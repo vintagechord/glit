@@ -292,7 +292,7 @@ export function MvWizard({
       }
 
       setNotice({ submissionId: result.submissionId });
-    } catch (error) {
+    } catch {
       setNotice({ error: "저장 중 오류가 발생했습니다." });
     } finally {
       setIsSaving(false);

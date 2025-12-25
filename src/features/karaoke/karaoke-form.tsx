@@ -123,7 +123,7 @@ export function KaraokeForm({ userId }: { userId: string }) {
       setNotes("");
       setFile(null);
       setUpload({ name: "", progress: 0, status: "idle" });
-    } catch (error) {
+    } catch {
       setNotice({ error: "요청 처리 중 오류가 발생했습니다." });
     } finally {
       setIsSubmitting(false);
