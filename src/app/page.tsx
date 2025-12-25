@@ -63,7 +63,7 @@ export default function Home() {
       <div className="pointer-events-none absolute right-[-10%] top-[10%] h-[360px] w-[360px] rounded-full bg-amber-300/20 blur-[130px] dark:bg-amber-400/20" />
 
       <section className="mx-auto grid w-full max-w-6xl items-center gap-12 px-6 pb-14 pt-16 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
           <span className="inline-flex items-center rounded-full border border-border/60 bg-background/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-foreground/80">
             심의 접수 플랫폼
           </span>
@@ -107,7 +107,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="rounded-[32px] border border-border/60 bg-card/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+        <div className="rounded-[32px] border border-border/60 bg-card/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)] animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
           <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground">
             <span>접수 현황</span>
             <span>Live</span>
