@@ -8,7 +8,7 @@ import { formatCurrency } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
 
 import {
-  saveAlbumSubmissionAction,
+  saveMvSubmissionAction,
   type SubmissionActionState,
 } from "./actions";
 
@@ -27,15 +27,6 @@ type PackageOption = {
   stations: StationOption[];
 };
 
-type TrackInput = {
-  trackTitle: string;
-  featuring: string;
-  composer: string;
-  lyricist: string;
-  notes: string;
-  isTitle: boolean;
-};
-
 type UploadItem = {
   name: string;
   size: number;
@@ -52,15 +43,6 @@ type UploadResult = {
   size: number;
 };
 
-const initialTrack: TrackInput = {
-  trackTitle: "",
-  featuring: "",
-  composer: "",
-  lyricist: "",
-  notes: "",
-  isTitle: false,
-};
-
 const steps = [
   "패키지 선택",
   "신청서/파일 업로드",
@@ -69,10 +51,10 @@ const steps = [
   "접수 완료",
 ];
 
-const uploadMaxMb = Number(process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ?? "200");
+const uploadMaxMb = Number(process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ?? "500");
 const uploadMaxBytes = uploadMaxMb * 1024 * 1024;
 
-export function AlbumWizard({
+export function MvWizard({
   packages,
   userId,
 }: {
@@ -84,11 +66,15 @@ export function AlbumWizard({
   const [step, setStep] = React.useState(1);
   const [selectedPackage, setSelectedPackage] =
     React.useState<PackageOption | null>(packages[0] ?? null);
-  const [tracks, setTracks] = React.useState<TrackInput[]>([initialTrack]);
+  const [mvType, setMvType] = React.useState<"MV_DISTRIBUTION" | "MV_BROADCAST">(
+    "MV_DISTRIBUTION",
+  );
   const [title, setTitle] = React.useState("");
   const [artistName, setArtistName] = React.useState("");
   const [releaseDate, setReleaseDate] = React.useState("");
   const [genre, setGenre] = React.useState("");
+  const [runtime, setRuntime] = React.useState("");
+  const [format, setFormat] = React.useState("");
   const [preReviewRequested, setPreReviewRequested] = React.useState(false);
   const [karaokeRequested, setKaraokeRequested] = React.useState(false);
   const [bankDepositorName, setBankDepositorName] = React.useState("");
@@ -130,56 +116,22 @@ export function AlbumWizard({
     </div>
   );
 
-  const updateTrack = <K extends keyof TrackInput>(
-    index: number,
-    field: K,
-    value: TrackInput[K],
-  ) => {
-    setTracks((prev) =>
-      prev.map((track, idx) =>
-        idx === index ? { ...track, [field]: value } : track,
-      ),
-    );
-  };
-
-  const toggleTitleTrack = (index: number) => {
-    setTracks((prev) =>
-      prev.map((track, idx) => ({
-        ...track,
-        isTitle: idx === index,
-      })),
-    );
-  };
-
-  const addTrack = () => {
-    setTracks((prev) => [...prev, { ...initialTrack }]);
-  };
-
-  const removeTrack = (index: number) => {
-    setTracks((prev) => prev.filter((_, idx) => idx !== index));
-  };
-
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
-    const allowedTypes = new Set([
-      "audio/mpeg",
-      "audio/mp3",
-      "audio/wav",
-      "audio/x-wav",
-    ]);
+    const allowedTypes = new Set(["video/mp4", "video/quicktime"]);
     const filtered = selected.filter((file) => {
       if (file.size > uploadMaxBytes) {
         setNotice({ error: `파일 용량은 ${uploadMaxMb}MB 이하만 가능합니다.` });
         return false;
       }
       if (file.type && !allowedTypes.has(file.type)) {
-        setNotice({ error: "WAV 또는 MP3 파일만 업로드할 수 있습니다." });
+        setNotice({ error: "MP4 또는 MOV 파일만 업로드할 수 있습니다." });
         return false;
       }
       if (!file.type) {
         const lowerName = file.name.toLowerCase();
-        if (!lowerName.endsWith(".wav") && !lowerName.endsWith(".mp3")) {
-          setNotice({ error: "WAV 또는 MP3 파일만 업로드할 수 있습니다." });
+        if (!lowerName.endsWith(".mp4") && !lowerName.endsWith(".mov")) {
+          setNotice({ error: "MP4 또는 MOV 파일만 업로드할 수 있습니다." });
           return false;
         }
       }
@@ -242,7 +194,7 @@ export function AlbumWizard({
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
       const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`;
-      const path = `${userId}/${submissionId}/audio/${fileName}`;
+      const path = `${userId}/${submissionId}/video/${fileName}`;
 
       nextUploads[index] = {
         ...nextUploads[index],
@@ -298,11 +250,7 @@ export function AlbumWizard({
       return;
     }
     if (!title || !artistName) {
-      setNotice({ error: "곡 제목과 아티스트명을 입력해주세요." });
-      return;
-    }
-    if (tracks.some((track) => !track.trackTitle)) {
-      setNotice({ error: "모든 트랙명을 입력해주세요." });
+      setNotice({ error: "제목과 아티스트명을 입력해주세요." });
       return;
     }
     if (status === "SUBMITTED" && !bankDepositorName.trim()) {
@@ -314,19 +262,21 @@ export function AlbumWizard({
     setNotice({});
     try {
       const uploaded = await uploadFiles();
-      const result = await saveAlbumSubmissionAction({
+      const result = await saveMvSubmissionAction({
         submissionId,
         packageId: selectedPackage.id,
         title,
         artistName,
         releaseDate: releaseDate || undefined,
         genre: genre || undefined,
+        mvType,
+        runtime: runtime || undefined,
+        format: format || undefined,
         preReviewRequested,
         karaokeRequested,
         bankDepositorName:
           status === "SUBMITTED" ? bankDepositorName.trim() : undefined,
         status,
-        tracks,
         files: uploaded,
       });
 
@@ -361,10 +311,10 @@ export function AlbumWizard({
                 STEP 01
               </p>
               <h2 className="font-display mt-2 text-2xl text-foreground">
-                패키지를 선택하세요.
+                심의 유형과 패키지를 선택하세요.
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                포함 방송국과 가격을 확인하고 선택할 수 있습니다.
+                유통용/방송용 유형 선택 후 패키지를 선택합니다.
               </p>
             </div>
             <button
@@ -375,6 +325,43 @@ export function AlbumWizard({
             >
               다음 단계
             </button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {[
+              {
+                value: "MV_DISTRIBUTION",
+                label: "MV 유통용 심의",
+                description: "온라인 유통용 심의를 신청합니다.",
+              },
+              {
+                value: "MV_BROADCAST",
+                label: "MV 방송 송출용 심의",
+                description: "방송 송출 심의를 신청합니다.",
+              },
+            ].map((item) => {
+              const active = mvType === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() =>
+                    setMvType(item.value as "MV_DISTRIBUTION" | "MV_BROADCAST")
+                  }
+                  className={`text-left rounded-[28px] border p-6 transition ${
+                    active
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border/60 bg-card/80 text-foreground hover:border-foreground"
+                  }`}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
+                    MV Type
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold">{item.label}</h3>
+                  <p className="mt-2 text-xs opacity-70">{item.description}</p>
+                </button>
+              );
+            })}
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
@@ -434,10 +421,10 @@ export function AlbumWizard({
                 STEP 02
               </p>
               <h2 className="font-display mt-2 text-2xl text-foreground">
-                신청서 정보를 입력하세요.
+                MV 정보를 입력하세요.
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                트랙 정보와 음원 파일을 업로드합니다.
+                제목/러닝타임/포맷을 입력하고 영상 파일을 업로드합니다.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -460,12 +447,12 @@ export function AlbumWizard({
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              기본 정보
+              MV 메타데이터
             </p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  곡 제목
+                  MV 제목
                 </label>
                 <input
                   value={title}
@@ -504,132 +491,43 @@ export function AlbumWizard({
                   className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                 />
               </div>
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                트랙 정보
-              </p>
-              <button
-                type="button"
-                onClick={addTrack}
-                className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
-              >
-                트랙 추가
-              </button>
-            </div>
-            <div className="mt-5 space-y-5">
-              {tracks.map((track, index) => (
-                <div
-                  key={`track-${index}`}
-                  className="rounded-2xl border border-border/60 bg-background/70 p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-foreground">
-                      트랙 {index + 1}
-                    </p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={track.isTitle}
-                          onChange={() => toggleTitleTrack(index)}
-                          className="h-4 w-4 rounded border-border"
-                        />
-                        타이틀
-                      </label>
-                      {tracks.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeTrack(index)}
-                          className="text-red-500"
-                        >
-                          삭제
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        트랙명
-                      </label>
-                      <input
-                        value={track.trackTitle}
-                        onChange={(event) =>
-                          updateTrack(index, "trackTitle", event.target.value)
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        피처링
-                      </label>
-                      <input
-                        value={track.featuring}
-                        onChange={(event) =>
-                          updateTrack(index, "featuring", event.target.value)
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        작곡
-                      </label>
-                      <input
-                        value={track.composer}
-                        onChange={(event) =>
-                          updateTrack(index, "composer", event.target.value)
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        작사
-                      </label>
-                      <input
-                        value={track.lyricist}
-                        onChange={(event) =>
-                          updateTrack(index, "lyricist", event.target.value)
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        특이사항
-                      </label>
-                      <input
-                        value={track.notes}
-                        onChange={(event) =>
-                          updateTrack(index, "notes", event.target.value)
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  러닝타임
+                </label>
+                <input
+                  placeholder="예: 03:25"
+                  value={runtime}
+                  onChange={(event) => setRuntime(event.target.value)}
+                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  파일 포맷
+                </label>
+                <input
+                  placeholder="예: MP4 (H.264)"
+                  value={format}
+                  onChange={(event) => setFormat(event.target.value)}
+                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                />
+              </div>
             </div>
           </div>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              음원 파일 업로드
+              MV 파일 업로드
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              허용 형식: WAV/MP3 · 최대 {uploadMaxMb}MB
+              허용 형식: MP4/MOV · 최대 {uploadMaxMb}MB
             </p>
             <div className="mt-4">
               <input
                 type="file"
                 multiple
-                accept=".wav,.mp3,audio/*"
+                accept=".mp4,.mov,video/*"
                 onChange={onFileChange}
                 className="w-full rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm text-muted-foreground"
               />
@@ -712,7 +610,7 @@ export function AlbumWizard({
                 추가 옵션을 선택하세요.
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                사전 검토와 노래방 등록 요청을 선택할 수 있습니다.
+                사전 검토 및 노래방 등록 요청을 선택할 수 있습니다.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -777,8 +675,7 @@ export function AlbumWizard({
           </div>
 
           <div className="rounded-[28px] border border-dashed border-border/60 bg-background/70 p-4 text-xs text-muted-foreground">
-            가사 입력 또는 첨부 자료가 필요한 경우, 접수 완료 후 담당자가 별도
-            연락드립니다.
+            외국어 가사 번역이 필요한 경우 담당자가 별도 안내드립니다.
           </div>
         </div>
       )}

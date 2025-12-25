@@ -30,6 +30,12 @@ exception
   when duplicate_object then null;
 end $$;
 
+do $$ begin
+  create type karaoke_status as enum ('REQUESTED', 'IN_REVIEW', 'COMPLETED');
+exception
+  when duplicate_object then null;
+end $$;
+
 create table if not exists public.packages (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -66,6 +72,8 @@ create table if not exists public.submissions (
   artist_name text,
   release_date date,
   genre text,
+  mv_runtime text,
+  mv_format text,
   package_id uuid references public.packages,
   amount_krw integer not null default 0,
   pre_review_requested boolean not null default false,
@@ -119,6 +127,18 @@ create table if not exists public.submission_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.karaoke_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users on delete cascade,
+  title text not null,
+  artist text,
+  contact text,
+  notes text,
+  file_path text,
+  status karaoke_status not null default 'REQUESTED',
+  created_at timestamptz not null default now()
+);
+
 create trigger set_submissions_updated_at
 before update on public.submissions
 for each row execute procedure public.set_updated_at();
@@ -158,6 +178,7 @@ alter table public.album_tracks enable row level security;
 alter table public.submission_files enable row level security;
 alter table public.station_reviews enable row level security;
 alter table public.submission_events enable row level security;
+alter table public.karaoke_requests enable row level security;
 
 create policy "Packages readable"
 on public.packages
@@ -269,3 +290,18 @@ create policy "Submission events insertable"
 on public.submission_events
 for insert
 with check (public.can_access_submission(submission_id));
+
+create policy "Karaoke requests readable"
+on public.karaoke_requests
+for select
+using (user_id = auth.uid() or public.is_admin());
+
+create policy "Karaoke requests insertable"
+on public.karaoke_requests
+for insert
+with check (user_id = auth.uid());
+
+create policy "Karaoke requests updatable"
+on public.karaoke_requests
+for update
+using (public.is_admin());

@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ProfileForm } from "@/features/profile/profile-form";
+import { formatCurrency, formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = {
@@ -23,6 +25,15 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
+  const { data: submissions } = await supabase
+    .from("submissions")
+    .select(
+      "id, title, artist_name, status, payment_status, created_at, updated_at, type, package:packages ( name, price_krw )",
+    )
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
+    .limit(5);
+
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -31,17 +42,25 @@ export default async function DashboardPage() {
             Dashboard
           </p>
           <h1 className="font-display mt-2 text-3xl text-foreground">
-            접수 현황을 준비 중입니다.
+            내 심의 접수 현황
           </h1>
         </div>
-        <form action="/logout" method="post">
-          <button
-            type="submit"
-            className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/new"
+            className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background"
           >
-            로그아웃
-          </button>
-        </form>
+            새 접수
+          </Link>
+          <form action="/logout" method="post">
+            <button
+              type="submit"
+              className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+            >
+              로그아웃
+            </button>
+          </form>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -76,8 +95,55 @@ export default async function DashboardPage() {
             </p>
           </div>
           <div className="rounded-2xl border border-dashed border-border/70 bg-background/80 p-4 text-xs text-muted-foreground">
-            곧 접수 내역, 진행 상태, 실시간 알림이 이 영역에 표시됩니다.
+            심의 진행 상태와 결과는 접수 상세 페이지에서 확인할 수 있습니다.
           </div>
+        </div>
+      </div>
+
+      <div className="mt-10 rounded-[32px] border border-border/60 bg-card/80 p-6">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            최근 접수
+          </p>
+          <Link
+            href="/dashboard/history"
+            className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:text-foreground"
+          >
+            전체 보기
+          </Link>
+        </div>
+        <div className="mt-4 space-y-3">
+          {submissions && submissions.length > 0 ? (
+            submissions.map((submission) => (
+              <Link
+                key={submission.id}
+                href={`/dashboard/submissions/${submission.id}`}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/80 px-4 py-3 text-sm transition hover:border-foreground"
+              >
+                <div>
+                  <p className="font-semibold text-foreground">
+                    {submission.title || "제목 미입력"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {submission.artist_name || "아티스트 미입력"} ·{" "}
+                    {submission.type}
+                  </p>
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  <p>
+                    {submission.package?.price_krw
+                      ? `${formatCurrency(submission.package.price_krw)}원`
+                      : "-"}
+                  </p>
+                  <p>{formatDateTime(submission.updated_at)}</p>
+                </div>
+              </Link>
+            ))
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
+              아직 접수된 내역이 없습니다.
+            </div>
+          )}
         </div>
       </div>
     </div>

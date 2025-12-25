@@ -32,8 +32,28 @@ const albumSubmissionSchema = z.object({
   artistName: z.string().min(1),
   releaseDate: z.string().optional(),
   genre: z.string().optional(),
+  preReviewRequested: z.boolean().optional(),
+  karaokeRequested: z.boolean().optional(),
+  bankDepositorName: z.string().optional(),
   status: z.enum(["DRAFT", "SUBMITTED"]),
   tracks: z.array(trackSchema).min(1),
+  files: z.array(fileSchema).optional(),
+});
+
+const mvSubmissionSchema = z.object({
+  submissionId: z.string().uuid(),
+  packageId: z.string().uuid(),
+  title: z.string().min(1),
+  artistName: z.string().min(1),
+  releaseDate: z.string().optional(),
+  genre: z.string().optional(),
+  mvType: z.enum(["MV_DISTRIBUTION", "MV_BROADCAST"]),
+  runtime: z.string().optional(),
+  format: z.string().optional(),
+  preReviewRequested: z.boolean().optional(),
+  karaokeRequested: z.boolean().optional(),
+  bankDepositorName: z.string().optional(),
+  status: z.enum(["DRAFT", "SUBMITTED"]),
   files: z.array(fileSchema).optional(),
 });
 
@@ -66,6 +86,7 @@ export async function saveAlbumSubmissionAction(
     return { error: "패키지 정보를 확인할 수 없습니다." };
   }
 
+  const shouldRequestPayment = Boolean(parsed.data.bankDepositorName);
   const submissionPayload = {
     id: parsed.data.submissionId,
     user_id: user.id,
@@ -76,8 +97,14 @@ export async function saveAlbumSubmissionAction(
     genre: parsed.data.genre || null,
     package_id: parsed.data.packageId,
     amount_krw: selectedPackage.price_krw,
-    status: parsed.data.status,
-    payment_status: "UNPAID",
+    pre_review_requested: parsed.data.preReviewRequested ?? false,
+    karaoke_requested: parsed.data.karaokeRequested ?? false,
+    bank_depositor_name: parsed.data.bankDepositorName || null,
+    status:
+      parsed.data.status === "SUBMITTED" && shouldRequestPayment
+        ? "WAITING_PAYMENT"
+        : parsed.data.status,
+    payment_status: shouldRequestPayment ? "PAYMENT_PENDING" : "UNPAID",
   };
 
   const { error: submissionError } = await supabase
@@ -176,7 +203,148 @@ export async function saveAlbumSubmissionAction(
 
   const eventMessage =
     parsed.data.status === "SUBMITTED"
-      ? "심의 접수가 완료되었습니다."
+      ? shouldRequestPayment
+        ? "입금 확인 요청이 접수되었습니다."
+        : "심의 접수가 완료되었습니다."
+      : "임시 저장이 완료되었습니다.";
+
+  await supabase.from("submission_events").insert({
+    submission_id: parsed.data.submissionId,
+    actor_user_id: user.id,
+    event_type: parsed.data.status,
+    message: eventMessage,
+  });
+
+  return { submissionId: parsed.data.submissionId };
+}
+
+export async function saveMvSubmissionAction(
+  payload: z.infer<typeof mvSubmissionSchema>,
+): Promise<SubmissionActionState> {
+  const parsed = mvSubmissionSchema.safeParse(payload);
+
+  if (!parsed.success) {
+    return { error: "입력값을 다시 확인해주세요." };
+  }
+
+  const supabase = createServerSupabase();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  const { data: selectedPackage, error: packageError } = await supabase
+    .from("packages")
+    .select("price_krw")
+    .eq("id", parsed.data.packageId)
+    .maybeSingle();
+
+  if (packageError || !selectedPackage) {
+    return { error: "패키지 정보를 확인할 수 없습니다." };
+  }
+
+  const shouldRequestPayment = Boolean(parsed.data.bankDepositorName);
+  const submissionPayload = {
+    id: parsed.data.submissionId,
+    user_id: user.id,
+    type: parsed.data.mvType,
+    title: parsed.data.title,
+    artist_name: parsed.data.artistName,
+    release_date: parsed.data.releaseDate || null,
+    genre: parsed.data.genre || null,
+    mv_runtime: parsed.data.runtime || null,
+    mv_format: parsed.data.format || null,
+    package_id: parsed.data.packageId,
+    amount_krw: selectedPackage.price_krw,
+    pre_review_requested: parsed.data.preReviewRequested ?? false,
+    karaoke_requested: parsed.data.karaokeRequested ?? false,
+    bank_depositor_name: parsed.data.bankDepositorName || null,
+    status:
+      parsed.data.status === "SUBMITTED" && shouldRequestPayment
+        ? "WAITING_PAYMENT"
+        : parsed.data.status,
+    payment_status: shouldRequestPayment ? "PAYMENT_PENDING" : "UNPAID",
+  };
+
+  const { error: submissionError } = await supabase
+    .from("submissions")
+    .upsert(submissionPayload, { onConflict: "id" });
+
+  if (submissionError) {
+    return { error: "접수 저장에 실패했습니다." };
+  }
+
+  await supabase
+    .from("submission_files")
+    .delete()
+    .eq("submission_id", parsed.data.submissionId)
+    .eq("kind", "VIDEO");
+
+  const fileRows =
+    parsed.data.files?.map((file) => ({
+      submission_id: parsed.data.submissionId,
+      kind: "VIDEO",
+      file_path: file.path,
+      original_name: file.originalName,
+      mime: file.mime || null,
+      size: file.size,
+    })) ?? [];
+
+  if (fileRows.length > 0) {
+    const { error: fileError } = await supabase
+      .from("submission_files")
+      .insert(fileRows);
+
+    if (fileError) {
+      return { error: "파일 정보를 저장할 수 없습니다." };
+    }
+  }
+
+  if (parsed.data.status === "SUBMITTED") {
+    const { data: existingReviews } = await supabase
+      .from("station_reviews")
+      .select("id")
+      .eq("submission_id", parsed.data.submissionId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingReviews) {
+      const { data: packageStations, error: stationError } = await supabase
+        .from("package_stations")
+        .select("station_id")
+        .eq("package_id", parsed.data.packageId);
+
+      if (stationError) {
+        return { error: "방송국 정보를 불러올 수 없습니다." };
+      }
+
+      if (packageStations && packageStations.length > 0) {
+        const stationRows = packageStations.map((station) => ({
+          submission_id: parsed.data.submissionId,
+          station_id: station.station_id,
+          status: "NOT_SENT",
+        }));
+
+        const { error: insertStationError } = await supabase
+          .from("station_reviews")
+          .insert(stationRows);
+
+        if (insertStationError) {
+          return { error: "방송국 진행 정보를 저장할 수 없습니다." };
+        }
+      }
+    }
+  }
+
+  const eventMessage =
+    parsed.data.status === "SUBMITTED"
+      ? shouldRequestPayment
+        ? "입금 확인 요청이 접수되었습니다."
+        : "MV 심의 접수가 완료되었습니다."
       : "임시 저장이 완료되었습니다.";
 
   await supabase.from("submission_events").insert({

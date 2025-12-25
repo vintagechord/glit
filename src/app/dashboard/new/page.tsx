@@ -43,7 +43,7 @@ export default function NewSubmissionPage() {
             MV 심의 접수
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            유통용/방송용 심의는 Phase 3에서 제공됩니다.
+            유통용/방송용 심의를 구분해 접수할 수 있습니다.
           </p>
         </Link>
       </div>

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { APP_CONFIG } from "@/lib/config";
+
 export function SiteFooter() {
   return (
     <footer className="border-t border-border/60 bg-background/80">
@@ -13,7 +15,7 @@ export function SiteFooter() {
             플랫폼.
           </p>
           <p className="text-xs text-muted-foreground">
-            대표 메일: onside17@daum.net
+            대표 메일: {APP_CONFIG.supportEmail}
           </p>
         </div>
         <div className="space-y-2 text-sm text-muted-foreground">

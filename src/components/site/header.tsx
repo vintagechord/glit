@@ -7,6 +7,7 @@ const navLinks = [
   { label: "M/V심의", href: "/guide?tab=mv" },
   { label: "심의접수", href: "/dashboard/new" },
   { label: "진행상황", href: "/dashboard" },
+  { label: "노래방 요청", href: "/karaoke-request" },
   { label: "신청서", href: "/forms" },
 ];
 
