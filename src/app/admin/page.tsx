@@ -16,7 +16,7 @@ export default function AdminPage() {
       <p className="mt-3 text-sm text-muted-foreground">
         접수 리스트, 결제 승인, 방송국 상태 관리를 진행하세요.
       </p>
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
+      <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Link
           href="/admin/submissions"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
@@ -57,6 +57,20 @@ export default function AdminPage() {
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
             노래방 등록 요청 접수와 상태를 관리합니다.
+          </p>
+        </Link>
+        <Link
+          href="/admin/banners"
+          className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            Banners
+          </p>
+          <h2 className="mt-3 text-xl font-semibold text-foreground">
+            배너 관리
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            좌측 배너 광고 노출 정보를 관리합니다.
           </p>
         </Link>
       </div>

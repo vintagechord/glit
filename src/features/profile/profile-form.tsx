@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 
 import { updateProfileAction, type ActionState } from "@/features/auth/actions";
 
@@ -15,7 +15,7 @@ type ProfileFormProps = {
 const initialState: ActionState = {};
 
 export function ProfileForm({ defaultValues }: ProfileFormProps) {
-  const [state, formAction] = useFormState(updateProfileAction, initialState);
+  const [state, formAction] = useActionState(updateProfileAction, initialState);
 
   return (
     <form action={formAction} className="space-y-4">

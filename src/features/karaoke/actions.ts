@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export type KaraokeActionState = {
@@ -15,6 +16,9 @@ const karaokeRequestSchema = z.object({
   contact: z.string().min(3),
   notes: z.string().optional(),
   filePath: z.string().optional(),
+  guestName: z.string().min(1).optional(),
+  guestEmail: z.string().email().optional(),
+  guestPhone: z.string().min(3).optional(),
 });
 
 const karaokeStatusSchema = z.object({
@@ -30,18 +34,30 @@ export async function createKaraokeRequestAction(
     return { error: "입력값을 확인해주세요." };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
 
-  if (userError || !user) {
-    return { error: "로그인이 필요합니다." };
+  if (userError) {
+    return { error: "로그인 정보를 확인할 수 없습니다." };
   }
 
-  const { error } = await supabase.from("karaoke_requests").insert({
-    user_id: user.id,
+  const isGuest = !user;
+  if (isGuest && (!parsed.data.guestName || !parsed.data.guestEmail)) {
+    return { error: "비회원 정보를 입력해주세요." };
+  }
+
+  const db = isGuest ? createAdminClient() : supabase;
+
+  const { error } = await db.from("karaoke_requests").insert({
+    user_id: user?.id ?? null,
+    guest_name: isGuest ? parsed.data.guestName : null,
+    guest_email: isGuest ? parsed.data.guestEmail : null,
+    guest_phone: isGuest
+      ? parsed.data.guestPhone ?? parsed.data.contact
+      : null,
     title: parsed.data.title,
     artist: parsed.data.artist || null,
     contact: parsed.data.contact,
@@ -64,7 +80,7 @@ export async function updateKaraokeStatusAction(
     return { error: "상태를 확인해주세요." };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { error } = await supabase
     .from("karaoke_requests")
     .update({ status: parsed.data.status })

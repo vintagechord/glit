@@ -33,11 +33,11 @@ export default async function AdminSubmissionsPage({
     to?: string;
   };
 }) {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   let query = supabase
     .from("submissions")
     .select(
-      "id, title, artist_name, status, payment_status, type, created_at, updated_at, package:packages ( name )",
+      "id, title, artist_name, status, payment_status, type, created_at, updated_at, guest_name, package:packages ( name )",
     )
     .order("created_at", { ascending: false });
 
@@ -161,6 +161,7 @@ export default async function AdminSubmissionsPage({
                 <p className="text-xs text-muted-foreground">
                   {submission.artist_name || "아티스트 미입력"} ·{" "}
                   {submission.type}
+                  {submission.guest_name ? " · 비회원" : ""}
                 </p>
               </div>
               <div className="text-xs text-muted-foreground">

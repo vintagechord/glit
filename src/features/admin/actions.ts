@@ -74,12 +74,22 @@ const packageStationsSchema = z.object({
   stationCodes: z.string().min(1),
 });
 
+const adBannerSchema = z.object({
+  id: z.string().uuid().optional(),
+  title: z.string().min(1),
+  imageUrl: z.string().min(1),
+  linkUrl: z.string().optional(),
+  isActive: z.boolean(),
+  startsAt: z.string().optional(),
+  endsAt: z.string().optional(),
+});
+
 async function insertEvent(
   submissionId: string,
   message: string,
   eventType: string,
 ) {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -100,7 +110,7 @@ export async function updateSubmissionStatusAction(
     return { error: "입력값을 확인해주세요." };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { error } = await supabase
     .from("submissions")
     .update({
@@ -143,7 +153,7 @@ export async function updatePaymentStatusAction(
     return { error: "입력값을 확인해주세요." };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { data: submission } = await supabase
     .from("submissions")
     .select("status")
@@ -200,7 +210,7 @@ export async function updateStationReviewAction(
     return { error: "입력값을 확인해주세요." };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { data: review } = await supabase
     .from("station_reviews")
     .select("submission_id")
@@ -251,7 +261,7 @@ export async function upsertPackageAction(
     return { error: "패키지 정보를 확인해주세요." };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { error } = await supabase.from("packages").upsert({
     id: parsed.data.id,
     name: parsed.data.name,
@@ -291,7 +301,7 @@ export async function upsertStationAction(
     return { error: "방송국 정보를 확인해주세요." };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { error } = await supabase.from("stations").upsert({
     id: parsed.data.id,
     name: parsed.data.name,
@@ -327,7 +337,7 @@ export async function updatePackageStationsAction(
     return { error: "방송국 코드를 확인해주세요." };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const codes = parsed.data.stationCodes
     .split(",")
     .map((code) => code.trim())
@@ -368,5 +378,86 @@ export async function updatePackageStationsFormAction(
   return updatePackageStationsAction({
     packageId: String(formData.get("packageId") ?? ""),
     stationCodes: String(formData.get("stationCodes") ?? ""),
+  });
+}
+
+export async function upsertAdBannerAction(
+  payload: z.infer<typeof adBannerSchema>,
+): Promise<AdminActionState> {
+  const parsed = adBannerSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { error: "배너 정보를 확인해주세요." };
+  }
+
+  const supabase = await createServerSupabase();
+  const startsDate = parsed.data.startsAt
+    ? new Date(parsed.data.startsAt)
+    : null;
+  const endsDate = parsed.data.endsAt ? new Date(parsed.data.endsAt) : null;
+  const startsAt =
+    startsDate && !Number.isNaN(startsDate.getTime())
+      ? startsDate.toISOString()
+      : null;
+  const endsAt =
+    endsDate && !Number.isNaN(endsDate.getTime())
+      ? endsDate.toISOString()
+      : null;
+
+  const { error } = await supabase.from("ad_banners").upsert({
+    id: parsed.data.id,
+    title: parsed.data.title,
+    image_url: parsed.data.imageUrl,
+    link_url: parsed.data.linkUrl || null,
+    is_active: parsed.data.isActive,
+    starts_at: startsAt,
+    ends_at: endsAt,
+  });
+
+  if (error) {
+    return { error: "배너 저장에 실패했습니다." };
+  }
+
+  return { message: "배너가 저장되었습니다." };
+}
+
+export async function upsertAdBannerFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  const id = String(formData.get("id") ?? "");
+  return upsertAdBannerAction({
+    id: id ? id : undefined,
+    title: String(formData.get("title") ?? ""),
+    imageUrl: String(formData.get("imageUrl") ?? ""),
+    linkUrl: String(formData.get("linkUrl") ?? "") || undefined,
+    isActive: formData.get("isActive") === "on",
+    startsAt: String(formData.get("startsAt") ?? "") || undefined,
+    endsAt: String(formData.get("endsAt") ?? "") || undefined,
+  });
+}
+
+export async function deleteAdBannerAction(
+  payload: { id: string },
+): Promise<AdminActionState> {
+  if (!payload.id) {
+    return { error: "배너 ID를 확인해주세요." };
+  }
+
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.from("ad_banners").delete().eq("id", payload.id);
+
+  if (error) {
+    return { error: "배너 삭제에 실패했습니다." };
+  }
+
+  return { message: "배너가 삭제되었습니다." };
+}
+
+export async function deleteAdBannerFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  return deleteAdBannerAction({
+    id: String(formData.get("id") ?? ""),
   });
 }

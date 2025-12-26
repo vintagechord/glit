@@ -32,6 +32,8 @@ type TrackInput = {
   featuring: string;
   composer: string;
   lyricist: string;
+  arranger: string;
+  lyrics: string;
   notes: string;
   isTitle: boolean;
 };
@@ -57,6 +59,8 @@ const initialTrack: TrackInput = {
   featuring: "",
   composer: "",
   lyricist: "",
+  arranger: "",
+  lyrics: "",
   notes: "",
   isTitle: false,
 };
@@ -65,7 +69,7 @@ const steps = [
   "패키지 선택",
   "신청서/파일 업로드",
   "옵션 선택",
-  "결제 안내",
+  "결제하기",
   "접수 완료",
 ];
 
@@ -77,20 +81,29 @@ export function AlbumWizard({
   userId,
 }: {
   packages: PackageOption[];
-  userId: string;
+  userId?: string | null;
 }) {
   const router = useRouter();
   const supabase = React.useMemo(() => createClient(), []);
+  const isGuest = !userId;
   const [step, setStep] = React.useState(1);
   const [selectedPackage, setSelectedPackage] =
     React.useState<PackageOption | null>(packages[0] ?? null);
   const [tracks, setTracks] = React.useState<TrackInput[]>([initialTrack]);
+  const [activeTrackIndex, setActiveTrackIndex] = React.useState(0);
   const [title, setTitle] = React.useState("");
   const [artistName, setArtistName] = React.useState("");
   const [releaseDate, setReleaseDate] = React.useState("");
   const [genre, setGenre] = React.useState("");
+  const [guestName, setGuestName] = React.useState("");
+  const [guestCompany, setGuestCompany] = React.useState("");
+  const [guestEmail, setGuestEmail] = React.useState("");
+  const [guestPhone, setGuestPhone] = React.useState("");
   const [preReviewRequested, setPreReviewRequested] = React.useState(false);
   const [karaokeRequested, setKaraokeRequested] = React.useState(false);
+  const [paymentMethod, setPaymentMethod] = React.useState<"CARD" | "BANK">(
+    "BANK",
+  );
   const [bankDepositorName, setBankDepositorName] = React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
   const [uploads, setUploads] = React.useState<UploadItem[]>([]);
@@ -100,12 +113,18 @@ export function AlbumWizard({
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [completionId, setCompletionId] = React.useState<string | null>(null);
   const submissionIdRef = React.useRef<string>();
+  const guestTokenRef = React.useRef<string>();
 
   if (!submissionIdRef.current) {
     submissionIdRef.current = crypto.randomUUID();
   }
+  if (!guestTokenRef.current) {
+    guestTokenRef.current = crypto.randomUUID();
+  }
 
   const submissionId = submissionIdRef.current;
+  const guestToken = guestTokenRef.current;
+  const activeTrack = tracks[activeTrackIndex] ?? tracks[0];
 
   const stepLabels = (
     <div className="grid gap-3 md:grid-cols-5">
@@ -152,20 +171,32 @@ export function AlbumWizard({
   };
 
   const addTrack = () => {
-    setTracks((prev) => [...prev, { ...initialTrack }]);
+    setTracks((prev) => {
+      const next = [...prev, { ...initialTrack }];
+      setActiveTrackIndex(next.length - 1);
+      return next;
+    });
   };
 
   const removeTrack = (index: number) => {
-    setTracks((prev) => prev.filter((_, idx) => idx !== index));
+    setTracks((prev) => {
+      const next = prev.filter((_, idx) => idx !== index);
+      setActiveTrackIndex((prevIndex) => {
+        const nextIndex =
+          prevIndex > index ? prevIndex - 1 : prevIndex === index ? 0 : prevIndex;
+        return Math.min(nextIndex, Math.max(0, next.length - 1));
+      });
+      return next;
+    });
   };
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
     const allowedTypes = new Set([
-      "audio/mpeg",
-      "audio/mp3",
       "audio/wav",
       "audio/x-wav",
+      "application/zip",
+      "application/x-zip-compressed",
     ]);
     const filtered = selected.filter((file) => {
       if (file.size > uploadMaxBytes) {
@@ -173,13 +204,13 @@ export function AlbumWizard({
         return false;
       }
       if (file.type && !allowedTypes.has(file.type)) {
-        setNotice({ error: "WAV 또는 MP3 파일만 업로드할 수 있습니다." });
+        setNotice({ error: "WAV 또는 ZIP 파일만 업로드할 수 있습니다." });
         return false;
       }
       if (!file.type) {
         const lowerName = file.name.toLowerCase();
-        if (!lowerName.endsWith(".wav") && !lowerName.endsWith(".mp3")) {
-          setNotice({ error: "WAV 또는 MP3 파일만 업로드할 수 있습니다." });
+        if (!lowerName.endsWith(".wav") && !lowerName.endsWith(".zip")) {
+          setNotice({ error: "WAV 또는 ZIP 파일만 업로드할 수 있습니다." });
           return false;
         }
       }
@@ -226,6 +257,38 @@ export function AlbumWizard({
     });
   };
 
+  const createSignedUpload = async (fileName: string) => {
+    if (userId) {
+      const path = `${userId}/${submissionId}/audio/${fileName}`;
+      const { data, error } = await supabase.storage
+        .from("submissions")
+        .createSignedUploadUrl(path, { upsert: true });
+
+      if (error || !data) {
+        throw new Error("Upload url creation failed");
+      }
+
+      return { signedUrl: data.signedUrl, path: data.path };
+    }
+
+    const response = await fetch("/api/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        submissionId,
+        guestToken,
+        kind: "audio",
+        fileName,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Upload url creation failed");
+    }
+
+    return (await response.json()) as { signedUrl: string; path: string };
+  };
+
   const uploadFiles = async () => {
     if (files.length === 0) return [];
 
@@ -242,7 +305,6 @@ export function AlbumWizard({
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
       const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`;
-      const path = `${userId}/${submissionId}/audio/${fileName}`;
 
       nextUploads[index] = {
         ...nextUploads[index],
@@ -250,11 +312,13 @@ export function AlbumWizard({
       };
       setUploads([...nextUploads]);
 
-      const { data, error } = await supabase.storage
-        .from("submissions")
-        .createSignedUploadUrl(path, { upsert: true });
-
-      if (error || !data) {
+      let signedUrl: string;
+      let path: string;
+      try {
+        const uploadData = await createSignedUpload(fileName);
+        signedUrl = uploadData.signedUrl;
+        path = uploadData.path;
+      } catch {
         nextUploads[index] = {
           ...nextUploads[index],
           status: "error",
@@ -263,7 +327,7 @@ export function AlbumWizard({
         throw new Error("업로드 URL 생성 실패");
       }
 
-      await uploadWithProgress(data.signedUrl, file, (progress) => {
+      await uploadWithProgress(signedUrl, file, (progress) => {
         nextUploads[index] = {
           ...nextUploads[index],
           progress,
@@ -275,12 +339,12 @@ export function AlbumWizard({
         ...nextUploads[index],
         status: "done",
         progress: 100,
-        path: data.path,
+        path,
       };
       setUploads([...nextUploads]);
 
       results.push({
-        path: data.path,
+        path,
         originalName: file.name,
         mime: file.type || undefined,
         size: file.size,
@@ -301,11 +365,19 @@ export function AlbumWizard({
       setNotice({ error: "곡 제목과 아티스트명을 입력해주세요." });
       return;
     }
+    if (isGuest && (!guestName || !guestEmail || !guestPhone)) {
+      setNotice({ error: "비회원 담당자 정보(이름/연락처/이메일)를 입력해주세요." });
+      return;
+    }
     if (tracks.some((track) => !track.trackTitle)) {
       setNotice({ error: "모든 트랙명을 입력해주세요." });
       return;
     }
-    if (status === "SUBMITTED" && !bankDepositorName.trim()) {
+    if (
+      status === "SUBMITTED" &&
+      paymentMethod === "BANK" &&
+      !bankDepositorName.trim()
+    ) {
       setNotice({ error: "입금자명을 입력해주세요." });
       return;
     }
@@ -321,8 +393,14 @@ export function AlbumWizard({
         artistName,
         releaseDate: releaseDate || undefined,
         genre: genre || undefined,
+        guestToken: isGuest ? guestToken : undefined,
+        guestName: isGuest ? guestName : undefined,
+        guestCompany: isGuest ? guestCompany : undefined,
+        guestEmail: isGuest ? guestEmail : undefined,
+        guestPhone: isGuest ? guestPhone : undefined,
         preReviewRequested,
         karaokeRequested,
+        paymentMethod,
         bankDepositorName:
           status === "SUBMITTED" ? bankDepositorName.trim() : undefined,
         status,
@@ -507,129 +585,261 @@ export function AlbumWizard({
             </div>
           </div>
 
+          {isGuest && (
+            <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                신청자 정보
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    담당자명
+                  </label>
+                  <input
+                    value={guestName}
+                    onChange={(event) => setGuestName(event.target.value)}
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    회사/기획사
+                  </label>
+                  <input
+                    value={guestCompany}
+                    onChange={(event) => setGuestCompany(event.target.value)}
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    이메일
+                  </label>
+                  <input
+                    type="email"
+                    value={guestEmail}
+                    onChange={(event) => setGuestEmail(event.target.value)}
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    연락처
+                  </label>
+                  <input
+                    value={guestPhone}
+                    onChange={(event) => setGuestPhone(event.target.value)}
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 트랙 정보
               </p>
-              <button
-                type="button"
-                onClick={addTrack}
-                className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
-              >
-                트랙 추가
-              </button>
+              <span className="text-xs text-muted-foreground">
+                총 {tracks.length}곡
+              </span>
             </div>
-            <div className="mt-5 space-y-5">
-              {tracks.map((track, index) => (
-                <div
-                  key={`track-${index}`}
-                  className="rounded-2xl border border-border/60 bg-background/70 p-4"
+            <div className="mt-5 grid gap-6 md:grid-cols-[200px_1fr]">
+              <div className="space-y-2">
+                {tracks.map((track, index) => {
+                  const active = index === activeTrackIndex;
+                  return (
+                    <button
+                      key={`track-tab-${index}`}
+                      type="button"
+                      onClick={() => setActiveTrackIndex(index)}
+                      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
+                        active
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border/60 bg-background text-foreground hover:border-foreground"
+                      }`}
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em]">
+                        Track {String(index + 1).padStart(2, "0")}
+                      </p>
+                      <p className="mt-1 text-xs opacity-80">
+                        {track.trackTitle || "제목 미입력"}
+                      </p>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={addTrack}
+                  className="w-full rounded-2xl border border-dashed border-border/70 px-3 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-foreground">
-                      트랙 {index + 1}
-                    </p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={track.isTitle}
-                          onChange={() => toggleTitleTrack(index)}
-                          className="h-4 w-4 rounded border-border"
-                        />
-                        타이틀
-                      </label>
-                      {tracks.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeTrack(index)}
-                          className="text-red-500"
-                        >
-                          삭제
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        트랙명
-                      </label>
+                  + 트랙 추가
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-foreground">
+                    트랙 {activeTrackIndex + 1}
+                  </p>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <label className="flex items-center gap-2">
                       <input
-                        value={track.trackTitle}
-                        onChange={(event) =>
-                          updateTrack(index, "trackTitle", event.target.value)
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        type="checkbox"
+                        checked={activeTrack.isTitle}
+                        onChange={() => toggleTitleTrack(activeTrackIndex)}
+                        className="h-4 w-4 rounded border-border"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        피처링
-                      </label>
-                      <input
-                        value={track.featuring}
-                        onChange={(event) =>
-                          updateTrack(index, "featuring", event.target.value)
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        작곡
-                      </label>
-                      <input
-                        value={track.composer}
-                        onChange={(event) =>
-                          updateTrack(index, "composer", event.target.value)
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        작사
-                      </label>
-                      <input
-                        value={track.lyricist}
-                        onChange={(event) =>
-                          updateTrack(index, "lyricist", event.target.value)
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        특이사항
-                      </label>
-                      <input
-                        value={track.notes}
-                        onChange={(event) =>
-                          updateTrack(index, "notes", event.target.value)
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
+                      타이틀
+                    </label>
+                    {tracks.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeTrack(activeTrackIndex)}
+                        className="text-red-500"
+                      >
+                        삭제
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))}
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      트랙명
+                    </label>
+                    <input
+                      value={activeTrack.trackTitle}
+                      onChange={(event) =>
+                        updateTrack(
+                          activeTrackIndex,
+                          "trackTitle",
+                          event.target.value,
+                        )
+                      }
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      피처링
+                    </label>
+                    <input
+                      value={activeTrack.featuring}
+                      onChange={(event) =>
+                        updateTrack(
+                          activeTrackIndex,
+                          "featuring",
+                          event.target.value,
+                        )
+                      }
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      작곡
+                    </label>
+                    <input
+                      value={activeTrack.composer}
+                      onChange={(event) =>
+                        updateTrack(
+                          activeTrackIndex,
+                          "composer",
+                          event.target.value,
+                        )
+                      }
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      작사
+                    </label>
+                    <input
+                      value={activeTrack.lyricist}
+                      onChange={(event) =>
+                        updateTrack(
+                          activeTrackIndex,
+                          "lyricist",
+                          event.target.value,
+                        )
+                      }
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      편곡
+                    </label>
+                    <input
+                      value={activeTrack.arranger}
+                      onChange={(event) =>
+                        updateTrack(
+                          activeTrackIndex,
+                          "arranger",
+                          event.target.value,
+                        )
+                      }
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      가사
+                    </label>
+                    <textarea
+                      value={activeTrack.lyrics}
+                      onChange={(event) =>
+                        updateTrack(
+                          activeTrackIndex,
+                          "lyrics",
+                          event.target.value,
+                        )
+                      }
+                      className="h-24 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      특이사항
+                    </label>
+                    <input
+                      value={activeTrack.notes}
+                      onChange={(event) =>
+                        updateTrack(
+                          activeTrackIndex,
+                          "notes",
+                          event.target.value,
+                        )
+                      }
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              음원 파일 업로드
+              전체 음원 파일 업로드
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              허용 형식: WAV/MP3 · 최대 {uploadMaxMb}MB
+              허용 형식: WAV/ZIP · 최대 {uploadMaxMb}MB
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              용량이 크거나 첨부가 어려운 경우 이메일로 음원만 발송해주세요.{" "}
+              <span className="font-semibold text-foreground">
+                {APP_CONFIG.supportEmail}
+              </span>
             </p>
             <div className="mt-4">
               <input
                 type="file"
                 multiple
-                accept=".wav,.mp3,audio/*"
+                accept=".wav,.zip,application/zip"
                 onChange={onFileChange}
                 className="w-full rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm text-muted-foreground"
               />
@@ -682,14 +892,16 @@ export function AlbumWizard({
           )}
 
           <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => handleSave("DRAFT")}
-              disabled={isSaving}
-              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground disabled:cursor-not-allowed"
-            >
-              임시 저장
-            </button>
+            {!isGuest && (
+              <button
+                type="button"
+                onClick={() => handleSave("DRAFT")}
+                disabled={isSaving}
+                className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground disabled:cursor-not-allowed"
+              >
+                임시 저장
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setStep(3)}
@@ -791,10 +1003,10 @@ export function AlbumWizard({
                 STEP 04
               </p>
               <h2 className="font-display mt-2 text-2xl text-foreground">
-                무통장 입금 안내
+                결제하기
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                입금 정보를 확인한 뒤 입금자명을 입력해주세요.
+                카드 결제 또는 무통장 입금을 선택할 수 있습니다.
               </p>
             </div>
             <button
@@ -808,34 +1020,83 @@ export function AlbumWizard({
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              입금 계좌
+              결제 방식 선택
             </p>
-            <div className="mt-4 grid gap-4 text-sm text-foreground md:grid-cols-3">
-              <div>
-                <p className="text-xs text-muted-foreground">은행</p>
-                <p className="mt-1 font-semibold">{APP_CONFIG.bankName}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">계좌번호</p>
-                <p className="mt-1 font-semibold">{APP_CONFIG.bankAccount}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">예금주</p>
-                <p className="mt-1 font-semibold">{APP_CONFIG.bankHolder}</p>
-              </div>
-            </div>
-            <div className="mt-6 space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                입금자명
-              </label>
-              <input
-                value={bankDepositorName}
-                onChange={(event) => setBankDepositorName(event.target.value)}
-                placeholder="입금자명을 입력해주세요."
-                className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-              />
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("CARD")}
+                className={`rounded-2xl border p-4 text-left transition ${
+                  paymentMethod === "CARD"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                }`}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
+                  Card
+                </p>
+                <p className="mt-2 text-sm font-semibold">카드 결제</p>
+                <p className="mt-2 text-xs opacity-80">
+                  KG모빌리언스 연동 예정 · 접수 후 결제 링크 안내
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("BANK")}
+                className={`rounded-2xl border p-4 text-left transition ${
+                  paymentMethod === "BANK"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                }`}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
+                  Bank
+                </p>
+                <p className="mt-2 text-sm font-semibold">무통장 입금</p>
+                <p className="mt-2 text-xs opacity-80">
+                  입금 확인 후 진행이 시작됩니다.
+                </p>
+              </button>
             </div>
           </div>
+
+          {paymentMethod === "BANK" ? (
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                무통장 입금 안내
+              </p>
+              <div className="mt-4 grid gap-4 text-sm text-foreground md:grid-cols-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">은행</p>
+                  <p className="mt-1 font-semibold">{APP_CONFIG.bankName}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">계좌번호</p>
+                  <p className="mt-1 font-semibold">{APP_CONFIG.bankAccount}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">예금주</p>
+                  <p className="mt-1 font-semibold">{APP_CONFIG.bankHolder}</p>
+                </div>
+              </div>
+              <div className="mt-6 space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  입금자명
+                </label>
+                <input
+                  value={bankDepositorName}
+                  onChange={(event) => setBankDepositorName(event.target.value)}
+                  placeholder="입금자명을 입력해주세요."
+                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
+              카드 결제는 KG모빌리언스 연동 후 자동화 예정입니다. 현재는 접수
+              완료 후 담당자가 결제 링크를 안내드립니다.
+            </div>
+          )}
 
           {notice.error && (
             <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
@@ -863,16 +1124,35 @@ export function AlbumWizard({
             접수 완료
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            입금 확인 후 진행 상태가 업데이트됩니다.
+            결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
-          {completionId && (
+          {completionId && !isGuest && (
             <button
               type="button"
-              onClick={() => router.push(`/dashboard/submissions/${completionId}`)}
+              onClick={() =>
+                router.push(`/dashboard/submissions/${completionId}`)
+              }
               className="mt-6 rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5"
             >
               진행 상황 보기
             </button>
+          )}
+          {isGuest && (
+            <div className="mt-6 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                비회원 조회 코드:{" "}
+                <span className="font-semibold text-foreground">
+                  {guestToken}
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={() => router.push(`/track/${guestToken}`)}
+                className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5"
+              >
+                진행 상황 조회
+              </button>
+            </div>
           )}
         </div>
       )}

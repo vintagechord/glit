@@ -26,11 +26,16 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Optional (UI/config)
 NEXT_PUBLIC_SUPPORT_EMAIL=onside17@daum.net
+NEXT_PUBLIC_SUPPORT_PHONE=010-5556-7083
 NEXT_PUBLIC_BANK_NAME=신한은행
 NEXT_PUBLIC_BANK_ACCOUNT=123-456-789012
 NEXT_PUBLIC_BANK_HOLDER=온사이드
 NEXT_PUBLIC_PRE_REVIEW_PRICE=0
 NEXT_PUBLIC_UPLOAD_MAX_MB=200
+
+# Optional (welcome email)
+RESEND_API_KEY=your_resend_key
+RESEND_FROM="Onside <no-reply@onside.local>"
 ```
 
 3) Supabase SQL (run in SQL Editor)
@@ -39,6 +44,8 @@ NEXT_PUBLIC_UPLOAD_MAX_MB=200
 supabase/migrations/0001_profiles.sql
 supabase/migrations/0002_core.sql
 supabase/migrations/0003_storage.sql
+supabase/migrations/0004_guest_access.sql
+supabase/migrations/0005_extras.sql
 supabase/seed.sql
 ```
 
@@ -52,12 +59,12 @@ npm run dev
 - Auth: 회원가입/로그인/로그아웃 + profiles 자동 생성
 - 심의 접수: 음반/뮤직비디오 Wizard (STEP01~05)
 - 파일 업로드: Supabase Storage signed upload (로컬 디스크 미사용)
-- 결제: 무통장 입금 안내 + 입금자명 입력 → PAYMENT_PENDING
+- 결제: 카드/무통장 선택 + 입금 확인 → PAYMENT_PENDING
 - 진행상황: 방송국별 상태 테이블 + 실시간 갱신
 - 결과 통보: 이벤트 타임라인
 - 신청서 다운로드: `/forms`
 - 노래방 등록 요청: `/karaoke-request`
-- 관리자: `/admin` (접수 관리, 결제 승인, 방송국 상태, 패키지/방송국 설정)
+- 관리자: `/admin` (접수 관리, 결제 승인, 방송국 상태, 패키지/방송국/배너 설정)
 
 ## Realtime
 
@@ -93,3 +100,4 @@ NEXT_PUBLIC_APP_URL
 - Render 무료 플랜의 휘발성 디스크에 파일을 저장하지 않습니다.
 - `public/forms/*` 파일은 MVP용 placeholder입니다.
 - 관리자 계정은 Supabase `profiles` 테이블에서 `role='admin'`으로 설정하세요.
+- 이메일 인증 없이 가입하려면 Supabase Auth 설정에서 Email Confirm을 꺼주세요.

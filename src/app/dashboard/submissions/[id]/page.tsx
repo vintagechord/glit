@@ -12,11 +12,11 @@ export default async function SubmissionDetailPage({
 }: {
   params: { id: string };
 }) {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { data: submission } = await supabase
     .from("submissions")
     .select(
-      "id, title, artist_name, status, payment_status, created_at, updated_at, package:packages ( name, station_count, price_krw )",
+      "id, title, artist_name, status, payment_status, payment_method, amount_krw, created_at, updated_at, package:packages ( name, station_count, price_krw )",
     )
     .eq("id", params.id)
     .maybeSingle();

@@ -13,10 +13,12 @@ export default async function AdminKaraokePage({
 }: {
   searchParams: { status?: string };
 }) {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   let query = supabase
     .from("karaoke_requests")
-    .select("id, title, artist, contact, notes, status, created_at")
+    .select(
+      "id, title, artist, contact, notes, status, created_at, guest_name, guest_email, guest_phone",
+    )
     .order("created_at", { ascending: false });
 
   if (searchParams.status) {
@@ -69,12 +71,19 @@ export default async function AdminKaraokePage({
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {request.artist ?? "-"} · {request.contact}
+                    {request.guest_name ? " · 비회원" : ""}
                   </p>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {formatDateTime(request.created_at)}
                 </p>
               </div>
+              {request.guest_name && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  담당자 {request.guest_name} · {request.guest_phone ?? "-"} ·{" "}
+                  {request.guest_email ?? "-"}
+                </p>
+              )}
               <p className="mt-3 text-xs text-muted-foreground">
                 {request.notes ?? "요청 사항 없음"}
               </p>

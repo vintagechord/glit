@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 import { AlbumWizard } from "@/features/submissions/album-wizard";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -8,14 +6,10 @@ export const metadata = {
 };
 
 export default async function AlbumSubmissionPage() {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
 
   const { data: packageRows } = await supabase
     .from("packages")
@@ -49,14 +43,14 @@ export default async function AlbumSubmissionPage() {
             음반 심의 접수
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            STEP01~05 중 현재는 패키지 선택과 신청서/파일 업로드까지 진행할 수
-            있습니다.
+            비회원도 접수할 수 있으며, 로그인 시 마이페이지에서 진행 상황을
+            확인할 수 있습니다.
           </p>
         </div>
       </div>
 
       <div className="mt-8">
-        <AlbumWizard packages={packages} userId={user.id} />
+        <AlbumWizard packages={packages} userId={user?.id ?? null} />
       </div>
     </div>
   );

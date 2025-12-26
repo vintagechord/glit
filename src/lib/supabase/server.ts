@@ -3,20 +3,19 @@ import { cookies } from "next/headers";
 
 import { getSupabaseEnv } from "./env";
 
-export function createServerSupabase() {
-  const cookieStore = cookies();
+export async function createServerSupabase() {
+  const cookieStore = await cookies();
   const { url, anonKey } = getSupabaseEnv();
 
   return createServerClient(url, anonKey, {
     cookies: {
-      get(name) {
-        return cookieStore.get(name)?.value;
+      getAll() {
+        return cookieStore.getAll();
       },
-      set(name, value, options) {
-        cookieStore.set({ name, value, ...options });
-      },
-      remove(name, options) {
-        cookieStore.set({ name, value: "", ...options });
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookieStore.set({ name, value, ...options });
+        });
       },
     },
   });

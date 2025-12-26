@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { redirect } from "next/navigation";
 
+import { sendWelcomeEmail } from "@/lib/email";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export type ActionState = {
@@ -54,7 +55,7 @@ export async function loginAction(
     };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error) {
@@ -82,7 +83,7 @@ export async function signupAction(
     };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
@@ -99,8 +100,15 @@ export async function signupAction(
     return { error: "회원가입을 완료할 수 없습니다." };
   }
 
+  await sendWelcomeEmail({
+    email: parsed.data.email,
+    name: parsed.data.name,
+  });
+
   if (!data.session) {
-    return { message: "가입 완료! 이메일 확인 후 로그인해주세요." };
+    return {
+      message: "가입 완료! 환영 이메일을 전송했습니다. 로그인해주세요.",
+    };
   }
 
   redirect("/dashboard");
@@ -122,7 +130,7 @@ export async function updateProfileAction(
     };
   }
 
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const {
     data: { user },
     error: userError,
@@ -150,7 +158,7 @@ export async function updateProfileAction(
 }
 
 export async function signOutAction() {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   await supabase.auth.signOut();
   redirect("/");
 }

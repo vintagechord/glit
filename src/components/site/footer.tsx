@@ -5,39 +5,67 @@ import { APP_CONFIG } from "@/lib/config";
 export function SiteFooter() {
   return (
     <footer className="border-t border-border/60 bg-background/80">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-6 py-10 md:grid-cols-[1.2fr_1fr_1fr]">
-        <div className="space-y-3">
-          <p className="text-sm font-semibold tracking-[0.3em] text-foreground">
-            ONSIDE
-          </p>
-          <p className="text-sm text-muted-foreground">
-            음원/뮤직비디오 심의 접수와 진행 상황을 한 번에 관리하는 온라인
-            플랫폼.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            대표 메일: {APP_CONFIG.supportEmail}
-          </p>
+      <div className="mx-auto w-full max-w-6xl px-6 py-10">
+        <div className="grid gap-6 border-b border-border/60 pb-6 md:grid-cols-2">
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              CS CENTER
+            </p>
+            <p className="text-2xl font-semibold text-foreground">
+              {APP_CONFIG.supportPhone}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              이메일 {APP_CONFIG.supportEmail}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              상담시간 {APP_CONFIG.supportHours}
+            </p>
+          </div>
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              BANK INFO
+            </p>
+            <p className="text-sm text-muted-foreground">
+              예금주: <span className="font-semibold">{APP_CONFIG.bankHolder}</span>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {APP_CONFIG.bankName} {APP_CONFIG.bankAccount}
+            </p>
+            {APP_CONFIG.bankLink ? (
+              <Link
+                href={APP_CONFIG.bankLink}
+                className="inline-flex items-center rounded-full border border-border/70 px-3 py-1 text-xs font-semibold text-foreground transition hover:border-foreground"
+              >
+                인터넷뱅킹 바로가기
+              </Link>
+            ) : null}
+          </div>
         </div>
-        <div className="space-y-2 text-sm text-muted-foreground">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">
-            서비스
-          </p>
-          <Link href="/guide" className="block hover:text-foreground">
-            심의 안내
+
+        <div className="flex flex-wrap gap-4 border-b border-border/60 py-4 text-xs text-muted-foreground">
+          <Link href="/about" className="transition hover:text-foreground">
+            About Us
           </Link>
-          <Link href="/dashboard/new" className="block hover:text-foreground">
-            온라인 접수
-          </Link>
-          <Link href="/forms" className="block hover:text-foreground">
-            신청서 다운로드
-          </Link>
+          <span>회사소개</span>
+          <span>이용약관</span>
+          <span>개인정보처리방침</span>
+          <span>이용안내</span>
+          <span>제휴안내</span>
         </div>
-        <div className="space-y-2 text-sm text-muted-foreground">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">
-            안내
+
+        <div className="space-y-2 pt-4 text-xs text-muted-foreground">
+          <p>
+            회사명: {APP_CONFIG.businessName} · 대표자:{" "}
+            {APP_CONFIG.businessRep} · 주소: {APP_CONFIG.businessAddress} · 전화:{" "}
+            {APP_CONFIG.supportPhone} · 이메일: {APP_CONFIG.supportEmail}
           </p>
-          <p>운영시간: 평일 10:00 - 18:00</p>
-          <p>무통장 입금 안내 및 확인은 관리자 승인 후 처리됩니다.</p>
+          <p>
+            사업자등록번호: {APP_CONFIG.businessRegNo} · 통신판매업신고번호:{" "}
+            {APP_CONFIG.businessMailOrderNo} · 개인정보 보호책임자:{" "}
+            {APP_CONFIG.privacyOfficer} · 호스팅 제공자:{" "}
+            {APP_CONFIG.hostingProvider}
+          </p>
+          <p>Copyright © {APP_CONFIG.businessName}. All Rights Reserved.</p>
         </div>
       </div>
     </footer>

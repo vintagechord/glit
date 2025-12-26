@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { HomeReviewPanel } from "@/features/home/home-review-panel";
+import { createServerSupabase } from "@/lib/supabase/server";
+
 const featureHighlights = [
   {
     title: "실시간 진행 알림",
@@ -11,7 +14,7 @@ const featureHighlights = [
   },
   {
     title: "관리자 승인",
-    description: "무통장 입금 확인부터 최종 결과까지 단계별로 관리합니다.",
+    description: "결제 확인부터 최종 결과까지 단계별로 관리합니다.",
   },
 ];
 
@@ -23,7 +26,7 @@ const serviceCards = [
   },
   {
     title: "M/V 심의",
-    description: "유통용 · 방송용 심의 접수를 분리해 효율적으로.",
+    description: "TV 송출/온라인 업로드 심의를 분리해 효율적으로.",
     href: "/dashboard/new/mv",
   },
   {
@@ -33,125 +36,227 @@ const serviceCards = [
   },
 ];
 
-const steps = [
-  { label: "패키지 선택", detail: "방송국 묶음/옵션 선택" },
-  { label: "신청서 업로드", detail: "음원, 영상, 가사 자료 등록" },
-  { label: "옵션 설정", detail: "사전검토 · 노래방 요청" },
-  { label: "무통장 입금", detail: "입금자명 입력 및 확인" },
-  { label: "접수 완료", detail: "진행 상황 실시간 추적" },
+const sampleStations = [
+  {
+    id: "sample-1",
+    status: "NOT_SENT",
+    updated_at: new Date(Date.now() + 86400000).toISOString(),
+    station: { name: "KBS" },
+  },
+  {
+    id: "sample-2",
+    status: "RECEIVED",
+    updated_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    station: { name: "MBC" },
+  },
+  {
+    id: "sample-3",
+    status: "APPROVED",
+    updated_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+    station: { name: "SBS" },
+  },
+  {
+    id: "sample-4",
+    status: "NEEDS_FIX",
+    updated_at: new Date(Date.now() - 86400000 * 3).toISOString(),
+    station: { name: "EBS" },
+  },
+  {
+    id: "sample-5",
+    status: "NOT_SENT",
+    updated_at: new Date(Date.now() + 86400000 * 2).toISOString(),
+    station: { name: "Mnet" },
+  },
+  {
+    id: "sample-6",
+    status: "RECEIVED",
+    updated_at: new Date(Date.now() - 86400000).toISOString(),
+    station: { name: "JTBC" },
+  },
 ];
 
-const timeline = [
-  { title: "SUBMITTED", detail: "접수 완료 및 파일 검수" },
-  { title: "PAYMENT", detail: "입금 확인 및 결제 승인" },
-  { title: "PRE-REVIEW", detail: "사전검토 진행(옵션)" },
-  { title: "IN REVIEW", detail: "방송국별 심의 진행" },
-  { title: "RESULT", detail: "승인/수정 요청 통보" },
-];
+export default async function Home() {
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-const stationPreview = [
-  { name: "KBS", status: "RECEIVED" },
-  { name: "MBC", status: "IN REVIEW" },
-  { name: "SBS", status: "APPROVED" },
-  { name: "EBS", status: "NEEDS FIX" },
-];
+  const isLoggedIn = Boolean(user);
+  const heroVideoDesktop =
+    process.env.NEXT_PUBLIC_HERO_VIDEO_DESKTOP ??
+    "/media/hero/onside-hero-desktop.mp4";
+  const heroVideoMobile =
+    process.env.NEXT_PUBLIC_HERO_VIDEO_MOBILE ??
+    "/media/hero/onside-hero-mobile.mp4";
+  const heroVideoPoster =
+    process.env.NEXT_PUBLIC_HERO_VIDEO_POSTER ??
+    "/media/hero/onside-hero-poster.jpg";
+  const hasHeroVideo = Boolean(heroVideoDesktop || heroVideoMobile);
 
-export default function Home() {
+  const sampleAlbum = {
+    id: "sample-album",
+    title: "샘플 앨범 심의",
+    status: "IN_PROGRESS",
+    updated_at: new Date().toISOString(),
+  };
+  const sampleMv = {
+    id: "sample-mv",
+    title: "샘플 MV 심의",
+    status: "WAITING_PAYMENT",
+    updated_at: new Date().toISOString(),
+  };
+
+  let albumSubmission: typeof sampleAlbum | null = isLoggedIn
+    ? null
+    : sampleAlbum;
+  let mvSubmission: typeof sampleMv | null = isLoggedIn ? null : sampleMv;
+  let albumStations = isLoggedIn ? [] : sampleStations;
+  let mvStations = isLoggedIn ? [] : sampleStations;
+  let albumDetailHref = "/track";
+  let mvDetailHref = "/track";
+
+  if (user) {
+    const { data: albumData } = await supabase
+      .from("submissions")
+      .select("id, title, status, updated_at")
+      .eq("user_id", user.id)
+      .eq("type", "ALBUM")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const { data: mvData } = await supabase
+      .from("submissions")
+      .select("id, title, status, updated_at, type")
+      .eq("user_id", user.id)
+      .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    albumSubmission = albumData ?? null;
+    mvSubmission = mvData ?? null;
+
+    if (albumSubmission) {
+      albumDetailHref = `/dashboard/submissions/${albumSubmission.id}`;
+      const { data: albumReviews } = await supabase
+        .from("station_reviews")
+        .select("id, status, updated_at, station:stations ( name )")
+        .eq("submission_id", albumSubmission.id)
+        .order("updated_at", { ascending: false });
+
+      albumStations = albumReviews ?? [];
+    }
+
+    if (mvSubmission) {
+      mvDetailHref = `/dashboard/submissions/${mvSubmission.id}`;
+      const { data: mvReviews } = await supabase
+        .from("station_reviews")
+        .select("id, status, updated_at, station:stations ( name )")
+        .eq("submission_id", mvSubmission.id)
+        .order("updated_at", { ascending: false });
+
+      mvStations = mvReviews ?? [];
+    }
+  }
+
   return (
     <div className="relative overflow-hidden">
-      <div className="pointer-events-none absolute left-[-20%] top-[-10%] h-[420px] w-[420px] rounded-full bg-emerald-400/20 blur-[140px] dark:bg-emerald-500/20" />
-      <div className="pointer-events-none absolute right-[-10%] top-[10%] h-[360px] w-[360px] rounded-full bg-amber-300/20 blur-[130px] dark:bg-amber-400/20" />
+      <div className="pointer-events-none absolute left-[-20%] top-[-10%] h-[420px] w-[420px] rounded-full bg-amber-200/60 blur-[160px] dark:bg-amber-300/20" />
+      <div className="pointer-events-none absolute right-[-15%] top-[10%] h-[380px] w-[380px] rounded-full bg-indigo-200/40 blur-[160px] dark:bg-indigo-400/20" />
+      <div className="pointer-events-none absolute bottom-[-10%] left-[20%] h-[320px] w-[320px] rounded-full bg-rose-200/40 blur-[160px] dark:bg-rose-400/20" />
 
-      <section className="mx-auto grid w-full max-w-6xl items-center gap-12 px-6 pb-14 pt-16 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <span className="inline-flex items-center rounded-full border border-border/60 bg-background/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-foreground/80">
-            심의 접수 플랫폼
-          </span>
-          <h1 className="font-display text-4xl leading-tight text-foreground sm:text-5xl">
-            Onside에서 음원과 MV 심의를
-            <br />
-            한 번에 접수하고 관리하세요.
-          </h1>
-          <p className="max-w-xl text-base text-muted-foreground sm:text-lg">
-            접수부터 결과 통보까지 모두 온라인으로. 패키지 선택, 파일 업로드,
-            진행 상태 추적을 한 화면에서 해결합니다.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/dashboard/new"
-              className="inline-flex items-center rounded-full bg-foreground px-6 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
-            >
-              온라인 심의 신청
-            </Link>
-            <Link
-              href="/guide"
-              className="inline-flex items-center rounded-full border border-border/70 px-6 py-3 text-sm font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-foreground"
-            >
-              심의 안내 보기
-            </Link>
+      <section className="mx-auto w-full max-w-6xl px-6 pb-10 pt-14">
+        <div className="relative overflow-hidden rounded-[36px] border border-border/60 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.94),_rgba(254,249,237,0.92),_rgba(248,244,255,0.9))] shadow-[0_24px_80px_rgba(31,41,55,0.15)] dark:bg-[radial-gradient(circle_at_top,_rgba(36,38,53,0.95),_rgba(26,27,38,0.95),_rgba(21,22,31,0.95))]">
+          <div className="absolute inset-0">
+            {hasHeroVideo ? (
+              <>
+                <video
+                  className="hidden h-full w-full object-cover opacity-70 sm:block"
+                  poster={heroVideoPoster}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                >
+                  <source src={heroVideoDesktop} type="video/mp4" />
+                </video>
+                <video
+                  className="h-full w-full object-cover opacity-70 sm:hidden"
+                  poster={heroVideoPoster}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                >
+                  <source
+                    src={heroVideoMobile || heroVideoDesktop}
+                    type="video/mp4"
+                  />
+                </video>
+              </>
+            ) : (
+              <div className="h-full w-full bg-gradient-to-br from-amber-100/80 via-white/80 to-indigo-100/70 dark:from-amber-300/10 dark:via-white/5 dark:to-indigo-300/10" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-r from-background via-background/70 to-transparent" />
           </div>
-          <div className="grid gap-4 pt-6 sm:grid-cols-3">
-            {featureHighlights.map((feature) => (
-              <div
-                key={feature.title}
-                className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm"
-              >
-                <p className="text-sm font-semibold text-foreground">
-                  {feature.title}
-                </p>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  {feature.description}
-                </p>
+
+          <div className="relative z-10 grid gap-10 p-8 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <span className="inline-flex items-center rounded-full border border-border/60 bg-background/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-foreground/80">
+                심의 접수 플랫폼
+              </span>
+              <h1 className="font-display text-4xl leading-tight text-foreground sm:text-5xl">
+                Onside에서 음원과 MV 심의를
+                <br />
+                한 번에 접수하고 관리하세요.
+              </h1>
+              <p className="max-w-xl text-base text-muted-foreground sm:text-lg">
+                접수부터 결과 통보까지 모두 온라인으로. 패키지 선택, 파일
+                업로드, 진행 상태 추적을 한 화면에서 해결합니다.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/dashboard/new/album"
+                  className="inline-flex items-center rounded-full bg-foreground px-6 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
+                >
+                  음반 심의 신청
+                </Link>
+                <Link
+                  href="/dashboard/new/mv"
+                  className="inline-flex items-center rounded-full border border-border/70 bg-background/70 px-6 py-3 text-sm font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-foreground"
+                >
+                  뮤직비디오 심의 신청
+                </Link>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-[32px] border border-border/60 bg-card/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)] animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
-          <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            <span>접수 현황</span>
-            <span>Live</span>
-          </div>
-          <div className="mt-6 space-y-5">
-            <div className="rounded-2xl border border-dashed border-border/80 bg-background/60 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 01-05
-              </p>
-              <p className="mt-2 text-sm font-semibold text-foreground">
-                패키지 선택 → 파일 업로드 → 옵션 선택 → 무통장 입금 → 접수 완료
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
-              <p className="text-sm font-semibold text-foreground">
-                방송국별 진행 상황
-              </p>
-              <div className="mt-3 grid gap-2 text-xs">
-                {stationPreview.map((station) => (
+              <div className="grid gap-4 pt-6 sm:grid-cols-3">
+                {featureHighlights.map((feature) => (
                   <div
-                    key={station.name}
-                    className="flex items-center justify-between rounded-full border border-border/60 bg-background/70 px-3 py-2"
+                    key={feature.title}
+                    className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm"
                   >
-                    <span className="font-semibold text-foreground">
-                      {station.name}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {station.status}
-                    </span>
+                    <p className="text-sm font-semibold text-foreground">
+                      {feature.title}
+                    </p>
+                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                      {feature.description}
+                    </p>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
-              <p className="text-sm font-semibold text-foreground">
-                입금 확인 대기
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                관리자 승인 후 자동으로 상태가 업데이트됩니다.
-              </p>
-              <div className="mt-3 h-1.5 w-full rounded-full bg-muted">
-                <div className="h-1.5 w-2/5 rounded-full bg-foreground" />
-              </div>
-            </div>
+
+            <HomeReviewPanel
+              isLoggedIn={isLoggedIn}
+              albumSubmission={albumSubmission}
+              mvSubmission={mvSubmission}
+              albumStations={albumStations}
+              mvStations={mvStations}
+              albumDetailHref={albumDetailHref}
+              mvDetailHref={mvDetailHref}
+            />
           </div>
         </div>
       </section>
@@ -170,15 +275,21 @@ export default function Home() {
             href="/forms"
             className="text-sm font-semibold text-muted-foreground transition hover:text-foreground"
           >
-            신청서 다운로드 안내 →
+            신청서(구양식) 다운로드 접수 안내 →
           </Link>
         </div>
         <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {serviceCards.map((card) => (
+          {serviceCards.map((card, index) => (
             <Link
               key={card.title}
               href={card.href}
-              className="group rounded-3xl border border-border/60 bg-card/80 p-6 transition hover:-translate-y-1 hover:border-foreground"
+              className={`group rounded-3xl border border-border/60 p-6 transition hover:-translate-y-1 hover:border-foreground ${
+                index === 0
+                  ? "bg-gradient-to-br from-amber-50/80 via-white/70 to-amber-100/80 dark:from-amber-300/10 dark:via-white/5 dark:to-amber-400/10"
+                  : index === 1
+                    ? "bg-gradient-to-br from-indigo-50/80 via-white/70 to-indigo-100/80 dark:from-indigo-300/10 dark:via-white/5 dark:to-indigo-400/10"
+                    : "bg-gradient-to-br from-rose-50/80 via-white/70 to-rose-100/80 dark:from-rose-300/10 dark:via-white/5 dark:to-rose-400/10"
+              }`}
             >
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 Onside
@@ -208,7 +319,7 @@ export default function Home() {
                 STEP 01-05로 한 번에 끝내기
               </h2>
               <p className="mt-3 max-w-xl text-sm text-muted-foreground">
-                상품/방송국 패키지 선택부터 입금 확인까지 흐름을 간단하게
+                상품/방송국 패키지 선택부터 결제 확인까지 흐름을 간단하게
                 설계했습니다.
               </p>
             </div>
@@ -220,86 +331,21 @@ export default function Home() {
             </Link>
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-5">
-            {steps.map((step, index) => (
-              <div
-                key={step.label}
-                className="rounded-2xl border border-border/60 bg-card/70 p-4"
-              >
-                <p className="text-xs font-semibold text-muted-foreground">
-                  STEP {String(index + 1).padStart(2, "0")}
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {step.label}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {step.detail}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto w-full max-w-6xl px-6 pb-20 pt-10">
-        <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              진행 상태
-            </p>
-            <h2 className="font-display text-3xl text-foreground">
-              방송국별 상태를 실시간으로 추적합니다.
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              관리자 업데이트가 즉시 반영되어 접수 내역 페이지에서 최신 정보를
-              확인할 수 있습니다.
-            </p>
-            <div className="space-y-4">
-              {timeline.map((item, index) => (
+            {["패키지 선택", "신청서 업로드", "옵션 선택", "결제하기", "접수 완료"].map(
+              (label, index) => (
                 <div
-                  key={item.title}
-                  className="flex items-start gap-4 rounded-2xl border border-border/60 bg-background/70 p-4"
+                  key={label}
+                  className="rounded-2xl border border-border/60 bg-card/70 p-4"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border/80 text-xs font-semibold text-foreground">
-                    {String(index + 1).padStart(2, "0")}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {item.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.detail}
-                    </p>
-                  </div>
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    STEP {String(index + 1).padStart(2, "0")}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">
+                    {label}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-[32px] border border-border/60 bg-card/80 p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-foreground">
-                방송국별 진행 표
-              </h3>
-              <span className="text-xs text-muted-foreground">오늘 업데이트</span>
-            </div>
-            <div className="mt-4 space-y-3 text-sm">
-              {stationPreview.map((station) => (
-                <div
-                  key={station.name}
-                  className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/80 px-4 py-3"
-                >
-                  <span className="font-semibold text-foreground">
-                    {station.name}
-                  </span>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    {station.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 rounded-2xl border border-dashed border-border/80 bg-background/70 p-4 text-xs text-muted-foreground">
-              심의 결과 통보, 수정 요청 사항, 최종 완료 상태가 이 영역에
-              표시됩니다.
-            </div>
+              ),
+            )}
           </div>
         </div>
       </section>

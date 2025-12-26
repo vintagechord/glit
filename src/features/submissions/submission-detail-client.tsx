@@ -11,6 +11,8 @@ type Submission = {
   artist_name: string | null;
   status: string;
   payment_status: string;
+  payment_method: string | null;
+  amount_krw: number | null;
   created_at: string;
   updated_at: string;
   package?: {
@@ -49,18 +51,28 @@ const statusLabels: Record<string, string> = {
   COMPLETED: "완료",
 };
 
+const paymentMethodLabels: Record<string, string> = {
+  BANK: "무통장",
+  CARD: "카드",
+};
+
 export function SubmissionDetailClient({
   submissionId,
   initialSubmission,
   initialEvents,
   initialStationReviews,
+  enableRealtime = true,
 }: {
   submissionId: string;
   initialSubmission: Submission;
   initialEvents: SubmissionEvent[];
   initialStationReviews: StationReview[];
+  enableRealtime?: boolean;
 }) {
-  const supabase = React.useMemo(() => createClient(), []);
+  const supabase = React.useMemo(
+    () => (enableRealtime ? createClient() : null),
+    [enableRealtime],
+  );
   const [submission, setSubmission] =
     React.useState<Submission>(initialSubmission);
   const [events, setEvents] = React.useState<SubmissionEvent[]>(
@@ -71,10 +83,11 @@ export function SubmissionDetailClient({
   );
 
   const fetchLatest = React.useCallback(async () => {
+    if (!supabase) return;
     const { data: submissionData } = await supabase
       .from("submissions")
       .select(
-        "id, title, artist_name, status, payment_status, created_at, updated_at, package:packages ( name, station_count, price_krw )",
+        "id, title, artist_name, status, payment_status, payment_method, amount_krw, created_at, updated_at, package:packages ( name, station_count, price_krw )",
       )
       .eq("id", submissionId)
       .maybeSingle();
@@ -107,6 +120,7 @@ export function SubmissionDetailClient({
   }, [submissionId, supabase]);
 
   React.useEffect(() => {
+    if (!enableRealtime || !supabase) return;
     const channel = supabase
       .channel(`submission-${submissionId}`)
       .on(
@@ -144,7 +158,7 @@ export function SubmissionDetailClient({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchLatest, submissionId, supabase]);
+  }, [enableRealtime, fetchLatest, submissionId, supabase]);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -186,15 +200,26 @@ export function SubmissionDetailClient({
             <div>
               <p className="text-xs text-muted-foreground">금액</p>
               <p className="mt-1 font-semibold">
-                {submission.package?.price_krw
-                  ? `${formatCurrency(submission.package.price_krw)}원`
-                  : "-"}
+                {submission.amount_krw
+                  ? `${formatCurrency(submission.amount_krw)}원`
+                  : submission.package?.price_krw
+                    ? `${formatCurrency(submission.package.price_krw)}원`
+                    : "-"}
               </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">결제 상태</p>
               <p className="mt-1 font-semibold">
                 {submission.payment_status}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">결제 방식</p>
+              <p className="mt-1 font-semibold">
+                {submission.payment_method
+                  ? paymentMethodLabels[submission.payment_method] ??
+                    submission.payment_method
+                  : "-"}
               </p>
             </div>
             <div>

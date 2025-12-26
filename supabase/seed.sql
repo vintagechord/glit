@@ -7,6 +7,7 @@ values
   ('KBS Joy', 'KBS_JOY', true),
   ('KBS2', 'KBS2', true),
   ('Mnet', 'MNET', true),
+  ('ETN', 'ETN', true),
   ('tvN', 'TVN', true),
   ('JTBC', 'JTBC', true),
   ('Channel A', 'CHANNELA', true),

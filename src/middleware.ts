@@ -2,8 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { updateSession } from "@/lib/supabase/middleware";
 
-const protectedPrefixes = ["/dashboard", "/admin"];
-
 function withCookies(target: NextResponse, source: NextResponse) {
   source.cookies.getAll().forEach((cookie) => {
     target.cookies.set(cookie);
@@ -14,9 +12,11 @@ function withCookies(target: NextResponse, source: NextResponse) {
 export async function middleware(request: NextRequest) {
   const { response, user, supabase } = await updateSession(request);
   const { pathname } = request.nextUrl;
-  const isProtected = protectedPrefixes.some((path) =>
-    pathname.startsWith(path),
-  );
+  const isAdminRoute = pathname.startsWith("/admin");
+  const isDashboardRoute = pathname.startsWith("/dashboard");
+  const isPublicDashboardRoute = pathname.startsWith("/dashboard/new");
+  const isProtected =
+    (isDashboardRoute && !isPublicDashboardRoute) || isAdminRoute;
 
   if (isProtected && !user) {
     const redirectUrl = request.nextUrl.clone();
@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
     return withCookies(NextResponse.redirect(redirectUrl), response);
   }
 
-  if (pathname.startsWith("/admin") && user) {
+  if (isAdminRoute && user) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")

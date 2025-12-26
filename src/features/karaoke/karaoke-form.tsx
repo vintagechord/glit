@@ -16,11 +16,14 @@ type UploadState = {
 
 const uploadMaxBytes = APP_CONFIG.uploadMaxMb * 1024 * 1024;
 
-export function KaraokeForm({ userId }: { userId: string }) {
+export function KaraokeForm({ userId }: { userId?: string | null }) {
   const supabase = React.useMemo(() => createClient(), []);
+  const isGuest = !userId;
   const [title, setTitle] = React.useState("");
   const [artist, setArtist] = React.useState("");
   const [contact, setContact] = React.useState("");
+  const [guestName, setGuestName] = React.useState("");
+  const [guestEmail, setGuestEmail] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const [upload, setUpload] = React.useState<UploadState>({
@@ -30,6 +33,16 @@ export function KaraokeForm({ userId }: { userId: string }) {
   });
   const [notice, setNotice] = React.useState<KaraokeActionState>({});
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const guestTokenRef = React.useRef<string>();
+  const uploadIdRef = React.useRef<string>();
+
+  if (!guestTokenRef.current) {
+    guestTokenRef.current = crypto.randomUUID();
+  }
+
+  if (!uploadIdRef.current) {
+    uploadIdRef.current = crypto.randomUUID();
+  }
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] ?? null;
@@ -73,9 +86,43 @@ export function KaraokeForm({ userId }: { userId: string }) {
     });
   };
 
+  const createSignedUpload = async (fileName: string) => {
+    if (userId) {
+      const path = `${userId}/karaoke/${fileName}`;
+      const { data, error } = await supabase.storage
+        .from("submissions")
+        .createSignedUploadUrl(path, { upsert: true });
+      if (error || !data) {
+        throw new Error("Upload url creation failed");
+      }
+      return { signedUrl: data.signedUrl, path: data.path };
+    }
+
+    const response = await fetch("/api/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        submissionId: uploadIdRef.current,
+        guestToken: guestTokenRef.current,
+        kind: "karaoke",
+        fileName,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Upload url creation failed");
+    }
+
+    return (await response.json()) as { signedUrl: string; path: string };
+  };
+
   const handleSubmit = async () => {
     if (!title || !contact) {
       setNotice({ error: "곡명과 연락처를 입력해주세요." });
+      return;
+    }
+    if (isGuest && (!guestName || !guestEmail)) {
+      setNotice({ error: "담당자명과 이메일을 입력해주세요." });
       return;
     }
 
@@ -85,22 +132,23 @@ export function KaraokeForm({ userId }: { userId: string }) {
       let filePath: string | undefined;
       if (file) {
         const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`;
-        const path = `${userId}/karaoke/${fileName}`;
         setUpload((prev) => ({ ...prev, status: "uploading" }));
 
-        const { data, error } = await supabase.storage
-          .from("submissions")
-          .createSignedUploadUrl(path, { upsert: true });
-
-        if (error || !data) {
+        let signedUrl: string;
+        let path: string;
+        try {
+          const uploadData = await createSignedUpload(fileName);
+          signedUrl = uploadData.signedUrl;
+          path = uploadData.path;
+        } catch {
           setUpload((prev) => ({ ...prev, status: "error" }));
           setNotice({ error: "파일 업로드 URL 생성 실패" });
           return;
         }
 
-        await uploadWithProgress(data.signedUrl, file);
+        await uploadWithProgress(signedUrl, file);
         setUpload((prev) => ({ ...prev, status: "done", progress: 100 }));
-        filePath = data.path;
+        filePath = path;
       }
 
       const result = await createKaraokeRequestAction({
@@ -109,6 +157,9 @@ export function KaraokeForm({ userId }: { userId: string }) {
         contact,
         notes: notes || undefined,
         filePath,
+        guestName: isGuest ? guestName : undefined,
+        guestEmail: isGuest ? guestEmail : undefined,
+        guestPhone: isGuest ? contact : undefined,
       });
 
       if (result.error) {
@@ -120,6 +171,8 @@ export function KaraokeForm({ userId }: { userId: string }) {
       setTitle("");
       setArtist("");
       setContact("");
+      setGuestName("");
+      setGuestEmail("");
       setNotes("");
       setFile(null);
       setUpload({ name: "", progress: 0, status: "idle" });
@@ -133,6 +186,31 @@ export function KaraokeForm({ userId }: { userId: string }) {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
+        {isGuest && (
+          <>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                담당자명
+              </label>
+              <input
+                value={guestName}
+                onChange={(event) => setGuestName(event.target.value)}
+                className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                이메일
+              </label>
+              <input
+                type="email"
+                value={guestEmail}
+                onChange={(event) => setGuestEmail(event.target.value)}
+                className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              />
+            </div>
+          </>
+        )}
         <div className="space-y-2">
           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
             곡명

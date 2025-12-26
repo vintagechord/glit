@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 import { MvWizard } from "@/features/submissions/mv-wizard";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -8,35 +6,16 @@ export const metadata = {
 };
 
 export default async function MvSubmissionPage() {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  const { data: packageRows } = await supabase
-    .from("packages")
-    .select(
-      "id, name, station_count, price_krw, description, package_stations ( station:stations ( id, name, code ) )",
-    )
-    .eq("is_active", true)
-    .order("station_count", { ascending: true });
-
-  const packages =
-    packageRows?.map((pkg) => ({
-      id: pkg.id,
-      name: pkg.name,
-      stationCount: pkg.station_count,
-      priceKrw: pkg.price_krw,
-      description: pkg.description,
-      stations:
-        pkg.package_stations
-          ?.map((row) => row.station)
-          .filter(Boolean) ?? [],
-    })) ?? [];
+  const { data: stationRows } = await supabase
+    .from("stations")
+    .select("id, name, code")
+    .in("code", ["KBS", "MBC", "SBS", "ETN", "MNET"])
+    .eq("is_active", true);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -49,13 +28,28 @@ export default async function MvSubmissionPage() {
             MV 심의 접수
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            유통용/방송용 MV 심의를 선택하고 파일 업로드를 진행합니다.
+            비회원도 접수할 수 있으며, 로그인 시 마이페이지에서 진행 상황을
+            확인할 수 있습니다.
           </p>
         </div>
       </div>
 
+      <div className="mt-8 rounded-[28px] border border-border/60 bg-background/80 p-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          접수 전 참고사항
+        </p>
+        <h2 className="font-display mt-2 text-2xl text-foreground">
+          뮤직비디오 심의, 이것만 확인하세요
+        </h2>
+        <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+          <li>뮤직비디오 심의는 음원 심의 완료 후 진행 가능합니다.</li>
+          <li>TV 송출 목적은 방송국별 개별 심의가 필요합니다.</li>
+          <li>온라인 업로드 목적은 기본 MV 심의로 유통/업로드 가능합니다.</li>
+        </ul>
+      </div>
+
       <div className="mt-8">
-        <MvWizard packages={packages} userId={user.id} />
+        <MvWizard stations={stationRows ?? []} userId={user?.id ?? null} />
       </div>
     </div>
   );

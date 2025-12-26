@@ -14,7 +14,7 @@ export default function NewSubmissionPage() {
         접수 유형을 선택하세요.
       </h1>
       <p className="mt-3 text-sm text-muted-foreground">
-        음반과 MV 심의를 분리하여 접수할 수 있습니다.
+        비회원도 바로 접수할 수 있으며, 로그인 시 내역이 마이페이지에 저장됩니다.
       </p>
 
       <div className="mt-8 grid gap-6 md:grid-cols-2">

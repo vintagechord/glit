@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   await supabase.auth.signOut();
 
   const redirectUrl = new URL("/", request.url);

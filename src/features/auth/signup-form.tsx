@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 
 import { signupAction, type ActionState } from "./actions";
 
 const initialState: ActionState = {};
 
 export function SignupForm() {
-  const [state, formAction] = useFormState(signupAction, initialState);
+  const [state, formAction] = useActionState(signupAction, initialState);
 
   return (
     <form action={formAction} className="space-y-4">

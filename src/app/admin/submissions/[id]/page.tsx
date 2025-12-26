@@ -33,16 +33,21 @@ const stationStatuses = [
   "NEEDS_FIX",
 ];
 
+const paymentMethodLabels: Record<string, string> = {
+  BANK: "무통장",
+  CARD: "카드",
+};
+
 export default async function AdminSubmissionDetailPage({
   params,
 }: {
   params: { id: string };
 }) {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { data: submission } = await supabase
     .from("submissions")
     .select(
-      "id, title, artist_name, status, payment_status, pre_review_requested, karaoke_requested, bank_depositor_name, admin_memo, created_at, updated_at, type, package:packages ( name )",
+      "id, title, artist_name, status, payment_status, payment_method, amount_krw, mv_base_selected, pre_review_requested, karaoke_requested, bank_depositor_name, admin_memo, created_at, updated_at, type, guest_name, guest_company, guest_email, guest_phone, package:packages ( name )",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -104,6 +109,23 @@ export default async function AdminSubmissionDetailPage({
                 </p>
               </div>
               <div>
+                <p className="text-xs text-muted-foreground">금액</p>
+                <p className="mt-1 font-semibold text-foreground">
+                  {submission.amount_krw
+                    ? `${submission.amount_krw.toLocaleString()}원`
+                    : "-"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">결제 방식</p>
+                <p className="mt-1 font-semibold text-foreground">
+                  {submission.payment_method
+                    ? paymentMethodLabels[submission.payment_method] ??
+                      submission.payment_method
+                    : "-"}
+                </p>
+              </div>
+              <div>
                 <p className="text-xs text-muted-foreground">사전검토</p>
                 <p className="mt-1 font-semibold text-foreground">
                   {submission.pre_review_requested ? "요청" : "미요청"}
@@ -117,6 +139,43 @@ export default async function AdminSubmissionDetailPage({
               </div>
             </div>
           </div>
+          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              신청자 정보
+            </p>
+            {submission.guest_name ? (
+              <div className="mt-4 space-y-2 text-sm text-foreground">
+                <p>
+                  <span className="text-xs text-muted-foreground">구분</span>{" "}
+                  비회원
+                </p>
+                <p>
+                  <span className="text-xs text-muted-foreground">담당자</span>{" "}
+                  {submission.guest_name}
+                </p>
+                {submission.guest_company && (
+                  <p>
+                    <span className="text-xs text-muted-foreground">
+                      회사
+                    </span>{" "}
+                    {submission.guest_company}
+                  </p>
+                )}
+                <p>
+                  <span className="text-xs text-muted-foreground">연락처</span>{" "}
+                  {submission.guest_phone ?? "-"}
+                </p>
+                <p>
+                  <span className="text-xs text-muted-foreground">이메일</span>{" "}
+                  {submission.guest_email ?? "-"}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-dashed border-border/70 bg-background/70 px-4 py-3 text-xs text-muted-foreground">
+                회원 접수입니다. 마이페이지 프로필 정보를 참고해주세요.
+              </div>
+            )}
+          </div>
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               결제 상태
@@ -126,10 +185,15 @@ export default async function AdminSubmissionDetailPage({
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    입금자명
+                    결제 방식
                   </label>
                   <input
-                    value={submission.bank_depositor_name ?? ""}
+                    value={
+                      submission.payment_method
+                        ? paymentMethodLabels[submission.payment_method] ??
+                          submission.payment_method
+                        : "-"
+                    }
                     readOnly
                     className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
                   />
@@ -149,6 +213,20 @@ export default async function AdminSubmissionDetailPage({
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    입금자명
+                  </label>
+                  <input
+                    value={
+                      submission.payment_method === "BANK"
+                        ? submission.bank_depositor_name ?? ""
+                        : "카드 결제"
+                    }
+                    readOnly
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                  />
                 </div>
               </div>
               <div className="space-y-2">

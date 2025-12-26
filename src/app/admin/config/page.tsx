@@ -10,7 +10,7 @@ export const metadata = {
 };
 
 export default async function AdminConfigPage() {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const { data: packages } = await supabase
     .from("packages")
     .select(

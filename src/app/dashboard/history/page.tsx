@@ -8,7 +8,7 @@ export const metadata = {
 };
 
 export default async function HistoryPage() {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
