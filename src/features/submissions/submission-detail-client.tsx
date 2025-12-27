@@ -15,7 +15,7 @@ type Submission = {
   type: string;
   status: string;
   payment_status: string;
-  payment_method: string | null;
+  payment_method?: string | null;
   amount_krw: number | null;
   created_at: string;
   updated_at: string;
