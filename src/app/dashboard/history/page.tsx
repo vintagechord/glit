@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { formatDateTime } from "@/lib/format";
+import { HistoryList } from "@/components/dashboard/history-list";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = {
@@ -23,7 +23,7 @@ const statusLabels: Record<string, { label: string; tone: string }> = {
     tone: "bg-violet-500/10 text-violet-600",
   },
   WAITING_PAYMENT: {
-    label: "결제대기",
+    label: "결제 확인 중",
     tone: "bg-amber-500/10 text-amber-700",
   },
   IN_PROGRESS: { label: "진행중", tone: "bg-indigo-500/10 text-indigo-600" },
@@ -34,7 +34,7 @@ const statusLabels: Record<string, { label: string; tone: string }> = {
 const paymentLabels: Record<string, { label: string; tone: string }> = {
   UNPAID: { label: "미결제", tone: "bg-slate-500/10 text-slate-600" },
   PAYMENT_PENDING: {
-    label: "결제확인중",
+    label: "결제 확인 중",
     tone: "bg-amber-500/10 text-amber-700",
   },
   PAID: { label: "결제완료", tone: "bg-emerald-500/10 text-emerald-600" },
@@ -59,6 +59,29 @@ export default async function HistoryPage() {
     .order("updated_at", { ascending: false })
     .eq("user_id", user.id);
 
+  const items =
+    submissions?.map((submission, index) => {
+      const statusInfo =
+        statusLabels[submission.status] ?? statusLabels.DRAFT;
+      const paymentInfo =
+        paymentLabels[submission.payment_status] ?? paymentLabels.UNPAID;
+      const typeLabel = typeLabels[submission.type] ?? submission.type;
+      return {
+        id: submission.id,
+        order: index + 1,
+        title: submission.title || "제목 미입력",
+        artistName: submission.artist_name || "아티스트 미입력",
+        typeLabel,
+        createdAt: submission.created_at,
+        status: statusInfo,
+        payment: paymentInfo,
+        showPaymentChip: !(
+          submission.status === "WAITING_PAYMENT" &&
+          submission.payment_status === "PAYMENT_PENDING"
+        ),
+      };
+    }) ?? [];
+
   return (
     <DashboardShell
       title="나의 심의 내역"
@@ -73,82 +96,7 @@ export default async function HistoryPage() {
         </Link>
       }
     >
-      <div className="space-y-3">
-        {submissions && submissions.length > 0 ? (
-          submissions.map((submission, index) => {
-            const statusInfo =
-              statusLabels[submission.status] ?? statusLabels.DRAFT;
-            const paymentInfo =
-              paymentLabels[submission.payment_status] ??
-              paymentLabels.UNPAID;
-            const typeLabel = typeLabels[submission.type] ?? submission.type;
-            return (
-              <div
-                key={submission.id}
-                className="grid items-center gap-4 rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-sm transition hover:border-foreground md:grid-cols-[28px_28px_1fr_auto]"
-              >
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-border"
-                />
-                <span className="text-xs text-muted-foreground">
-                  {index + 1}
-                </span>
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-200/70 via-white/40 to-indigo-200/60 text-xs font-semibold text-foreground">
-                    ONS
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-foreground">
-                        {submission.title || "제목 미입력"}
-                      </p>
-                      <span
-                        className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${statusInfo.tone}`}
-                      >
-                        {statusInfo.label}
-                      </span>
-                      <span
-                        className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${paymentInfo.tone}`}
-                      >
-                        {paymentInfo.label}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {submission.artist_name || "아티스트 미입력"} · {typeLabel} ·{" "}
-                      {formatDateTime(submission.created_at)}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                  <Link
-                    href={`/dashboard/submissions/${submission.id}`}
-                    className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
-                  >
-                    상세
-                  </Link>
-                  <button
-                    type="button"
-                    className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground"
-                  >
-                    재생
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground"
-                  >
-                    추가
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
-            아직 접수된 내역이 없습니다.
-          </div>
-        )}
-      </div>
+      <HistoryList initialItems={items} />
     </DashboardShell>
   );
 }

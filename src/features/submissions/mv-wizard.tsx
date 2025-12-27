@@ -168,7 +168,7 @@ export function MvWizard({
   const submissionId = submissionIdRef.current;
   const guestToken = guestTokenRef.current;
   const shouldShowGuestLookup = isGuest || Boolean(completionGuestToken);
-  const guestLookupCode = completionId ?? completionGuestToken ?? guestToken;
+  const guestLookupCode = completionGuestToken ?? guestToken ?? completionId;
   const stationMap = React.useMemo(
     () => new Map(stations.map((station) => [station.code, station])),
     [stations],

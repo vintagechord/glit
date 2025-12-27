@@ -6,7 +6,6 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { ThemeToggle } from "./theme-toggle";
 
 const navLinks = [
-  { label: "심의 안내", href: "/guide" },
   { label: "심의 신청", href: "/dashboard/new" },
   { label: "진행상황", href: "/track" },
   { label: "노래방 등록", href: "/karaoke-request" },

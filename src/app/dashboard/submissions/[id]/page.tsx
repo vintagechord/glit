@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = {
@@ -21,22 +22,39 @@ export default async function SubmissionDetailPage({
   const fullSelect =
     "id, user_id, title, artist_name, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, package:packages ( name, station_count, price_krw )";
 
-  const { data: submission, error: submissionError } = await supabase
-    .from("submissions")
-    .select(fullSelect)
-    .eq("id", params.id)
-    .maybeSingle();
+  const fetchSubmission = async (
+    client: typeof supabase,
+    column: "id" | "guest_token",
+    value: string,
+  ) => {
+    const { data, error } = await client
+      .from("submissions")
+      .select(fullSelect)
+      .eq(column, value)
+      .maybeSingle();
 
-  const { data: fallbackSubmission } =
-    !submission && submissionError?.code === "PGRST204"
-      ? await supabase
-          .from("submissions")
-          .select(baseSelect)
-          .eq("id", params.id)
-          .maybeSingle()
-      : { data: null };
+    if (!error) {
+      return data;
+    }
 
-  const resolvedSubmission = submission ?? fallbackSubmission;
+    if (error.code === "PGRST204") {
+      const { data: fallbackData } = await client
+        .from("submissions")
+        .select(baseSelect)
+        .eq(column, value)
+        .maybeSingle();
+      return fallbackData ?? null;
+    }
+
+    return null;
+  };
+
+  let resolvedSubmission = await fetchSubmission(supabase, "id", params.id);
+
+  if (!resolvedSubmission && !user) {
+    const admin = createAdminClient();
+    resolvedSubmission = await fetchSubmission(admin, "guest_token", params.id);
+  }
 
   if (!resolvedSubmission) {
     notFound();

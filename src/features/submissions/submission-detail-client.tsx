@@ -60,7 +60,7 @@ const statusLabels: Record<string, string> = {
   DRAFT: "임시 저장",
   SUBMITTED: "접수 완료",
   PRE_REVIEW: "사전 검토",
-  WAITING_PAYMENT: "결제 대기",
+  WAITING_PAYMENT: "결제 확인 중",
   IN_PROGRESS: "심의 진행",
   RESULT_READY: "결과 확인",
   COMPLETED: "완료",

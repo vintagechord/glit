@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useRef } from "react";
 
 import { signupAction, type ActionState } from "./actions";
 
@@ -9,6 +10,17 @@ const initialState: ActionState = {};
 
 export function SignupForm() {
   const [state, formAction] = useActionState(signupAction, initialState);
+  const router = useRouter();
+  const didRedirect = useRef(false);
+
+  useEffect(() => {
+    if (!state.message || didRedirect.current) return;
+    didRedirect.current = true;
+    if (typeof window !== "undefined") {
+      window.alert(state.message);
+    }
+    router.push("/login");
+  }, [state.message, router]);
 
   return (
     <form action={formAction} className="space-y-4">

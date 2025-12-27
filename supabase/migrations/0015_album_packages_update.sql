@@ -1,21 +1,5 @@
 insert into public.stations (name, code, is_active)
 values
-  ('KBS', 'KBS', true),
-  ('MBC', 'MBC', true),
-  ('SBS', 'SBS', true),
-  ('EBS', 'EBS', true),
-  ('KBS Joy', 'KBS_JOY', true),
-  ('KBS2', 'KBS2', true),
-  ('Mnet', 'MNET', true),
-  ('ETN', 'ETN', true),
-  ('tvN', 'TVN', true),
-  ('JTBC', 'JTBC', true),
-  ('Channel A', 'CHANNELA', true),
-  ('MBN', 'MBN', true),
-  ('YTN', 'YTN', true),
-  ('SBS Plus', 'SBS_PLUS', true),
-  ('MBC Music', 'MBC_MUSIC', true),
-  ('KBS World', 'KBS_WORLD', true),
   ('CBS 기독교방송', 'CBS', true),
   ('WBS 원음방송', 'WBS', true),
   ('TBS 교통방송', 'TBS', true),
@@ -34,13 +18,19 @@ values
   ('3곳 패키지', 3, 50000, '핵심 방송국 3곳 심의 접수', true),
   ('7곳 패키지', 7, 70000, '주요 방송국 7곳 심의 접수', true),
   ('10곳 패키지', 10, 100000, '방송국 10곳 심의 접수', true),
-  ('13곳 패키지', 13, 130000, '방송국 13곳 심의 접수', true),
-  ('15곳 패키지', 15, 450000, '프리미엄 전체 방송국 패키지', true)
+  ('13곳 패키지', 13, 130000, '방송국 13곳 심의 접수', true)
 on conflict (name) do update
 set station_count = excluded.station_count,
     price_krw = excluded.price_krw,
     description = excluded.description,
     is_active = excluded.is_active;
+
+delete from public.package_stations
+where package_id in (
+  select id
+  from public.packages
+  where name in ('3곳 패키지', '7곳 패키지', '10곳 패키지', '13곳 패키지')
+);
 
 with package_map as (
   select id, name from public.packages
@@ -52,8 +42,7 @@ insert into public.package_stations (package_id, station_id)
 select package_map.id, station_map.id
 from package_map
 join station_map on station_map.code in ('KBS', 'MBC', 'SBS')
-where package_map.name = '3곳 패키지'
-on conflict do nothing;
+where package_map.name = '3곳 패키지';
 
 with package_map as (
   select id, name from public.packages
@@ -65,8 +54,7 @@ insert into public.package_stations (package_id, station_id)
 select package_map.id, station_map.id
 from package_map
 join station_map on station_map.code in ('KBS', 'MBC', 'SBS', 'CBS', 'WBS', 'TBS', 'YTN')
-where package_map.name = '7곳 패키지'
-on conflict do nothing;
+where package_map.name = '7곳 패키지';
 
 with package_map as (
   select id, name from public.packages
@@ -80,8 +68,7 @@ from package_map
 join station_map on station_map.code in (
   'KBS', 'MBC', 'SBS', 'TBS', 'CBS', 'WBS', 'PBC', 'BBS', 'YTN', 'ARIRANG'
 )
-where package_map.name = '10곳 패키지'
-on conflict do nothing;
+where package_map.name = '10곳 패키지';
 
 with package_map as (
   select id, name from public.packages
@@ -96,21 +83,4 @@ join station_map on station_map.code in (
   'KBS', 'MBC', 'SBS', 'TBS', 'CBS', 'WBS', 'PBC', 'BBS', 'YTN',
   'GYEONGIN_IFM', 'TBN', 'ARIRANG', 'KISS'
 )
-where package_map.name = '13곳 패키지'
-on conflict do nothing;
-
-with package_map as (
-  select id, name from public.packages
-),
-station_map as (
-  select id, code from public.stations
-)
-insert into public.package_stations (package_id, station_id)
-select package_map.id, station_map.id
-from package_map
-join station_map on station_map.code in (
-  'KBS', 'MBC', 'SBS', 'EBS', 'KBS2', 'MNET', 'JTBC', 'TVN', 'MBN', 'CHANNELA',
-  'YTN', 'SBS_PLUS', 'MBC_MUSIC', 'KBS_JOY', 'KBS_WORLD'
-)
-where package_map.name = '15곳 패키지'
-on conflict do nothing;
+where package_map.name = '13곳 패키지';

@@ -260,11 +260,11 @@ export function AlbumWizard({
     : null;
   const shouldShowGuestLookup = isGuest || completionTokens.length > 0;
   const completionCodesToShow = shouldShowGuestLookup
-    ? completionSubmissionIds.length > 0
-      ? completionSubmissionIds
-      : completionTokens.length > 0
-        ? completionTokens
-        : [currentSubmissionId]
+    ? completionTokens.length > 0
+      ? completionTokens
+      : completionSubmissionIds.length > 0
+        ? completionSubmissionIds
+        : [currentGuestToken]
     : [];
 
   React.useEffect(() => {

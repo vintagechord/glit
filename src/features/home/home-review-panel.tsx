@@ -72,7 +72,7 @@ const submissionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bg-slate-500/10 text-slate-600 dark:text-slate-200",
   },
   WAITING_PAYMENT: {
-    label: "결제 대기",
+    label: "결제 확인 중",
     tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
   SUBMITTED: {

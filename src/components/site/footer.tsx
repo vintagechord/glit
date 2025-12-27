@@ -310,14 +310,42 @@ const privacyContent = `온사이드(이하 "회사"라 함)는 회사가 운영
 
 회사는 해킹이나 컴퓨터 바이러스 등에 의해 회원의 개인정보가 유출되거나 훼손되는 것을 막기 위해 최선을 다하고 있습니다. 개인정보의 훼손에 대비해서 자료를 수시로 백업하고 있고, 최신 백신프로그램을 이용하여 이용자들의 개인정보나 자료가 누출되거나 손상되지 않도록 방지하고 있으며, 암호알고리즘 등을 통하여 네트워크상에서 개인정보를 안전하게 전송할 수 있도록 하고 있습니다. 그리고 침입차단시스템을 이용하여 외부로부터의 무단 접근을 통제하고 있으며, 기타 시스템적으로 안정성을 확보하기 위한 가능한 모든 기술적 장치를 갖추려 노력하고 있습니다.`;
 
+const partnershipContent = `제휴안내
+독창적인 아이디어나 사업모델을 가지고 계신 분은 언제든지 제안을 주세요.
+
+제안 절차
+1. 제휴 및 제안 접수 : 메일로 제안(연락처와 성함 필수)
+2. 담당자 검토 : 2~3일 정도 소요 됩니다.
+3. 연락 : 좋은 제안에 대해 연락을 드립니다.
+4. 채택 및 실행 : 채택이 되면 계약을 체결하고 실행을 합니다.
+
+접수 방법
+아래의 이메일로 제휴 문의 바랍니다.
+onside17@daum.net`;
+
 export function SiteFooter() {
   const [activeModal, setActiveModal] = React.useState<
-    "terms" | "privacy" | null
+    "terms" | "privacy" | "partnership" | null
   >(null);
 
   const closeModal = () => setActiveModal(null);
   const isTermsOpen = activeModal === "terms";
   const isPrivacyOpen = activeModal === "privacy";
+  const modalTitle = isTermsOpen
+    ? "이용약관"
+    : isPrivacyOpen
+      ? "개인정보처리방침"
+      : "제휴안내";
+  const modalTag = isTermsOpen
+    ? "Terms"
+    : isPrivacyOpen
+      ? "Privacy"
+      : "Partnership";
+  const modalContent = isTermsOpen
+    ? termsContent
+    : isPrivacyOpen
+      ? privacyContent
+      : partnershipContent;
 
   return (
     <footer className="border-t border-black bg-[#f05a28] text-black">
@@ -362,6 +390,12 @@ export function SiteFooter() {
         </div>
 
         <div className="flex flex-wrap gap-4 border-b border-black/30 py-4 text-sm font-semibold text-black">
+          <Link href="/about" className="transition hover:text-black">
+            About Us
+          </Link>
+          <Link href="/guide" className="transition hover:text-black">
+            심의 안내
+          </Link>
           <button
             type="button"
             onClick={() => setActiveModal("terms")}
@@ -376,7 +410,13 @@ export function SiteFooter() {
           >
             개인정보처리방침
           </button>
-          <span>제휴안내</span>
+          <button
+            type="button"
+            onClick={() => setActiveModal("partnership")}
+            className="transition hover:text-black"
+          >
+            제휴안내
+          </button>
         </div>
 
         <div className="space-y-2 pt-4 text-sm font-medium text-black">
@@ -398,15 +438,21 @@ export function SiteFooter() {
       </div>
 
       {activeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.25)]">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={closeModal}
+        >
+          <div
+            className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.25)]"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-black/10 px-6 py-4">
               <div className="flex items-center gap-3">
                 <span className="rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black">
-                  {isTermsOpen ? "이용약관" : "개인정보처리방침"}
+                  {modalTitle}
                 </span>
                 <span className="text-xs font-semibold uppercase tracking-[0.2em] text-black/60">
-                  {isTermsOpen ? "Terms" : "Privacy"}
+                  {modalTag}
                 </span>
               </div>
               <button
@@ -418,7 +464,7 @@ export function SiteFooter() {
               </button>
             </div>
             <div className="max-h-[70vh] overflow-y-auto px-6 py-5 text-xs leading-relaxed text-black/80 whitespace-pre-line">
-              {isTermsOpen ? termsContent : privacyContent}
+              {modalContent}
             </div>
           </div>
         </div>

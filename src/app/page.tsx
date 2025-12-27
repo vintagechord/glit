@@ -72,7 +72,8 @@ const heroCtas = [
 const featureHighlights = [
   {
     title: "실시간 진행 알림",
-    description: "방송국별 실시간 심의 진행상황 제공",
+    description:
+      "각 방송국별 심의 진행 상황을 실시간으로!\n회원/비회원 모두에게 제공",
     card:
       "bg-[#f7f8fb] text-[#1f2937] border-white/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#d7ecff] via-white to-[#eef6ff]",
@@ -97,7 +98,8 @@ const featureHighlights = [
   },
   {
     title: "파일 업로드",
-    description: "음원/영상 파일도 안전하게 업로드",
+    description:
+      "음원/M/V 신청서를 작성하며, 파일도 동시에 업로드하세요.\n심의 종료까지 파일은 안전하게 보관됩니다.",
     card:
       "bg-white text-[#1f2937] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#e7fff2] via-white to-[#eaf7ff]",
@@ -124,7 +126,8 @@ const featureHighlights = [
   },
   {
     title: "관리자 승인",
-    description: "접수 단계 최종 결과까지 전반적 관리",
+    description:
+      "심의 신청 단계만 따르면 문제 없으나,\n방송사 접수 시 관리자가 한번 더 확인!",
     card:
       "bg-[#eef2ff] text-[#1f2937] border-[#dbe5ff] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#fff4d6] via-white to-[#ffe9d6]",
@@ -410,7 +413,7 @@ export default async function Home() {
                     <div
                       className={`flip-card relative min-h-[170px] overflow-hidden rounded-[28px] border ${feature.card} transition-transform duration-500 group-hover:[transform:rotateY(180deg)]`}
                     >
-                      <div className="flip-face absolute inset-0 flex flex-col p-5 text-center transition-opacity duration-500 group-hover:opacity-0">
+                      <div className="flip-face absolute inset-0 z-0 flex flex-col p-5 text-center transition-opacity duration-300 group-hover:opacity-0">
                         <div
                           className={`relative mb-2 flex h-16 items-center justify-center overflow-hidden rounded-[18px] bg-gradient-to-br ${feature.visual}`}
                         >
@@ -420,8 +423,8 @@ export default async function Home() {
                         </div>
                         <p className="text-base font-semibold">{feature.title}</p>
                       </div>
-                      <div className="flip-face absolute inset-0 flex items-center justify-center px-5 text-center opacity-0 transition-opacity duration-500 group-hover:opacity-100 [transform:rotateY(180deg)]">
-                        <p className="text-sm font-semibold text-slate-700">
+                      <div className="absolute inset-0 z-10 flex items-center justify-center px-5 text-center opacity-0 transition-opacity duration-300 [transform:rotateY(180deg)] group-hover:opacity-100">
+                        <p className="text-sm font-semibold text-slate-900 whitespace-pre-line">
                           {feature.description}
                         </p>
                       </div>

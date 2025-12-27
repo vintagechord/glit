@@ -14,7 +14,7 @@ const statusLabels: Record<string, { label: string; tone: string }> = {
   SUBMITTED: { label: "접수", tone: "bg-sky-500/10 text-sky-600" },
   PRE_REVIEW: { label: "사전검토", tone: "bg-violet-500/10 text-violet-600" },
   WAITING_PAYMENT: {
-    label: "결제대기",
+    label: "결제 확인 중",
     tone: "bg-amber-500/10 text-amber-700",
   },
   IN_PROGRESS: { label: "진행중", tone: "bg-indigo-500/10 text-indigo-600" },
@@ -25,7 +25,7 @@ const statusLabels: Record<string, { label: string; tone: string }> = {
 const paymentLabels: Record<string, { label: string; tone: string }> = {
   UNPAID: { label: "미결제", tone: "bg-slate-500/10 text-slate-600" },
   PAYMENT_PENDING: {
-    label: "결제확인중",
+    label: "결제 확인 중",
     tone: "bg-amber-500/10 text-amber-700",
   },
   PAID: { label: "결제완료", tone: "bg-emerald-500/10 text-emerald-600" },
@@ -71,6 +71,10 @@ export default async function DashboardPage() {
               statusLabels[submission.status] ?? statusLabels.DRAFT;
             const paymentInfo =
               paymentLabels[submission.payment_status] ?? paymentLabels.UNPAID;
+            const shouldShowPaymentChip = !(
+              submission.status === "WAITING_PAYMENT" &&
+              submission.payment_status === "PAYMENT_PENDING"
+            );
             const typeLabel = typeLabels[submission.type] ?? submission.type;
             const stationReviews = submission.station_reviews ?? [];
             const totalStations = stationReviews.length;
@@ -109,11 +113,13 @@ export default async function DashboardPage() {
                     >
                       {statusInfo.label}
                     </span>
-                    <span
-                      className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${paymentInfo.tone}`}
-                    >
-                      {paymentInfo.label}
-                    </span>
+                    {shouldShowPaymentChip && (
+                      <span
+                        className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${paymentInfo.tone}`}
+                      >
+                        {paymentInfo.label}
+                      </span>
+                    )}
                     <Link
                       href={`/dashboard/submissions/${submission.id}`}
                       className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"

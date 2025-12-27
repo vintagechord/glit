@@ -5,9 +5,9 @@ type WelcomeEmailPayload = {
 
 export async function sendWelcomeEmail(payload: WelcomeEmailPayload) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM ?? "Onside <no-reply@onside.local>";
+  const from = process.env.RESEND_FROM;
 
-  if (!apiKey) {
+  if (!apiKey || !from) {
     return { ok: false, skipped: true } as const;
   }
 

@@ -100,18 +100,22 @@ export async function signupAction(
     return { error: "회원가입을 완료할 수 없습니다." };
   }
 
-  await sendWelcomeEmail({
+  const emailResult = await sendWelcomeEmail({
     email: parsed.data.email,
     name: parsed.data.name,
   });
 
-  if (!data.session) {
-    return {
-      message: "가입 완료! 환영 이메일을 전송했습니다. 로그인해주세요.",
-    };
+  if (!emailResult.ok && !emailResult.skipped) {
+    console.warn("Welcome email failed", emailResult);
   }
 
-  redirect("/dashboard");
+  if (data.session) {
+    await supabase.auth.signOut();
+  }
+
+  return {
+    message: "회원가입을 축하합니다. 로그인해 주세요.",
+  };
 }
 
 export async function updateProfileAction(

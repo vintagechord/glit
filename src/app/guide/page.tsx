@@ -35,36 +35,33 @@ const albumSteps = [
   },
 ];
 
-const mvNotes = [
+const mvSteps = [
   {
-    id: "mv-prereq",
-    content: "뮤직비디오 심의는 음원 심의 완료 후 진행 가능합니다.",
+    number: "01",
+    title: "뮤직비디오 심의란?",
+    description:
+      "음원 심의 완료 후 진행되며, 뮤직비디오의 송출/유통 목적에 맞는 심의 절차를 거칩니다. 폭력성·선정성·광고 노출 등 영상 요소를 확인합니다.",
   },
   {
-    id: "mv-purpose",
-    content: (
-      <span>
-        심의 목적은{" "}
-        <span className="font-semibold text-foreground">
-          ① TV 방송 송출과 ② 유통사 제출/온라인 업로드(YouTube 등)
-        </span>
-        로 나뉩니다.
-      </span>
-    ),
+    number: "02",
+    title: "방송국 및 영등위 심의 현황",
+    description:
+      "TV 송출 목적은 방송국별 개별 심의가 필요하고, 유통/온라인 목적은 한 곳 심의로 유통 제출이 가능합니다.",
+    bullets: [
+      "심의 목적: ① TV 방송 송출 ② 유통사 제출/온라인 업로드",
+      "권장 포맷: MOV · 1920×1080 · 29.97fps",
+      "심의 완료 후 등급분류 파일을 결과 페이지에서 다운로드",
+    ],
   },
   {
-    id: "mv-flow",
-    content:
-      "TV 송출 목적은 방송국별 개별 심의가 필요합니다. 온라인 송출 목적은 한 방송사 심의만으로 유통·온라인 송출이 가능합니다.",
-  },
-  {
-    id: "mv-format",
-    content: "권장 영상 파일 포맷 MOV · 1920×1080 · 29.97fps",
-  },
-  {
-    id: "mv-rating",
-    content:
-      "심의 완료 후 등급분류 파일을 결과 페이지에서 다운받을 수 있습니다.",
+    number: "03",
+    title: "Onside의 뮤비 심의 대행",
+    description: "뮤직비디오 접수를 빠르고 정확하게 진행합니다.",
+    bullets: [
+      "온라인 신청서 작성과 파일 업로드 동시 지원",
+      "관리자 2차 확인으로 방송국 접수 누락 최소화",
+      "진행 상황과 결과를 한눈에 보는 개별 페이지 제공",
+    ],
   },
 ];
 
@@ -80,14 +77,6 @@ export default function GuidePage() {
       </p>
 
       <section className="mt-10 rounded-[32px] border border-border/60 bg-card/80 p-8 shadow-[0_22px_70px_rgba(15,23,42,0.1)]">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="rounded-full border border-[#7ad97a] bg-[#8fe38f] px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900">
-            음반심의
-          </span>
-          <span className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            Album Review Guide
-          </span>
-        </div>
         <h2 className="font-display mt-4 text-2xl text-foreground">
           음반심의, 이렇게 진행됩니다
         </h2>
@@ -143,30 +132,41 @@ export default function GuidePage() {
       </section>
 
       <section className="mt-12 rounded-[32px] border border-border/60 bg-card/80 p-8 shadow-[0_22px_70px_rgba(15,23,42,0.1)]">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="rounded-full border border-[#d8d654] bg-[#e6e35b] px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900">
-            M/V심의
-          </span>
-          <span className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            M/V Review Guide
-          </span>
-        </div>
         <h2 className="font-display mt-4 text-2xl text-foreground">
-          접수 전 참고사항
+          뮤직비디오 심의, 이렇게 진행됩니다
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          뮤직비디오 심의, 이것만 확인하세요
-        </p>
 
-        <div className="mt-6 rounded-2xl border border-border/60 bg-background/70 p-5">
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            {mvNotes.map((note) => (
-              <li key={note.id} className="flex gap-3">
-                <span className="mt-2 h-1.5 w-1.5 rounded-full bg-foreground/70" />
-                <span>{note.content}</span>
-              </li>
-            ))}
-          </ul>
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          {mvSteps.map((step) => (
+            <div
+              key={step.number}
+              className="rounded-2xl border border-border/60 bg-background/70 p-5"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-xs font-semibold uppercase tracking-[0.2em] text-background">
+                  {step.number}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {step.title}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                {step.description}
+              </p>
+              {step.bullets && (
+                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                  {step.bullets.map((bullet) => (
+                    <li key={bullet} className="flex gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-foreground/70" />
+                      <span>{bullet}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
         </div>
 
         <div className="mt-6">
