@@ -26,7 +26,7 @@ type UploadState = {
   path?: string;
 };
 
-const isExternalUrl = (value?: string | null) =>
+const isExternalUrl = (value?: string | null): value is string =>
   Boolean(value && /^https?:\/\//i.test(value));
 
 const getPromotionTargets = (promotion: PromotionSummary) =>
