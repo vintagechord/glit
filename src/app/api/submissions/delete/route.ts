@@ -15,7 +15,7 @@ export async function POST(request: Request) {
 
   const payload = await request.json().catch(() => null);
   const ids = Array.isArray(payload?.ids)
-    ? payload.ids.filter((id) => typeof id === "string")
+    ? payload.ids.filter((id: unknown): id is string => typeof id === "string")
     : [];
 
   if (ids.length === 0) {

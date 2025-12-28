@@ -153,11 +153,16 @@ const HANGUL_T_LIST = [
   "ㅎ",
 ];
 
-const HANGUL_L_MAP = new Map(HANGUL_L_LIST.map((ch, index) => [ch, index]));
-const HANGUL_V_MAP = new Map(HANGUL_V_LIST.map((ch, index) => [ch, index]));
-const HANGUL_T_MAP = new Map(
-  HANGUL_T_LIST.map((ch, index) => [ch, index]).filter(([ch]) => ch),
+const HANGUL_L_MAP = new Map(
+  HANGUL_L_LIST.map((ch, index): [string, number] => [ch, index]),
 );
+const HANGUL_V_MAP = new Map(
+  HANGUL_V_LIST.map((ch, index): [string, number] => [ch, index]),
+);
+const HANGUL_T_ENTRIES = HANGUL_T_LIST.map(
+  (ch, index): [string, number] => [ch, index],
+).filter((entry): entry is [string, number] => Boolean(entry[0]));
+const HANGUL_T_MAP = new Map(HANGUL_T_ENTRIES);
 const HANGUL_L_TO_T_MAP = new Map(
   HANGUL_L_LIST.map((compat, index) => {
     const trailingIndex = HANGUL_T_MAP.get(compat);

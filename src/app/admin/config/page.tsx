@@ -130,7 +130,7 @@ export default async function AdminConfigPage() {
                   }
                   return row.station.code ?? null;
                 })
-                .filter(Boolean)
+                .filter((code): code is string => Boolean(code))
                 .filter((code) => albumStationCodeSet.has(code))
                 .join(", ");
               const expectedCodes =
