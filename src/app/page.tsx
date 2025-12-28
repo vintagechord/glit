@@ -219,6 +219,20 @@ type StationSnapshot = {
   } | null;
 };
 
+type SubmissionSnapshot = {
+  id: string;
+  title: string;
+  artist_name?: string | null;
+  status: string;
+  payment_status: string | null;
+  updated_at: string;
+  type?: string;
+  package?:
+    | Array<{ name?: string | null; station_count?: number | null }>
+    | { name?: string | null; station_count?: number | null }
+    | null;
+};
+
 const sampleStations: StationSnapshot[] = [
   {
     id: "sample-1",
@@ -276,7 +290,7 @@ export default async function Home() {
     "/media/hero/onside-hero-poster.jpg";
   const hasHeroVideo = Boolean(heroVideoDesktop || heroVideoMobile);
 
-  const sampleAlbum = {
+  const sampleAlbum: SubmissionSnapshot = {
     id: "sample-album",
     title: "샘플 앨범 심의",
     artist_name: "온사이드",
@@ -284,7 +298,7 @@ export default async function Home() {
     payment_status: "PAID",
     updated_at: new Date().toISOString(),
   };
-  const sampleMv = {
+  const sampleMv: SubmissionSnapshot = {
     id: "sample-mv",
     title: "샘플 MV 심의",
     artist_name: "온사이드",
@@ -293,10 +307,10 @@ export default async function Home() {
     updated_at: new Date().toISOString(),
   };
 
-  let albumSubmission: typeof sampleAlbum | null = isLoggedIn
+  let albumSubmission: SubmissionSnapshot | null = isLoggedIn
     ? null
     : sampleAlbum;
-  let mvSubmission: typeof sampleMv | null = isLoggedIn ? null : sampleMv;
+  let mvSubmission: SubmissionSnapshot | null = isLoggedIn ? null : sampleMv;
   let albumStations: StationSnapshot[] = isLoggedIn ? [] : sampleStations;
   let mvStations: StationSnapshot[] = isLoggedIn ? [] : sampleStations;
 

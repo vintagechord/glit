@@ -598,16 +598,25 @@ export function AlbumWizard({
         return;
       }
 
-      const rawChanges = Array.isArray(payload.changes)
-        ? payload.changes
-        : [];
+      const rawChanges: Array<{
+        from?: unknown;
+        to?: unknown;
+        index?: unknown;
+      }> = Array.isArray(payload.changes) ? payload.changes : [];
       const changes = rawChanges
-        .map((change) => ({
-          before: typeof change?.from === "string" ? change.from : "",
-          after: typeof change?.to === "string" ? change.to : "",
-          index: typeof change?.index === "number" ? change.index : undefined,
-        }))
-        .filter((change) => change.before && change.after);
+        .map(
+          (change: { from?: unknown; to?: unknown; index?: unknown }) => ({
+            before: typeof change?.from === "string" ? change.from : "",
+            after: typeof change?.to === "string" ? change.to : "",
+            index:
+              typeof change?.index === "number" ? change.index : undefined,
+          }),
+        )
+        .filter((change) => Boolean(change.before && change.after)) as Array<{
+        before: string;
+        after: string;
+        index?: number;
+      }>;
 
       updateTrack(activeTrackIndex, "lyrics", corrected);
       setSpellcheckChangesByTrack((prev) => ({

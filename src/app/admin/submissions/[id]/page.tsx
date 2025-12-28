@@ -49,6 +49,32 @@ const typeLabels: Record<string, string> = {
   MV_BROADCAST: "M/V 심의 (TV 송출)",
 };
 
+type SubmissionRow = {
+  id: string;
+  title: string | null;
+  artist_name: string | null;
+  status: string;
+  payment_status: string | null;
+  payment_method: string | null;
+  amount_krw: number | null;
+  mv_base_selected: boolean | null;
+  pre_review_requested: boolean | null;
+  karaoke_requested: boolean | null;
+  bank_depositor_name: string | null;
+  admin_memo: string | null;
+  mv_rating_file_path: string | null;
+  created_at: string;
+  updated_at: string;
+  type: string;
+  package?:
+    | Array<{ name?: string | null; station_count?: number | null }>
+    | { name?: string | null; station_count?: number | null }
+    | null;
+  guest_name?: string | null;
+  guest_company?: string | null;
+  guest_email?: string | null;
+  guest_phone?: string | null;
+};
 
 const paymentMethodLabels: Record<string, string> = {
   BANK: "무통장",
@@ -66,11 +92,15 @@ export default async function AdminSubmissionDetailPage({
   const guestSelect = `${baseSelect}, guest_name, guest_company, guest_email, guest_phone`;
 
   let hasGuestColumns = true;
-  let { data: submission, error: submissionError } = await supabase
+  let submission: SubmissionRow | null = null;
+  let submissionError: { message?: string; code?: string } | null = null;
+  const guestResult = await supabase
     .from("submissions")
     .select(guestSelect)
     .eq("id", params.id)
     .maybeSingle();
+  submission = (guestResult.data ?? null) as SubmissionRow | null;
+  submissionError = guestResult.error ?? null;
 
   if (
     submissionError?.message?.toLowerCase().includes("guest_name") ||
@@ -82,7 +112,7 @@ export default async function AdminSubmissionDetailPage({
       .select(baseSelect)
       .eq("id", params.id)
       .maybeSingle();
-    submission = fallback.data ?? null;
+    submission = (fallback.data ?? null) as SubmissionRow | null;
     submissionError = fallback.error ?? null;
   }
 
@@ -300,11 +330,11 @@ export default async function AdminSubmissionDetailPage({
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     결제 상태
                   </label>
-                  <select
-                    name="paymentStatus"
-                    defaultValue={submission.payment_status}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                  >
+                <select
+                  name="paymentStatus"
+                  defaultValue={submission.payment_status ?? "UNPAID"}
+                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                >
                     {paymentStatuses.map((status) => (
                       <option key={status.value} value={status.value}>
                         {status.label}

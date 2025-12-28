@@ -6,13 +6,20 @@ import {
   buildCustomRules,
   spellcheckText,
   type SpellcheckError,
-  type SpellcheckSuccess,
   type SpellcheckTerm,
 } from "@/lib/spellcheck";
 
 type SpellcheckRequest = {
   text?: string;
   mode?: string;
+};
+
+type SpellcheckApiSuccess = {
+  ok: true;
+  original: string;
+  corrected: string;
+  changes: Array<{ from: string; to: string; index: number }>;
+  meta: { engine: string; truncated: boolean };
 };
 
 export const runtime = "nodejs";
@@ -45,7 +52,7 @@ export async function POST(request: Request) {
       return NextResponse.json(result);
     }
 
-    const response: SpellcheckSuccess = {
+    const response: SpellcheckApiSuccess = {
       ok: true,
       original: result.original,
       corrected: result.corrected,

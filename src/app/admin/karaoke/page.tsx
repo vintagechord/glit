@@ -62,7 +62,7 @@ export default async function AdminKaraokePage({
   let requestsError = null as { message?: string; code?: string } | null;
   const guestResult = await buildQuery(guestSelect);
   requestsError = guestResult.error ?? null;
-  requests = (guestResult.data ?? []) as KaraokeRequestRow[];
+  requests = (guestResult.data ?? []) as unknown as KaraokeRequestRow[];
 
   if (
     requestsError?.message?.toLowerCase().includes("guest_name") ||
@@ -70,7 +70,7 @@ export default async function AdminKaraokePage({
   ) {
     hasGuestColumns = false;
     const fallback = await buildQuery(baseSelect);
-    requests = (fallback.data ?? []) as KaraokeRequestRow[];
+    requests = (fallback.data ?? []) as unknown as KaraokeRequestRow[];
     requestsError = fallback.error ?? null;
   }
 
@@ -187,7 +187,7 @@ export default async function AdminKaraokePage({
                 </select>
                 <select
                   name="paymentStatus"
-                  defaultValue={request.payment_status}
+                  defaultValue={request.payment_status ?? "UNPAID"}
                   className="rounded-2xl border border-border/70 bg-background px-4 py-2 text-xs"
                 >
                   {paymentStatusOptions.map((status) => (

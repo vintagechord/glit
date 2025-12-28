@@ -15,6 +15,35 @@ const typeLabels: Record<string, string> = {
   MV_BROADCAST: "MV 방송",
 };
 
+type SubmissionRow = {
+  id: string;
+  title: string | null;
+  artist_name: string | null;
+  status: string;
+  payment_status?: string | null;
+  payment_method?: string | null;
+  created_at: string;
+  updated_at: string | null;
+  type: string;
+  amount_krw: number | null;
+  is_oneclick: boolean | null;
+  package?:
+    | Array<{ name?: string | null; station_count?: number | null }>
+    | { name?: string | null; station_count?: number | null }
+    | null;
+  album_tracks?: Array<{
+    id: string;
+    track_no: number;
+    track_title: string | null;
+  }> | null;
+  station_reviews?: Array<{
+    id: string;
+    status: string;
+    updated_at: string | null;
+    station?: { name?: string | null } | Array<{ name?: string | null }>;
+  }> | null;
+};
+
 export default async function HistoryPage() {
   const supabase = await createServerSupabase();
   const {
@@ -30,11 +59,12 @@ export default async function HistoryPage() {
   const fallbackSelect =
     "id, title, artist_name, status, created_at, updated_at, type, amount_krw, is_oneclick, station_reviews ( id, status, updated_at, station:stations ( name ) )";
 
-  let { data: submissions, error: submissionError } = await supabase
+  const { data: initialData, error: submissionError } = await supabase
     .from("submissions")
     .select(fullSelect)
     .order("updated_at", { ascending: false })
     .eq("user_id", user.id);
+  let submissions = (initialData ?? null) as SubmissionRow[] | null;
 
   if (
     submissionError?.code === "PGRST204" ||
@@ -47,13 +77,13 @@ export default async function HistoryPage() {
       .eq("user_id", user.id);
 
     submissions =
-      fallback.data?.map((row) => ({
+      (fallback.data?.map((row) => ({
         ...row,
         payment_status: null,
         payment_method: null,
         package: null,
         album_tracks: [],
-      })) ?? null;
+      })) as SubmissionRow[]) ?? null;
   }
 
   if (submissions && submissions.length > 0) {
@@ -86,7 +116,7 @@ export default async function HistoryPage() {
         createdAt: submission.created_at,
         updatedAt: submission.updated_at,
         status: submission.status,
-        paymentStatus: submission.payment_status,
+        paymentStatus: submission.payment_status ?? null,
         paymentMethod: submission.payment_method ?? null,
         amountKrw: submission.amount_krw,
         isOneclick: submission.is_oneclick,

@@ -44,6 +44,23 @@ const labelMap = {
   ),
 } as const;
 
+type SubmissionRow = {
+  id: string;
+  title: string | null;
+  artist_name: string | null;
+  status: string;
+  payment_status: string | null;
+  type: string;
+  created_at: string;
+  updated_at: string | null;
+  amount_krw: number | null;
+  package?:
+    | Array<{ name?: string | null }>
+    | { name?: string | null }
+    | null;
+  guest_name?: string | null;
+};
+
 export default async function AdminSubmissionsPage({
   searchParams,
 }: {
@@ -92,8 +109,11 @@ export default async function AdminSubmissionsPage({
   };
 
   let hasGuestColumns = true;
-  let { data: submissions, error: submissionsError } =
-    await buildQuery(guestSelect);
+  let submissions: SubmissionRow[] = [];
+  let submissionsError = null as { message?: string; code?: string } | null;
+  const guestResult = await buildQuery(guestSelect);
+  submissionsError = guestResult.error ?? null;
+  submissions = (guestResult.data ?? []) as unknown as SubmissionRow[];
 
   if (
     submissionsError?.message?.toLowerCase().includes("guest_name") ||
@@ -101,7 +121,7 @@ export default async function AdminSubmissionsPage({
   ) {
     hasGuestColumns = false;
     const fallback = await buildQuery(baseSelect);
-    submissions = fallback.data ?? null;
+    submissions = (fallback.data ?? []) as unknown as SubmissionRow[];
     submissionsError = fallback.error ?? null;
   }
 
@@ -198,6 +218,10 @@ export default async function AdminSubmissionsPage({
             const packageInfo = Array.isArray(submission.package)
               ? submission.package[0]
               : submission.package;
+            const paymentStatusLabel = submission.payment_status
+              ? labelMap.payment[submission.payment_status] ??
+                submission.payment_status
+              : "-";
             return (
               <Link
                 key={submission.id}
@@ -219,9 +243,7 @@ export default async function AdminSubmissionsPage({
                     상태: {labelMap.status[submission.status] ?? submission.status}
                   </p>
                   <p>
-                    결제:{" "}
-                    {labelMap.payment[submission.payment_status] ??
-                      submission.payment_status}
+                    결제: {paymentStatusLabel}
                   </p>
                 </div>
                 <div className="text-xs text-muted-foreground md:text-right">
