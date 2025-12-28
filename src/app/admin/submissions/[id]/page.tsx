@@ -6,32 +6,46 @@ import {
   updateSubmissionStatusFormAction,
 } from "@/features/admin/actions";
 import { formatDateTime } from "@/lib/format";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = {
   title: "접수 상세 관리",
 };
 
+export const dynamic = "force-dynamic";
+
 const submissionStatuses = [
-  "DRAFT",
-  "SUBMITTED",
-  "PRE_REVIEW",
-  "WAITING_PAYMENT",
-  "IN_PROGRESS",
-  "RESULT_READY",
-  "COMPLETED",
+  { value: "DRAFT", label: "임시 저장" },
+  { value: "SUBMITTED", label: "접수 완료" },
+  { value: "PRE_REVIEW", label: "사전 검토" },
+  { value: "WAITING_PAYMENT", label: "결제 대기" },
+  { value: "IN_PROGRESS", label: "심의 진행" },
+  { value: "RESULT_READY", label: "결과 준비" },
+  { value: "COMPLETED", label: "완료" },
 ];
 
-const paymentStatuses = ["UNPAID", "PAYMENT_PENDING", "PAID", "REFUNDED"];
+const paymentStatuses = [
+  { value: "UNPAID", label: "미결제" },
+  { value: "PAYMENT_PENDING", label: "결제 확인 중" },
+  { value: "PAID", label: "결제 완료" },
+  { value: "REFUNDED", label: "환불" },
+];
 
 const stationStatuses = [
-  "NOT_SENT",
-  "SENT",
-  "RECEIVED",
-  "APPROVED",
-  "REJECTED",
-  "NEEDS_FIX",
+  { value: "NOT_SENT", label: "미전달" },
+  { value: "SENT", label: "전달 완료" },
+  { value: "RECEIVED", label: "접수 완료" },
+  { value: "APPROVED", label: "통과" },
+  { value: "REJECTED", label: "불통과" },
+  { value: "NEEDS_FIX", label: "수정 요청" },
 ];
+
+const typeLabels: Record<string, string> = {
+  ALBUM: "음반 심의",
+  MV_DISTRIBUTION: "M/V 심의 (유통/온라인)",
+  MV_BROADCAST: "M/V 심의 (TV 송출)",
+};
+
 
 const paymentMethodLabels: Record<string, string> = {
   BANK: "무통장",
@@ -43,7 +57,7 @@ export default async function AdminSubmissionDetailPage({
 }: {
   params: { id: string };
 }) {
-  const supabase = await createServerSupabase();
+  const supabase = createAdminClient();
   const { data: submission } = await supabase
     .from("submissions")
     .select(
@@ -80,7 +94,7 @@ export default async function AdminSubmissionDetailPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            Admin
+            관리자
           </p>
           <h1 className="font-display mt-2 text-3xl text-foreground">
             {submission.title || "제목 미입력"}
@@ -104,7 +118,7 @@ export default async function AdminSubmissionDetailPage({
               <div>
                 <p className="text-xs text-muted-foreground">유형</p>
                 <p className="mt-1 font-semibold text-foreground">
-                  {submission.type}
+                  {typeLabels[submission.type] ?? submission.type}
                 </p>
               </div>
               <div>
@@ -213,8 +227,8 @@ export default async function AdminSubmissionDetailPage({
                     className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
                   >
                     {paymentStatuses.map((status) => (
-                      <option key={status} value={status}>
-                        {status}
+                      <option key={status.value} value={status.value}>
+                        {status.label}
                       </option>
                     ))}
                   </select>
@@ -265,8 +279,8 @@ export default async function AdminSubmissionDetailPage({
                 className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
               >
                 {submissionStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
+                  <option key={status.value} value={status.value}>
+                    {status.label}
                   </option>
                 ))}
               </select>
@@ -362,8 +376,8 @@ export default async function AdminSubmissionDetailPage({
                     className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
                   >
                     {stationStatuses.map((status) => (
-                      <option key={status} value={status}>
-                        {status}
+                      <option key={status.value} value={status.value}>
+                        {status.label}
                       </option>
                     ))}
                   </select>

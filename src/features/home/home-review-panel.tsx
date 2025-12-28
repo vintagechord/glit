@@ -1,8 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
 
@@ -20,6 +18,7 @@ type SubmissionSummary = {
   title: string | null;
   status: string;
   updated_at: string;
+  payment_status?: string | null;
 };
 
 type TabKey = "album" | "mv";
@@ -66,33 +65,25 @@ const resultStatusMap: Record<string, { label: string; tone: string }> = {
   },
 };
 
-const submissionStatusMap: Record<string, { label: string; tone: string }> = {
-  DRAFT: {
-    label: "작성 중",
+const stageStatusMap = {
+  payment: {
+    label: "결제중",
     tone: "bg-slate-500/10 text-slate-600 dark:text-slate-200",
   },
-  WAITING_PAYMENT: {
-    label: "결제 확인 중",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
-  },
-  SUBMITTED: {
-    label: "접수 완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
-  },
-  PRE_REVIEW: {
-    label: "심의 예정",
-    tone: "bg-violet-500/15 text-violet-700 dark:text-violet-200",
-  },
-  IN_PROGRESS: {
-    label: "심의 접수 완료",
-    tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
-  },
-  RESULT_READY: {
-    label: "결과 통보 완료",
+  paid: {
+    label: "결제완료",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
-  COMPLETED: {
-    label: "결과 통보 완료",
+  received: {
+    label: "심의 접수완료",
+    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+  },
+  progress: {
+    label: "심의 진행중",
+    tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
+  },
+  completed: {
+    label: "전체 심의 완료",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
 };
@@ -115,13 +106,22 @@ function getResultStatus(status: string) {
   );
 }
 
-function getSubmissionStatus(status: string) {
-  return (
-    submissionStatusMap[status] ?? {
-      label: "진행 중",
-      tone: "bg-slate-500/10 text-slate-600 dark:text-slate-200",
-    }
-  );
+function getStageStatus(submission?: SubmissionSummary | null) {
+  if (!submission) return null;
+  const status = submission.status;
+  if (["RESULT_READY", "COMPLETED"].includes(status)) {
+    return stageStatusMap.completed;
+  }
+  if (status === "IN_PROGRESS") {
+    return stageStatusMap.progress;
+  }
+  if (["SUBMITTED", "PRE_REVIEW"].includes(status)) {
+    return stageStatusMap.received;
+  }
+  if (submission.payment_status === "PAID") {
+    return stageStatusMap.paid;
+  }
+  return stageStatusMap.payment;
 }
 
 export function HomeReviewPanel({
@@ -130,18 +130,27 @@ export function HomeReviewPanel({
   mvSubmission,
   albumStations,
   mvStations,
+  hideEmptyTabs = false,
+  forceLiveBadge = false,
 }: {
   isLoggedIn: boolean;
   albumSubmission: SubmissionSummary | null;
   mvSubmission: SubmissionSummary | null;
   albumStations: StationItem[];
   mvStations: StationItem[];
+  hideEmptyTabs?: boolean;
+  forceLiveBadge?: boolean;
 }) {
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
     [isLoggedIn],
   );
-  const [tab, setTab] = React.useState<TabKey>("album");
+  const [tab, setTab] = React.useState<TabKey>(() => {
+    if (!hideEmptyTabs) return "album";
+    if (albumSubmission) return "album";
+    if (mvSubmission) return "mv";
+    return "album";
+  });
   const normalizeStations = React.useCallback(
     (rows?: StationItem[] | null) =>
       (rows ?? []).map((row) => ({
@@ -159,14 +168,29 @@ export function HomeReviewPanel({
     stations: normalizeStations(mvStations),
   });
 
+  const availableTabs = React.useMemo<TabKey[]>(() => {
+    if (!hideEmptyTabs) return ["album", "mv"];
+    const tabs: TabKey[] = [];
+    if (albumState.submission) tabs.push("album");
+    if (mvState.submission) tabs.push("mv");
+    return tabs.length ? tabs : ["album", "mv"];
+  }, [albumState.submission, hideEmptyTabs, mvState.submission]);
+
+  React.useEffect(() => {
+    if (!availableTabs.includes(tab)) {
+      setTab(availableTabs[0] ?? "album");
+    }
+  }, [availableTabs, tab]);
+
   const active = tab === "album" ? albumState : mvState;
   const activeSubmission = active.submission;
   const activeStations = active.stations;
   const isLive =
-    isLoggedIn &&
-    [albumState.submission, mvState.submission].some(
-      (submission) => submission && submission.status !== "COMPLETED",
-    );
+    (forceLiveBadge && isLoggedIn) ||
+    (isLoggedIn &&
+      [albumState.submission, mvState.submission].some(
+        (submission) => submission && submission.status !== "COMPLETED",
+      ));
 
   React.useEffect(() => {
     if (!supabase || !activeSubmission?.id) return;
@@ -183,7 +207,7 @@ export function HomeReviewPanel({
         async () => {
           const { data } = await supabase
             .from("submissions")
-            .select("id, title, status, updated_at")
+            .select("id, title, status, updated_at, payment_status")
             .eq("id", activeSubmission.id)
             .maybeSingle();
           if (!data) return;
@@ -205,9 +229,9 @@ export function HomeReviewPanel({
         async () => {
           const { data } = await supabase
             .from("station_reviews")
-          .select("id, status, updated_at, station:stations ( name )")
-          .eq("submission_id", activeSubmission.id)
-          .order("updated_at", { ascending: false });
+            .select("id, status, updated_at, station:stations ( name )")
+            .eq("submission_id", activeSubmission.id)
+            .order("updated_at", { ascending: false });
           if (!data) return;
           if (tab === "album") {
             setAlbumState((prev) => ({
@@ -244,15 +268,10 @@ export function HomeReviewPanel({
     totalCount > 0
       ? `진행률 : 총 ${totalCount}곳 중 ${effectiveCompletedCount}곳 완료`
       : "진행률 : 방송국 결과가 등록되면 진행률이 표시됩니다.";
-  const currentSubmissionStatus = activeSubmission
-    ? totalCount > 0
-        ? completedCount === totalCount
-        ? getSubmissionStatus("RESULT_READY")
-        : ["SUBMITTED", "PRE_REVIEW"].includes(activeSubmission.status)
-          ? getSubmissionStatus("IN_PROGRESS")
-          : getSubmissionStatus(activeSubmission.status)
-      : getSubmissionStatus(activeSubmission.status)
-    : null;
+  const currentSubmissionStatus =
+    activeSubmission && totalCount > 0 && completedCount === totalCount
+      ? stageStatusMap.completed
+      : getStageStatus(activeSubmission);
 
   const rowsPerPage = 5;
   const rowHeight = 40;
@@ -347,28 +366,32 @@ export function HomeReviewPanel({
       </div>
 
       <div className="mt-5 flex items-center gap-2 rounded-full bg-muted/60 p-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-        <button
-          type="button"
-          onClick={() => setTab("album")}
-          className={`flex-1 rounded-full px-3 py-2 transition ${
-            tab === "album"
-              ? "bg-[#f6d64a] text-black shadow-sm"
-              : "hover:text-foreground"
-          }`}
-        >
-          앨범
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("mv")}
-          className={`flex-1 rounded-full px-3 py-2 transition ${
-            tab === "mv"
-              ? "bg-[#f6d64a] text-black shadow-sm"
-              : "hover:text-foreground"
-          }`}
-        >
-          뮤직비디오
-        </button>
+        {availableTabs.includes("album") ? (
+          <button
+            type="button"
+            onClick={() => setTab("album")}
+            className={`flex-1 rounded-full px-3 py-2 transition ${
+              tab === "album"
+                ? "bg-[#f6d64a] text-black shadow-sm"
+                : "hover:text-foreground"
+            }`}
+          >
+            앨범
+          </button>
+        ) : null}
+        {availableTabs.includes("mv") ? (
+          <button
+            type="button"
+            onClick={() => setTab("mv")}
+            className={`flex-1 rounded-full px-3 py-2 transition ${
+              tab === "mv"
+                ? "bg-[#f6d64a] text-black shadow-sm"
+                : "hover:text-foreground"
+            }`}
+          >
+            뮤직비디오
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-6 space-y-5">

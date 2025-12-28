@@ -73,7 +73,7 @@ const tvStationDetails: Record<string, { title: string; note: string }> = {
 const onlineOptionDetails: Record<string, { title: string; note: string }> = {
   MBC: {
     title: "MBC 뮤직비디오 심의",
-    note: "프로그램별 방송 조건에 따라 제한될 수 있습니다.",
+    note: "MBC M 방송 아티스트에 한해 심의 가능합니다.",
   },
   MNET: {
     title: "Mnet 뮤직비디오 심의",
@@ -81,8 +81,29 @@ const onlineOptionDetails: Record<string, { title: string; note: string }> = {
   },
   ETN: {
     title: "ETN 입고 옵션",
-    note: "온라인 심의 완료 후 ETN 방송 입고 가능합니다.",
+    note: "온라인 심의 완료된 영상에 한하여 ETN 방송 '입고'만 가능합니다.",
   },
+};
+
+const onlineOptionConfirmMessages: Record<string, string> = {
+  MBC: [
+    "MBC 뮤직비디오 심의 안내",
+    "2020.06.25부터 MBC M (<쇼챔피언>, <주간아이돌> 등) 방송되는 아티스트 M/V에 한해 심의 가능.",
+    "심의 영상은 온라인용으로 사용 가능합니다.",
+    "심의 완료 후 등급분류 + MBC 로고 삽입본 사용 가능.",
+    "파일 용량 2GB 미만.",
+    "",
+    "위 내용을 확인하셨다면 [확인]을 눌러주세요.",
+  ].join("\n"),
+  MNET: [
+    "Mnet 뮤직비디오 심의 안내",
+    "자사 편성 계획 M/V 외 등급심의가 불가합니다. 방송 일정이 있는 경우만 문의 주세요.",
+    "심의 완료 시 등급분류 + Mnet 로고를 삽입하여 온라인 유통이 가능합니다.",
+    "제출 규격: WMV 또는 MPG",
+    "파일 용량 1GB 미만.",
+    "",
+    "위 내용을 확인하셨다면 [확인]을 눌러주세요.",
+  ].join("\n"),
 };
 
 const mvOptionToneClasses = [
@@ -367,10 +388,23 @@ export function MvWizard({
     );
   };
 
+  const confirmOnlineOptionSelection = (code: string) => {
+    const message = onlineOptionConfirmMessages[code];
+    if (!message) return true;
+    if (typeof window === "undefined") return true;
+    return window.confirm(message);
+  };
+
   const toggleOnlineOption = (code: string) => {
-    setOnlineOptions((prev) =>
-      prev.includes(code) ? prev.filter((item) => item !== code) : [...prev, code],
-    );
+    setOnlineOptions((prev) => {
+      if (prev.includes(code)) {
+        return prev.filter((item) => item !== code);
+      }
+      if (!confirmOnlineOptionSelection(code)) {
+        return prev;
+      }
+      return [...prev, code];
+    });
   };
 
   const createSignedUpload = async (fileName: string) => {
@@ -754,8 +788,8 @@ export function MvWizard({
                     </span>
                   </div>
                   <p className="mt-2 text-xs opacity-80">
-                    온라인 유통을 위한 기본 심의입니다. 대부분 이 옵션을
-                    사용합니다.
+                    심의 완료 후 등급분류를 영상에 삽입하면 Melon, 지니,
+                    유튜브 등으로 온라인 유통이 가능합니다.
                   </p>
                 </button>
                 {onlineOptionCodes.map((code, index) => {
@@ -794,12 +828,12 @@ export function MvWizard({
           )}
 
           <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
+            <div className="flex flex-wrap items-center justify-end gap-3 text-right">
+              <div className="flex flex-col items-end">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   총 결제 금액
                 </p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
+                <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">
                   {formatCurrency(totalAmount)}원
                 </p>
               </div>
@@ -807,11 +841,11 @@ export function MvWizard({
                 비회원 결제 가능
               </span>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground text-right">
               카드 결제 또는 무통장 입금 모두 가능합니다.
             </p>
           </div>
-          <div className="flex justify-start">
+          <div className="flex justify-end">
             <button
               type="button"
               onClick={() => setStep(2)}
@@ -1292,12 +1326,12 @@ export function MvWizard({
             </div>
           )}
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
               onClick={() => setStep(1)}
               disabled={isSaving}
-              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 disabled:cursor-not-allowed"
+              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-white disabled:cursor-not-allowed"
             >
               이전 단계
             </button>
@@ -1453,11 +1487,11 @@ export function MvWizard({
             </div>
           )}
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900"
+              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-white"
             >
               이전 단계
             </button>

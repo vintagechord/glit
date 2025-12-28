@@ -6,7 +6,7 @@ export const metadata = {
 
 export default function NewSubmissionPage() {
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-12">
+    <div className="page-centered mx-auto w-full max-w-5xl px-6 py-12">
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
         New Submission
       </p>

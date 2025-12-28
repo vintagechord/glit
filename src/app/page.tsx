@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { StripAdBanner } from "@/components/site/strip-ad-banner";
+import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { HomeReviewPanel } from "@/features/home/home-review-panel";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -127,7 +128,7 @@ const featureHighlights = [
   {
     title: "관리자 승인",
     description:
-      "심의 신청 단계만 따르면 문제 없으나,\n방송사 접수 시 관리자가 한번 더 확인!",
+      "신청접수 프로세스로 1차 체크!\n방송사 전달 시 한번 더 완벽하게!",
     card:
       "bg-[#eef2ff] text-[#1f2937] border-[#dbe5ff] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#fff4d6] via-white to-[#ffe9d6]",
@@ -152,6 +153,9 @@ const featureHighlights = [
     ),
   },
 ];
+
+const scrollRevealBaseClass =
+  "opacity-0 translate-y-6 transition-all duration-700 ease-out will-change-transform data-[reveal-state=visible]:opacity-100 data-[reveal-state=visible]:translate-y-0 motion-reduce:opacity-100 motion-reduce:translate-y-0";
 
 const serviceCards = [
   {
@@ -183,6 +187,27 @@ const serviceCardTones = [
   "bg-[#e6e35b] text-[#111111] border-transparent",
   "bg-[#5f67f2] text-[#111111] border-transparent",
 ];
+
+/* const sidebarAds = [
+  {
+    title: "ONSIDE TIP",
+    subtitle: "심의 신청 가이드",
+    href: "/guide",
+    tone: "from-[#111827] via-[#1f2937] to-[#0f172a]",
+  },
+  {
+    title: "원클릭 접수",
+    subtitle: "멜론 링크로 간편 심의",
+    href: "/dashboard/new/album?mode=oneclick",
+    tone: "from-[#f97316] via-[#f59e0b] to-[#facc15]",
+  },
+  {
+    title: "제휴 안내",
+    subtitle: "파트너 제안 접수",
+    href: "/",
+    tone: "from-[#1d4ed8] via-[#3b82f6] to-[#60a5fa]",
+  },
+]; */
 
 type StationSnapshot = {
   id: string;
@@ -216,19 +241,19 @@ const sampleStations: StationSnapshot[] = [
     id: "sample-4",
     status: "NEEDS_FIX",
     updated_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-    station: { name: "EBS" },
+    station: { name: "YTN" },
   },
   {
     id: "sample-5",
     status: "NOT_SENT",
     updated_at: new Date(Date.now() + 86400000 * 2).toISOString(),
-    station: { name: "Mnet" },
+    station: { name: "CBS 기독교방송" },
   },
   {
     id: "sample-6",
     status: "RECEIVED",
     updated_at: new Date(Date.now() - 86400000).toISOString(),
-    station: { name: "JTBC" },
+    station: { name: "Arirang 방송" },
   },
 ];
 
@@ -254,12 +279,14 @@ export default async function Home() {
     id: "sample-album",
     title: "샘플 앨범 심의",
     status: "IN_PROGRESS",
+    payment_status: "PAID",
     updated_at: new Date().toISOString(),
   };
   const sampleMv = {
     id: "sample-mv",
     title: "샘플 MV 심의",
     status: "WAITING_PAYMENT",
+    payment_status: "PAYMENT_PENDING",
     updated_at: new Date().toISOString(),
   };
 
@@ -288,7 +315,7 @@ export default async function Home() {
   if (user) {
     const { data: albumData } = await supabase
       .from("submissions")
-      .select("id, title, status, updated_at")
+      .select("id, title, status, updated_at, payment_status")
       .eq("user_id", user.id)
       .eq("type", "ALBUM")
       .order("updated_at", { ascending: false })
@@ -297,7 +324,7 @@ export default async function Home() {
 
     const { data: mvData } = await supabase
       .from("submissions")
-      .select("id, title, status, updated_at, type")
+      .select("id, title, status, updated_at, payment_status, type")
       .eq("user_id", user.id)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
       .order("updated_at", { ascending: false })
@@ -331,11 +358,12 @@ export default async function Home() {
 
   return (
     <div className="relative overflow-hidden">
+      <ScrollRevealObserver />
       <div className="pointer-events-none absolute left-[-20%] top-[-10%] h-[420px] w-[420px] rounded-full bg-[#c94821]/20 blur-[180px] dark:bg-[#f05a28]/20" />
       <div className="pointer-events-none absolute right-[-15%] top-[10%] h-[380px] w-[380px] rounded-full bg-[#c6a631]/20 blur-[180px] dark:bg-[#f6d64a]/20" />
       <div className="pointer-events-none absolute bottom-[-10%] left-[20%] h-[320px] w-[320px] rounded-full bg-[#a8792c]/25 blur-[180px] dark:bg-[#f6d64a]/15" />
 
-      <section className="w-full pb-10 pt-14">
+      <section className="w-full pb-10 pt-[1.75rem]">
         <div className="relative w-full overflow-hidden border-y border-border/60 bg-[radial-gradient(circle_at_top,_rgba(245,245,245,0.98),_rgba(231,223,213,0.92),_rgba(210,198,185,0.88))] shadow-[0_24px_80px_rgba(31,41,55,0.15)] dark:bg-[radial-gradient(circle_at_top,_rgba(11,11,11,0.95),_rgba(24,18,14,0.95),_rgba(14,14,14,0.95))]">
           <div className="absolute inset-0">
             {hasHeroVideo ? (
@@ -445,11 +473,54 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-6xl px-6 pb-6 pt-2">
-        <StripAdBanner />
-      </section>
-      <section className="mx-auto w-full max-w-6xl px-6 py-12">
-        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+      <section className="mx-auto w-full max-w-6xl px-6 pb-12 pt-4">
+        <div className="mb-14">
+          <StripAdBanner />
+        </div>
+        {/* <div className="hidden 2xl:block">
+          <div
+            className="fixed top-28 left-1/2 z-30 w-[200px] space-y-4"
+            style={{
+              transform: "translateX(calc(-36rem - 224px))",
+            }}
+          >
+            <div className="rounded-[22px] border border-border/60 bg-background/80 p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                Banner AD
+              </p>
+              <div className="mt-4 space-y-4">
+                {sidebarAds.map((ad) => (
+                  <Link
+                    key={ad.title}
+                    href={ad.href}
+                    className="group block overflow-hidden rounded-2xl border border-border/60 shadow-[0_12px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-1"
+                  >
+                    <div
+                      className={`flex aspect-[4/3] flex-col justify-end gap-2 bg-gradient-to-br ${ad.tone} p-4 text-white`}
+                    >
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-white/80">
+                        Sponsored
+                      </span>
+                      <span className="text-base font-semibold">
+                        {ad.title}
+                      </span>
+                      <span className="text-xs text-white/85">
+                        {ad.subtitle}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div> */}
+
+        <div
+          data-scroll-reveal
+          data-reveal-state="hidden"
+          className={`flex flex-col gap-6 md:flex-row md:items-end md:justify-between ${scrollRevealBaseClass}`}
+          style={{ transitionDelay: "0ms" }}
+        >
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               심의 메뉴
@@ -470,7 +541,10 @@ export default async function Home() {
             <Link
               key={card.title}
               href={card.href}
-              className={`group relative flex min-h-[190px] flex-col justify-between rounded-[28px] border p-6 shadow-[0_18px_45px_rgba(0,0,0,0.25)] transition hover:-translate-y-1 ${serviceCardTones[index] ?? "bg-white text-[#111111] border-border/60"}`}
+              data-scroll-reveal
+              data-reveal-state="hidden"
+              style={{ transitionDelay: `${120 + index * 120}ms` }}
+              className={`group relative flex min-h-[190px] flex-col justify-between rounded-[28px] border p-6 shadow-[0_18px_45px_rgba(0,0,0,0.25)] transition hover:-translate-y-1 ${scrollRevealBaseClass} ${serviceCardTones[index] ?? "bg-white text-[#111111] border-border/60"}`}
             >
               <div className="space-y-3">
                 <h3 className="text-2xl font-semibold leading-snug">
@@ -493,7 +567,12 @@ export default async function Home() {
 
       <section className="mx-auto w-full max-w-6xl px-6 py-12">
         <div className="rounded-[32px] border border-border/60 bg-background/80 px-8 py-10">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div
+            data-scroll-reveal
+            data-reveal-state="hidden"
+            className={`flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between ${scrollRevealBaseClass}`}
+            style={{ transitionDelay: "0ms" }}
+          >
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 접수 프로세스
@@ -512,7 +591,10 @@ export default async function Home() {
               (label, index) => (
                 <div
                   key={label}
-                  className={`rounded-2xl border p-4 ${processStepTones[index] ?? "border-border/60 bg-card/70 text-foreground"}`}
+                  data-scroll-reveal
+                  data-reveal-state="hidden"
+                  style={{ transitionDelay: `${120 + index * 120}ms` }}
+                  className={`rounded-2xl border p-4 ${scrollRevealBaseClass} ${processStepTones[index] ?? "border-border/60 bg-card/70 text-foreground"}`}
                 >
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">
                     STEP {String(index + 1).padStart(2, "0")}

@@ -34,27 +34,39 @@ export default function FormsPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-12">
+    <div className="page-centered mx-auto w-full max-w-5xl px-6 py-12">
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
         Forms
       </p>
       <h1 className="font-display mt-2 text-3xl text-foreground">
-        신청서(구양식) 다운로드 및 이메일 접수
+        신청서 다운로드 및 이메일 접수(구양식)
       </h1>
-      <p className="mt-3 text-sm text-muted-foreground">
-        온라인 신청이 어렵거나 번거로운 경우, 신청서를 내려받아 작성 후 이메일로
-        접수할 수 있습니다. 음반 심의와 M/V 심의를 구분해 다운로드하세요.
+      <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground">
+        <span className="font-semibold text-foreground">
+          신청서를 직접 다운받아 작성 후 이메일로 접수하던
+        </span>{" "}
+        이전 온사이드의 방식이 편하신 분들을 위한 접수 페이지입니다.
+        <span className="mt-2 block">
+          다운받은 신청서를 작성 후{" "}
+          <span className="font-semibold text-foreground">
+            이메일로 음원과 함께 보내주시면
+          </span>{" "}
+          <span className="font-semibold text-foreground">
+            온라인 접수와 동일하게 심의진행
+          </span>
+          이 됩니다.
+        </span>
       </p>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <section className="group relative overflow-hidden rounded-[28px] border border-black/10 bg-[#8fe38f] p-6 text-slate-900 shadow-[0_18px_50px_rgba(15,23,42,0.12)] transition hover:-translate-y-1 hover:bg-[#7ad97a] hover:shadow-[0_22px_60px_rgba(15,23,42,0.16)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-900/70">
+        <section className="group relative overflow-hidden rounded-[28px] border border-border/60 bg-card/80 p-6 text-foreground shadow-[0_18px_50px_rgba(15,23,42,0.12)] transition hover:-translate-y-1 hover:border-foreground/40 hover:bg-background">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             음반 심의
           </p>
           <h2 className="mt-3 text-xl font-semibold">
             음반 심의 신청서
           </h2>
-          <p className="mt-2 text-sm text-slate-900/70">
+          <p className="mt-2 text-sm text-muted-foreground">
             음반 심의용 신청서를 다운로드하여 작성하세요.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -62,7 +74,7 @@ export default function FormsPage() {
               <Link
                 key={form.href}
                 href={form.href}
-                className="inline-flex rounded-full border border-black/10 bg-white/85 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:-translate-y-0.5 hover:bg-white"
+                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:bg-background"
               >
                 {form.label} 다운로드
               </Link>
@@ -70,14 +82,14 @@ export default function FormsPage() {
           </div>
         </section>
 
-        <section className="group relative overflow-hidden rounded-[28px] border border-black/10 bg-[#e6e35b] p-6 text-slate-900 shadow-[0_18px_50px_rgba(15,23,42,0.12)] transition hover:-translate-y-1 hover:bg-[#d8d654] hover:shadow-[0_22px_60px_rgba(15,23,42,0.16)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-900/70">
+        <section className="group relative overflow-hidden rounded-[28px] border border-border/60 bg-card/80 p-6 text-foreground shadow-[0_18px_50px_rgba(15,23,42,0.12)] transition hover:-translate-y-1 hover:border-foreground/40 hover:bg-background">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             M/V 심의
           </p>
           <h2 className="mt-3 text-xl font-semibold">
             M/V 심의 신청서
           </h2>
-          <p className="mt-2 text-sm text-slate-900/70">
+          <p className="mt-2 text-sm text-muted-foreground">
             M/V 심의용 신청서를 다운로드하여 작성하세요.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -85,7 +97,7 @@ export default function FormsPage() {
               <Link
                 key={form.href}
                 href={form.href}
-                className="inline-flex rounded-full border border-black/10 bg-white/85 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:-translate-y-0.5 hover:bg-white"
+                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:bg-background"
               >
                 {form.label} 다운로드
               </Link>

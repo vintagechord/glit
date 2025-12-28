@@ -1,0 +1,90 @@
+[
+  {
+    "id": "ko_block_ssibal",
+    "severity": "BLOCK",
+    "pattern": "(?:씨|시|ㅆ\\s*ㅣ|ㅅ\\s*ㅣ)\\s*(?:발|ㅂ\\s*ㅏ\\s*ㄹ)",
+    "description": "Strong Korean profanity root (ssi-bal variants)",
+    "lang": "ko",
+    "score": 5
+  },
+  {
+    "id": "ko_block_byeongshin",
+    "severity": "BLOCK",
+    "pattern": "(?:병\\s*신|ㅂ\\s*ㅕ\\s*ㅇ\\s*ㅅ\\s*ㅣ\\s*ㄴ)",
+    "description": "Strong Korean insult root (byeong-shin variants)",
+    "lang": "ko",
+    "score": 5
+  },
+  {
+    "id": "ko_mask_jot",
+    "severity": "MASK",
+    "pattern": "(?:좆|ㅈ\\s*ㅗ\\s*ㅈ)",
+    "description": "Aggressive Korean term (jot variants)",
+    "lang": "ko",
+    "score": 3
+  },
+  {
+    "id": "ko_mask_jiral",
+    "severity": "MASK",
+    "pattern": "(?:지\\s*랄|ㅈ\\s*ㅣ\\s*ㄹ\\s*ㅏ\\s*ㄹ)",
+    "description": "Aggressive Korean term (jiral variants)",
+    "lang": "ko",
+    "score": 3
+  },
+  {
+    "id": "ko_mask_saekki",
+    "severity": "MASK",
+    "pattern": "(?:(?:개\\s*)?새\\s*끼|(?:ㄱ\\s*ㅐ\\s*)?ㅅ\\s*ㅐ\\s*ㄲ\\s*ㅣ)",
+    "description": "Aggressive Korean term (saekki variants)",
+    "lang": "ko",
+    "score": 3
+  },
+  {
+    "id": "ko_warn_jonna",
+    "severity": "WARN",
+    "pattern": "(?:존\\s*나|ㅈ\\s*ㅗ\\s*ㄴ\\s*ㄴ?\\s*ㅏ)",
+    "description": "Mild Korean intensifier (jonna variants)",
+    "lang": "ko",
+    "score": 2
+  },
+  {
+    "id": "ko_warn_sib",
+    "severity": "WARN",
+    "pattern": "(?:ㅅ\\s*ㅂ|ㅆ\\s*ㅂ)",
+    "description": "Korean consonant shorthand (sib variants)",
+    "lang": "ko",
+    "score": 2
+  },
+  {
+    "id": "en_block_fuck",
+    "severity": "BLOCK",
+    "pattern": "\\b(?:f\\s*u{1,2}\\s*c\\s*k)\\b",
+    "description": "Strong English profanity root (f-word variants)",
+    "lang": "en",
+    "score": 5
+  },
+  {
+    "id": "en_mask_shit",
+    "severity": "MASK",
+    "pattern": "\\b(?:s\\s*h\\s*i\\s*t)\\b",
+    "description": "Aggressive English term (s-word variants)",
+    "lang": "en",
+    "score": 3
+  },
+  {
+    "id": "en_mask_bitch",
+    "severity": "MASK",
+    "pattern": "\\b(?:b\\s*i\\s*t\\s*c\\s*h)\\b",
+    "description": "Aggressive English term (b-word variants)",
+    "lang": "en",
+    "score": 3
+  },
+  {
+    "id": "en_warn_damn",
+    "severity": "WARN",
+    "pattern": "\\b(?:d\\s*a\\s*m\\s*n)\\b",
+    "description": "Mild English term (d-word variants)",
+    "lang": "en",
+    "score": 1
+  }
+]

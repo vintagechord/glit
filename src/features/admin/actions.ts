@@ -2,6 +2,9 @@
 
 import { z } from "zod";
 
+import { revalidatePath } from "next/cache";
+
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export type AdminActionState = {
@@ -78,12 +81,70 @@ const packageStationsSchema = z.object({
 const adBannerSchema = z.object({
   id: z.string().uuid().optional(),
   title: z.string().min(1),
-  imageUrl: z.string().min(1),
+  imageUrl: z.string().optional(),
   linkUrl: z.string().optional(),
   isActive: z.boolean(),
-  startsAt: z.string().optional(),
-  endsAt: z.string().optional(),
 });
+
+const profanityTermSchema = z.object({
+  id: z.string().uuid().optional(),
+  term: z.string().min(1),
+  language: z.enum(["KO", "EN"]),
+  isActive: z.boolean(),
+});
+
+const spellcheckTermSchema = z.object({
+  id: z.string().uuid().optional(),
+  fromText: z.string().min(1),
+  toText: z.string().min(1),
+  language: z.enum(["KO", "EN"]),
+  isActive: z.boolean(),
+});
+
+const bannerBucket = "banners";
+const bannerFolder = "strip";
+
+const sanitizeFileName = (name: string) =>
+  name
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 120);
+
+const ensureBannerBucket = async (
+  admin: ReturnType<typeof createAdminClient>,
+) => {
+  const { data } = await admin.storage.listBuckets();
+  const exists = data?.some((bucket) => bucket.name === bannerBucket);
+  if (exists) {
+    await admin.storage.updateBucket(bannerBucket, { public: true });
+    return;
+  }
+  await admin.storage.createBucket(bannerBucket, { public: true });
+};
+
+const uploadBannerImage = async (file: File) => {
+  if (!file.type.startsWith("image/")) {
+    return { error: "이미지 파일만 업로드 가능합니다." };
+  }
+
+  const admin = createAdminClient();
+  await ensureBannerBucket(admin);
+  const safeName = sanitizeFileName(file.name || "banner.jpg");
+  const path = `${bannerFolder}/${Date.now()}-${safeName}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const { error } = await admin.storage.from(bannerBucket).upload(path, buffer, {
+    contentType: file.type || "image/jpeg",
+    upsert: true,
+  });
+
+  if (error) {
+    return { error: "배너 이미지 업로드에 실패했습니다." };
+  }
+
+  const { data } = admin.storage.from(bannerBucket).getPublicUrl(path);
+  return { publicUrl: data.publicUrl };
+};
 
 async function insertEvent(
   submissionId: string,
@@ -313,7 +374,9 @@ export async function upsertPackageFormAction(
   });
   if (result.error) {
     console.error(result.error);
+    return;
   }
+  revalidatePath("/admin/config");
 }
 
 export async function upsertStationAction(
@@ -351,7 +414,9 @@ export async function upsertStationFormAction(
   });
   if (result.error) {
     console.error(result.error);
+    return;
   }
+  revalidatePath("/admin/config");
 }
 
 export async function updatePackageStationsAction(
@@ -375,6 +440,10 @@ export async function updatePackageStationsAction(
 
   if (stationError) {
     return { error: "방송국 정보를 찾을 수 없습니다." };
+  }
+
+  if (codes.length > 0 && (stations?.length ?? 0) !== codes.length) {
+    return { error: "일부 방송국 코드를 찾을 수 없습니다." };
   }
 
   await supabase
@@ -405,7 +474,63 @@ export async function updatePackageStationsFormAction(
   });
   if (result.error) {
     console.error(result.error);
+    return;
   }
+  revalidatePath("/admin/config");
+}
+
+export async function deletePackageAction(
+  payload: { id: string },
+): Promise<AdminActionState> {
+  if (!payload.id) {
+    return { error: "패키지 ID를 확인해주세요." };
+  }
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.from("packages").delete().eq("id", payload.id);
+  if (error) {
+    return { error: "패키지 삭제에 실패했습니다." };
+  }
+  return { message: "패키지가 삭제되었습니다." };
+}
+
+export async function deletePackageFormAction(
+  formData: FormData,
+): Promise<void> {
+  const result = await deletePackageAction({
+    id: String(formData.get("id") ?? ""),
+  });
+  if (result.error) {
+    console.error(result.error);
+    return;
+  }
+  revalidatePath("/admin/config");
+}
+
+export async function deleteStationAction(
+  payload: { id: string },
+): Promise<AdminActionState> {
+  if (!payload.id) {
+    return { error: "방송국 ID를 확인해주세요." };
+  }
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.from("stations").delete().eq("id", payload.id);
+  if (error) {
+    return { error: "방송국 삭제에 실패했습니다." };
+  }
+  return { message: "방송국이 삭제되었습니다." };
+}
+
+export async function deleteStationFormAction(
+  formData: FormData,
+): Promise<void> {
+  const result = await deleteStationAction({
+    id: String(formData.get("id") ?? ""),
+  });
+  if (result.error) {
+    console.error(result.error);
+    return;
+  }
+  revalidatePath("/admin/config");
 }
 
 export async function upsertAdBannerAction(
@@ -416,28 +541,17 @@ export async function upsertAdBannerAction(
     return { error: "배너 정보를 확인해주세요." };
   }
 
-  const supabase = await createServerSupabase();
-  const startsDate = parsed.data.startsAt
-    ? new Date(parsed.data.startsAt)
-    : null;
-  const endsDate = parsed.data.endsAt ? new Date(parsed.data.endsAt) : null;
-  const startsAt =
-    startsDate && !Number.isNaN(startsDate.getTime())
-      ? startsDate.toISOString()
-      : null;
-  const endsAt =
-    endsDate && !Number.isNaN(endsDate.getTime())
-      ? endsDate.toISOString()
-      : null;
+  if (!parsed.data.imageUrl) {
+    return { error: "배너 이미지를 입력하거나 업로드해주세요." };
+  }
 
+  const supabase = createAdminClient();
   const { error } = await supabase.from("ad_banners").upsert({
     id: parsed.data.id,
     title: parsed.data.title,
     image_url: parsed.data.imageUrl,
     link_url: parsed.data.linkUrl || null,
     is_active: parsed.data.isActive,
-    starts_at: startsAt,
-    ends_at: endsAt,
   });
 
   if (error) {
@@ -451,18 +565,31 @@ export async function upsertAdBannerFormAction(
   formData: FormData,
 ): Promise<void> {
   const id = String(formData.get("id") ?? "");
+  const imageFile = formData.get("imageFile");
+  let imageUrl = String(formData.get("imageUrl") ?? "");
+
+  if (imageFile instanceof File && imageFile.size > 0) {
+    const uploadResult = await uploadBannerImage(imageFile);
+    if (uploadResult.error) {
+      console.error(uploadResult.error);
+      return;
+    }
+    imageUrl = uploadResult.publicUrl ?? imageUrl;
+  }
+
   const result = await upsertAdBannerAction({
     id: id ? id : undefined,
     title: String(formData.get("title") ?? ""),
-    imageUrl: String(formData.get("imageUrl") ?? ""),
+    imageUrl: imageUrl || undefined,
     linkUrl: String(formData.get("linkUrl") ?? "") || undefined,
     isActive: formData.get("isActive") === "on",
-    startsAt: String(formData.get("startsAt") ?? "") || undefined,
-    endsAt: String(formData.get("endsAt") ?? "") || undefined,
   });
   if (result.error) {
     console.error(result.error);
+    return;
   }
+  revalidatePath("/admin/banners");
+  revalidatePath("/");
 }
 
 export async function deleteAdBannerAction(
@@ -472,7 +599,7 @@ export async function deleteAdBannerAction(
     return { error: "배너 ID를 확인해주세요." };
   }
 
-  const supabase = await createServerSupabase();
+  const supabase = createAdminClient();
   const { error } = await supabase.from("ad_banners").delete().eq("id", payload.id);
 
   if (error) {
@@ -490,5 +617,164 @@ export async function deleteAdBannerFormAction(
   });
   if (result.error) {
     console.error(result.error);
+    return;
   }
+  revalidatePath("/admin/banners");
+  revalidatePath("/");
+}
+
+export async function upsertProfanityTermAction(
+  payload: z.infer<typeof profanityTermSchema>,
+): Promise<AdminActionState> {
+  const parsed = profanityTermSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { error: "욕설/비속어 정보를 확인해주세요." };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("profanity_terms").upsert({
+    id: parsed.data.id,
+    term: parsed.data.term.trim(),
+    language: parsed.data.language,
+    is_active: parsed.data.isActive,
+  });
+
+  if (error) {
+    return { error: "욕설/비속어 저장에 실패했습니다." };
+  }
+
+  return { message: "욕설/비속어가 저장되었습니다." };
+}
+
+export async function upsertProfanityTermFormAction(
+  formData: FormData,
+): Promise<void> {
+  const id = String(formData.get("id") ?? "");
+  const result = await upsertProfanityTermAction({
+    id: id ? id : undefined,
+    term: String(formData.get("term") ?? ""),
+    language: (String(formData.get("language") ?? "KO") || "KO") as
+      | "KO"
+      | "EN",
+    isActive: formData.get("isActive") === "on",
+  });
+  if (result.error) {
+    console.error(result.error);
+    return;
+  }
+  revalidatePath("/admin/config");
+  revalidatePath("/dashboard/new/album");
+}
+
+export async function deleteProfanityTermAction(
+  payload: { id: string },
+): Promise<AdminActionState> {
+  if (!payload.id) {
+    return { error: "욕설/비속어 ID를 확인해주세요." };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("profanity_terms")
+    .delete()
+    .eq("id", payload.id);
+
+  if (error) {
+    return { error: "욕설/비속어 삭제에 실패했습니다." };
+  }
+
+  return { message: "욕설/비속어가 삭제되었습니다." };
+}
+
+export async function deleteProfanityTermFormAction(
+  formData: FormData,
+): Promise<void> {
+  const result = await deleteProfanityTermAction({
+    id: String(formData.get("id") ?? ""),
+  });
+  if (result.error) {
+    console.error(result.error);
+    return;
+  }
+  revalidatePath("/admin/config");
+  revalidatePath("/dashboard/new/album");
+}
+
+export async function upsertSpellcheckTermAction(
+  payload: z.infer<typeof spellcheckTermSchema>,
+): Promise<AdminActionState> {
+  const parsed = spellcheckTermSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { error: "맞춤법 사전 정보를 확인해주세요." };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("spellcheck_terms").upsert({
+    id: parsed.data.id,
+    from_text: parsed.data.fromText.trim(),
+    to_text: parsed.data.toText.trim(),
+    language: parsed.data.language,
+    is_active: parsed.data.isActive,
+  });
+
+  if (error) {
+    return { error: "맞춤법 사전 저장에 실패했습니다." };
+  }
+
+  return { message: "맞춤법 사전이 저장되었습니다." };
+}
+
+export async function upsertSpellcheckTermFormAction(
+  formData: FormData,
+): Promise<void> {
+  const id = String(formData.get("id") ?? "");
+  const result = await upsertSpellcheckTermAction({
+    id: id ? id : undefined,
+    fromText: String(formData.get("fromText") ?? ""),
+    toText: String(formData.get("toText") ?? ""),
+    language: (String(formData.get("language") ?? "KO") || "KO") as
+      | "KO"
+      | "EN",
+    isActive: formData.get("isActive") === "on",
+  });
+  if (result.error) {
+    console.error(result.error);
+    return;
+  }
+  revalidatePath("/admin/config");
+  revalidatePath("/dashboard/new/album");
+}
+
+export async function deleteSpellcheckTermAction(
+  payload: { id: string },
+): Promise<AdminActionState> {
+  if (!payload.id) {
+    return { error: "맞춤법 사전 ID를 확인해주세요." };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("spellcheck_terms")
+    .delete()
+    .eq("id", payload.id);
+
+  if (error) {
+    return { error: "맞춤법 사전 삭제에 실패했습니다." };
+  }
+
+  return { message: "맞춤법 사전이 삭제되었습니다." };
+}
+
+export async function deleteSpellcheckTermFormAction(
+  formData: FormData,
+): Promise<void> {
+  const result = await deleteSpellcheckTermAction({
+    id: String(formData.get("id") ?? ""),
+  });
+  if (result.error) {
+    console.error(result.error);
+    return;
+  }
+  revalidatePath("/admin/config");
+  revalidatePath("/dashboard/new/album");
 }

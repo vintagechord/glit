@@ -16,21 +16,11 @@ export default async function TrackPage() {
   const isLoggedIn = Boolean(user);
 
   if (user) {
-    const { data: submission } = await supabase
-      .from("submissions")
-      .select("id")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (submission?.id) {
-      redirect(`/dashboard/submissions/${submission.id}`);
-    }
+    redirect("/dashboard");
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-12">
+    <div className="page-centered mx-auto w-full max-w-3xl px-6 py-12">
       <div className="rounded-[32px] border border-border/60 bg-card/80 p-6">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           진행상황 조회

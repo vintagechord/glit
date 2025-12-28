@@ -33,8 +33,7 @@ const faqItems = [
   },
   {
     question: "[심의결과] 심의 결과는 어떻게 확인하나요?",
-    answer:
-      "통과/불통과 여부를 이메일 또는 문자로 안내드립니다. 개별 심의확인 페이지 URL로 실시간 진행 상황을 확인할 수 있습니다.",
+    answer: "개별 심의확인 페이지에서 실시간 진행 상황을 확인할 수 있습니다.",
   },
   {
     question: "[심의결과] 심의 결과가 늦어지는 이유는 무엇인가요?",
@@ -44,7 +43,7 @@ const faqItems = [
   {
     question: "[주문결제] 2장 이상의 앨범은 할인 혜택이 있나요?",
     answer:
-      "네. 첫 번째 앨범은 기본가격, 두 번째부터는 50% 할인됩니다. 예) 3장(10곳 패키지): 10만원 + 5만원 + 5만원.",
+      "네. 첫 번째 앨범은 기본가격, 두 번째부터는 50% 할인됩니다. 예) 3장(10개 패키지): 10만원 + 5만원 + 5만원.",
   },
   {
     question: "[온사이드] 온사이드는 정식 업체인가요?",
@@ -70,57 +69,114 @@ const faqItems = [
 
 export function ChatbotWidget() {
   const [open, setOpen] = React.useState(false);
-  const [activeIndex, setActiveIndex] = React.useState(0);
+  const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
+  const [pageIndex, setPageIndex] = React.useState(0);
+  const pageSize = 5;
+  const pageCount = Math.ceil(faqItems.length / pageSize);
+  const startIndex = pageIndex * pageSize;
+  const visibleItems = faqItems.slice(startIndex, startIndex + pageSize);
+
+  const goToPage = (nextPage: number) => {
+    const clamped = Math.min(Math.max(nextPage, 0), pageCount - 1);
+    setPageIndex(clamped);
+    setActiveIndex(null);
+  };
+
+  React.useEffect(() => {
+    if (open) {
+      setActiveIndex(null);
+    }
+  }, [open]);
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <>
       {open && (
-        <div className="mb-3 w-[320px] rounded-3xl border border-border/60 bg-card/95 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.2)]">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                Onside 도움말
-              </p>
-              <p className="text-sm font-semibold text-foreground">
-                무엇을 도와드릴까요?
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-full border border-border/70 px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground"
-            >
-              닫기
-            </button>
-          </div>
-          <div className="mt-4 space-y-2">
-            {faqItems.map((item, index) => (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="absolute bottom-6 right-6 w-[320px] rounded-3xl border border-border/60 bg-card/95 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.2)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  Onside FAQ
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  자주 묻는 질문
+                </p>
+              </div>
               <button
-                key={item.question}
                 type="button"
-                onClick={() => setActiveIndex(index)}
-                className={`w-full rounded-2xl border px-3 py-2 text-left text-xs transition ${
-                  activeIndex === index
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border/60 bg-background text-muted-foreground hover:border-foreground"
-                }`}
+                onClick={() => setOpen(false)}
+                className="rounded-full border border-border/70 px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground"
               >
-                {item.question}
+                닫기
               </button>
-            ))}
-          </div>
-          <div className="mt-4 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-3 py-3 text-xs text-slate-700 shadow-sm dark:border-amber-400/30 dark:bg-amber-400/15 dark:text-amber-100">
-            {faqItems[activeIndex]?.answer}
+            </div>
+            <div className="mt-4 space-y-2">
+              {visibleItems.map((item, index) => {
+                const itemIndex = startIndex + index;
+                return (
+                <button
+                  key={item.question}
+                  type="button"
+                  onClick={() => setActiveIndex(itemIndex)}
+                  className={`w-full rounded-2xl border px-3 py-2 text-left text-xs transition ${
+                    activeIndex === itemIndex
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border/60 bg-background text-muted-foreground hover:border-foreground"
+                  }`}
+                >
+                  {item.question}
+                </button>
+              );
+              })}
+              <div className="flex items-center justify-between pt-1 text-xs text-muted-foreground">
+                <button
+                  type="button"
+                  onClick={() => goToPage(pageIndex - 1)}
+                  disabled={pageIndex === 0}
+                  className="rounded-full border border-border/70 px-3 py-1 font-semibold uppercase tracking-[0.2em] transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  이전
+                </button>
+                <span>
+                  {pageIndex + 1} / {pageCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => goToPage(pageIndex + 1)}
+                  disabled={pageIndex >= pageCount - 1}
+                  className="rounded-full border border-border/70 px-3 py-1 font-semibold uppercase tracking-[0.2em] transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  다음
+                </button>
+              </div>
+            </div>
+            {activeIndex === null ? (
+              <div className="mt-4 rounded-2xl border border-border/60 bg-background/80 px-3 py-3 text-sm leading-relaxed text-muted-foreground">
+                질문을 선택해주세요.
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-3 py-3 text-sm leading-relaxed text-slate-700 shadow-sm dark:border-amber-400/30 dark:bg-amber-400/15 dark:text-amber-100">
+                {faqItems[activeIndex]?.answer}
+              </div>
+            )}
           </div>
         </div>
       )}
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background shadow-lg transition hover:-translate-y-0.5"
-      >
-        Q&A
-      </button>
-    </div>
+      <div className="fixed bottom-6 right-6 z-50">
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background shadow-lg transition hover:-translate-y-0.5"
+        >
+          FAQ
+        </button>
+      </div>
+    </>
   );
 }

@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Admin",
+  title: "관리자",
 };
 
 import Link from "next/link";
@@ -8,7 +8,7 @@ export default function AdminPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        Admin
+        관리자
       </p>
       <h1 className="font-display mt-2 text-3xl text-foreground">
         관리자 대시보드
@@ -22,7 +22,7 @@ export default function AdminPage() {
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            Submissions
+            접수 관리
           </p>
           <h2 className="mt-3 text-xl font-semibold text-foreground">
             접수 관리
@@ -36,7 +36,7 @@ export default function AdminPage() {
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            Config
+            설정
           </p>
           <h2 className="mt-3 text-xl font-semibold text-foreground">
             패키지/방송국 설정
@@ -50,7 +50,7 @@ export default function AdminPage() {
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            Karaoke
+            노래방
           </p>
           <h2 className="mt-3 text-xl font-semibold text-foreground">
             노래방 등록 관리
@@ -64,7 +64,7 @@ export default function AdminPage() {
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            Banners
+            배너
           </p>
           <h2 className="mt-3 text-xl font-semibold text-foreground">
             배너 관리

@@ -5,6 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
+import {
+  buildLegacyProfanityMatchers,
+  extractProfanityWords,
+  type ProfanityTerm,
+} from "@/lib/profanity/legacy";
+import { runProfanityCheck } from "@/lib/profanity/check";
 import { createClient } from "@/lib/supabase/client";
 
 import {
@@ -28,9 +34,7 @@ type PackageOption = {
 };
 
 type TrackInput = {
-  trackTitleKr: string;
-  trackTitleEn: string;
-  trackTitleOfficial: "" | "KR" | "EN";
+  trackTitle: string;
   featuring: string;
   composer: string;
   lyricist: string;
@@ -64,9 +68,7 @@ type DraftSnapshot = {
 };
 
 const initialTrack: TrackInput = {
-  trackTitleKr: "",
-  trackTitleEn: "",
-  trackTitleOfficial: "",
+  trackTitle: "",
   featuring: "",
   composer: "",
   lyricist: "",
@@ -84,6 +86,13 @@ const steps = [
   "결제하기",
   "접수 완료",
 ];
+
+const formatPackageName = (count: number) => `${count}개 패키지`;
+const formatPackageBroadcastLabel = (count: number) => `${count}개 방송국`;
+const formatPackageDescription = (
+  description: string | null | undefined,
+  count: number,
+) => (description ? description.replace(`${count}곳`, `${count}개`) : "");
 
 const packageToneClasses = [
   {
@@ -135,7 +144,60 @@ const lyricCautions = [
   "음원과 다르게 고의로 가사(욕설 및 선정성 문구 포함)를 누락하는 경우 심의가 불가하며, 향후 방송사에서 해당 음반기획사의 심의를 거부할 수 있습니다.",
   "외국어 가사에는 반드시 번역을 나란히 기재해주세요.",
   "심의요청서의 곡 순서와 CD 순서는 반드시 일치해야 합니다.",
+  "실제 발매 앨범과 동일한 음원·가사·트랙수가 필요합니다. (예: 2트랙 앨범—AR 1곡 + INST 1곡—의 경우 INST까지 제출)",
 ];
+
+const normalizeLyricsText = (value: string) =>
+  value
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+const hasEnglish = (value: string) => /[A-Za-z]/.test(value);
+const hasKorean = (value: string) => /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(value);
+
+const isEnglishOnlyLine = (value: string) =>
+  hasEnglish(value) && !hasKorean(value);
+
+const splitEnglishSentences = (value: string) => {
+  const matches = value.match(/[^.!?]+[.!?]*/g);
+  return matches?.map((item) => item.trim()).filter(Boolean) ?? [];
+};
+
+
+const englishSegmentRegex = /[A-Za-z][^ㄱ-ㅎㅏ-ㅣ가-힣]*/g;
+
+const extractEnglishSegments = (line: string) => {
+  const matches = Array.from(line.matchAll(englishSegmentRegex));
+  return matches
+    .map((match) => {
+      const raw = match[0];
+      const start = match.index ?? 0;
+      const end = start + raw.length;
+      const trimmed = raw.trim();
+      if (!trimmed || trimmed.includes("번역:")) {
+        return null;
+      }
+      const sentences = splitEnglishSentences(trimmed);
+      if (!sentences.length) return null;
+      return {
+        raw,
+        start,
+        end,
+        sentences,
+      };
+    })
+    .filter(
+      (segment): segment is {
+        raw: string;
+        start: number;
+        end: number;
+        sentences: string[];
+      } => Boolean(segment),
+    );
+};
 
 const broadcastRequirementMessage =
   "타이틀곡 지정해 주시고 4곡 이상의 앨범일 경우 원음방송 심의를 위해 3곡 지정 해주세요. (원음방송은 앨범당 3곡만 심의가 가능합니다.)";
@@ -171,9 +233,13 @@ type AlbumDraft = {
 export function AlbumWizard({
   packages,
   userId,
+  profanityTerms = [],
+  profanityFilterV2Enabled = false,
 }: {
   packages: PackageOption[];
   userId?: string | null;
+  profanityTerms?: ProfanityTerm[];
+  profanityFilterV2Enabled?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -213,6 +279,28 @@ export function AlbumWizard({
   const [emailSubmitConfirmed, setEmailSubmitConfirmed] = React.useState(false);
   const [showCdInfo, setShowCdInfo] = React.useState(false);
   const [showOneclickNotice, setShowOneclickNotice] = React.useState(false);
+  const lyricsOverlayRef = React.useRef<HTMLDivElement | null>(null);
+  const [lyricsToolApplied, setLyricsToolApplied] = React.useState<
+    Record<number, boolean>
+  >({});
+  const [profanityCheckedMap, setProfanityCheckedMap] = React.useState<
+    Record<number, boolean>
+  >({});
+  const [profanityHighlightMap, setProfanityHighlightMap] = React.useState<
+    Record<number, boolean>
+  >({});
+  const [spellcheckChangesByTrack, setSpellcheckChangesByTrack] =
+    React.useState<Record<number, Array<{ before: string; after: string }>>>(
+      {},
+    );
+  const [spellcheckAppliedMap, setSpellcheckAppliedMap] = React.useState<
+    Record<number, boolean>
+  >({});
+  const [isSpellchecking, setIsSpellchecking] = React.useState(false);
+  const [isTranslatingLyrics, setIsTranslatingLyrics] = React.useState(false);
+  const [lyricsTab, setLyricsTab] = React.useState<"profanity" | "spellcheck">(
+    "profanity",
+  );
   const [isSaving, setIsSaving] = React.useState(false);
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
@@ -231,7 +319,41 @@ export function AlbumWizard({
   const [currentGuestToken, setCurrentGuestToken] = React.useState(() =>
     crypto.randomUUID(),
   );
+  const profanityMatchers = React.useMemo(
+    () => buildLegacyProfanityMatchers(profanityTerms),
+    [profanityTerms],
+  );
+  const isProfanityFilterV2Enabled = Boolean(profanityFilterV2Enabled);
+  const profanityPattern = profanityMatchers?.pattern ?? null;
+  const profanityTestPattern = profanityMatchers?.testPattern ?? null;
   const activeTrack = tracks[activeTrackIndex] ?? tracks[0];
+  const profanityWords = extractProfanityWords(
+    activeTrack.lyrics,
+    profanityPattern,
+  );
+  const showLyricsToolNotice = Boolean(lyricsToolApplied[activeTrackIndex]);
+  const showProfanityPanel = Boolean(profanityCheckedMap[activeTrackIndex]);
+  const showProfanityOverlay =
+    showProfanityPanel &&
+    lyricsTab === "profanity" &&
+    Boolean(profanityHighlightMap[activeTrackIndex]) &&
+    profanityWords.length > 0;
+  const spellcheckChanges =
+    spellcheckChangesByTrack[activeTrackIndex] ?? [];
+  const showSpellcheckPreview = Boolean(
+    spellcheckAppliedMap[activeTrackIndex],
+  );
+  const hasSpellcheckChanges = spellcheckChanges.length > 0;
+
+  const handleLyricsScroll = React.useCallback(
+    (event: React.UIEvent<HTMLTextAreaElement>) => {
+      if (lyricsOverlayRef.current) {
+        lyricsOverlayRef.current.scrollTop = event.currentTarget.scrollTop;
+      }
+    },
+    [],
+  );
+  const showLyricsTabs = showProfanityPanel || showSpellcheckPreview;
   const genreValue =
     genreSelection === "기타" ? genreCustom.trim() : genreSelection;
   const titleCount = tracks.filter((track) => track.isTitle).length;
@@ -258,6 +380,16 @@ export function AlbumWizard({
         priceKrw: basePriceKrw,
       }
     : null;
+
+  React.useEffect(() => {
+    if (spellcheckAppliedMap[activeTrackIndex]) {
+      setLyricsTab("spellcheck");
+      return;
+    }
+    if (profanityCheckedMap[activeTrackIndex]) {
+      setLyricsTab("profanity");
+    }
+  }, [activeTrackIndex, profanityCheckedMap, spellcheckAppliedMap]);
   const shouldShowGuestLookup = isGuest || completionTokens.length > 0;
   const completionCodesToShow = shouldShowGuestLookup
     ? completionTokens.length > 0
@@ -287,22 +419,40 @@ export function AlbumWizard({
     }
   }, [searchParams]);
 
+  const selectedPackageIndex = React.useMemo(() => {
+    if (!selectedPackage) return -1;
+    return packages.findIndex((pkg) => pkg.id === selectedPackage.id);
+  }, [packages, selectedPackage]);
+
+  const selectedPackageTone =
+    selectedPackageIndex >= 0
+      ? packageToneClasses[selectedPackageIndex % packageToneClasses.length]
+      : null;
+
   const stepLabels = (
     <div className="grid gap-3 md:grid-cols-4">
       {steps.map((label, index) => {
         const active = index + 1 <= step;
+        const isPackageStep = index === 0;
+        const packageLabel =
+          isPackageStep && selectedPackage
+            ? formatPackageBroadcastLabel(selectedPackage.stationCount)
+            : label;
+        const activeTone = selectedPackageTone
+          ? selectedPackageTone.card
+          : "border-amber-200 bg-amber-200 text-slate-900";
         return (
           <div
             key={label}
             className={`rounded-2xl border px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] ${
               active
-                ? "border-amber-200 bg-amber-200 text-slate-900"
+                ? activeTone
                 : "border-border/60 bg-background text-muted-foreground"
             }`}
           >
             STEP {String(index + 1).padStart(2, "0")}
             <p className="mt-2 text-[11px] font-medium tracking-normal">
-              {label}
+              {packageLabel}
             </p>
           </div>
         );
@@ -320,6 +470,180 @@ export function AlbumWizard({
         idx === index ? { ...track, [field]: value } : track,
       ),
     );
+  };
+
+  const markLyricsToolApplied = (index: number) => {
+    setLyricsToolApplied((prev) => ({ ...prev, [index]: true }));
+  };
+
+  const renderProfanityPreview = (
+    value: string,
+    pattern?: RegExp | null,
+    testPattern?: RegExp | null,
+  ) => {
+    if (!value || !pattern || !testPattern) return value;
+    const parts = value.split(pattern);
+    return parts.map((part, index) => {
+      if (!part) return null;
+      if (testPattern.test(part)) {
+        return (
+          <mark
+            key={`${part}-${index}`}
+            className="rounded bg-red-200/80 px-1 text-red-900 dark:bg-red-500/30 dark:text-red-100"
+          >
+            {part}
+          </mark>
+        );
+      }
+      return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
+    });
+  };
+
+  const handleProfanityCheck = () => {
+    const lyrics = activeTrack.lyrics.trim();
+    if (!lyrics) return;
+    const v1HasProfanity = profanityTestPattern
+      ? profanityTestPattern.test(lyrics)
+      : false;
+    const { hasProfanity } = runProfanityCheck(lyrics, {
+      v1HasProfanity,
+      enableV2: isProfanityFilterV2Enabled,
+    });
+    if (hasProfanity) {
+      const shouldProceed = window.confirm(
+        "욕설이 감지되었습니다. 욕설이 있는 경우 심의 불통과 확률이 높습니다",
+      );
+      if (!shouldProceed) return;
+    }
+    setProfanityCheckedMap((prev) => ({
+      ...prev,
+      [activeTrackIndex]: true,
+    }));
+    setProfanityHighlightMap((prev) => ({
+      ...prev,
+      [activeTrackIndex]: hasProfanity,
+    }));
+    setLyricsTab("profanity");
+    markLyricsToolApplied(activeTrackIndex);
+  };
+
+  const handleSpellCheck = async () => {
+    const lyrics = activeTrack.lyrics.trim();
+    if (!lyrics) return;
+    setIsSpellchecking(true);
+    try {
+      const response = await fetch("/api/spellcheck", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text: lyrics }),
+      });
+      const payload = await response
+        .json()
+        .catch(() => ({ corrected: "", changes: [] }));
+      const corrected =
+        typeof payload?.corrected === "string"
+          ? payload.corrected
+          : normalizeLyricsText(lyrics);
+      const changes = Array.isArray(payload?.changes)
+        ? payload.changes
+        : [];
+      updateTrack(activeTrackIndex, "lyrics", corrected);
+      setSpellcheckChangesByTrack((prev) => ({
+        ...prev,
+        [activeTrackIndex]: changes,
+      }));
+      setSpellcheckAppliedMap((prev) => ({
+        ...prev,
+        [activeTrackIndex]: true,
+      }));
+      setLyricsTab("spellcheck");
+      markLyricsToolApplied(activeTrackIndex);
+    } catch (error) {
+      console.error(error);
+      const normalized = normalizeLyricsText(lyrics);
+      updateTrack(activeTrackIndex, "lyrics", normalized);
+      setSpellcheckChangesByTrack((prev) => ({
+        ...prev,
+        [activeTrackIndex]: [],
+      }));
+      setSpellcheckAppliedMap((prev) => ({
+        ...prev,
+        [activeTrackIndex]: true,
+      }));
+      markLyricsToolApplied(activeTrackIndex);
+    } finally {
+      setIsSpellchecking(false);
+    }
+  };
+
+  const handleTranslateLyrics = async () => {
+    const lyrics = activeTrack.lyrics.trim();
+    if (!lyrics) return;
+    const lines = lyrics.split("\n");
+    const segmentMap = lines.map((line) => extractEnglishSegments(line));
+    const sentencesToTranslate = segmentMap.flatMap((segments) =>
+      segments.flatMap((segment) => segment.sentences),
+    );
+    if (!sentencesToTranslate.length) return;
+    setIsTranslatingLyrics(true);
+    try {
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lines: sentencesToTranslate,
+          source: "en",
+          target: "ko",
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Translation failed");
+      }
+      const translations: string[] = Array.isArray(payload?.translations)
+        ? payload.translations
+        : [];
+      let translationIndex = 0;
+      const nextLines = lines.map((line, index) => {
+        const segments = segmentMap[index];
+        if (!segments.length) return line;
+        let nextLine = line;
+        const segmentsWithReplacement = segments.map((segment) => {
+          const translatedSentences = segment.sentences.map((sentence) => {
+            const translation = translations[translationIndex] ?? "";
+            translationIndex += 1;
+            const translationText = translation.trim() || "번역 실패";
+            return `${sentence} (번역: ${translationText})`;
+          });
+          const leading = segment.raw.match(/^\s*/)?.[0] ?? "";
+          const trailing = segment.raw.match(/\s*$/)?.[0] ?? "";
+          return {
+            start: segment.start,
+            end: segment.end,
+            replacement: `${leading}${translatedSentences.join(" ")}${trailing}`,
+          };
+        });
+        segmentsWithReplacement
+          .sort((a, b) => b.start - a.start)
+          .forEach((segment) => {
+            nextLine =
+              nextLine.slice(0, segment.start) +
+              segment.replacement +
+              nextLine.slice(segment.end);
+          });
+        return nextLine;
+      });
+      updateTrack(activeTrackIndex, "lyrics", nextLines.join("\n"));
+      markLyricsToolApplied(activeTrackIndex);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsTranslatingLyrics(false);
+    }
   };
 
   const setMainTitleTrack = (index: number) => {
@@ -722,29 +1046,14 @@ export function AlbumWizard({
     };
   };
 
-  const getTrackOfficialTitle = (track: TrackInput) => {
-    const titleKr = track.trackTitleKr.trim();
-    const titleEn = track.trackTitleEn.trim();
-    if (track.trackTitleOfficial === "KR") {
-      return titleKr;
-    }
-    if (track.trackTitleOfficial === "EN") {
-      return titleEn;
-    }
-    return titleKr || titleEn;
-  };
-
   const getTrackDisplayTitle = (track: TrackInput) =>
-    getTrackOfficialTitle(track) || "제목 미입력";
+    track.trackTitle.trim() || "제목 미입력";
 
   const mapTracksForSave = (trackList: TrackInput[]) => {
     const isSingleTrack = trackList.length === 1;
     return trackList.map((track) => ({
       ...track,
-      trackTitle: getTrackOfficialTitle(track),
-      trackTitleKr: track.trackTitleKr.trim(),
-      trackTitleEn: track.trackTitleEn.trim(),
-      trackTitleOfficial: track.trackTitleOfficial || undefined,
+      trackTitle: track.trackTitle.trim(),
       isTitle: isSingleTrack ? true : Boolean(track.isTitle),
       titleRole: isSingleTrack
         ? "MAIN"
@@ -818,18 +1127,8 @@ export function AlbumWizard({
         return false;
       }
 
-      if (tracks.some((track) => !track.trackTitleKr.trim())) {
-        setNotice({ error: "모든 트랙의 곡명(한글)을 입력해주세요." });
-        return false;
-      }
-
-      if (tracks.some((track) => !track.trackTitleEn.trim())) {
-        setNotice({ error: "모든 트랙의 곡명(영문)을 입력해주세요." });
-        return false;
-      }
-
-      if (tracks.some((track) => !track.trackTitleOfficial)) {
-        setNotice({ error: "모든 트랙의 공식 표기를 선택해주세요." });
+      if (tracks.some((track) => !track.trackTitle.trim())) {
+        setNotice({ error: "모든 트랙의 곡명을 입력해주세요." });
         return false;
       }
 
@@ -1190,17 +1489,19 @@ export function AlbumWizard({
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
-                        {pkg.stationCount}곳 패키지
+                        {formatPackageName(pkg.stationCount)}
                       </p>
                       <h3 className="mt-2 text-xl font-semibold">
-                        {pkg.name}
+                        {formatPackageName(pkg.stationCount)}
                       </h3>
                     </div>
                     <span className="text-sm font-semibold">
                       {formatCurrency(displayPrice)}원
                     </span>
                   </div>
-                  <p className="mt-3 text-xs opacity-70">{pkg.description}</p>
+                  <p className="mt-3 text-xs opacity-70">
+                    {formatPackageDescription(pkg.description, pkg.stationCount)}
+                  </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {pkg.stations.map((station) => (
                       <span
@@ -1224,7 +1525,7 @@ export function AlbumWizard({
               추가 앨범이 등록된 경우 패키지는 변경할 수 없습니다.
             </p>
           )}
-          <div className="flex justify-start">
+          <div className="flex justify-end">
             <button
               type="button"
               onClick={() => setStep(2)}
@@ -1374,6 +1675,7 @@ export function AlbumWizard({
                   <textarea
                     value={previousRelease}
                     onChange={(event) => setPreviousRelease(event.target.value)}
+                    placeholder="가장 최근 발매한 1곡을 적어주세요. 신인인 경우 신인이라고 표기해주세요."
                     className="h-20 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                   />
                 </div>
@@ -1606,74 +1908,21 @@ export function AlbumWizard({
                     </div>
                   )}
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        곡명 (한글) *
-                      </label>
-                      <input
-                        value={activeTrack.trackTitleKr}
-                        onChange={(event) =>
-                          updateTrack(
-                            activeTrackIndex,
-                            "trackTitleKr",
-                            event.target.value,
-                          )
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        곡명 (영문) *
-                      </label>
-                      <input
-                        value={activeTrack.trackTitleEn}
-                        onChange={(event) =>
-                          updateTrack(
-                            activeTrackIndex,
-                            "trackTitleEn",
-                            event.target.value,
-                          )
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
                     <div className="space-y-2 md:col-span-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        공식 표기 *
-                      </p>
-                      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            checked={activeTrack.trackTitleOfficial === "KR"}
-                            onChange={() =>
-                              updateTrack(
-                                activeTrackIndex,
-                                "trackTitleOfficial",
-                                "KR",
-                              )
-                            }
-                            className="h-4 w-4 rounded-full border-border"
-                          />
-                          한글
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            checked={activeTrack.trackTitleOfficial === "EN"}
-                            onChange={() =>
-                              updateTrack(
-                                activeTrackIndex,
-                                "trackTitleOfficial",
-                                "EN",
-                              )
-                            }
-                            className="h-4 w-4 rounded-full border-border"
-                          />
-                          영문
-                        </label>
-                      </div>
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        곡명 *
+                      </label>
+                      <input
+                        value={activeTrack.trackTitle}
+                        onChange={(event) =>
+                          updateTrack(
+                            activeTrackIndex,
+                            "trackTitle",
+                            event.target.value,
+                          )
+                        }
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -1681,6 +1930,7 @@ export function AlbumWizard({
                       </label>
                       <input
                         value={activeTrack.featuring}
+                        placeholder="피처링이 있는 경우 피처링 아티스트"
                         onChange={(event) =>
                           updateTrack(
                             activeTrackIndex,
@@ -1713,6 +1963,7 @@ export function AlbumWizard({
                       </label>
                       <input
                         value={activeTrack.lyricist}
+                        placeholder="연주곡/MR/Inst. 인 경우 비워두세요"
                         onChange={(event) =>
                           updateTrack(
                             activeTrackIndex,
@@ -1743,18 +1994,162 @@ export function AlbumWizard({
                       <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         가사
                       </label>
-                      <textarea
-                        value={activeTrack.lyrics}
-                        onChange={(event) =>
-                          updateTrack(
-                            activeTrackIndex,
-                            "lyrics",
-                            event.target.value,
-                          )
-                        }
-                        className="h-24 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                      <div className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3 text-xs text-muted-foreground">
+                      <div className="group/lyrics-tools">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={handleProfanityCheck}
+                            className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer"
+                          >
+                            욕설 체크
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSpellCheck}
+                            disabled={isSpellchecking}
+                            className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            맞춤법 {isSpellchecking ? "적용 중..." : "자동 적용"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleTranslateLyrics}
+                            disabled={isTranslatingLyrics}
+                            className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            번역 {isTranslatingLyrics ? "중..." : ""}
+                          </button>
+                        </div>
+                        {showLyricsToolNotice && (
+                          <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-amber-900 opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-amber-200/70 group-hover/lyrics-tools:bg-amber-50/80 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-amber-200/70 group-focus-within/lyrics-tools:bg-amber-50/80 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100">
+                            위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
+                            체크해주세요.
+                          </div>
+                        )}
+                      </div>
+                      <div className="relative isolate overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
+                        {showProfanityOverlay && (
+                          <div
+                            ref={lyricsOverlayRef}
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-0 z-10 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-foreground"
+                          >
+                            <div className="whitespace-pre-wrap">
+                              {renderProfanityPreview(
+                                activeTrack.lyrics,
+                                profanityPattern,
+                                profanityTestPattern,
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        <textarea
+                          value={activeTrack.lyrics}
+                          onChange={(event) =>
+                            updateTrack(
+                              activeTrackIndex,
+                              "lyrics",
+                              event.target.value,
+                            )
+                          }
+                          onScroll={handleLyricsScroll}
+                          className={`relative z-0 min-h-[180px] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${
+                            showProfanityOverlay
+                              ? "text-transparent caret-foreground"
+                              : "text-foreground"
+                          }`}
+                        />
+                      </div>
+                      {showLyricsTabs && (
+                        <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-foreground">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {showProfanityPanel && (
+                              <button
+                                type="button"
+                                onClick={() => setLyricsTab("profanity")}
+                                className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                                  lyricsTab === "profanity"
+                                    ? "bg-foreground text-background"
+                                    : "border border-border/70 text-muted-foreground hover:text-foreground"
+                                }`}
+                              >
+                                욕설 표시
+                              </button>
+                            )}
+                            {showSpellcheckPreview && (
+                              <button
+                                type="button"
+                                onClick={() => setLyricsTab("spellcheck")}
+                                className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                                  lyricsTab === "spellcheck"
+                                    ? "bg-foreground text-background"
+                                    : "border border-border/70 text-muted-foreground hover:text-foreground"
+                                }`}
+                              >
+                                맞춤법 수정
+                              </button>
+                            )}
+                          </div>
+                          {lyricsTab === "profanity" && showProfanityPanel && (
+                            <div className="mt-3 space-y-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                                감지된 단어
+                              </p>
+                              <div className="max-h-32 space-y-2 overflow-auto pr-1">
+                                {profanityWords.length > 0 ? (
+                                  profanityWords.map((word) => (
+                                    <div
+                                      key={word}
+                                      className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px] font-semibold text-red-600"
+                                    >
+                                      {word}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="rounded-xl border border-dashed border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
+                                    {profanityHighlightMap[activeTrackIndex]
+                                      ? "회피 패턴이 감지되었습니다."
+                                      : "욕설이 감지되지 않았습니다."}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {lyricsTab === "spellcheck" &&
+                            showSpellcheckPreview && (
+                              <div className="mt-3 space-y-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                                  수정 내역
+                                </p>
+                                <div className="max-h-32 space-y-2 overflow-auto pr-1">
+                                  {hasSpellcheckChanges ? (
+                                    spellcheckChanges.map((change, index) => (
+                                      <div
+                                        key={`${change.before}-${index}`}
+                                        className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px]"
+                                      >
+                                        <span className="text-muted-foreground">
+                                          {change.before}
+                                        </span>
+                                        <span className="mx-2 text-muted-foreground">
+                                          →
+                                        </span>
+                                        <span className="font-semibold text-foreground">
+                                          {change.after}
+                                        </span>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="rounded-xl border border-dashed border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
+                                      맞춤법 수정 내역이 없습니다.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                        </div>
+                      )}
+                      <div className="group rounded-2xl border border-border/60 bg-background/70 px-3 py-3 text-xs text-muted-foreground transition-all duration-200 group-hover:[&_li]:text-sm group-hover:[&_li]:leading-relaxed group-hover:[&_p]:text-xs">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                           유의사항
                         </p>
@@ -1847,25 +2242,24 @@ export function AlbumWizard({
             </div>
             <div className="mt-4 space-y-1 text-xs text-muted-foreground">
               <p>
-                음원 첨부는 선택사항입니다. 미첨부 시 이메일 제출 확인이
-                필요합니다.
+                용량이 크거나 첨부가 어려운 경우 이메일로 음원을 꼭 제출해주세요.
               </p>
               {isOneClick && (
                 <p>원클릭 접수는 음원 파일만 제출하면 됩니다.</p>
               )}
-              <p>
-                용량이 크거나 첨부가 어려운 경우 이메일로 음원만 발송해주세요.{" "}
-                <span className="font-semibold text-foreground">
-                  {APP_CONFIG.supportEmail}
-                </span>
+              <p className="font-semibold text-foreground">
+                {APP_CONFIG.supportEmail}
               </p>
-              <button
-                type="button"
-                onClick={() => setShowCdInfo(true)}
-                className="text-xs font-semibold text-foreground underline decoration-foreground/60 underline-offset-4 transition hover:text-amber-300"
-              >
-                CD 제작 등 실물 앨범을 발표한 경우
-              </button>
+              <p className="text-xs text-muted-foreground">
+                CD 제작 등 실물 앨범을 발표한 경우{" "}
+                <button
+                  type="button"
+                  onClick={() => setShowCdInfo(true)}
+                  className="font-semibold text-amber-500 transition hover:text-amber-400"
+                >
+                  자세히 보기 →
+                </button>
+              </p>
             </div>
           </div>
 
@@ -1926,12 +2320,12 @@ export function AlbumWizard({
             </div>
           )}
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
               onClick={() => setStep(1)}
               disabled={isSaving || isAddingAlbum}
-              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 disabled:cursor-not-allowed"
+              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-white disabled:cursor-not-allowed"
             >
               이전 단계
             </button>
@@ -1940,7 +2334,7 @@ export function AlbumWizard({
                 type="button"
                 onClick={() => handleSave("DRAFT")}
                 disabled={isSaving || isAddingAlbum}
-                className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 disabled:cursor-not-allowed"
+                className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-white disabled:cursor-not-allowed"
               >
                 임시 저장
               </button>
@@ -1949,7 +2343,7 @@ export function AlbumWizard({
               type="button"
               onClick={handleAddAlbum}
               disabled={isSaving || isAddingAlbum}
-              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 disabled:cursor-not-allowed"
+              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-white disabled:cursor-not-allowed"
             >
               {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 등록"}
             </button>
@@ -1991,10 +2385,10 @@ export function AlbumWizard({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="font-semibold">
-                        {selectedPackageSummary.name}
+                        {formatPackageName(selectedPackageSummary.stationCount)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {selectedPackageSummary.stationCount}곳 패키지 · 총{" "}
+                        {formatPackageName(selectedPackageSummary.stationCount)} · 총{" "}
                         {totalAlbumCount}건
                       </p>
                     </div>
@@ -2115,11 +2509,11 @@ export function AlbumWizard({
             </div>
           )}
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900"
+              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-white"
             >
               이전 단계
             </button>
@@ -2210,8 +2604,14 @@ export function AlbumWizard({
       )}
 
       {showCdInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setShowCdInfo(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <p className="text-sm font-semibold text-foreground">
               CD 발송, CD 제작
             </p>

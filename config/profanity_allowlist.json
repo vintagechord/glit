@@ -1,0 +1,32 @@
+[
+  {
+    "id": "ko_sibal_point",
+    "pattern": "시\\s*발\\s*점",
+    "description": "Non-profanity phrase meaning starting point",
+    "lang": "ko"
+  },
+  {
+    "id": "ko_saekki_finger",
+    "pattern": "새\\s*끼\\s*손\\s*가\\s*락",
+    "description": "Non-profanity phrase for finger name",
+    "lang": "ko"
+  },
+  {
+    "id": "en_class",
+    "pattern": "\\bclass\\b",
+    "description": "English word boundary allowlist",
+    "lang": "en"
+  },
+  {
+    "id": "en_pass",
+    "pattern": "\\bpass\\b",
+    "description": "English word boundary allowlist",
+    "lang": "en"
+  },
+  {
+    "id": "en_assistant",
+    "pattern": "\\bassistant\\b",
+    "description": "English word boundary allowlist",
+    "lang": "en"
+  }
+]

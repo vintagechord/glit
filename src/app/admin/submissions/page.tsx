@@ -1,25 +1,48 @@
 import Link from "next/link";
 
 import { formatDateTime } from "@/lib/format";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = {
   title: "접수 관리",
 };
 
+export const dynamic = "force-dynamic";
+
 const statusOptions = [
-  "DRAFT",
-  "SUBMITTED",
-  "PRE_REVIEW",
-  "WAITING_PAYMENT",
-  "IN_PROGRESS",
-  "RESULT_READY",
-  "COMPLETED",
+  { value: "DRAFT", label: "임시 저장" },
+  { value: "SUBMITTED", label: "접수 완료" },
+  { value: "PRE_REVIEW", label: "사전 검토" },
+  { value: "WAITING_PAYMENT", label: "결제 대기" },
+  { value: "IN_PROGRESS", label: "심의 진행" },
+  { value: "RESULT_READY", label: "결과 준비" },
+  { value: "COMPLETED", label: "완료" },
 ];
 
-const paymentOptions = ["UNPAID", "PAYMENT_PENDING", "PAID", "REFUNDED"];
+const paymentOptions = [
+  { value: "UNPAID", label: "미결제" },
+  { value: "PAYMENT_PENDING", label: "결제 확인 중" },
+  { value: "PAID", label: "결제 완료" },
+  { value: "REFUNDED", label: "환불" },
+];
 
-const typeOptions = ["ALBUM", "MV_DISTRIBUTION", "MV_BROADCAST"];
+const typeOptions = [
+  { value: "ALBUM", label: "음반 심의" },
+  { value: "MV_DISTRIBUTION", label: "M/V 심의 (유통/온라인)" },
+  { value: "MV_BROADCAST", label: "M/V 심의 (TV 송출)" },
+];
+
+const labelMap = {
+  status: Object.fromEntries(
+    statusOptions.map((option) => [option.value, option.label]),
+  ),
+  payment: Object.fromEntries(
+    paymentOptions.map((option) => [option.value, option.label]),
+  ),
+  type: Object.fromEntries(
+    typeOptions.map((option) => [option.value, option.label]),
+  ),
+} as const;
 
 export default async function AdminSubmissionsPage({
   searchParams,
@@ -33,11 +56,11 @@ export default async function AdminSubmissionsPage({
     to?: string;
   };
 }) {
-  const supabase = await createServerSupabase();
+  const supabase = createAdminClient();
   let query = supabase
     .from("submissions")
     .select(
-      "id, title, artist_name, status, payment_status, type, created_at, updated_at, guest_name, package:packages ( name )",
+      "id, title, artist_name, status, payment_status, type, created_at, updated_at, guest_name, amount_krw, package:packages ( name )",
     )
     .order("created_at", { ascending: false });
 
@@ -69,7 +92,7 @@ export default async function AdminSubmissionsPage({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            Admin
+            관리자
           </p>
           <h1 className="font-display mt-2 text-3xl text-foreground">
             접수 관리
@@ -108,11 +131,11 @@ export default async function AdminSubmissionsPage({
           className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
         >
           <option value="">전체 유형</option>
-          {typeOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
+            {typeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
         </select>
         <select
           name="status"
@@ -121,8 +144,8 @@ export default async function AdminSubmissionsPage({
         >
           <option value="">전체 상태</option>
           {statusOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
@@ -133,8 +156,8 @@ export default async function AdminSubmissionsPage({
         >
           <option value="">결제 상태</option>
           {paymentOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
@@ -156,7 +179,7 @@ export default async function AdminSubmissionsPage({
               <Link
                 key={submission.id}
                 href={`/admin/submissions/${submission.id}`}
-                className="grid gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 text-sm transition hover:border-foreground md:grid-cols-[1.4fr_1fr_1fr]"
+                className="grid gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 text-sm transition hover:border-foreground md:grid-cols-[1.4fr_1fr_1fr_0.8fr]"
               >
                 <div>
                   <p className="font-semibold text-foreground">
@@ -164,17 +187,31 @@ export default async function AdminSubmissionsPage({
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {submission.artist_name || "아티스트 미입력"} ·{" "}
-                    {submission.type}
+                    {labelMap.type[submission.type] ?? submission.type}
                     {submission.guest_name ? " · 비회원" : ""}
                   </p>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  <p>상태: {submission.status}</p>
-                  <p>결제: {submission.payment_status}</p>
+                  <p>
+                    상태: {labelMap.status[submission.status] ?? submission.status}
+                  </p>
+                  <p>
+                    결제:{" "}
+                    {labelMap.payment[submission.payment_status] ??
+                      submission.payment_status}
+                  </p>
                 </div>
                 <div className="text-xs text-muted-foreground md:text-right">
                   <p>{packageInfo?.name ?? "-"}</p>
                   <p>{formatDateTime(submission.created_at)}</p>
+                </div>
+                <div className="text-xs text-muted-foreground md:text-right">
+                  <p>
+                    {submission.amount_krw
+                      ? `${submission.amount_krw.toLocaleString()}원`
+                      : "-"}
+                  </p>
+                  <p>상세 보기 →</p>
                 </div>
               </Link>
             );

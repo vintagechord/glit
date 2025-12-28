@@ -1,4 +1,5 @@
 import { createServerSupabase } from "@/lib/supabase/server";
+import { StripAdBannerClient } from "@/components/site/strip-ad-banner-client";
 
 type AdBanner = {
   id: string;
@@ -23,41 +24,22 @@ export async function StripAdBanner() {
     .eq("is_active", true)
     .order("created_at", { ascending: false });
 
-  if (!data || data.length === 0) return null;
-
   const now = new Date();
-  const banner = data.find((item) => isBannerActive(item, now));
+  const activeBanners = data?.filter((item) => isBannerActive(item, now)) ?? [];
 
-  if (!banner) return null;
+  const bannersToShow =
+    activeBanners.length > 0
+      ? activeBanners
+      : [
+          {
+            id: "fallback-banner",
+            title: "온사이드 심의 접수 안내",
+            image_url: "/media/hero/onside-hero-poster.jpg",
+            link_url: "/dashboard/new",
+            starts_at: null,
+            ends_at: null,
+          },
+        ];
 
-  const content = (
-    <div className="flex h-24 items-center gap-4 overflow-hidden rounded-[28px] border border-border/60 bg-card/90 shadow-[0_18px_60px_rgba(15,23,42,0.2)]">
-      <img
-        src={banner.image_url}
-        alt={banner.title}
-        className="h-full w-40 object-cover sm:w-56"
-      />
-      <div className="flex flex-1 items-center justify-between gap-4 pr-6">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            Ad
-          </p>
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {banner.title}
-          </p>
-        </div>
-        <span className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground">
-          자세히 보기
-        </span>
-      </div>
-    </div>
-  );
-
-  return banner.link_url ? (
-    <a href={banner.link_url} target="_blank" rel="noreferrer">
-      {content}
-    </a>
-  ) : (
-    content
-  );
+  return <StripAdBannerClient banners={bannersToShow} />;
 }

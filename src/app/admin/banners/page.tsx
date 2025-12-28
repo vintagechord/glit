@@ -2,21 +2,14 @@ import {
   deleteAdBannerFormAction,
   upsertAdBannerFormAction,
 } from "@/features/admin/actions";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = {
   title: "배너 관리",
 };
 
-function toDatetimeLocal(value: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 16);
-}
-
 export default async function AdminBannersPage() {
-  const supabase = await createServerSupabase();
+  const supabase = createAdminClient();
   const { data: banners } = await supabase
     .from("ad_banners")
     .select("id, title, image_url, link_url, is_active, starts_at, ends_at")
@@ -25,11 +18,11 @@ export default async function AdminBannersPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        Admin
+        관리자
       </p>
       <h1 className="font-display mt-2 text-3xl text-foreground">배너 관리</h1>
       <p className="mt-3 text-sm text-muted-foreground">
-        좌측 배너 광고를 등록하고 노출 기간을 관리합니다.
+        띠배너 이미지를 등록하고 노출 여부를 관리합니다.
       </p>
 
       <div className="mt-8 space-y-6">
@@ -44,7 +37,7 @@ export default async function AdminBannersPage() {
                 >
                   <form
                     action={upsertAdBannerFormAction}
-                    className="grid gap-3 md:grid-cols-[1.4fr_1.6fr_1.2fr]"
+                    className="grid gap-3 md:grid-cols-[1.2fr_1.4fr_1.2fr_1.2fr_auto_auto]"
                   >
                     <input type="hidden" name="id" value={banner.id} />
                     <input
@@ -58,7 +51,13 @@ export default async function AdminBannersPage() {
                       type="url"
                       defaultValue={banner.image_url}
                       className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-                      placeholder="이미지 URL"
+                      placeholder="이미지 URL (선택)"
+                    />
+                    <input
+                      name="imageFile"
+                      type="file"
+                      accept="image/*"
+                      className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
                     />
                     <input
                       name="linkUrl"
@@ -66,18 +65,6 @@ export default async function AdminBannersPage() {
                       defaultValue={banner.link_url ?? ""}
                       className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
                       placeholder="링크 URL"
-                    />
-                    <input
-                      name="startsAt"
-                      type="datetime-local"
-                      defaultValue={toDatetimeLocal(banner.starts_at)}
-                      className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-                    />
-                    <input
-                      name="endsAt"
-                      type="datetime-local"
-                      defaultValue={toDatetimeLocal(banner.ends_at)}
-                      className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
                     />
                     <label className="flex items-center gap-2 text-xs text-muted-foreground">
                       <input
@@ -121,7 +108,7 @@ export default async function AdminBannersPage() {
           <h2 className="text-lg font-semibold text-foreground">새 배너 등록</h2>
           <form
             action={upsertAdBannerFormAction}
-            className="mt-4 grid gap-3 md:grid-cols-[1.4fr_1.6fr_1.2fr]"
+            className="mt-4 grid gap-3 md:grid-cols-[1.2fr_1.4fr_1.2fr_1.2fr_auto_auto]"
           >
             <input
               name="title"
@@ -131,23 +118,19 @@ export default async function AdminBannersPage() {
             <input
               name="imageUrl"
               type="url"
-              placeholder="이미지 URL"
+              placeholder="이미지 URL (선택)"
+              className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
+            />
+            <input
+              name="imageFile"
+              type="file"
+              accept="image/*"
               className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
             />
             <input
               name="linkUrl"
               type="url"
               placeholder="링크 URL"
-              className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-            />
-            <input
-              name="startsAt"
-              type="datetime-local"
-              className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-            />
-            <input
-              name="endsAt"
-              type="datetime-local"
               className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
             />
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
