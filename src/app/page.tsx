@@ -448,7 +448,7 @@ export default async function Home() {
                 온사이드에서 관리하세요
               </h1>
               <p className="max-w-xl text-base text-muted-foreground sm:text-lg">
-                접수부터 결과 통보, 그리고 나의 지난 심의까지 쉽고 간편하게
+                접수부터 실시간 결과확인, 나의 지난 심의 관리까지 쉽고 간편하게
               </p>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {heroCtas.map((cta) => (
