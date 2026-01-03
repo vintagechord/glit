@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
-import { createClient } from "@/lib/supabase/client";
 
 import {
   saveMvSubmissionAction,
@@ -42,6 +41,10 @@ const uploadMaxMb = Number(
     "4096",
 );
 const uploadMaxBytes = uploadMaxMb * 1024 * 1024;
+const uploadMaxLabel =
+  uploadMaxMb >= 1024
+    ? `${Math.round(uploadMaxMb / 1024)}GB`
+    : `${uploadMaxMb}MB`;
 const baseOnlinePrice = 30000;
 const stationPriceMap: Record<string, number> = {
   KBS: 30000,
@@ -132,7 +135,6 @@ export function MvWizard({
   userId?: string | null;
 }) {
   const router = useRouter();
-  const supabase = React.useMemo(() => createClient(), []);
   const isGuest = !userId;
   const [step, setStep] = React.useState(1);
   const [mvType, setMvType] = React.useState<"MV_DISTRIBUTION" | "MV_BROADCAST">(
@@ -181,6 +183,7 @@ export function MvWizard({
   const [uploads, setUploads] = React.useState<UploadItem[]>([]);
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadResult[]>([]);
   const [fileDigest, setFileDigest] = React.useState("");
+  const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [confirmModal, setConfirmModal] = React.useState<{
@@ -349,6 +352,10 @@ export function MvWizard({
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
+    addFiles(selected);
+  };
+
+  const addFiles = (selected: File[]) => {
     const allowAllExtensions = mvType === "MV_DISTRIBUTION";
     const allowedTypes = new Set([
       "video/mp4",
@@ -359,7 +366,7 @@ export function MvWizard({
     const allowedExtensions = [".mp4", ".mov", ".wmv", ".mpg", ".mpeg"];
     const filtered = selected.filter((file) => {
       if (file.size > uploadMaxBytes) {
-        setNotice({ error: `파일 용량은 ${uploadMaxMb}MB 이하만 가능합니다.` });
+        setNotice({ error: `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.` });
         return false;
       }
       if (!allowAllExtensions) {
@@ -381,17 +388,39 @@ export function MvWizard({
       }
       return true;
     });
+    const combinedFiles = [...files, ...filtered];
+    const existingMap = new Map<string, UploadItem>();
+    uploads.forEach((item) => {
+      existingMap.set(`${item.name}-${item.size}`, item);
+    });
+    const nextUploads = combinedFiles.map((file) => {
+      const key = `${file.name}-${file.size}`;
+      return (
+        existingMap.get(key) ?? {
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          status: "pending" as const,
+          mime: file.type,
+        }
+      );
+    });
     setNotice({});
-    setFiles(filtered);
-    setUploads(
-      filtered.map((file) => ({
-        name: file.name,
-        size: file.size,
-        progress: 0,
-        status: "pending",
-        mime: file.type,
-      })),
-    );
+    setFiles(combinedFiles);
+    setUploads(nextUploads);
+    if (filtered.length > 0) {
+      void uploadFiles(combinedFiles, nextUploads).catch(() => {
+        setNotice({ error: "파일 업로드 중 오류가 발생했습니다." });
+      });
+    }
+  };
+
+  const onDropFiles = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    const dropped = Array.from(event.dataTransfer.files ?? []);
+    if (dropped.length === 0) return;
+    setIsDraggingOver(false);
+    addFiles(dropped);
   };
 
   const uploadWithProgress = async (
@@ -454,42 +483,39 @@ export function MvWizard({
     setConfirmModal(null);
   };
 
-  const createSignedUpload = async (fileName: string) => {
-    if (userId) {
-      const path = `${userId}/${submissionId}/video/${fileName}`;
-      const { data, error } = await supabase.storage
-        .from("submissions")
-        .createSignedUploadUrl(path, { upsert: true });
-
-      if (error || !data) {
-        throw new Error("Upload url creation failed");
-      }
-
-      return { signedUrl: data.signedUrl, path: data.path };
-    }
-
-    const response = await fetch("/api/upload-url", {
+  const createSignedUpload = async (file: File) => {
+    const response = await fetch("/api/uploads/presign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         submissionId,
-        guestToken,
-        kind: "video",
-        fileName,
+        filename: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        guestToken: isGuest ? guestToken : undefined,
+        title,
       }),
     });
 
+    const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error("Upload url creation failed");
+      throw new Error(
+        typeof payload?.error === "string"
+          ? payload.error
+          : "업로드 URL을 생성할 수 없습니다.",
+      );
     }
 
-    return (await response.json()) as { signedUrl: string; path: string };
+    return payload as { uploadUrl: string; objectKey: string };
   };
 
-  const uploadFiles = async () => {
-    if (files.length === 0) return [];
+  const uploadFiles = async (
+    targetFiles: File[] = files,
+    initialUploads: UploadItem[] = uploads,
+  ) => {
+    if (targetFiles.length === 0) return [];
 
-    const digest = files
+    const digest = targetFiles
       .map((file) => `${file.name}-${file.size}-${file.lastModified}`)
       .join("|");
     if (digest === fileDigest && uploadedFiles.length > 0) {
@@ -497,11 +523,24 @@ export function MvWizard({
     }
 
     const results: UploadResult[] = [];
-    const nextUploads = [...uploads];
+    const nextUploads =
+      initialUploads.length === targetFiles.length
+        ? [...initialUploads]
+        : targetFiles.map((file) => ({
+            name: file.name,
+            size: file.size,
+            progress: 0,
+            status: "pending" as const,
+            mime: file.type,
+          }));
 
-    for (let index = 0; index < files.length; index += 1) {
-      const file = files[index];
-      const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`;
+    for (let index = 0; index < targetFiles.length; index += 1) {
+      const file = targetFiles[index];
+
+      if (nextUploads[index]?.status === "done" && uploadedFiles[index]) {
+        results.push(uploadedFiles[index]);
+        continue;
+      }
 
       nextUploads[index] = {
         ...nextUploads[index],
@@ -512,16 +551,21 @@ export function MvWizard({
       let signedUrl: string;
       let path: string;
       try {
-        const uploadData = await createSignedUpload(fileName);
-        signedUrl = uploadData.signedUrl;
-        path = uploadData.path;
-      } catch {
+        const uploadData = await createSignedUpload(file);
+        signedUrl = uploadData.uploadUrl;
+        path = uploadData.objectKey;
+      } catch (error) {
         nextUploads[index] = {
           ...nextUploads[index],
           status: "error",
         };
         setUploads([...nextUploads]);
-        throw new Error("업로드 URL 생성 실패");
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "업로드 URL 생성 실패";
+        setNotice({ error: message });
+        throw new Error(message);
       }
 
       await uploadWithProgress(signedUrl, file, (progress) => {
@@ -531,6 +575,17 @@ export function MvWizard({
         };
         setUploads([...nextUploads]);
       });
+
+      await fetch("/api/uploads/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          objectKey: path,
+          submissionId,
+          sizeBytes: file.size,
+          mimeType: file.type,
+        }),
+      }).catch(() => null);
 
       nextUploads[index] = {
         ...nextUploads[index],
@@ -684,6 +739,10 @@ export function MvWizard({
         return;
       }
 
+      if (result.emailWarning && typeof window !== "undefined") {
+        window.alert(result.emailWarning);
+      }
+
       if (status === "SUBMITTED" && result.submissionId) {
         if (typeof window !== "undefined") {
           window.alert("심의 접수가 완료되었습니다.");
@@ -713,6 +772,9 @@ export function MvWizard({
 
   return (
     <div className="space-y-8">
+      {isDraggingOver && (
+        <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
+      )}
       {confirmModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
@@ -1343,6 +1405,9 @@ export function MvWizard({
             <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               {uploadHintTitle}
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              최대 {uploadMaxLabel}까지 업로드할 수 있습니다.
+            </p>
             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
               {uploadChips.map((chip) => (
                 <span
@@ -1354,7 +1419,20 @@ export function MvWizard({
               ))}
             </div>
             <div className="mt-4">
-              <label className="block">
+              <label
+                className="relative block"
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsDraggingOver(true);
+                }}
+                onDragEnter={() => setIsDraggingOver(true)}
+                onDragLeave={(event) => {
+                  event.preventDefault();
+                  setIsDraggingOver(false);
+                }}
+                onDrop={onDropFiles}
+              >
                 <span className="sr-only">파일 첨부</span>
                 <input
                   type="file"
@@ -1368,29 +1446,52 @@ export function MvWizard({
                   className="hidden"
                 />
                 <span className="flex w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
-                  파일 첨부
+                  파일 첨부 (드래그 앤 드롭 가능)
                 </span>
+                {isDraggingOver && (
+                  <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-amber-300 bg-black/10 backdrop-blur-[1px]" />
+                )}
               </label>
             </div>
             <div className="mt-4 space-y-3">
-              {uploads.map((upload) => (
+              {uploads.map((upload, index) => (
                 <div
-                  key={upload.name}
+                  key={`${upload.name}-${index}`}
                   className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="font-semibold text-foreground">
                       {upload.name}
                     </span>
-                    <span className="text-muted-foreground">
-                      {upload.status === "done"
-                        ? "완료"
-                        : upload.status === "uploading"
-                          ? "업로드 중"
-                          : upload.status === "error"
-                            ? "실패"
-                            : "대기"}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-muted-foreground">
+                        {upload.status === "done"
+                          ? "첨부 완료"
+                          : upload.status === "uploading"
+                            ? `업로드 중 · ${upload.progress}%`
+                            : upload.status === "error"
+                              ? "실패"
+                              : "대기"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextFiles = [...files];
+                          nextFiles.splice(index, 1);
+                          const nextUploads = [...uploads];
+                          nextUploads.splice(index, 1);
+                          setFiles(nextFiles);
+                          setUploads(nextUploads);
+                          setUploadedFiles((prev) =>
+                            prev.filter((_, idx) => idx !== index),
+                          );
+                          setFileDigest("");
+                        }}
+                        className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
                     <div
@@ -1594,7 +1695,7 @@ export function MvWizard({
               disabled={isSaving}
               className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
             >
-              접수 완료 요청
+              결제하기
             </button>
           </div>
         </div>

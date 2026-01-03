@@ -4,6 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 
 import { sendWelcomeEmail } from "@/lib/email";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export type ActionState = {
@@ -18,11 +19,17 @@ const loginSchema = z.object({
 });
 
 const signupSchema = z.object({
-  name: z.string().min(2),
-  company: z.string().optional(),
-  phone: z.string().min(7),
+  name: z.string().trim().optional(),
+  company: z.string().trim().optional(),
+  phone: z.string().trim().optional(),
   email: z.string().email(),
   password: z.string().min(8),
+  confirmPassword: z.string().min(8),
+  agreeTerms: z.literal("on"),
+  agreePrivacy: z.literal("on"),
+}).refine((data) => data.password === data.confirmPassword, {
+  path: ["confirmPassword"],
+  message: "비밀번호가 일치하지 않습니다.",
 });
 
 const profileSchema = z.object({
@@ -59,7 +66,12 @@ export async function loginAction(
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error) {
-    return { error: "로그인 정보를 확인해주세요." };
+    const message =
+      error.message?.toLowerCase().includes("email not confirmed") ||
+      error.message?.toLowerCase().includes("email confirmation")
+        ? "이메일 인증 후 로그인해 주세요. 인증 메일을 다시 받으려면 비밀번호 재설정으로 진행하면 새 링크를 받을 수 있습니다."
+        : "로그인 정보를 확인해주세요.";
+    return { error: message };
   }
 
   redirect("/dashboard");
@@ -70,11 +82,14 @@ export async function signupAction(
   formData: FormData,
 ): Promise<ActionState> {
   const parsed = signupSchema.safeParse({
-    name: formData.get("name"),
-    company: formData.get("company") || undefined,
-    phone: formData.get("phone"),
+    name: (formData.get("name") || "").toString().trim() || undefined,
+    company: (formData.get("company") || "").toString().trim() || undefined,
+    phone: (formData.get("phone") || "").toString().trim() || undefined,
     email: formData.get("email"),
     password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+    agreeTerms: formData.get("agreeTerms"),
+    agreePrivacy: formData.get("agreePrivacy"),
   });
 
   if (!parsed.success) {
@@ -83,39 +98,71 @@ export async function signupAction(
     };
   }
 
-  const supabase = await createServerSupabase();
-  const { data, error } = await supabase.auth.signUp({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    options: {
-      data: {
-        name: parsed.data.name,
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin.auth.admin.createUser({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      email_confirm: true,
+      user_metadata: {
+        name: parsed.data.name ?? "",
         company: parsed.data.company ?? "",
-        phone: parsed.data.phone,
+        phone: parsed.data.phone ?? "",
       },
-    },
-  });
+    });
 
-  if (error) {
+    if (error || !data.user) {
+      return { error: "회원가입을 완료할 수 없습니다." };
+    }
+
+    const emailResult = await sendWelcomeEmail({
+      email: parsed.data.email,
+      name: parsed.data.name,
+    });
+
+    if (!emailResult.ok && !emailResult.skipped) {
+      console.warn("Welcome email failed", emailResult);
+    }
+
+    return {
+      message: "회원가입이 완료되었습니다. 로그인해 주세요.",
+    };
+  } catch (error) {
+    console.error("Signup error", error);
     return { error: "회원가입을 완료할 수 없습니다." };
   }
+}
 
-  const emailResult = await sendWelcomeEmail({
-    email: parsed.data.email,
-    name: parsed.data.name,
-  });
-
-  if (!emailResult.ok && !emailResult.skipped) {
-    console.warn("Welcome email failed", emailResult);
+export async function resetPasswordAction(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const email = String(formData.get("resetEmail") || "").trim();
+  if (!email) {
+    return { fieldErrors: { resetEmail: "이메일을 입력해주세요." } };
+  }
+  const parsed = z.string().email().safeParse(email);
+  if (!parsed.success) {
+    return { fieldErrors: { resetEmail: "유효한 이메일을 입력해주세요." } };
   }
 
-  if (data.session) {
-    await supabase.auth.signOut();
+  try {
+    const supabase = await createServerSupabase();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${
+        process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+      }/reset-password`,
+    });
+    if (error) {
+      return { error: "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요." };
+    }
+    return {
+      message: "비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.",
+    };
+  } catch (error) {
+    console.error("resetPasswordAction error", error);
+    return { error: "비밀번호 재설정 요청 중 오류가 발생했습니다." };
   }
-
-  return {
-    message: "회원가입을 축하합니다. 로그인해 주세요.",
-  };
 }
 
 export async function updateProfileAction(

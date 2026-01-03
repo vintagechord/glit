@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { sendSubmissionReceiptEmail } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -10,6 +11,7 @@ export type SubmissionActionState = {
   error?: string;
   submissionId?: string;
   guestToken?: string;
+  emailWarning?: string;
 };
 
 export type RatingFileActionState = {
@@ -531,13 +533,29 @@ export async function getSubmissionFileUrlAction(
   if (user) {
     const { data: fileRow } = await supabase
       .from("submission_files")
-      .select("file_path")
+      .select("file_path, storage_provider, object_key")
       .eq("id", parsed.data.fileId)
       .eq("submission_id", parsed.data.submissionId)
       .maybeSingle();
 
-    if (!fileRow?.file_path) {
+    if (!fileRow?.file_path && !fileRow?.object_key) {
       return { error: "파일을 찾을 수 없습니다." };
+    }
+
+    if (fileRow.storage_provider === "b2" && fileRow.object_key) {
+      try {
+        const b2 = await import("@/lib/b2");
+        const url = await b2.presignGetUrl(fileRow.object_key, 300);
+        return { url };
+      } catch (error) {
+        const b2 = await import("@/lib/b2");
+        if (error instanceof b2.B2ConfigError) {
+          return {
+            error: "파일 저장소가 아직 설정되지 않았습니다. 관리자에게 문의해주세요.",
+          };
+        }
+        return { error: "다운로드 링크를 생성할 수 없습니다." };
+      }
     }
 
     const { data, error } = await supabase.storage
@@ -568,13 +586,29 @@ export async function getSubmissionFileUrlAction(
 
   const { data: fileRow } = await admin
     .from("submission_files")
-    .select("file_path")
+    .select("file_path, storage_provider, object_key")
     .eq("id", parsed.data.fileId)
     .eq("submission_id", parsed.data.submissionId)
     .maybeSingle();
 
-  if (!fileRow?.file_path) {
+  if (!fileRow?.file_path && !fileRow?.object_key) {
     return { error: "파일을 찾을 수 없습니다." };
+  }
+
+  if (fileRow.storage_provider === "b2" && fileRow.object_key) {
+    try {
+      const b2 = await import("@/lib/b2");
+      const url = await b2.presignGetUrl(fileRow.object_key, 300);
+      return { url };
+    } catch (error) {
+      const b2 = await import("@/lib/b2");
+      if (error instanceof b2.B2ConfigError) {
+        return {
+          error: "파일 저장소가 아직 설정되지 않았습니다. 관리자에게 문의해주세요.",
+        };
+      }
+      return { error: "다운로드 링크를 생성할 수 없습니다." };
+    }
   }
 
   const { data, error } = await admin.storage
@@ -809,6 +843,10 @@ export async function saveAlbumSubmissionAction(
       submission_id: parsed.data.submissionId,
       kind: "AUDIO",
       file_path: file.path,
+      object_key: file.path,
+      storage_provider: "b2",
+      status: "UPLOADED",
+      uploaded_at: new Date().toISOString(),
       original_name: file.originalName,
       mime: file.mime || null,
       size: file.size,
@@ -911,9 +949,38 @@ export async function saveAlbumSubmissionAction(
     message: eventMessage,
   });
 
+  let emailWarning: string | undefined;
+  if (parsed.data.status === "SUBMITTED") {
+    const recipientEmail =
+      parsed.data.guestEmail ??
+      parsed.data.applicantEmail ??
+      user?.email ??
+      null;
+    if (recipientEmail) {
+      const link =
+        parsed.data.guestToken && parsed.data.guestToken.length >= 8
+          ? `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/track/${parsed.data.guestToken}`
+          : undefined;
+      const emailResult = await sendSubmissionReceiptEmail({
+        email: recipientEmail,
+        title: parsed.data.title,
+        kind: "ALBUM",
+        isGuest: isGuest,
+        guestToken: parsed.data.guestToken ?? undefined,
+        link,
+      });
+      if (emailResult.skipped || !emailResult.ok) {
+        emailWarning =
+          emailResult.message ??
+          "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+      }
+    }
+  }
+
   return {
     submissionId: parsed.data.submissionId,
     guestToken: isGuest ? parsed.data.guestToken : undefined,
+    emailWarning: typeof emailWarning === "string" ? emailWarning : undefined,
   };
 }
 
@@ -1099,6 +1166,10 @@ export async function saveMvSubmissionAction(
       submission_id: parsed.data.submissionId,
       kind: "VIDEO",
       file_path: file.path,
+      object_key: file.path,
+      storage_provider: "b2",
+      status: "UPLOADED",
+      uploaded_at: new Date().toISOString(),
       original_name: file.originalName,
       mime: file.mime || null,
       size: file.size,
@@ -1163,8 +1234,33 @@ export async function saveMvSubmissionAction(
     message: eventMessage,
   });
 
+  let emailWarning: string | undefined;
+  if (parsed.data.status === "SUBMITTED") {
+    const recipientEmail = parsed.data.guestEmail ?? user?.email ?? null;
+    if (recipientEmail) {
+      const link =
+        parsed.data.guestToken && parsed.data.guestToken.length >= 8
+          ? `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/track/${parsed.data.guestToken}`
+          : undefined;
+      const emailResult = await sendSubmissionReceiptEmail({
+        email: recipientEmail,
+        title: parsed.data.title,
+        kind: "MV",
+        isGuest: isGuest,
+        guestToken: parsed.data.guestToken ?? undefined,
+        link,
+      });
+      if (emailResult.skipped || !emailResult.ok) {
+        emailWarning =
+          emailResult.message ??
+          "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+      }
+    }
+  }
+
   return {
     submissionId: parsed.data.submissionId,
     guestToken: isGuest ? parsed.data.guestToken : undefined,
+    emailWarning: typeof emailWarning === "string" ? emailWarning : undefined,
   };
 }

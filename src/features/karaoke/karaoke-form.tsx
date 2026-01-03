@@ -4,7 +4,6 @@ import * as React from "react";
 
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
-import { createClient } from "@/lib/supabase/client";
 
 import {
   createKaraokeRequestAction,
@@ -21,7 +20,6 @@ type UploadState = {
 const uploadMaxBytes = APP_CONFIG.uploadMaxMb * 1024 * 1024;
 
 export function KaraokeForm({ userId }: { userId?: string | null }) {
-  const supabase = React.useMemo(() => createClient(), []);
   const isGuest = !userId;
   const [title, setTitle] = React.useState("");
   const [artist, setArtist] = React.useState("");
@@ -45,6 +43,7 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const guestTokenRef = React.useRef<string | null>(null);
   const uploadIdRef = React.useRef<string | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = React.useState(false);
 
   if (!guestTokenRef.current) {
     guestTokenRef.current = crypto.randomUUID();
@@ -54,8 +53,7 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
     uploadIdRef.current = crypto.randomUUID();
   }
 
-  const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = event.target.files?.[0] ?? null;
+  const handleSelectedFile = (selected: File | null) => {
     if (!selected) {
       setFile(null);
       setUpload({ name: "", progress: 0, status: "idle" });
@@ -70,6 +68,18 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
     setNotice({});
     setFile(selected);
     setUpload({ name: selected.name, progress: 0, status: "idle" });
+  };
+
+  const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0] ?? null;
+    handleSelectedFile(selected);
+  };
+
+  const onDropFiles = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    const selected = event.dataTransfer.files?.[0] ?? null;
+    setIsDraggingOver(false);
+    handleSelectedFile(selected);
   };
 
   const uploadWithProgress = async (signedUrl: string, selected: File) => {
@@ -96,34 +106,30 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
     });
   };
 
-  const createSignedUpload = async (fileName: string) => {
-    if (userId) {
-      const path = `${userId}/karaoke/${fileName}`;
-      const { data, error } = await supabase.storage
-        .from("submissions")
-        .createSignedUploadUrl(path, { upsert: true });
-      if (error || !data) {
-        throw new Error("Upload url creation failed");
-      }
-      return { signedUrl: data.signedUrl, path: data.path };
-    }
-
-    const response = await fetch("/api/upload-url", {
+  const createSignedUpload = async (selected: File) => {
+    const response = await fetch("/api/uploads/presign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         submissionId: uploadIdRef.current,
-        guestToken: guestTokenRef.current,
-        kind: "karaoke",
-        fileName,
+        filename: selected.name,
+        mimeType: selected.type,
+        sizeBytes: selected.size,
+        guestToken: isGuest ? guestTokenRef.current ?? undefined : undefined,
+        title,
       }),
     });
 
+    const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error("Upload url creation failed");
+      throw new Error(
+        typeof payload?.error === "string"
+          ? payload.error
+          : "업로드 URL을 생성할 수 없습니다.",
+      );
     }
 
-    return (await response.json()) as { signedUrl: string; path: string };
+    return payload as { uploadUrl: string; objectKey: string };
   };
 
   const handleSubmit = async () => {
@@ -149,23 +155,37 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
     try {
       let filePath: string | undefined;
       if (file) {
-        const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`;
         setUpload((prev) => ({ ...prev, status: "uploading" }));
 
         let signedUrl: string;
         let path: string;
         try {
-          const uploadData = await createSignedUpload(fileName);
-          signedUrl = uploadData.signedUrl;
-          path = uploadData.path;
-        } catch {
+          const uploadData = await createSignedUpload(file);
+          signedUrl = uploadData.uploadUrl;
+          path = uploadData.objectKey;
+        } catch (error) {
           setUpload((prev) => ({ ...prev, status: "error" }));
-          setNotice({ error: "파일 업로드 URL 생성 실패" });
+          const message =
+            error instanceof Error && error.message
+              ? error.message
+              : "파일 업로드 URL 생성 실패";
+          setNotice({ error: message });
           return;
         }
 
         await uploadWithProgress(signedUrl, file);
         setUpload((prev) => ({ ...prev, status: "done", progress: 100 }));
+        await fetch("/api/uploads/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            objectKey: path,
+            submissionId: uploadIdRef.current,
+            sizeBytes: file.size,
+            mimeType: file.type,
+            guestToken: isGuest ? guestTokenRef.current ?? undefined : undefined,
+          }),
+        }).catch(() => null);
         filePath = path;
       }
 
@@ -212,6 +232,9 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
 
   return (
     <div className="space-y-8">
+      {isDraggingOver && (
+        <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
+      )}
       <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           노래방 등록 신청하기
@@ -327,32 +350,71 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
           <p className="mt-2 text-xs text-muted-foreground">
             음원 또는 참고 자료를 업로드하세요. (선택)
           </p>
-          <input
-            type="file"
-            onChange={onFileChange}
-            className="mt-4 w-full rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm text-muted-foreground"
-          />
+          <div className="mt-4">
+            <label
+              className="relative block"
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setIsDraggingOver(true);
+              }}
+              onDragEnter={() => setIsDraggingOver(true)}
+              onDragLeave={(event) => {
+                event.preventDefault();
+                setIsDraggingOver(false);
+              }}
+              onDrop={onDropFiles}
+            >
+              <span className="sr-only">파일 첨부</span>
+              <input
+                type="file"
+                onChange={onFileChange}
+                className="hidden"
+              />
+              <span className="flex w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
+                파일 첨부 (드래그 앤 드롭 가능)
+              </span>
+              {isDraggingOver && (
+                <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-amber-300 bg-black/10 backdrop-blur-[1px]" />
+              )}
+            </label>
+          </div>
           {upload.name && (
-            <div className="mt-4 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-foreground">
-                  {upload.name}
-                </span>
-                <span className="text-muted-foreground">
-                  {upload.status === "done"
-                    ? "완료"
-                    : upload.status === "uploading"
-                      ? "업로드 중"
-                      : upload.status === "error"
-                        ? "실패"
-                        : "대기"}
-                </span>
-              </div>
-              <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
-                <div
-                  className="h-1.5 rounded-full bg-foreground transition-all"
-                  style={{ width: `${upload.progress}%` }}
-                />
+            <div className="mt-4 space-y-3">
+              <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className="font-semibold text-foreground">
+                    {upload.name}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-muted-foreground">
+                      {upload.status === "done"
+                        ? "첨부 완료"
+                        : upload.status === "uploading"
+                          ? `업로드 중 · ${upload.progress}%`
+                          : upload.status === "error"
+                            ? "실패"
+                            : "대기"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFile(null);
+                        setUpload({ name: "", progress: 0, status: "idle" });
+                        setIsDraggingOver(false);
+                      }}
+                      className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
+                  <div
+                    className="h-1.5 rounded-full bg-foreground transition-all"
+                    style={{ width: `${upload.progress}%` }}
+                  />
+                </div>
               </div>
             </div>
           )}

@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 
+import Image from "next/image";
+
 import { AboutRevealSection } from "@/components/about/about-reveal-section";
 
 export const metadata = {
@@ -55,19 +57,23 @@ export default function AboutPage() {
             </div>
             <div className="relative">
               <div className="relative overflow-hidden rounded-[28px] border border-border/60 bg-white/80">
-                <img
+                <Image
                   src="/media/hero/glit-hero-poster.jpg"
                   alt="GLIT 심의 서비스 소개 이미지"
+                  width={960}
+                  height={520}
                   className="h-[220px] w-full object-cover md:h-[260px]"
-                  loading="lazy"
+                  priority={false}
                 />
               </div>
               <div className="mt-3 flex items-center gap-3">
-                <img
+                <Image
                   src="/brand/glit-logo.svg"
                   alt="GLIT 로고"
+                  width={96}
+                  height={24}
                   className="h-6 w-auto"
-                  loading="lazy"
+                  priority={false}
                 />
                 <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--about-ink)]/60">
                   Ready to Air · Officially Greenlit

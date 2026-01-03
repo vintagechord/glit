@@ -17,6 +17,7 @@ type HistoryItem = {
   title: string;
   artistName: string;
   typeLabel: string;
+  type: string;
   createdAt: string | null;
   updatedAt: string | null;
   status: string;
@@ -46,7 +47,7 @@ const submissionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
   WAITING_PAYMENT: {
-    label: "결제 확인 중",
+    label: "결제대기",
     tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
   IN_PROGRESS: {
@@ -69,7 +70,7 @@ const paymentStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
   },
   PAYMENT_PENDING: {
-    label: "결제 확인 중",
+    label: "결제대기",
     tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
   PAID: {
@@ -170,6 +171,7 @@ const getPaymentMethodLabel = (method?: string | null) =>
 
 export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
   const [items, setItems] = React.useState<HistoryItem[]>(initialItems);
+  const [filter, setFilter] = React.useState<"ALL" | "ALBUM" | "MV">("ALL");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
     () => new Set(),
   );
@@ -237,9 +239,53 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
     );
   }
 
+  const filteredItems =
+    filter === "ALL"
+      ? items
+      : items.filter((item) =>
+          filter === "ALBUM"
+            ? item.type.startsWith("ALBUM")
+            : item.type.startsWith("MV"),
+        );
+
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => setFilter("ALL")}
+            className={`rounded-full px-3 py-1 transition ${
+              filter === "ALL"
+                ? "bg-foreground text-background"
+                : "border border-border/70 text-foreground hover:border-foreground"
+            }`}
+          >
+            전체
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter("ALBUM")}
+            className={`rounded-full px-3 py-1 transition ${
+              filter === "ALBUM"
+                ? "bg-foreground text-background"
+                : "border border-border/70 text-foreground hover:border-foreground"
+            }`}
+          >
+            앨범
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter("MV")}
+            className={`rounded-full px-3 py-1 transition ${
+              filter === "MV"
+                ? "bg-foreground text-background"
+                : "border border-border/70 text-foreground hover:border-foreground"
+            }`}
+          >
+            뮤직비디오
+          </button>
+        </div>
         <button
           type="button"
           onClick={handleDelete}
@@ -254,11 +300,15 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
           {notice}
         </div>
       )}
-      {items.map((submission) => {
+      {filteredItems.map((submission) => {
         const statusInfo = getSubmissionStatus(submission.status);
         const paymentInfo = getPaymentStatus(submission.paymentStatus);
         const paymentMethodLabel = getPaymentMethodLabel(
           submission.paymentMethod,
+        );
+        const shouldShowPaymentChip = !(
+          submission.status === "WAITING_PAYMENT" &&
+          submission.paymentStatus === "PAYMENT_PENDING"
         );
         const packageLabel = submission.packageInfo?.name ?? "패키지 미지정";
         const trackCount = submission.tracks.length;
@@ -294,7 +344,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                   >
                     {statusInfo.label}
                   </span>
-                  {paymentInfo && (
+                  {paymentInfo && shouldShowPaymentChip && (
                     <span
                       className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${paymentInfo.tone}`}
                     >

@@ -68,7 +68,7 @@ const resultStatusMap: Record<string, { label: string; tone: string }> = {
 
 const stageStatusMap = {
   payment: {
-    label: "결제중",
+    label: "결제대기",
     tone: "bg-slate-500/10 text-slate-600 dark:text-slate-200",
   },
   paid: {
@@ -144,18 +144,18 @@ function getSubmissionLabels(submission?: SubmissionSummary | null) {
 
 export function HomeReviewPanel({
   isLoggedIn,
-  albumSubmission,
-  mvSubmission,
-  albumStations,
-  mvStations,
+  albumSubmissions,
+  mvSubmissions,
+  albumStationsMap,
+  mvStationsMap,
   hideEmptyTabs = false,
   forceLiveBadge = false,
 }: {
   isLoggedIn: boolean;
-  albumSubmission: SubmissionSummary | null;
-  mvSubmission: SubmissionSummary | null;
-  albumStations: StationItem[];
-  mvStations: StationItem[];
+  albumSubmissions: SubmissionSummary[];
+  mvSubmissions: SubmissionSummary[];
+  albumStationsMap: Record<string, StationItem[]>;
+  mvStationsMap: Record<string, StationItem[]>;
   hideEmptyTabs?: boolean;
   forceLiveBadge?: boolean;
 }) {
@@ -163,36 +163,38 @@ export function HomeReviewPanel({
     () => (isLoggedIn ? createClient() : null),
     [isLoggedIn],
   );
+  const albumList = albumSubmissions;
+  const mvList = mvSubmissions;
   const [tab, setTab] = React.useState<TabKey>(() => {
     if (!hideEmptyTabs) return "album";
-    if (albumSubmission) return "album";
-    if (mvSubmission) return "mv";
+    if (albumList.length > 0) return "album";
+    if (mvList.length > 0) return "mv";
     return "album";
   });
-  const normalizeStations = React.useCallback(
-    (rows?: StationItem[] | null) =>
-      (rows ?? []).map((row) => ({
-        ...row,
-        station: Array.isArray(row.station) ? row.station[0] : row.station ?? null,
-      })),
-    [],
-  );
-  const [albumState, setAlbumState] = React.useState({
-    submission: albumSubmission,
-    stations: normalizeStations(albumStations),
-  });
-  const [mvState, setMvState] = React.useState({
-    submission: mvSubmission,
-    stations: normalizeStations(mvStations),
-  });
+  const normalizeStations = React.useCallback((rows?: StationItem[] | null) => {
+    return (rows ?? []).map((row) => ({
+      ...row,
+      station: Array.isArray(row.station) ? row.station[0] : row.station ?? null,
+    }));
+  }, []);
+  const [albumState, setAlbumState] = React.useState(() => ({
+    submissions: albumList,
+    stationsById: albumStationsMap,
+    index: 0,
+  }));
+  const [mvState, setMvState] = React.useState(() => ({
+    submissions: mvList,
+    stationsById: mvStationsMap,
+    index: 0,
+  }));
 
   const availableTabs = React.useMemo<TabKey[]>(() => {
     if (!hideEmptyTabs) return ["album", "mv"];
     const tabs: TabKey[] = [];
-    if (albumState.submission) tabs.push("album");
-    if (mvState.submission) tabs.push("mv");
+    if (albumState.submissions.length > 0) tabs.push("album");
+    if (mvState.submissions.length > 0) tabs.push("mv");
     return tabs.length ? tabs : ["album", "mv"];
-  }, [albumState.submission, hideEmptyTabs, mvState.submission]);
+  }, [albumState.submissions.length, hideEmptyTabs, mvState.submissions.length]);
 
   React.useEffect(() => {
     if (!availableTabs.includes(tab)) {
@@ -200,40 +202,56 @@ export function HomeReviewPanel({
     }
   }, [availableTabs, tab]);
 
-  const active = tab === "album" ? albumState : mvState;
-  const activeSubmission = active.submission;
-  const activeStations = active.stations;
+  const activeList = tab === "album" ? albumState.submissions : mvState.submissions;
+  const activeIndex = tab === "album" ? albumState.index : mvState.index;
+  const activeStationsMap = tab === "album" ? albumState.stationsById : mvState.stationsById;
+  const activeSubmission =
+    activeList.length > 0 ? activeList[Math.min(activeIndex, activeList.length - 1)] : null;
+  const activeSubmissionId = activeSubmission?.id;
+  const activeStations = activeSubmissionId
+    ? activeStationsMap[activeSubmissionId] ?? []
+    : [];
   const submissionLabels = getSubmissionLabels(activeSubmission);
   const isLive =
     (forceLiveBadge && isLoggedIn) ||
     (isLoggedIn &&
-      [albumState.submission, mvState.submission].some(
+      [...albumState.submissions, ...mvState.submissions].some(
         (submission) => submission && submission.status !== "COMPLETED",
       ));
 
   React.useEffect(() => {
-    if (!supabase || !activeSubmission?.id) return;
+    if (!supabase || !activeSubmissionId) return;
     const channel = supabase
-      .channel(`home-submission-${activeSubmission.id}`)
+      .channel(`home-submission-${activeSubmissionId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "submissions",
-          filter: `id=eq.${activeSubmission.id}`,
+          filter: `id=eq.${activeSubmissionId}`,
         },
         async () => {
           const { data } = await supabase
             .from("submissions")
             .select("id, title, artist_name, status, updated_at, payment_status")
-            .eq("id", activeSubmission.id)
+            .eq("id", activeSubmissionId)
             .maybeSingle();
           if (!data) return;
           if (tab === "album") {
-            setAlbumState((prev) => ({ ...prev, submission: data }));
+            setAlbumState((prev) => {
+              const submissions = prev.submissions.map((item, idx) =>
+                idx === prev.index ? { ...item, ...data } : item,
+              );
+              return { ...prev, submissions };
+            });
           } else {
-            setMvState((prev) => ({ ...prev, submission: data }));
+            setMvState((prev) => {
+              const submissions = prev.submissions.map((item, idx) =>
+                idx === prev.index ? { ...item, ...data } : item,
+              );
+              return { ...prev, submissions };
+            });
           }
         },
       )
@@ -243,24 +261,30 @@ export function HomeReviewPanel({
           event: "*",
           schema: "public",
           table: "station_reviews",
-          filter: `submission_id=eq.${activeSubmission.id}`,
+          filter: `submission_id=eq.${activeSubmissionId}`,
         },
         async () => {
           const { data } = await supabase
             .from("station_reviews")
             .select("id, status, updated_at, station:stations ( name )")
-            .eq("submission_id", activeSubmission.id)
+            .eq("submission_id", activeSubmissionId)
             .order("updated_at", { ascending: false });
           if (!data) return;
           if (tab === "album") {
             setAlbumState((prev) => ({
               ...prev,
-              stations: normalizeStations(data as StationItem[]),
+              stationsById: {
+                ...prev.stationsById,
+                [activeSubmissionId]: normalizeStations(data as StationItem[]),
+              },
             }));
           } else {
             setMvState((prev) => ({
               ...prev,
-              stations: normalizeStations(data as StationItem[]),
+              stationsById: {
+                ...prev.stationsById,
+                [activeSubmissionId]: normalizeStations(data as StationItem[]),
+              },
             }));
           }
         },
@@ -270,7 +294,7 @@ export function HomeReviewPanel({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeSubmission?.id, normalizeStations, supabase, tab]);
+  }, [activeSubmissionId, normalizeStations, supabase, tab]);
 
   const totalCount = activeStations.length;
   const completedCount = activeStations.filter((review) =>
@@ -309,7 +333,7 @@ export function HomeReviewPanel({
     setPage(0);
     setDragOffset(0);
     setIsDragging(false);
-  }, [tab, activeStations.length]);
+  }, [tab, activeStations.length, activeSubmissionId]);
 
   const clampPage = React.useCallback(
     (value: number) => Math.min(maxPage, Math.max(0, value)),
@@ -415,6 +439,70 @@ export function HomeReviewPanel({
             뮤직비디오
           </button>
         ) : null}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        <span>
+          {activeList.length > 0
+            ? `${activeIndex + 1}/${activeList.length}`
+            : "0/0"}
+          {tab === "album" && activeList.length > 0
+            ? ` · 진행중 ${activeList.length}건`
+            : null}
+          {tab === "mv" && activeList.length > 0
+            ? ` · 진행중 ${activeList.length}건`
+            : null}
+        </span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (tab === "album") {
+                setAlbumState((prev) => ({
+                  ...prev,
+                  index: Math.max(0, prev.index - 1),
+                }));
+              } else {
+                setMvState((prev) => ({
+                  ...prev,
+                  index: Math.max(0, prev.index - 1),
+                }));
+              }
+            }}
+            disabled={activeIndex <= 0}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-white text-xs font-bold text-black shadow-sm transition hover:border-black hover:bg-slate-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="이전 접수"
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (tab === "album") {
+                setAlbumState((prev) => ({
+                  ...prev,
+                  index: Math.min(
+                    (prev.submissions.length || 1) - 1,
+                    prev.index + 1,
+                  ),
+                }));
+              } else {
+                setMvState((prev) => ({
+                  ...prev,
+                  index: Math.min(
+                    (prev.submissions.length || 1) - 1,
+                    prev.index + 1,
+                  ),
+                }));
+              }
+            }}
+            disabled={activeIndex >= Math.max(0, activeList.length - 1)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-white text-xs font-bold text-black shadow-sm transition hover:border-black hover:bg-slate-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="다음 접수"
+          >
+            →
+          </button>
+        </div>
       </div>
 
       <div className="mt-6 space-y-5">

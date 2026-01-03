@@ -11,17 +11,35 @@ export function TrackLookupForm({
   const router = useRouter();
   const [token, setToken] = React.useState("");
   const [error, setError] = React.useState("");
+  const [validating, setValidating] = React.useState(false);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = token.trim();
     if (!value) {
       setError("조회 코드를 입력해주세요.");
       return;
     }
-    setError("");
-    onSuccess?.();
-    router.push(`/track/${encodeURIComponent(value)}`);
+    setValidating(true);
+    try {
+      const res = await fetch("/api/track/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: value }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      if (!payload.ok) {
+        setError("코드가 올바르지 않습니다. 다시 입력해주세요.");
+        return;
+      }
+      setError("");
+      onSuccess?.();
+      router.push(`/track/${encodeURIComponent(value)}`);
+    } catch {
+      setError("코드를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setValidating(false);
+    }
   };
 
   return (
@@ -30,16 +48,19 @@ export function TrackLookupForm({
         value={token}
         onChange={(event) => setToken(event.target.value)}
         placeholder="비회원 조회 코드 입력"
-        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+        className={`w-full rounded-2xl border ${
+          error ? "border-amber-400 bg-amber-50/60" : "border-border/70 bg-background"
+        } px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground`}
       />
       {error ? (
-        <p className="text-xs text-rose-500">{error}</p>
+        <p className="text-xs text-amber-700">{error}</p>
       ) : null}
       <button
         type="submit"
-        className="w-full rounded-full bg-foreground px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+        disabled={validating}
+        className="w-full rounded-full bg-foreground px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
       >
-        진행상황 조회
+        {validating ? "확인 중..." : "진행상황 조회"}
       </button>
     </form>
   );

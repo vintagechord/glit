@@ -322,10 +322,14 @@ export default async function Home() {
     updated_at: new Date().toISOString(),
   };
 
-  let albumSubmission: SubmissionSnapshot | null = isLoggedIn ? null : sampleAlbum;
-  let mvSubmission: SubmissionSnapshot | null = isLoggedIn ? null : sampleMv;
-  let albumStations: StationSnapshot[] = isLoggedIn ? [] : sampleStations;
-  let mvStations: StationSnapshot[] = isLoggedIn ? [] : sampleStations;
+  let albumSubmissions: SubmissionSnapshot[] = isLoggedIn ? [] : [sampleAlbum];
+  let mvSubmissions: SubmissionSnapshot[] = isLoggedIn ? [] : [sampleMv];
+  const albumStationsMap: Record<string, StationSnapshot[]> = isLoggedIn
+    ? {}
+    : { [sampleAlbum.id]: sampleStations };
+  const mvStationsMap: Record<string, StationSnapshot[]> = isLoggedIn
+    ? {}
+    : { [sampleMv.id]: sampleStations };
 
   const normalizeStations = (
     reviews?: Array<{
@@ -341,6 +345,7 @@ export default async function Home() {
     }));
 
   if (user) {
+    const finalizedStatuses = ["RESULT_READY", "COMPLETED"];
     const { data: albumData } = await supabase
       .from("submissions")
       .select(
@@ -348,51 +353,54 @@ export default async function Home() {
       )
       .eq("user_id", user.id)
       .eq("type", "ALBUM")
+      .not("status", "in", `(${finalizedStatuses.join(",")})`)
       .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(5);
 
     const { data: mvData } = await supabase
       .from("submissions")
       .select("id, title, artist_name, status, updated_at, payment_status, type")
       .eq("user_id", user.id)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
+      .not("status", "in", `(${finalizedStatuses.join(",")})`)
       .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(5);
 
-    albumSubmission = albumData ?? null;
-    mvSubmission = mvData ?? null;
+    albumSubmissions = albumData ?? [];
+    mvSubmissions = mvData ?? [];
 
-    if (albumSubmission) {
-      const packageInfo = Array.isArray(albumSubmission.package)
-        ? albumSubmission.package[0]
-        : albumSubmission.package;
+    if (albumSubmissions.length > 0) {
+      for (const submission of albumSubmissions) {
+        const packageInfo = Array.isArray(submission.package)
+          ? submission.package[0]
+          : submission.package;
 
-      await ensureAlbumStationReviews(
-        supabase,
-        albumSubmission.id,
-        packageInfo?.station_count ?? null,
-        packageInfo?.name ?? null,
-      );
+        await ensureAlbumStationReviews(
+          supabase,
+          submission.id,
+          packageInfo?.station_count ?? null,
+          packageInfo?.name ?? null,
+        );
 
-      const { data: albumReviews } = await supabase
-        .from("station_reviews")
-        .select("id, status, updated_at, station:stations ( name )")
-        .eq("submission_id", albumSubmission.id)
-        .order("updated_at", { ascending: false });
+        const { data: albumReviews } = await supabase
+          .from("station_reviews")
+          .select("id, status, updated_at, station:stations ( name )")
+          .eq("submission_id", submission.id)
+          .order("updated_at", { ascending: false });
 
-      albumStations = normalizeStations(albumReviews);
+        albumStationsMap[submission.id] = normalizeStations(albumReviews);
+      }
     }
 
-    if (mvSubmission) {
-      const { data: mvReviews } = await supabase
-        .from("station_reviews")
-        .select("id, status, updated_at, station:stations ( name )")
-        .eq("submission_id", mvSubmission.id)
-        .order("updated_at", { ascending: false });
-
-      mvStations = normalizeStations(mvReviews);
+    if (mvSubmissions.length > 0) {
+      for (const submission of mvSubmissions) {
+        const { data: mvReviews } = await supabase
+          .from("station_reviews")
+          .select("id, status, updated_at, station:stations ( name )")
+          .eq("submission_id", submission.id)
+          .order("updated_at", { ascending: false });
+        mvStationsMap[submission.id] = normalizeStations(mvReviews);
+      }
     }
   }
 
@@ -443,12 +451,12 @@ export default async function Home() {
                 Officially Greenlit
               </span>
               <h1 className="font-display text-4xl leading-tight text-foreground sm:text-5xl">
-                GLIT(글릿) — 심의부터 방송 가능까지, 한 번에.
+                GLIT(글릿) — 심의부터 온에어까지, 스타트업처럼 빠르게.
               </h1>
               <p className="max-w-xl text-base text-muted-foreground sm:text-lg">
-                음반·뮤직비디오 심의를 온라인으로 신청하고, 승인까지 실시간으로
-                확인하세요. 방송 가능 판정과 모든 기록 아카이브를 GLIT 한 곳에서
-                끝냅니다.
+                음반·뮤직비디오 심의를 클릭 한 번에 접수하고, 승인까지 실시간
+                트래킹하세요. 방송 가능 판정과 모든 기록 아카이브를 GLIT 한 곳에서
+                끝냅니다. 기획·홍보 팀을 위한 광고급 속도와 투명성을 제공합니다.
               </p>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {heroCtas.map((cta) => (
@@ -500,10 +508,10 @@ export default async function Home() {
 
             <HomeReviewPanel
               isLoggedIn={isLoggedIn}
-              albumSubmission={albumSubmission}
-              mvSubmission={mvSubmission}
-              albumStations={albumStations}
-              mvStations={mvStations}
+              albumSubmissions={albumSubmissions}
+              mvSubmissions={mvSubmissions}
+              albumStationsMap={albumStationsMap}
+              mvStationsMap={mvStationsMap}
             />
           </div>
         </div>
@@ -531,7 +539,7 @@ export default async function Home() {
           </div>
           <Link
             href="/forms"
-            className="text-sm font-semibold text-muted-foreground transition hover:text-foreground"
+            className="self-end text-sm font-semibold text-muted-foreground transition hover:text-foreground md:self-auto"
           >
             신청서(구양식) 다운로드 접수 안내 →
           </Link>
@@ -586,7 +594,7 @@ export default async function Home() {
             </div>
           </div>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-4">
+          <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4">
             {["패키지 선택", "신청서 업로드", "결제하기", "접수 완료"].map((label, index) => (
               <div
                 key={label}

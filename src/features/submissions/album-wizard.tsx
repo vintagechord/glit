@@ -11,7 +11,6 @@ import {
   type ProfanityTerm,
 } from "@/lib/profanity/legacy";
 import { runProfanityCheck } from "@/lib/profanity/check";
-import { createClient } from "@/lib/supabase/client";
 
 import {
   saveAlbumSubmissionAction,
@@ -87,7 +86,8 @@ const steps = [
   "접수 완료",
 ];
 
-const formatPackageName = (count: number) => `${count}개 패키지`;
+const formatPackageName = (count: number, isOneClick = false) =>
+  `${isOneClick ? "원클릭 " : ""}${count}개 패키지`;
 const formatPackageBroadcastLabel = (count: number) => `${count}개 방송국`;
 const formatPackageDescription = (
   description: string | null | undefined,
@@ -146,12 +146,6 @@ const lyricCautions = [
   "심의요청서의 곡 순서와 CD 순서는 반드시 일치해야 합니다.",
   "실제 발매 앨범과 동일한 음원·가사·트랙수가 필요합니다. (예: 2트랙 앨범—AR 1곡 + INST 1곡—의 경우 INST까지 제출)",
 ];
-
-const hasEnglish = (value: string) => /[A-Za-z]/.test(value);
-const hasKorean = (value: string) => /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(value);
-
-const isEnglishOnlyLine = (value: string) =>
-  hasEnglish(value) && !hasKorean(value);
 
 const splitEnglishSentences = (value: string) => {
   const matches = value.match(/[^.!?]+[.!?]*/g);
@@ -235,7 +229,6 @@ export function AlbumWizard({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = React.useMemo(() => createClient(), []);
   const isGuest = !userId;
   const [step, setStep] = React.useState(1);
   const [isOneClick, setIsOneClick] = React.useState(false);
@@ -304,7 +297,9 @@ export function AlbumWizard({
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [completionId, setCompletionId] = React.useState<string | null>(null);
-  const [completionTokens, setCompletionTokens] = React.useState<string[]>([]);
+  const [completionTokens, setCompletionTokens] = React.useState<
+    Array<{ token: string; title: string }>
+  >([]);
   const [completionSubmissionIds, setCompletionSubmissionIds] = React.useState<
     string[]
   >([]);
@@ -395,8 +390,11 @@ export function AlbumWizard({
     ? completionTokens.length > 0
       ? completionTokens
       : completionSubmissionIds.length > 0
-        ? completionSubmissionIds
-        : [currentGuestToken]
+        ? completionSubmissionIds.map((id, index) => ({
+            token: id,
+            title: albumDrafts[index]?.title || title || "앨범",
+          }))
+        : [{ token: currentGuestToken, title: title || "앨범" }]
     : [];
 
   React.useEffect(() => {
@@ -838,8 +836,9 @@ export function AlbumWizard({
     });
   };
 
-  const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(event.target.files ?? []);
+  const [isDraggingOver, setIsDraggingOver] = React.useState(false);
+
+  const addFiles = (selected: File[]) => {
     const allowedTypes = new Set([
       "audio/wav",
       "audio/x-wav",
@@ -864,24 +863,46 @@ export function AlbumWizard({
       }
       return true;
     });
-    const nextUploads = filtered.map((file) => ({
-      name: file.name,
-      size: file.size,
-      progress: 0,
-      status: "pending" as const,
-      mime: file.type,
-    }));
+    const combinedFiles = [...files, ...filtered];
+    const existingMap = new Map<string, UploadItem>();
+    uploads.forEach((item) => {
+      existingMap.set(`${item.name}-${item.size}`, item);
+    });
+    const nextUploads = combinedFiles.map((file) => {
+      const key = `${file.name}-${file.size}`;
+      return (
+        existingMap.get(key) ?? {
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          status: "pending" as const,
+          mime: file.type,
+        }
+      );
+    });
     setNotice({});
-    setFiles(filtered);
+    setFiles(combinedFiles);
     setUploads(nextUploads);
-    setUploadedFiles([]);
     setFileDigest("");
     setEmailSubmitConfirmed(false);
     if (filtered.length > 0) {
-      void uploadFiles(filtered, nextUploads).catch(() => {
+      void uploadFiles(combinedFiles, nextUploads).catch(() => {
         setNotice({ error: "파일 업로드 중 오류가 발생했습니다." });
       });
     }
+  };
+
+  const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files ?? []);
+    addFiles(selected);
+  };
+
+  const onDropFiles = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    const dropped = Array.from(event.dataTransfer.files ?? []);
+    if (dropped.length === 0) return;
+    setIsDraggingOver(false);
+    addFiles(dropped);
   };
 
   const uploadWithProgress = async (
@@ -912,36 +933,30 @@ export function AlbumWizard({
     });
   };
 
-  const createSignedUpload = async (fileName: string) => {
-    if (userId) {
-      const path = `${userId}/${currentSubmissionId}/audio/${fileName}`;
-      const { data, error } = await supabase.storage
-        .from("submissions")
-        .createSignedUploadUrl(path, { upsert: true });
-
-      if (error || !data) {
-        throw new Error("Upload url creation failed");
-      }
-
-      return { signedUrl: data.signedUrl, path: data.path };
-    }
-
-    const response = await fetch("/api/upload-url", {
+  const createSignedUpload = async (file: File) => {
+    const response = await fetch("/api/uploads/presign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         submissionId: currentSubmissionId,
-        guestToken: currentGuestToken,
-        kind: "audio",
-        fileName,
+        filename: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        guestToken: isGuest ? currentGuestToken : undefined,
+        title: title.trim() || undefined,
       }),
     });
 
+    const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error("Upload url creation failed");
+      throw new Error(
+        typeof payload?.error === "string"
+          ? payload.error
+          : "업로드 URL을 생성할 수 없습니다.",
+      );
     }
 
-    return (await response.json()) as { signedUrl: string; path: string };
+    return payload as { uploadUrl: string; objectKey: string };
   };
 
   const uploadFiles = async (
@@ -973,7 +988,11 @@ export function AlbumWizard({
 
     for (let index = 0; index < targetFiles.length; index += 1) {
       const file = targetFiles[index];
-      const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`;
+
+      if (nextUploads[index]?.status === "done" && uploadedFiles[index]) {
+        results.push(uploadedFiles[index]);
+        continue;
+      }
 
       nextUploads[index] = {
         ...nextUploads[index],
@@ -984,16 +1003,21 @@ export function AlbumWizard({
       let signedUrl: string;
       let path: string;
       try {
-        const uploadData = await createSignedUpload(fileName);
-        signedUrl = uploadData.signedUrl;
-        path = uploadData.path;
-      } catch {
+        const uploadData = await createSignedUpload(file);
+        signedUrl = uploadData.uploadUrl;
+        path = uploadData.objectKey;
+      } catch (error) {
         nextUploads[index] = {
           ...nextUploads[index],
           status: "error",
         };
         setUploads([...nextUploads]);
-        throw new Error("업로드 URL 생성 실패");
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "업로드 URL 생성 실패";
+        setNotice({ error: message });
+        throw new Error(message);
       }
 
       await uploadWithProgress(signedUrl, file, (progress) => {
@@ -1003,6 +1027,17 @@ export function AlbumWizard({
         };
         setUploads([...nextUploads]);
       });
+
+      await fetch("/api/uploads/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          objectKey: path,
+          submissionId: currentSubmissionId,
+          sizeBytes: file.size,
+          mimeType: file.type,
+        }),
+      }).catch(() => null);
 
       nextUploads[index] = {
         ...nextUploads[index],
@@ -1398,7 +1433,8 @@ export function AlbumWizard({
       const applicantEmailValue = applicantEmail.trim();
       const applicantPhoneValue = applicantPhone.trim();
       const submissionIds: string[] = [];
-      const guestTokens: string[] = [];
+      const guestTokens: Array<{ token: string; title: string }> = [];
+      let emailWarning: string | undefined;
 
       for (let index = 0; index < allDrafts.length; index += 1) {
         const draft = allDrafts[index];
@@ -1453,13 +1489,22 @@ export function AlbumWizard({
           submissionIds.push(result.submissionId);
         }
         if (result.guestToken) {
-          guestTokens.push(result.guestToken);
+          guestTokens.push({
+            token: result.guestToken,
+            title: draft.title || safeTitle,
+          });
+        }
+        if (result.emailWarning && !emailWarning) {
+          emailWarning = result.emailWarning;
         }
       }
 
       if (status === "SUBMITTED" && submissionIds.length > 0) {
         if (typeof window !== "undefined") {
           window.alert("심의 접수가 완료되었습니다.");
+          if (emailWarning) {
+            window.alert(emailWarning);
+          }
         }
         setCompletionId(submissionIds[0]);
         setCompletionSubmissionIds(submissionIds);
@@ -1468,6 +1513,10 @@ export function AlbumWizard({
         }
         setStep(4);
         return;
+      }
+
+      if (emailWarning && typeof window !== "undefined") {
+        window.alert(emailWarning);
       }
 
       setNotice({
@@ -1582,10 +1631,10 @@ export function AlbumWizard({
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
-                        {formatPackageName(pkg.stationCount)}
+                        {formatPackageName(pkg.stationCount, isOneClick)}
                       </p>
                       <h3 className="mt-2 text-xl font-semibold">
-                        {formatPackageName(pkg.stationCount)}
+                        {formatPackageName(pkg.stationCount, isOneClick)}
                       </h3>
                     </div>
                     <span className="text-sm font-semibold">
@@ -1632,8 +1681,11 @@ export function AlbumWizard({
       )}
 
       {step === 2 && (
-        <div className="space-y-8">
-          <div className="flex items-start justify-between gap-4">
+      <div className="space-y-8">
+        {isDraggingOver && (
+          <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
+        )}
+        <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 STEP 02
@@ -2299,7 +2351,23 @@ export function AlbumWizard({
               허용 형식: WAV/ZIP · 최대 {uploadMaxLabel}
             </p>
             <div className="mt-4">
-              <label className="block">
+              <label
+                className="relative block"
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsDraggingOver(true);
+                }}
+                onDragEnter={() => setIsDraggingOver(true)}
+                onDragLeave={(event) => {
+                  event.preventDefault();
+                  setIsDraggingOver(false);
+                }}
+                onDrop={(event) => {
+                  setIsDraggingOver(false);
+                  onDropFiles(event);
+                }}
+              >
                 <span className="sr-only">파일 첨부</span>
                 <input
                   type="file"
@@ -2309,29 +2377,52 @@ export function AlbumWizard({
                   className="hidden"
                 />
                 <span className="flex w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
-                  파일 첨부
+                  파일 첨부 (드래그 앤 드롭 가능)
                 </span>
+                {isDraggingOver && (
+                  <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-amber-300 bg-black/10 backdrop-blur-[1px]" />
+                )}
               </label>
             </div>
             <div className="mt-4 space-y-3">
-              {uploads.map((upload) => (
+              {uploads.map((upload, index) => (
                 <div
-                  key={upload.name}
+                  key={`${upload.name}-${index}`}
                   className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="font-semibold text-foreground">
                       {upload.name}
                     </span>
-                    <span className="text-muted-foreground">
-                      {upload.status === "done"
-                        ? "완료"
-                        : upload.status === "uploading"
-                          ? "업로드 중"
-                          : upload.status === "error"
-                            ? "실패"
-                            : "대기"}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-muted-foreground">
+                        {upload.status === "done"
+                          ? "첨부 완료"
+                          : upload.status === "uploading"
+                            ? `업로드 중 · ${upload.progress}%`
+                            : upload.status === "error"
+                              ? "실패"
+                              : "대기"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextFiles = [...files];
+                          nextFiles.splice(index, 1);
+                          const nextUploads = [...uploads];
+                          nextUploads.splice(index, 1);
+                          setFiles(nextFiles);
+                          setUploads(nextUploads);
+                          setUploadedFiles((prev) =>
+                            prev.filter((_, idx) => idx !== index),
+                          );
+                          setFileDigest("");
+                        }}
+                        className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
                     <div
@@ -2492,11 +2583,17 @@ export function AlbumWizard({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="font-semibold">
-                        {formatPackageName(selectedPackageSummary.stationCount)}
+                        {formatPackageName(
+                          selectedPackageSummary.stationCount,
+                          isOneClick,
+                        )}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatPackageName(selectedPackageSummary.stationCount)} · 총{" "}
-                        {totalAlbumCount}건
+                        {formatPackageName(
+                          selectedPackageSummary.stationCount,
+                          isOneClick,
+                        )}{" "}
+                        · 총 {totalAlbumCount}건
                       </p>
                     </div>
                     <span className="text-sm font-semibold">
@@ -2630,7 +2727,7 @@ export function AlbumWizard({
               disabled={isSaving || isAddingAlbum}
               className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
             >
-              접수 완료 요청
+              결제하기
             </button>
           </div>
         </div>
@@ -2660,24 +2757,37 @@ export function AlbumWizard({
             <div className="mt-6 space-y-3">
               <p className="text-xs text-muted-foreground">조회 코드</p>
               <div className="space-y-2">
-                {completionCodesToShow.map((token, index) => (
+                {completionCodesToShow.map((item, index) => (
                   <div
-                    key={token}
+                    key={`${item.token}-${index}`}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
                   >
-                    <span className="text-muted-foreground">
-                      앨범 {index + 1}
-                    </span>
                     <span className="font-semibold text-foreground">
-                      {token}
+                      {item.title || `앨범 ${index + 1}`}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/track/${token}`)}
-                      className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-amber-200 hover:text-slate-900"
-                    >
-                      조회
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-foreground">
+                        {item.token}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigator.clipboard
+                            .writeText(item.token)
+                            .catch(() => null)
+                        }
+                        className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-black hover:bg-black hover:text-white"
+                      >
+                        코드 복사
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/track/${item.token}`)}
+                        className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-black hover:bg-black hover:text-white"
+                      >
+                        조회
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

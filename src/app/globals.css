@@ -175,49 +175,22 @@
   animation: marquee 18s linear infinite;
 }
 
-@keyframes strip-shimmer {
-  0% {
-    transform: translateX(-140%) rotate(18deg);
-    opacity: 0;
-  }
-  15% {
-    opacity: 0.6;
-  }
-  45%,
-  100% {
-    transform: translateX(220%) rotate(18deg);
-    opacity: 0;
-  }
-}
-
-.strip-shimmer {
-  position: relative;
-}
-
-.strip-shimmer::after {
-  content: "";
-  position: absolute;
-  inset: -40% auto -40% -60%;
-  width: 45%;
-  background: linear-gradient(
-    120deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.65) 45%,
-    rgba(255, 255, 255, 0.9) 50%,
-    rgba(255, 255, 255, 0.65) 55%,
-    transparent 100%
-  );
-  opacity: 0.55;
-  pointer-events: none;
-  animation: strip-shimmer 6.5s ease-in-out infinite;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-marquee {
     animation: none;
   }
+}
 
-  .strip-shimmer::after {
-    animation: none;
-  }
+/* Dev build indicator: replace default N badge text with G while keeping behavior */
+button[aria-label="Next.js build indicator"] {
+  position: relative;
+  font-weight: 700;
+}
+button[aria-label="Next.js build indicator"] svg {
+  display: none;
+}
+button[aria-label="Next.js build indicator"]::after {
+  content: "G";
+  color: #111827;
+  font-size: 14px;
 }

@@ -173,6 +173,15 @@ export async function getKaraokeRequestFileUrlAction(
     return { error: "첨부된 파일이 없습니다." };
   }
 
+  try {
+    const url = await import("@/lib/b2")
+      .then(({ presignGetUrl }) => presignGetUrl(request.file_path, 300))
+      .catch(() => null);
+    if (url) return { url };
+  } catch {
+    // fall through to supabase
+  }
+
   const { data, error } = await supabase.storage
     .from("submissions")
     .createSignedUrl(request.file_path, 60 * 10);
@@ -214,6 +223,15 @@ export async function getKaraokeRecommendationFileUrlAction(
 
   if (!recommendation?.proof_path) {
     return { error: "첨부된 파일이 없습니다." };
+  }
+
+  try {
+    const url = await import("@/lib/b2")
+      .then(({ presignGetUrl }) => presignGetUrl(recommendation.proof_path, 300))
+      .catch(() => null);
+    if (url) return { url };
+  } catch {
+    // fall back
   }
 
   const { data, error } = await supabase.storage

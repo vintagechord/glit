@@ -7,7 +7,7 @@ import { TrackLookupForm } from "@/features/track/track-lookup-form";
 export function TrackLookupModalTrigger({
   label,
   className,
-  modalTitle = "비회원 진행상황 조회",
+  modalTitle,
 }: {
   label: string;
   className?: string;
@@ -31,17 +31,16 @@ export function TrackLookupModalTrigger({
         >
           <div
             className="w-full max-w-md rounded-[28px] border border-border/60 bg-background p-6 shadow-[0_28px_80px_rgba(15,23,42,0.25)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  진행상황
-                </p>
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              {modalTitle ? (
                 <p className="text-sm font-semibold text-foreground">
                   {modalTitle}
                 </p>
-              </div>
+              ) : null}
+            </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}

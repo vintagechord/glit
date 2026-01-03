@@ -34,55 +34,85 @@ export default async function DashboardPage() {
         : review.station ?? null,
     }));
 
-  const { data: albumSubmission } = await supabase
+  const finalizedStatuses = ["RESULT_READY", "COMPLETED"];
+  const { data: albumSubmissionsRaw } = await supabase
     .from("submissions")
     .select(
       "id, title, artist_name, status, updated_at, payment_status, package:packages ( name, station_count )",
     )
     .eq("user_id", user.id)
     .eq("type", "ALBUM")
+    .not("status", "in", `(${finalizedStatuses.join(",")})`)
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(5);
 
-  const { data: mvSubmission } = await supabase
+  const { data: mvSubmissionsRaw } = await supabase
     .from("submissions")
     .select("id, title, artist_name, status, updated_at, payment_status, type")
     .eq("user_id", user.id)
     .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
+    .not("status", "in", `(${finalizedStatuses.join(",")})`)
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(5);
 
-  let albumStations: Array<{ id: string; status: string; updated_at: string; station?: { name?: string | null } | null }> = [];
-  let mvStations: Array<{ id: string; status: string; updated_at: string; station?: { name?: string | null } | null }> = [];
+  const albumStationsMap: Record<
+    string,
+    Array<{ id: string; status: string; updated_at: string; station?: { name?: string | null } | null }>
+  > = {};
+  const mvStationsMap: Record<
+    string,
+    Array<{ id: string; status: string; updated_at: string; station?: { name?: string | null } | null }>
+  > = {};
 
-  if (albumSubmission) {
-    const packageInfo = Array.isArray(albumSubmission.package)
-      ? albumSubmission.package[0]
-      : albumSubmission.package;
-    await ensureAlbumStationReviews(
-      supabase,
-      albumSubmission.id,
-      packageInfo?.station_count ?? null,
-      packageInfo?.name ?? null,
-    );
-    const { data: albumReviews } = await supabase
-      .from("station_reviews")
-      .select("id, status, updated_at, station:stations ( name )")
-      .eq("submission_id", albumSubmission.id)
-      .order("updated_at", { ascending: false });
-    albumStations = normalizeStations(albumReviews);
-  }
+  const albumSubmissions = (albumSubmissionsRaw ?? []) as Array<{
+    id: string;
+    title: string | null;
+    artist_name?: string | null;
+    status: string;
+    updated_at: string;
+    payment_status?: string | null;
+    package?: { name?: string | null; station_count?: number | null }[];
+  }>;
+  const mvSubmissions = (mvSubmissionsRaw ?? []) as Array<{
+    id: string;
+    title: string | null;
+    artist_name?: string | null;
+    status: string;
+    updated_at: string;
+    payment_status?: string | null;
+    type: string;
+  }>;
 
-  if (mvSubmission) {
-    const { data: mvReviews } = await supabase
-      .from("station_reviews")
-      .select("id, status, updated_at, station:stations ( name )")
-      .eq("submission_id", mvSubmission.id)
-      .order("updated_at", { ascending: false });
-    mvStations = normalizeStations(mvReviews);
-  }
+  await Promise.all(
+    albumSubmissions.map(async (submission) => {
+      const packageInfo = Array.isArray(submission.package)
+        ? submission.package[0]
+        : submission.package;
+      await ensureAlbumStationReviews(
+        supabase,
+        submission.id,
+        packageInfo?.station_count ?? null,
+        packageInfo?.name ?? null,
+      );
+      const { data: albumReviews } = await supabase
+        .from("station_reviews")
+        .select("id, status, updated_at, station:stations ( name )")
+        .eq("submission_id", submission.id)
+        .order("updated_at", { ascending: false });
+      albumStationsMap[submission.id] = normalizeStations(albumReviews);
+    }),
+  );
+
+  await Promise.all(
+    mvSubmissions.map(async (submission) => {
+      const { data: mvReviews } = await supabase
+        .from("station_reviews")
+        .select("id, status, updated_at, station:stations ( name )")
+        .eq("submission_id", submission.id)
+        .order("updated_at", { ascending: false });
+      mvStationsMap[submission.id] = normalizeStations(mvReviews);
+    }),
+  );
 
   return (
     <DashboardShell
@@ -92,11 +122,11 @@ export default async function DashboardPage() {
     >
       <HomeReviewPanel
         isLoggedIn
-        albumSubmission={albumSubmission ?? null}
-        mvSubmission={mvSubmission ?? null}
-        albumStations={albumStations}
-        mvStations={mvStations}
-        hideEmptyTabs
+        albumSubmissions={albumSubmissions}
+        mvSubmissions={mvSubmissions}
+        albumStationsMap={albumStationsMap}
+        mvStationsMap={mvStationsMap}
+        hideEmptyTabs={false}
         forceLiveBadge
       />
     </DashboardShell>

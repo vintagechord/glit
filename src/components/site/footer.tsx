@@ -1,4 +1,4 @@
- "use client";
+"use client";
 
 import Link from "next/link";
 import * as React from "react";
@@ -328,7 +328,7 @@ export function SiteFooter() {
   const contactEmail = "help@vhouse.co.kr";
   const bankName = "국민은행";
   const bankAccount = "073001-04-276967";
-  const bankHolder = "빈티지하우스";
+  const bankHolder = "주식회사 빈티지하우스";
 
   const [activeModal, setActiveModal] = React.useState<
     "terms" | "privacy" | "partnership" | null

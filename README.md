@@ -29,9 +29,11 @@ NEXT_PUBLIC_SUPPORT_EMAIL=help@vhouse.co.kr
 NEXT_PUBLIC_SUPPORT_PHONE=010-8436-9035
 NEXT_PUBLIC_BANK_NAME=국민은행
 NEXT_PUBLIC_BANK_ACCOUNT=073001-04-276967
-NEXT_PUBLIC_BANK_HOLDER=정준영(빈티지하우스)
+NEXT_PUBLIC_BANK_HOLDER=주식회사 빈티지하우스
 NEXT_PUBLIC_PRE_REVIEW_PRICE=0
-NEXT_PUBLIC_UPLOAD_MAX_MB=200
+NEXT_PUBLIC_UPLOAD_MAX_MB=1024
+NEXT_PUBLIC_AUDIO_UPLOAD_MAX_MB=1024
+NEXT_PUBLIC_VIDEO_UPLOAD_MAX_MB=4096
 
 # Optional (welcome email)
 RESEND_API_KEY=your_resend_key
@@ -70,6 +72,13 @@ npm run dev
 
 사용자 상세 페이지(`/dashboard/submissions/[id]`)에서 Supabase Realtime을 구독해
 `submissions`, `station_reviews`, `submission_events` 변경을 즉시 반영합니다.
+
+## 스모크 테스트 체크리스트
+
+- 앨범/뮤비 다중 파일 업로드: 3개 이상 동시 업로드 후 드래프트 재진입 시 목록 유지되는지 확인
+- 게스트 접수: 제출 후 수신 이메일에서 조회 코드/링크가 포함됐는지 확인
+- 관리자 다운로드: B2 저장소 파일에 대해 관리자 다운로드 링크가 생성·동작하는지 확인
+- 대용량 업로드: 앨범(1GB)·뮤비(4GB) 정책 용량까지 업로드 진행률 표시와 완료 여부 확인
 
 ## Render 배포 가이드
 

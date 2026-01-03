@@ -3,7 +3,6 @@
 import * as React from "react";
 
 import { createKaraokePromotionRecommendationAction } from "@/features/karaoke/actions";
-import { createClient } from "@/lib/supabase/client";
 
 type PromotionSummary = {
   id: string;
@@ -46,7 +45,6 @@ export function KaraokeCreditPanel({
   promotions: PromotionSummary[];
   creditBalance?: number;
 }) {
-  const supabase = React.useMemo(() => createClient(), []);
   const [promotionId, setPromotionId] = React.useState("");
   const [recommendationFile, setRecommendationFile] =
     React.useState<File | null>(null);
@@ -109,18 +107,25 @@ export function KaraokeCreditPanel({
     });
   };
 
-  const createSignedUpload = async (fileName: string) => {
+  const createSignedUpload = async (file: File) => {
     if (!userId) {
       throw new Error("User required");
     }
-    const path = `${userId}/karaoke_recommendation/${fileName}`;
-    const { data, error } = await supabase.storage
-      .from("submissions")
-      .createSignedUploadUrl(path, { upsert: true });
-    if (error || !data) {
+    const response = await fetch("/api/uploads/presign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        submissionId: promotionId || crypto.randomUUID(),
+        filename: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        guestToken: undefined,
+      }),
+    });
+    if (!response.ok) {
       throw new Error("Upload url creation failed");
     }
-    return { signedUrl: data.signedUrl, path: data.path };
+    return (await response.json()) as { uploadUrl: string; objectKey: string };
   };
 
   const handleSubmit = async () => {
@@ -138,18 +143,14 @@ export function KaraokeCreditPanel({
     try {
       let proofPath: string | undefined;
       if (recommendationFile) {
-        const fileName = `${Date.now()}-${recommendationFile.name.replace(
-          /\s+/g,
-          "_",
-        )}`;
         setRecommendationUpload((prev) => ({ ...prev, status: "uploading" }));
 
         let signedUrl: string;
         let path: string;
         try {
-          const uploadData = await createSignedUpload(fileName);
-          signedUrl = uploadData.signedUrl;
-          path = uploadData.path;
+          const uploadData = await createSignedUpload(recommendationFile);
+          signedUrl = uploadData.uploadUrl;
+          path = uploadData.objectKey;
         } catch {
           setRecommendationUpload((prev) => ({ ...prev, status: "error" }));
           setNotice({ error: "인증샷 업로드 URL 생성 실패" });
@@ -158,6 +159,16 @@ export function KaraokeCreditPanel({
 
         await uploadWithProgress(signedUrl, recommendationFile);
         setRecommendationUpload((prev) => ({ ...prev, status: "done", progress: 100 }));
+        await fetch("/api/uploads/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            objectKey: path,
+            submissionId: promotionId || undefined,
+            sizeBytes: recommendationFile.size,
+            mimeType: recommendationFile.type,
+          }),
+        }).catch(() => null);
         proofPath = path;
       }
 

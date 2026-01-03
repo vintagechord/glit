@@ -187,7 +187,7 @@ export async function ensureAlbumStationReviews(
   const expectedCodes = albumStationCodesByCount[resolvedCount];
   if (!expectedCodes || expectedCodes.length === 0) return;
 
-  let { data: stations, error: stationError } = await client
+  const { data: stations, error: stationError } = await client
     .from("stations")
     .select("id, code")
     .in("code", expectedCodes);
@@ -199,8 +199,9 @@ export async function ensureAlbumStationReviews(
     return;
   }
 
+  let stationRows = stations ?? [];
   let stationMap = new Map(
-    (stations ?? []).map((station) => [station.code, station.id]),
+    stationRows.map((station) => [station.code, station.id]),
   );
   const missingCodes = expectedCodes.filter((code) => !stationMap.has(code));
 
@@ -219,9 +220,9 @@ export async function ensureAlbumStationReviews(
         .from("stations")
         .select("id, code")
         .in("code", expectedCodes);
-      stations = refreshed ?? stations;
+      stationRows = refreshed ?? stationRows;
       stationMap = new Map(
-        (stations ?? []).map((station) => [station.code, station.id]),
+        stationRows.map((station) => [station.code, station.id]),
       );
     }
   }

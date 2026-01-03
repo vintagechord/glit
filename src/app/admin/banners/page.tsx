@@ -12,10 +12,11 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminBannersPage() {
   const supabase = await createServerSupabase();
-  let { data: banners, error: bannersError } = await supabase
+  const { data, error: bannersError } = await supabase
     .from("ad_banners")
     .select("id, title, image_url, link_url, is_active, starts_at, ends_at")
     .order("created_at", { ascending: false });
+  let banners = data ?? [];
   const bannerTableMissing =
     bannersError?.message
       ?.toLowerCase()

@@ -9,7 +9,7 @@ function withCookies(target: NextResponse, source: NextResponse) {
   return target;
 }
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { response, user, supabase } = await updateSession(request);
   const { pathname } = request.nextUrl;
   const isAdminRoute = pathname.startsWith("/admin");

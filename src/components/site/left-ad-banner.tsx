@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { createServerSupabase } from "@/lib/supabase/server";
 
 type AdBanner = {
@@ -32,9 +34,11 @@ export async function LeftAdBanner() {
 
   const content = (
     <div className="rounded-[28px] border border-border/60 bg-card/90 p-3 shadow-[0_18px_60px_rgba(15,23,42,0.2)]">
-      <img
+      <Image
         src={banner.image_url}
         alt={banner.title}
+        width={360}
+        height={200}
         className="w-full rounded-2xl object-cover"
       />
       <p className="mt-3 text-xs font-semibold text-foreground">

@@ -48,7 +48,7 @@ const faqItems = [
   {
     question: "[GLIT] 글릿은 정식 업체인가요?",
     answer:
-      "네. 빈티지하우스가 운영하는 정식 등록 업체이며 세금계산서/현금영수증 발급이 가능합니다. 2017년부터 심의 대행을 진행하고 있습니다.",
+      "네. 빈티지하우스가 운영하는 정식 등록 업체이며 세금계산서/현금영수증 발급이 가능합니다.",
   },
   {
     question: "비회원 접수도 가능한가요?",
@@ -117,19 +117,18 @@ export function ChatbotWidget() {
               {visibleItems.map((item, index) => {
                 const itemIndex = startIndex + index;
                 return (
-                <button
-                  key={item.question}
-                  type="button"
-                  onClick={() => setActiveIndex(itemIndex)}
-                  className={`w-full rounded-2xl border px-3 py-2 text-left text-xs transition ${
-                    activeIndex === itemIndex
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border/60 bg-background text-muted-foreground hover:border-foreground"
-                  }`}
-                >
-                  {item.question}
-                </button>
-              );
+                  <button
+                    key={item.question}
+                    type="button"
+                    onClick={() => setActiveIndex(itemIndex)}
+                    className={`w-full rounded-2xl border px-3 py-2 text-left text-xs transition ${activeIndex === itemIndex
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border/60 bg-background text-muted-foreground hover:border-foreground"
+                      }`}
+                  >
+                    {item.question}
+                  </button>
+                );
               })}
               <div className="flex items-center justify-between pt-1 text-xs text-muted-foreground">
                 <button

@@ -113,6 +113,7 @@ export default async function HistoryPage() {
         title: submission.title || "제목 미입력",
         artistName: submission.artist_name || "아티스트 미입력",
         typeLabel,
+        type: submission.type,
         createdAt: submission.created_at,
         updatedAt: submission.updated_at,
         status: submission.status,
