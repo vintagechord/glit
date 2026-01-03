@@ -20,9 +20,7 @@ export default function ForgotPasswordPage() {
           </p>
           <h1 className="font-display text-2xl text-foreground">비밀번호 찾기</h1>
           <p className="text-sm text-muted-foreground">
-            회원가입시 입력하셨던 이메일 주소를 정확히 입력해야 합니다.
-            <br />
-            입력된 이메일로 비밀번호 재설정 링크를 보내드립니다.
+            회원가입시 입력한 이메일로 비밀번호 재설정 링크를 보내드립니다.
           </p>
         </div>
 
@@ -59,10 +57,10 @@ export default function ForgotPasswordPage() {
             type="submit"
             className="w-full rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
           >
-            비밀번호 재설정 메일 보내기
+            비밀번호 재설정 메일 발송
           </button>
           <p className="text-[11px] text-muted-foreground">
-            입력한 이메일로 비밀번호 재설정 링크가 전송됩니다. 메일함(스팸 포함)을 확인해주세요.
+            메일 수신이 안된 경우 메일함(스팸 포함)을 확인해주세요.
           </p>
         </form>
       </div>

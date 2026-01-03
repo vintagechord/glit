@@ -28,12 +28,25 @@ function ResetPasswordContent() {
     const run = async () => {
       if (typeof window === "undefined") return;
 
-      const code = searchParams.get("code");
+      // Supabase recovery 링크는 ?token 또는 ?code 쿼리로 전달되거나,
+      // #access_token/#refresh_token 해시로 전달될 수 있음.
+      const code =
+        searchParams.get("code") || searchParams.get("token") || null;
       if (code) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(
-          code,
-        );
-        if (exchangeError) {
+        const { error: exchangeError } =
+          await supabase.auth.exchangeCodeForSession(code);
+        if (!exchangeError) {
+          setStatus({ state: "ready" });
+          return;
+        }
+
+        // 일부 릴리즈에서 recovery 토큰은 verifyOtp로 처리해야 할 수 있음
+        const { data: verifyData, error: verifyError } =
+          await supabase.auth.verifyOtp({
+            type: "recovery",
+            token_hash: code,
+          });
+        if (verifyError || !verifyData.session) {
           setStatus({
             state: "error",
             message:
@@ -41,6 +54,7 @@ function ResetPasswordContent() {
           });
           return;
         }
+
         setStatus({ state: "ready" });
         return;
       }

@@ -149,12 +149,15 @@ export async function resetPasswordAction(
   try {
     const supabase = await createServerSupabase();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${
-        process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-      }/reset-password`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://glit-b1yn.onrender.com"}/reset-password`,
     });
     if (error) {
-      return { error: "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요." };
+      console.error("resetPasswordForEmail error", error);
+      return {
+        error:
+          error.message ??
+          "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.",
+      };
     }
     return {
       message: "비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.",
