@@ -142,6 +142,48 @@ function getSubmissionLabels(submission?: SubmissionSummary | null) {
   };
 }
 
+const stationLogoMap: Record<
+  string,
+  { label: string; color: string; bg: string }
+> = {
+  KBS: { label: "KBS", color: "#0c4da2", bg: "#e2ecf9" },
+  "KBS 1FM": { label: "KBS", color: "#0c4da2", bg: "#e2ecf9" },
+  "KBS 2FM": { label: "KBS", color: "#0c4da2", bg: "#e2ecf9" },
+  MBC: { label: "MBC", color: "#0c2e63", bg: "#e1e7f7" },
+  "MBC FM4U": { label: "MBC", color: "#0c2e63", bg: "#e1e7f7" },
+  "MBC 표준FM": { label: "MBC", color: "#0c2e63", bg: "#e1e7f7" },
+  SBS: { label: "SBS", color: "#1b74e4", bg: "#e4efff" },
+  "SBS 파워FM": { label: "SBS", color: "#1b74e4", bg: "#e4efff" },
+  "SBS 러브FM": { label: "SBS", color: "#1b74e4", bg: "#e4efff" },
+  TBS: { label: "TBS", color: "#0a9389", bg: "#dbf4f1" },
+  "TBS eFM": { label: "TBS", color: "#0a9389", bg: "#dbf4f1" },
+  YTN: { label: "YTN", color: "#0d74b7", bg: "#e3f2fb" },
+  CBS: { label: "CBS", color: "#1c6ac9", bg: "#e1edff" },
+  BBS: { label: "BBS", color: "#7b3f98", bg: "#f2e9fb" },
+  WBS: { label: "WBS", color: "#0f6b4f", bg: "#e4f5ee" },
+  PBC: { label: "PBC", color: "#a4002f", bg: "#fbe7ed" },
+  FEBC: { label: "FEBC", color: "#d97706", bg: "#fff4e5" },
+  ARIRANG: { label: "ARIRANG", color: "#d00023", bg: "#fde6ea" },
+  "GYEONGIN IFM": { label: "gfm", color: "#2563eb", bg: "#e0ebff" },
+  TBN: { label: "TBN", color: "#0ea5e9", bg: "#e0f7ff" },
+  KISS: { label: "KISS", color: "#15803d", bg: "#e4f6ea" },
+  GUGAK: { label: "GUGAK", color: "#92400e", bg: "#f7efe6" },
+};
+
+function StationLogo({ name }: { name?: string | null }) {
+  const key = (name ?? "").trim().toUpperCase();
+  const logo = stationLogoMap[key] ?? { label: key || "-", color: "#111", bg: "#e5e7eb" };
+  return (
+    <span
+      className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold uppercase"
+      style={{ color: logo.color, backgroundColor: logo.bg }}
+      aria-hidden
+    >
+      {logo.label.slice(0, 4)}
+    </span>
+  );
+}
+
 export function HomeReviewPanel({
   isLoggedIn,
   albumSubmissions,
@@ -601,8 +643,9 @@ export function HomeReviewPanel({
                           key={`${station.id}-${index}`}
                           className="grid h-10 grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 text-[11px]"
                         >
-                          <span className="truncate font-semibold text-foreground">
-                            {station.station?.name ?? "-"}
+                          <span className="flex items-center gap-2 truncate font-semibold text-foreground">
+                            <StationLogo name={station.station?.name ?? undefined} />
+                            <span className="truncate">{station.station?.name ?? "-"}</span>
                           </span>
                           <span
                             className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}

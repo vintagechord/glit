@@ -1,14 +1,38 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 
-import { resetPasswordAction, type ActionState } from "@/features/auth/actions";
+import { createClient } from "@/lib/supabase/client";
 
-const initialState: ActionState = {};
+const appUrl =
+  process.env.NEXT_PUBLIC_APP_URL ?? "https://glit-b1yn.onrender.com";
 
 export default function ForgotPasswordPage() {
-  const [state, formAction] = useActionState(resetPasswordAction, initialState);
+  const supabase = createClient();
   const [email, setEmail] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage(null);
+    setError(null);
+    if (!email.trim()) {
+      setError("이메일을 입력해주세요.");
+      return;
+    }
+    setIsSending(true);
+    const { error: sendError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${appUrl}/reset-password`,
+    });
+    if (sendError) {
+      setError(sendError.message || "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.");
+    } else {
+      setMessage("비밀번호 재설정 메일을 발송했습니다.");
+    }
+    setIsSending(false);
+  };
 
   return (
     <div className="relative mx-auto flex w-full max-w-4xl flex-1 items-center justify-center px-6 py-16">
@@ -24,18 +48,18 @@ export default function ForgotPasswordPage() {
           </p>
         </div>
 
-        {state.error && (
+        {error && (
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600">
-            {state.error}
+            {error}
           </div>
         )}
-        {state.message && (
+        {message && (
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
-            {state.message}
+            {message}
           </div>
         )}
 
-        <form action={formAction} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               이메일
@@ -49,15 +73,13 @@ export default function ForgotPasswordPage() {
               placeholder="이메일을 입력하세요"
               className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
             />
-            {state.fieldErrors?.resetEmail && (
-              <p className="text-xs text-red-500">{state.fieldErrors.resetEmail}</p>
-            )}
           </div>
           <button
             type="submit"
+            disabled={isSending}
             className="w-full rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
           >
-            비밀번호 재설정 메일 발송
+            {isSending ? "발송 중..." : "비밀번호 재설정 메일 발송"}
           </button>
           <p className="text-[11px] text-muted-foreground">
             메일 수신이 안된 경우 메일함(스팸 포함)을 확인해주세요.
