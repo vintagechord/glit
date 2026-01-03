@@ -1,11 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
-
-const appUrl =
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://glit-b1yn.onrender.com";
 
 export default function ForgotPasswordPage() {
   const supabase = createClient();
@@ -13,6 +10,10 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const redirectBase = useMemo(() => {
+    if (typeof window !== "undefined") return window.location.origin;
+    return process.env.NEXT_PUBLIC_APP_URL ?? "https://glit-b1yn.onrender.com";
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -23,9 +24,12 @@ export default function ForgotPasswordPage() {
       return;
     }
     setIsSending(true);
-    const { error: sendError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${appUrl}/reset-password`,
-    });
+    const { error: sendError } = await supabase.auth.resetPasswordForEmail(
+      email.trim(),
+      {
+        redirectTo: `${redirectBase}/reset-password`,
+      },
+    );
     if (sendError) {
       setError(sendError.message || "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.");
     } else {
