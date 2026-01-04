@@ -86,7 +86,7 @@ export default async function AdminSubmissionsPage({
     let query = supabase
       .from("submissions")
       .select(selectFields, { count: "exact" })
-      .order("updated_at", { ascending: false, nullsLast: true })
+      .order("updated_at", { ascending: false })
       .order("created_at", { ascending: false });
 
     if (searchParams.status) {
