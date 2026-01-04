@@ -8,6 +8,9 @@ import {
   reviewStatusLabelMap,
   reviewStatusOptions,
   stationReviewStatusOptions,
+  type PaymentStatus,
+  type ResultStatus,
+  type ReviewStatus,
 } from "@/constants/review-status";
 import {
   updateSubmissionBasicInfoFormAction,
@@ -41,8 +44,8 @@ type SubmissionRow = {
   id: string;
   title: string | null;
   artist_name: string | null;
-  status: string;
-  payment_status: string | null;
+  status: ReviewStatus;
+  payment_status: PaymentStatus | null;
   payment_method: string | null;
   amount_krw: number | null;
   mv_base_selected: boolean | null;
@@ -51,7 +54,7 @@ type SubmissionRow = {
   bank_depositor_name: string | null;
   admin_memo: string | null;
   mv_rating_file_path: string | null;
-  result_status?: string | null;
+  result_status?: ResultStatus | null;
   result_memo?: string | null;
   result_notified_at?: string | null;
   applicant_email?: string | null;
@@ -265,13 +268,8 @@ export default async function AdminSubmissionDetailPage({
       ? paymentStatusLabelMap[submission.payment_status]
       : submission.payment_status ?? "미결제";
   const resultStatusLabel =
-    submission.result_status &&
-    resultStatusLabelMap[
-      submission.result_status as keyof typeof resultStatusLabelMap
-    ]
-      ? resultStatusLabelMap[
-          submission.result_status as keyof typeof resultStatusLabelMap
-        ]
+    submission.result_status && resultStatusLabelMap[submission.result_status]
+      ? resultStatusLabelMap[submission.result_status]
       : submission.result_status ?? "미입력";
 
   if (submission.type === "ALBUM") {
