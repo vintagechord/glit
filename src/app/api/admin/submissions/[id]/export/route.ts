@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
-  _request: Request,
+  _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
   const submissionId = params.id;
