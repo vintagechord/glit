@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import {
   paymentStatusEnum,
@@ -230,6 +231,7 @@ export async function updateSubmissionStatusFormAction(
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
+    redirect(`/admin/submissions/${submissionId}`);
   }
 }
 
@@ -296,6 +298,7 @@ export async function updateSubmissionBasicInfoFormAction(
   revalidatePath(`/admin/submissions/${submissionId}`);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
+  redirect(`/admin/submissions/${submissionId}`);
 }
 
 export async function updatePaymentStatusAction(
@@ -358,6 +361,10 @@ export async function updatePaymentStatusFormAction(
 
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${String(formData.get("submissionId") ?? "")}`);
+  const submissionId = String(formData.get("submissionId") ?? "");
+  if (submissionId) {
+    redirect(`/admin/submissions/${submissionId}`);
+  }
 }
 
 export async function updateStationReviewAction(
@@ -418,6 +425,7 @@ export async function updateStationReviewFormAction(
     String(formData.get("reviewId") ?? "");
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
+    redirect(`/admin/submissions/${submissionId}`);
   }
 }
 
@@ -464,6 +472,12 @@ export async function updateSubmissionResultFormAction(
   });
   if (result.error) {
     console.error(result.error);
+  }
+
+  const submissionId = String(formData.get("submissionId") ?? "");
+  if (submissionId) {
+    revalidatePath(`/admin/submissions/${submissionId}`);
+    redirect(`/admin/submissions/${submissionId}`);
   }
 }
 
@@ -529,6 +543,22 @@ export async function notifySubmissionResultAction(
 
   revalidatePath(`/admin/submissions/${submissionId}`);
   return { message: "심의 결과가 발송되었습니다." };
+}
+
+export async function updateArtistAction(formData: FormData): Promise<void> {
+  const artistId = String(formData.get("artistId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const thumbnailUrl = String(formData.get("thumbnailUrl") ?? "").trim();
+  if (!artistId || !name) {
+    return;
+  }
+  const admin = createAdminClient();
+  await admin
+    .from("artists")
+    .update({ name, thumbnail_url: thumbnailUrl || null })
+    .eq("id", artistId);
+  revalidatePath("/admin/artists");
+  revalidatePath(`/admin/artists/${artistId}`);
 }
 
 export async function upsertPackageAction(

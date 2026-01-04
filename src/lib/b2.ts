@@ -100,8 +100,10 @@ export function buildObjectKey(opts: {
   const safe = sanitizeFileName(opts.filename);
   const titleSegment = sanitizeFileName(opts.title?.trim() || "untitled");
   const submissionPart = opts.submissionId ? `${opts.submissionId}/` : "";
-  // 최종 object key: submissions/{userId}/{submissionId?}/{uuid}-{filename}
-  return `${prefix}${opts.userId}/${titleSegment}/${submissionPart}${randomUUID()}-${safe}`;
+  const uniquePrefix = randomUUID();
+  // 보안/충돌 방지를 위해 uuid는 앞에 붙이고, 사용자가 올린 원본 파일명은 그대로 유지한다.
+  // 최종 object key: submissions/{userId}/{title}/{submissionId?}/{uuid}-{originalName}
+  return `${prefix}${opts.userId}/${titleSegment}/${submissionPart}${uniquePrefix}-${safe}`;
 }
 
 export async function presignPutUrl(params: {

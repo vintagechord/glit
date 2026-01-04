@@ -86,6 +86,7 @@ export default async function AdminSubmissionsPage({
     let query = supabase
       .from("submissions")
       .select(selectFields, { count: "exact" })
+      .order("updated_at", { ascending: false, nullsLast: true })
       .order("created_at", { ascending: false });
 
     if (searchParams.status) {
@@ -108,10 +109,12 @@ export default async function AdminSubmissionsPage({
       query = query.or(terms.join(","));
     }
     if (searchParams.from) {
-      query = query.gte("created_at", `${searchParams.from}T00:00:00.000Z`);
+      const from = `${searchParams.from}T00:00:00.000Z`;
+      query = query.gte("updated_at", from).gte("created_at", from);
     }
     if (searchParams.to) {
-      query = query.lte("created_at", `${searchParams.to}T23:59:59.999Z`);
+      const to = `${searchParams.to}T23:59:59.999Z`;
+      query = query.lte("updated_at", to).lte("created_at", to);
     }
 
     return query.range(offset, offset + PAGE_SIZE - 1);
@@ -332,7 +335,10 @@ export default async function AdminSubmissionsPage({
                 </div>
                 <div className="text-xs text-muted-foreground md:text-right">
                   <p>{packageInfo?.name ?? "-"}</p>
-                  <p>{formatDateTime(submission.created_at)}</p>
+                  <p>
+                    업데이트:{" "}
+                    {formatDateTime(submission.updated_at ?? submission.created_at)}
+                  </p>
                 </div>
                 <div className="text-xs text-muted-foreground md:text-right">
                   <p>

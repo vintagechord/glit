@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { HistoryList } from "@/components/dashboard/history-list";
+import { ArtistHistoryTabs } from "@/components/dashboard/artist-history";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -9,16 +9,12 @@ export const metadata = {
   title: "나의 심의 내역",
 };
 
-const typeLabels: Record<string, string> = {
-  ALBUM: "앨범",
-  MV_DISTRIBUTION: "MV 유통",
-  MV_BROADCAST: "MV 방송",
-};
-
 type SubmissionRow = {
   id: string;
   title: string | null;
   artist_name: string | null;
+  artist_id: string | null;
+  artist?: { id: string; name: string; thumbnail_url: string | null } | null;
   status: string;
   payment_status?: string | null;
   payment_method?: string | null;
@@ -55,35 +51,41 @@ export default async function HistoryPage() {
   }
 
   const fullSelect =
-    "id, title, artist_name, status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title ), station_reviews ( id, status, updated_at, station:stations ( name ) )";
+    "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title ), station_reviews ( id, status, updated_at, station:stations ( name ) )";
   const fallbackSelect =
-    "id, title, artist_name, status, created_at, updated_at, type, amount_krw, is_oneclick, station_reviews ( id, status, updated_at, station:stations ( name ) )";
+    "id, title, artist_name, artist_id, status, created_at, updated_at, type, amount_krw, is_oneclick, station_reviews ( id, status, updated_at, station:stations ( name ) )";
 
+  // 1) 기본 쿼리: artist join 포함
   const { data: initialData, error: submissionError } = await supabase
     .from("submissions")
     .select(fullSelect)
     .order("updated_at", { ascending: false })
     .eq("user_id", user.id);
+
   let submissions = (initialData ?? null) as SubmissionRow[] | null;
 
-  if (
-    submissionError?.code === "PGRST204" ||
-    submissionError?.message?.toLowerCase().includes("column")
-  ) {
-    const fallback = await supabase
+  // 2) 에러 발생 시 컬럼 축소한 fallback
+  if (submissionError) {
+    console.error("history full select error", submissionError);
+    const { data: fallbackData, error: fallbackError } = await supabase
       .from("submissions")
       .select(fallbackSelect)
       .order("updated_at", { ascending: false })
       .eq("user_id", user.id);
 
-    submissions =
-      (fallback.data?.map((row) => ({
-        ...row,
-        payment_status: null,
-        payment_method: null,
-        package: null,
-        album_tracks: [],
-      })) as SubmissionRow[]) ?? null;
+    if (fallbackError) {
+      console.error("history fallback select error", fallbackError);
+      submissions = [];
+    } else {
+      submissions =
+        (fallbackData?.map((row) => ({
+          ...row,
+          payment_status: null,
+          payment_method: null,
+          package: null,
+          album_tracks: [],
+        })) as SubmissionRow[]) ?? [];
+    }
   }
 
   if (submissions && submissions.length > 0) {
@@ -104,40 +106,30 @@ export default async function HistoryPage() {
     );
   }
 
-  const items =
-    submissions?.map((submission, index) => {
-      const typeLabel = typeLabels[submission.type] ?? submission.type;
-      return {
-        id: submission.id,
-        order: index + 1,
-        title: submission.title || "제목 미입력",
-        artistName: submission.artist_name || "아티스트 미입력",
-        typeLabel,
-        type: submission.type,
-        createdAt: submission.created_at,
-        updatedAt: submission.updated_at,
-        status: submission.status,
-        paymentStatus: submission.payment_status ?? null,
-        paymentMethod: submission.payment_method ?? null,
-        amountKrw: submission.amount_krw,
-        isOneclick: submission.is_oneclick,
-        packageInfo: Array.isArray(submission.package)
-          ? submission.package[0]
-          : submission.package ?? null,
-        tracks:
-          submission.album_tracks?.map((track) => ({
-            id: track.id,
-            trackNo: track.track_no,
-            title: track.track_title ?? "",
-          })) ?? [],
-        stationReviews: (submission.station_reviews ?? []).map((review) => ({
-          ...review,
-          station: Array.isArray(review.station)
-            ? review.station[0]
-            : review.station,
-        })),
-      };
-    }) ?? [];
+  // 그룹핑: 타입별 -> 아티스트별
+  const groupByArtist = (typeFilter: string[]) => {
+    const filtered = submissions?.filter((s) => typeFilter.includes(s.type)) ?? [];
+    const map = new Map<
+      string,
+      { artistId: string | null; artistName: string; thumbnail: string | null; submissions: SubmissionRow[] }
+    >();
+    for (const s of filtered) {
+      const key = s.artist?.id ?? s.artist_id ?? s.artist_name ?? s.id;
+      if (!map.has(key)) {
+        map.set(key, {
+          artistId: s.artist?.id ?? s.artist_id ?? null,
+          artistName: s.artist?.name || s.artist_name || "아티스트 미입력",
+          thumbnail: s.artist?.thumbnail_url ?? null,
+          submissions: [],
+        });
+      }
+      map.get(key)?.submissions.push(s);
+    }
+    return Array.from(map.values());
+  };
+
+  const albumGroups = groupByArtist(["ALBUM"]);
+  const mvGroups = groupByArtist(["MV_BROADCAST", "MV_DISTRIBUTION"]);
 
   return (
     <DashboardShell
@@ -145,7 +137,7 @@ export default async function HistoryPage() {
       description="심의 기록을 발매 음원 단위로 확인합니다."
       activeTab="history"
     >
-      <HistoryList initialItems={items} />
+      <ArtistHistoryTabs albumGroups={albumGroups} mvGroups={mvGroups} />
     </DashboardShell>
   );
 }

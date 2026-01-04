@@ -666,7 +666,7 @@ export function HomeReviewPanel({
               <span>방송국</span>
               <span className="justify-self-center text-center">접수 상태</span>
               <span className="justify-self-center text-center">통과 여부</span>
-              <span className="text-right">접수 날짜</span>
+              <span className="text-right">Updated</span>
             </div>
             {activeStations.length > 0 ? (
               <div className="text-xs">

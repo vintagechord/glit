@@ -43,6 +43,7 @@ const typeLabels: Record<string, string> = {
 
 type SubmissionRow = {
   id: string;
+  user_id?: string | null;
   title: string | null;
   artist_name: string | null;
   status: ReviewStatus;
@@ -191,10 +192,20 @@ export default async function AdminSubmissionDetailPage({
   );
 
   const supabase = createAdminClient();
-  const baseSelectWithResult =
-    "id, title, artist_name, status, payment_status, payment_method, amount_krw, mv_base_selected, pre_review_requested, karaoke_requested, bank_depositor_name, admin_memo, mv_rating_file_path, result_status, result_memo, result_notified_at, applicant_email, created_at, updated_at, type, package:packages ( name, station_count )";
-  const baseSelectWithoutResult =
-    "id, title, artist_name, status, payment_status, payment_method, amount_krw, mv_base_selected, pre_review_requested, karaoke_requested, bank_depositor_name, admin_memo, mv_rating_file_path, created_at, updated_at, type, package:packages ( name, station_count )";
+  const baseSelectCore =
+    "id, user_id, title, artist_name, artist_name_kr, artist_name_en, status, payment_status, payment_method, amount_krw, mv_base_selected, pre_review_requested, karaoke_requested, bank_depositor_name, admin_memo, mv_rating_file_path, result_status, result_memo, result_notified_at, applicant_email, applicant_name, applicant_phone, created_at, updated_at, type, package:packages ( name, station_count )";
+  const albumExtra =
+    "release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, is_oneclick, melon_url";
+  const mvExtra =
+    "mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics";
+  const trackRelation =
+    "album_tracks ( track_no, track_title, track_title_kr, track_title_en, track_title_official, featuring, composer, lyricist, arranger, lyrics, notes, is_title, title_role, broadcast_selected )";
+
+  const baseSelectWithResult = `${baseSelectCore}, ${albumExtra}, ${mvExtra}, ${trackRelation}`;
+  const baseSelectWithoutResult = `${baseSelectCore.replace(
+    ", result_status, result_memo, result_notified_at",
+    "",
+  )}, ${albumExtra}, ${mvExtra}, ${trackRelation}`;
   const guestSelectWithResult = `${baseSelectWithResult}, guest_name, guest_company, guest_email, guest_phone`;
   const guestSelectWithoutResult = `${baseSelectWithoutResult}, guest_name, guest_company, guest_email, guest_phone`;
 
@@ -299,6 +310,27 @@ export default async function AdminSubmissionDetailPage({
       ? resultStatusLabelMap[submission.result_status]
       : submission.result_status ?? "미입력";
 
+  const memberProfile =
+    submission.user_id && !submission.guest_name
+      ? (
+          await supabase
+            .from("profiles")
+            .select("name, company, phone, email")
+            .eq("user_id", submission.user_id)
+            .maybeSingle()
+        ).data ?? null
+      : null;
+
+  let memberEmail: string | null = memberProfile?.email ?? null;
+  if (!memberEmail && submission.user_id && !submission.guest_name) {
+    const { data: userData } = await supabase.auth.admin.getUserById(
+      submission.user_id,
+    );
+    memberEmail = userData?.user?.email ?? null;
+  }
+
+  const applicantEmail = submission.applicant_email ?? submission.guest_email ?? null;
+
   if (submission.type === "ALBUM") {
     await ensureAlbumStationReviews(
       supabase,
@@ -311,10 +343,10 @@ export default async function AdminSubmissionDetailPage({
   const { data: stationReviews } = await supabase
     .from("station_reviews")
     .select(
-      "id, status, result_note, updated_at, station:stations ( id, name, code )",
+      "id, status, result_note, updated_at, station_id, station:stations ( id, name, code )",
     )
     .eq("submission_id", submissionId)
-    .order("updated_at", { ascending: false });
+    .order("station_id", { ascending: true });
 
   const { data: events } = await supabase
     .from("submission_events")
@@ -357,7 +389,7 @@ export default async function AdminSubmissionDetailPage({
             </div>
         </div>
         <div className="text-xs text-muted-foreground">
-          접수일 {formatDateTime(submission.created_at)}
+          Updated {formatDateTime(submission.updated_at ?? submission.created_at)}
         </div>
       </div>
 
@@ -454,43 +486,6 @@ export default async function AdminSubmissionDetailPage({
                 </button>
               </div>
             </form>
-          </div>
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              신청자 정보
-            </p>
-            {hasGuestColumns && submission.guest_name ? (
-              <div className="mt-4 space-y-2 text-sm text-foreground">
-                <p>
-                  <span className="text-xs text-muted-foreground">구분</span>{" "}
-                  비회원
-                </p>
-                <p>
-                  <span className="text-xs text-muted-foreground">담당자</span>{" "}
-                  {submission.guest_name}
-                </p>
-                {submission.guest_company && (
-                  <p>
-                    <span className="text-xs text-muted-foreground">
-                      회사
-                    </span>{" "}
-                    {submission.guest_company}
-                  </p>
-                )}
-                <p>
-                  <span className="text-xs text-muted-foreground">연락처</span>{" "}
-                  {submission.guest_phone ?? "-"}
-                </p>
-                <p>
-                  <span className="text-xs text-muted-foreground">이메일</span>{" "}
-                  {submission.guest_email ?? "-"}
-                </p>
-              </div>
-            ) : (
-              <div className="mt-4 rounded-2xl border border-dashed border-border/70 bg-background/70 px-4 py-3 text-xs text-muted-foreground">
-                회원 접수입니다. 마이페이지 프로필 정보를 참고해주세요.
-              </div>
-            )}
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -614,44 +609,102 @@ export default async function AdminSubmissionDetailPage({
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 text-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              첨부 파일
+              상태 요약
             </p>
-            <div className="mt-4">
+            <div className="mt-3 space-y-2 text-[13px] text-foreground">
+              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <span className="text-muted-foreground">심의 상태</span>
+                <span className="font-semibold">{statusLabel}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <span className="text-muted-foreground">결제 상태</span>
+                <span className="font-semibold">{paymentLabel}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <span className="text-muted-foreground">결과</span>
+                <span className="font-semibold">{resultStatusLabel}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              신청자 정보
+            </p>
+            {hasGuestColumns && submission.guest_name ? (
+              <div className="mt-3 space-y-1 text-sm text-foreground">
+                <p className="flex justify-between text-[13px] text-muted-foreground">
+                  <span>구분</span>
+                  <span className="text-foreground">비회원</span>
+                </p>
+                <p className="flex justify-between text-[13px] text-muted-foreground">
+                  <span>담당자</span>
+                  <span className="text-foreground">{submission.guest_name}</span>
+                </p>
+                {submission.guest_company && (
+                  <p className="flex justify-between text-[13px] text-muted-foreground">
+                    <span>회사</span>
+                    <span className="text-foreground">{submission.guest_company}</span>
+                  </p>
+                )}
+                <p className="flex justify-between text-[13px] text-muted-foreground">
+                  <span>연락처</span>
+                  <span className="text-foreground">{submission.guest_phone ?? "-"}</span>
+                </p>
+                <p className="flex justify-between text-[13px] text-muted-foreground">
+                  <span>이메일</span>
+                  <span className="text-foreground">
+                    {submission.guest_email ?? submission.applicant_email ?? "-"}
+                  </span>
+                </p>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-1 text-sm text-foreground">
+                <p className="flex justify-between text-[13px] text-muted-foreground">
+                  <span>구분</span>
+                  <span className="text-foreground">회원</span>
+                </p>
+                <p className="flex justify-between text-[13px] text-muted-foreground">
+                  <span>이름</span>
+                  <span className="text-foreground">{memberProfile?.name ?? "회원 정보 미입력"}</span>
+                </p>
+                <p className="flex justify-between text-[13px] text-muted-foreground">
+                  <span>회사</span>
+                  <span className="text-foreground">{memberProfile?.company ?? "-"}</span>
+                </p>
+                <p className="flex justify-between text-[13px] text-muted-foreground">
+                  <span>연락처</span>
+                  <span className="text-foreground">{memberProfile?.phone ?? "-"}</span>
+                </p>
+                <p className="flex justify-between text-[13px] text-muted-foreground">
+                  <span>로그인 이메일</span>
+                  <span className="text-foreground">{memberEmail ?? applicantEmail ?? "-"}</span>
+                </p>
+                {applicantEmail && (
+                  <p className="flex justify-between text-[12px] text-muted-foreground">
+                    <span>신청서 이메일</span>
+                    <span className="text-foreground">{applicantEmail}</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              파일
+            </p>
+            <div className="mt-3">
               <SubmissionFilesPanel
                 submissionId={submission.id}
                 files={submissionFiles ?? []}
               />
             </div>
-          </div>
-        </div>
-
-        <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            이벤트 로그
-          </p>
-          <div className="mt-4 space-y-3 text-xs">
-            {events && events.length > 0 ? (
-              events.map((event) => (
-                <div
-                  key={event.id}
-                  className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3"
-                >
-                  <div className="flex items-center justify-between text-foreground">
-                    <span className="font-semibold">{event.event_type}</span>
-                    <span className="text-muted-foreground">
-                      {formatDateTime(event.created_at)}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-muted-foreground">{event.message}</p>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
-                아직 이벤트가 없습니다.
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -673,6 +726,7 @@ export default async function AdminSubmissionDetailPage({
                   className="grid gap-4 rounded-2xl border border-border/60 bg-background/80 p-4 md:grid-cols-[1.2fr_1fr_1.2fr_auto]"
                 >
                   <input type="hidden" name="reviewId" value={review.id} />
+                  <input type="hidden" name="submissionId" value={submission.id} />
                   <div>
                     <p className="text-sm font-semibold text-foreground">
                       {stationInfo?.name ?? "-"}
@@ -714,6 +768,163 @@ export default async function AdminSubmissionDetailPage({
           )}
         </div>
       </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              신청 상세
+            </p>
+            <Link
+              href={`/api/admin/submissions/${submission.id}/export`}
+              className="rounded-full border border-border/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+            >
+              전체 내역 다운로드
+            </Link>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <DetailRow label="발매일" value={submission.release_date || "-"} />
+            <DetailRow label="장르" value={submission.genre || "-"} />
+            <DetailRow
+              label="유통사"
+              value={submission.distributor || submission.mv_distribution_company || "-"}
+            />
+            <DetailRow
+              label="제작사"
+              value={submission.production_company || submission.mv_production_company || "-"}
+            />
+            <DetailRow
+              label="신청자"
+              value={submission.applicant_name || memberProfile?.name || "-"}
+            />
+            <DetailRow
+              label="신청자 연락처"
+              value={submission.applicant_phone || memberProfile?.phone || "-"}
+            />
+            <DetailRow
+              label="신청자 이메일"
+              value={submission.applicant_email || memberEmail || "-"}
+            />
+            {isMvSubmission ? (
+              <>
+                <DetailRow label="러닝타임" value={submission.mv_runtime || "-"} />
+                <DetailRow label="포맷" value={submission.mv_format || "-"} />
+                <DetailRow label="감독" value={submission.mv_director || "-"} />
+                <DetailRow label="주연" value={submission.mv_lead_actor || "-"} />
+                <DetailRow label="제작사" value={submission.mv_production_company || "-"} />
+                <DetailRow label="배급사" value={submission.mv_distribution_company || "-"} />
+                <DetailRow label="용도" value={submission.mv_usage || "-"} />
+                <DetailRow label="희망등급" value={submission.mv_desired_rating || "-"} />
+                <DetailRow label="곡 제목" value={submission.mv_song_title || "-"} />
+                <DetailRow label="작곡" value={submission.mv_composer || "-"} />
+                <DetailRow label="작사" value={submission.mv_lyricist || "-"} />
+                <DetailRow label="편곡" value={submission.mv_arranger || "-"} />
+              </>
+            ) : (
+              <>
+                <DetailRow
+                  label="아티스트 유형"
+                  value={submission.artist_type || "-"}
+                />
+                <DetailRow
+                  label="구성/멤버"
+                  value={submission.artist_members || "-"}
+                />
+                <DetailRow
+                  label="이전 발매"
+                  value={submission.previous_release || "-"}
+                />
+                <DetailRow label="멜론 링크" value={submission.melon_url || "-"} />
+              </>
+            )}
+          </div>
+          {!isMvSubmission && submission.album_tracks && submission.album_tracks.length > 0 ? (
+            <div className="mt-6 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                트랙 리스트
+              </p>
+              <div className="rounded-2xl border border-border/60 bg-background/70 p-3 text-sm max-h-[600px] overflow-auto space-y-2">
+                {submission.album_tracks.map((track) => (
+                  <div
+                    key={`${track.track_no}-${track.track_title}-${track.track_title_kr}`}
+                    className="border-b border-border/40 py-2 last:border-b-0"
+                  >
+                    <p className="font-semibold text-foreground">
+                      {track.track_no}. {track.track_title || track.track_title_kr || "-"}
+                      {track.is_title ? " · 타이틀" : ""}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} / 편곡{" "}
+                      {track.arranger || "-"}
+                    </p>
+                    {track.lyrics ? (
+                      <details className="mt-1 text-xs text-muted-foreground">
+                        <summary className="cursor-pointer">가사</summary>
+                        <pre className="mt-2 whitespace-pre-wrap text-foreground">
+{track.lyrics}
+                        </pre>
+                      </details>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {isMvSubmission && submission.mv_lyrics ? (
+            <div className="mt-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                가사
+              </p>
+              <div className="mt-2 rounded-2xl border border-border/60 bg-background/70 p-3 text-sm text-foreground whitespace-pre-wrap">
+                {submission.mv_lyrics}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            이벤트 로그
+          </p>
+          <div className="mt-4 space-y-3 text-xs">
+            {events && events.length > 0 ? (
+              events.map((event) => (
+                <div
+                  key={event.id}
+                  className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3"
+                >
+                  <div className="flex items-center justify-between text-foreground">
+                    <span className="font-semibold">{event.event_type}</span>
+                    <span className="text-muted-foreground">
+                      {formatDateTime(event.created_at)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-muted-foreground">{event.message}</p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
+                아직 이벤트가 없습니다.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number | null;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 font-semibold text-foreground">{value ?? "-"}</p>
     </div>
   );
 }

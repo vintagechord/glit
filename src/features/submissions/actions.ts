@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { sendSubmissionReceiptEmail } from "@/lib/email";
+import { ensureArtistByName } from "@/lib/artist";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -658,6 +659,9 @@ export async function saveAlbumSubmissionAction(
   const hasPackage = Boolean(parsed.data.packageId);
   let amountKrw = parsed.data.amountKrw ?? 0;
   const isOneClick = parsed.data.isOneClick ?? false;
+  if (!parsed.data.artistName || !parsed.data.artistName.trim()) {
+    return { error: "아티스트명을 입력해주세요. (원클릭 포함)" };
+  }
   let packageStationCount: number | null = null;
   let packageName: string | null = null;
 
@@ -695,12 +699,15 @@ export async function saveAlbumSubmissionAction(
     isSubmitted &&
     (paymentMethod === "CARD" ||
       Boolean(parsed.data.bankDepositorName?.trim()));
+  const artistId = await ensureArtistByName(parsed.data.artistName);
+
   const submissionPayload = {
     id: parsed.data.submissionId,
     user_id: user?.id ?? null,
     type: "ALBUM",
     title: parsed.data.title,
     artist_name: parsed.data.artistName,
+    artist_id: artistId,
     artist_name_kr: parsed.data.artistNameKr || null,
     artist_name_en: parsed.data.artistNameEn || null,
     release_date: parsed.data.releaseDate || null,
@@ -1046,12 +1053,15 @@ export async function saveMvSubmissionAction(
     isSubmitted &&
     (paymentMethod === "CARD" ||
       Boolean(parsed.data.bankDepositorName?.trim()));
+  const artistId = await ensureArtistByName(parsed.data.artistName);
+
   const submissionPayload = {
     id: parsed.data.submissionId,
     user_id: user?.id ?? null,
     type: parsed.data.mvType,
     title: parsed.data.title,
     artist_name: parsed.data.artistName,
+    artist_id: artistId,
     release_date: parsed.data.releaseDate || null,
     genre: parsed.data.genre || null,
     mv_runtime: parsed.data.runtime || null,

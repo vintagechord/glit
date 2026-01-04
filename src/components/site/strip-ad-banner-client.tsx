@@ -194,7 +194,7 @@ function BannerLinkWrap({
 function BannerContent({ banner }: { banner: AdBanner }) {
   return (
     <div className="px-2 py-2 sm:px-3 sm:py-3">
-      <div className="flex h-20 overflow-hidden rounded-2xl border border-white/30 bg-white/35 shadow-[0_10px_30px_rgba(15,23,42,0.14)] backdrop-blur-md dark:border-white/10 dark:bg-black/25 sm:h-24">
+      <div className="group/banner relative flex h-20 overflow-hidden rounded-2xl border border-white/20 bg-white/25 shadow-[0_10px_30px_rgba(15,23,42,0.14)] backdrop-blur-md transition duration-300 hover:shadow-[0_18px_50px_rgba(0,0,0,0.25)] hover:border-border/70 dark:border-white/10 dark:bg-black/35 sm:h-24">
         <div className="relative h-full flex-[0_0_68%] sm:flex-[0_0_74%] md:flex-[0_0_80%]">
           <Image
             src={banner.image_url}
@@ -204,7 +204,7 @@ function BannerContent({ banner }: { banner: AdBanner }) {
             height={200}
             priority={false}
           />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/25 via-black/10 to-transparent dark:from-black/35 dark:via-black/20" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/25 via-black/10 to-transparent transition duration-300 group-hover/banner:from-white/25 group-hover/banner:via-white/10 group-hover/banner:to-transparent dark:from-black/35 dark:via-black/20" />
         </div>
         <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 sm:px-4">
           <div className="min-w-0">
@@ -214,7 +214,7 @@ function BannerContent({ banner }: { banner: AdBanner }) {
               <p>Brand</p>
             </div>
           </div>
-          <span className="shrink-0 rounded-full border border-border/70 bg-background/40 px-3 py-1.5 text-[10px] font-semibold tracking-[0.18em] text-foreground hover:bg-background/60 sm:px-4 sm:py-2 sm:text-xs">
+          <span className="shrink-0 rounded-full border border-border/70 bg-background/40 px-3 py-1.5 text-[10px] font-semibold tracking-[0.18em] text-foreground transition duration-300 group-hover/banner:-translate-y-0.5 group-hover/banner:border-white/70 group-hover/banner:bg-white/80 group-hover/banner:text-black dark:group-hover/banner:bg-white/20 dark:group-hover/banner:text-white sm:px-4 sm:py-2 sm:text-xs">
             {banner.title}
           </span>
         </div>

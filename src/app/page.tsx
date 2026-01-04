@@ -451,11 +451,15 @@ export default async function Home() {
                 Officially Greenlit
               </span>
               <h1 className="font-display text-3xl leading-tight text-foreground sm:text-4xl">
-                GLIT(글릿) — 음반 · M/V 심의를 쉽고 빠르게!
+                <span className="inline-block animate-[floaty_6s_ease-in-out_infinite] bg-gradient-to-r from-emerald-400 via-lime-300 to-emerald-500 bg-clip-text text-transparent drop-shadow-[0_8px_24px_rgba(52,211,153,0.25)]">
+                  GLIT(글릿)
+                </span>
+                <br />
+                음반 · M/V 심의를 쉽고 빠르게!
               </h1>
               <p className="max-w-xl text-base text-muted-foreground sm:text-lg whitespace-pre-line">
-                글릿에 접수하고, 각 방송사별 심의 진행 과정을 실시간으로 살펴보세요.
-                {"\n"}이후에는 발매된 나의 심의 기록 아카이브를 GLIT 한 곳에서 관리할 수 있어요.
+                글릿에서 방송사별 심의 진행을 실시간으로 받아보세요.
+                {"\n"}나의 모든 심의 기록은 GLIT에서 모아 관리할 수 있습니다.
               </p>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {heroCtas.map((cta) => (
