@@ -46,6 +46,15 @@ type SubmissionRow = {
   user_id?: string | null;
   title: string | null;
   artist_name: string | null;
+  release_date?: string | null;
+  genre?: string | null;
+  distributor?: string | null;
+  production_company?: string | null;
+  previous_release?: string | null;
+  artist_type?: string | null;
+  artist_gender?: string | null;
+  artist_members?: string | null;
+  melon_url?: string | null;
   status: ReviewStatus;
   payment_status: PaymentStatus | null;
   payment_method: string | null;
