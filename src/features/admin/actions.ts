@@ -179,7 +179,7 @@ export async function updateSubmissionStatusAction(
 
   const supabase = await createServerSupabase();
   const updatePayload: {
-    status: z.infer<typeof submissionStatusEnum>;
+    status: z.infer<typeof reviewStatusEnum>;
     admin_memo: string | null;
     mv_rating_file_path?: string | null;
   } = {
@@ -216,9 +216,7 @@ export async function updateSubmissionStatusFormAction(
   const rawRatingFilePath = formData.get("mvRatingFilePath");
   const result = await updateSubmissionStatusAction({
     submissionId: String(formData.get("submissionId") ?? ""),
-    status: String(formData.get("status") ?? "") as z.infer<
-      typeof submissionStatusEnum
-    >,
+    status: String(formData.get("status") ?? "") as z.infer<typeof reviewStatusEnum>,
     adminMemo: String(formData.get("adminMemo") ?? "") || undefined,
     mvRatingFilePath:
       rawRatingFilePath !== null ? String(rawRatingFilePath ?? "") : undefined,
@@ -396,7 +394,7 @@ export async function updateStationReviewFormAction(
   const result = await updateStationReviewAction({
     reviewId: String(formData.get("reviewId") ?? ""),
     status: String(formData.get("status") ?? "") as z.infer<
-      typeof stationStatusEnum
+      typeof stationReviewStatusEnum
     >,
     resultNote: String(formData.get("resultNote") ?? "") || undefined,
   });

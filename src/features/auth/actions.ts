@@ -169,8 +169,11 @@ export async function resetPasswordAction(
       };
     }
 
+    const linkData = data as
+      | { action_link?: string | null; properties?: { action_link?: string | null } }
+      | null;
     const actionLink =
-      data?.action_link ?? data?.properties?.action_link ?? null;
+      linkData?.action_link ?? linkData?.properties?.action_link ?? null;
     if (!actionLink) {
       return {
         error: "비밀번호 재설정 링크를 생성하지 못했습니다. 잠시 후 다시 시도해주세요.",

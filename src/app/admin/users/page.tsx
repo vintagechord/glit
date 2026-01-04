@@ -32,7 +32,8 @@ export default async function AdminUsersPage() {
   let emailMap = new Map<string, string | null>();
   if (ids.length > 0) {
     const { data: authUsers } = await admin
-      .from("users", { schema: "auth" })
+      .schema("auth")
+      .from("users")
       .select("id, email")
       .in("id", ids);
     emailMap = new Map(

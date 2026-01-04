@@ -6,6 +6,9 @@ import {
   resultStatusOptions,
   reviewStatusLabelMap,
   reviewStatusOptions,
+  type PaymentStatus,
+  type ResultStatus,
+  type ReviewStatus,
 } from "@/constants/review-status";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -39,9 +42,9 @@ type SubmissionRow = {
   id: string;
   title: string | null;
   artist_name: string | null;
-  status: string;
-  result_status?: string | null;
-  payment_status: string | null;
+  status: ReviewStatus;
+  result_status?: ResultStatus | null;
+  payment_status: PaymentStatus | null;
   type: string;
   created_at: string;
   updated_at: string | null;
