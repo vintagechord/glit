@@ -4,11 +4,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
+// NOTE: context.params is Promise<{id:string}> on Next.js route handlers.
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const submissionId = params.id;
+  const { id: submissionId } = await params;
   if (!submissionId) {
     return NextResponse.json({ error: "Submission ID missing" }, { status: 400 });
   }
