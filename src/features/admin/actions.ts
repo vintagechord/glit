@@ -4,6 +4,14 @@ import { z } from "zod";
 
 import { revalidatePath } from "next/cache";
 
+import {
+  paymentStatusEnum,
+  resultStatusEnum,
+  resultStatusLabelMap,
+  reviewStatusEnum,
+  stationReviewStatusEnum,
+} from "@/constants/review-status";
+import { sendResultEmail } from "@/lib/email";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export type AdminActionState = {
@@ -11,35 +19,9 @@ export type AdminActionState = {
   message?: string;
 };
 
-const submissionStatusEnum = z.enum([
-  "DRAFT",
-  "SUBMITTED",
-  "PRE_REVIEW",
-  "WAITING_PAYMENT",
-  "IN_PROGRESS",
-  "RESULT_READY",
-  "COMPLETED",
-]);
-
-const paymentStatusEnum = z.enum([
-  "UNPAID",
-  "PAYMENT_PENDING",
-  "PAID",
-  "REFUNDED",
-]);
-
-const stationStatusEnum = z.enum([
-  "NOT_SENT",
-  "SENT",
-  "RECEIVED",
-  "APPROVED",
-  "REJECTED",
-  "NEEDS_FIX",
-]);
-
 const submissionStatusSchema = z.object({
   submissionId: z.string().uuid(),
-  status: submissionStatusEnum,
+  status: reviewStatusEnum,
   adminMemo: z.string().optional(),
   mvRatingFilePath: z.string().optional(),
 });
@@ -56,9 +38,15 @@ const paymentStatusSchema = z.object({
   adminMemo: z.string().optional(),
 });
 
+const submissionResultSchema = z.object({
+  submissionId: z.string().uuid(),
+  resultStatus: resultStatusEnum,
+  resultMemo: z.string().optional(),
+});
+
 const stationReviewSchema = z.object({
   reviewId: z.string().uuid(),
-  status: stationStatusEnum,
+  status: stationReviewStatusEnum,
   resultNote: z.string().optional(),
 });
 
@@ -415,6 +403,116 @@ export async function updateStationReviewFormAction(
   if (result.error) {
     console.error(result.error);
   }
+}
+
+export async function updateSubmissionResultAction(
+  payload: z.infer<typeof submissionResultSchema>,
+): Promise<AdminActionState> {
+  const parsed = submissionResultSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { error: "입력값을 확인해주세요." };
+  }
+
+  const supabase = await createServerSupabase();
+  const { error } = await supabase
+    .from("submissions")
+    .update({
+      result_status: parsed.data.resultStatus,
+      result_memo: parsed.data.resultMemo || null,
+    })
+    .eq("id", parsed.data.submissionId);
+
+  if (error) {
+    return { error: "결과 정보를 저장하지 못했습니다." };
+  }
+
+  await insertEvent(
+    parsed.data.submissionId,
+    `결과 저장: ${resultStatusLabelMap[parsed.data.resultStatus]}`,
+    "RESULT_UPDATE",
+  );
+
+  revalidatePath(`/admin/submissions/${parsed.data.submissionId}`);
+  return { message: "결과 정보가 저장되었습니다." };
+}
+
+export async function updateSubmissionResultFormAction(
+  formData: FormData,
+): Promise<void> {
+  const result = await updateSubmissionResultAction({
+    submissionId: String(formData.get("submissionId") ?? ""),
+    resultStatus: String(
+      formData.get("resultStatus") ?? "",
+    ) as z.infer<typeof resultStatusEnum>,
+    resultMemo: String(formData.get("resultMemo") ?? "") || undefined,
+  });
+  if (result.error) {
+    console.error(result.error);
+  }
+}
+
+export async function notifySubmissionResultAction(
+  submissionId: string,
+): Promise<AdminActionState> {
+  if (!submissionId) return { error: "접수 ID가 없습니다." };
+
+  const supabase = await createServerSupabase();
+  const { data: submission, error: submissionError } = await supabase
+    .from("submissions")
+    .select(
+      "id, title, artist_name, applicant_email, guest_email, result_status, result_memo, user_id",
+    )
+    .eq("id", submissionId)
+    .maybeSingle();
+
+  if (submissionError || !submission) {
+    return { error: "접수 정보를 찾을 수 없습니다." };
+  }
+  if (!submission.result_status) {
+    return { error: "먼저 결과 상태를 저장해주세요." };
+  }
+
+  let recipient = submission.applicant_email || submission.guest_email || "";
+  if (!recipient && submission.user_id) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("user_id", submission.user_id)
+      .maybeSingle();
+    if (profile?.email) {
+      recipient = profile.email;
+    }
+  }
+
+  if (!recipient) {
+    return { error: "보낼 이메일 주소를 찾을 수 없습니다." };
+  }
+
+  const emailResult = await sendResultEmail({
+    email: recipient,
+    title: submission.title || "제목 미입력",
+    artist: submission.artist_name,
+    resultStatus: submission.result_status as z.infer<typeof resultStatusEnum>,
+    resultMemo: submission.result_memo,
+  });
+
+  if (!emailResult.ok) {
+    return { error: emailResult.message ?? "결과 메일 발송에 실패했습니다." };
+  }
+
+  await supabase
+    .from("submissions")
+    .update({ result_notified_at: new Date().toISOString() })
+    .eq("id", submissionId);
+
+  await insertEvent(
+    submissionId,
+    "심의 결과 메일 발송",
+    "RESULT_NOTIFY",
+  );
+
+  revalidatePath(`/admin/submissions/${submissionId}`);
+  return { message: "심의 결과가 발송되었습니다." };
 }
 
 export async function upsertPackageAction(

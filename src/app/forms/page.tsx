@@ -39,13 +39,12 @@ export default function FormsPage() {
         Forms
       </p>
       <h1 className="font-display mt-2 text-3xl text-foreground">
-        신청서 다운로드 및 이메일 접수(구양식)
+        신청서 다운로드 및 이메일 접수{" "}
+        <span className="text-base text-muted-foreground">(구양식)</span>
       </h1>
       <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground">
-        <span className="font-semibold text-foreground">
-          신청서를 직접 다운받아 작성 후 이메일로 접수하던
-        </span>{" "}
-        이전 이메일 기반 방식을 선호하시는 분들을 위한 접수 페이지입니다.
+        신청서를 직접 다운받아 작성 후 이메일로 접수하는 방식이 편한 분들을 위한 접수
+        페이지입니다.
         <span className="mt-2 block">
           다운받은 신청서를 작성 후{" "}
           <span className="font-semibold text-foreground">

@@ -39,16 +39,16 @@ export async function SiteHeader() {
                   src={logoLight}
                   alt="GLIT"
                   className="dark:hidden"
-                  width={112}
-                  height={28}
+                  width={90}
+                  height={22}
                   priority
                 />
                 <Image
                   src={logoDark}
                   alt="GLIT"
                   className="hidden dark:block"
-                  width={112}
-                  height={28}
+                  width={90}
+                  height={22}
                   priority
                 />
                 <span className="sr-only">GLIT</span>

@@ -85,7 +85,7 @@ const featureHighlights = [
     description:
       "각 방송국별 심의 진행 상황을 실시간으로 확인하고 승인 기록을 남깁니다.\n회원/비회원 모두에게 제공",
     card:
-      "bg-[#f7f8fb] text-[#1f2937] border-white/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
+      "bg-[#f7f8fb] text-[#2d3444] border-white/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#d7ecff] via-white to-[#eef6ff]",
     icon: (
       <svg
@@ -125,7 +125,7 @@ const featureHighlights = [
     description:
       "음원/M/V 신청서를 작성하며, 파일도 동시에 업로드하세요.\n복잡한 심의를 GLIT에서 도장 찍듯 간단하게 처리합니다.",
     card:
-      "bg-white text-[#1f2937] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
+      "bg-white text-[#2d3444] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#e7fff2] via-white to-[#eaf7ff]",
     icon: (
       <svg
@@ -160,7 +160,7 @@ const featureHighlights = [
     description:
       "신청 접수 시 1차 체크, 방송국 전달 전 2차 검수로 빈틈 없이.\nClear. Approved. Out.",
     card:
-      "bg-[#eef2ff] text-[#1f2937] border-[#dbe5ff] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
+      "bg-[#eef2ff] text-[#2d3444] border-[#dbe5ff] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#fff4d6] via-white to-[#ffe9d6]",
     icon: (
       <svg
@@ -450,13 +450,12 @@ export default async function Home() {
               <span className="inline-flex w-fit items-center rounded-full border border-border/60 bg-background/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-foreground/80">
                 Officially Greenlit
               </span>
-              <h1 className="font-display text-4xl leading-tight text-foreground sm:text-5xl">
-                GLIT(글릿) — 심의부터 온에어까지, 스타트업처럼 빠르게.
+              <h1 className="font-display text-3xl leading-tight text-foreground sm:text-4xl">
+                GLIT(글릿) — 음반 · M/V 심의를 쉽고 빠르게!
               </h1>
-              <p className="max-w-xl text-base text-muted-foreground sm:text-lg">
-                음반·뮤직비디오 심의를 클릭 한 번에 접수하고, 승인까지 실시간
-                트래킹하세요. 방송 가능 판정과 모든 기록 아카이브를 GLIT 한 곳에서
-                끝냅니다. 기획·홍보 팀을 위한 광고급 속도와 투명성을 제공합니다.
+              <p className="max-w-xl text-base text-muted-foreground sm:text-lg whitespace-pre-line">
+                글릿에 접수하고, 각 방송사별 심의 진행 과정을 실시간으로 살펴보세요.
+                {"\n"}이후에는 발매된 나의 심의 기록 아카이브를 GLIT 한 곳에서 관리할 수 있어요.
               </p>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {heroCtas.map((cta) => (
@@ -529,14 +528,7 @@ export default async function Home() {
           className={`flex flex-col gap-6 md:flex-row md:items-end md:justify-between ${scrollRevealBaseClass}`}
           style={{ transitionDelay: "0ms" }}
         >
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              심의 메뉴
-            </p>
-            <h2 className="font-display mt-3 text-3xl text-foreground">
-              필요한 심의 유형을 빠르게 선택하세요.
-            </h2>
-          </div>
+          <div />
           <Link
             href="/forms"
             className="self-end text-sm font-semibold text-muted-foreground transition hover:text-foreground md:self-auto"

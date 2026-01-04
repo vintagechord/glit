@@ -3,7 +3,10 @@
 import { z } from "zod";
 import { redirect } from "next/navigation";
 
-import { sendWelcomeEmail } from "@/lib/email";
+import {
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+} from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -147,18 +150,54 @@ export async function resetPasswordAction(
   }
 
   try {
-    const supabase = await createServerSupabase();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://glit-b1yn.onrender.com"}/reset-password`,
+    const redirectTo = `${
+      process.env.NEXT_PUBLIC_APP_URL ??
+      "https://glit-b1yn.onrender.com"
+    }/reset-password`;
+    const admin = createAdminClient();
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "recovery",
+      email: parsed.data,
+      options: { redirectTo },
     });
     if (error) {
-      console.error("resetPasswordForEmail error", error);
+      console.error("generateLink error", error);
       return {
         error:
           error.message ??
           "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.",
       };
     }
+
+    const actionLink =
+      data?.action_link ?? data?.properties?.action_link ?? null;
+    if (!actionLink) {
+      return {
+        error: "비밀번호 재설정 링크를 생성하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      };
+    }
+
+    const emailResult = await sendPasswordResetEmail({
+      email: parsed.data,
+      link: actionLink,
+    });
+
+    if (!emailResult.ok) {
+      const supabase = await createServerSupabase();
+      const { error: fallbackError } =
+        await supabase.auth.resetPasswordForEmail(parsed.data, {
+          redirectTo,
+        });
+      if (fallbackError) {
+        console.error("resetPasswordForEmail fallback error", fallbackError);
+        return {
+          error:
+            fallbackError.message ??
+            "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.",
+        };
+      }
+    }
+
     return {
       message: "비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.",
     };

@@ -264,6 +264,8 @@ export function AlbumWizard({
   const [emailSubmitConfirmed, setEmailSubmitConfirmed] = React.useState(false);
   const [showCdInfo, setShowCdInfo] = React.useState(false);
   const [showOneclickNotice, setShowOneclickNotice] = React.useState(false);
+  const [packageConfirmTarget, setPackageConfirmTarget] =
+    React.useState<PackageOption | null>(null);
   const lyricsOverlayRef = React.useRef<HTMLDivElement | null>(null);
   const lyricsTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const [lyricsToolApplied, setLyricsToolApplied] = React.useState<
@@ -426,6 +428,35 @@ export function AlbumWizard({
     selectedPackageIndex >= 0
       ? packageToneClasses[selectedPackageIndex % packageToneClasses.length]
       : null;
+  const activePackageId = packageConfirmTarget?.id ?? selectedPackage?.id ?? null;
+  const genderOptions =
+    artistType === "GROUP"
+      ? [
+          { value: "", label: "선택" },
+          { value: "MALE", label: "남성" },
+          { value: "FEMALE", label: "여성" },
+          { value: "MIXED", label: "혼성" },
+        ]
+      : [
+          { value: "", label: "선택" },
+          { value: "MALE", label: "남성" },
+          { value: "FEMALE", label: "여성" },
+        ];
+
+  const handleConfirmPackage = () => {
+    if (!packageConfirmTarget) return;
+    setSelectedPackage(packageConfirmTarget);
+    setPackageConfirmTarget(null);
+    setStep(2);
+  };
+
+  const handleCancelPackage = () => setPackageConfirmTarget(null);
+
+  React.useEffect(() => {
+    if (artistType !== "GROUP" && artistGender === "MIXED") {
+      setArtistGender("");
+    }
+  }, [artistGender, artistType]);
 
   const stepLabels = (
     <div className="grid gap-3 md:grid-cols-4">
@@ -557,12 +588,25 @@ export function AlbumWizard({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: lyrics, mode: "auto_apply" }),
+        body: JSON.stringify({ text: lyrics }),
       });
       const payload = await response.json().catch(() => null);
-      if (!payload || payload.ok !== true) {
+      type SpellcheckResponse = {
+        correctedText?: string;
+        corrected?: string;
+        changes?: Array<{ from?: unknown; to?: unknown; index?: unknown }>;
+        error?: { message?: string };
+      };
+      const spellcheckPayload = payload as SpellcheckResponse | null;
+      const corrected =
+        typeof spellcheckPayload?.correctedText === "string"
+          ? spellcheckPayload.correctedText
+          : typeof spellcheckPayload?.corrected === "string"
+            ? spellcheckPayload.corrected
+            : null;
+      if (!response.ok || !corrected) {
         const message =
-          payload?.error?.message ??
+          spellcheckPayload?.error?.message ??
           "일시적으로 맞춤법 적용에 실패했습니다. 잠시 후 다시 시도해주세요.";
         setSpellcheckNoticeMap((prev) => ({
           ...prev,
@@ -571,8 +615,6 @@ export function AlbumWizard({
         return;
       }
 
-      const corrected =
-        typeof payload.corrected === "string" ? payload.corrected : lyrics;
       if (!corrected || (!corrected.trim() && trimmedLyrics)) {
         setSpellcheckNoticeMap((prev) => ({
           ...prev,
@@ -600,7 +642,9 @@ export function AlbumWizard({
         from?: unknown;
         to?: unknown;
         index?: unknown;
-      }> = Array.isArray(payload.changes) ? payload.changes : [];
+      }> = Array.isArray(spellcheckPayload?.changes)
+        ? spellcheckPayload?.changes
+        : [];
       const changes = rawChanges
         .map(
           (change: { from?: unknown; to?: unknown; index?: unknown }) => ({
@@ -1544,7 +1588,7 @@ export function AlbumWizard({
                 패키지를 선택하세요.
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                포함 방송국과 가격을 확인하고 선택할 수 있습니다.
+                포함 방송국과 가격을 확인하고 선택하면 다음 단계로 이동합니다.
               </p>
             </div>
           </div>
@@ -1607,7 +1651,9 @@ export function AlbumWizard({
 
           <div className="grid gap-6 md:grid-cols-2">
             {packages.map((pkg, index) => {
-              const isActive = selectedPackage?.id === pkg.id;
+              const isActive = activePackageId === pkg.id;
+              const isDisabled =
+                selectionLocked && selectedPackage?.id !== pkg.id;
               const tone =
                 packageToneClasses[index % packageToneClasses.length];
               const displayPrice = isOneClick
@@ -1618,10 +1664,12 @@ export function AlbumWizard({
                   key={pkg.id}
                   type="button"
                   onClick={() => {
-                    if (selectionLocked) return;
-                    setSelectedPackage(pkg);
+                    if (selectionLocked && selectedPackage?.id !== pkg.id) {
+                      return;
+                    }
+                    setPackageConfirmTarget(pkg);
                   }}
-                  disabled={selectionLocked}
+                  disabled={isDisabled}
                   className={`text-left rounded-[28px] border p-6 transition disabled:cursor-not-allowed disabled:opacity-70 ${
                     isActive
                       ? tone.card
@@ -1681,11 +1729,11 @@ export function AlbumWizard({
       )}
 
       {step === 2 && (
-      <div className="space-y-8">
-        {isDraggingOver && (
-          <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
-        )}
-        <div className="flex items-start justify-between gap-4">
+        <div className="space-y-8">
+          {isDraggingOver && (
+            <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
+          )}
+          <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 STEP 02
@@ -1847,10 +1895,11 @@ export function AlbumWizard({
                     onChange={(event) => setArtistGender(event.target.value)}
                     className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                   >
-                    <option value="">선택</option>
-                    <option value="MALE">남성</option>
-                    <option value="FEMALE">여성</option>
-                    <option value="MIXED">혼성</option>
+                    {genderOptions.map((option) => (
+                      <option key={option.value || "empty"} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 {artistType === "GROUP" && (
@@ -2162,7 +2211,7 @@ export function AlbumWizard({
                             disabled={isTranslatingLyrics}
                             className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            번역 {isTranslatingLyrics ? "중..." : ""}
+                            자동번역 {isTranslatingLyrics ? "중..." : ""}
                           </button>
                         </div>
                         {spellcheckNotice && (
@@ -2793,6 +2842,47 @@ export function AlbumWizard({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {packageConfirmTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={handleCancelPackage}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-border/60 bg-background p-6 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              확인
+            </p>
+            <p className="mt-2 text-lg font-semibold">
+              {`${formatPackageName(
+                packageConfirmTarget.stationCount,
+                isOneClick,
+              )}로 진행할까요?`}
+            </p>
+            <p className="mt-3 text-xs text-muted-foreground">
+              선택을 확정하면 신청서 작성 단계로 이동합니다.
+            </p>
+            <div className="mt-6 flex gap-2">
+              <button
+                type="button"
+                onClick={handleCancelPackage}
+                className="flex-1 rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-foreground"
+              >
+                아니오
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPackage}
+                className="flex-1 rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+              >
+                예
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -84,8 +84,31 @@ export function AboutRevealSection() {
               정식 등록 업체
             </p>
             <p className="text-base leading-relaxed text-white/80">
-              GLIT은 빈티지하우스가 운영하는 정식 심의 대행 서비스로, 사업자와
-              음반/음악영상물제작업 등록을 모두 마쳤습니다.
+              GLIT은 (주)빈티지하우스의 법인 사업자로 운영되며, 통신판매업,
+              대중문화예술기획업, 음반/음악영상물제작업 등을 완료한 정식 업체로
+              모든 서류의 발급이 원활합니다. 빈티지하우스는 음원거래 플랫폼{" "}
+              <a
+                href="https://www.iamwatermelon.com"
+                className="font-semibold underline decoration-white/60 underline-offset-4"
+              >
+                워터멜론
+              </a>
+              , 아티스트 섭외 서비스{" "}
+              <button
+                type="button"
+                onClick={() => window.alert("준비 중입니다.")}
+                className="font-semibold underline decoration-white/60 underline-offset-4"
+              >
+                Encore
+              </button>
+              , 레코딩&믹스 등을 진행하는 뮤직 스튜디오{" "}
+              <a
+                href="https://vhouse.co.kr"
+                className="font-semibold underline decoration-white/60 underline-offset-4"
+              >
+                V-House
+              </a>
+              , 앨범 기획/제작 레이블 운영 등을 진행하고 있습니다.
             </p>
           </div>
         </section>

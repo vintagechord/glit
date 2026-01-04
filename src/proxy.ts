@@ -18,6 +18,26 @@ export default async function proxy(request: NextRequest) {
   const isProtected =
     (isDashboardRoute && !isPublicDashboardRoute) || isAdminRoute;
 
+  // Ensure submission detail carries ?id=<uuid> for downstream usage
+  const submissionMatch = pathname.match(
+    /^\/admin\/submissions\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/,
+  );
+  if (submissionMatch && !request.nextUrl.searchParams.get("id")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin/submissions/detail";
+    url.searchParams.set("id", submissionMatch[1]);
+    const redirectRes = NextResponse.redirect(url);
+    redirectRes.cookies.set("admin_submission_id", submissionMatch[1], {
+      path: "/admin/submissions",
+    });
+    return withCookies(redirectRes, response);
+  }
+  if (submissionMatch && !response.cookies.get("admin_submission_id")) {
+    response.cookies.set("admin_submission_id", submissionMatch[1], {
+      path: "/admin/submissions",
+    });
+  }
+
   if (isProtected && !user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";

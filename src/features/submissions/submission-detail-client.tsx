@@ -104,7 +104,7 @@ const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
 
 const reviewResultMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
-    label: "통과",
+    label: "적격",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   REJECTED: {
@@ -124,6 +124,17 @@ const flowSteps = [
   "결제 확인",
   "심의 진행",
   "결과 확인",
+];
+
+const radioSubmissionLinks: Array<{ name: string; url: string }> = [
+  { name: "KBS Cool FM 신청곡/사연 접수", url: "https://program.kbs.co.kr/pc/fm" },
+  { name: "MBC 라디오 미니(사연/신청곡)", url: "https://mini.imbc.com/" },
+  {
+    name: "SBS 파워FM 청취자 게시판",
+    url: "https://programs.sbs.co.kr/radio",
+  },
+  { name: "TBS FM 신청곡/사연", url: "https://tbs.seoul.kr/" },
+  { name: "CBS 음악FM 신청곡", url: "https://www.cbs.co.kr/radio" },
 ];
 
 const getReviewReception = (status: string) =>
@@ -200,6 +211,9 @@ export function SubmissionDetailClient({
     stationName?: string | null;
     note: string;
   } | null>(null);
+  const [radioLinksModal, setRadioLinksModal] = React.useState<{
+    stationName?: string;
+  } | null>(null);
   const [isPromotionSubmitting, setIsPromotionSubmitting] =
     React.useState(false);
   const packageInfo = Array.isArray(submission.package)
@@ -225,6 +239,12 @@ export function SubmissionDetailClient({
     setKyEnabled(promotion.ky_enabled);
     setReferenceUrl(promotion.reference_url ?? "");
   }, [promotion]);
+
+  const openRadioLinks = (stationName?: string) => {
+    setRadioLinksModal({ stationName });
+  };
+
+  const closeRadioLinks = () => setRadioLinksModal(null);
 
   const fetchLatest = React.useCallback(async () => {
     if (!supabase) return;
@@ -706,6 +726,7 @@ export function SubmissionDetailClient({
                       const note = review.result_note?.trim();
                       const showNote =
                         Boolean(note) && rejectedReviewStatuses.has(review.status);
+                      const isApproved = review.status === "APPROVED";
                       return (
                         <div
                           key={review.id}
@@ -724,11 +745,21 @@ export function SubmissionDetailClient({
                           >
                             {reception.label}
                           </span>
-                          <span
-                            className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
-                          >
-                            {result.label}
-                          </span>
+                          {isApproved ? (
+                            <button
+                              type="button"
+                              onClick={() => openRadioLinks(review.station?.name ?? undefined)}
+                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold underline decoration-transparent transition hover:decoration-current ${result.tone}`}
+                            >
+                              {result.label}
+                            </button>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                            >
+                              {result.label}
+                            </span>
+                          )}
                           <span className="text-right text-[11px] text-muted-foreground">
                             {formatDateTime(review.updated_at)}
                           </span>
@@ -784,6 +815,48 @@ export function SubmissionDetailClient({
             >
               닫기
             </button>
+          </div>
+        </div>
+      )}
+
+      {radioLinksModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              라디오 신청 링크
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-foreground">
+              {radioLinksModal.stationName
+                ? `${radioLinksModal.stationName} 적격 · 라디오 신청곡 올리기`
+                : "적격 · 라디오 신청곡 올리기"}
+            </h3>
+            <p className="mt-2 text-xs text-muted-foreground">
+              방송사별 라디오 신청곡/사연 접수 페이지로 이동합니다.
+            </p>
+            <ul className="mt-4 space-y-2">
+              {radioSubmissionLinks.map((link) => (
+                <li key={link.url}>
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-foreground"
+                  >
+                    <span>{link.name}</span>
+                    <span className="text-xs text-muted-foreground">새 창에서 열기 ↗</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={closeRadioLinks}
+                className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+              >
+                닫기
+              </button>
+            </div>
           </div>
         </div>
       )}
