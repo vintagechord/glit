@@ -92,6 +92,8 @@ type SubmissionRow = {
   result_memo?: string | null;
   result_notified_at?: string | null;
   applicant_email?: string | null;
+  applicant_name?: string | null;
+  applicant_phone?: string | null;
   created_at: string;
   updated_at: string;
   type: string;
