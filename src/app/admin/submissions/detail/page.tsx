@@ -95,9 +95,8 @@ export default async function AdminSubmissionDetailPage({
         : "";
 
   // Fallback: grab id from referer (e.g., when query is dropped during navigation) or cookie
-  const headerList = headers();
-  const referer =
-    typeof headerList?.get === "function" ? headerList.get("referer") : "";
+  const headerList = await headers();
+  const referer = headerList?.get?.("referer") ?? "";
   const refererId = (() => {
     if (!referer) return "";
     try {
@@ -107,7 +106,7 @@ export default async function AdminSubmissionDetailPage({
       return "";
     }
   })();
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const cookieId =
     cookieStore && typeof cookieStore.get === "function"
       ? cookieStore.get("admin_submission_id")?.value ?? ""
