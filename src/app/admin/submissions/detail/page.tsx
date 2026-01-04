@@ -78,6 +78,23 @@ type SubmissionRow = {
   mv_arranger?: string | null;
   mv_song_memo?: string | null;
   mv_lyrics?: string | null;
+  album_tracks?: Array<{
+    id?: string;
+    track_no?: number;
+    track_title?: string | null;
+    track_title_kr?: string | null;
+    track_title_en?: string | null;
+    track_title_official?: string | null;
+    featuring?: string | null;
+    composer?: string | null;
+    lyricist?: string | null;
+    arranger?: string | null;
+    lyrics?: string | null;
+    notes?: string | null;
+    is_title?: boolean | null;
+    title_role?: string | null;
+    broadcast_selected?: boolean | null;
+  }> | null;
   status: ReviewStatus;
   payment_status: PaymentStatus | null;
   payment_method: string | null;
