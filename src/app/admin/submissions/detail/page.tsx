@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies, headers } from "next/headers";
 
 import {
   paymentStatusLabelMap,
@@ -78,15 +79,42 @@ const paymentMethodLabels: Record<string, string> = {
 
 export default async function AdminSubmissionDetailPage({
   searchParams,
+  params,
 }: {
   searchParams?: { id?: string | string[] };
+  params?: { id?: string };
 }) {
+  const paramId = params?.id;
   const searchId = searchParams?.id;
-  const rawSubmissionId = Array.isArray(searchId)
+  const urlId = Array.isArray(searchId)
     ? searchId.find((v) => typeof v === "string" && uuidPattern.test(v)) ?? ""
     : typeof searchId === "string"
       ? searchId
+      : paramId && uuidPattern.test(paramId)
+        ? paramId
+        : "";
+
+  // Fallback: grab id from referer (e.g., when query is dropped during navigation) or cookie
+  const headerList = headers();
+  const referer =
+    typeof headerList?.get === "function" ? headerList.get("referer") : "";
+  const refererId = (() => {
+    if (!referer) return "";
+    try {
+      const id = new URL(referer).searchParams.get("id");
+      return id && uuidPattern.test(id) ? id : "";
+    } catch {
+      return "";
+    }
+  })();
+  const cookieStore = cookies();
+  const cookieId =
+    cookieStore && typeof cookieStore.get === "function"
+      ? cookieStore.get("admin_submission_id")?.value ?? ""
       : "";
+  const cookieUuid = uuidPattern.test(cookieId) ? cookieId : "";
+
+  const rawSubmissionId = urlId || refererId || cookieUuid;
 
   if (!rawSubmissionId) {
     return (
