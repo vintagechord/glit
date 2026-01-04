@@ -1,13 +1,18 @@
-import { redirect } from "next/navigation";
+import AdminSubmissionDetailPage, {
+  dynamic,
+  metadata,
+  revalidate,
+} from "../detail/page";
 
-export default function AdminSubmissionDetailRedirect({
+export { dynamic, metadata, revalidate };
+
+export default function AdminSubmissionDetailById({
   params,
 }: {
   params: { id: string };
 }) {
-  const id = params?.id;
-  if (id) {
-    redirect(`/admin/submissions/detail?id=${id}`);
-  }
-  redirect("/admin/submissions");
+  return AdminSubmissionDetailPage({
+    params,
+    searchParams: { id: params.id },
+  });
 }

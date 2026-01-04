@@ -300,10 +300,7 @@ export default async function AdminSubmissionsPage({
               <Link
                 key={submission.id}
                 prefetch={false}
-                href={{
-                  pathname: "/admin/submissions/detail",
-                  query: { id: submission.id },
-                }}
+                href={`/admin/submissions/${submission.id}`}
                 className="grid gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 text-sm transition hover:border-foreground md:grid-cols-[1.4fr_1fr_1fr_0.8fr]"
               >
                 <div>
