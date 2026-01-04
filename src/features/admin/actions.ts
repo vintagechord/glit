@@ -13,6 +13,7 @@ import {
 } from "@/constants/review-status";
 import { sendResultEmail } from "@/lib/email";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AdminActionState = {
   error?: string;
@@ -177,7 +178,7 @@ export async function updateSubmissionStatusAction(
     return { error: "입력값을 확인해주세요." };
   }
 
-  const supabase = await createServerSupabase();
+  const supabase = createAdminClient();
   const updatePayload: {
     status: z.infer<typeof reviewStatusEnum>;
     admin_memo: string | null;
@@ -214,8 +215,9 @@ export async function updateSubmissionStatusFormAction(
   formData: FormData,
 ): Promise<void> {
   const rawRatingFilePath = formData.get("mvRatingFilePath");
+  const submissionId = String(formData.get("submissionId") ?? "");
   const result = await updateSubmissionStatusAction({
-    submissionId: String(formData.get("submissionId") ?? ""),
+    submissionId,
     status: String(formData.get("status") ?? "") as z.infer<typeof reviewStatusEnum>,
     adminMemo: String(formData.get("adminMemo") ?? "") || undefined,
     mvRatingFilePath:
@@ -223,6 +225,11 @@ export async function updateSubmissionStatusFormAction(
   });
   if (result.error) {
     console.error(result.error);
+  }
+  revalidatePath("/admin/submissions");
+  if (submissionId) {
+    revalidatePath(`/admin/submissions/${submissionId}`);
+    revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
   }
 }
 
@@ -299,7 +306,7 @@ export async function updatePaymentStatusAction(
     return { error: "입력값을 확인해주세요." };
   }
 
-  const supabase = await createServerSupabase();
+  const supabase = createAdminClient();
   const { data: submission } = await supabase
     .from("submissions")
     .select("status")
@@ -348,6 +355,9 @@ export async function updatePaymentStatusFormAction(
   if (result.error) {
     console.error(result.error);
   }
+
+  revalidatePath("/admin/submissions");
+  revalidatePath(`/admin/submissions/${String(formData.get("submissionId") ?? "")}`);
 }
 
 export async function updateStationReviewAction(
@@ -358,7 +368,7 @@ export async function updateStationReviewAction(
     return { error: "입력값을 확인해주세요." };
   }
 
-  const supabase = await createServerSupabase();
+  const supabase = createAdminClient();
   const { data: review } = await supabase
     .from("station_reviews")
     .select("submission_id")
@@ -401,6 +411,14 @@ export async function updateStationReviewFormAction(
   if (result.error) {
     console.error(result.error);
   }
+
+  revalidatePath("/admin/submissions");
+  const submissionId =
+    String(formData.get("submissionId") ?? "") ||
+    String(formData.get("reviewId") ?? "");
+  if (submissionId) {
+    revalidatePath(`/admin/submissions/${submissionId}`);
+  }
 }
 
 export async function updateSubmissionResultAction(
@@ -411,7 +429,7 @@ export async function updateSubmissionResultAction(
     return { error: "입력값을 확인해주세요." };
   }
 
-  const supabase = await createServerSupabase();
+  const supabase = createAdminClient();
   const { error } = await supabase
     .from("submissions")
     .update({
