@@ -1,5 +1,12 @@
 import Link from "next/link";
 
+import {
+  paymentStatusLabelMap,
+  paymentStatusOptions,
+  resultStatusOptions,
+  reviewStatusLabelMap,
+  reviewStatusOptions,
+} from "@/constants/review-status";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -9,22 +16,7 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-const statusOptions = [
-  { value: "DRAFT", label: "임시 저장" },
-  { value: "SUBMITTED", label: "접수 완료" },
-  { value: "PRE_REVIEW", label: "사전 검토" },
-  { value: "WAITING_PAYMENT", label: "결제 대기" },
-  { value: "IN_PROGRESS", label: "심의 진행" },
-  { value: "RESULT_READY", label: "결과 준비" },
-  { value: "COMPLETED", label: "완료" },
-];
-
-const paymentOptions = [
-  { value: "UNPAID", label: "미결제" },
-  { value: "PAYMENT_PENDING", label: "결제 확인 중" },
-  { value: "PAID", label: "결제 완료" },
-  { value: "REFUNDED", label: "환불" },
-];
+const PAGE_SIZE = 20;
 
 const typeOptions = [
   { value: "ALBUM", label: "음반 심의" },
@@ -33,14 +25,13 @@ const typeOptions = [
 ];
 
 const labelMap = {
-  status: Object.fromEntries(
-    statusOptions.map((option) => [option.value, option.label]),
-  ),
-  payment: Object.fromEntries(
-    paymentOptions.map((option) => [option.value, option.label]),
-  ),
+  status: reviewStatusLabelMap,
+  payment: paymentStatusLabelMap,
   type: Object.fromEntries(
     typeOptions.map((option) => [option.value, option.label]),
+  ),
+  result: Object.fromEntries(
+    (resultStatusOptions ?? []).map((option) => [option.value, option.label]),
   ),
 } as const;
 
@@ -49,6 +40,7 @@ type SubmissionRow = {
   title: string | null;
   artist_name: string | null;
   status: string;
+  result_status?: string | null;
   payment_status: string | null;
   type: string;
   created_at: string;
@@ -71,17 +63,26 @@ export default async function AdminSubmissionsPage({
     q?: string;
     from?: string;
     to?: string;
+    page?: string;
   };
 }) {
   const supabase = await createServerSupabase();
-  const baseSelect =
+  const page =
+    typeof searchParams.page === "string" && Number(searchParams.page) > 1
+      ? Math.floor(Number(searchParams.page))
+      : 1;
+  const offset = (page - 1) * PAGE_SIZE;
+  const baseSelectWithResult =
+    "id, title, artist_name, status, payment_status, result_status, type, created_at, updated_at, amount_krw, package:packages ( name )";
+  const baseSelectWithoutResult =
     "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, package:packages ( name )";
-  const guestSelect = `${baseSelect}, guest_name`;
+  const guestSelectWithResult = `${baseSelectWithResult}, guest_name`;
+  const guestSelectWithoutResult = `${baseSelectWithoutResult}, guest_name`;
 
-  const buildQuery = (selectFields: string) => {
+  const buildQuery = (selectFields: string, includeGuestColumns: boolean) => {
     let query = supabase
       .from("submissions")
-      .select(selectFields)
+      .select(selectFields, { count: "exact" })
       .order("created_at", { ascending: false });
 
     if (searchParams.status) {
@@ -94,9 +95,14 @@ export default async function AdminSubmissionsPage({
       query = query.eq("type", searchParams.type);
     }
     if (searchParams.q) {
-      query = query.or(
-        `title.ilike.%${searchParams.q}%,artist_name.ilike.%${searchParams.q}%`,
-      );
+      const terms = [
+        `title.ilike.%${searchParams.q}%`,
+        `artist_name.ilike.%${searchParams.q}%`,
+      ];
+      if (includeGuestColumns) {
+        terms.push(`guest_name.ilike.%${searchParams.q}%`);
+      }
+      query = query.or(terms.join(","));
     }
     if (searchParams.from) {
       query = query.gte("created_at", `${searchParams.from}T00:00:00.000Z`);
@@ -105,25 +111,60 @@ export default async function AdminSubmissionsPage({
       query = query.lte("created_at", `${searchParams.to}T23:59:59.999Z`);
     }
 
-    return query;
+    return query.range(offset, offset + PAGE_SIZE - 1);
   };
 
   let hasGuestColumns = true;
+  let hasResultStatusColumn = true;
   let submissions: SubmissionRow[] = [];
   let submissionsError = null as { message?: string; code?: string } | null;
-  const guestResult = await buildQuery(guestSelect);
+  let totalCount = 0;
+
+  const guestResult = await buildQuery(guestSelectWithResult, true);
   submissionsError = guestResult.error ?? null;
   submissions = (guestResult.data ?? []) as unknown as SubmissionRow[];
+  totalCount = guestResult.count ?? 0;
 
   if (
     submissionsError?.message?.toLowerCase().includes("guest_name") ||
     submissionsError?.code === "42703"
   ) {
     hasGuestColumns = false;
-    const fallback = await buildQuery(baseSelect);
+    const fallback = await buildQuery(
+      hasResultStatusColumn ? baseSelectWithResult : baseSelectWithoutResult,
+      false,
+    );
     submissions = (fallback.data ?? []) as unknown as SubmissionRow[];
     submissionsError = fallback.error ?? null;
+    totalCount = fallback.count ?? totalCount;
   }
+
+  if (
+    submissionsError?.message?.toLowerCase().includes("result_status") ||
+    submissionsError?.code === "42703"
+  ) {
+    hasResultStatusColumn = false;
+    const fallback = await buildQuery(
+      hasGuestColumns ? guestSelectWithoutResult : baseSelectWithoutResult,
+      hasGuestColumns,
+    );
+    submissions = (fallback.data ?? []) as unknown as SubmissionRow[];
+    submissionsError = fallback.error ?? null;
+    totalCount = fallback.count ?? totalCount;
+  }
+
+  const totalPages =
+    totalCount > 0 ? Math.max(1, Math.ceil(totalCount / PAGE_SIZE)) : 1;
+
+  const buildPageHref = (targetPage: number) => {
+    const params = new URLSearchParams(
+      Object.entries(searchParams).filter(
+        ([, value]) => typeof value === "string" && value.length > 0,
+      ) as Array<[string, string]>,
+    );
+    params.set("page", String(targetPage));
+    return `/admin/submissions?${params.toString()}`;
+  };
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -181,7 +222,7 @@ export default async function AdminSubmissionsPage({
           className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
         >
           <option value="">전체 상태</option>
-          {statusOptions.map((option) => (
+          {reviewStatusOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -193,7 +234,7 @@ export default async function AdminSubmissionsPage({
           className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
         >
           <option value="">결제 상태</option>
-          {paymentOptions.map((option) => (
+          {paymentStatusOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -206,6 +247,36 @@ export default async function AdminSubmissionsPage({
           필터 적용
         </button>
       </form>
+
+      <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          총 {totalCount.toLocaleString()}건 · 페이지 {page} / {totalPages}
+        </span>
+        <div className="flex items-center gap-2">
+          <Link
+            href={buildPageHref(Math.max(1, page - 1))}
+            aria-disabled={page <= 1}
+            className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
+              page <= 1
+                ? "cursor-not-allowed border-border/60 text-muted-foreground"
+                : "border-border/70 text-foreground hover:border-foreground"
+            }`}
+          >
+            이전
+          </Link>
+          <Link
+            href={buildPageHref(Math.min(totalPages, page + 1))}
+            aria-disabled={page >= totalPages}
+            className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] transition ${
+              page >= totalPages
+                ? "cursor-not-allowed border-border/60 text-muted-foreground"
+                : "border-border/70 text-foreground hover:border-foreground"
+            }`}
+          >
+            다음
+          </Link>
+        </div>
+      </div>
 
       <div className="mt-6 space-y-3">
         {submissionsError && (
@@ -225,7 +296,11 @@ export default async function AdminSubmissionsPage({
             return (
               <Link
                 key={submission.id}
-                href={`/admin/submissions/${submission.id}`}
+                prefetch={false}
+                href={{
+                  pathname: "/admin/submissions/detail",
+                  query: { id: submission.id },
+                }}
                 className="grid gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 text-sm transition hover:border-foreground md:grid-cols-[1.4fr_1fr_1fr_0.8fr]"
               >
                 <div>
@@ -245,6 +320,15 @@ export default async function AdminSubmissionsPage({
                   <p>
                     결제: {paymentStatusLabel}
                   </p>
+                  {hasResultStatusColumn && "result_status" in submission ? (
+                    <p>
+                      결과:{" "}
+                      {submission.result_status
+                        ? (labelMap as any).result?.[submission.result_status] ??
+                          submission.result_status
+                        : "-"}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="text-xs text-muted-foreground md:text-right">
                   <p>{packageInfo?.name ?? "-"}</p>
