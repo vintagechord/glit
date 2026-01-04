@@ -30,18 +30,21 @@ export default async function AdminUsersPage() {
   // auth.users에서 이메일을 가져와 병합
   const ids = (data ?? []).map((item) => item.user_id);
   let emailMap = new Map<string, string | null>();
+  let emailError: string | null = null;
   if (ids.length > 0) {
-    const { data: authUsers } = await admin
-      .schema("auth")
-      .from("users")
-      .select("id, email")
-      .in("id", ids);
-    emailMap = new Map(
-      (authUsers ?? []).map((row: { id: string; email: string | null }) => [
-        row.id,
-        row.email,
-      ]),
-    );
+    // Admin API로 직접 조회해 auth schema 접근 오류를 피한다.
+    const { data: listData, error: listError } = await admin.auth.admin.listUsers({
+      perPage: 1000,
+    });
+    if (listError) {
+      emailError = listError.message;
+    } else if (listData?.users) {
+      emailMap = new Map(
+        listData.users
+          .filter((u) => ids.includes(u.id))
+          .map((u) => [u.id, u.email ?? null]),
+      );
+    }
   }
 
   const users: UserRow[] = (data ?? []).map((item) => ({
@@ -74,6 +77,11 @@ export default async function AdminUsersPage() {
       {error && (
         <div className="mt-6 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           회원 정보를 불러오지 못했습니다. ({error.message})
+        </div>
+      )}
+      {emailError && (
+        <div className="mt-4 rounded-2xl border border-amber-400/50 bg-amber-500/10 px-4 py-2 text-xs text-amber-700">
+          이메일 정보를 불러오는 데 문제가 있습니다. ({emailError})
         </div>
       )}
 
