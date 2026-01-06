@@ -308,13 +308,35 @@ export default async function SubmissionDetailPage({
     .eq("submission_id", resolvedSubmission.id)
     .order("created_at", { ascending: false });
 
-  const { data: stationReviews } = await stationReviewsClient
-    .from("station_reviews")
-    .select(
-      "id, status, result_note, updated_at, station:stations ( id, name, code, logo_url )",
-    )
-    .eq("submission_id", resolvedSubmission.id)
-    .order("updated_at", { ascending: false });
+  // 방송국별 진행: logo_url이 없는 스키마에서도 동작하도록 fallback
+  const stationSelectWithLogo =
+    "id, status, result_note, updated_at, station:stations ( id, name, code, logo_url )";
+  const stationSelectBasic =
+    "id, status, result_note, updated_at, station:stations ( id, name, code )";
+
+  let stationReviews: typeof stationReviewsClient extends any ? any[] | null : any = null;
+  let stationError: { code?: string; message?: string } | null = null;
+
+  const runStationFetch = (select: string) =>
+    stationReviewsClient
+      .from("station_reviews")
+      .select(select)
+      .eq("submission_id", resolvedSubmission.id)
+      .order("updated_at", { ascending: false });
+
+  let stationResult = await runStationFetch(stationSelectWithLogo);
+  stationReviews = stationResult.data ?? null;
+  stationError = stationResult.error ?? null;
+
+  if (
+    stationError &&
+    (stationError.code === "42703" ||
+      stationError.message?.toLowerCase().includes("logo_url"))
+  ) {
+    const fallbackResult = await runStationFetch(stationSelectBasic);
+    stationReviews = fallbackResult.data ?? null;
+    stationError = fallbackResult.error ?? null;
+  }
   const normalizedStationReviews =
     stationReviews?.map((review) => ({
       ...review,
@@ -331,7 +353,16 @@ export default async function SubmissionDetailPage({
   return (
     <SubmissionDetailClient
       submissionId={submissionId}
-      initialSubmission={{ ...resolvedSubmission, package: packageInfo ?? null }}
+      initialSubmission={{
+        ...resolvedSubmission,
+        package: packageInfo
+          ? {
+              name: packageInfo.name ?? null,
+              station_count: packageInfo.station_count ?? null,
+              price_krw: packageInfo.price_krw ?? null,
+            }
+          : null,
+      }}
       initialEvents={events ?? []}
       initialStationReviews={normalizedStationReviews}
       initialFiles={submissionFiles ?? []}

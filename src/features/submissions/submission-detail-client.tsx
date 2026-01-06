@@ -308,13 +308,31 @@ export function SubmissionDetailClient({
       setEvents(eventsData);
     }
 
-    const { data: stationData } = await supabase
-      .from("station_reviews")
-      .select(
-        "id, status, result_note, updated_at, station:stations ( id, name, code, logo_url )",
-      )
-      .eq("submission_id", submissionId)
-      .order("updated_at", { ascending: false });
+    const stationSelectWithLogo =
+      "id, status, result_note, updated_at, station:stations ( id, name, code, logo_url )";
+    const stationSelectBasic =
+      "id, status, result_note, updated_at, station:stations ( id, name, code )";
+
+    const runStationFetch = (select: string) =>
+      supabase
+        .from("station_reviews")
+        .select(select)
+        .eq("submission_id", submissionId)
+        .order("updated_at", { ascending: false });
+
+    let stationResult = await runStationFetch(stationSelectWithLogo);
+    let stationData = stationResult.data ?? null;
+    let stationError = stationResult.error ?? null;
+
+    if (
+      stationError &&
+      (stationError.code === "42703" ||
+        stationError.message?.toLowerCase().includes("logo_url"))
+    ) {
+      const fallback = await runStationFetch(stationSelectBasic);
+      stationData = fallback.data ?? null;
+      stationError = fallback.error ?? null;
+    }
 
     if (stationData) {
       setStationReviews(
@@ -439,7 +457,9 @@ export function SubmissionDetailClient({
     lines.push("");
     lines.push("작성 신청서");
     lines.push("-".repeat(24));
-    lines.push(`앨범/영상 제목: ${submission.title || "-"}`);
+    lines.push(
+      `${submission.type === "ALBUM" ? "앨범 제목" : "영상 제목"}: ${submission.title || "-"}`,
+    );
     lines.push(
       `아티스트명: ${submission.artist_name || "-"}${submission.artist_name_kr ? ` / ${submission.artist_name_kr}` : ""}${submission.artist_name_en ? ` / ${submission.artist_name_en}` : ""}`,
     );
@@ -670,7 +690,9 @@ export function SubmissionDetailClient({
       </p>
       <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
         <div>
-          <p className="text-sm text-muted-foreground">앨범/영상 제목</p>
+          <p className="text-sm text-muted-foreground">
+            {submission.type === "ALBUM" ? "앨범 제목" : "영상 제목"}
+          </p>
           <p className="mt-1 font-semibold">{submission.title || "-"}</p>
         </div>
         <div>
