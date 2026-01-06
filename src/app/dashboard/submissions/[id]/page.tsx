@@ -4,10 +4,22 @@ import { SubmissionDetailClient } from "@/features/submissions/submission-detail
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { headers } from "next/headers";
 
 export const metadata = {
   title: "심의 상세",
 };
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const uuidPattern =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+const baseSelect =
+  "id, user_id, title, artist_name, type, status, payment_status, amount_krw, created_at, updated_at, package:packages ( name, station_count, price_krw )";
+const fullSelect =
+  "id, user_id, title, artist_name, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, package:packages ( name, station_count, price_krw )";
 
 export default async function SubmissionDetailPage({
   params,
@@ -16,17 +28,50 @@ export default async function SubmissionDetailPage({
   params?: { id?: string };
   searchParams?: { id?: string | string[] };
 }) {
+  const headerList = await headers();
   const paramId = params?.id;
-  const queryId = Array.isArray(searchParams?.id)
-    ? searchParams?.id?.[0]
-    : searchParams?.id;
-  const rawId = typeof paramId === "string" ? paramId : queryId ?? "";
-  const submissionId = rawId.trim();
+  const searchId = Array.isArray(searchParams?.id)
+    ? searchParams?.id?.find((value) => typeof value === "string" && value.trim().length > 0) ?? ""
+    : searchParams?.id ?? "";
+  const fallbackFromHeaderPath = (() => {
+    const candidates = [
+      headerList.get("x-invoke-path"),
+      headerList.get("x-pathname"),
+      headerList.get("x-forwarded-path"),
+      headerList.get("next-url"),
+      headerList.get("referer"),
+    ].filter(Boolean) as string[];
+    for (const value of candidates) {
+      try {
+        const url = value.includes("://") ? new URL(value) : null;
+        const pathname = url ? url.pathname : value;
+        const parts = pathname.split("/").filter(Boolean);
+        const last = parts[parts.length - 1] ?? "";
+        if (uuidPattern.test(last)) return last;
+        if (url) {
+          const queryId = url.searchParams.get("id");
+          if (queryId && uuidPattern.test(queryId)) return queryId;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return "";
+  })();
+  const rawId =
+    (typeof paramId === "string" && paramId.trim().length > 0 && paramId) ||
+    searchId ||
+    fallbackFromHeaderPath;
+  const submissionId = decodeURIComponent(rawId || "").trim();
 
-  // Debug to catch unexpected ID shapes during navigation
-  console.log("[SubmissionDetailPage] params:", params, "searchParams:", searchParams, "rawId:", rawId);
+  console.log("[Dashboard SubmissionDetail] incoming", {
+    params,
+    searchParams,
+    submissionId,
+    headerIds: { fallbackFromHeaderPath },
+  });
 
-  if (!submissionId) {
+  if (!submissionId || !uuidPattern.test(submissionId)) {
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-12">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -36,6 +81,9 @@ export default async function SubmissionDetailPage({
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           URL에 접수 ID가 포함되어 있는지 확인해주세요.
         </p>
+        <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
+          요청 ID: {submissionId || "입력 없음"}
+        </div>
         <div className="mt-3 flex gap-3">
           <Link
             href="/dashboard/history"
@@ -47,47 +95,76 @@ export default async function SubmissionDetailPage({
       </div>
     );
   }
+
   const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const baseSelect =
-    "id, user_id, title, artist_name, type, status, payment_status, amount_krw, created_at, updated_at, package:packages ( name, station_count, price_krw )";
-  const fullSelect =
-    "id, user_id, title, artist_name, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, package:packages ( name, station_count, price_krw )";
 
-  const fetchSubmission = async (
-    client: typeof supabase,
-    column: "id" | "guest_token",
-    value: string,
-  ) => {
-    const { data, error } = await client
+  const isColumnMissing = (
+    error: { message?: string; code?: string } | null,
+    column: string,
+  ) =>
+    error?.code === "42703" ||
+    error?.code === "PGRST204" ||
+    error?.message?.toLowerCase().includes(column.toLowerCase());
+
+  const isNotFoundError = (error: { message?: string; code?: string } | null) =>
+    error?.code === "PGRST116" ||
+    error?.message?.toLowerCase().includes("row not found") ||
+    error?.message?.toLowerCase().includes("results contain 0 rows");
+
+  const runFetch = async (
+    client: ReturnType<typeof createAdminClient> | Awaited<ReturnType<typeof createServerSupabase>>,
+    select: string,
+  ) =>
+    client
       .from("submissions")
-      .select(fullSelect)
-      .eq(column, value)
+      .select(select)
+      .eq("id", submissionId)
       .maybeSingle();
 
-    if (!error) {
-      return data;
+  const fetchSubmission = async (
+    client: ReturnType<typeof createAdminClient> | Awaited<ReturnType<typeof createServerSupabase>>,
+  ) => {
+    let result = await runFetch(client, fullSelect);
+    let submission = result.data ?? null;
+    let error = result.error ?? null;
+
+    if (submission || isNotFoundError(error)) {
+      return { submission, error };
     }
 
-    if (error.code === "PGRST204") {
-      const { data: fallbackData } = await client
-        .from("submissions")
-        .select(baseSelect)
-        .eq(column, value)
-        .maybeSingle();
-      return fallbackData ?? null;
+    if (isColumnMissing(error, "mv_rating_file_path")) {
+      result = await runFetch(
+        client,
+        fullSelect.replace(", mv_rating_file_path", ""),
+      );
+      submission = result.data ?? null;
+      error = result.error ?? null;
+
+      if (submission || isNotFoundError(error)) {
+        return { submission, error };
+      }
     }
 
-    return null;
+    if (isColumnMissing(error, "payment_method")) {
+      result = await runFetch(client, baseSelect);
+      submission = result.data ?? null;
+      error = result.error ?? null;
+    }
+
+    return { submission, error };
   };
 
   const admin = createAdminClient();
-  const adminSubmission = await fetchSubmission(admin, "id", submissionId);
-  console.log("[SubmissionDetailPage] admin lookup", {
+  const { submission: adminSubmission, error: adminError } =
+    await fetchSubmission(admin);
+
+  console.log("[Dashboard SubmissionDetail] admin lookup", {
     submissionId,
     found: Boolean(adminSubmission),
+    error: adminError?.message,
   });
 
   if (!adminSubmission) {
@@ -119,6 +196,11 @@ export default async function SubmissionDetailPage({
             </Link>
           ) : null}
         </div>
+        {adminError ? (
+          <div className="mt-2 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
+            상세: {adminError.message}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -159,15 +241,16 @@ export default async function SubmissionDetailPage({
     );
   }
 
-  let resolvedSubmission = await fetchSubmission(supabase, "id", submissionId);
-  console.log("[SubmissionDetailPage] user lookup", {
+  const { submission: userSubmission, error: userError } =
+    await fetchSubmission(supabase);
+
+  console.log("[Dashboard SubmissionDetail] user lookup", {
     submissionId,
-    found: Boolean(resolvedSubmission),
+    found: Boolean(userSubmission),
+    error: userError?.message,
   });
 
-  if (!resolvedSubmission) {
-    resolvedSubmission = adminSubmission;
-  }
+  const resolvedSubmission = userSubmission ?? adminSubmission;
   const packageInfo = Array.isArray(resolvedSubmission.package)
     ? resolvedSubmission.package[0]
     : resolvedSubmission.package;
@@ -181,7 +264,7 @@ export default async function SubmissionDetailPage({
     );
   }
 
-  const stationReviewsClient = user ? supabase : admin;
+  const stationReviewsClient = userSubmission ? supabase : admin;
 
   const { data: events } = await supabase
     .from("submission_events")
@@ -202,7 +285,7 @@ export default async function SubmissionDetailPage({
       station: Array.isArray(review.station) ? review.station[0] : review.station,
     })) ?? [];
 
-  const filesClient = user ? supabase : admin;
+  const filesClient = userSubmission ? supabase : admin;
   const { data: submissionFiles } = await filesClient
     .from("submission_files")
     .select("id, kind, file_path, original_name, mime, size, created_at")
@@ -233,7 +316,7 @@ export default async function SubmissionDetailPage({
 
   return (
     <SubmissionDetailClient
-      submissionId={params.id}
+      submissionId={submissionId}
       initialSubmission={{ ...resolvedSubmission, package: packageInfo ?? null }}
       initialEvents={events ?? []}
       initialStationReviews={normalizedStationReviews}

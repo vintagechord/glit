@@ -92,7 +92,7 @@ export async function SiteHeader() {
           <ThemeToggle />
           {user ? (
             <>
-              <form action="/logout" method="post" className="hidden sm:block">
+              <form action="/logout" method="post">
                 <button
                   type="submit"
                   className={ghostButtonClass}
@@ -102,7 +102,7 @@ export async function SiteHeader() {
               </form>
               <Link
                 href="/dashboard"
-                className={`hidden sm:inline-flex ${ghostButtonClass}`}
+                className={ghostButtonClass}
               >
                 마이페이지
               </Link>
