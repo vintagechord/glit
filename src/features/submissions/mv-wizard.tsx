@@ -771,7 +771,7 @@ export function MvWizard({
       : onlineBaseSelected || onlineOptions.length > 0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       {isDraggingOver && (
         <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
       )}
@@ -1453,6 +1453,11 @@ export function MvWizard({
                 )}
               </label>
             </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              파일 첨부가 실패하는 경우 이메일로 영상 파일만 보내주세요.
+              <br />
+              help@vhouse.co.kr
+            </p>
             <div className="mt-4 space-y-3">
               {uploads.map((upload, index) => (
                 <div

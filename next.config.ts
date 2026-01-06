@@ -21,6 +21,10 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "s3.*.backblazeb2.com",
       },
+      {
+        protocol: "https",
+        hostname: "image.genie.co.kr",
+      },
     ],
   },
 };

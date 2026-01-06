@@ -1578,7 +1578,7 @@ export function AlbumWizard({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       {stepLabels}
 
       {step === 1 && (
@@ -1932,6 +1932,28 @@ export function AlbumWizard({
                   </p>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      아티스트명 *
+                    </label>
+                    <input
+                      value={artistName}
+                      onChange={(event) => setArtistName(event.target.value)}
+                      placeholder="발매된 음원의 아티스트명을 입력해주세요."
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      앨범 제목 (선택)
+                    </label>
+                    <input
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                      placeholder="입력하지 않으면 '원클릭 접수'로 표시됩니다."
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       멜론 링크 *
@@ -2018,13 +2040,21 @@ export function AlbumWizard({
                         <p className="mt-1 text-xs opacity-80">
                           {getTrackDisplayTitle(track)}
                         </p>
-                        <div className="mt-2 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em]">
+                        <div
+                          className={`mt-2 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] ${
+                            active ? "text-background" : ""
+                          }`}
+                        >
                           {track.isTitle && (
                             <span
                               className={`rounded-full border px-2 py-1 ${
                                 track.titleRole === "MAIN"
-                                  ? "border-amber-300 text-amber-600 dark:text-amber-200"
-                                  : "border-border/60 text-muted-foreground"
+                                  ? active
+                                    ? "border-amber-200 bg-amber-100 text-amber-900 shadow-sm"
+                                    : "border-amber-400 bg-amber-100 text-amber-800 shadow-sm dark:border-amber-400/70 dark:bg-amber-500/20 dark:text-amber-100"
+                                  : active
+                                    ? "border-border/40 bg-background/90 text-background/80"
+                                    : "border-border/60 bg-background/70 text-muted-foreground"
                               }`}
                             >
                               {track.titleRole === "MAIN"
@@ -2033,7 +2063,13 @@ export function AlbumWizard({
                             </span>
                           )}
                           {track.broadcastSelected && (
-                            <span className="rounded-full border border-emerald-300 px-2 py-1 text-emerald-600 dark:text-emerald-200">
+                            <span
+                              className={`rounded-full border px-2 py-1 ${
+                                active
+                                  ? "border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm"
+                                  : "border-emerald-300 text-emerald-600 dark:text-emerald-200"
+                              }`}
+                            >
                               원음방송
                             </span>
                           )}
@@ -2061,17 +2097,17 @@ export function AlbumWizard({
                           type="checkbox"
                           checked={activeTrack.isTitle}
                           onChange={() => toggleTitleTrack(activeTrackIndex)}
-                          className="h-4 w-4 rounded border-border"
+                          className="h-4 w-4 rounded border-border accent-amber-500"
                         />
                         타이틀
                       </label>
                       {activeTrack.isTitle && (
-                        <label className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 rounded-full border border-amber-400 bg-amber-100/80 px-3 py-1 text-[13px] font-semibold text-amber-900 shadow-sm transition dark:border-amber-400/70 dark:bg-amber-500/20 dark:text-amber-100">
                           <input
                             type="radio"
                             checked={activeTrack.titleRole === "MAIN"}
                             onChange={() => setMainTitleTrack(activeTrackIndex)}
-                            className="h-4 w-4 rounded-full border-border"
+                            className="h-4 w-4 rounded-full border-border accent-amber-500"
                           />
                           메인 타이틀
                         </label>

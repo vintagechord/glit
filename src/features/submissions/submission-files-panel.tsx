@@ -37,15 +37,18 @@ export function SubmissionFilesPanel({
   submissionId,
   files,
   guestToken,
+  canDownload = true,
 }: {
   submissionId: string;
   files: SubmissionFile[];
   guestToken?: string;
+  canDownload?: boolean;
 }) {
   const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   const handleDownload = async (fileId: string) => {
+    if (!canDownload) return;
     setErrorMessage(null);
     setDownloadingId(fileId);
     const result = await getSubmissionFileUrlAction({
@@ -87,14 +90,20 @@ export function SubmissionFilesPanel({
                 {kindLabelMap[file.kind] ?? file.kind} · {formatFileSize(file.size)}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => handleDownload(file.id)}
-              disabled={downloadingId === file.id}
-              className="rounded-full border border-border/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {downloadingId === file.id ? "다운로드 중" : "다운로드"}
-            </button>
+            {canDownload ? (
+              <button
+                type="button"
+                onClick={() => handleDownload(file.id)}
+                disabled={downloadingId === file.id}
+                className="rounded-full border border-border/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {downloadingId === file.id ? "다운로드 중" : "다운로드"}
+              </button>
+            ) : (
+              <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                다운로드는 관리자 전용입니다
+              </span>
+            )}
           </div>
         </div>
       ))}

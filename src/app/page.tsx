@@ -213,10 +213,10 @@ const serviceCards = [
 ];
 
 const processStepTones = [
-  "border-[#f5d067] bg-gradient-to-br from-[#fff7db] via-[#ffe6a8] to-[#f5d067] text-[#5f3b00] shadow-[0_10px_28px_rgba(245,208,103,0.28)]",
-  "border-[#f2b25d] bg-gradient-to-br from-[#fff1da] via-[#ffd79c] to-[#f2b25d] text-[#5d3100] shadow-[0_10px_28px_rgba(242,178,93,0.25)]",
-  "border-[#b3e262] bg-gradient-to-br from-[#f4fbe0] via-[#d8f4b1] to-[#b3e262] text-[#2f4e0f] shadow-[0_10px_28px_rgba(179,226,98,0.24)]",
-  "border-[#3ac268] bg-gradient-to-br from-[#e1f9e8] via-[#b9f0c9] to-[#3ac268] text-[#0f3a21] shadow-[0_12px_32px_rgba(58,194,104,0.28)]",
+  "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
+  "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
+  "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
+  "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
 ];
 
 const serviceCardTones = [

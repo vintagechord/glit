@@ -1,15 +1,24 @@
 import { redirect } from "next/navigation";
 
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import {
+  DashboardShell,
+  statusDashboardTabs,
+  type DashboardTab,
+} from "@/components/dashboard/dashboard-shell";
 import { HomeReviewPanel } from "@/features/home/home-review-panel";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = {
-  title: "마이페이지",
+  title: "진행상황",
 };
 
-export default async function DashboardPage() {
+type ShellConfig = {
+  contextLabel?: string;
+  tabs?: DashboardTab[];
+};
+
+export async function StatusPageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
   const {
     data: { user },
@@ -119,6 +128,8 @@ export default async function DashboardPage() {
       title="접수 현황"
       description="접수한 심의의 현재 상태를 확인할 수 있습니다."
       activeTab="status"
+      tabs={config?.tabs ?? statusDashboardTabs}
+      contextLabel={config?.contextLabel ?? "진행상황"}
     >
       <HomeReviewPanel
         isLoggedIn
@@ -131,4 +142,8 @@ export default async function DashboardPage() {
       />
     </DashboardShell>
   );
+}
+
+export default async function DashboardPage() {
+  return StatusPageView();
 }

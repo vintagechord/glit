@@ -15,14 +15,21 @@ export default async function AdminArtistDetailPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
   searchParams?: { id?: string | string[] };
 }) {
-  const rawParamId = params?.id ?? "";
+  // Next 16: params가 Promise로 전달되므로 먼저 언랩한다.
+  const { id } = await params;
+  const paramId = id ?? "";
   const searchId = Array.isArray(searchParams?.id)
     ? searchParams?.id?.[0]
     : searchParams?.id ?? "";
-  const artistId = rawParamId || searchId;
+  const artistId = paramId || searchId;
+
+  console.log("[Admin ArtistDetail] incoming", {
+    paramId,
+    searchId,
+  });
 
   if (!artistId) {
     return (
@@ -35,8 +42,8 @@ export default async function AdminArtistDetailPage({
           잘못된 아티스트 ID입니다.
         </p>
         <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-          <p>요청 ID: 비어 있음</p>
-          <p>params.id: {rawParamId || "없음"} / searchParams.id: {searchId || "없음"}</p>
+          <p>요청 ID: {artistId || "비어 있음"}</p>
+          <p>params.id: {paramId || "없음"} / searchParams.id: {searchId || "없음"}</p>
         </div>
         <div className="mt-3">
           <Link

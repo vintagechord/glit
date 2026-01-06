@@ -1,13 +1,22 @@
 import { redirect } from "next/navigation";
 
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import {
+  DashboardShell,
+  defaultDashboardTabs,
+  type DashboardTab,
+} from "@/components/dashboard/dashboard-shell";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = {
   title: "크레딧",
 };
 
-export default async function DashboardCreditsPage() {
+type ShellConfig = {
+  contextLabel?: string;
+  tabs?: DashboardTab[];
+};
+
+export async function CreditsPageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
   const {
     data: { user },
@@ -28,6 +37,8 @@ export default async function DashboardCreditsPage() {
       title="크레딧"
       description="노래방 등록 추천을 위한 크레딧 현황을 확인합니다."
       activeTab="credits"
+      tabs={config?.tabs ?? defaultDashboardTabs}
+      contextLabel={config?.contextLabel ?? "마이페이지"}
     >
       <div className="grid gap-6 md:grid-cols-2">
         <div className="rounded-[32px] border border-border/60 bg-card/80 p-6">
@@ -53,4 +64,8 @@ export default async function DashboardCreditsPage() {
       </div>
     </DashboardShell>
   );
+}
+
+export default function DashboardCreditsPage() {
+  redirect("/mypage/credits");
 }

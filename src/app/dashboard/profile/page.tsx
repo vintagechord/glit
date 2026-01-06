@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import {
+  DashboardShell,
+  defaultDashboardTabs,
+  type DashboardTab,
+} from "@/components/dashboard/dashboard-shell";
 import { ProfileForm } from "@/features/profile/profile-form";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -8,7 +12,12 @@ export const metadata = {
   title: "계정 정보",
 };
 
-export default async function DashboardProfilePage() {
+type ShellConfig = {
+  contextLabel?: string;
+  tabs?: DashboardTab[];
+};
+
+export async function ProfilePageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
   const {
     data: { user },
@@ -29,6 +38,8 @@ export default async function DashboardProfilePage() {
       title="계정 정보"
       description="담당자 정보를 최신 상태로 유지해주세요."
       activeTab="profile"
+      tabs={config?.tabs ?? defaultDashboardTabs}
+      contextLabel={config?.contextLabel ?? "마이페이지"}
     >
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[32px] border border-border/60 bg-card/80 p-6">
@@ -69,4 +80,8 @@ export default async function DashboardProfilePage() {
       </div>
     </DashboardShell>
   );
+}
+
+export default function DashboardProfilePage() {
+  redirect("/mypage/profile");
 }

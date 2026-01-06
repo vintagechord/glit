@@ -1,14 +1,21 @@
 import Image from "next/image";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import {
+  DashboardShell,
+  statusDashboardTabs,
+} from "@/components/dashboard/dashboard-shell";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = {
   title: "아티스트 상세",
 };
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const typeLabels: Record<string, string> = {
   ALBUM: "음반 심의",
@@ -43,8 +50,9 @@ type SubmissionRow = {
 export default async function DashboardArtistDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const supabase = await createServerSupabase();
   const {
     data: { user },
@@ -54,19 +62,69 @@ export default async function DashboardArtistDetailPage({
     redirect("/login");
   }
 
-  const artistId = params?.id;
+  const uuidPattern =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+  const rawId = id?.trim();
+  const artistId = rawId && uuidPattern.test(rawId) ? rawId : "";
+
+  console.log("[Dashboard ArtistDetail] incoming", {
+    params: { id },
+    artistId,
+  });
+
   if (!artistId) {
-    notFound();
+    return (
+      <div className="mx-auto w-full max-w-4xl px-6 py-12">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          Artist
+        </p>
+        <h1 className="font-display mt-2 text-2xl text-foreground">
+          아티스트 ID가 전달되지 않았습니다.
+        </h1>
+        <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
+          요청 ID: {artistId || "없음"}
+        </div>
+        <div className="mt-3">
+          <Link
+            href="/dashboard/history"
+            className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+          >
+            나의 심의 내역으로 돌아가기
+          </Link>
+        </div>
+      </div>
+    );
   }
 
-  const { data: artist } = await supabase
+  // Fetch artist via admin client to avoid permission gaps
+  const admin = createAdminClient();
+  const { data: artist } = await admin
     .from("artists")
     .select("id, name, thumbnail_url, created_at, updated_at")
     .eq("id", artistId)
     .maybeSingle();
 
   if (!artist) {
-    notFound();
+    return (
+      <div className="mx-auto w-full max-w-4xl px-6 py-12">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          Artist
+        </p>
+        <h1 className="font-display mt-2 text-2xl text-foreground">아티스트 정보를 찾을 수 없습니다.</h1>
+        <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
+          요청 ID: {artistId}
+        </div>
+        <div className="mt-3">
+          <Link
+            href="/dashboard/history"
+            className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+          >
+            나의 심의 내역으로 돌아가기
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   const { data: submissions } = await supabase
@@ -85,6 +143,8 @@ export default async function DashboardArtistDetailPage({
       title={artist.name}
       description="해당 아티스트의 접수 내역을 확인합니다."
       activeTab="history"
+      tabs={statusDashboardTabs}
+      contextLabel="진행상황"
     >
       <div className="space-y-6">
         <div className="flex items-center gap-3 rounded-[28px] border border-border/60 bg-card/80 p-4">

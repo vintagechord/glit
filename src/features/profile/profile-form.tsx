@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 import { updateProfileAction, type ActionState } from "@/features/auth/actions";
 
@@ -16,6 +17,16 @@ const initialState: ActionState = {};
 
 export function ProfileForm({ defaultValues }: ProfileFormProps) {
   const [state, formAction] = useActionState(updateProfileAction, initialState);
+  const router = useRouter();
+  const hasRefreshed = useRef(false);
+
+  // After a successful save, refresh to pull updated profile values back into the form
+  useEffect(() => {
+    if (state?.message && !hasRefreshed.current) {
+      hasRefreshed.current = true;
+      router.refresh();
+    }
+  }, [state?.message, router]);
 
   return (
     <form action={formAction} className="space-y-4">

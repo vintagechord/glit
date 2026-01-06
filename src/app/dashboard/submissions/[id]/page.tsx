@@ -1,10 +1,10 @@
 import Link from "next/link";
+import type { PostgrestError } from "@supabase/supabase-js";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
-import { headers } from "next/headers";
 
 export const metadata = {
   title: "심의 상세",
@@ -17,58 +17,94 @@ const uuidPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 const baseSelect =
-  "id, user_id, title, artist_name, type, status, payment_status, amount_krw, created_at, updated_at, package:packages ( name, station_count, price_krw )";
-const fullSelect =
-  "id, user_id, title, artist_name, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, package:packages ( name, station_count, price_krw )";
+  "id, user_id, artist_id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )";
+const fullSelect = baseSelect;
+
+type SubmissionRow = {
+  id: string;
+  user_id: string | null;
+  artist_id?: string | null;
+  title: string | null;
+  artist_name: string | null;
+  artist_name_kr?: string | null;
+  artist_name_en?: string | null;
+  type: string;
+  status: string;
+  payment_status: string | null;
+  payment_method?: string | null;
+  amount_krw: number | null;
+  mv_rating_file_path?: string | null;
+  created_at: string;
+  updated_at: string;
+  release_date?: string | null;
+  genre?: string | null;
+  distributor?: string | null;
+  production_company?: string | null;
+  previous_release?: string | null;
+  artist_type?: string | null;
+  artist_gender?: string | null;
+  artist_members?: string | null;
+  melon_url?: string | null;
+  mv_runtime?: string | null;
+  mv_format?: string | null;
+  mv_director?: string | null;
+  mv_lead_actor?: string | null;
+  mv_storyline?: string | null;
+  mv_production_company?: string | null;
+  mv_agency?: string | null;
+  mv_album_title?: string | null;
+  mv_production_date?: string | null;
+  mv_distribution_company?: string | null;
+  mv_business_reg_no?: string | null;
+  mv_usage?: string | null;
+  mv_desired_rating?: string | null;
+  mv_memo?: string | null;
+  mv_song_title?: string | null;
+  mv_song_title_kr?: string | null;
+  mv_song_title_en?: string | null;
+  mv_song_title_official?: string | null;
+  mv_composer?: string | null;
+  mv_lyricist?: string | null;
+  mv_arranger?: string | null;
+  mv_song_memo?: string | null;
+  mv_lyrics?: string | null;
+  applicant_name?: string | null;
+  applicant_email?: string | null;
+  applicant_phone?: string | null;
+  package?:
+    | Array<{ name?: string | null; station_count?: number | null; price_krw?: number | null }>
+    | { name?: string | null; station_count?: number | null; price_krw?: number | null }
+    | null;
+  album_tracks?:
+    | Array<{
+        track_no?: number | null;
+        track_title?: string | null;
+        track_title_kr?: string | null;
+        track_title_en?: string | null;
+        composer?: string | null;
+        lyricist?: string | null;
+        arranger?: string | null;
+        lyrics?: string | null;
+        is_title?: boolean | null;
+        title_role?: string | null;
+        broadcast_selected?: boolean | null;
+      }>
+    | null;
+};
 
 export default async function SubmissionDetailPage({
   params,
-  searchParams,
 }: {
-  params?: { id?: string };
-  searchParams?: { id?: string | string[] };
+  params: Promise<{ id: string }>;
 }) {
-  const headerList = await headers();
-  const paramId = params?.id;
-  const searchId = Array.isArray(searchParams?.id)
-    ? searchParams?.id?.find((value) => typeof value === "string" && value.trim().length > 0) ?? ""
-    : searchParams?.id ?? "";
-  const fallbackFromHeaderPath = (() => {
-    const candidates = [
-      headerList.get("x-invoke-path"),
-      headerList.get("x-pathname"),
-      headerList.get("x-forwarded-path"),
-      headerList.get("next-url"),
-      headerList.get("referer"),
-    ].filter(Boolean) as string[];
-    for (const value of candidates) {
-      try {
-        const url = value.includes("://") ? new URL(value) : null;
-        const pathname = url ? url.pathname : value;
-        const parts = pathname.split("/").filter(Boolean);
-        const last = parts[parts.length - 1] ?? "";
-        if (uuidPattern.test(last)) return last;
-        if (url) {
-          const queryId = url.searchParams.get("id");
-          if (queryId && uuidPattern.test(queryId)) return queryId;
-        }
-      } catch {
-        continue;
-      }
-    }
-    return "";
-  })();
-  const rawId =
-    (typeof paramId === "string" && paramId.trim().length > 0 && paramId) ||
-    searchId ||
-    fallbackFromHeaderPath;
-  const submissionId = decodeURIComponent(rawId || "").trim();
+  const { id } = await params;
+  const rawId = id?.trim();
+  const submissionId = rawId && uuidPattern.test(rawId) ? rawId : "";
 
+  // 디버그용: params.id만 검사 (추후 headers/search fallback 복원 가능)
   console.log("[Dashboard SubmissionDetail] incoming", {
-    params,
-    searchParams,
+    params: { id },
     submissionId,
-    headerIds: { fallbackFromHeaderPath },
   });
 
   if (!submissionId || !uuidPattern.test(submissionId)) {
@@ -126,9 +162,9 @@ export default async function SubmissionDetailPage({
 
   const fetchSubmission = async (
     client: ReturnType<typeof createAdminClient> | Awaited<ReturnType<typeof createServerSupabase>>,
-  ) => {
+  ): Promise<{ submission: SubmissionRow | null; error: PostgrestError | null }> => {
     let result = await runFetch(client, fullSelect);
-    let submission = result.data ?? null;
+    let submission = (result.data ?? null) as SubmissionRow | null;
     let error = result.error ?? null;
 
     if (submission || isNotFoundError(error)) {
@@ -140,7 +176,7 @@ export default async function SubmissionDetailPage({
         client,
         fullSelect.replace(", mv_rating_file_path", ""),
       );
-      submission = result.data ?? null;
+      submission = (result.data ?? null) as SubmissionRow | null;
       error = result.error ?? null;
 
       if (submission || isNotFoundError(error)) {
@@ -150,7 +186,7 @@ export default async function SubmissionDetailPage({
 
     if (isColumnMissing(error, "payment_method")) {
       result = await runFetch(client, baseSelect);
-      submission = result.data ?? null;
+      submission = (result.data ?? null) as SubmissionRow | null;
       error = result.error ?? null;
     }
 
@@ -275,7 +311,7 @@ export default async function SubmissionDetailPage({
   const { data: stationReviews } = await stationReviewsClient
     .from("station_reviews")
     .select(
-      "id, status, result_note, updated_at, station:stations ( id, name, code )",
+      "id, status, result_note, updated_at, station:stations ( id, name, code, logo_url )",
     )
     .eq("submission_id", resolvedSubmission.id)
     .order("updated_at", { ascending: false });
@@ -292,28 +328,6 @@ export default async function SubmissionDetailPage({
     .eq("submission_id", resolvedSubmission.id)
     .order("created_at", { ascending: false });
 
-  const isOwner = Boolean(user && resolvedSubmission.user_id === user.id);
-  let creditBalance = 0;
-  let promotion = null;
-
-  if (isOwner && user) {
-    const { data: creditRow } = await supabase
-      .from("karaoke_credits")
-      .select("balance")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    creditBalance = creditRow?.balance ?? 0;
-
-    const { data: promotionRow } = await supabase
-      .from("karaoke_promotions")
-      .select(
-        "id, status, credits_balance, credits_required, tj_enabled, ky_enabled, reference_url",
-      )
-      .eq("submission_id", resolvedSubmission.id)
-      .maybeSingle();
-    promotion = promotionRow ?? null;
-  }
-
   return (
     <SubmissionDetailClient
       submissionId={submissionId}
@@ -321,9 +335,6 @@ export default async function SubmissionDetailPage({
       initialEvents={events ?? []}
       initialStationReviews={normalizedStationReviews}
       initialFiles={submissionFiles ?? []}
-      creditBalance={creditBalance}
-      promotion={promotion}
-      canManagePromotion={isOwner}
     />
   );
 }

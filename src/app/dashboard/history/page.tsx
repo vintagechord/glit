@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import {
+  DashboardShell,
+  statusDashboardTabs,
+  type DashboardTab,
+} from "@/components/dashboard/dashboard-shell";
 import { ArtistHistoryTabs } from "@/components/dashboard/artist-history";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -40,7 +44,12 @@ type SubmissionRow = {
   }> | null;
 };
 
-export default async function HistoryPage() {
+type ShellConfig = {
+  contextLabel?: string;
+  tabs?: DashboardTab[];
+};
+
+export async function HistoryPageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
   const {
     data: { user },
@@ -140,8 +149,14 @@ export default async function HistoryPage() {
       title="나의 심의 내역"
       description="심의 기록을 발매 음원 단위로 확인합니다."
       activeTab="history"
+      tabs={config?.tabs ?? statusDashboardTabs}
+      contextLabel={config?.contextLabel ?? "진행상황"}
     >
       <ArtistHistoryTabs albumGroups={albumGroups} mvGroups={mvGroups} />
     </DashboardShell>
   );
+}
+
+export default async function HistoryPage() {
+  return HistoryPageView();
 }

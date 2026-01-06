@@ -1,9 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-
-import { contributeKaraokePromotionAction } from "@/features/karaoke/actions";
 import { getMvRatingFileUrlAction } from "@/features/submissions/actions";
 import {
   SubmissionFilesPanel,
@@ -16,6 +13,8 @@ type Submission = {
   id: string;
   title: string | null;
   artist_name: string | null;
+  artist_name_kr?: string | null;
+  artist_name_en?: string | null;
   type: string;
   status: string;
   payment_status: string;
@@ -24,11 +23,59 @@ type Submission = {
   created_at: string;
   updated_at: string;
   mv_rating_file_path?: string | null;
+  release_date?: string | null;
+  genre?: string | null;
+  distributor?: string | null;
+  production_company?: string | null;
+  previous_release?: string | null;
+  artist_type?: string | null;
+  artist_gender?: string | null;
+  artist_members?: string | null;
+  melon_url?: string | null;
+  mv_runtime?: string | null;
+  mv_format?: string | null;
+  mv_director?: string | null;
+  mv_lead_actor?: string | null;
+  mv_storyline?: string | null;
+  mv_production_company?: string | null;
+  mv_agency?: string | null;
+  mv_album_title?: string | null;
+  mv_production_date?: string | null;
+  mv_distribution_company?: string | null;
+  mv_business_reg_no?: string | null;
+  mv_usage?: string | null;
+  mv_desired_rating?: string | null;
+  mv_memo?: string | null;
+  mv_song_title?: string | null;
+  mv_song_title_kr?: string | null;
+  mv_song_title_en?: string | null;
+  mv_song_title_official?: string | null;
+  mv_composer?: string | null;
+  mv_lyricist?: string | null;
+  mv_arranger?: string | null;
+  mv_song_memo?: string | null;
+  mv_lyrics?: string | null;
+  applicant_name?: string | null;
+  applicant_email?: string | null;
+  applicant_phone?: string | null;
   package?: {
     name: string | null;
     station_count: number | null;
     price_krw: number | null;
   } | null;
+  album_tracks?: Array<{
+    track_no?: number | null;
+    track_title?: string | null;
+    track_title_kr?: string | null;
+    track_title_en?: string | null;
+    composer?: string | null;
+    lyricist?: string | null;
+    arranger?: string | null;
+    lyrics?: string | null;
+    is_title?: boolean | null;
+    title_role?: string | null;
+    broadcast_selected?: boolean | null;
+  }> | null;
 };
 
 type SubmissionEvent = {
@@ -47,17 +94,8 @@ type StationReview = {
     id: string;
     name: string | null;
     code: string | null;
+    logo_url?: string | null;
   } | null;
-};
-
-type PromotionInfo = {
-  id: string;
-  status: string;
-  credits_balance: number;
-  credits_required: number;
-  tj_enabled: boolean;
-  ky_enabled: boolean;
-  reference_url: string | null;
 };
 
 const statusLabels: Record<string, string> = {
@@ -161,9 +199,6 @@ export function SubmissionDetailClient({
   initialFiles,
   initialEvents,
   initialStationReviews,
-  promotion,
-  creditBalance = 0,
-  canManagePromotion = false,
   enableRealtime = true,
   guestToken,
 }: {
@@ -172,9 +207,6 @@ export function SubmissionDetailClient({
   initialFiles: SubmissionFile[];
   initialEvents: SubmissionEvent[];
   initialStationReviews: StationReview[];
-  promotion?: PromotionInfo | null;
-  creditBalance?: number;
-  canManagePromotion?: boolean;
   enableRealtime?: boolean;
   guestToken?: string;
 }) {
@@ -182,7 +214,6 @@ export function SubmissionDetailClient({
     () => (enableRealtime ? createClient() : null),
     [enableRealtime],
   );
-  const router = useRouter();
   const [submission, setSubmission] =
     React.useState<Submission>(initialSubmission);
   const [events, setEvents] = React.useState<SubmissionEvent[]>(
@@ -194,20 +225,6 @@ export function SubmissionDetailClient({
   const [files, setFiles] = React.useState<SubmissionFile[]>(
     initialFiles ?? [],
   );
-  const [promotionCredits, setPromotionCredits] = React.useState(1);
-  const [tjEnabled, setTjEnabled] = React.useState(
-    promotion?.tj_enabled ?? true,
-  );
-  const [kyEnabled, setKyEnabled] = React.useState(
-    promotion?.ky_enabled ?? true,
-  );
-  const [referenceUrl, setReferenceUrl] = React.useState(
-    promotion?.reference_url ?? "",
-  );
-  const [promotionNotice, setPromotionNotice] = React.useState<{
-    error?: string;
-    message?: string;
-  }>({});
   const [ratingFileNotice, setRatingFileNotice] = React.useState<{
     error?: string;
   }>({});
@@ -220,8 +237,6 @@ export function SubmissionDetailClient({
   const [radioLinksModal, setRadioLinksModal] = React.useState<{
     stationName?: string;
   } | null>(null);
-  const [isPromotionSubmitting, setIsPromotionSubmitting] =
-    React.useState(false);
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
@@ -230,6 +245,19 @@ export function SubmissionDetailClient({
   const isResultReady =
     submission.status === "RESULT_READY" || submission.status === "COMPLETED";
   const isPaymentDone = submission.payment_status === "PAID";
+  const albumTracks = submission.album_tracks ?? [];
+  const artistTypeLabel =
+    submission.artist_type === "GROUP"
+      ? "그룹"
+      : submission.artist_type === "SOLO"
+        ? "솔로"
+        : submission.artist_type ?? "-";
+  const artistGenderLabel =
+    submission.artist_gender === "MALE"
+      ? "남"
+      : submission.artist_gender === "FEMALE"
+        ? "여"
+        : submission.artist_gender || "-";
   const flowIndex = (() => {
     if (submission.status === "DRAFT") return 0;
     if (!isPaymentDone) return 0;
@@ -239,25 +267,19 @@ export function SubmissionDetailClient({
     return 1;
   })();
 
-  React.useEffect(() => {
-    if (!promotion) return;
-    setTjEnabled(promotion.tj_enabled);
-    setKyEnabled(promotion.ky_enabled);
-    setReferenceUrl(promotion.reference_url ?? "");
-  }, [promotion]);
-
   const openRadioLinks = (stationName?: string) => {
     setRadioLinksModal({ stationName });
   };
 
   const closeRadioLinks = () => setRadioLinksModal(null);
+  const [isTimelineOpen, setIsTimelineOpen] = React.useState(false);
 
   const fetchLatest = React.useCallback(async () => {
     if (!supabase) return;
     const { data: submissionData } = await supabase
       .from("submissions")
       .select(
-        "id, title, artist_name, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, package:packages ( name, station_count, price_krw )",
+        "id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )",
       )
       .eq("id", submissionId)
       .maybeSingle();
@@ -266,7 +288,14 @@ export function SubmissionDetailClient({
       const nextPackage = Array.isArray(submissionData.package)
         ? submissionData.package[0]
         : submissionData.package;
-      setSubmission({ ...submissionData, package: nextPackage ?? null });
+      const nextTracks = Array.isArray(submissionData.album_tracks)
+        ? submissionData.album_tracks
+        : [];
+      setSubmission({
+        ...submissionData,
+        package: nextPackage ?? null,
+        album_tracks: nextTracks,
+      });
     }
 
     const { data: eventsData } = await supabase
@@ -282,7 +311,7 @@ export function SubmissionDetailClient({
     const { data: stationData } = await supabase
       .from("station_reviews")
       .select(
-        "id, status, result_note, updated_at, station:stations ( id, name, code )",
+        "id, status, result_note, updated_at, station:stations ( id, name, code, logo_url )",
       )
       .eq("submission_id", submissionId)
       .order("updated_at", { ascending: false });
@@ -360,42 +389,6 @@ export function SubmissionDetailClient({
     };
   }, [enableRealtime, fetchLatest, submissionId, supabase]);
 
-  const handlePromotionSubmit = async () => {
-    if (promotionCredits <= 0) {
-      setPromotionNotice({ error: "사용할 크레딧을 입력해주세요." });
-      return;
-    }
-    if (creditBalance < promotionCredits) {
-      setPromotionNotice({ error: "보유한 크레딧이 부족합니다." });
-      return;
-    }
-    if (!tjEnabled && !kyEnabled) {
-      setPromotionNotice({ error: "노출 대상(태진/금영)을 선택해주세요." });
-      return;
-    }
-
-    setIsPromotionSubmitting(true);
-    setPromotionNotice({});
-    const result = await contributeKaraokePromotionAction({
-      submissionId,
-      credits: promotionCredits,
-      tjEnabled,
-      kyEnabled,
-      referenceUrl: referenceUrl.trim() || undefined,
-    });
-
-    if (result.error) {
-      setPromotionNotice({ error: result.error });
-      setIsPromotionSubmitting(false);
-      return;
-    }
-
-    setPromotionNotice({ message: result.message });
-    setPromotionCredits(1);
-    setIsPromotionSubmitting(false);
-    router.refresh();
-  };
-
   const handleRatingFileDownload = async () => {
     setRatingFileNotice({});
     setIsRatingDownloading(true);
@@ -434,32 +427,79 @@ export function SubmissionDetailClient({
       }`,
     );
     lines.push(`결제 상태: ${submission.payment_status || "-"}`);
-    lines.push(`결제 방식: ${submission.payment_method ? paymentMethodLabels[submission.payment_method] ?? submission.payment_method : "-"}`);
+    lines.push(
+      `결제 방식: ${
+        submission.payment_method
+          ? paymentMethodLabels[submission.payment_method] ?? submission.payment_method
+          : "-"
+      }`,
+    );
     lines.push(`접수 일시: ${formatDateTime(submission.created_at)}`);
     lines.push(`최근 업데이트: ${formatDateTime(submission.updated_at)}`);
     lines.push("");
-    lines.push("방송국별 진행");
+    lines.push("작성 신청서");
     lines.push("-".repeat(24));
-    if (stationReviews.length > 0) {
-      stationReviews.forEach((review) => {
-        const reception = getReviewReception(review.status);
-        const result = getReviewResult(review.status);
-        lines.push(
-          `- ${review.station?.name ?? "-"} | 접수: ${reception.label} | 결과: ${result.label} | 업데이트: ${formatDateTime(review.updated_at)}`,
-        );
-      });
+    lines.push(`앨범/영상 제목: ${submission.title || "-"}`);
+    lines.push(
+      `아티스트명: ${submission.artist_name || "-"}${submission.artist_name_kr ? ` / ${submission.artist_name_kr}` : ""}${submission.artist_name_en ? ` / ${submission.artist_name_en}` : ""}`,
+    );
+    lines.push(`신청자: ${submission.applicant_name || "-"}`);
+    lines.push(`신청자 연락처: ${submission.applicant_phone || "-"}`);
+    lines.push(`신청자 이메일: ${submission.applicant_email || "-"}`);
+    lines.push(`유통사: ${submission.distributor || "-"}`);
+    lines.push(`제작사: ${submission.production_company || "-"}`);
+    lines.push(
+      `발매일: ${submission.release_date ? formatDateTime(submission.release_date) : "-"}`,
+    );
+    lines.push(`장르: ${submission.genre || "-"}`);
+    lines.push(`이전 발매: ${submission.previous_release || "-"}`);
+    lines.push(`그룹/솔로: ${artistTypeLabel}`);
+    lines.push(`성별: ${artistGenderLabel}`);
+    lines.push(`멤버: ${submission.artist_members || "-"}`);
+    lines.push(`멜론 링크: ${submission.melon_url || "-"}`);
+    if (isMvSubmission) {
+      lines.push(`러닝타임: ${submission.mv_runtime || "-"}`);
+      lines.push(`포맷: ${submission.mv_format || "-"}`);
+      lines.push(`감독: ${submission.mv_director || "-"}`);
+      lines.push(`주연: ${submission.mv_lead_actor || "-"}`);
+      lines.push(`스토리라인: ${submission.mv_storyline || "-"}`);
+      lines.push(`제작사: ${submission.mv_production_company || "-"}`);
+      lines.push(`에이전시: ${submission.mv_agency || "-"}`);
+      lines.push(`앨범 제목: ${submission.mv_album_title || "-"}`);
+      lines.push(
+        `제작일: ${submission.mv_production_date ? formatDateTime(submission.mv_production_date) : "-"}`,
+      );
+      lines.push(`배급사: ${submission.mv_distribution_company || "-"}`);
+      lines.push(`사업자등록번호: ${submission.mv_business_reg_no || "-"}`);
+      lines.push(`용도: ${submission.mv_usage || "-"}`);
+      lines.push(`희망 등급: ${submission.mv_desired_rating || "-"}`);
+      lines.push(
+        `곡 제목: ${submission.mv_song_title || submission.mv_song_title_kr || submission.mv_song_title_en || "-"}`,
+      );
+      lines.push(
+        `작곡/작사/편곡: ${submission.mv_composer || "-"} / ${submission.mv_lyricist || "-"} / ${submission.mv_arranger || "-"}`,
+      );
+      lines.push(`메모: ${submission.mv_memo || "-"}`);
+      lines.push(`가사: ${submission.mv_lyrics || "-"}`);
     } else {
-      lines.push("- 방송국 진행 정보가 없습니다.");
+      lines.push(`아티스트 유형: ${artistTypeLabel}`);
+      lines.push(`이전 발매: ${submission.previous_release || "-"}`);
     }
-    lines.push("");
-    lines.push("타임라인");
-    lines.push("-".repeat(16));
-    if (events.length > 0) {
-      events.forEach((event) => {
-        lines.push(`- [${formatDateTime(event.created_at)}] ${event.event_type}${event.message ? `: ${event.message}` : ""}`);
+    if (!isMvSubmission && albumTracks.length > 0) {
+      lines.push("");
+      lines.push("트랙 리스트");
+      lines.push("-".repeat(16));
+      albumTracks.forEach((track, index) => {
+        lines.push(
+          `${track.track_no ?? index + 1}. ${track.track_title || track.track_title_kr || track.track_title_en || "제목 미입력"}${track.is_title ? " · 타이틀" : ""}`,
+        );
+        lines.push(
+          `   작곡 ${track.composer || "-"} / 작사 ${track.lyricist || "-"} / 편곡 ${track.arranger || "-"}`,
+        );
+        if (track.lyrics) {
+          lines.push(`   가사: ${track.lyrics}`);
+        }
       });
-    } else {
-      lines.push("- 등록된 이벤트가 없습니다.");
     }
     return lines.join("\n");
   };
@@ -497,7 +537,7 @@ export function SubmissionDetailClient({
         <button
           type="button"
           onClick={handleDownloadText}
-          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
+          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
         >
           신청 내역 TXT 다운로드
         </button>
@@ -509,21 +549,21 @@ export function SubmissionDetailClient({
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               접수 정보
             </p>
-            <div className="mt-4 grid gap-4 text-sm text-foreground md:grid-cols-2">
+            <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
               <div>
-                <p className="text-xs text-muted-foreground">패키지</p>
+                <p className="text-sm text-muted-foreground">패키지</p>
                 <p className="mt-1 font-semibold">
                   {packageInfo?.name ?? "-"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">방송국 수</p>
+                <p className="text-sm text-muted-foreground">방송국 수</p>
                 <p className="mt-1 font-semibold">
                   {packageInfo?.station_count ?? "-"}곳
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">금액</p>
+                <p className="text-sm text-muted-foreground">금액</p>
                 <p className="mt-1 font-semibold">
                   {submission.amount_krw
                     ? `${formatCurrency(submission.amount_krw)}원`
@@ -533,13 +573,13 @@ export function SubmissionDetailClient({
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">결제 상태</p>
+                <p className="text-sm text-muted-foreground">결제 상태</p>
                 <p className="mt-1 font-semibold">
                   {submission.payment_status}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">결제 방식</p>
+                <p className="text-sm text-muted-foreground">결제 방식</p>
                 <p className="mt-1 font-semibold">
                   {submission.payment_method
                     ? paymentMethodLabels[submission.payment_method] ??
@@ -548,20 +588,20 @@ export function SubmissionDetailClient({
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">접수 일시</p>
+                <p className="text-sm text-muted-foreground">접수 일시</p>
                 <p className="mt-1 font-semibold">
                   {formatDateTime(submission.created_at)}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">최근 업데이트</p>
+                <p className="text-sm text-muted-foreground">최근 업데이트</p>
                 <p className="mt-1 font-semibold">
                   {formatDateTime(submission.updated_at)}
                 </p>
               </div>
               {isMvSubmission && (
                 <div className="md:col-span-2">
-                  <p className="text-xs text-muted-foreground">등급분류 파일</p>
+                  <p className="text-sm text-muted-foreground">등급분류 파일</p>
                   {isResultReady && submission.mv_rating_file_path ? (
                     <div className="mt-2 flex flex-wrap items-center gap-3">
                       <button
@@ -589,18 +629,6 @@ export function SubmissionDetailClient({
               )}
             </div>
           </div>
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              첨부 파일
-            </p>
-            <div className="mt-4">
-              <SubmissionFilesPanel
-                submissionId={submissionId}
-                files={files}
-                guestToken={guestToken}
-              />
-            </div>
-          </div>
         </div>
         <div className="space-y-6">
           <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
@@ -608,7 +636,7 @@ export function SubmissionDetailClient({
               주문 진행 상태
             </p>
             <div className="mt-4 space-y-4">
-              <div className="grid gap-3 text-xs text-muted-foreground sm:grid-cols-4">
+              <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-4">
                 {flowSteps.map((label, index) => {
                   const isActive = index <= flowIndex;
                   return (
@@ -633,151 +661,248 @@ export function SubmissionDetailClient({
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              타임라인
-            </p>
-            <div className="mt-4 space-y-3">
-              {events && events.length > 0 ? (
-                events.map((event) => (
-                  <div
-                    key={event.id}
-                    className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-xs"
-                  >
-                    <div className="flex items-center justify-between text-foreground">
-                      <span className="font-semibold">{event.event_type}</span>
-                      <span className="text-muted-foreground">
-                        {formatDateTime(event.created_at)}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-muted-foreground">{event.message}</p>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
-                  아직 등록된 이벤트가 없습니다.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
+    </div>
 
-      {canManagePromotion && (
-        <div className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              노래방 추천 노출
-            </p>
-            <h2 className="mt-3 text-xl font-semibold text-foreground">
-              크레딧으로 추천 노출을 활성화하세요.
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              추천 인증이 완료되면 크레딧이 소진되고 추천자가 크레딧을 받습니다.
-            </p>
-            <div className="mt-4 grid gap-4 text-sm text-muted-foreground sm:grid-cols-2">
-              <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  내 크레딧
-                </p>
-                <p className="mt-2 text-xl font-semibold text-foreground">
-                  {creditBalance} 크레딧
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  노출 크레딧
-                </p>
-                <p className="mt-2 text-xl font-semibold text-foreground">
-                  {promotion?.credits_balance ?? 0} 크레딧
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  최소 {promotion?.credits_required ?? 10} 크레딧 필요
-                </p>
-              </div>
+    <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
+      <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        작성 신청서
+      </p>
+      <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
+        <div>
+          <p className="text-sm text-muted-foreground">앨범/영상 제목</p>
+          <p className="mt-1 font-semibold">{submission.title || "-"}</p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">아티스트명</p>
+          <p className="mt-1 font-semibold">
+            {submission.artist_name || "-"}
+            {submission.artist_name_kr ? ` / ${submission.artist_name_kr}` : ""}
+            {submission.artist_name_en ? ` / ${submission.artist_name_en}` : ""}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">신청자</p>
+          <p className="mt-1 font-semibold">
+            {submission.applicant_name || "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">신청자 연락처</p>
+          <p className="mt-1 font-semibold">
+            {submission.applicant_phone || "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">신청자 이메일</p>
+          <p className="mt-1 font-semibold">
+            {submission.applicant_email || "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">유통사</p>
+          <p className="mt-1 font-semibold">
+            {submission.distributor || "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">제작사</p>
+          <p className="mt-1 font-semibold">
+            {submission.production_company || "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">발매일</p>
+          <p className="mt-1 font-semibold">
+            {submission.release_date ? formatDateTime(submission.release_date) : "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">장르</p>
+          <p className="mt-1 font-semibold">
+            {submission.genre || "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">이전 발매</p>
+          <p className="mt-1 font-semibold">
+            {submission.previous_release || "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">그룹/솔로</p>
+          <p className="mt-1 font-semibold">{artistTypeLabel}</p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">성별</p>
+          <p className="mt-1 font-semibold">{artistGenderLabel}</p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">멤버</p>
+          <p className="mt-1 font-semibold">
+            {submission.artist_members || "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-muted-foreground">멜론 링크</p>
+          <p className="mt-1 font-semibold">
+            {submission.melon_url || "-"}
+          </p>
+        </div>
+        {isMvSubmission ? (
+          <>
+            <div>
+              <p className="text-xs text-muted-foreground">러닝타임</p>
+              <p className="mt-1 font-semibold">{submission.mv_runtime || "-"}</p>
             </div>
-          </div>
-
-          <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              크레딧 사용
-            </p>
-            <div className="mt-4 space-y-4 text-sm text-muted-foreground">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  사용 크레딧
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  value={promotionCredits}
-                  onChange={(event) =>
-                    setPromotionCredits(Number(event.target.value))
-                  }
-                  className="mt-2 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  음원 링크
-                </label>
-                <input
-                  value={referenceUrl}
-                  onChange={(event) => setReferenceUrl(event.target.value)}
-                  placeholder="https://"
-                  className="mt-2 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  추천 참여자가 확인할 음원 링크를 입력하세요.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <label className="flex items-center gap-2 rounded-full border border-border/70 px-3 py-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={tjEnabled}
-                    onChange={() => setTjEnabled((prev) => !prev)}
-                    className="h-4 w-4 rounded border-border"
-                  />
-                  태진
-                </label>
-                <label className="flex items-center gap-2 rounded-full border border-border/70 px-3 py-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={kyEnabled}
-                    onChange={() => setKyEnabled((prev) => !prev)}
-                    className="h-4 w-4 rounded border-border"
-                  />
-                  금영
-                </label>
-              </div>
-              {promotionNotice.error && (
-                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-                  {promotionNotice.error}
+            <div>
+              <p className="text-xs text-muted-foreground">포맷</p>
+              <p className="mt-1 font-semibold">{submission.mv_format || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">감독</p>
+              <p className="mt-1 font-semibold">{submission.mv_director || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">주연</p>
+              <p className="mt-1 font-semibold">{submission.mv_lead_actor || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">스토리라인</p>
+              <p className="mt-1 font-semibold">{submission.mv_storyline || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">제작사</p>
+              <p className="mt-1 font-semibold">{submission.mv_production_company || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">에이전시</p>
+              <p className="mt-1 font-semibold">{submission.mv_agency || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">앨범 제목</p>
+              <p className="mt-1 font-semibold">{submission.mv_album_title || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">제작일</p>
+              <p className="mt-1 font-semibold">
+                {submission.mv_production_date ? formatDateTime(submission.mv_production_date) : "-"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">배급사</p>
+              <p className="mt-1 font-semibold">{submission.mv_distribution_company || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">사업자등록번호</p>
+              <p className="mt-1 font-semibold">{submission.mv_business_reg_no || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">용도</p>
+              <p className="mt-1 font-semibold">{submission.mv_usage || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">희망 등급</p>
+              <p className="mt-1 font-semibold">{submission.mv_desired_rating || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">곡 제목</p>
+              <p className="mt-1 font-semibold">
+                {submission.mv_song_title ||
+                  submission.mv_song_title_kr ||
+                  submission.mv_song_title_en ||
+                  "-"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">작곡/작사/편곡</p>
+              <p className="mt-1 font-semibold">
+                {submission.mv_composer || "-"} / {submission.mv_lyricist || "-"} /{" "}
+                {submission.mv_arranger || "-"}
+              </p>
+            </div>
+            <div className="md:col-span-2">
+              <p className="text-xs text-muted-foreground">메모</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+                {submission.mv_memo || "-"}
+              </p>
+            </div>
+            {submission.mv_lyrics ? (
+              <div className="md:col-span-2">
+                <p className="text-xs text-muted-foreground">가사</p>
+                <div className="mt-2 whitespace-pre-wrap rounded-2xl border border-border/60 bg-background/70 p-3 text-sm text-foreground">
+                  {submission.mv_lyrics}
                 </div>
-              )}
-              {promotionNotice.message && (
-                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
-                  {promotionNotice.message}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="text-xs text-muted-foreground">아티스트 유형</p>
+              <p className="mt-1 font-semibold">{artistTypeLabel}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">이전 발매</p>
+              <p className="mt-1 font-semibold">
+                {submission.previous_release || "-"}
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+      {!isMvSubmission && albumTracks.length > 0 ? (
+        <div className="mt-5 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            트랙 리스트
+          </p>
+          <div className="rounded-2xl border border-border/60 bg-background/70 p-3 text-sm">
+            <div className="divide-y divide-border/60">
+              {albumTracks.map((track, index) => (
+                <div key={`${track.track_no ?? index}-${track.track_title ?? index}`} className="py-2">
+                  <p className="font-semibold text-foreground">
+                    {track.track_no ?? index + 1}.{" "}
+                    {track.track_title || track.track_title_kr || track.track_title_en || "제목 미입력"}
+                    {track.is_title ? " · 타이틀" : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} / 편곡{" "}
+                    {track.arranger || "-"}
+                  </p>
+                  {track.lyrics ? (
+                    <details className="mt-1 text-xs text-muted-foreground">
+                      <summary className="cursor-pointer">가사 보기</summary>
+                      <div className="mt-1 whitespace-pre-wrap text-foreground">
+                        {track.lyrics}
+                      </div>
+                    </details>
+                  ) : null}
                 </div>
-              )}
-              <button
-                type="button"
-                onClick={handlePromotionSubmit}
-                disabled={isPromotionSubmitting}
-                className="w-full rounded-full bg-foreground px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-foreground/90 disabled:cursor-not-allowed disabled:bg-muted"
-              >
-                크레딧 사용하기
-              </button>
+              ))}
             </div>
           </div>
         </div>
-      )}
+      ) : null}
+    </div>
 
-      <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            방송국별 진행표
+    <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
+      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        첨부 파일
+      </p>
+      <div className="mt-4">
+        <SubmissionFilesPanel
+          submissionId={submissionId}
+          files={files}
+          guestToken={guestToken}
+          canDownload={false}
+        />
+      </div>
+    </div>
+
+    <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          방송국별 진행표
           </p>
           <span className="text-xs text-muted-foreground">
             업데이트: {formatDateTime(submission.updated_at)}
@@ -808,13 +933,29 @@ export function SubmissionDetailClient({
                           key={review.id}
                           className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 px-4 py-3 text-xs"
                         >
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-foreground">
-                              {review.station?.name ?? "-"}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">
-                              {review.station?.code ?? ""}
-                            </p>
+                          <div className="min-w-0 flex items-center gap-2">
+                            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-background/60">
+                              {review.station?.logo_url ? (
+                                // 로고 이미지가 있으면 표시
+                                <img
+                                  src={review.station.logo_url}
+                                  alt={review.station.name ?? "station logo"}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-sm font-semibold text-foreground">
+                                  {(review.station?.name || "S").charAt(0)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-foreground">
+                                {review.station?.name ?? "-"}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {review.station?.code ?? ""}
+                              </p>
+                            </div>
                           </div>
                           <span
                             className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
@@ -870,6 +1011,49 @@ export function SubmissionDetailClient({
             </div>
           )}
         </div>
+      </div>
+
+      <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            타임라인
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsTimelineOpen((prev) => !prev)}
+            className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+          >
+            {isTimelineOpen ? "접기" : "펼치기"}
+          </button>
+        </div>
+        {isTimelineOpen ? (
+          <div className="mt-4 space-y-3">
+            {events && events.length > 0 ? (
+              events.map((event) => (
+                <div
+                  key={event.id}
+                  className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-xs"
+                >
+                  <div className="flex items-center justify-between text-foreground">
+                    <span className="font-semibold">{event.event_type}</span>
+                    <span className="text-muted-foreground">
+                      {formatDateTime(event.created_at)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-muted-foreground">{event.message}</p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
+                아직 등록된 이벤트가 없습니다.
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-muted-foreground">
+            심의 진행 중 발생한 이벤트를 확인하려면 펼치기를 눌러주세요.
+          </p>
+        )}
       </div>
 
       {activeResultNote && (

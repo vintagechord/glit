@@ -132,16 +132,16 @@ export default async function AlbumSubmissionPage() {
     })) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12">
+    <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             Album Review
           </p>
           <h1 className="font-display mt-2 text-3xl text-foreground">
             음반 심의 접수
           </h1>
-          <p className="mt-3 text-sm text-muted-foreground">
+          <p className="mt-3 text-base text-muted-foreground">
             비회원도 접수할 수 있으며, 로그인 시 마이페이지에서 진행 상황을
             확인할 수 있습니다.
           </p>

@@ -35,7 +35,7 @@ const statusTone: Record<string, string> = {
 function StatusChip({ value }: { value: string }) {
   const tone = statusTone[value] ?? "bg-border/60 text-foreground";
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${tone}`}>
+    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.2em] ${tone}`}>
       {value}
     </span>
   );
@@ -69,20 +69,22 @@ function ArtistCard({ group }: { group: ArtistGroup }) {
         <div className="flex items-center gap-3">
           <Thumbnail name={group.artistName} src={group.thumbnail} />
           <div>
-            <p className="text-base font-semibold text-foreground">{group.artistName}</p>
-            <p className="text-xs text-muted-foreground">총 {group.submissions.length}건 접수</p>
+            <p className="max-w-[12rem] truncate text-base font-semibold text-foreground md:max-w-[14rem]">
+              {group.artistName}
+            </p>
+            <p className="text-sm text-muted-foreground">총 {group.submissions.length}건 접수</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {group.artistId ? (
             <Link
               href={`/dashboard/artists/${group.artistId}`}
-              className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
+              className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground whitespace-nowrap"
             >
               아티스트 상세
             </Link>
           ) : null}
-          <span className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <span className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground whitespace-nowrap">
             {open ? "접기" : "보기"}
           </span>
         </div>
@@ -101,7 +103,7 @@ function ArtistCard({ group }: { group: ArtistGroup }) {
                   <p className="truncate font-semibold text-foreground">
                     {item.title || "제목 미입력"}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground truncate">
                     접수일 {formatDate(item.created_at)}
                   </p>
                 </div>
