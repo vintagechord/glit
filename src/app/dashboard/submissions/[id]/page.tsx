@@ -350,20 +350,22 @@ export default async function SubmissionDetailPage({
     .eq("submission_id", resolvedSubmission.id)
     .order("created_at", { ascending: false });
 
+  const initialSubmission = {
+    ...resolvedSubmission,
+    payment_status: resolvedSubmission.payment_status ?? "",
+    package: packageInfo
+      ? {
+          name: packageInfo.name ?? null,
+          station_count: packageInfo.station_count ?? null,
+          price_krw: packageInfo.price_krw ?? null,
+        }
+      : null,
+  };
+
   return (
     <SubmissionDetailClient
       submissionId={submissionId}
-      initialSubmission={{
-        ...resolvedSubmission,
-        payment_status: resolvedSubmission.payment_status ?? "",
-        package: packageInfo
-          ? {
-              name: packageInfo.name ?? null,
-              station_count: packageInfo.station_count ?? null,
-              price_krw: packageInfo.price_krw ?? null,
-            }
-          : null,
-      }}
+      initialSubmission={initialSubmission as any}
       initialEvents={events ?? []}
       initialStationReviews={normalizedStationReviews}
       initialFiles={submissionFiles ?? []}

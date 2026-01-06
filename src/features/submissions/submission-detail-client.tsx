@@ -335,14 +335,15 @@ export function SubmissionDetailClient({
     }
 
     if (stationData) {
-      setStationReviews(
-        stationData.map((review) => ({
+      const normalizedStations = (Array.isArray(stationData) ? stationData : []).map(
+        (review) => ({
           ...review,
           station: Array.isArray(review.station)
             ? review.station[0]
             : review.station,
-        })),
+        }),
       );
+      setStationReviews(normalizedStations);
     }
 
     const { data: fileData } = await supabase
