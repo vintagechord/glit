@@ -5,7 +5,6 @@ import {
   paymentStatusLabelMap,
   paymentStatusOptions,
   resultStatusLabelMap,
-  resultStatusOptions,
   reviewStatusLabelMap,
   reviewStatusOptions,
   stationReviewStatusOptions,
@@ -18,8 +17,6 @@ import {
   updatePaymentStatusFormAction,
   updateStationReviewFormAction,
   updateSubmissionStatusFormAction,
-  updateSubmissionResultFormAction,
-  notifySubmissionResultAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
@@ -262,7 +259,6 @@ export default async function AdminSubmissionDetailPage({
 
   let hasGuestColumns = true;
   let hasResultColumns = true;
-  let hasApplicantColumns = true;
   let submission: SubmissionRow | null = null;
   let submissionError: { message?: string; code?: string } | null = null;
 
@@ -316,7 +312,6 @@ export default async function AdminSubmissionDetailPage({
   }
 
   if (isColumnMissing(submissionError, "applicant_email")) {
-    hasApplicantColumns = false;
     const select = hasResultColumns
       ? baseSelectWithResult.replace(", applicant_email", "")
       : baseSelectWithoutResult.replace(", applicant_email", "");

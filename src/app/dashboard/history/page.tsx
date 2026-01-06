@@ -114,6 +114,10 @@ export default async function HistoryPage() {
       { artistId: string | null; artistName: string; thumbnail: string | null; submissions: SubmissionRow[] }
     >();
     for (const s of filtered) {
+      if (!s.id) {
+        console.warn("[HistoryPage] submission without id skipped", s);
+        continue;
+      }
       const key = s.artist?.id ?? s.artist_id ?? s.artist_name ?? s.id;
       if (!map.has(key)) {
         map.set(key, {

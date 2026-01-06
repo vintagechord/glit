@@ -201,17 +201,24 @@ const stationLogoSources: Array<{
   { patterns: ["G1", "GFM"], src: "/station-logos/g1.svg", alt: "G1" },
 ];
 
-function StationLogo({ name }: { name?: string | null }) {
+function StationLogo({
+  name,
+  hideOnMobile = false,
+}: {
+  name?: string | null;
+  hideOnMobile?: boolean;
+}) {
   const key = (name ?? "").trim().toUpperCase();
   const logoSource = stationLogoSources.find((entry) =>
     entry.patterns.some(
       (pattern) => key === pattern || key.startsWith(pattern),
     ),
   );
+  const visibilityClass = hideOnMobile ? "hidden sm:inline-flex" : "inline-flex";
 
   if (logoSource) {
     return (
-      <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-white shadow-sm">
+      <span className={`${visibilityClass} h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-white shadow-sm`}>
         <Image
           src={logoSource.src}
           alt={logoSource.alt}
@@ -226,7 +233,7 @@ function StationLogo({ name }: { name?: string | null }) {
   const badge = stationBadgeMap[key] ?? { label: key || "-", color: "#111", bg: "#e5e7eb" };
   return (
     <span
-      className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold uppercase"
+      className={`${visibilityClass} h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold uppercase`}
       style={{ color: badge.color, backgroundColor: badge.bg }}
       aria-hidden
     >
@@ -695,7 +702,7 @@ export function HomeReviewPanel({
                           className="grid h-10 grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 text-[11px]"
                         >
                           <span className="flex items-center gap-2 truncate font-semibold text-foreground">
-                            <StationLogo name={station.station?.name ?? undefined} />
+                            <StationLogo name={station.station?.name ?? undefined} hideOnMobile />
                             <span className="truncate">{station.station?.name ?? "-"}</span>
                           </span>
                           <span

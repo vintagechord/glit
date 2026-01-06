@@ -27,15 +27,19 @@ const typeOptions = [
   { value: "MV_BROADCAST", label: "M/V 심의 (TV 송출)" },
 ];
 
+const typeLabelMap: Record<string, string> = Object.fromEntries(
+  typeOptions.map((option) => [option.value, option.label]),
+);
+
+const resultLabelMap: Record<string, string> = Object.fromEntries(
+  (resultStatusOptions ?? []).map((option) => [option.value, option.label]),
+);
+
 const labelMap = {
   status: reviewStatusLabelMap,
   payment: paymentStatusLabelMap,
-  type: Object.fromEntries(
-    typeOptions.map((option) => [option.value, option.label]),
-  ),
-  result: Object.fromEntries(
-    (resultStatusOptions ?? []).map((option) => [option.value, option.label]),
-  ),
+  type: typeLabelMap,
+  result: resultLabelMap,
 } as const;
 
 type SubmissionRow = {
@@ -327,7 +331,7 @@ export default async function AdminSubmissionsPage({
                     <p>
                       결과:{" "}
                       {submission.result_status
-                        ? (labelMap as any).result?.[submission.result_status] ??
+                        ? labelMap.result[submission.result_status] ??
                           submission.result_status
                         : "-"}
                     </p>

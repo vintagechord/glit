@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -12,13 +13,18 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminArtistDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { id?: string | string[] };
 }) {
-  const artistId = params?.id;
-  const uuidPattern =
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-  if (!artistId || !uuidPattern.test(artistId)) {
+  const rawParamId = params?.id ?? "";
+  const searchId = Array.isArray(searchParams?.id)
+    ? searchParams?.id?.[0]
+    : searchParams?.id ?? "";
+  const artistId = rawParamId || searchId;
+
+  if (!artistId) {
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -28,6 +34,10 @@ export default async function AdminArtistDetailPage({
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           잘못된 아티스트 ID입니다.
         </p>
+        <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+          <p>요청 ID: 비어 있음</p>
+          <p>params.id: {rawParamId || "없음"} / searchParams.id: {searchId || "없음"}</p>
+        </div>
         <div className="mt-3">
           <Link
             href="/admin/artists"
@@ -59,6 +69,9 @@ export default async function AdminArtistDetailPage({
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           아티스트 정보를 불러올 수 없습니다. ({error?.message ?? "not found"})
         </p>
+        <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
+          요청 ID: {artistId}
+        </div>
         <div className="mt-3">
           <Link
             href="/admin/artists"
@@ -78,11 +91,15 @@ export default async function AdminArtistDetailPage({
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           {artist.thumbnail_url ? (
-            <img
-              src={artist.thumbnail_url}
-              alt={artist.name}
-              className="h-16 w-16 rounded-2xl object-cover"
-            />
+            <div className="relative h-16 w-16 overflow-hidden rounded-2xl">
+              <Image
+                src={artist.thumbnail_url}
+                alt={artist.name}
+                fill
+                sizes="64px"
+                className="object-cover"
+              />
+            </div>
           ) : (
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-200 via-lime-200 to-emerald-400 text-lg font-bold text-emerald-900">
               {(artist.name || "A").charAt(0).toUpperCase()}

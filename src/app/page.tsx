@@ -213,10 +213,10 @@ const serviceCards = [
 ];
 
 const processStepTones = [
-  "border-black bg-gradient-to-br from-[#0f0f0f] via-[#1a1a1a] to-[#2a2a2a] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
-  "border-black bg-gradient-to-br from-[#121212] via-[#1c1c1c] to-[#2b2b2b] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
-  "border-black bg-gradient-to-br from-[#141414] via-[#1f1f1f] to-[#303030] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
-  "border-black bg-gradient-to-br from-[#161616] via-[#222222] to-[#333333] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
+  "border-[#f5d067] bg-gradient-to-br from-[#fff7db] via-[#ffe6a8] to-[#f5d067] text-[#5f3b00] shadow-[0_10px_28px_rgba(245,208,103,0.28)]",
+  "border-[#f2b25d] bg-gradient-to-br from-[#fff1da] via-[#ffd79c] to-[#f2b25d] text-[#5d3100] shadow-[0_10px_28px_rgba(242,178,93,0.25)]",
+  "border-[#b3e262] bg-gradient-to-br from-[#f4fbe0] via-[#d8f4b1] to-[#b3e262] text-[#2f4e0f] shadow-[0_10px_28px_rgba(179,226,98,0.24)]",
+  "border-[#3ac268] bg-gradient-to-br from-[#e1f9e8] via-[#b9f0c9] to-[#3ac268] text-[#0f3a21] shadow-[0_12px_32px_rgba(58,194,104,0.28)]",
 ];
 
 const serviceCardTones = [
@@ -417,7 +417,7 @@ export default async function Home() {
             {hasHeroVideo ? (
               <>
                 <video
-                  className="hidden h-full w-full object-cover opacity-100 saturate-[1.2] brightness-[0.9] contrast-[1.25] dark:opacity-75 dark:saturate-[1.35] dark:brightness-[1.15] dark:contrast-[1.12] sm:block"
+                  className="hidden h-full w-full object-cover opacity-100 saturate-[1.05] brightness-[0.72] contrast-[1.2] dark:opacity-80 dark:saturate-[1.35] dark:brightness-[1.12] dark:contrast-[1.12] sm:block"
                   poster={heroVideoPoster}
                   autoPlay
                   muted
@@ -428,7 +428,7 @@ export default async function Home() {
                   <source src={heroVideoDesktop} type="video/mp4" />
                 </video>
                 <video
-                  className="h-full w-full object-cover object-right opacity-100 saturate-[1.2] brightness-[0.9] contrast-[1.25] dark:opacity-75 dark:saturate-[1.35] dark:brightness-[1.15] dark:contrast-[1.12] sm:hidden"
+                  className="h-full w-full object-cover object-right opacity-100 saturate-[1.05] brightness-[0.72] contrast-[1.2] dark:opacity-80 dark:saturate-[1.35] dark:brightness-[1.12] dark:contrast-[1.12] sm:hidden"
                   poster={heroVideoPoster}
                   autoPlay
                   muted
@@ -442,7 +442,7 @@ export default async function Home() {
             ) : (
               <div className="h-full w-full bg-gradient-to-br from-[#d8ecff]/80 via-white/80 to-[#f3eaff]/70 dark:from-amber-300/10 dark:via-white/5 dark:to-indigo-300/10" />
             )}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/20 via-black/5 to-transparent dark:from-background/75 dark:via-background/35" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/35 via-black/15 to-black/5 dark:from-background/80 dark:via-background/40" />
           </div>
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-10 px-6 py-10 lg:grid-cols-[1.05fr_0.95fr]">

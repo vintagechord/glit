@@ -126,6 +126,12 @@ const flowSteps = [
   "결과 확인",
 ];
 
+const submissionTypeLabels: Record<string, string> = {
+  ALBUM: "음반 심의",
+  MV_DISTRIBUTION: "M/V 심의 (유통/온라인)",
+  MV_BROADCAST: "M/V 심의 (TV 송출)",
+};
+
 const radioSubmissionLinks: Array<{ name: string; url: string }> = [
   { name: "KBS Cool FM 신청곡/사연 접수", url: "https://program.kbs.co.kr/pc/fm" },
   { name: "MBC 라디오 미니(사연/신청곡)", url: "https://mini.imbc.com/" },
@@ -408,6 +414,67 @@ export function SubmissionDetailClient({
     setIsRatingDownloading(false);
   };
 
+  const buildSubmissionText = () => {
+    const lines: string[] = [];
+    lines.push("GLIT 신청 내역");
+    lines.push("=".repeat(40));
+    lines.push(`제목: ${submission.title || "제목 미입력"}`);
+    lines.push(`아티스트: ${submission.artist_name || "아티스트 미입력"}`);
+    lines.push(`접수 ID: ${submission.id}`);
+    lines.push(`접수 유형: ${submissionTypeLabels[submission.type] ?? submission.type}`);
+    lines.push(`패키지: ${packageInfo?.name ?? "-"}`);
+    lines.push(`방송국 수: ${packageInfo?.station_count ?? "-"}`);
+    lines.push(
+      `금액: ${
+        submission.amount_krw
+          ? `${formatCurrency(submission.amount_krw)}원`
+          : packageInfo?.price_krw
+            ? `${formatCurrency(packageInfo.price_krw)}원`
+            : "-"
+      }`,
+    );
+    lines.push(`결제 상태: ${submission.payment_status || "-"}`);
+    lines.push(`결제 방식: ${submission.payment_method ? paymentMethodLabels[submission.payment_method] ?? submission.payment_method : "-"}`);
+    lines.push(`접수 일시: ${formatDateTime(submission.created_at)}`);
+    lines.push(`최근 업데이트: ${formatDateTime(submission.updated_at)}`);
+    lines.push("");
+    lines.push("방송국별 진행");
+    lines.push("-".repeat(24));
+    if (stationReviews.length > 0) {
+      stationReviews.forEach((review) => {
+        const reception = getReviewReception(review.status);
+        const result = getReviewResult(review.status);
+        lines.push(
+          `- ${review.station?.name ?? "-"} | 접수: ${reception.label} | 결과: ${result.label} | 업데이트: ${formatDateTime(review.updated_at)}`,
+        );
+      });
+    } else {
+      lines.push("- 방송국 진행 정보가 없습니다.");
+    }
+    lines.push("");
+    lines.push("타임라인");
+    lines.push("-".repeat(16));
+    if (events.length > 0) {
+      events.forEach((event) => {
+        lines.push(`- [${formatDateTime(event.created_at)}] ${event.event_type}${event.message ? `: ${event.message}` : ""}`);
+      });
+    } else {
+      lines.push("- 등록된 이벤트가 없습니다.");
+    }
+    return lines.join("\n");
+  };
+
+  const handleDownloadText = () => {
+    const content = buildSubmissionText();
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `submission-${submission.id}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -425,6 +492,15 @@ export function SubmissionDetailClient({
         <div className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground">
           {statusLabels[submission.status] ?? submission.status}
         </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={handleDownloadText}
+          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
+        >
+          신청 내역 TXT 다운로드
+        </button>
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">

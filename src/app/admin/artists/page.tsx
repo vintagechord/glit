@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -108,11 +109,15 @@ export default async function AdminArtistsPage({
                 >
                   <td className="px-4 py-3">
                     {artist.thumbnail_url ? (
-                      <img
-                        src={artist.thumbnail_url}
-                        alt={artist.name}
-                        className="h-12 w-12 rounded-xl object-cover"
-                      />
+                      <div className="relative h-12 w-12 overflow-hidden rounded-xl">
+                        <Image
+                          src={artist.thumbnail_url}
+                          alt={artist.name}
+                          fill
+                          sizes="48px"
+                          className="object-cover"
+                        />
+                      </div>
                     ) : (
                       <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-200 via-lime-200 to-emerald-400 text-sm font-semibold text-emerald-900">
                         {(artist.name || "A").charAt(0).toUpperCase()}

@@ -73,29 +73,50 @@ function ArtistCard({ group }: { group: ArtistGroup }) {
             <p className="text-xs text-muted-foreground">총 {group.submissions.length}건 접수</p>
           </div>
         </div>
-        <span className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          {open ? "접기" : "보기"}
-        </span>
+        <div className="flex items-center gap-2">
+          {group.artistId ? (
+            <Link
+              href={`/dashboard/artists/${group.artistId}`}
+              className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
+            >
+              아티스트 상세
+            </Link>
+          ) : null}
+          <span className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            {open ? "접기" : "보기"}
+          </span>
+        </div>
       </button>
       {open && (
         <div className="mt-3 space-y-2 rounded-2xl border border-border/60 bg-background/70 p-3">
           {group.submissions.map((item) => (
-            <Link
-              key={item.id}
-              href={`/admin/submissions/detail?id=${item.id}`}
-              prefetch={false}
-              className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/80 px-3 py-2 text-sm transition hover:border-foreground"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-semibold text-foreground">
-                  {item.title || "제목 미입력"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  접수일 {formatDate(item.created_at)}
-                </p>
+            item.id ? (
+              <Link
+                key={item.id}
+                href={`/dashboard/submissions/${encodeURIComponent(item.id)}`}
+                prefetch={false}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/80 px-3 py-2 text-sm transition hover:border-foreground"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-foreground">
+                    {item.title || "제목 미입력"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    접수일 {formatDate(item.created_at)}
+                  </p>
+                </div>
+                <StatusChip value={item.status} />
+              </Link>
+            ) : (
+              <div
+                key={`${group.artistName}-${item.title ?? "unknown"}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-red-400/40 bg-red-500/5 px-3 py-2 text-sm text-red-700"
+              >
+                <span className="truncate">
+                  ID가 없는 항목입니다. 관리자에게 문의해주세요.
+                </span>
               </div>
-              <StatusChip value={item.status} />
-            </Link>
+            )
           ))}
         </div>
       )}
@@ -110,7 +131,22 @@ export function ArtistHistoryTabs({
   albumGroups: ArtistGroup[];
   mvGroups: ArtistGroup[];
 }) {
-  const [tab, setTab] = React.useState<"ALBUM" | "MV">("ALBUM");
+  const initialTab =
+    albumGroups.length > 0 ? "ALBUM" : mvGroups.length > 0 ? "MV" : "ALBUM";
+  const [tab, setTab] = React.useState<"ALBUM" | "MV">(initialTab);
+
+  React.useEffect(() => {
+    setTab((prev) => {
+      if (prev === "ALBUM" && albumGroups.length === 0 && mvGroups.length > 0) {
+        return "MV";
+      }
+      if (prev === "MV" && mvGroups.length === 0 && albumGroups.length > 0) {
+        return "ALBUM";
+      }
+      return prev;
+    });
+  }, [albumGroups.length, mvGroups.length]);
+
   const groups = tab === "ALBUM" ? albumGroups : mvGroups;
 
   return (
