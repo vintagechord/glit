@@ -26,6 +26,20 @@ const statusLabels: Record<string, string> = {
   COMPLETED: "완료",
 };
 
+type SubmissionRow = {
+  id: string;
+  title: string | null;
+  status: string;
+  type: string;
+  payment_status?: string | null;
+  created_at: string;
+  updated_at: string | null;
+  package?:
+    | Array<{ name?: string | null; station_count?: number | null }>
+    | { name?: string | null; station_count?: number | null }
+    | null;
+};
+
 export default async function DashboardArtistDetailPage({
   params,
 }: {
@@ -64,7 +78,7 @@ export default async function DashboardArtistDetailPage({
     .eq("artist_id", artistId)
     .order("created_at", { ascending: false });
 
-  const list = submissions ?? [];
+  const list = (submissions ?? []) as SubmissionRow[];
 
   return (
     <DashboardShell
