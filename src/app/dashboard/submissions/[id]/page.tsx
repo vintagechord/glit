@@ -355,6 +355,7 @@ export default async function SubmissionDetailPage({
       submissionId={submissionId}
       initialSubmission={{
         ...resolvedSubmission,
+        payment_status: resolvedSubmission.payment_status ?? "",
         package: packageInfo
           ? {
               name: packageInfo.name ?? null,
