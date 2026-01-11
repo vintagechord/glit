@@ -67,7 +67,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "금액을 확인해주세요." }, { status: 400 });
     }
 
-    const modeEnv = String(process.env.INICIS_ENV ?? "").toLowerCase() === "prod" ? "prod" : "stg";
+    // 운영 JS만 사용하도록 prod 고정 (테스트 JS 혼용 방지)
+    const modeEnv: "prod" = "prod";
     const config = loadEnvConfig(modeEnv);
     const baseUrl = getBaseUrl(req);
     if (baseUrl.startsWith("http://localhost") || baseUrl.startsWith("http://127.")) {

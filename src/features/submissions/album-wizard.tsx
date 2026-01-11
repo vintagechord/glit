@@ -373,9 +373,9 @@ export function AlbumWizard({
     });
   }, []);
 
-  // 사전 스크립트 로드 시도 (stg 기본 URL)
+  // 사전 스크립트 로드 시도 (운영 기본 URL)
   React.useEffect(() => {
-    void ensureStdPayReady("https://stgstdpay.inicis.com/stdjs/INIStdPay.js");
+    void ensureStdPayReady("https://stdpay.inicis.com/stdjs/INIStdPay.js");
   }, [ensureStdPayReady]);
 
   const invokeStdPay = React.useCallback(
