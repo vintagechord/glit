@@ -1,8 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getStdPayConfig } from "../../../../../lib/inicis/config";
 import { buildStdPayRequest } from "../../../../../lib/inicis/stdpay";
 import { getBaseUrl } from "../../../../../lib/url";
+
+const clean = (value?: string | null) => {
+  if (!value) return "";
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : "";
+};
+
+const loadEnvConfig = (mode: "stg" | "prod") => {
+  const suffix = mode === "prod" ? "PROD" : "STG";
+  const mid = clean(process.env[`INICIS_MID_${suffix}`] ?? "");
+  const signKey = clean(process.env[`INICIS_SIGN_KEY_${suffix}`] ?? "");
+  const stdJsUrl =
+    mode === "prod"
+      ? "https://stdpay.inicis.com/stdjs/INIStdPay.js"
+      : clean(
+          process.env[`INICIS_STDJS_URL_${suffix}`] ??
+            "https://stgstdpay.inicis.com/stdjs/INIStdPay.js",
+        );
+
+  if (!mid || !signKey) {
+    throw new Error(
+      `[Inicis][STDPay][dev-init] Missing env for mode=${mode}. Set INICIS_MID_${suffix}, INICIS_SIGN_KEY_${suffix}.`,
+    );
+  }
+
+  const isProdJs = stdJsUrl.includes("stdpay.inicis.com");
+  const isStgJs = stdJsUrl.includes("stgstdpay.inicis.com");
+  if (mode === "stg" && isProdJs) {
+    throw new Error(
+      "[Inicis][STDPay][dev-init] Config mismatch: stg mode requires stgstdpay.inicis.com JS URL.",
+    );
+  }
+  if (mode === "prod" && isStgJs) {
+    throw new Error(
+      "[Inicis][STDPay][dev-init] Config mismatch: prod mode requires stdpay.inicis.com JS URL.",
+    );
+  }
+
+  return { mode, mid, signKey, stdJsUrl };
+};
 
 export async function POST(req: NextRequest) {
   const devToolsEnabled =
@@ -28,7 +67,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "금액을 확인해주세요." }, { status: 400 });
     }
 
-    const config = getStdPayConfig();
+    const modeEnv = String(process.env.INICIS_ENV ?? "").toLowerCase() === "prod" ? "prod" : "stg";
+    const config = loadEnvConfig(modeEnv);
     const baseUrl = getBaseUrl(req);
     if (baseUrl.startsWith("http://localhost") || baseUrl.startsWith("http://127.")) {
       return NextResponse.json(
@@ -72,6 +112,7 @@ export async function POST(req: NextRequest) {
       stdJsUrl: config.stdJsUrl,
       returnUrl,
       closeUrl,
+      env: config.mode,
     });
   } catch (error: any) {
     console.error("[Inicis][STDPay][dev-init][error]", error);

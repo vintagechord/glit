@@ -26,7 +26,8 @@ export default function DevInicisStdPayPage() {
   const [scriptReady, setScriptReady] = React.useState(false);
 
   // React 18 useId는 ":"가 포함될 수 있어서 안전하게 제거
-  const formId = React.useId().replace(/:/g, "");
+  const formIdRef = React.useRef(`inicis-form-${crypto.randomUUID()}`);
+  const formId = formIdRef.current;
   React.useEffect(() => {
     if (typeof window !== "undefined" && window.INIStdPay) {
       setScriptReady(true);
@@ -121,6 +122,18 @@ export default function DevInicisStdPayPage() {
       if (!res.ok || !json || json.error) {
         console.error("[Dev][STDPay] init failed", { status: res.status, body: raw });
         alert(json?.error ?? `초기화 실패 (status ${res.status})`);
+        return;
+      }
+
+      const jsIsStg = /stgstdpay\.inicis\.com/i.test(json.stdJsUrl ?? "");
+      const mid = json.stdParams?.mid ?? "";
+      const midLooksTest = mid === "INIpayTest" || /test/i.test(mid);
+      const mismatch = (jsIsStg && !midLooksTest) || (!jsIsStg && midLooksTest);
+      if (mismatch) {
+        console.error("[Dev][STDPay] env mismatch", { stdJsUrl: json.stdJsUrl, mid });
+        alert(
+          "설정 오류: MID와 JS URL 환경이 다릅니다. 실 MID에는 운영 JS(https://stdpay.inicis.com), 테스트 MID에는 stg JS를 사용해야 합니다.",
+        );
         return;
       }
 
