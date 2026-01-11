@@ -175,7 +175,7 @@ export default function DevInicisStdPayPage() {
 
     // window.INIStdPay.pay(formId) 는 "form id" 문자열을 받음 (INIStdPay.js 내부에서 form 탐색)
     console.info("[Dev][STDPay] invoking pay - Network 탭에서 payMain/pay 요청 발생 여부 확인");
-    window.INIStdPay.pay(formId);
+    window.INIStdPay?.pay(formId);
 
     window.setTimeout(() => {
       const iframes = Array.from(
