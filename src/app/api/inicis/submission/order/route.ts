@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { ensureSubmissionOwner, createSubmissionPaymentOrder } from "../../../../lib/payments/submission";
-import { getBaseUrl } from "../../../../lib/url";
+import { ensureSubmissionOwner, createSubmissionPaymentOrder } from "../../../../../lib/payments/submission";
+import { getBaseUrl } from "../../../../../lib/url";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));

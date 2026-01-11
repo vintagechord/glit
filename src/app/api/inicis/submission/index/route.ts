@@ -1,1 +1,1 @@
-export { POST, runtime } from "../order/route";
+export { POST } from "../order/route";
