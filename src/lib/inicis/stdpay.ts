@@ -73,7 +73,6 @@ export const buildStdPayRequest = (
     buyeremail: params.buyerEmail ?? "",
     returnUrl: params.returnUrl,
     closeUrl: params.closeUrl ?? params.returnUrl,
-    acceptmethod: "BILLAUTH(Card)",
     use_chkfake: "Y",
   };
 };
