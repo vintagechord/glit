@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getStdPayConfig } from "@/lib/inicis/config";
-import { requestStdPayApproval } from "@/lib/inicis/api";
+import { getStdPayConfig } from "../../../../../lib/inicis/config";
+import { requestStdPayApproval } from "../../../../../lib/inicis/api";
 import {
   getPaymentByOrderId,
   markPaymentFailure,
   markPaymentSuccess,
-} from "@/lib/payments/submission";
-import { getBaseUrl } from "@/lib/url";
+} from "../../../../../lib/payments/submission";
+import { getBaseUrl } from "../../../../../lib/url";
 
 const successRedirect = (
   baseUrl: string,

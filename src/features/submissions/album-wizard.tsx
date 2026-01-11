@@ -17,6 +17,14 @@ import {
   type SubmissionActionState,
 } from "./actions";
 
+declare global {
+  interface Window {
+    INIStdPay?: {
+      pay: (formId: string) => void;
+    };
+  }
+}
+
 type StationOption = {
   id: string;
   name: string;
@@ -296,6 +304,108 @@ export function AlbumWizard({
     "profanity",
   );
   const [isSaving, setIsSaving] = React.useState(false);
+  const [payData, setPayData] = React.useState<{
+    orderId: string;
+    stdParams: Record<string, string>;
+    stdJsUrl: string;
+  } | null>(null);
+  const [stdScriptReady, setStdScriptReady] = React.useState(false);
+  const payFormId = React.useRef(
+    `inicis-subpay-${Math.random().toString(36).slice(2)}`,
+  );
+
+  const logStdPayParams = React.useCallback(
+    (params: Record<string, string>, stdJsUrl: string) => {
+      const len = (key: keyof typeof params) => String(params[key] ?? "").length;
+      const mask = (value?: string) =>
+        value ? `${value.slice(0, 2)}***${value.slice(-2)}` : "";
+      console.info("[Inicis][STDPay][params-check]", {
+        mid: { masked: mask(params.mid), length: len("mid") },
+        oid: { present: Boolean(params.oid), length: len("oid") },
+        price: { present: Boolean(params.price), length: len("price") },
+        timestamp: { present: Boolean(params.timestamp), length: len("timestamp") },
+        returnUrl: { present: Boolean(params.returnUrl), length: len("returnUrl") },
+        closeUrl: { present: Boolean(params.closeUrl), length: len("closeUrl") },
+        signature: { present: Boolean(params.signature), length: len("signature") },
+        mKey: { present: Boolean(params.mKey), length: len("mKey") },
+        iniStdPay: Boolean(typeof window !== "undefined" && window.INIStdPay),
+        stdJsUrl,
+      });
+    },
+    [],
+  );
+
+  const ensureStdPayReady = React.useCallback(async (stdJsUrl: string) => {
+    if (typeof window === "undefined") return false;
+    if (window.INIStdPay) {
+      setStdScriptReady(true);
+      return true;
+    }
+    let script = document.querySelector(`script[src="${stdJsUrl}"]`) as
+      | HTMLScriptElement
+      | null;
+    if (!script) {
+      script = document.createElement("script");
+      script.src = stdJsUrl;
+      script.type = "text/javascript";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+    return new Promise<boolean>((resolve) => {
+      const onReady = () => cleanup(Boolean(window.INIStdPay));
+      const onError = () => cleanup(false);
+      const cleanup = (value: boolean) => {
+        script?.removeEventListener("load", onReady);
+        script?.removeEventListener("error", onError);
+        window.clearTimeout(timeout);
+        window.clearTimeout(poll);
+        if (value) setStdScriptReady(true);
+        resolve(value);
+      };
+      const timeout = window.setTimeout(() => cleanup(Boolean(window.INIStdPay)), 2000);
+      const poll = window.setInterval(() => {
+        if (window.INIStdPay) {
+          cleanup(true);
+        }
+      }, 200);
+      script?.addEventListener("load", onReady);
+      script?.addEventListener("error", onError);
+    });
+  }, []);
+
+  // 사전 스크립트 로드 시도 (stg 기본 URL)
+  React.useEffect(() => {
+    void ensureStdPayReady("https://stgstdpay.inicis.com/stdjs/INIStdPay.js");
+  }, [ensureStdPayReady]);
+
+  const invokeStdPay = React.useCallback(
+    (data: { stdParams: Record<string, string>; stdJsUrl: string }) => {
+      if (typeof window === "undefined") return;
+      logStdPayParams(data.stdParams, data.stdJsUrl);
+      const formId = payFormId.current;
+      if (!window.INIStdPay) {
+        console.warn("[Inicis][STDPay] INIStdPay.js not available. Check script src or CSP.");
+        return;
+      }
+      console.info("[Inicis][STDPay] invoking pay()", { formId, scriptReady: stdScriptReady });
+      window.INIStdPay.pay(formId);
+      window.setTimeout(() => {
+        const iframes = Array.from(
+          document.querySelectorAll<HTMLIFrameElement>('iframe[src*="inicis"], iframe[id*="INI"], iframe[name*="INI"]'),
+        );
+        console.info("[Inicis][STDPay] iframe check after pay()", {
+          count: iframes.length,
+          srcs: iframes.map((f) => f.src),
+        });
+      }, 300);
+    },
+    [logStdPayParams, stdScriptReady],
+  );
+
+  React.useEffect(() => {
+    if (!payData) return;
+    void ensureStdPayReady(payData.stdJsUrl);
+  }, [ensureStdPayReady, payData]);
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [completionId, setCompletionId] = React.useState<string | null>(null);
@@ -1548,19 +1658,78 @@ export function AlbumWizard({
       }
 
       if (status === "SUBMITTED" && submissionIds.length > 0) {
-        if (typeof window !== "undefined") {
-          window.alert("심의 접수가 완료되었습니다.");
-          if (emailWarning) {
-            window.alert(emailWarning);
+        if (paymentMethod === "CARD") {
+          try {
+            const response = await fetch("/api/inicis/submission/order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                submissionId: submissionIds[0],
+                guestToken: guestTokens[0]?.token ?? currentGuestToken ?? undefined,
+              }),
+            });
+            let json: any = null;
+            let raw: string | null = null;
+            try {
+              raw = await response.text();
+              json = raw ? JSON.parse(raw) : null;
+            } catch (parseError) {
+              console.error("[Inicis][STDPay][init][client] parse error", parseError, {
+                status: response.status,
+                body: raw,
+              });
+            }
+            if (!response.ok || json?.error) {
+              console.error("[Inicis][STDPay][init][client]", {
+                status: response.status,
+                error: json?.error,
+                body: raw,
+              });
+              setNotice({
+                error:
+                  json?.error ||
+                  "카드 결제 요청에 실패했습니다. 관리자에게 문의해주세요.",
+              });
+              return;
+            }
+            if (!json) {
+              setNotice({
+                error: "결제 초기화 응답을 해석하지 못했습니다. 잠시 후 다시 시도해주세요.",
+              });
+              return;
+            }
+            setPayData(json);
+            console.info("[Inicis][STDPay][init][client] order created", {
+              orderId: json.orderId,
+              stdJsUrl: json.stdJsUrl,
+              keys: Object.keys(json.stdParams ?? {}),
+            });
+            invokeStdPay(json);
+            return;
+          } catch (error) {
+            console.error("[Inicis][STDPay][init][client] exception", error);
+            setNotice({ error: "카드 결제 초기화 중 오류가 발생했습니다." });
+            return;
           }
+        } else if (paymentMethod === "BANK") {
+          if (typeof window !== "undefined") {
+            window.alert("심의 접수가 완료되었습니다.");
+            if (emailWarning) {
+              window.alert(emailWarning);
+            }
+          }
+          setCompletionId(submissionIds[0]);
+          setCompletionSubmissionIds(submissionIds);
+          if (guestTokens.length > 0) {
+            setCompletionTokens(guestTokens);
+          }
+          setStep(4);
+          return;
+        } else {
+          console.warn("[Inicis][STDPay][init][client] unknown payment method", paymentMethod);
+          setNotice({ error: "지원하지 않는 결제 수단입니다." });
+          return;
         }
-        setCompletionId(submissionIds[0]);
-        setCompletionSubmissionIds(submissionIds);
-        if (guestTokens.length > 0) {
-          setCompletionTokens(guestTokens);
-        }
-        setStep(4);
-        return;
       }
 
       if (emailWarning && typeof window !== "undefined") {
@@ -1579,6 +1748,17 @@ export function AlbumWizard({
 
   return (
     <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
+      {payData ? (
+        <>
+          <script src={payData.stdJsUrl} type="text/javascript" />
+          <form id={payFormId.current} method="POST" acceptCharset="UTF-8" className="hidden">
+            {Object.entries(payData.stdParams).map(([key, value]) => (
+              <input key={key} type="hidden" name={key} value={value} />
+            ))}
+          </form>
+        </>
+      ) : null}
+
       {stepLabels}
 
       {step === 1 && (

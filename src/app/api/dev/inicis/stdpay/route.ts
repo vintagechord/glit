@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getStdPayConfig } from "@/lib/inicis/config";
-import { buildStdPayRequest } from "@/lib/inicis/stdpay";
-import { getBaseUrl } from "@/lib/url";
+import { getStdPayConfig } from "../../../../../lib/inicis/config";
+import { buildStdPayRequest } from "../../../../../lib/inicis/stdpay";
+import { getBaseUrl } from "../../../../../lib/url";
 
 export async function POST(req: NextRequest) {
   const devToolsEnabled =

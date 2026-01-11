@@ -1,6 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { updateSession } from "@/lib/supabase/middleware";
+import { middleware as updateSession } from "@/lib/supabase/middleware";
+
+const devStdPayCsp =
+  "default-src 'self'; " +
+  "script-src 'self' 'unsafe-inline' https://stgstdpay.inicis.com https://stdpay.inicis.com https://stdux.inicis.com; " +
+  "script-src-elem 'self' 'unsafe-inline' https://stgstdpay.inicis.com https://stdpay.inicis.com https://stdux.inicis.com; " +
+  "frame-src 'self' https://stgstdpay.inicis.com https://stdpay.inicis.com; " +
+  "style-src 'self' 'unsafe-inline' https://stgstdpay.inicis.com https://stdpay.inicis.com; " +
+  "style-src-elem 'self' 'unsafe-inline' https://stgstdpay.inicis.com https://stdpay.inicis.com; " +
+  "img-src 'self' data: https://stgstdpay.inicis.com https://stdux.inicis.com; " +
+  "connect-src 'self' https://stgstdpay.inicis.com https://stdpay.inicis.com";
 
 function withCookies(target: NextResponse, source: NextResponse) {
   source.cookies.getAll().forEach((cookie) => {
@@ -10,8 +20,20 @@ function withCookies(target: NextResponse, source: NextResponse) {
 }
 
 export default async function proxy(request: NextRequest) {
-  const { response, user, supabase } = await updateSession(request);
+  const session = await updateSession(request as any);
+  const response =
+    session instanceof NextResponse ? session : (session?.response as NextResponse | undefined);
+  const user = session instanceof NextResponse ? null : session?.user ?? null;
+  const supabase = session instanceof NextResponse ? null : session?.supabase ?? null;
+  if (!response) {
+    return NextResponse.next();
+  }
   const { pathname } = request.nextUrl;
+  const isDev = process.env.NODE_ENV !== "production";
+  const isDevStdPayPath =
+    pathname === "/dev/inicis-stdpay" ||
+    pathname.startsWith("/api/dev/inicis/stdpay") ||
+    pathname.startsWith("/api/dev/inicis/stdpay-return");
   const isAdminRoute = pathname.startsWith("/admin");
   const isDashboardRoute = pathname.startsWith("/dashboard");
   const isPublicDashboardRoute = pathname.startsWith("/dashboard/new");
@@ -42,21 +64,43 @@ export default async function proxy(request: NextRequest) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("next", pathname);
-    return withCookies(NextResponse.redirect(redirectUrl), response);
+    const redirectRes = withCookies(NextResponse.redirect(redirectUrl), response);
+    if (isDev && isDevStdPayPath) {
+      redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
+    }
+    return redirectRes;
   }
 
   if (isAdminRoute && user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    if (supabase) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    if (!profile || profile.role !== "admin") {
+      if (!profile || profile.role !== "admin") {
+        const redirectUrl = request.nextUrl.clone();
+        redirectUrl.pathname = "/dashboard";
+        const redirectRes = withCookies(NextResponse.redirect(redirectUrl), response);
+        if (isDev && isDevStdPayPath) {
+          redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
+        }
+        return redirectRes;
+      }
+    } else {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/dashboard";
-      return withCookies(NextResponse.redirect(redirectUrl), response);
+      const redirectRes = withCookies(NextResponse.redirect(redirectUrl), response);
+      if (isDev && isDevStdPayPath) {
+        redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
+      }
+      return redirectRes;
     }
+  }
+
+  if (isDev && isDevStdPayPath) {
+    response.headers.set("Content-Security-Policy", devStdPayCsp);
   }
 
   return response;
