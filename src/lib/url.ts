@@ -25,5 +25,7 @@ export const getClientIp = (req?: NextRequest) => {
     const first = forwarded.split(",").map((p) => p.trim())[0];
     if (first) return first;
   }
-  return req?.ip || "127.0.0.1";
+  // NextRequest.ip is available at runtime but not typed in some versions
+  const ip = (req as any)?.ip;
+  return ip || "127.0.0.1";
 };
