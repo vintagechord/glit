@@ -63,14 +63,14 @@ export const createSubmissionPaymentOrder = async (
   const orderId = `SUBP-${Date.now()}-${submission.id.slice(0, 8)}`;
   const config = getStdPayConfig();
   const productName =
-    submission.package?.name ??
+    (Array.isArray(submission.package) ? submission.package[0]?.name : submission.package?.name) ??
     submission.title ??
     submission.artist_name ??
     "심의 접수";
   const buyerName =
     submission.applicant_name ??
     submission.artist_name ??
-    submission.package?.name ??
+    (Array.isArray(submission.package) ? submission.package[0]?.name : submission.package?.name) ??
     "회원";
   const buyerEmail = submission.applicant_email ?? "";
   const buyerTel = submission.applicant_phone ?? "";
