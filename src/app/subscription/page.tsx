@@ -15,8 +15,8 @@ import {
 } from "@/lib/subscriptions/service";
 import { SubscriptionPayButtons } from "@/features/subscriptions/subscription-pay";
 
-const resolveBaseUrl = () => {
-  const headerList = headers();
+const resolveBaseUrl = async () => {
+  const headerList = await headers();
   const proto = headerList.get("x-forwarded-proto") ?? "https";
   const host =
     headerList.get("x-forwarded-host") ??
@@ -38,7 +38,7 @@ export default async function SubscriptionPage() {
   const { subscription } = await getActiveSubscription(user.id);
   const amountKrw = resolveSubscriptionPrice();
   const config = getStdPayConfig();
-  const baseUrl = resolveBaseUrl();
+  const baseUrl = await resolveBaseUrl();
 
   if (!amountKrw || amountKrw <= 0) {
     return (
