@@ -81,8 +81,8 @@ const loadBillingConfig = (mode: InicisMode): BillingEnvConfig => {
   return { mid, apiKey, apiIv, liteKey, apiUrl };
 };
 
-export const getInicisMode = (): InicisMode =>
-  clean(process.env.INICIS_ENV ?? "").toLowerCase() === "stg" ? "stg" : "prod";
+// 운영 결제만 사용하도록 기본 prod 강제 (env에 stg가 있어도 prod 우선)
+export const getInicisMode = (): InicisMode => "prod";
 
 export const getStdPayConfig = (): StdPayEnvConfig =>
   loadStdPayConfig(getInicisMode());
