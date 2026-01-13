@@ -106,12 +106,13 @@ export async function POST(req: NextRequest) {
     authData.BillKey ??
     authData.P_BILLKEY ??
     null;
+  const billKeyStr = billKey != null ? String(billKey) : null;
 
   const totPrice = Number(authData.TotPrice ?? authData.price ?? 0);
   const toCode = (value: string | number | null | undefined, fallback: string) =>
     value == null ? fallback : String(value);
 
-  if (!billKey) {
+  if (!billKeyStr) {
     await updateHistory(orderId, {
       status: "FAILED",
       result_code: toCode(authData.resultCode, "NO_BILLKEY"),
@@ -133,7 +134,7 @@ export async function POST(req: NextRequest) {
 
   const { billing, error: billingError } = await storeBillingKey({
     userId: history.user_id,
-    billKey,
+    billKey: billKeyStr,
     pgTid: authData.tid ?? tid ?? null,
     pgMid: billingConfig.mid,
     cardCode: authData.CARD_Code ?? authData.cardCode ?? null,
