@@ -385,25 +385,53 @@ export default async function Home() {
               packageInfo?.name ?? null,
             );
 
-            const { data: albumReviews } = await supabase
+            const withTracks = "id, status, track_results, updated_at, station:stations ( name )";
+            const withoutTracks = "id, status, updated_at, station:stations ( name )";
+            const albumResult = await supabase
               .from("station_reviews")
-              .select("id, status, track_results, updated_at, station:stations ( name )")
+              .select(withTracks)
               .eq("submission_id", submission.id)
               .order("updated_at", { ascending: false });
 
-            albumStationsMap[submission.id] = normalizeStations(albumReviews);
+            if (
+              albumResult.error?.message?.toLowerCase().includes("track_results") ||
+              albumResult.error?.code === "42703"
+            ) {
+              const fallback = await supabase
+                .from("station_reviews")
+                .select(withoutTracks)
+                .eq("submission_id", submission.id)
+                .order("updated_at", { ascending: false });
+              albumStationsMap[submission.id] = normalizeStations(fallback.data);
+            } else {
+              albumStationsMap[submission.id] = normalizeStations(albumResult.data);
+            }
           })
         : [];
 
     const mvFetches =
       mvSubmissions.length > 0
         ? mvSubmissions.map(async (submission) => {
-            const { data: mvReviews } = await supabase
+            const withTracks = "id, status, track_results, updated_at, station:stations ( name )";
+            const withoutTracks = "id, status, updated_at, station:stations ( name )";
+            const mvResult = await supabase
               .from("station_reviews")
-              .select("id, status, track_results, updated_at, station:stations ( name )")
+              .select(withTracks)
               .eq("submission_id", submission.id)
               .order("updated_at", { ascending: false });
-            mvStationsMap[submission.id] = normalizeStations(mvReviews);
+            if (
+              mvResult.error?.message?.toLowerCase().includes("track_results") ||
+              mvResult.error?.code === "42703"
+            ) {
+              const fallback = await supabase
+                .from("station_reviews")
+                .select(withoutTracks)
+                .eq("submission_id", submission.id)
+                .order("updated_at", { ascending: false });
+              mvStationsMap[submission.id] = normalizeStations(fallback.data);
+            } else {
+              mvStationsMap[submission.id] = normalizeStations(mvResult.data);
+            }
           })
         : [];
 
@@ -453,17 +481,17 @@ export default async function Home() {
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-10 px-6 py-10 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 lg:min-h-[520px] lg:h-full">
-              <span className="inline-flex w-fit items-center rounded-full border border-border/60 bg-background/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-foreground/80">
+              <span className="inline-flex w-fit items-center rounded-full border border-border/60 bg-background/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/85">
                 Officially Greenlit
               </span>
-              <h1 className="font-display text-3xl leading-tight text-foreground sm:text-4xl">
+              <h1 className="font-display text-3xl leading-tight text-white sm:text-4xl">
                 <span className="inline-block animate-[floaty_6s_ease-in-out_infinite] bg-gradient-to-r from-emerald-400 via-lime-300 to-emerald-500 bg-clip-text text-transparent drop-shadow-[0_8px_24px_rgba(52,211,153,0.25)]">
                   GLIT(글릿)
                 </span>
                 <br />
                 음반 · M/V 심의를 쉽고 빠르게!
               </h1>
-              <p className="max-w-xl text-base text-muted-foreground sm:text-lg whitespace-pre-line">
+              <p className="max-w-xl text-base text-white/85 sm:text-lg whitespace-pre-line">
                 글릿에서 방송사별 심의 진행을 실시간으로 받아보세요.
                 {"\n"}나의 모든 심의 기록은 GLIT에서 모아 관리할 수 있습니다.
               </p>

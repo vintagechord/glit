@@ -388,13 +388,42 @@ export default async function AdminSubmissionDetailPage({
     );
   }
 
-  const { data: stationReviews } = await supabase
+  const stationSelectWithTracks =
+    "id, status, result_note, track_results, updated_at, station_id, station:stations ( id, name, code )";
+  const stationSelectNoTracks =
+    "id, status, result_note, updated_at, station_id, station:stations ( id, name, code )";
+
+  const stationResult = await supabase
     .from("station_reviews")
-    .select(
-      "id, status, result_note, track_results, updated_at, station_id, station:stations ( id, name, code )",
-    )
+    .select(stationSelectWithTracks)
     .eq("submission_id", submissionId)
     .order("station_id", { ascending: true });
+
+  let stationReviews =
+    (stationResult.data as
+      | Array<{
+          id: string;
+          status: string;
+          result_note: string | null;
+          track_results?: unknown;
+          updated_at: string;
+          station_id: string | null;
+          station: Array<{ id: string; name: string | null; code: string | null }>;
+        }>
+      | null) ?? null;
+
+  if (
+    stationResult.error &&
+    (stationResult.error.code === "42703" ||
+      stationResult.error.message?.toLowerCase().includes("track_results"))
+  ) {
+    const fallback = await supabase
+      .from("station_reviews")
+      .select(stationSelectNoTracks)
+      .eq("submission_id", submissionId)
+      .order("station_id", { ascending: true });
+    stationReviews = (fallback.data as typeof stationReviews) ?? stationReviews;
+  }
 
   const { data: events } = await supabase
     .from("submission_events")

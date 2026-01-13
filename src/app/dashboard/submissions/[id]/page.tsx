@@ -318,6 +318,10 @@ export default async function SubmissionDetailPage({
     "id, status, result_note, track_results, updated_at, station:stations ( id, name, code, logo_url )";
   const stationSelectBasic =
     "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
+  const stationSelectNoTracks =
+    "id, status, result_note, updated_at, station:stations ( id, name, code, logo_url )";
+  const stationSelectNoTracksBasic =
+    "id, status, result_note, updated_at, station:stations ( id, name, code )";
 
   type StationReviewRow = {
     id: string;
@@ -350,6 +354,25 @@ export default async function SubmissionDetailPage({
     const fallbackResult = await runStationFetch(stationSelectBasic);
     stationReviews = (fallbackResult.data as StationReviewRow[] | null) ?? null;
     stationError = fallbackResult.error ?? null;
+  }
+
+  if (
+    stationError &&
+    (stationError.code === "42703" ||
+      stationError.message?.toLowerCase().includes("track_results"))
+  ) {
+    const fallbackResult = await runStationFetch(stationSelectNoTracks);
+    stationReviews = (fallbackResult.data as StationReviewRow[] | null) ?? null;
+    stationError = fallbackResult.error ?? null;
+    if (
+      stationError &&
+      (stationError.code === "42703" ||
+        stationError.message?.toLowerCase().includes("logo_url"))
+    ) {
+      const basicFallback = await runStationFetch(stationSelectNoTracksBasic);
+      stationReviews = (basicFallback.data as StationReviewRow[] | null) ?? null;
+      stationError = basicFallback.error ?? null;
+    }
   }
   const normalizedStationReviews =
     stationReviews?.map((review) => ({

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
+import type { TrackReviewResult } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 
@@ -82,16 +83,44 @@ export default async function TrackDetailPage({
     .eq("submission_id", submission.id)
     .order("created_at", { ascending: false });
 
-  const { data: stationReviews } = await admin
+  const stationSelectWithTracks =
+    "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
+  const stationSelectNoTracks =
+    "id, status, result_note, updated_at, station:stations ( id, name, code )";
+
+  const stationResult = await admin
     .from("station_reviews")
-    .select(
-      "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )",
-    )
+    .select(stationSelectWithTracks)
     .eq("submission_id", submission.id)
     .order("updated_at", { ascending: false });
+
+  let stationReviews =
+    (stationResult.data as
+      | Array<{
+          id: string;
+          status: string;
+          result_note: string | null;
+          track_results?: unknown;
+          updated_at: string;
+          station: Array<{ id: string; name: string | null; code: string | null }>;
+        }>
+      | null) ?? null;
+  if (
+    stationResult.error &&
+    (stationResult.error.code === "42703" ||
+      stationResult.error.message?.toLowerCase().includes("track_results"))
+  ) {
+    const fallback = await admin
+      .from("station_reviews")
+      .select(stationSelectNoTracks)
+      .eq("submission_id", submission.id)
+      .order("updated_at", { ascending: false });
+    stationReviews = (fallback.data as typeof stationReviews) ?? stationReviews;
+  }
   const normalizedStationReviews =
     stationReviews?.map((review) => ({
       ...review,
+      track_results: review.track_results as TrackReviewResult[] | null | undefined,
       station: Array.isArray(review.station) ? review.station[0] : review.station,
     })) ?? [];
 

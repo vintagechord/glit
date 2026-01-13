@@ -64,38 +64,72 @@ export async function HistoryPageView(config?: ShellConfig) {
     "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title ), station_reviews ( id, status, track_results, updated_at, station:stations ( name ) )";
   const fallbackSelect =
     "id, title, artist_name, artist_id, status, created_at, updated_at, type, amount_krw, is_oneclick, station_reviews ( id, status, track_results, updated_at, station:stations ( name ) )";
+  const fullSelectWithoutTracks =
+    "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title )";
+  const fallbackSelectWithoutTracks =
+    "id, title, artist_name, artist_id, status, created_at, updated_at, type, amount_krw, is_oneclick";
 
   // 1) 기본 쿼리: artist join 포함
-  const { data: initialData, error: submissionError } = await supabase
-    .from("submissions")
-    .select(fullSelect)
-    .order("updated_at", { ascending: false })
-    .eq("user_id", user.id);
+  const runSelect = (select: string) =>
+    supabase
+      .from("submissions")
+      .select(select)
+      .order("updated_at", { ascending: false })
+      .eq("user_id", user.id);
+
+  const { data: initialData, error: submissionError } = await runSelect(fullSelect);
 
   let submissions = (initialData ?? null) as SubmissionRow[] | null;
+  let hasTrackResultsColumn = true;
 
   // 2) 에러 발생 시 컬럼 축소한 fallback
   if (submissionError) {
     console.error("history full select error", submissionError);
-    const { data: fallbackData, error: fallbackError } = await supabase
-      .from("submissions")
-      .select(fallbackSelect)
-      .order("updated_at", { ascending: false })
-      .eq("user_id", user.id);
+    const { data: fallbackData, error: fallbackError } = await runSelect(fallbackSelect);
 
     if (fallbackError) {
       console.error("history fallback select error", fallbackError);
       submissions = [];
+      hasTrackResultsColumn =
+        !fallbackError.message?.toLowerCase().includes("track_results") &&
+        fallbackError.code !== "42703";
     } else {
       submissions =
-        (fallbackData?.map((row) => ({
-          ...row,
-          payment_status: null,
-          payment_method: null,
-          package: null,
-          album_tracks: [],
-        })) as SubmissionRow[]) ?? [];
+        (fallbackData?.map((row) => {
+          const safeRow =
+            typeof row === "object" && row !== null
+              ? (row as SubmissionRow)
+              : ({} as SubmissionRow);
+          return {
+            ...safeRow,
+            payment_status: null,
+            payment_method: null,
+            package: null,
+            album_tracks: [],
+          };
+        }) as SubmissionRow[]) ?? [];
     }
+  }
+
+  // 3) track_results 컬럼이 없는 스키마 대응
+  if (!submissions || submissions.length === 0) {
+    const { data: noTrackData, error: noTrackError } = await runSelect(
+      fullSelectWithoutTracks,
+    );
+    if (noTrackError) {
+      console.error("history select without track_results error", noTrackError);
+      const { data: fallbackNoTrack } = await runSelect(
+        fallbackSelectWithoutTracks,
+      );
+      submissions = ((fallbackNoTrack ?? []) as unknown[]).map((row) =>
+        (typeof row === "object" && row !== null ? row : {}) as SubmissionRow,
+      );
+    } else {
+      submissions = ((noTrackData ?? []) as unknown[]).map((row) =>
+        (typeof row === "object" && row !== null ? row : {}) as SubmissionRow,
+      );
+    }
+    hasTrackResultsColumn = false;
   }
 
   if (submissions && submissions.length > 0) {

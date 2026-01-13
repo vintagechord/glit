@@ -70,7 +70,6 @@ export async function StatusPageView(config?: ShellConfig) {
     Array<{
       id: string;
       status: string;
-      track_results?: unknown;
       updated_at: string;
       station?: { name?: string | null } | null;
     }>
@@ -80,7 +79,6 @@ export async function StatusPageView(config?: ShellConfig) {
     Array<{
       id: string;
       status: string;
-      track_results?: unknown;
       updated_at: string;
       station?: { name?: string | null } | null;
     }>
@@ -116,23 +114,51 @@ export async function StatusPageView(config?: ShellConfig) {
         packageInfo?.station_count ?? null,
         packageInfo?.name ?? null,
       );
-      const { data: albumReviews } = await supabase
+      const withTracks = "id, status, track_results, updated_at, station:stations ( name )";
+      const withoutTracks = "id, status, updated_at, station:stations ( name )";
+      const albumResult = await supabase
         .from("station_reviews")
-        .select("id, status, track_results, updated_at, station:stations ( name )")
+        .select(withTracks)
         .eq("submission_id", submission.id)
         .order("updated_at", { ascending: false });
-      albumStationsMap[submission.id] = normalizeStations(albumReviews);
+      if (
+        albumResult.error?.message?.toLowerCase().includes("track_results") ||
+        albumResult.error?.code === "42703"
+      ) {
+        const fallback = await supabase
+          .from("station_reviews")
+          .select(withoutTracks)
+          .eq("submission_id", submission.id)
+          .order("updated_at", { ascending: false });
+        albumStationsMap[submission.id] = normalizeStations(fallback.data);
+      } else {
+        albumStationsMap[submission.id] = normalizeStations(albumResult.data);
+      }
     }),
   );
 
   await Promise.all(
     mvSubmissions.map(async (submission) => {
-      const { data: mvReviews } = await supabase
+      const withTracks = "id, status, track_results, updated_at, station:stations ( name )";
+      const withoutTracks = "id, status, updated_at, station:stations ( name )";
+      const mvResult = await supabase
         .from("station_reviews")
-        .select("id, status, track_results, updated_at, station:stations ( name )")
+        .select(withTracks)
         .eq("submission_id", submission.id)
         .order("updated_at", { ascending: false });
-      mvStationsMap[submission.id] = normalizeStations(mvReviews);
+      if (
+        mvResult.error?.message?.toLowerCase().includes("track_results") ||
+        mvResult.error?.code === "42703"
+      ) {
+        const fallback = await supabase
+          .from("station_reviews")
+          .select(withoutTracks)
+          .eq("submission_id", submission.id)
+          .order("updated_at", { ascending: false });
+        mvStationsMap[submission.id] = normalizeStations(fallback.data);
+      } else {
+        mvStationsMap[submission.id] = normalizeStations(mvResult.data);
+      }
     }),
   );
 
