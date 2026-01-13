@@ -866,9 +866,10 @@ export default async function AdminSubmissionDetailPage({
                       <div className="mt-2 space-y-2 rounded-2xl border border-border/60 bg-background/60 p-3">
                         {trackResultsForDisplay.map((track, index) => {
                           const trackLabel = track.title || "트랙";
+                          const trackKey = track.track_id ?? track.track_no ?? index;
                           return (
                             <div
-                              key={`${track.id ?? index}-${track.track_no ?? index}`}
+                              key={trackKey}
                               className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-xs md:grid-cols-[1fr_180px]"
                             >
                               <div className="min-w-0">
