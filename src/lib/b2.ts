@@ -20,7 +20,8 @@ const envSchema = z.object({
   endpoint: z.string().url(),
   region: z.string().min(1),
   bucket: z.string().min(1),
-  prefix: z.string().min(1),
+  // prefix가 비어 있어도 동작하도록 기본값을 제공해 업로드 중단을 방지
+  prefix: z.string().min(1).default("submissions"),
   keyId: z.string().min(1),
   applicationKey: z.string().min(1),
   presignExpiresSeconds: z.coerce.number().int().positive().default(900),
