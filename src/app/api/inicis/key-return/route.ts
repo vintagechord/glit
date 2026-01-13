@@ -111,6 +111,8 @@ export async function POST(req: NextRequest) {
   const totPrice = Number(authData.TotPrice ?? authData.price ?? 0);
   const toCode = (value: string | number | null | undefined, fallback: string) =>
     value == null ? fallback : String(value);
+  const toStrOrNull = (value: string | number | null | undefined) =>
+    value == null ? null : String(value);
 
   if (!billKeyStr) {
     await updateHistory(orderId, {
@@ -135,7 +137,7 @@ export async function POST(req: NextRequest) {
   const { billing, error: billingError } = await storeBillingKey({
     userId: history.user_id,
     billKey: billKeyStr,
-    pgTid: authData.tid ?? tid ?? null,
+    pgTid: toStrOrNull(authData.tid ?? tid ?? null),
     pgMid: billingConfig.mid,
     cardCode: authData.CARD_Code ?? authData.cardCode ?? null,
     cardName: authData.CARD_Name ?? authData.cardName ?? null,
