@@ -988,7 +988,13 @@ export function MvWizard({
       {payData ? (
         <>
           <Script src={payData.stdJsUrl} strategy="afterInteractive" />
-          <form id={payFormId.current} method="POST" acceptCharset="UTF-8" className="hidden">
+          <form
+            id={payFormId.current}
+            name={payFormId.current}
+            method="POST"
+            acceptCharset="UTF-8"
+            className="hidden"
+          >
             {Object.entries(payData.stdParams).map(([key, value]) => (
               <input key={key} type="hidden" name={key} value={value} />
             ))}
