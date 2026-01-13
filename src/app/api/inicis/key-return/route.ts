@@ -161,7 +161,8 @@ export async function POST(req: NextRequest) {
     status: "BILLKEY_ISSUED",
     billing_id: billing.id,
     result_code: toCode(authData.resultCode, "0000"),
-    result_message: authData.resultMsg ?? "빌링키 발급 완료",
+    result_message:
+      authData.resultMsg != null ? String(authData.resultMsg) : "빌링키 발급 완료",
     raw_response: { auth: authData },
   });
 
