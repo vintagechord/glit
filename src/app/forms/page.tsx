@@ -73,7 +73,7 @@ export default function FormsPage() {
               <Link
                 key={form.href}
                 href={form.href}
-                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:bg-background"
+                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-200 hover:text-slate-900"
               >
                 {form.label} 다운로드
               </Link>
@@ -96,7 +96,7 @@ export default function FormsPage() {
               <Link
                 key={form.href}
                 href={form.href}
-                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:bg-background"
+                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-200 hover:text-slate-900"
               >
                 {form.label} 다운로드
               </Link>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import * as React from "react";
 import { getMvRatingFileUrlAction } from "@/features/submissions/actions";
 import {
@@ -7,6 +8,10 @@ import {
   type SubmissionFile,
 } from "@/features/submissions/submission-files-panel";
 import { formatCurrency, formatDateTime } from "@/lib/format";
+import {
+  summarizeTrackResults,
+  type TrackReviewResult,
+} from "@/lib/track-results";
 import { createClient } from "@/lib/supabase/client";
 
 type Submission = {
@@ -64,6 +69,7 @@ type Submission = {
     price_krw: number | null;
   } | null;
   album_tracks?: Array<{
+    id?: string | null;
     track_no?: number | null;
     track_title?: string | null;
     track_title_kr?: string | null;
@@ -89,6 +95,7 @@ type StationReview = {
   id: string;
   status: string;
   result_note: string | null;
+  track_results?: TrackReviewResult[] | null;
   updated_at: string;
   station?: {
     id: string;
@@ -237,6 +244,10 @@ export function SubmissionDetailClient({
   const [radioLinksModal, setRadioLinksModal] = React.useState<{
     stationName?: string;
   } | null>(null);
+  const [trackResultModal, setTrackResultModal] = React.useState<{
+    stationName?: string;
+    summary: ReturnType<typeof summarizeTrackResults>;
+  } | null>(null);
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
@@ -245,7 +256,10 @@ export function SubmissionDetailClient({
   const isResultReady =
     submission.status === "RESULT_READY" || submission.status === "COMPLETED";
   const isPaymentDone = submission.payment_status === "PAID";
-  const albumTracks = submission.album_tracks ?? [];
+  const albumTracks = React.useMemo(
+    () => submission.album_tracks ?? [],
+    [submission.album_tracks],
+  );
   const artistTypeLabel =
     submission.artist_type === "GROUP"
       ? "그룹"
@@ -267,6 +281,39 @@ export function SubmissionDetailClient({
     return 1;
   })();
 
+  const buildTrackSummary = React.useCallback(
+    (trackResults?: TrackReviewResult[] | null) => {
+      const base = summarizeTrackResults(trackResults, albumTracks);
+      if (!albumTracks.length) {
+        return base;
+      }
+      const mergedResults = albumTracks.map((track, index) => {
+        const matched =
+          base.results.find(
+            (item) =>
+              (item.track_id && track.id && item.track_id === track.id) ||
+              (typeof item.track_no === "number" &&
+                typeof track.track_no === "number" &&
+                item.track_no === track.track_no),
+          ) ?? null;
+        return {
+          track_id: track.id ?? matched?.track_id ?? null,
+          track_no: track.track_no ?? matched?.track_no ?? index + 1,
+          title:
+            track.track_title ||
+            track.track_title_kr ||
+            track.track_title_en ||
+            matched?.title ||
+            "트랙",
+          status: (matched?.status as string) ?? "PENDING",
+        };
+      });
+      const merged = summarizeTrackResults(mergedResults, albumTracks);
+      return { ...merged, results: mergedResults };
+    },
+    [albumTracks],
+  );
+
   const openRadioLinks = (stationName?: string) => {
     setRadioLinksModal({ stationName });
   };
@@ -279,7 +326,7 @@ export function SubmissionDetailClient({
     const { data: submissionData } = await supabase
       .from("submissions")
       .select(
-        "id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )",
+        "id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )",
       )
       .eq("id", submissionId)
       .maybeSingle();
@@ -309,9 +356,9 @@ export function SubmissionDetailClient({
     }
 
     const stationSelectWithLogo =
-      "id, status, result_note, updated_at, station:stations ( id, name, code, logo_url )";
+      "id, status, result_note, track_results, updated_at, station:stations ( id, name, code, logo_url )";
     const stationSelectBasic =
-      "id, status, result_note, updated_at, station:stations ( id, name, code )";
+      "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
 
     const runStationFetch = (select: string) =>
       supabase
@@ -320,7 +367,7 @@ export function SubmissionDetailClient({
         .eq("submission_id", submissionId)
         .order("updated_at", { ascending: false });
 
-    let stationResult = await runStationFetch(stationSelectWithLogo);
+    const stationResult = await runStationFetch(stationSelectWithLogo);
     let stationData = stationResult.data ?? null;
     let stationError = stationResult.error ?? null;
 
@@ -338,7 +385,12 @@ export function SubmissionDetailClient({
       const normalizedStations = (Array.isArray(stationData) ? stationData : []).map(
         (review) => {
           const base =
-            review && typeof review === "object" ? (review as Record<string, any>) : {};
+            review && typeof review === "object"
+              ? (review as {
+                  station?: StationReview["station"] | StationReview["station"][];
+                  [key: string]: unknown;
+                })
+              : {};
           const station = Array.isArray(base.station) ? base.station[0] : base.station;
           return { ...base, station };
         },
@@ -654,7 +706,7 @@ export function SubmissionDetailClient({
         <div className="space-y-6">
           <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              주문 진행 상태
+              심의 진행 상태
             </p>
             <div className="mt-4 space-y-4">
               <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-4">
@@ -938,19 +990,63 @@ export function SubmissionDetailClient({
                 <div className="min-w-[640px]">
                   <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     <span>방송국</span>
-                    <span>접수 상태</span>
-                    <span>통과 여부</span>
+                    <span className="text-center">접수 상태</span>
+                    <span className="text-center">통과 여부</span>
                     <span className="text-right">접수 날짜</span>
                     <span className="text-center">사유</span>
                   </div>
                   <div className="divide-y divide-border/60">
                     {stationReviews.map((review) => {
                       const reception = getReviewReception(review.status);
-                      const result = getReviewResult(review.status);
+                      const trackInfo = buildTrackSummary(review.track_results);
                       const note = review.result_note?.trim();
                       const showNote =
                         Boolean(note) && rejectedReviewStatuses.has(review.status);
                       const isApproved = review.status === "APPROVED";
+                      const totalTracksForDisplay =
+                        albumTracks.length > 1
+                          ? albumTracks.length
+                          : trackInfo.counts.total;
+                      const pendingGap = Math.max(
+                        totalTracksForDisplay -
+                          (trackInfo.counts.approved +
+                            trackInfo.counts.rejected +
+                            trackInfo.counts.pending),
+                        0,
+                      );
+                      const pendingCount = trackInfo.counts.pending + pendingGap;
+                      const hasTrackDetails = totalTracksForDisplay > 1;
+                      const resultTone =
+                        trackInfo.outcome === "APPROVED"
+                          ? reviewResultMap.APPROVED
+                          : trackInfo.outcome === "REJECTED"
+                            ? reviewResultMap.REJECTED
+                            : trackInfo.outcome === "PARTIAL"
+                              ? {
+                                  label: "부분 통과",
+                                  tone:
+                                    "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+                                }
+                              : getReviewResult(review.status);
+                      const trackSummaryLine = hasTrackDetails
+                        ? `${trackInfo.counts.approved}곡 통과 · ${trackInfo.counts.rejected}곡 불통과${
+                            pendingCount > 0 ? ` · ${pendingCount}곡 대기` : ""
+                          }`
+                        : null;
+
+                      const handleResultClick = () => {
+                        if (hasTrackDetails) {
+                          setTrackResultModal({
+                            stationName: review.station?.name ?? "-",
+                            summary: trackInfo,
+                          });
+                          return;
+                        }
+                        if (isApproved) {
+                          openRadioLinks(review.station?.name ?? undefined);
+                        }
+                      };
+
                       return (
                         <div
                           key={review.id}
@@ -959,10 +1055,11 @@ export function SubmissionDetailClient({
                           <div className="min-w-0 flex items-center gap-2">
                             <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-background/60">
                               {review.station?.logo_url ? (
-                                // 로고 이미지가 있으면 표시
-                                <img
+                                <Image
                                   src={review.station.logo_url}
                                   alt={review.station.name ?? "station logo"}
+                                  width={36}
+                                  height={36}
                                   className="h-full w-full object-cover"
                                 />
                               ) : (
@@ -981,25 +1078,24 @@ export function SubmissionDetailClient({
                             </div>
                           </div>
                           <span
-                            className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
+                            className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
                           >
                             {reception.label}
                           </span>
-                          {isApproved ? (
-                            <button
-                              type="button"
-                              onClick={() => openRadioLinks(review.station?.name ?? undefined)}
-                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold underline decoration-transparent transition hover:decoration-current ${result.tone}`}
-                            >
-                              {result.label}
-                            </button>
-                          ) : (
-                            <span
-                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
-                            >
-                              {result.label}
-                            </span>
-                          )}
+                          <button
+                            type="button"
+                            onClick={handleResultClick}
+                            className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold transition ${
+                              resultTone.tone
+                            } ${hasTrackDetails ? "hover:opacity-90" : ""}`}
+                          >
+                            <span>{resultTone.label}</span>
+                            {trackSummaryLine ? (
+                              <span className="mt-0.5 text-[9px] font-normal leading-tight text-current/80">
+                                {trackSummaryLine}
+                              </span>
+                            ) : null}
+                          </button>
                           <span className="text-right text-[11px] text-muted-foreground">
                             {formatDateTime(review.updated_at)}
                           </span>
@@ -1098,6 +1194,86 @@ export function SubmissionDetailClient({
             >
               닫기
             </button>
+          </div>
+        </div>
+      )}
+
+      {trackResultModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              트랙별 결과
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-foreground">
+              {trackResultModal.stationName ?? "-"}
+            </h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {trackResultModal.summary.counts.approved}곡 통과 ·{" "}
+              {trackResultModal.summary.counts.rejected}곡 불통과
+              {trackResultModal.summary.counts.pending > 0
+                ? ` · ${trackResultModal.summary.counts.pending}곡 대기`
+                : ""}
+            </p>
+            <div className="mt-4 max-h-80 space-y-2 overflow-auto">
+              {trackResultModal.summary.results.map((track, index) => {
+                const status =
+                  track.status === "APPROVED"
+                    ? { label: "통과", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200" }
+                    : track.status === "REJECTED"
+                      ? { label: "불통과", tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200" }
+                      : { label: "대기", tone: "bg-slate-500/10 text-slate-600 dark:text-slate-300" };
+                const trackLabel =
+                  track.title ||
+                  albumTracks.find(
+                    (base) =>
+                      (track.track_id && base.id === track.track_id) ||
+                      (typeof track.track_no === "number" &&
+                        base.track_no === track.track_no),
+                  )?.track_title ||
+                  "트랙";
+                return (
+                  <div
+                    key={`${track.track_id ?? index}-${track.track_no ?? index}`}
+                    className="flex items-center justify-between rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-foreground">
+                        {track.track_no ? `${track.track_no}. ` : ""}
+                        {trackLabel}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-semibold ${status.tone}`}
+                    >
+                      {status.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-5 flex items-center justify-between gap-3">
+              {trackResultModal.summary.outcome === "APPROVED" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    openRadioLinks(trackResultModal.stationName);
+                    setTrackResultModal(null);
+                  }}
+                  className="rounded-full border border-border/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+                >
+                  라디오 신청 링크
+                </button>
+              ) : (
+                <div />
+              )}
+              <button
+                type="button"
+                onClick={() => setTrackResultModal(null)}
+                className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+              >
+                닫기
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -13,6 +13,7 @@ import {
   stationReviewStatusEnum,
 } from "@/constants/review-status";
 import { sendResultEmail } from "@/lib/email";
+import { summarizeTrackResults } from "@/lib/track-results";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -46,10 +47,19 @@ const submissionResultSchema = z.object({
   resultMemo: z.string().optional(),
 });
 
+const trackResultStatusEnum = z.enum(["PENDING", "APPROVED", "REJECTED"]);
+const trackResultSchema = z.object({
+  trackId: z.string().uuid().optional(),
+  trackNo: z.number().int().nonnegative().optional(),
+  title: z.string().optional(),
+  status: trackResultStatusEnum,
+});
+
 const stationReviewSchema = z.object({
   reviewId: z.string().uuid(),
   status: stationReviewStatusEnum,
   resultNote: z.string().optional(),
+  trackResults: z.array(trackResultSchema).optional(),
 });
 
 const packageSchema = z.object({
@@ -382,13 +392,28 @@ export async function updateStationReviewAction(
     .eq("id", parsed.data.reviewId)
     .maybeSingle();
 
-  const { error } = await supabase
-    .from("station_reviews")
-    .update({
-      status: parsed.data.status,
-      result_note: parsed.data.resultNote || null,
-    })
-    .eq("id", parsed.data.reviewId);
+  const trackSummary = parsed.data.trackResults
+    ? summarizeTrackResults(parsed.data.trackResults)
+    : null;
+  const normalizedTrackResults = trackSummary?.results;
+  const derivedStatus =
+    trackSummary?.outcome === "APPROVED"
+      ? "APPROVED"
+      : trackSummary?.outcome === "REJECTED"
+        ? "REJECTED"
+        : trackSummary?.outcome === "PARTIAL"
+          ? "NEEDS_FIX"
+          : null;
+  const resolvedStatus = derivedStatus ?? parsed.data.status;
+  const payload: Record<string, unknown> = {
+    status: resolvedStatus,
+    result_note: parsed.data.resultNote || null,
+  };
+  if (normalizedTrackResults !== undefined) {
+    payload.track_results = normalizedTrackResults;
+  }
+
+  const { error } = await supabase.from("station_reviews").update(payload).eq("id", parsed.data.reviewId);
 
   if (error) {
     return { error: "방송국 상태 업데이트에 실패했습니다." };
@@ -397,7 +422,7 @@ export async function updateStationReviewAction(
   if (review?.submission_id) {
     await insertEvent(
       review.submission_id,
-      `방송국 상태 변경: ${parsed.data.status}`,
+      `방송국 상태 변경: ${resolvedStatus}`,
       "STATION_UPDATE",
     );
   }
@@ -408,12 +433,47 @@ export async function updateStationReviewAction(
 export async function updateStationReviewFormAction(
   formData: FormData,
 ): Promise<void> {
+  let trackResults: Array<z.infer<typeof trackResultSchema>> | undefined;
+  const trackResultsInput = formData.get("trackResults");
+  if (typeof trackResultsInput === "string" && trackResultsInput.trim()) {
+    try {
+      const parsed = JSON.parse(trackResultsInput);
+      if (Array.isArray(parsed)) {
+        trackResults = parsed as Array<z.infer<typeof trackResultSchema>>;
+      }
+    } catch (error) {
+      console.error("Failed to parse trackResults JSON", error, trackResultsInput);
+    }
+  }
+  if (!trackResults) {
+    const statuses = formData.getAll("trackResultStatus");
+    const ids = formData.getAll("trackResultId");
+    const numbers = formData.getAll("trackResultNo");
+    const titles = formData.getAll("trackResultTitle");
+    if (statuses.length > 0) {
+      trackResults = statuses
+        .map((status, index) => ({
+          trackId: typeof ids[index] === "string" && ids[index] ? String(ids[index]) : undefined,
+          trackNo:
+            typeof numbers[index] === "string" &&
+            numbers[index] !== "" &&
+            Number.isFinite(Number(numbers[index]))
+              ? Number(numbers[index])
+              : undefined,
+          title: typeof titles[index] === "string" ? titles[index] : undefined,
+          status: String(status) as z.infer<typeof trackResultStatusEnum>,
+        }))
+        .filter((item) => Boolean(item.status));
+    }
+  }
+
   const result = await updateStationReviewAction({
     reviewId: String(formData.get("reviewId") ?? ""),
     status: String(formData.get("status") ?? "") as z.infer<
       typeof stationReviewStatusEnum
     >,
     resultNote: String(formData.get("resultNote") ?? "") || undefined,
+    trackResults,
   });
   if (result.error) {
     console.error(result.error);

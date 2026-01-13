@@ -1,5 +1,6 @@
-import Link from "next/link";
 import type { PostgrestError } from "@supabase/supabase-js";
+import Link from "next/link";
+import type React from "react";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -17,8 +18,10 @@ const uuidPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 const baseSelect =
-  "id, user_id, artist_id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )";
+  "id, user_id, artist_id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )";
 const fullSelect = baseSelect;
+
+type SubmissionDetailClientProps = React.ComponentProps<typeof SubmissionDetailClient>;
 
 type SubmissionRow = {
   id: string;
@@ -77,6 +80,7 @@ type SubmissionRow = {
     | null;
   album_tracks?:
     | Array<{
+        id?: string | null;
         track_no?: number | null;
         track_title?: string | null;
         track_title_kr?: string | null;
@@ -310,11 +314,13 @@ export default async function SubmissionDetailPage({
 
   // 방송국별 진행: logo_url이 없는 스키마에서도 동작하도록 fallback
   const stationSelectWithLogo =
-    "id, status, result_note, updated_at, station:stations ( id, name, code, logo_url )";
+    "id, status, result_note, track_results, updated_at, station:stations ( id, name, code, logo_url )";
   const stationSelectBasic =
-    "id, status, result_note, updated_at, station:stations ( id, name, code )";
+    "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
 
-  let stationReviews: typeof stationReviewsClient extends any ? any[] | null : any = null;
+  let stationReviews: Array<{
+    station?: { id?: string; name?: string | null; code?: string | null; logo_url?: string | null } | null;
+  }> | null = null;
   let stationError: { code?: string; message?: string } | null = null;
 
   const runStationFetch = (select: string) =>
@@ -324,7 +330,7 @@ export default async function SubmissionDetailPage({
       .eq("submission_id", resolvedSubmission.id)
       .order("updated_at", { ascending: false });
 
-  let stationResult = await runStationFetch(stationSelectWithLogo);
+  const stationResult = await runStationFetch(stationSelectWithLogo);
   stationReviews = stationResult.data ?? null;
   stationError = stationResult.error ?? null;
 
@@ -365,7 +371,7 @@ export default async function SubmissionDetailPage({
   return (
     <SubmissionDetailClient
       submissionId={submissionId}
-      initialSubmission={initialSubmission as any}
+      initialSubmission={initialSubmission as unknown as SubmissionDetailClientProps["initialSubmission"]}
       initialEvents={events ?? []}
       initialStationReviews={normalizedStationReviews}
       initialFiles={submissionFiles ?? []}

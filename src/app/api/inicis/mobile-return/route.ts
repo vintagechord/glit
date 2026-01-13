@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const billingData = billingResult.data as Record<string, any>;
+  const billingData = billingResult.data as Record<string, string | number | null | undefined>;
   const tidPaid =
     billingData.tid ?? billingData.TID ?? billingData.P_TID ?? billingData.tid;
 

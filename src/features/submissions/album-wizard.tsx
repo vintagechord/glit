@@ -1,8 +1,10 @@
 "use client";
 
+import Script from "next/script";
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { PendingOverlay } from "@/components/ui/pending-overlay";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -16,6 +18,13 @@ import {
   saveAlbumSubmissionAction,
   type SubmissionActionState,
 } from "./actions";
+
+type StdPayInitResponse = {
+  orderId?: string;
+  stdJsUrl?: string;
+  stdParams?: Record<string, string>;
+  error?: string;
+};
 
 declare global {
   interface Window {
@@ -1668,11 +1677,11 @@ export function AlbumWizard({
                 guestToken: guestTokens[0]?.token ?? currentGuestToken ?? undefined,
               }),
             });
-            let json: any = null;
+            let json: StdPayInitResponse | null = null;
             let raw: string | null = null;
             try {
               raw = await response.text();
-              json = raw ? JSON.parse(raw) : null;
+              json = raw ? (JSON.parse(raw) as StdPayInitResponse) : null;
             } catch (parseError) {
               console.error("[Inicis][STDPay][init][client] parse error", parseError, {
                 status: response.status,
@@ -1748,9 +1757,13 @@ export function AlbumWizard({
 
   return (
     <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
+      <PendingOverlay
+        show={isSaving || isAddingAlbum}
+        label="심의 저장/결제 처리 중..."
+      />
       {payData ? (
         <>
-          <script src={payData.stdJsUrl} type="text/javascript" />
+          <Script src={payData.stdJsUrl} strategy="afterInteractive" />
           <form id={payFormId.current} method="POST" acceptCharset="UTF-8" className="hidden">
             {Object.entries(payData.stdParams).map(([key, value]) => (
               <input key={key} type="hidden" name={key} value={value} />

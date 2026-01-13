@@ -21,6 +21,7 @@ import {
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { summarizeTrackResults } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = {
@@ -247,7 +248,7 @@ export default async function AdminSubmissionDetailPage({
   const mvExtra =
     "mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics";
   const trackRelation =
-    "album_tracks ( track_no, track_title, track_title_kr, track_title_en, track_title_official, featuring, composer, lyricist, arranger, lyrics, notes, is_title, title_role, broadcast_selected )";
+    "album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, track_title_official, featuring, composer, lyricist, arranger, lyrics, notes, is_title, title_role, broadcast_selected )";
 
   const baseSelectWithResult = `${baseSelectCore}, ${albumExtra}, ${mvExtra}, ${trackRelation}`;
   const baseSelectWithoutResult = `${baseSelectCore.replace(
@@ -376,6 +377,7 @@ export default async function AdminSubmissionDetailPage({
   }
 
   const applicantEmail = submission.applicant_email ?? submission.guest_email ?? null;
+  const albumTracks = submission.album_tracks ?? [];
 
   if (submission.type === "ALBUM") {
     await ensureAlbumStationReviews(
@@ -389,7 +391,7 @@ export default async function AdminSubmissionDetailPage({
   const { data: stationReviews } = await supabase
     .from("station_reviews")
     .select(
-      "id, status, result_note, updated_at, station_id, station:stations ( id, name, code )",
+      "id, status, result_note, track_results, updated_at, station_id, station:stations ( id, name, code )",
     )
     .eq("submission_id", submissionId)
     .order("station_id", { ascending: true });
@@ -765,6 +767,50 @@ export default async function AdminSubmissionDetailPage({
               const stationInfo = Array.isArray(review.station)
                 ? review.station[0]
                 : review.station;
+              const trackSummary = summarizeTrackResults(review.track_results, albumTracks);
+              const trackResults = trackSummary.results;
+              const trackResultsForDisplay = albumTracks.map((track, index) => {
+                const matched =
+                  trackResults.find(
+                    (item) =>
+                      (item.track_id && item.track_id === track.id) ||
+                      (typeof item.track_no === "number" &&
+                        item.track_no === track.track_no),
+                  ) ?? {
+                    track_id: track.id,
+                    track_no: track.track_no ?? index + 1,
+                    title:
+                      track.track_title ??
+                      track.track_title_kr ??
+                      track.track_title_en ??
+                      "트랙",
+                    status: "PENDING",
+                  };
+                return {
+                  ...matched,
+                  track_no: matched.track_no ?? track.track_no ?? index + 1,
+                  title:
+                    matched.title ??
+                    track.track_title ??
+                    track.track_title_kr ??
+                    track.track_title_en ??
+                    "트랙",
+                  composer: track.composer,
+                  lyricist: track.lyricist,
+                  arranger: track.arranger,
+                  is_title: track.is_title,
+                };
+              });
+              const trackCounts = trackResultsForDisplay.reduce(
+                (acc, item) => {
+                  if (item.status === "APPROVED") acc.approved += 1;
+                  else if (item.status === "REJECTED") acc.rejected += 1;
+                  else acc.pending += 1;
+                  acc.total += 1;
+                  return acc;
+                },
+                { total: 0, approved: 0, rejected: 0, pending: 0 },
+              );
               return (
                 <form
                   key={review.id}
@@ -804,6 +850,68 @@ export default async function AdminSubmissionDetailPage({
                   >
                     저장
                   </button>
+                  {albumTracks.length > 1 ? (
+                    <div className="md:col-span-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          트랙별 결과
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {trackCounts.approved}곡 통과 · {trackCounts.rejected}곡 불통과
+                          {trackCounts.pending > 0
+                            ? ` · ${trackCounts.pending}곡 대기`
+                            : ""}
+                        </p>
+                      </div>
+                      <div className="mt-2 space-y-2 rounded-2xl border border-border/60 bg-background/60 p-3">
+                        {trackResultsForDisplay.map((track, index) => {
+                          const trackLabel = track.title || "트랙";
+                          return (
+                            <div
+                              key={`${track.id ?? index}-${track.track_no ?? index}`}
+                              className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-xs md:grid-cols-[1fr_180px]"
+                            >
+                              <div className="min-w-0">
+                                <input
+                                  type="hidden"
+                                  name="trackResultId"
+                                  value={track.track_id ?? ""}
+                                />
+                                <input
+                                  type="hidden"
+                                  name="trackResultNo"
+                                  value={track.track_no ?? ""}
+                                />
+                                <input
+                                  type="hidden"
+                                  name="trackResultTitle"
+                                  value={trackLabel}
+                                />
+                                <p className="truncate font-semibold text-foreground">
+                                  {track.track_no ? `${track.track_no}. ` : ""}
+                                  {trackLabel}
+                                  {track.is_title ? " · 타이틀" : ""}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} /
+                                  편곡 {track.arranger || "-"}
+                                </p>
+                              </div>
+                              <select
+                                name="trackResultStatus"
+                                defaultValue={(track.status as string) || "PENDING"}
+                                className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-[11px]"
+                              >
+                                <option value="PENDING">대기</option>
+                                <option value="APPROVED">통과</option>
+                                <option value="REJECTED">불통과</option>
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </form>
               );
             })

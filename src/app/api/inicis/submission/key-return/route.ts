@@ -126,6 +126,25 @@ async function handler(req: NextRequest) {
       gotKeys: formKeys,
     });
 
+    // 토큰 미발급 등의 실패도 결제 실패로 기록 & 리다이렉트
+    if (orderId) {
+      const { payment } = await getPaymentByOrderId(orderId);
+      if (payment?.submission) {
+        const guestToken = payment.submission.guest_token ?? null;
+        await markPaymentFailure(orderId, {
+          result_code: resultCode || "AUTH_MISSING",
+          result_message: resultMsg || "이니시스 인증 토큰을 받지 못했습니다.",
+          raw_response: params,
+        });
+        return failureRedirect(
+          baseUrl,
+          payment.submission.id,
+          resultMsg || "결제 인증이 완료되지 않았습니다.",
+          guestToken,
+        );
+      }
+    }
+
     return NextResponse.json(
       {
         error: "이니시스 인증 실패(토큰 미발급)",
@@ -211,7 +230,7 @@ async function handler(req: NextRequest) {
   }
 
   // ---- 금액 검증 ----
-  const authData = approval.data as Record<string, any>;
+  const authData = approval.data as Record<string, string | number | null | undefined>;
   const totPrice = Number(authData.TotPrice ?? authData.price ?? 0);
 
   if (paymentAmount > 0 && totPrice > 0 && paymentAmount !== totPrice) {

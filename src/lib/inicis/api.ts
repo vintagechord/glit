@@ -80,7 +80,7 @@ export async function requestStdPayApproval({
       cache: "no-store",
     });
 
-    const data = (await res.json()) as Record<string, any>;
+    const data = (await res.json()) as Record<string, string | number | null | undefined>;
     const secureSignature = data.MOID
       ? makeAuthSecureSignature({
           mid,
@@ -152,9 +152,9 @@ export async function requestBillingPayment(payload: BillingRequest) {
     cache: "no-store",
   });
 
-  let dataResponse: Record<string, any> | null = null;
+  let dataResponse: Record<string, string | number | null | undefined> | null = null;
   try {
-    dataResponse = (await res.json()) as Record<string, any>;
+    dataResponse = (await res.json()) as Record<string, string | number | null | undefined>;
   } catch {
     dataResponse = null;
   }
@@ -200,9 +200,9 @@ export async function requestRefund(payload: RefundRequest) {
     cache: "no-store",
   });
 
-  let dataResponse: Record<string, any> | null = null;
+  let dataResponse: Record<string, string | number | null | undefined> | null = null;
   try {
-    dataResponse = (await res.json()) as Record<string, any>;
+    dataResponse = (await res.json()) as Record<string, string | number | null | undefined>;
   } catch {
     dataResponse = null;
   }

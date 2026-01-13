@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 운영 JS만 사용하도록 prod 고정 (테스트 JS 혼용 방지)
-    const modeEnv: "prod" = "prod";
+    const modeEnv = "prod" as const;
     const config = loadEnvConfig(modeEnv);
     const baseUrl = getBaseUrl(req);
     if (baseUrl.startsWith("http://localhost") || baseUrl.startsWith("http://127.")) {
@@ -115,9 +115,9 @@ export async function POST(req: NextRequest) {
       closeUrl,
       env: config.mode,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Inicis][STDPay][dev-init][error]", error);
-    const message = error?.message ?? "초기화 실패";
+    const message = error instanceof Error ? error.message : "초기화 실패";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

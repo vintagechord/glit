@@ -9,7 +9,7 @@ const services = [
   "최종 결과까지 개별 실시간 업데이트",
   "카드·모바일 등 온라인 결제",
   "CD/가사집/DVD 무료 제작",
-  "전 방송사 접수 진행 (서울·경기권)",
+  "전 방송사 접수 진행",
 ];
 
 const revealBaseClass =
@@ -84,31 +84,24 @@ export function AboutRevealSection() {
               정식 등록 업체
             </p>
             <p className="text-base leading-relaxed text-white/80">
-              GLIT은 (주)빈티지하우스의 법인 사업자로 운영되며, 통신판매업,
-              대중문화예술기획업, 음반/음악영상물제작업 등을 완료한 정식 업체로
-              모든 서류의 발급이 원활합니다. 빈티지하우스는 음원거래 플랫폼{" "}
+              GLIT은 뮤직 비즈니스 전문기업 (주)빈티지하우스의 심의 브랜드입니다.
+              빈티지하우스는 음원거래 플랫폼{" "}
               <a
                 href="https://www.iamwatermelon.com"
                 className="font-semibold underline decoration-white/60 underline-offset-4"
               >
                 워터멜론
               </a>
-              , 아티스트 섭외 서비스{" "}
-              <button
-                type="button"
-                onClick={() => window.alert("준비 중입니다.")}
-                className="font-semibold underline decoration-white/60 underline-offset-4"
-              >
-                Encore
-              </button>
-              , 레코딩&믹스 등을 진행하는 뮤직 스튜디오{" "}
+              (Beat 마켓), 마하픽스(음향기기 수리), 레코딩&믹스를 진행하는 뮤직 스튜디오{" "}
               <a
                 href="https://vhouse.co.kr"
                 className="font-semibold underline decoration-white/60 underline-offset-4"
               >
                 V-House
               </a>
-              , 앨범 기획/제작 레이블 운영 등을 진행하고 있습니다.
+              등을 운영하고 있습니다. 통신판매업, 대중문화예술기획업,
+              음반/음악영상물제작업 등을 완료한 정식 업체로 세금계산서, 현금영수증,
+              거래내역서 등 모든 서류의 발급이 원활합니다.
             </p>
           </div>
         </section>

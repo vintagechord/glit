@@ -21,9 +21,9 @@ export default async function TrackDetailPage({
 
   const admin = createAdminClient();
   const baseSelect =
-    "id, title, artist_name, type, status, payment_status, amount_krw, created_at, updated_at, package:packages ( name, station_count, price_krw )";
+    "id, title, artist_name, type, status, payment_status, amount_krw, created_at, updated_at, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )";
   const fullSelect =
-    "id, title, artist_name, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, package:packages ( name, station_count, price_krw )";
+    "id, title, artist_name, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )";
 
   const fetchSubmission = async (column: "guest_token" | "id", value: string) => {
     const { data, error } = await admin
@@ -85,7 +85,7 @@ export default async function TrackDetailPage({
   const { data: stationReviews } = await admin
     .from("station_reviews")
     .select(
-      "id, status, result_note, updated_at, station:stations ( id, name, code )",
+      "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )",
     )
     .eq("submission_id", submission.id)
     .order("updated_at", { ascending: false });

@@ -3,12 +3,14 @@
 import Image from "next/image";
 import * as React from "react";
 import { formatDate } from "@/lib/format";
+import { summarizeTrackResults } from "@/lib/track-results";
 import { createClient } from "@/lib/supabase/client";
 
 type StationItem = {
   id: string;
   status: string;
   updated_at: string;
+  track_results?: unknown;
   station?: {
     name?: string | null;
   } | null;
@@ -99,13 +101,31 @@ function getReceptionStatus(status: string) {
   );
 }
 
-function getResultStatus(status: string) {
-  return (
-    resultStatusMap[status] ?? {
-      label: "대기",
-      tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
-    }
-  );
+function getResultStatus(review: StationItem) {
+  const summary = summarizeTrackResults(review.track_results);
+  const base =
+    summary.outcome === "APPROVED"
+      ? resultStatusMap.APPROVED
+      : summary.outcome === "REJECTED"
+        ? resultStatusMap.REJECTED
+        : summary.outcome === "PARTIAL"
+          ? {
+              label: "부분 통과",
+              tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+            }
+          : resultStatusMap[review.status] ?? {
+              label: "대기",
+              tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+            };
+
+  const summaryText =
+    summary.counts.total > 1
+      ? `${summary.counts.approved}곡 통과 / ${summary.counts.rejected}곡 불통과${
+          summary.counts.pending > 0 ? ` / ${summary.counts.pending}곡 대기` : ""
+        }`
+      : null;
+
+  return { ...base, summaryText };
 }
 
 function getStageStatus(submission?: SubmissionSummary | null) {
@@ -200,6 +220,16 @@ const stationLogoSources: Array<{
   { patterns: ["JTBC"], src: "/station-logos/jtbc.svg", alt: "JTBC" },
   { patterns: ["G1", "GFM"], src: "/station-logos/g1.svg", alt: "G1" },
 ];
+
+const completionStatusSet = new Set(["APPROVED", "REJECTED", "NEEDS_FIX"]);
+
+const isStationCompleted = (review: StationItem) => {
+  const summary = summarizeTrackResults(review.track_results);
+  if (summary.outcome && summary.outcome !== "PENDING") {
+    return true;
+  }
+  return completionStatusSet.has(review.status);
+};
 
 function StationLogo({
   name,
@@ -366,7 +396,7 @@ export function HomeReviewPanel({
         async () => {
           const { data } = await supabase
             .from("station_reviews")
-            .select("id, status, updated_at, station:stations ( name )")
+            .select("id, status, track_results, updated_at, station:stations ( name )")
             .eq("submission_id", activeSubmissionId)
             .order("updated_at", { ascending: false });
           if (!data) return;
@@ -398,7 +428,7 @@ export function HomeReviewPanel({
 
   const totalCount = activeStations.length;
   const completedCount = activeStations.filter((review) =>
-    ["APPROVED", "REJECTED", "NEEDS_FIX"].includes(review.status),
+    isStationCompleted(review),
   ).length;
   const isFinalized =
     activeSubmission &&
@@ -417,7 +447,7 @@ export function HomeReviewPanel({
       : getStageStatus(activeSubmission);
 
   const rowsPerPage = 5;
-  const rowHeight = 40;
+  const rowHeight = 52;
   const rowGap = 8;
   const listPadding = 12;
   const pageHeight =
@@ -695,11 +725,11 @@ export function HomeReviewPanel({
                   >
                     {activeStations.map((station, index) => {
                       const reception = getReceptionStatus(station.status);
-                      const result = getResultStatus(station.status);
+                      const result = getResultStatus(station);
                       return (
                         <div
                           key={`${station.id}-${index}`}
-                          className="grid h-10 grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 text-[11px]"
+                          className="grid min-h-[52px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-[11px]"
                         >
                           <span className="flex items-center gap-2 truncate font-semibold text-foreground">
                             <StationLogo name={station.station?.name ?? undefined} hideOnMobile />
@@ -710,11 +740,18 @@ export function HomeReviewPanel({
                           >
                             {reception.label}
                           </span>
-                          <span
-                            className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
-                          >
-                            {result.label}
-                          </span>
+                          <div className="flex flex-col items-center justify-center gap-1 justify-self-center">
+                            <span
+                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                            >
+                              {result.label}
+                            </span>
+                            {result.summaryText ? (
+                              <span className="text-[9px] leading-tight text-muted-foreground text-center">
+                                {result.summaryText}
+                              </span>
+                            ) : null}
+                          </div>
                           <span className="text-right text-[10px] text-muted-foreground">
                             {formatDate(station.updated_at)}
                           </span>

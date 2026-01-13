@@ -32,6 +32,7 @@ export async function StatusPageView(config?: ShellConfig) {
     reviews?: Array<{
       id: string;
       status: string;
+      track_results?: unknown;
       updated_at: string;
       station?: { name?: string | null } | Array<{ name?: string | null }>;
     }> | null,
@@ -66,11 +67,23 @@ export async function StatusPageView(config?: ShellConfig) {
 
   const albumStationsMap: Record<
     string,
-    Array<{ id: string; status: string; updated_at: string; station?: { name?: string | null } | null }>
+    Array<{
+      id: string;
+      status: string;
+      track_results?: unknown;
+      updated_at: string;
+      station?: { name?: string | null } | null;
+    }>
   > = {};
   const mvStationsMap: Record<
     string,
-    Array<{ id: string; status: string; updated_at: string; station?: { name?: string | null } | null }>
+    Array<{
+      id: string;
+      status: string;
+      track_results?: unknown;
+      updated_at: string;
+      station?: { name?: string | null } | null;
+    }>
   > = {};
 
   const albumSubmissions = (albumSubmissionsRaw ?? []) as Array<{
@@ -105,7 +118,7 @@ export async function StatusPageView(config?: ShellConfig) {
       );
       const { data: albumReviews } = await supabase
         .from("station_reviews")
-        .select("id, status, updated_at, station:stations ( name )")
+        .select("id, status, track_results, updated_at, station:stations ( name )")
         .eq("submission_id", submission.id)
         .order("updated_at", { ascending: false });
       albumStationsMap[submission.id] = normalizeStations(albumReviews);
@@ -116,7 +129,7 @@ export async function StatusPageView(config?: ShellConfig) {
     mvSubmissions.map(async (submission) => {
       const { data: mvReviews } = await supabase
         .from("station_reviews")
-        .select("id, status, updated_at, station:stations ( name )")
+        .select("id, status, track_results, updated_at, station:stations ( name )")
         .eq("submission_id", submission.id)
         .order("updated_at", { ascending: false });
       mvStationsMap[submission.id] = normalizeStations(mvReviews);

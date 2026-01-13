@@ -83,7 +83,7 @@ const featureHighlights = [
   {
     title: "실시간 진행 알림",
     description:
-      "각 방송국별 심의 진행 상황을 실시간으로 확인하고 승인 기록을 남깁니다.\n회원/비회원 모두에게 제공",
+      "방송국별 심의 진행 상황을 실시간으로 확인하세요.\n회원/비회원 누구나",
     card:
       "bg-[#f7f8fb] text-[#2d3444] border-white/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#d7ecff] via-white to-[#eef6ff]",
@@ -123,7 +123,7 @@ const featureHighlights = [
   {
     title: "파일 업로드",
     description:
-      "음원/M/V 신청서를 작성하며, 파일도 동시에 업로드하세요.\n복잡한 심의를 GLIT에서 도장 찍듯 간단하게 처리합니다.",
+      "글릿은 자체 스토리지를 운영하고 있습니다.\n안전하게 글릿에 음원과 영상을 업로드하세요.",
     card:
       "bg-white text-[#2d3444] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#e7fff2] via-white to-[#eaf7ff]",
@@ -158,7 +158,7 @@ const featureHighlights = [
   {
     title: "관리자 승인",
     description:
-      "신청 접수 시 1차 체크, 방송국 전달 전 2차 검수로 빈틈 없이.\nClear. Approved. Out.",
+      "접수 시 1차 체크, 방송국 전달 전 2차 검수로 빈틈 없이",
     card:
       "bg-[#eef2ff] text-[#2d3444] border-[#dbe5ff] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#fff4d6] via-white to-[#ffe9d6]",
@@ -229,6 +229,7 @@ type StationSnapshot = {
   id: string;
   status: string;
   updated_at: string;
+  track_results?: unknown;
   station?: {
     name?: string | null;
   } | null;
@@ -336,6 +337,7 @@ export default async function Home() {
       id: string;
       status: string;
       updated_at: string;
+      track_results?: unknown;
       station?: { name?: string | null } | Array<{ name?: string | null }>;
     }> | null,
   ) =>
@@ -369,39 +371,43 @@ export default async function Home() {
     albumSubmissions = albumData ?? [];
     mvSubmissions = mvData ?? [];
 
-    if (albumSubmissions.length > 0) {
-      for (const submission of albumSubmissions) {
-        const packageInfo = Array.isArray(submission.package)
-          ? submission.package[0]
-          : submission.package;
+    const albumFetches =
+      albumSubmissions.length > 0
+        ? albumSubmissions.map(async (submission) => {
+            const packageInfo = Array.isArray(submission.package)
+              ? submission.package[0]
+              : submission.package;
 
-        await ensureAlbumStationReviews(
-          supabase,
-          submission.id,
-          packageInfo?.station_count ?? null,
-          packageInfo?.name ?? null,
-        );
+            await ensureAlbumStationReviews(
+              supabase,
+              submission.id,
+              packageInfo?.station_count ?? null,
+              packageInfo?.name ?? null,
+            );
 
-        const { data: albumReviews } = await supabase
-          .from("station_reviews")
-          .select("id, status, updated_at, station:stations ( name )")
-          .eq("submission_id", submission.id)
-          .order("updated_at", { ascending: false });
+            const { data: albumReviews } = await supabase
+              .from("station_reviews")
+              .select("id, status, track_results, updated_at, station:stations ( name )")
+              .eq("submission_id", submission.id)
+              .order("updated_at", { ascending: false });
 
-        albumStationsMap[submission.id] = normalizeStations(albumReviews);
-      }
-    }
+            albumStationsMap[submission.id] = normalizeStations(albumReviews);
+          })
+        : [];
 
-    if (mvSubmissions.length > 0) {
-      for (const submission of mvSubmissions) {
-        const { data: mvReviews } = await supabase
-          .from("station_reviews")
-          .select("id, status, updated_at, station:stations ( name )")
-          .eq("submission_id", submission.id)
-          .order("updated_at", { ascending: false });
-        mvStationsMap[submission.id] = normalizeStations(mvReviews);
-      }
-    }
+    const mvFetches =
+      mvSubmissions.length > 0
+        ? mvSubmissions.map(async (submission) => {
+            const { data: mvReviews } = await supabase
+              .from("station_reviews")
+              .select("id, status, track_results, updated_at, station:stations ( name )")
+              .eq("submission_id", submission.id)
+              .order("updated_at", { ascending: false });
+            mvStationsMap[submission.id] = normalizeStations(mvReviews);
+          })
+        : [];
+
+    await Promise.all([...albumFetches, ...mvFetches]);
   }
 
   return (
@@ -417,7 +423,7 @@ export default async function Home() {
             {hasHeroVideo ? (
               <>
                 <video
-                  className="hidden h-full w-full object-cover opacity-100 saturate-[1.05] brightness-[0.72] contrast-[1.2] dark:opacity-80 dark:saturate-[1.35] dark:brightness-[1.12] dark:contrast-[1.12] sm:block"
+                  className="hidden h-full w-full object-cover opacity-100 saturate-[1.02] brightness-[0.6] contrast-[1.1] dark:opacity-80 dark:saturate-[1.3] dark:brightness-[1.12] dark:contrast-[1.12] sm:block"
                   poster={heroVideoPoster}
                   autoPlay
                   muted
@@ -428,7 +434,7 @@ export default async function Home() {
                   <source src={heroVideoDesktop} type="video/mp4" />
                 </video>
                 <video
-                  className="h-full w-full object-cover object-right opacity-100 saturate-[1.05] brightness-[0.72] contrast-[1.2] dark:opacity-80 dark:saturate-[1.35] dark:brightness-[1.12] dark:contrast-[1.12] sm:hidden"
+                  className="h-full w-full object-cover object-right opacity-100 saturate-[1.02] brightness-[0.6] contrast-[1.1] dark:opacity-80 dark:saturate-[1.3] dark:brightness-[1.12] dark:contrast-[1.12] sm:hidden"
                   poster={heroVideoPoster}
                   autoPlay
                   muted
@@ -496,10 +502,12 @@ export default async function Home() {
                           <div className="absolute -left-6 bottom-[-14px] h-10 w-10 rounded-full bg-white/60 blur-md" />
                           {feature.icon}
                         </div>
-                        <p className="text-base font-semibold">{feature.title}</p>
+                        <p className="text-base font-semibold text-[#1f2733]">
+                          {feature.title}
+                        </p>
                       </div>
                       <div className="absolute inset-0 z-10 flex items-center justify-center px-5 text-center opacity-0 transition-opacity duration-300 [transform:rotateY(180deg)] group-hover:opacity-100">
-                        <p className="text-sm font-semibold text-slate-900 whitespace-pre-line">
+                        <p className="text-sm font-semibold text-[#1f2733] whitespace-pre-line">
                           {feature.description}
                         </p>
                       </div>

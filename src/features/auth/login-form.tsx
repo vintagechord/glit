@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { TrackLookupModalTrigger } from "@/features/track/track-lookup-modal";
 
@@ -12,6 +13,26 @@ const initialState: ActionState = {};
 export function LoginForm() {
   const [state, formAction] = useActionState(loginAction, initialState);
   const [emailValue, setEmailValue] = useState("");
+
+  const SubmitButton = () => {
+    const { pending } = useFormStatus();
+    return (
+      <button
+        type="submit"
+        className="w-full rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-70"
+        disabled={pending}
+      >
+        {pending ? (
+          <span className="inline-flex items-center justify-center gap-2">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-background/40 border-t-transparent" />
+            <span>로그인 중...</span>
+          </span>
+        ) : (
+          "로그인"
+        )}
+      </button>
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -55,12 +76,7 @@ export function LoginForm() {
             {state.error}
           </p>
         )}
-        <button
-          type="submit"
-          className="w-full rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
-        >
-          로그인
-        </button>
+        <SubmitButton />
       </form>
       <div className="space-y-2 rounded-2xl border border-border/60 bg-background/60 px-4 py-3">
         <div className="flex justify-center">

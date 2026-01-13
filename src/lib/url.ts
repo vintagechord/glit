@@ -26,6 +26,6 @@ export const getClientIp = (req?: NextRequest) => {
     if (first) return first;
   }
   // NextRequest.ip is available at runtime but not typed in some versions
-  const ip = (req as any)?.ip;
+  const ip = (req as { ip?: string | null })?.ip;
   return ip || "127.0.0.1";
 };

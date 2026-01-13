@@ -20,7 +20,7 @@ function withCookies(target: NextResponse, source: NextResponse) {
 }
 
 export default async function proxy(request: NextRequest) {
-  const session = await updateSession(request as any);
+  const session = await updateSession(request);
   const response =
     session instanceof NextResponse ? session : (session?.response as NextResponse | undefined);
   const user = session instanceof NextResponse ? null : session?.user ?? null;

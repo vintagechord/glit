@@ -16,7 +16,7 @@ export async function GET(
 
   const supabase = createAdminClient();
   const select =
-    "*, package:packages ( name, station_count ), album_tracks ( * ), station_reviews ( id, status, result_note, updated_at, station:stations ( id, name, code ) ), submission_files ( id, kind, file_path, original_name, mime, size, created_at )";
+    "*, package:packages ( name, station_count ), album_tracks ( * ), station_reviews ( id, status, result_note, track_results, updated_at, station:stations ( id, name, code ) ), submission_files ( id, kind, file_path, original_name, mime, size, created_at )";
 
   const { data, error } = await supabase
     .from("submissions")

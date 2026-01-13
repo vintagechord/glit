@@ -77,7 +77,6 @@ export const buildStdPayRequest = (
 
   // 이니시스 STDPay에서 계약되지 않은 본인인증(BILLAUTH) 방식으로 전환되는 것을 방지
   if ("acceptmethod" in stdParams) {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-expect-error 런타임 방어: acceptmethod 강제 제거
     delete stdParams.acceptmethod;
   }

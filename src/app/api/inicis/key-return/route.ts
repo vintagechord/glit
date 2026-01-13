@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const authData = approval.data as Record<string, any>;
+  const authData = approval.data as Record<string, string | number | null | undefined>;
   const billKey =
     authData.CARD_BillKey ??
     authData.billKey ??
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const billingData = billingResult.data as Record<string, any>;
+  const billingData = billingResult.data as Record<string, string | number | null | undefined>;
   const tidPaid =
     billingData.tid ?? billingData.TID ?? billingData.P_TID ?? billingData.tid;
 

@@ -39,6 +39,7 @@ type SubmissionRow = {
   station_reviews?: Array<{
     id: string;
     status: string;
+    track_results?: unknown;
     updated_at: string | null;
     station?: { name?: string | null } | Array<{ name?: string | null }>;
   }> | null;
@@ -60,9 +61,9 @@ export async function HistoryPageView(config?: ShellConfig) {
   }
 
   const fullSelect =
-    "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title ), station_reviews ( id, status, updated_at, station:stations ( name ) )";
+    "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title ), station_reviews ( id, status, track_results, updated_at, station:stations ( name ) )";
   const fallbackSelect =
-    "id, title, artist_name, artist_id, status, created_at, updated_at, type, amount_krw, is_oneclick, station_reviews ( id, status, updated_at, station:stations ( name ) )";
+    "id, title, artist_name, artist_id, status, created_at, updated_at, type, amount_krw, is_oneclick, station_reviews ( id, status, track_results, updated_at, station:stations ( name ) )";
 
   // 1) 기본 쿼리: artist join 포함
   const { data: initialData, error: submissionError } = await supabase

@@ -2,7 +2,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
 import { getInicisMode, getStdPayConfig } from "@/lib/inicis/config";
-import { getBaseUrl } from "@/lib/url";
 
 export type StdPayInitResult = {
   orderId: string;
