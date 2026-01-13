@@ -193,7 +193,9 @@ export async function POST(req: NextRequest) {
     return failureResponse(
       baseUrl,
       orderId,
-      billingResult.data?.resultMsg ?? "첫 결제 승인에 실패했습니다.",
+      billingResult.data?.resultMsg != null
+        ? String(billingResult.data.resultMsg)
+        : "첫 결제 승인에 실패했습니다.",
       400,
     );
   }
