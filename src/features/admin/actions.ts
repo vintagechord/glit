@@ -405,15 +405,18 @@ export async function updateStationReviewAction(
           ? "NEEDS_FIX"
           : null;
   const resolvedStatus = derivedStatus ?? parsed.data.status;
-  const payload: Record<string, unknown> = {
+  const updatePayload: Record<string, unknown> = {
     status: resolvedStatus,
     result_note: parsed.data.resultNote || null,
   };
   if (normalizedTrackResults !== undefined) {
-    payload.track_results = normalizedTrackResults;
+    updatePayload.track_results = normalizedTrackResults;
   }
 
-  const { error } = await supabase.from("station_reviews").update(payload).eq("id", parsed.data.reviewId);
+  const { error } = await supabase
+    .from("station_reviews")
+    .update(updatePayload)
+    .eq("id", parsed.data.reviewId);
 
   if (error) {
     return { error: "방송국 상태 업데이트에 실패했습니다." };
