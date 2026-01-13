@@ -82,12 +82,14 @@ export async function POST(req: NextRequest) {
       approval.data?.resultCode != null
         ? String(approval.data.resultCode)
         : "AUTH_FAIL";
+    const resultMsgStr =
+      approval.data?.resultMsg != null
+        ? String(approval.data.resultMsg)
+        : "Inicis approval failed. Please try again or contact support.";
     await updateHistory(orderId, {
       status: "FAILED",
       result_code: resultCodeStr,
-      result_message:
-        approval.data?.resultMsg ??
-        "Inicis approval failed. Please try again or contact support.",
+      result_message: resultMsgStr,
     });
     return failureResponse(
       baseUrl,
