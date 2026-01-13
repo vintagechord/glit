@@ -57,6 +57,10 @@ export async function POST(req: NextRequest) {
     (form.get("price") as string | null) ??
     (form.get("P_AMT") as string | null) ??
     "";
+  const toCode = (value: string | number | null | undefined, fallback: string) =>
+    value == null ? fallback : String(value);
+  const toStrOrNull = (value: string | number | null | undefined) =>
+    value == null ? null : String(value);
 
   if (!orderId) {
     return NextResponse.json(
@@ -157,22 +161,27 @@ export async function POST(req: NextRequest) {
   if (!billingResult.ok || !billingResult.data) {
     await updateHistory(orderId, {
       status: "FAILED",
-      result_code: billingResult.data?.resultCode ?? "BILLING_FAIL",
-      result_message:
-        billingResult.data?.resultMsg ?? "정기결제(빌링) 요청 실패",
-      raw_response: { billing: billingResult.data },
-    });
-    return failureResponse(
-      baseUrl,
-      orderId,
-      billingResult.data?.resultMsg ?? "첫 결제 승인 실패",
-      400,
-    );
-  }
+    result_code: toCode(billingResult.data?.resultCode, "BILLING_FAIL"),
+    result_message:
+      billingResult.data?.resultMsg != null
+        ? String(billingResult.data.resultMsg)
+        : "정기결제(빌링) 요청 실패",
+    raw_response: { billing: billingResult.data },
+  });
+  return failureResponse(
+    baseUrl,
+    orderId,
+    billingResult.data?.resultMsg != null
+      ? String(billingResult.data.resultMsg)
+      : "첫 결제 승인 실패",
+    400,
+  );
+}
 
-  const billingData = billingResult.data as Record<string, string | number | null | undefined>;
-  const tidPaid =
-    billingData.tid ?? billingData.TID ?? billingData.P_TID ?? billingData.tid;
+const billingData = billingResult.data as Record<string, string | number | null | undefined>;
+const tidPaid =
+  billingData.tid ?? billingData.TID ?? billingData.P_TID ?? billingData.tid;
+const tidPaidStr = tidPaid != null ? String(tidPaid) : null;
 
   const { subscription } = await activateSubscription({
     userId: history.user_id,
@@ -181,16 +190,17 @@ export async function POST(req: NextRequest) {
     productName: history.product_name ?? "Subscription",
   });
 
-  await updateHistory(orderId, {
-    status: "APPROVED",
-    pg_tid: tidPaid ?? null,
-    result_code: billingData.resultCode ?? "00",
-    result_message: billingData.resultMsg ?? "결제 완료",
-    raw_response: { billing: billingData },
-    billing_id: billing.id,
-    subscription_id: subscription?.id ?? null,
-    paid_at: new Date().toISOString(),
-  });
+await updateHistory(orderId, {
+  status: "APPROVED",
+  pg_tid: tidPaidStr,
+  result_code: toCode(billingData.resultCode, "00"),
+  result_message:
+    billingData.resultMsg != null ? String(billingData.resultMsg) : "결제 완료",
+  raw_response: { billing: billingData },
+  billing_id: billing.id,
+  subscription_id: subscription?.id ?? null,
+  paid_at: new Date().toISOString(),
+});
 
   return successRedirect(baseUrl, orderId, "success");
 }
