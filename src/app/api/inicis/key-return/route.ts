@@ -173,9 +173,9 @@ export async function POST(req: NextRequest) {
     orderId,
     amountKrw: historyPrice,
     goodName: history.product_name ?? "Subscription",
-    buyerName: authData.buyerName ?? "회원",
-    buyerEmail: authData.buyerEmail ?? null,
-    buyerTel: authData.buyerTel ?? null,
+    buyerName: toStrOrNull(authData.buyerName) ?? "회원",
+    buyerEmail: toStrOrNull(authData.buyerEmail),
+    buyerTel: toStrOrNull(authData.buyerTel),
     clientIp: getClientIp(req),
     url: baseUrl,
   });
