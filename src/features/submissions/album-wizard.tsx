@@ -387,34 +387,30 @@ export function AlbumWizard({
     void ensureStdPayReady("https://stdpay.inicis.com/stdjs/INIStdPay.js");
   }, [ensureStdPayReady]);
 
-  const invokeStdPay = React.useCallback(
-    (data: { stdParams: Record<string, string>; stdJsUrl: string }) => {
-      if (typeof window === "undefined") return;
-      logStdPayParams(data.stdParams, data.stdJsUrl);
-      const formId = payFormId.current;
-      if (!window.INIStdPay) {
-        console.warn("[Inicis][STDPay] INIStdPay.js not available. Check script src or CSP.");
-        return;
-      }
-      console.info("[Inicis][STDPay] invoking pay()", { formId, scriptReady: stdScriptReady });
-      window.INIStdPay.pay(formId);
-      window.setTimeout(() => {
-        const iframes = Array.from(
-          document.querySelectorAll<HTMLIFrameElement>('iframe[src*="inicis"], iframe[id*="INI"], iframe[name*="INI"]'),
-        );
-        console.info("[Inicis][STDPay] iframe check after pay()", {
-          count: iframes.length,
-          srcs: iframes.map((f) => f.src),
-        });
-      }, 300);
-    },
-    [logStdPayParams, stdScriptReady],
-  );
-
   React.useEffect(() => {
     if (!payData) return;
-    void ensureStdPayReady(payData.stdJsUrl);
-  }, [ensureStdPayReady, payData]);
+    let cancelled = false;
+    const launch = async () => {
+      const ready = await ensureStdPayReady(payData.stdJsUrl);
+      if (cancelled) return;
+      logStdPayParams(payData.stdParams, payData.stdJsUrl);
+      const formId = payFormId.current;
+      if (!ready || typeof window === "undefined" || !window.INIStdPay) {
+        console.warn("[Inicis][STDPay] INIStdPay.js not ready. Check script src or CSP.");
+        return;
+      }
+      const formEl = document.getElementById(formId);
+      if (!formEl) {
+        console.warn("[Inicis][STDPay] form element not found", { formId });
+        return;
+      }
+      window.INIStdPay.pay(formId);
+    };
+    launch();
+    return () => {
+      cancelled = true;
+    };
+  }, [ensureStdPayReady, logStdPayParams, payData]);
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [completionId, setCompletionId] = React.useState<string | null>(null);
@@ -1724,7 +1720,6 @@ export function AlbumWizard({
               stdJsUrl: json.stdJsUrl,
               keys: Object.keys(json.stdParams ?? {}),
             });
-            invokeStdPay(normalizedPayData);
             return;
           } catch (error) {
             console.error("[Inicis][STDPay][init][client] exception", error);
