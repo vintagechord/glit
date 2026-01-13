@@ -45,11 +45,20 @@ export function getB2Config() {
   });
 
   if (!parsed.success) {
+    const envMap: Record<string, string> = {
+      endpoint: "B2_S3_ENDPOINT",
+      region: "B2_REGION",
+      bucket: "B2_BUCKET",
+      prefix: "B2_PREFIX",
+      keyId: "B2_KEY_ID",
+      applicationKey: "B2_APPLICATION_KEY",
+      presignExpiresSeconds: "B2_PRESIGN_EXPIRES_SECONDS",
+    };
     const missing = parsed.error.issues
-      .map((err) => err.path.join("."))
+      .map((err) => envMap[err.path[0] as string] ?? String(err.path[0]))
       .join(", ");
     throw new B2ConfigError(
-      `Backblaze B2 설정이 완료되지 않았습니다. 누락/오류 항목: ${missing}`,
+      `Backblaze B2 설정 누락/오류: ${missing} (값은 노출하지 않음)`,
     );
   }
 

@@ -61,21 +61,38 @@ export async function POST(request: Request) {
       contentType: mimeType,
     });
 
+    console.info("[Upload][presign] ok", {
+      submissionId,
+      objectKey,
+      sizeBytes,
+      user: user?.id ?? null,
+      guest: Boolean(guestToken),
+    });
+
     return NextResponse.json({
       uploadUrl,
       objectKey,
       expiresIn: Number(process.env.B2_PRESIGN_EXPIRES_SECONDS ?? "900"),
     });
   } catch (error) {
-    console.error("B2 presign error", error);
+    const message =
+      error instanceof B2ConfigError
+        ? error.message
+        : "업로드 URL을 생성할 수 없습니다.";
+    console.error("[Upload][presign] error", {
+      submissionId,
+      user: user?.id ?? null,
+      guest: Boolean(guestToken),
+      message: error instanceof Error ? error.message : String(error),
+    });
     if (error instanceof B2ConfigError) {
       return NextResponse.json(
-        { error: "파일 저장소가 아직 설정되지 않았습니다. 관리자에게 문의해주세요." },
+        { error: message },
         { status: 500 },
       );
     }
     return NextResponse.json(
-      { error: "업로드 URL을 생성할 수 없습니다." },
+      { error: message },
       { status: 500 },
     );
   }

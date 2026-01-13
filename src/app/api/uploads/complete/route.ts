@@ -39,12 +39,20 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof B2ConfigError) {
       return NextResponse.json(
-        { error: "파일 저장소가 아직 설정되지 않았습니다. 관리자에게 문의해주세요." },
+        { error: error.message },
         { status: 500 },
       );
     }
     // ignore other head errors; client already uploaded
   }
+
+  console.info("[Upload][complete] ok", {
+    objectKey,
+    submissionId: parsed.data.submissionId,
+    user: user?.id ?? null,
+    guest: Boolean(guestToken),
+    sizeBytes: parsed.data.sizeBytes,
+  });
 
   return NextResponse.json({ ok: true });
 }
