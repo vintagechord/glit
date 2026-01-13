@@ -481,7 +481,7 @@ export default async function Home() {
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-10 px-6 py-10 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 lg:min-h-[520px] lg:h-full">
-              <span className="inline-flex w-fit items-center rounded-full border border-border/60 bg-background/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/85">
+              <span className="inline-flex w-fit items-center rounded-full border border-white/60 bg-black/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/90 backdrop-blur-sm">
                 Officially Greenlit
               </span>
               <h1 className="font-display text-3xl leading-tight text-white sm:text-4xl">
@@ -500,7 +500,7 @@ export default async function Home() {
                   <Link
                     key={cta.title}
                     href={cta.href}
-                    className="group overflow-hidden rounded-[28px] border border-white/80 bg-white/85 shadow-[0_18px_50px_rgba(15,23,42,0.1)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(15,23,42,0.15)]"
+                    className="group overflow-hidden rounded-[28px] border border-white/60 bg-white/10 backdrop-blur-sm shadow-[0_18px_50px_rgba(0,0,0,0.28)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(0,0,0,0.35)]"
                   >
                     <div
                       className={`relative flex h-28 items-center justify-center overflow-hidden bg-gradient-to-br sm:h-32 ${cta.visual}`}
@@ -510,7 +510,7 @@ export default async function Home() {
                       {cta.icon}
                     </div>
                     <div className="px-5 py-4 text-center">
-                      <p className="text-base font-semibold text-slate-900">{cta.title}</p>
+                      <p className="text-base font-semibold text-white drop-shadow">{cta.title}</p>
                     </div>
                   </Link>
                 ))}
