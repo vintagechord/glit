@@ -46,6 +46,11 @@ function maskMid(mid: string) {
   return `${mid.slice(0, 2)}***${mid.slice(-2)}`;
 }
 
+const toCode = (value: string | number | null | undefined, fallback: string) =>
+  value == null ? fallback : String(value);
+const toStrOrNull = (value: string | number | null | undefined) =>
+  value == null ? null : String(value);
+
 /**
  * GET/POST 모두에서 파라미터를 최대한 동일 방식으로 읽어서
  * "콜백이 진짜로 들어오는지", "무슨 키가 오는지"를 1차로 확정한다.
@@ -207,17 +212,21 @@ async function handler(req: NextRequest) {
   const paymentAmount = Number(payment.amount_krw ?? 0);
 
   if (!approval.ok || !approval.data) {
+    const resultCodeStr = toCode(approval.data?.resultCode, "AUTH_FAIL");
+    const resultMsgStr =
+      approval.data?.resultMsg != null
+        ? String(approval.data.resultMsg)
+        : "승인 요청이 실패했습니다. 다시 시도해주세요.";
     console.warn("[Inicis][STDPay][callback][submission] approval failed", {
       orderId,
-      resultCode: approval.data?.resultCode ?? "AUTH_FAIL",
-      resultMsg: approval.data?.resultMsg,
+      resultCode: resultCodeStr,
+      resultMsg: resultMsgStr,
       secureSignatureMatches: approval.secureSignatureMatches ?? null,
     });
 
     await markPaymentFailure(orderId, {
-      result_code: approval.data?.resultCode ?? "AUTH_FAIL",
-      result_message:
-        approval.data?.resultMsg ?? "승인 요청이 실패했습니다. 다시 시도해주세요.",
+      result_code: resultCodeStr,
+      result_message: resultMsgStr,
       raw_response: approval.data ?? null,
     });
 
@@ -232,6 +241,14 @@ async function handler(req: NextRequest) {
   // ---- 금액 검증 ----
   const authData = approval.data as Record<string, string | number | null | undefined>;
   const totPrice = Number(authData.TotPrice ?? authData.price ?? 0);
+  const tidRaw =
+    authData.P_TID ??
+    authData.tid ??
+    authData.TID ??
+    authData.CARD_TID ??
+    authData.PG_TID ??
+    null;
+  const tidStr = tidRaw != null ? String(tidRaw) : null;
 
   if (paymentAmount > 0 && totPrice > 0 && paymentAmount !== totPrice) {
     console.warn("[Inicis][STDPay][callback][submission] price mismatch", {
@@ -256,28 +273,17 @@ async function handler(req: NextRequest) {
 
   // ---- 성공 처리 ----
   await markPaymentSuccess(orderId, {
-    tid:
-      authData.P_TID ??
-      authData.tid ??
-      authData.TID ??
-      authData.CARD_TID ??
-      authData.PG_TID ??
-      null,
-    result_code: authData.resultCode ?? "0000",
-    result_message: authData.resultMsg ?? "결제 완료",
+    tid: tidStr,
+    result_code: toCode(authData.resultCode, "0000"),
+    result_message:
+      authData.resultMsg != null ? String(authData.resultMsg) : "결제 완료",
     raw_response: authData,
   });
 
   console.info("[Inicis][STDPay][callback][submission] approval success", {
     orderId,
-    tid:
-      authData.P_TID ??
-      authData.tid ??
-      authData.TID ??
-      authData.CARD_TID ??
-      authData.PG_TID ??
-      null,
-    resultCode: authData.resultCode ?? "0000",
+    tid: tidStr,
+    resultCode: toCode(authData.resultCode, "0000"),
     totPrice,
   });
 

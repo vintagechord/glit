@@ -70,9 +70,11 @@ export function normalizeTrackResults(
     const maybeTrack: TrackInput =
       typeof item === "object" && item !== null ? (item as TrackInput) : {};
     const trackId =
-      (typeof maybeTrack.track_id === "string" && maybeTrack.track_id) ??
-      (typeof maybeTrack.trackId === "string" && maybeTrack.trackId) ??
-      null;
+      typeof maybeTrack.track_id === "string"
+        ? maybeTrack.track_id
+        : typeof maybeTrack.trackId === "string"
+          ? maybeTrack.trackId
+          : null;
     const trackNoRaw =
       (typeof maybeTrack.track_no === "number" && maybeTrack.track_no) ??
       (typeof maybeTrack.trackNo === "number" && maybeTrack.trackNo) ??

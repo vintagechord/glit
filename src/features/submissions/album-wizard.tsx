@@ -1707,13 +1707,24 @@ export function AlbumWizard({
               });
               return;
             }
-            setPayData(json);
+            if (!json.orderId || !json.stdJsUrl || !json.stdParams) {
+              setNotice({
+                error: "결제 초기화 응답이 올바르지 않습니다. 관리자에게 문의해주세요.",
+              });
+              return;
+            }
+            const normalizedPayData = {
+              orderId: json.orderId,
+              stdJsUrl: json.stdJsUrl,
+              stdParams: json.stdParams,
+            };
+            setPayData(normalizedPayData);
             console.info("[Inicis][STDPay][init][client] order created", {
               orderId: json.orderId,
               stdJsUrl: json.stdJsUrl,
               keys: Object.keys(json.stdParams ?? {}),
             });
-            invokeStdPay(json);
+            invokeStdPay(normalizedPayData);
             return;
           } catch (error) {
             console.error("[Inicis][STDPay][init][client] exception", error);

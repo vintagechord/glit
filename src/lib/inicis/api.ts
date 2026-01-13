@@ -81,21 +81,29 @@ export async function requestStdPayApproval({
     });
 
     const data = (await res.json()) as Record<string, string | number | null | undefined>;
-    const secureSignature = data.MOID
+    const moid = data.MOID != null ? String(data.MOID) : "";
+    const totPrice = data.TotPrice != null ? data.TotPrice : "";
+    const resultCode = data.resultCode != null ? String(data.resultCode) : "";
+    const authSignature = data.authSignature != null ? String(data.authSignature) : null;
+    const secureSignature = moid
       ? makeAuthSecureSignature({
           mid,
           tstamp: data.tstamp ?? timestamp,
-          MOID: data.MOID,
-          TotPrice: data.TotPrice,
+          MOID: moid,
+          TotPrice: totPrice,
         })
       : null;
 
-    if (data.resultCode !== "0000") {
+    if (resultCode !== "0000") {
       await doNetCancel();
-      return { ok: false, data, secureSignatureMatches: false };
+      return {
+        ok: false,
+        data,
+        secureSignatureMatches: false,
+      };
     }
 
-    if (!secureSignature || data.authSignature !== secureSignature) {
+    if (!secureSignature || authSignature !== secureSignature) {
       await doNetCancel();
       return { ok: false, data, secureSignatureMatches: false };
     }

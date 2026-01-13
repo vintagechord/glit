@@ -99,13 +99,23 @@ const handleCancel = async (req: NextRequest, requireAdmin = false) => {
     message: payload.reason ?? "subscription cancel",
     clientIp: getClientIp(req),
   });
+  const resultCode =
+    refund.data?.resultCode != null
+      ? String(refund.data.resultCode)
+      : refund.ok
+        ? "00"
+        : "CANCEL_FAIL";
+  const resultMsg =
+    refund.data?.resultMsg != null
+      ? String(refund.data.resultMsg)
+      : refund.ok
+        ? "정상 취소되었습니다."
+        : "취소 실패";
 
   await updateHistory(history.order_id, {
     status: refund.ok ? "CANCELED" : "FAILED",
-    result_code: refund.data?.resultCode ?? (refund.ok ? "00" : "CANCEL_FAIL"),
-    result_message:
-      refund.data?.resultMsg ??
-      (refund.ok ? "정상 취소되었습니다." : "취소 실패"),
+    result_code: resultCode,
+    result_message: resultMsg,
     raw_response: refund.data ?? null,
   });
 
@@ -119,7 +129,7 @@ const handleCancel = async (req: NextRequest, requireAdmin = false) => {
   if (!refund.ok) {
     return NextResponse.json(
       {
-        error: refund.data?.resultMsg ?? "취소 요청이 실패했습니다.",
+        error: resultMsg ?? "취소 요청이 실패했습니다.",
         data: refund.data,
       },
       { status: 400 },

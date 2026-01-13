@@ -3,6 +3,7 @@ import Link from "next/link";
 import type React from "react";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
+import type { TrackReviewResult } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
@@ -318,9 +319,16 @@ export default async function SubmissionDetailPage({
   const stationSelectBasic =
     "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
 
-  let stationReviews: Array<{
+  type StationReviewRow = {
+    id: string;
+    status: string;
+    result_note: string | null;
+    track_results?: TrackReviewResult[] | null;
+    updated_at: string;
     station?: { id?: string; name?: string | null; code?: string | null; logo_url?: string | null } | null;
-  }> | null = null;
+  };
+
+  let stationReviews: StationReviewRow[] | null = null;
   let stationError: { code?: string; message?: string } | null = null;
 
   const runStationFetch = (select: string) =>
@@ -331,7 +339,7 @@ export default async function SubmissionDetailPage({
       .order("updated_at", { ascending: false });
 
   const stationResult = await runStationFetch(stationSelectWithLogo);
-  stationReviews = stationResult.data ?? null;
+  stationReviews = (stationResult.data as StationReviewRow[] | null) ?? null;
   stationError = stationResult.error ?? null;
 
   if (
@@ -340,7 +348,7 @@ export default async function SubmissionDetailPage({
       stationError.message?.toLowerCase().includes("logo_url"))
   ) {
     const fallbackResult = await runStationFetch(stationSelectBasic);
-    stationReviews = fallbackResult.data ?? null;
+    stationReviews = (fallbackResult.data as StationReviewRow[] | null) ?? null;
     stationError = fallbackResult.error ?? null;
   }
   const normalizedStationReviews =
