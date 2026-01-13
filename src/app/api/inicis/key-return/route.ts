@@ -216,7 +216,8 @@ export async function POST(req: NextRequest) {
     status: "APPROVED",
     pg_tid: tidPaidStr,
     result_code: toCode(billingData.resultCode, "00"),
-    result_message: billingData.resultMsg ?? "결제 완료",
+    result_message:
+      billingData.resultMsg != null ? String(billingData.resultMsg) : "결제 완료",
     raw_response: { auth: authData, billing: billingData },
     billing_id: billing.id,
     subscription_id: subscription?.id ?? null,
