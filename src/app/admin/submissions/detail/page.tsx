@@ -17,12 +17,14 @@ import {
   updatePaymentStatusFormAction,
   updateStationReviewFormAction,
   updateSubmissionStatusFormAction,
+  createTrackForSubmissionAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { AdminSaveToast } from "@/components/admin/save-toast";
 
 export const metadata = {
   title: "접수 상세 관리",
@@ -65,6 +67,7 @@ type SubmissionRow = {
   mv_production_date?: string | null;
   mv_business_reg_no?: string | null;
   mv_usage?: string | null;
+  is_oneclick?: boolean | null;
   mv_desired_rating?: string | null;
   mv_memo?: string | null;
   mv_song_title?: string | null;
@@ -131,11 +134,14 @@ export default async function AdminSubmissionDetailPage({
   searchParams,
   params,
 }: {
-  searchParams?: { id?: string | string[] };
+  searchParams?: { id?: string | string[]; saved?: string };
   params?: { id?: string };
 }) {
   const paramId = params?.id;
   const searchId = searchParams?.id;
+  const savedFlag = Array.isArray(searchParams?.saved)
+    ? searchParams?.saved[0]
+    : searchParams?.saved;
   const urlId = Array.isArray(searchId)
     ? searchId.find((v) => typeof v === "string" && uuidPattern.test(v)) ?? ""
     : typeof searchId === "string"
@@ -378,6 +384,7 @@ export default async function AdminSubmissionDetailPage({
 
   const applicantEmail = submission.applicant_email ?? submission.guest_email ?? null;
   const albumTracks = submission.album_tracks ?? [];
+  const isOneclick = submission.is_oneclick === true;
 
   if (submission.type === "ALBUM") {
     await ensureAlbumStationReviews(
@@ -439,6 +446,7 @@ export default async function AdminSubmissionDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
+      {savedFlag ? <AdminSaveToast message="수정되었습니다." /> : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -1052,6 +1060,69 @@ export default async function AdminSubmissionDetailPage({
                   </div>
                 ))}
               </div>
+            </div>
+          ) : null}
+          {!isMvSubmission && isOneclick ? (
+            <div className="mt-6 space-y-3 rounded-2xl border border-border/60 bg-background/70 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                원클릭 트랙 추가
+              </p>
+              <p className="text-xs text-muted-foreground">
+                원클릭 접수에는 트랙 정보가 없어 관리자 등록이 필요합니다. 추가 후 방송국별 진행 관리에서 트랙별 통과/불통과를 설정하세요.
+              </p>
+              <form
+                action={createTrackForSubmissionAction}
+                className="grid gap-3 md:grid-cols-[90px_1fr] lg:grid-cols-[90px_1fr_1fr]"
+              >
+                <input type="hidden" name="submissionId" value={submission.id} />
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">트랙 번호</label>
+                  <input
+                    name="trackNo"
+                    type="number"
+                    min={1}
+                    defaultValue={albumTracks.length > 0 ? albumTracks.length + 1 : 1}
+                    className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">트랙명</label>
+                  <input
+                    name="trackTitle"
+                    required
+                    placeholder="곡 제목"
+                    className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">크레딧(선택)</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      name="composer"
+                      placeholder="작곡"
+                      className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
+                    />
+                    <input
+                      name="lyricist"
+                      placeholder="작사"
+                      className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
+                    />
+                    <input
+                      name="arranger"
+                      placeholder="편곡"
+                      className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="md:col-span-2 lg:col-span-3 flex justify-end">
+                  <button
+                    type="submit"
+                    className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background"
+                  >
+                    트랙 추가
+                  </button>
+                </div>
+              </form>
             </div>
           ) : null}
           {isMvSubmission && submission.mv_lyrics ? (

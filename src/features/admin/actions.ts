@@ -241,7 +241,7 @@ export async function updateSubmissionStatusFormAction(
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
-    redirect(`/admin/submissions/${submissionId}`);
+    redirect(`/admin/submissions/${submissionId}?saved=status`);
   }
 }
 
@@ -308,7 +308,7 @@ export async function updateSubmissionBasicInfoFormAction(
   revalidatePath(`/admin/submissions/${submissionId}`);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/history");
-  redirect(`/admin/submissions/${submissionId}`);
+  redirect(`/admin/submissions/${submissionId}?saved=basic`);
 }
 
 export async function updatePaymentStatusAction(
@@ -373,7 +373,7 @@ export async function updatePaymentStatusFormAction(
   revalidatePath(`/admin/submissions/${String(formData.get("submissionId") ?? "")}`);
   const submissionId = String(formData.get("submissionId") ?? "");
   if (submissionId) {
-    redirect(`/admin/submissions/${submissionId}`);
+    redirect(`/admin/submissions/${submissionId}?saved=payment`);
   }
 }
 
@@ -488,8 +488,65 @@ export async function updateStationReviewFormAction(
     String(formData.get("reviewId") ?? "");
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
-    redirect(`/admin/submissions/${submissionId}`);
+    redirect(`/admin/submissions/${submissionId}?saved=station`);
   }
+}
+
+const createTrackSchema = z.object({
+  submissionId: z.string().uuid(),
+  trackTitle: z.string().min(1, "트랙명을 입력하세요."),
+  trackNo: z.coerce.number().int().positive().optional(),
+  composer: z.string().optional(),
+  lyricist: z.string().optional(),
+  arranger: z.string().optional(),
+});
+
+export async function createTrackForSubmissionAction(
+  formData: FormData,
+): Promise<void> {
+  const parsed = createTrackSchema.safeParse({
+    submissionId: formData.get("submissionId"),
+    trackTitle: formData.get("trackTitle"),
+    trackNo: formData.get("trackNo"),
+    composer: formData.get("composer"),
+    lyricist: formData.get("lyricist"),
+    arranger: formData.get("arranger"),
+  });
+
+  if (!parsed.success) {
+    console.error("createTrack validation failed", parsed.error.flatten().fieldErrors);
+    return;
+  }
+
+  const supabase = createAdminClient();
+  let trackNo = parsed.data.trackNo;
+  if (!trackNo) {
+    const { data: existing } = await supabase
+      .from("album_tracks")
+      .select("track_no")
+      .eq("submission_id", parsed.data.submissionId)
+      .order("track_no", { ascending: false })
+      .limit(1);
+    const maxNo = existing?.[0]?.track_no;
+    trackNo = typeof maxNo === "number" && Number.isFinite(maxNo) ? maxNo + 1 : 1;
+  }
+
+  const { error } = await supabase.from("album_tracks").insert({
+    submission_id: parsed.data.submissionId,
+    track_no: trackNo,
+    track_title: parsed.data.trackTitle,
+    composer: parsed.data.composer || null,
+    lyricist: parsed.data.lyricist || null,
+    arranger: parsed.data.arranger || null,
+  });
+
+  if (error) {
+    console.error("createTrack insert error", error);
+  }
+
+  revalidatePath("/admin/submissions");
+  revalidatePath(`/admin/submissions/${parsed.data.submissionId}`);
+  redirect(`/admin/submissions/${parsed.data.submissionId}?saved=track`);
 }
 
 export async function updateSubmissionResultAction(

@@ -302,6 +302,11 @@ export function MvWizard({
         console.warn("[Inicis][STDPay] INIStdPay.js not ready. Check script src or CSP.");
         return;
       }
+      const formEl = document.getElementById(formId);
+      if (!formEl) {
+        console.warn("[Inicis][STDPay] form element not found", { formId });
+        return;
+      }
       window.INIStdPay.pay(formId);
     };
     launch();
