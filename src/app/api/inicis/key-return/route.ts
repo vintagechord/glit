@@ -203,6 +203,7 @@ export async function POST(req: NextRequest) {
   const billingData = billingResult.data as Record<string, string | number | null | undefined>;
   const tidPaid =
     billingData.tid ?? billingData.TID ?? billingData.P_TID ?? billingData.tid;
+  const tidPaidStr = tidPaid != null ? String(tidPaid) : null;
 
   const { subscription } = await activateSubscription({
     userId: history.user_id,
@@ -213,7 +214,7 @@ export async function POST(req: NextRequest) {
 
   await updateHistory(orderId, {
     status: "APPROVED",
-    pg_tid: tidPaid ?? null,
+    pg_tid: tidPaidStr,
     result_code: toCode(billingData.resultCode, "00"),
     result_message: billingData.resultMsg ?? "결제 완료",
     raw_response: { auth: authData, billing: billingData },
