@@ -166,8 +166,10 @@ export async function POST(req: NextRequest) {
     raw_response: { auth: authData },
   });
 
+  const billKeyForBilling = billKeyStr ?? "";
+
   const billingResult = await requestBillingPayment({
-    billKey,
+    billKey: billKeyForBilling,
     orderId,
     amountKrw: historyPrice,
     goodName: history.product_name ?? "Subscription",
