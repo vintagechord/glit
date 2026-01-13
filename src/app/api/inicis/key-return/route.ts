@@ -78,9 +78,13 @@ export async function POST(req: NextRequest) {
   });
 
   if (!approval.ok || !approval.data) {
+    const resultCodeStr =
+      approval.data?.resultCode != null
+        ? String(approval.data.resultCode)
+        : "AUTH_FAIL";
     await updateHistory(orderId, {
       status: "FAILED",
-      result_code: approval.data?.resultCode ?? "AUTH_FAIL",
+      result_code: resultCodeStr,
       result_message:
         approval.data?.resultMsg ??
         "Inicis approval failed. Please try again or contact support.",
@@ -102,11 +106,13 @@ export async function POST(req: NextRequest) {
     null;
 
   const totPrice = Number(authData.TotPrice ?? authData.price ?? 0);
+  const toCode = (value: string | number | null | undefined, fallback: string) =>
+    value == null ? fallback : String(value);
 
   if (!billKey) {
     await updateHistory(orderId, {
       status: "FAILED",
-      result_code: authData.resultCode ?? "NO_BILLKEY",
+      result_code: toCode(authData.resultCode, "NO_BILLKEY"),
       result_message: "빌링키를 발급받지 못했습니다.",
       raw_response: { auth: authData },
     });
@@ -132,8 +138,8 @@ export async function POST(req: NextRequest) {
     cardName: authData.CARD_Name ?? authData.cardName ?? null,
     cardNumber: authData.CARD_Num ?? authData.cardNumber ?? null,
     cardQuota: authData.CARD_Quota ?? authData.cardQuota ?? null,
-    lastResultCode: authData.resultCode ?? null,
-    lastResultMessage: authData.resultMsg ?? null,
+    lastResultCode: authData.resultCode != null ? String(authData.resultCode) : null,
+    lastResultMessage: authData.resultMsg != null ? String(authData.resultMsg) : null,
   });
 
   if (billingError || !billing) {
@@ -149,7 +155,7 @@ export async function POST(req: NextRequest) {
   await updateHistory(orderId, {
     status: "BILLKEY_ISSUED",
     billing_id: billing.id,
-    result_code: authData.resultCode ?? "0000",
+    result_code: toCode(authData.resultCode, "0000"),
     result_message: authData.resultMsg ?? "빌링키 발급 완료",
     raw_response: { auth: authData },
   });
@@ -169,7 +175,7 @@ export async function POST(req: NextRequest) {
   if (!billingResult.ok || !billingResult.data) {
     await updateHistory(orderId, {
       status: "FAILED",
-      result_code: billingResult.data?.resultCode ?? "BILLING_FAIL",
+      result_code: toCode(billingResult.data?.resultCode, "BILLING_FAIL"),
       result_message:
         billingResult.data?.resultMsg ?? "정기결제(빌링) 요청 실패",
       raw_response: { auth: authData, billing: billingResult.data },
@@ -196,7 +202,7 @@ export async function POST(req: NextRequest) {
   await updateHistory(orderId, {
     status: "APPROVED",
     pg_tid: tidPaid ?? null,
-    result_code: billingData.resultCode ?? "00",
+    result_code: toCode(billingData.resultCode, "00"),
     result_message: billingData.resultMsg ?? "결제 완료",
     raw_response: { auth: authData, billing: billingData },
     billing_id: billing.id,
