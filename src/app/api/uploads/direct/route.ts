@@ -69,10 +69,12 @@ export async function POST(request: Request) {
 
     const { client, bucket } = getB2Config();
 
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: objectKey,
-      Body: file.stream() as unknown as PutObjectCommand["input"]["Body"],
+      Body: fileBuffer,
       ContentType: mimeType || undefined,
     });
 
