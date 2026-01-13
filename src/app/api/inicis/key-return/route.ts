@@ -185,7 +185,9 @@ export async function POST(req: NextRequest) {
       status: "FAILED",
       result_code: toCode(billingResult.data?.resultCode, "BILLING_FAIL"),
       result_message:
-        billingResult.data?.resultMsg ?? "정기결제(빌링) 요청 실패",
+        billingResult.data?.resultMsg != null
+          ? String(billingResult.data.resultMsg)
+          : "정기결제(빌링) 요청 실패",
       raw_response: { auth: authData, billing: billingResult.data },
     });
     return failureResponse(
