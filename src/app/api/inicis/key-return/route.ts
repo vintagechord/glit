@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     return failureResponse(
       baseUrl,
       orderId,
-      approval.data?.resultMsg ?? "승인 요청이 실패했습니다.",
+      resultMsgStr ?? "승인 요청이 실패했습니다.",
       400,
     );
   }
