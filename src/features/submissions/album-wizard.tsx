@@ -1045,8 +1045,13 @@ export function AlbumWizard({
     setFileDigest("");
     setEmailSubmitConfirmed(false);
     if (filtered.length > 0) {
-      void uploadFiles(combinedFiles, nextUploads).catch(() => {
-        setNotice({ error: "파일 업로드 중 오류가 발생했습니다." });
+      void uploadFiles(combinedFiles, nextUploads).catch((error: unknown) => {
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "파일 업로드 중 오류가 발생했습니다.";
+        console.error("[AlbumUpload] upload failed", error);
+        setNotice({ error: message });
       });
     }
   };
@@ -1179,13 +1184,28 @@ export function AlbumWizard({
         throw new Error(message);
       }
 
-      await uploadWithProgress(signedUrl, file, (progress) => {
+      try {
+        await uploadWithProgress(signedUrl, file, (progress) => {
+          nextUploads[index] = {
+            ...nextUploads[index],
+            progress,
+          };
+          setUploads([...nextUploads]);
+        });
+      } catch (error) {
         nextUploads[index] = {
           ...nextUploads[index],
-          progress,
+          status: "error",
         };
         setUploads([...nextUploads]);
-      });
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "파일 업로드 중 오류가 발생했습니다.";
+        console.error("[AlbumUpload] upload failed", error);
+        setNotice({ error: message });
+        throw new Error(message);
+      }
 
       await fetch("/api/uploads/complete", {
         method: "POST",
