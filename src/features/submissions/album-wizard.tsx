@@ -1070,11 +1070,19 @@ export function AlbumWizard({
   };
 
   const uploadWithProgress = async (
-    signedUrl: string,
     file: File,
     onProgress: (percent: number) => void,
   ) => {
-    await new Promise<void>((resolve, reject) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("submissionId", currentSubmissionId);
+    formData.append("filename", file.name);
+    formData.append("mimeType", file.type);
+    formData.append("sizeBytes", String(file.size));
+    if (isGuest && currentGuestToken) formData.append("guestToken", currentGuestToken);
+    if (title.trim()) formData.append("title", title.trim());
+
+    return await new Promise<{ objectKey: string }>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
@@ -1083,44 +1091,24 @@ export function AlbumWizard({
       };
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
+          try {
+            const json = JSON.parse(xhr.responseText) as { objectKey?: string; error?: string };
+            if (json.objectKey) {
+              resolve({ objectKey: json.objectKey });
+              return;
+            }
+            reject(new Error(json.error || "Upload failed"));
+          } catch {
+            reject(new Error("Upload failed"));
+          }
         } else {
           reject(new Error("Upload failed"));
         }
       };
       xhr.onerror = () => reject(new Error("Upload failed"));
-      xhr.open("PUT", signedUrl);
-      if (file.type) {
-        xhr.setRequestHeader("Content-Type", file.type);
-      }
-      xhr.send(file);
+      xhr.open("POST", "/api/uploads/direct");
+      xhr.send(formData);
     });
-  };
-
-  const createSignedUpload = async (file: File) => {
-    const response = await fetch("/api/uploads/presign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        submissionId: currentSubmissionId,
-        filename: file.name,
-        mimeType: file.type,
-        sizeBytes: file.size,
-        guestToken: isGuest ? currentGuestToken : undefined,
-        title: title.trim() || undefined,
-      }),
-    });
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(
-        typeof payload?.error === "string"
-          ? payload.error
-          : "업로드 URL을 생성할 수 없습니다.",
-      );
-    }
-
-    return payload as { uploadUrl: string; objectKey: string };
   };
 
   const uploadFiles = async (
@@ -1164,34 +1152,16 @@ export function AlbumWizard({
       };
       setUploads([...nextUploads]);
 
-      let signedUrl: string;
       let path: string;
       try {
-        const uploadData = await createSignedUpload(file);
-        signedUrl = uploadData.uploadUrl;
-        path = uploadData.objectKey;
-      } catch (error) {
-        nextUploads[index] = {
-          ...nextUploads[index],
-          status: "error",
-        };
-        setUploads([...nextUploads]);
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : "업로드 URL 생성 실패";
-        setNotice({ error: message });
-        throw new Error(message);
-      }
-
-      try {
-        await uploadWithProgress(signedUrl, file, (progress) => {
+        const uploadResult = await uploadWithProgress(file, (progress) => {
           nextUploads[index] = {
             ...nextUploads[index],
             progress,
           };
           setUploads([...nextUploads]);
         });
+        path = uploadResult.objectKey;
       } catch (error) {
         nextUploads[index] = {
           ...nextUploads[index],
@@ -1215,6 +1185,7 @@ export function AlbumWizard({
           submissionId: currentSubmissionId,
           sizeBytes: file.size,
           mimeType: file.type,
+          guestToken: isGuest ? currentGuestToken : undefined,
         }),
       }).catch(() => null);
 
