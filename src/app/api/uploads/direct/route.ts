@@ -8,6 +8,8 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const schema = z.object({
   submissionId: z.string().uuid(),
@@ -28,7 +30,27 @@ export async function POST(request: Request) {
 
   const contentType = request.headers.get("content-type");
   const contentLength = request.headers.get("content-length");
+  const userAgent = request.headers.get("user-agent");
+  const forwardedFor = request.headers.get("x-forwarded-for");
 
+  console.info("[Upload][direct] request received", {
+    contentType,
+    contentLength,
+    userAgent,
+    forwardedFor,
+  });
+
+  if (!contentType || !contentType.toLowerCase().startsWith("multipart/form-data")) {
+    console.error("[Upload][direct] invalid content-type", { contentType });
+    return NextResponse.json(
+      {
+        error: "업로드 데이터를 읽을 수 없습니다.",
+        detail: "지원되지 않는 Content-Type",
+        receivedContentType: contentType,
+      },
+      { status: 415 },
+    );
+  }
   if (!request.body || !contentType) {
     console.error("[Upload][direct] missing body or content-type", {
       contentType,
@@ -42,7 +64,7 @@ export async function POST(request: Request) {
   let objectKey: string | null = null;
   let uploadPromise: Promise<unknown> | null = null;
   let parseErrorStatus: number | null = null;
-  let parseErrorBody: { error: string } | null = null;
+  let parseErrorBody: { error: string; detail?: string } | null = null;
   let filePart:
     | {
         stream: PassThrough;
@@ -93,9 +115,18 @@ export async function POST(request: Request) {
     });
 
     if (!parsed.success) {
-      console.error("[Upload][direct] validation failed", parsed.error.flatten().fieldErrors);
+      console.error("[Upload][direct] validation failed", {
+        errors: parsed.error.flatten().fieldErrors,
+        submissionId: fields.submissionId,
+        filename: filePart.filename ?? fields.filename,
+        mimeType: filePart.mimeType ?? fields.mimeType,
+        sizeBytes: fields.sizeBytes,
+      });
       parseErrorStatus = 400;
-      parseErrorBody = { error: "업로드 정보를 확인해주세요." };
+      parseErrorBody = {
+        error: "업로드 정보를 확인해주세요.",
+        detail: parsed.error.message,
+      };
       filePart.stream.resume();
       return;
     }
@@ -162,7 +193,10 @@ export async function POST(request: Request) {
       contentType,
       contentLength,
     });
-    return NextResponse.json({ error: "업로드 데이터를 읽을 수 없습니다." }, { status: 400 });
+    return NextResponse.json(
+      { error: "업로드 데이터를 읽을 수 없습니다.", detail: String(error) },
+      { status: 400 },
+    );
   }
 
   // Attempt one last time in case required fields arrived after the file began streaming.
@@ -174,17 +208,23 @@ export async function POST(request: Request) {
 
   const uploadObjectKey = objectKey;
   const uploadPromiseResolved = uploadPromise;
+  const missing: string[] = [];
+  if (!parsedData) missing.push("fields");
+  if (!filePart) missing.push("file");
+  if (!uploadPromiseResolved) missing.push("upload");
+  if (!uploadObjectKey) missing.push("objectKey");
 
-  if (!parsedData || !uploadPromiseResolved || !uploadObjectKey) {
+  if (missing.length > 0) {
     console.error("[Upload][direct] missing file or parsed data", {
       contentType,
       contentLength,
       fieldNames: Object.keys(fields),
+      missing,
     });
-    return NextResponse.json({ error: "업로드 정보를 확인해주세요." }, { status: 400 });
+    return NextResponse.json({ error: "업로드 정보를 확인해주세요.", missing }, { status: 400 });
   }
 
-  const uploadDetails = parsedData as z.infer<typeof schema>;
+  const uploadDetails = parsedData!;
 
   try {
     await uploadPromiseResolved;
