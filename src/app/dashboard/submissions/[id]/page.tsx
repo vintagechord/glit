@@ -3,7 +3,6 @@ import Link from "next/link";
 import type React from "react";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
-import type { TrackReviewResult } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
@@ -18,9 +17,8 @@ export const revalidate = 0;
 const uuidPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-const baseSelect =
-  "id, user_id, artist_id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )";
-const fullSelect = baseSelect;
+const lightSelect =
+  "id, user_id, artist_id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, created_at, updated_at, package:packages ( name, station_count, price_krw )";
 
 type SubmissionDetailClientProps = React.ComponentProps<typeof SubmissionDetailClient>;
 
@@ -142,61 +140,14 @@ export default async function SubmissionDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isColumnMissing = (
-    error: { message?: string; code?: string } | null,
-    column: string,
-  ) =>
-    error?.code === "42703" ||
-    error?.code === "PGRST204" ||
-    error?.message?.toLowerCase().includes(column.toLowerCase());
-
-  const isNotFoundError = (error: { message?: string; code?: string } | null) =>
-    error?.code === "PGRST116" ||
-    error?.message?.toLowerCase().includes("row not found") ||
-    error?.message?.toLowerCase().includes("results contain 0 rows");
-
-  const runFetch = async (
-    client: ReturnType<typeof createAdminClient> | Awaited<ReturnType<typeof createServerSupabase>>,
-    select: string,
-  ) =>
-    client
-      .from("submissions")
-      .select(select)
-      .eq("id", submissionId)
-      .maybeSingle();
-
   const fetchSubmission = async (
     client: ReturnType<typeof createAdminClient> | Awaited<ReturnType<typeof createServerSupabase>>,
-  ): Promise<{ submission: SubmissionRow | null; error: PostgrestError | null }> => {
-    let result = await runFetch(client, fullSelect);
-    let submission = (result.data ?? null) as SubmissionRow | null;
-    let error = result.error ?? null;
-
-    if (submission || isNotFoundError(error)) {
-      return { submission, error };
-    }
-
-    if (isColumnMissing(error, "mv_rating_file_path")) {
-      result = await runFetch(
-        client,
-        fullSelect.replace(", mv_rating_file_path", ""),
-      );
-      submission = (result.data ?? null) as SubmissionRow | null;
-      error = result.error ?? null;
-
-      if (submission || isNotFoundError(error)) {
-        return { submission, error };
-      }
-    }
-
-    if (isColumnMissing(error, "payment_method")) {
-      result = await runFetch(client, baseSelect);
-      submission = (result.data ?? null) as SubmissionRow | null;
-      error = result.error ?? null;
-    }
-
-    return { submission, error };
-  };
+  ): Promise<{ submission: SubmissionRow | null; error: PostgrestError | null }> =>
+    client
+      .from("submissions")
+      .select(lightSelect)
+      .eq("id", submissionId)
+      .maybeSingle() as Promise<{ data: SubmissionRow | null; error: PostgrestError | null }>;
 
   const admin = createAdminClient();
   const { submission: adminSubmission, error: adminError } =
@@ -305,88 +256,6 @@ export default async function SubmissionDetailPage({
     );
   }
 
-  const stationReviewsClient = userSubmission ? supabase : admin;
-
-  const { data: events } = await supabase
-    .from("submission_events")
-    .select("id, event_type, message, created_at")
-    .eq("submission_id", resolvedSubmission.id)
-    .order("created_at", { ascending: false });
-
-  // 방송국별 진행: logo_url이 없는 스키마에서도 동작하도록 fallback
-  const stationSelectWithLogo =
-    "id, status, result_note, track_results, updated_at, station:stations ( id, name, code, logo_url )";
-  const stationSelectBasic =
-    "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
-  const stationSelectNoTracks =
-    "id, status, result_note, updated_at, station:stations ( id, name, code, logo_url )";
-  const stationSelectNoTracksBasic =
-    "id, status, result_note, updated_at, station:stations ( id, name, code )";
-
-  type StationReviewRow = {
-    id: string;
-    status: string;
-    result_note: string | null;
-    track_results?: TrackReviewResult[] | null;
-    updated_at: string;
-    station?: { id?: string; name?: string | null; code?: string | null; logo_url?: string | null } | null;
-  };
-
-  let stationReviews: StationReviewRow[] | null = null;
-  let stationError: { code?: string; message?: string } | null = null;
-
-  const runStationFetch = (select: string) =>
-    stationReviewsClient
-      .from("station_reviews")
-      .select(select)
-      .eq("submission_id", resolvedSubmission.id)
-      .order("updated_at", { ascending: false });
-
-  const stationResult = await runStationFetch(stationSelectWithLogo);
-  stationReviews = (stationResult.data as StationReviewRow[] | null) ?? null;
-  stationError = stationResult.error ?? null;
-
-  if (
-    stationError &&
-    (stationError.code === "42703" ||
-      stationError.message?.toLowerCase().includes("logo_url"))
-  ) {
-    const fallbackResult = await runStationFetch(stationSelectBasic);
-    stationReviews = (fallbackResult.data as StationReviewRow[] | null) ?? null;
-    stationError = fallbackResult.error ?? null;
-  }
-
-  if (
-    stationError &&
-    (stationError.code === "42703" ||
-      stationError.message?.toLowerCase().includes("track_results"))
-  ) {
-    const fallbackResult = await runStationFetch(stationSelectNoTracks);
-    stationReviews = (fallbackResult.data as StationReviewRow[] | null) ?? null;
-    stationError = fallbackResult.error ?? null;
-    if (
-      stationError &&
-      (stationError.code === "42703" ||
-        stationError.message?.toLowerCase().includes("logo_url"))
-    ) {
-      const basicFallback = await runStationFetch(stationSelectNoTracksBasic);
-      stationReviews = (basicFallback.data as StationReviewRow[] | null) ?? null;
-      stationError = basicFallback.error ?? null;
-    }
-  }
-  const normalizedStationReviews =
-    stationReviews?.map((review) => ({
-      ...review,
-      station: Array.isArray(review.station) ? review.station[0] : review.station,
-    })) ?? [];
-
-  const filesClient = userSubmission ? supabase : admin;
-  const { data: submissionFiles } = await filesClient
-    .from("submission_files")
-    .select("id, kind, file_path, original_name, mime, size, created_at")
-    .eq("submission_id", resolvedSubmission.id)
-    .order("created_at", { ascending: false });
-
   const initialSubmission = {
     ...resolvedSubmission,
     payment_status: resolvedSubmission.payment_status ?? "",
@@ -403,9 +272,9 @@ export default async function SubmissionDetailPage({
     <SubmissionDetailClient
       submissionId={submissionId}
       initialSubmission={initialSubmission as unknown as SubmissionDetailClientProps["initialSubmission"]}
-      initialEvents={events ?? []}
-      initialStationReviews={normalizedStationReviews}
-      initialFiles={submissionFiles ?? []}
+      initialEvents={[]}
+      initialStationReviews={[]}
+      initialFiles={[]}
     />
   );
 }
