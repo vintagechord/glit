@@ -320,6 +320,7 @@ export function AlbumWizard({
     stdParams: Record<string, string>;
     stdJsUrl: string;
   } | null>(null);
+  const payFormRef = React.useRef<HTMLFormElement | null>(null);
   const [stdScriptReady, setStdScriptReady] = React.useState(false);
   const payFormId = React.useRef(
     `inicis-subpay-${Math.random().toString(36).slice(2)}`,
@@ -402,7 +403,8 @@ export function AlbumWizard({
         return;
       }
       const tryPay = () => {
-        const formEl = document.getElementById(formId);
+        const formEl =
+          payFormRef.current ?? (document.getElementById(formId) as HTMLFormElement | null);
         if (!formEl) {
           console.warn("[Inicis][STDPay] form element not found", { formId });
           return false;
@@ -1944,6 +1946,7 @@ export function AlbumWizard({
             method="POST"
             acceptCharset="UTF-8"
             className="hidden"
+            ref={payFormRef}
           >
             {Object.entries(payData.stdParams).map(([key, value]) => (
               <input key={key} type="hidden" name={key} value={value} />
