@@ -62,6 +62,16 @@ const uploadMaxLabel =
   uploadMaxMb >= 1024
     ? `${Math.round(uploadMaxMb / 1024)}GB`
     : `${uploadMaxMb}MB`;
+
+const mapFileKind = (file: File): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
+  const mime = (file.type || "").toLowerCase();
+  const name = file.name.toLowerCase();
+  if (mime.startsWith("video/")) return "VIDEO";
+  if (mime.startsWith("audio/")) return "AUDIO";
+  if (name.endsWith(".lrc") || name.endsWith(".txt")) return "LYRICS";
+  return "ETC";
+};
+
 const baseOnlinePrice = 30000;
 const stationPriceMap: Record<string, number> = {
   KBS: 30000,
@@ -815,10 +825,12 @@ export function MvWizard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          objectKey: path,
+          key: path,
           submissionId,
+          filename: file.name,
+          kind: mapFileKind(file),
           sizeBytes: file.size,
-          mimeType: file.type,
+          mimeType: file.type || "application/octet-stream",
         }),
       }).catch(() => null);
 

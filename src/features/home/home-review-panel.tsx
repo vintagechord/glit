@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import Image from "next/image";
 import * as React from "react";
 import { formatDate } from "@/lib/format";
@@ -671,6 +672,17 @@ export function HomeReviewPanel({
             </p>
           )}
         </div>
+
+        {activeSubmission ? (
+          <div className="flex justify-center">
+            <Link
+              href={`/dashboard/submissions/${activeSubmission.id}`}
+              className="rounded-full border border-border/70 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground shadow-sm transition hover:border-foreground hover:bg-foreground hover:text-background"
+            >
+              자세히 보기
+            </Link>
+          </div>
+        ) : null}
 
         <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
           <div className="flex items-center justify-between">

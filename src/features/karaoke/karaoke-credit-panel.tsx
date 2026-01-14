@@ -36,6 +36,15 @@ const getPromotionTargets = (promotion: PromotionSummary) =>
 const getPromotionLink = (promotion: PromotionSummary) =>
   promotion.reference_url ?? promotion.submission?.melon_url ?? null;
 
+const mapFileKind = (file: File): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
+  const mime = (file.type || "").toLowerCase();
+  const name = file.name.toLowerCase();
+  if (mime.startsWith("audio/")) return "AUDIO";
+  if (mime.startsWith("video/")) return "VIDEO";
+  if (name.endsWith(".lrc") || name.endsWith(".txt")) return "LYRICS";
+  return "ETC";
+};
+
 export function KaraokeCreditPanel({
   userId,
   promotions,
@@ -163,10 +172,12 @@ export function KaraokeCreditPanel({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            objectKey: path,
+            key: path,
             submissionId: promotionId || undefined,
             sizeBytes: recommendationFile.size,
-            mimeType: recommendationFile.type,
+            filename: recommendationFile.name,
+            kind: mapFileKind(recommendationFile),
+            mimeType: recommendationFile.type || "application/octet-stream",
           }),
         }).catch(() => null);
         proofPath = path;

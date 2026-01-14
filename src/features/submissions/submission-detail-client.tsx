@@ -410,6 +410,10 @@ export function SubmissionDetailClient({
   }, [submissionId, supabase]);
 
   React.useEffect(() => {
+    void fetchLatest();
+  }, [fetchLatest]);
+
+  React.useEffect(() => {
     if (!enableRealtime || !supabase) return;
     const channel = supabase
       .channel(`submission-${submissionId}`)
