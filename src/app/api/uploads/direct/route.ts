@@ -1,6 +1,6 @@
 import Busboy from "busboy";
 import { NextResponse } from "next/server";
-import { Readable } from "stream";
+import { PassThrough, Readable } from "stream";
 import { z } from "zod";
 
 import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
@@ -43,24 +43,52 @@ export async function POST(request: Request) {
   let uploadPromise: Promise<unknown> | null = null;
   let parseErrorStatus: number | null = null;
   let parseErrorBody: { error: string } | null = null;
+  let filePart:
+    | {
+        stream: PassThrough;
+        filename?: string;
+        mimeType?: string;
+      }
+    | null = null;
 
   const busboy = Busboy({ headers: { "content-type": contentType } });
   busboy.on("field", (name, value) => {
     fields[name] = value;
+    tryStartUpload();
   });
 
   busboy.on("file", (_name, file, info) => {
-    if (uploadPromise) {
+    if (filePart) {
+      // Only accept the first file; drain the rest.
       file.resume();
       return;
     }
+
+    const pass = new PassThrough();
+    file.pipe(pass);
+    filePart = {
+      stream: pass,
+      filename: info.filename,
+      mimeType: info.mimeType,
+    };
+    tryStartUpload();
+  });
+
+  const parsePromise = new Promise<void>((resolve, reject) => {
+    busboy.on("finish", resolve);
+    busboy.on("error", reject);
+  });
+
+  const tryStartUpload = () => {
+    if (uploadPromise || parseErrorStatus !== null || !filePart) return;
+    if (!fields.submissionId || !fields.sizeBytes) return;
 
     const parsed = schema.safeParse({
       submissionId: fields.submissionId,
       title: fields.title,
       guestToken: fields.guestToken,
-      filename: info.filename || fields.filename,
-      mimeType: info.mimeType || fields.mimeType,
+      filename: filePart.filename || fields.filename,
+      mimeType: filePart.mimeType || fields.mimeType,
       sizeBytes: fields.sizeBytes,
     });
 
@@ -68,7 +96,7 @@ export async function POST(request: Request) {
       console.error("[Upload][direct] validation failed", parsed.error.flatten().fieldErrors);
       parseErrorStatus = 400;
       parseErrorBody = { error: "업로드 정보를 확인해주세요." };
-      file.resume();
+      filePart.stream.resume();
       return;
     }
 
@@ -77,14 +105,14 @@ export async function POST(request: Request) {
     if (!user && !parsed.data.guestToken) {
       parseErrorStatus = 401;
       parseErrorBody = { error: "로그인 또는 게스트 토큰이 필요합니다." };
-      file.resume();
+      filePart.stream.resume();
       return;
     }
 
     if (parsed.data.sizeBytes > MAX_SIZE_BYTES) {
       parseErrorStatus = 400;
       parseErrorBody = { error: "파일 용량이 허용 한도(1GB)를 초과했습니다." };
-      file.resume();
+      filePart.stream.resume();
       return;
     }
 
@@ -101,7 +129,7 @@ export async function POST(request: Request) {
       const command = new PutObjectCommand({
         Bucket: bucket,
         Key: key,
-        Body: file,
+        Body: filePart.stream,
         ContentType: parsed.data.mimeType || undefined,
         ContentLength: parsed.data.sizeBytes,
       });
@@ -121,14 +149,9 @@ export async function POST(request: Request) {
         guest: Boolean(parsed.data.guestToken),
         message,
       });
-      file.resume();
+      filePart.stream.resume();
     }
-  });
-
-  const parsePromise = new Promise<void>((resolve, reject) => {
-    busboy.on("finish", resolve);
-    busboy.on("error", reject);
-  });
+  };
 
   try {
     Readable.fromWeb(request.body as any).pipe(busboy);
@@ -141,6 +164,9 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ error: "업로드 데이터를 읽을 수 없습니다." }, { status: 400 });
   }
+
+  // Attempt one last time in case required fields arrived after the file began streaming.
+  tryStartUpload();
 
   if (parseErrorStatus !== null && parseErrorBody) {
     return NextResponse.json(parseErrorBody, { status: parseErrorStatus });
