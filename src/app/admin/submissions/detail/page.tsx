@@ -807,15 +807,16 @@ export default async function AdminSubmissionDetailPage({
               const trackSummary = summarizeTrackResults(review.track_results, albumTracks);
               const trackResults = trackSummary.results;
               const trackResultsForDisplay = albumTracks.map((track, index) => {
+                const fallbackTrackNo = track.track_no ?? index + 1;
                 const matched =
                   trackResults.find(
                     (item) =>
                       (item.track_id && item.track_id === track.id) ||
                       (typeof item.track_no === "number" &&
-                        item.track_no === track.track_no),
+                        item.track_no === fallbackTrackNo),
                   ) ?? {
                     track_id: track.id,
-                    track_no: track.track_no ?? index + 1,
+                    track_no: fallbackTrackNo,
                     title:
                       track.track_title ??
                       track.track_title_kr ??
