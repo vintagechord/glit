@@ -644,7 +644,7 @@ export function MvWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           submissionId,
-          kind: "video",
+          kind: "VIDEO",
           key: fallback.objectKey,
           filename: file.name,
           mimeType: file.type || "application/octet-stream",
@@ -702,7 +702,7 @@ export function MvWizard({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         submissionId,
-        kind: "video",
+        kind: "VIDEO",
         key,
         filename: file.name,
         mimeType: file.type || "application/octet-stream",

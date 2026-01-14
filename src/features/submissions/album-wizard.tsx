@@ -1354,10 +1354,12 @@ export function AlbumWizard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          objectKey: path,
           submissionId,
+          key: path,
+          filename: file.name,
+          kind: "AUDIO",
+          mimeType: file.type || "application/octet-stream",
           sizeBytes: file.size,
-          mimeType: file.type,
           guestToken: isGuest ? currentGuestToken : undefined,
         }),
       }).catch(() => null);

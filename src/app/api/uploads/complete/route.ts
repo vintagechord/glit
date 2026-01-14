@@ -10,15 +10,26 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const schema = z.object({
-  submissionId: z.string().uuid(),
-  kind: z.string().min(1),
-  key: z.string().min(1),
-  filename: z.string().min(1),
-  mimeType: z.string().min(1),
-  sizeBytes: z.number().int().positive(),
-  guestToken: z.string().min(8).optional(),
-});
+const schema = z
+  .object({
+    submissionId: z.string().uuid(),
+    key: z.string().min(1).optional(),
+    objectKey: z.string().min(1).optional(),
+    filename: z.string().min(1).optional(),
+    kind: z.string().optional(),
+    mimeType: z.string().optional(),
+    sizeBytes: z.number().int().positive(),
+    guestToken: z.string().min(8).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.key && !data.objectKey) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["key"],
+        message: "key 또는 objectKey가 필요합니다.",
+      });
+    }
+  });
 
 const mapKind = (kind: string): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
   const upper = kind.toUpperCase();
@@ -28,6 +39,17 @@ const mapKind = (kind: string): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
   if (kind.toLowerCase() === "audio") return "AUDIO";
   if (kind.toLowerCase() === "video") return "VIDEO";
   if (kind.toLowerCase() === "lyrics") return "LYRICS";
+  return "ETC";
+};
+
+const inferKind = (filename: string | undefined, mimeType: string | undefined): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
+  const mime = (mimeType || "").toLowerCase();
+  const name = (filename || "").toLowerCase();
+  if (mime.startsWith("audio/")) return "AUDIO";
+  if (mime.startsWith("video/")) return "VIDEO";
+  if (mime.includes("text") || name.endsWith(".lrc") || name.endsWith(".txt")) return "LYRICS";
+  if (name.match(/\.(wav|mp3|flac|aiff|aac|m4a|ogg)$/)) return "AUDIO";
+  if (name.match(/\.(mp4|mov|mkv|webm)$/)) return "VIDEO";
   return "ETC";
 };
 
@@ -43,7 +65,30 @@ export async function POST(request: Request) {
     );
   }
 
-  const { submissionId, kind, key, filename, mimeType, sizeBytes, guestToken } = parsed.data;
+  const { submissionId, guestToken, sizeBytes } = parsed.data;
+  const rawKey = parsed.data.key ?? parsed.data.objectKey ?? "";
+  const normalizedKey = rawKey;
+  const normalizedFilename =
+    parsed.data.filename ||
+    (() => {
+      const parts = normalizedKey.split("/");
+      return parts[parts.length - 1] || normalizedKey;
+    })();
+  const normalizedMime = parsed.data.mimeType || "application/octet-stream";
+  const normalizedKind = parsed.data.kind
+    ? mapKind(parsed.data.kind)
+    : inferKind(normalizedFilename, normalizedMime);
+
+  if (!normalizedKey) {
+    return NextResponse.json({ error: "업로드 정보를 확인해주세요." }, { status: 400 });
+  }
+
+  console.info("[Upload][complete] normalized", {
+    submissionId,
+    hadKey: Boolean(parsed.data.key),
+    hadObjectKey: Boolean(parsed.data.objectKey),
+    inferredKind: !parsed.data.kind,
+  });
 
   try {
     const { user, submission, error } = await ensureSubmissionOwner(submissionId, guestToken);
@@ -61,7 +106,7 @@ export async function POST(request: Request) {
     const head = await client.send(
       new HeadObjectCommand({
         Bucket: bucket,
-        Key: key,
+        Key: normalizedKey,
       }),
     );
 
@@ -80,11 +125,11 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const payload = {
       submission_id: submissionId,
-      kind: mapKind(kind),
-      file_path: key,
-      object_key: key,
-      original_name: filename,
-      mime: mimeType,
+      kind: normalizedKind,
+      file_path: normalizedKey,
+      object_key: normalizedKey,
+      original_name: normalizedFilename,
+      mime: normalizedMime,
       size: sizeBytes,
       storage_provider: "b2",
       status: "UPLOADED",
@@ -101,15 +146,15 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error("[Upload][complete] failed to record file", {
         submissionId,
-        key,
+        key: normalizedKey,
         message: error instanceof Error ? error.message : String(error),
       });
     }
 
     console.info("[Upload][complete] ok", {
       submissionId,
-      kind,
-      key,
+      kind: normalizedKind,
+      key: normalizedKey,
       sizeBytes,
       etag: head.ETag,
       user: user?.id ?? null,
@@ -123,7 +168,7 @@ export async function POST(request: Request) {
       etag: head.ETag,
       contentLength,
       attachmentId,
-      key,
+      key: normalizedKey,
       submissionId,
     });
   } catch (error) {
@@ -135,8 +180,8 @@ export async function POST(request: Request) {
           : "업로드 확인 중 오류가 발생했습니다.";
     console.error("[Upload][complete] error", {
       submissionId,
-      kind,
-      key,
+      kind: normalizedKind,
+      key: normalizedKey,
       message,
     });
     return NextResponse.json({ error: message }, { status: 500 });
