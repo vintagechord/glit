@@ -84,8 +84,14 @@ export async function POST(request: Request) {
       status: "UPLOADED",
       uploaded_at: new Date().toISOString(),
     };
+    let attachmentId: string | null = null;
     try {
-      await admin.from("submission_files").insert(payload);
+      const { data: inserted } = await admin
+        .from("submission_files")
+        .insert(payload)
+        .select("id")
+        .maybeSingle();
+      attachmentId = inserted?.id ?? null;
     } catch (error) {
       console.error("[Upload][complete] failed to record file", {
         submissionId,
@@ -110,6 +116,9 @@ export async function POST(request: Request) {
       verified: true,
       etag: head.ETag,
       contentLength,
+      attachmentId,
+      key,
+      submissionId,
     });
   } catch (error) {
     const message =

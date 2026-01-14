@@ -312,6 +312,7 @@ export function AlbumWizard({
   const [lyricsTab, setLyricsTab] = React.useState<"profanity" | "spellcheck">(
     "profanity",
   );
+  const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [payData, setPayData] = React.useState<{
     orderId: string;
@@ -441,9 +442,8 @@ export function AlbumWizard({
   const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
   const [baseDraftSnapshot, setBaseDraftSnapshot] =
     React.useState<DraftSnapshot | null>(null);
-  const [currentSubmissionId, setCurrentSubmissionId] = React.useState(() =>
-    crypto.randomUUID(),
-  );
+  const [currentSubmissionId, setCurrentSubmissionId] =
+    React.useState<string | null>(null);
   const [currentGuestToken, setCurrentGuestToken] = React.useState(() =>
     crypto.randomUUID(),
   );
@@ -483,6 +483,12 @@ export function AlbumWizard({
     [],
   );
   const showLyricsTabs = showProfanityPanel || showSpellcheckPreview;
+  const requireSubmissionId = React.useCallback(() => {
+    if (!currentSubmissionId) {
+      throw new Error("접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    }
+    return currentSubmissionId;
+  }, [currentSubmissionId]);
   const genreValue =
     genreSelection === "기타" ? genreCustom.trim() : genreSelection;
   const titleCount = tracks.filter((track) => track.isTitle).length;
@@ -509,6 +515,42 @@ export function AlbumWizard({
         priceKrw: basePriceKrw,
       }
     : null;
+
+  React.useEffect(() => {
+    if (currentSubmissionId || isPreparingDraft) return;
+    let cancelled = false;
+    const createDraft = async () => {
+      setIsPreparingDraft(true);
+      try {
+        const res = await fetch("/api/submissions/draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "ALBUM",
+            guestToken: isGuest ? currentGuestToken : undefined,
+          }),
+        });
+        const json = (await res.json().catch(() => null)) as { submissionId?: string; error?: string };
+        if (!cancelled) {
+          if (res.ok && json?.submissionId) {
+            setCurrentSubmissionId(json.submissionId);
+          } else {
+            setNotice({
+              error: json?.error || "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
+            });
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setIsPreparingDraft(false);
+        }
+      }
+    };
+    createDraft();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentGuestToken, currentSubmissionId, isGuest, isPreparingDraft]);
 
   React.useEffect(() => {
     if (spellcheckAppliedMap[activeTrackIndex]) {
@@ -1015,6 +1057,10 @@ export function AlbumWizard({
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
 
   const addFiles = (selected: File[]) => {
+    if (!currentSubmissionId) {
+      setNotice({ error: "접수 초안을 준비하는 중입니다. 잠시 후 다시 시도해주세요." });
+      return;
+    }
     const allowedTypes = new Set([
       "audio/wav",
       "audio/x-wav",
@@ -1090,10 +1136,11 @@ export function AlbumWizard({
     file: File,
     onProgress: (percent: number) => void,
   ) => {
+    const submissionId = requireSubmissionId();
     const directUploadFallback = () =>
       new Promise<{ objectKey: string }>((resolve, reject) => {
         const formData = new FormData();
-        formData.append("submissionId", currentSubmissionId);
+        formData.append("submissionId", submissionId);
         formData.append("filename", file.name);
         formData.append("mimeType", file.type || "application/octet-stream");
         formData.append("sizeBytes", String(file.size));
@@ -1132,7 +1179,7 @@ export function AlbumWizard({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        submissionId: currentSubmissionId,
+        submissionId,
         kind: "audio",
         filename: file.name,
         mimeType: file.type || "application/octet-stream",
@@ -1158,7 +1205,7 @@ export function AlbumWizard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          submissionId: currentSubmissionId,
+          submissionId,
           kind: "audio",
           key: fallback.objectKey,
           filename: file.name,
@@ -1200,7 +1247,7 @@ export function AlbumWizard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          submissionId: currentSubmissionId,
+          submissionId,
           kind: "audio",
           key: fallback.objectKey,
           filename: file.name,
@@ -1216,7 +1263,7 @@ export function AlbumWizard({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        submissionId: currentSubmissionId,
+        submissionId,
         kind: "audio",
         key,
         filename: file.name,
@@ -1233,6 +1280,7 @@ export function AlbumWizard({
     targetFiles: File[] = files,
     initialUploads: UploadItem[] = uploads,
   ) => {
+    const submissionId = requireSubmissionId();
     if (targetFiles.length === 0) {
       return uploadedFiles;
     }
@@ -1300,7 +1348,7 @@ export function AlbumWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           objectKey: path,
-          submissionId: currentSubmissionId,
+          submissionId,
           sizeBytes: file.size,
           mimeType: file.type,
           guestToken: isGuest ? currentGuestToken : undefined,
@@ -1351,7 +1399,7 @@ export function AlbumWizard({
     setFileDigest("");
     setEmailSubmitConfirmed(false);
     setNotice({});
-    setCurrentSubmissionId(crypto.randomUUID());
+    setCurrentSubmissionId(null);
     setCurrentGuestToken(crypto.randomUUID());
   };
 
@@ -1366,7 +1414,7 @@ export function AlbumWizard({
     }));
 
   const captureCurrentDraft = (): AlbumDraft => ({
-    submissionId: currentSubmissionId,
+    submissionId: requireSubmissionId(),
     guestToken: currentGuestToken,
     title: title.trim(),
     artistName: artistName.trim(),
@@ -1422,7 +1470,7 @@ export function AlbumWizard({
   const buildAlbumDraft = async (): Promise<AlbumDraft> => {
     const uploaded = await uploadFiles();
     return {
-      submissionId: currentSubmissionId,
+      submissionId: requireSubmissionId(),
       guestToken: currentGuestToken,
       title: title.trim(),
       artistName: artistName.trim(),
