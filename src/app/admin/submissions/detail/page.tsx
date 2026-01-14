@@ -913,17 +913,17 @@ export default async function AdminSubmissionDetailPage({
                               <div className="min-w-0">
                                 <input
                                   type="hidden"
-                                  name="trackResultId"
+                                  name={`trackResultId-${index}`}
                                   value={track.track_id ?? ""}
                                 />
                                 <input
                                   type="hidden"
-                                  name="trackResultNo"
+                                  name={`trackResultNo-${index}`}
                                   value={track.track_no ?? index + 1}
                                 />
                                 <input
                                   type="hidden"
-                                  name="trackResultTitle"
+                                  name={`trackResultTitle-${index}`}
                                   value={trackLabel}
                                 />
                                 <p className="truncate font-semibold text-foreground">
@@ -937,7 +937,7 @@ export default async function AdminSubmissionDetailPage({
                                 </p>
                               </div>
                               <select
-                                name="trackResultStatus"
+                                name={`trackResultStatus-${index}`}
                                 defaultValue={(track.status as string) || "PENDING"}
                                 className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-[11px]"
                               >

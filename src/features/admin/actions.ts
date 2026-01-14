@@ -443,6 +443,8 @@ export async function updateStationReviewFormAction(
     : "NOT_SENT";
 
   let trackResults: Array<z.infer<typeof trackResultSchema>> | undefined;
+  const indexedTrackMap = new Map<number, { trackId?: string; trackNo?: number; title?: string; status?: string }>();
+
   const trackResultsInput = formData.get("trackResults");
   if (typeof trackResultsInput === "string" && trackResultsInput.trim()) {
     try {
@@ -454,6 +456,42 @@ export async function updateStationReviewFormAction(
       console.error("Failed to parse trackResults JSON", error, trackResultsInput);
     }
   }
+
+  // New parsing: trackResultStatus-0, trackResultId-0, trackResultNo-0, trackResultTitle-0
+  for (const [key, value] of formData.entries()) {
+    const match = key.match(/^trackResult(Status|Id|No|Title)-(\d+)$/);
+    if (!match) continue;
+    const [, field, idxRaw] = match;
+    const idx = Number(idxRaw);
+    if (!Number.isFinite(idx)) continue;
+    const entry = indexedTrackMap.get(idx) ?? {};
+    if (field === "Status") {
+      entry.status = String(value);
+    } else if (field === "Id") {
+      entry.trackId = typeof value === "string" && value ? value : undefined;
+    } else if (field === "No") {
+      const asNumber = Number(value);
+      entry.trackNo = Number.isFinite(asNumber) ? asNumber : undefined;
+    } else if (field === "Title") {
+      entry.title = typeof value === "string" ? value : undefined;
+    }
+    indexedTrackMap.set(idx, entry);
+  }
+
+  if (indexedTrackMap.size > 0) {
+    trackResults = Array.from(indexedTrackMap.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([, item]) => ({
+        trackId: item.trackId,
+        trackNo: item.trackNo,
+        title: item.title,
+        status: String(item.status ?? "PENDING").toUpperCase() as z.infer<
+          typeof trackResultStatusEnum
+        >,
+      }));
+  }
+
+  // Backward-compatible fallback if indexed names are absent
   if (!trackResults) {
     const statuses = formData.getAll("trackResultStatus");
     const ids = formData.getAll("trackResultId");
