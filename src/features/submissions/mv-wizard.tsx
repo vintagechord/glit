@@ -277,6 +277,10 @@ export function MvWizard({
   const payFormId = React.useRef(
     `inicis-subpay-${Math.random().toString(36).slice(2)}`,
   );
+  const payFormRef = React.useRef<HTMLFormElement | null>(null);
+  const payPopupNameRef = React.useRef(
+    `inicis-popup-${Math.random().toString(36).slice(2)}`,
+  );
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [confirmModal, setConfirmModal] = React.useState<{
     code: string;
@@ -303,11 +307,16 @@ export function MvWizard({
         return;
       }
       const tryPay = () => {
-        const formEl = document.getElementById(formId);
+        const formEl =
+          payFormRef.current ?? (document.getElementById(formId) as HTMLFormElement | null);
         if (!formEl) {
           console.warn("[Inicis][STDPay] form element not found", { formId });
           return false;
         }
+        const popupName = payPopupNameRef.current;
+        const features = "width=460,height=720,resizable=yes,scrollbars=yes";
+        window.open("", popupName, features);
+        formEl.setAttribute("target", popupName);
         try {
           window.INIStdPay?.pay(formId);
           return true;
@@ -323,7 +332,7 @@ export function MvWizard({
               error: "결제창을 여는 중 오류가 발생했습니다. 다시 시도해주세요.",
             });
           }
-        }, 120);
+        }, 180);
       }
     };
     launch();
@@ -1004,11 +1013,13 @@ export function MvWizard({
         <>
           <Script src={payData.stdJsUrl} strategy="afterInteractive" />
           <form
+            ref={payFormRef}
             id={payFormId.current}
             name={payFormId.current}
             method="POST"
             acceptCharset="UTF-8"
             className="hidden"
+            target={payPopupNameRef.current}
           >
             {Object.entries(payData.stdParams).map(([key, value]) => (
               <input key={key} type="hidden" name={key} value={value} />

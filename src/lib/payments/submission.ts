@@ -79,10 +79,7 @@ export const createSubmissionPaymentOrder = async (
     mid.length <= 4 ? `${mid.slice(0, 2)}**` : `${mid.slice(0, 2)}***${mid.slice(-2)}`;
 
   const returnUrl = `${baseUrl}/api/inicis/submission/key-return`;
-  const closeUrlBase = submission.guest_token
-    ? `${baseUrl}/track/${submission.guest_token}`
-    : `${baseUrl}/dashboard/submissions/${submission.id}`;
-  const closeUrl = `${closeUrlBase}?payment=cancel`;
+  const closeUrl = `${baseUrl}/api/inicis/submission/key-return?oid=${orderId}&cancel=1`;
   const stdParams = buildStdPayRequest({
     orderId,
     amountKrw,
