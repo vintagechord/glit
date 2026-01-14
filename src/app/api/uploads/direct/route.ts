@@ -41,7 +41,8 @@ export async function POST(request: Request) {
   let parsedData: z.infer<typeof schema> | null = null;
   let objectKey: string | null = null;
   let uploadPromise: Promise<unknown> | null = null;
-  let parseError: { status: number; body: { error: string } } | null = null;
+  let parseErrorStatus: number | null = null;
+  let parseErrorBody: { error: string } | null = null;
 
   const busboy = Busboy({ headers: { "content-type": contentType } });
   busboy.on("field", (name, value) => {
@@ -65,7 +66,8 @@ export async function POST(request: Request) {
 
     if (!parsed.success) {
       console.error("[Upload][direct] validation failed", parsed.error.flatten().fieldErrors);
-      parseError = { status: 400, body: { error: "업로드 정보를 확인해주세요." } };
+      parseErrorStatus = 400;
+      parseErrorBody = { error: "업로드 정보를 확인해주세요." };
       file.resume();
       return;
     }
@@ -73,16 +75,15 @@ export async function POST(request: Request) {
     parsedData = parsed.data;
 
     if (!user && !parsed.data.guestToken) {
-      parseError = { status: 401, body: { error: "로그인 또는 게스트 토큰이 필요합니다." } };
+      parseErrorStatus = 401;
+      parseErrorBody = { error: "로그인 또는 게스트 토큰이 필요합니다." };
       file.resume();
       return;
     }
 
     if (parsed.data.sizeBytes > MAX_SIZE_BYTES) {
-      parseError = {
-        status: 400,
-        body: { error: "파일 용량이 허용 한도(1GB)를 초과했습니다." },
-      };
+      parseErrorStatus = 400;
+      parseErrorBody = { error: "파일 용량이 허용 한도(1GB)를 초과했습니다." };
       file.resume();
       return;
     }
@@ -112,7 +113,8 @@ export async function POST(request: Request) {
           : error instanceof Error
             ? error.message
             : "업로드 중 오류가 발생했습니다.";
-      parseError = { status: 500, body: { error: message } };
+      parseErrorStatus = 500;
+      parseErrorBody = { error: message };
       console.error("[Upload][direct] error before upload", {
         submissionId: parsed.data.submissionId,
         user: user?.id ?? null,
@@ -140,11 +142,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "업로드 데이터를 읽을 수 없습니다." }, { status: 400 });
   }
 
-  if (parseError) {
-    return NextResponse.json(parseError.body, { status: parseError.status });
+  if (parseErrorStatus !== null && parseErrorBody) {
+    return NextResponse.json(parseErrorBody, { status: parseErrorStatus });
   }
 
-  if (!parsedData || !uploadPromise || !objectKey) {
+  const uploadObjectKey = objectKey;
+  const uploadPromiseResolved = uploadPromise;
+
+  if (!parsedData || !uploadPromiseResolved || !uploadObjectKey) {
     console.error("[Upload][direct] missing file or parsed data", {
       contentType,
       contentLength,
@@ -153,18 +158,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "업로드 정보를 확인해주세요." }, { status: 400 });
   }
 
+  const uploadDetails = parsedData as z.infer<typeof schema>;
+
   try {
-    await uploadPromise;
+    await uploadPromiseResolved;
 
     console.info("[Upload][direct] ok", {
-      submissionId: parsedData.submissionId,
-      objectKey,
-      sizeBytes: parsedData.sizeBytes,
+      submissionId: uploadDetails.submissionId,
+      objectKey: uploadObjectKey,
+      sizeBytes: uploadDetails.sizeBytes,
       user: user?.id ?? null,
-      guest: Boolean(parsedData.guestToken),
+      guest: Boolean(uploadDetails.guestToken),
     });
 
-    return NextResponse.json({ objectKey });
+    return NextResponse.json({ objectKey: uploadObjectKey });
   } catch (error) {
     const message =
       error instanceof B2ConfigError
@@ -173,9 +180,9 @@ export async function POST(request: Request) {
           ? error.message
           : "업로드 중 오류가 발생했습니다.";
     console.error("[Upload][direct] error", {
-      submissionId: parsedData.submissionId,
+      submissionId: uploadDetails.submissionId,
       user: user?.id ?? null,
-      guest: Boolean(parsedData.guestToken),
+      guest: Boolean(uploadDetails.guestToken),
       message,
     });
     return NextResponse.json({ error: message }, { status: 500 });
