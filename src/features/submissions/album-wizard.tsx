@@ -399,12 +399,29 @@ export function AlbumWizard({
         console.warn("[Inicis][STDPay] INIStdPay.js not ready. Check script src or CSP.");
         return;
       }
-      const formEl = document.getElementById(formId);
-      if (!formEl) {
-        console.warn("[Inicis][STDPay] form element not found", { formId });
-        return;
+      const tryPay = () => {
+        const formEl = document.getElementById(formId);
+        if (!formEl) {
+          console.warn("[Inicis][STDPay] form element not found", { formId });
+          return false;
+        }
+        try {
+          window.INIStdPay?.pay(formId);
+          return true;
+        } catch (error) {
+          console.error("[Inicis][STDPay] pay() error", error);
+          return false;
+        }
+      };
+      if (!tryPay()) {
+        setTimeout(() => {
+          if (!tryPay()) {
+            setNotice({
+              error: "결제창을 여는 중 오류가 발생했습니다. 다시 시도해주세요.",
+            });
+          }
+        }, 120);
       }
-      window.INIStdPay.pay(formId);
     };
     launch();
     return () => {
@@ -1074,13 +1091,13 @@ export function AlbumWizard({
     onProgress: (percent: number) => void,
   ) => {
     const formData = new FormData();
-    formData.append("file", file);
     formData.append("submissionId", currentSubmissionId);
     formData.append("filename", file.name);
     formData.append("mimeType", file.type);
     formData.append("sizeBytes", String(file.size));
     if (isGuest && currentGuestToken) formData.append("guestToken", currentGuestToken);
     if (title.trim()) formData.append("title", title.trim());
+    formData.append("file", file);
 
     return await new Promise<{ objectKey: string }>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -1099,13 +1116,13 @@ export function AlbumWizard({
             }
             reject(new Error(json.error || "Upload failed"));
           } catch {
-            reject(new Error("Upload failed"));
+            reject(new Error("Upload failed (응답 해석 실패)"));
           }
         } else {
-          reject(new Error("Upload failed"));
+          reject(new Error(`Upload failed (status ${xhr.status})`));
         }
       };
-      xhr.onerror = () => reject(new Error("Upload failed"));
+      xhr.onerror = () => reject(new Error("Upload failed (network/CORS)"));
       xhr.open("POST", "/api/uploads/direct");
       xhr.send(formData);
     });
