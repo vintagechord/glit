@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { HeadObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { z } from "zod";
 
-import { B2ConfigError, getB2Config } from "@/lib/b2";
+import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,17 +13,16 @@ export const maxDuration = 120;
 const schema = z.object({
   submissionId: z.string().uuid(),
   kind: z.enum(["audio", "video"]),
-  key: z.string().min(1),
   filename: z.string().min(1),
   mimeType: z.string().min(1),
   sizeBytes: z.number().int().positive(),
+  title: z.string().optional(),
   guestToken: z.string().min(8).optional(),
 });
 
-const kindToFileKind: Record<"audio" | "video", "AUDIO" | "VIDEO"> = {
-  audio: "AUDIO",
-  video: "VIDEO",
-};
+const MAX_AUDIO_BYTES = 1 * 1024 * 1024 * 1024; // 1GB
+const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
+const EXPIRES_SECONDS = Number(process.env.B2_PRESIGN_EXPIRES_SECONDS ?? "900");
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -37,7 +36,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const { submissionId, kind, key, filename, mimeType, sizeBytes, guestToken } = parsed.data;
+  const { submissionId, kind, filename, mimeType, sizeBytes, title, guestToken } =
+    parsed.data;
+
+  const maxSize = kind === "audio" ? MAX_AUDIO_BYTES : MAX_VIDEO_BYTES;
+  if (sizeBytes > maxSize) {
+    return NextResponse.json(
+      {
+        error:
+          kind === "audio"
+            ? "음원 파일은 최대 1GB까지 업로드할 수 있습니다."
+            : "뮤직비디오는 최대 4GB까지 업로드할 수 있습니다.",
+      },
+      { status: 413 },
+    );
+  }
 
   try {
     const { user, submission, error } = await ensureSubmissionOwner(submissionId, guestToken);
@@ -52,64 +65,40 @@ export async function POST(request: Request) {
     }
 
     const { client, bucket } = getB2Config();
-    const head = await client.send(
-      new HeadObjectCommand({
-        Bucket: bucket,
-        Key: key,
-      }),
-    );
+    const key = buildObjectKey({
+      userId: submission?.user_id ?? user?.id ?? `guest-${guestToken ?? submission?.guest_token}`,
+      submissionId,
+      title,
+      filename,
+    });
 
-    const contentLength = head.ContentLength ?? 0;
-    if (contentLength !== sizeBytes) {
-      return NextResponse.json(
-        {
-          error: "업로드된 파일 크기가 일치하지 않습니다.",
-          expected: sizeBytes,
-          actual: contentLength,
-        },
-        { status: 400 },
-      );
-    }
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ContentType: mimeType,
+    });
+    const uploadUrl = await getSignedUrl(client, command, { expiresIn: EXPIRES_SECONDS });
 
-    const admin = createAdminClient();
-    const payload = {
-      submission_id: submissionId,
-      kind: kindToFileKind[kind],
-      file_path: key,
-      object_key: key,
-      original_name: filename,
-      mime: mimeType,
-      size: sizeBytes,
-      storage_provider: "b2",
-      status: "UPLOADED",
-      uploaded_at: new Date().toISOString(),
-    };
-    try {
-      await admin.from("submission_files").insert(payload);
-    } catch (error) {
-      console.error("[Upload][complete] failed to record file", {
-        submissionId,
-        key,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-
-    console.info("[Upload][complete] ok", {
+    console.info("[Upload][init] ok", {
       submissionId,
       kind,
-      key,
       sizeBytes,
-      etag: head.ETag,
+      key,
+      bucket,
+      tookMs: Date.now() - startedAt,
       user: user?.id ?? null,
       guest: Boolean(submission?.guest_token ?? guestToken),
-      tookMs: Date.now() - startedAt,
     });
 
     return NextResponse.json({
       ok: true,
-      verified: true,
-      etag: head.ETag,
-      contentLength,
+      key,
+      bucket,
+      uploadUrl,
+      method: "PUT",
+      headers: { "Content-Type": mimeType },
+      maxSizeBytes: maxSize,
+      expiresInSeconds: EXPIRES_SECONDS,
     });
   } catch (error) {
     const message =
@@ -117,11 +106,12 @@ export async function POST(request: Request) {
         ? error.message
         : error instanceof Error
           ? error.message
-          : "업로드 확인 중 오류가 발생했습니다.";
-    console.error("[Upload][complete] error", {
+          : "업로드 URL을 생성할 수 없습니다.";
+    console.error("[Upload][init] error", {
       submissionId,
       kind,
-      key,
+      sizeBytes,
+      user: null,
       message,
     });
     return NextResponse.json({ error: message }, { status: 500 });

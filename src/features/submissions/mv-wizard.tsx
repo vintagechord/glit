@@ -566,16 +566,35 @@ export function MvWizard({
     file: File,
     onProgress: (percent: number) => void,
   ) => {
-    const formData = new FormData();
-    formData.append("submissionId", submissionId);
-    formData.append("filename", file.name);
-    formData.append("mimeType", file.type);
-    formData.append("sizeBytes", String(file.size));
-    if (isGuest && guestToken) formData.append("guestToken", guestToken);
-    if (title.trim()) formData.append("title", title.trim());
-    formData.append("file", file);
+    const initRes = await fetch("/api/uploads/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        submissionId,
+        kind: "video",
+        filename: file.name,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+        guestToken: isGuest ? guestToken : undefined,
+        title: title.trim() || undefined,
+      }),
+    });
 
-    return await new Promise<{ objectKey: string }>((resolve, reject) => {
+    const initJson = (await initRes.json().catch(() => ({}))) as {
+      key?: string;
+      uploadUrl?: string;
+      headers?: Record<string, string>;
+      error?: string;
+    };
+    if (!initRes.ok || !initJson.key || !initJson.uploadUrl) {
+      const message = initJson.error || `Upload init failed (status ${initRes.status})`;
+      throw new Error(message);
+    }
+
+    const { key, uploadUrl, headers } = initJson;
+    const contentType = headers?.["Content-Type"] || file.type || "application/octet-stream";
+
+    await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
@@ -584,24 +603,32 @@ export function MvWizard({
       };
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const json = JSON.parse(xhr.responseText) as { objectKey?: string; error?: string };
-            if (json.objectKey) {
-              resolve({ objectKey: json.objectKey });
-              return;
-            }
-            reject(new Error(json.error || "Upload failed"));
-          } catch {
-            reject(new Error("Upload failed (응답 해석 실패)"));
-          }
+          resolve();
         } else {
           reject(new Error(`Upload failed (status ${xhr.status})`));
         }
       };
       xhr.onerror = () => reject(new Error("Upload failed (network/CORS)"));
-      xhr.open("POST", "/api/uploads/direct");
-      xhr.send(formData);
+      xhr.open("PUT", uploadUrl);
+      xhr.setRequestHeader("Content-Type", contentType);
+      xhr.send(file);
     });
+
+    await fetch("/api/uploads/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        submissionId,
+        kind: "video",
+        key,
+        filename: file.name,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+        guestToken: isGuest ? guestToken : undefined,
+      }),
+    }).catch(() => null);
+
+    return { objectKey: key };
   };
 
   const toggleTvStation = (code: string) => {
