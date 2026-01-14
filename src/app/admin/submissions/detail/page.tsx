@@ -918,7 +918,7 @@ export default async function AdminSubmissionDetailPage({
                                 <input
                                   type="hidden"
                                   name="trackResultNo"
-                                  value={track.track_no ?? ""}
+                                  value={track.track_no ?? index + 1}
                                 />
                                 <input
                                   type="hidden"
