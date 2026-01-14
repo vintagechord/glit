@@ -70,28 +70,26 @@ export async function POST(request: Request) {
       .eq("id", submissionId)
       .maybeSingle();
 
-    if (!submission) {
-      return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
-    }
-
     const submissionGuestToken =
-      typeof submission.guest_token === "string" && submission.guest_token.length > 0
+      typeof submission?.guest_token === "string" && submission.guest_token.length > 0
         ? submission.guest_token
         : null;
 
-    const isOwner =
-      (submission.user_id && submission.user_id === user?.id) ||
-      (!submission.user_id && submissionGuestToken && submissionGuestToken === guestToken);
-    if (!isOwner) {
-      return NextResponse.json(
-        { error: "접수에 대한 권한이 없습니다." },
-        { status: user ? 403 : 401 },
-      );
+    if (submission) {
+      const isOwner =
+        (submission.user_id && submission.user_id === user?.id) ||
+        (!submission.user_id && submissionGuestToken && submissionGuestToken === guestToken);
+      if (!isOwner) {
+        return NextResponse.json(
+          { error: "접수에 대한 권한이 없습니다." },
+          { status: user ? 403 : 401 },
+        );
+      }
     }
 
     const { client, bucket } = getB2Config();
     const key = buildObjectKey({
-      userId: submission.user_id ?? user?.id ?? `guest-${guestToken ?? submissionGuestToken}`,
+      userId: submission?.user_id ?? user?.id ?? `guest-${guestToken ?? submissionGuestToken ?? "new"}`,
       submissionId,
       title,
       filename,
