@@ -142,12 +142,14 @@ export default async function SubmissionDetailPage({
 
   const fetchSubmission = async (
     client: ReturnType<typeof createAdminClient> | Awaited<ReturnType<typeof createServerSupabase>>,
-  ): Promise<{ submission: SubmissionRow | null; error: PostgrestError | null }> =>
-    client
+  ): Promise<{ submission: SubmissionRow | null; error: PostgrestError | null }> => {
+    const { data, error } = await client
       .from("submissions")
       .select(lightSelect)
       .eq("id", submissionId)
-      .maybeSingle() as Promise<{ data: SubmissionRow | null; error: PostgrestError | null }>;
+      .maybeSingle();
+    return { submission: data as SubmissionRow | null, error: error as PostgrestError | null };
+  };
 
   const admin = createAdminClient();
   const { submission: adminSubmission, error: adminError } =

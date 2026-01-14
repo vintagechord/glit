@@ -4,7 +4,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { z } from "zod";
 
 import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
-import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,20 +54,44 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { user, submission, error } = await ensureSubmissionOwner(submissionId, guestToken);
-    if (error === "NOT_FOUND") {
-      return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
-    }
-    if (error === "UNAUTHORIZED") {
+    const supabase = await createServerSupabase();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user && !guestToken) {
       return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
     }
-    if (error === "FORBIDDEN") {
-      return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
+
+    const admin = createAdminClient();
+    const { data: submission } = await admin
+      .from("submissions")
+      .select("id, user_id, guest_token")
+      .eq("id", submissionId)
+      .maybeSingle();
+
+    if (!submission) {
+      return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
+    }
+
+    const submissionGuestToken =
+      typeof submission.guest_token === "string" && submission.guest_token.length > 0
+        ? submission.guest_token
+        : null;
+
+    const isOwner =
+      (submission.user_id && submission.user_id === user?.id) ||
+      (!submission.user_id && submissionGuestToken && submissionGuestToken === guestToken);
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: "접수에 대한 권한이 없습니다." },
+        { status: user ? 403 : 401 },
+      );
     }
 
     const { client, bucket } = getB2Config();
     const key = buildObjectKey({
-      userId: submission?.user_id ?? user?.id ?? `guest-${guestToken ?? submission?.guest_token}`,
+      userId: submission.user_id ?? user?.id ?? `guest-${guestToken ?? submissionGuestToken}`,
       submissionId,
       title,
       filename,
