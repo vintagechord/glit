@@ -1149,12 +1149,25 @@ export function AlbumWizard({
       error?: string;
     };
     if (!initRes.ok || !initJson.key || !initJson.uploadUrl) {
-      const message =
-        initJson.error ||
-        (initRes.status === 413
-          ? "파일 용량이 허용 한도를 초과했습니다."
-          : `Upload init failed (status ${initRes.status})`);
-      throw new Error(message);
+      console.warn("[Upload][album] init failed, fallback to direct", {
+        status: initRes.status,
+        error: initJson.error,
+      });
+      const fallback = await directUploadFallback();
+      await fetch("/api/uploads/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId: currentSubmissionId,
+          kind: "audio",
+          key: fallback.objectKey,
+          filename: file.name,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          guestToken: isGuest ? currentGuestToken : undefined,
+        }),
+      }).catch(() => null);
+      return { objectKey: fallback.objectKey };
     }
 
     const { key, uploadUrl, headers } = initJson;

@@ -634,8 +634,25 @@ export function MvWizard({
       error?: string;
     };
     if (!initRes.ok || !initJson.key || !initJson.uploadUrl) {
-      const message = initJson.error || `Upload init failed (status ${initRes.status})`;
-      throw new Error(message);
+      console.warn("[Upload][mv] init failed, fallback to direct", {
+        status: initRes.status,
+        error: initJson.error,
+      });
+      const fallback = await directUploadFallback();
+      await fetch("/api/uploads/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId,
+          kind: "video",
+          key: fallback.objectKey,
+          filename: file.name,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          guestToken: isGuest ? guestToken : undefined,
+        }),
+      }).catch(() => null);
+      return { objectKey: fallback.objectKey };
     }
 
     const { key, uploadUrl, headers } = initJson;
