@@ -313,6 +313,7 @@ export function AlbumWizard({
     "profanity",
   );
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
+  const [draftError, setDraftError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [payData, setPayData] = React.useState<{
     orderId: string;
@@ -516,41 +517,43 @@ export function AlbumWizard({
       }
     : null;
 
+  const createDraft = React.useCallback(async () => {
+    if (isPreparingDraft) return;
+    setIsPreparingDraft(true);
+    setDraftError(null);
+    try {
+      const res = await fetch("/api/submissions/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "ALBUM",
+          guestToken: isGuest ? currentGuestToken : undefined,
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        submissionId?: string;
+        error?: string;
+      };
+      if (res.ok && json?.submissionId) {
+        setCurrentSubmissionId(json.submissionId);
+        return;
+      }
+      setDraftError(json?.error || "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.");
+    } catch (error) {
+      setDraftError(
+        error instanceof Error
+          ? error.message
+          : "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
+      );
+    } finally {
+      setIsPreparingDraft(false);
+    }
+  }, [currentGuestToken, isGuest, isPreparingDraft]);
+
   React.useEffect(() => {
     if (currentSubmissionId || isPreparingDraft) return;
-    let cancelled = false;
-    const createDraft = async () => {
-      setIsPreparingDraft(true);
-      try {
-        const res = await fetch("/api/submissions/draft", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "ALBUM",
-            guestToken: isGuest ? currentGuestToken : undefined,
-          }),
-        });
-        const json = (await res.json().catch(() => null)) as { submissionId?: string; error?: string };
-        if (!cancelled) {
-          if (res.ok && json?.submissionId) {
-            setCurrentSubmissionId(json.submissionId);
-          } else {
-            setNotice({
-              error: json?.error || "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
-            });
-          }
-        }
-      } finally {
-        if (!cancelled) {
-          setIsPreparingDraft(false);
-        }
-      }
-    };
-    createDraft();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentGuestToken, currentSubmissionId, isGuest, isPreparingDraft]);
+    void createDraft();
+  }, [createDraft, currentSubmissionId, isPreparingDraft]);
 
   React.useEffect(() => {
     if (spellcheckAppliedMap[activeTrackIndex]) {
@@ -1058,7 +1061,11 @@ export function AlbumWizard({
 
   const addFiles = (selected: File[]) => {
     if (!currentSubmissionId) {
-      setNotice({ error: "접수 초안을 준비하는 중입니다. 잠시 후 다시 시도해주세요." });
+      setNotice({
+        error:
+          draftError ||
+          "접수 초안을 준비하는 중입니다. 잠시 후 다시 시도하거나 다시 시도 버튼을 눌러주세요.",
+      });
       return;
     }
     const allowedTypes = new Set([
@@ -1400,6 +1407,8 @@ export function AlbumWizard({
     setEmailSubmitConfirmed(false);
     setNotice({});
     setCurrentSubmissionId(null);
+    setDraftError(null);
+    void createDraft();
     setCurrentGuestToken(crypto.randomUUID());
   };
 
@@ -2829,7 +2838,9 @@ export function AlbumWizard({
                   <span>
                     {currentSubmissionId
                       ? "파일 첨부 (드래그 앤 드롭 가능)"
-                      : "접수 ID 준비 중... 잠시 후 첨부 가능"}
+                      : isPreparingDraft
+                        ? "접수 ID 준비 중... 잠시 후 첨부 가능"
+                        : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
                   </span>
                   <span className="inline-flex items-center gap-2 rounded-full border border-black bg-gradient-to-br from-black to-slate-900 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm">
                     허용 형식: <span className="font-mono text-[12px]">WAV/ZIP</span>
