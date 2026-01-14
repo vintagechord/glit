@@ -1090,6 +1090,44 @@ export function AlbumWizard({
     file: File,
     onProgress: (percent: number) => void,
   ) => {
+    const directUploadFallback = () =>
+      new Promise<{ objectKey: string }>((resolve, reject) => {
+        const formData = new FormData();
+        formData.append("submissionId", currentSubmissionId);
+        formData.append("filename", file.name);
+        formData.append("mimeType", file.type || "application/octet-stream");
+        formData.append("sizeBytes", String(file.size));
+        if (isGuest && currentGuestToken) formData.append("guestToken", currentGuestToken);
+        if (title.trim()) formData.append("title", title.trim());
+        formData.append("file", file);
+
+        const xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(percent);
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const json = JSON.parse(xhr.responseText) as { objectKey?: string; error?: string };
+              if (json.objectKey) {
+                resolve({ objectKey: json.objectKey });
+                return;
+              }
+              reject(new Error(json.error || "Upload failed"));
+            } catch {
+              reject(new Error("Upload failed (응답 해석 실패)"));
+            }
+          } else {
+            reject(new Error(`Upload failed (status ${xhr.status})`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Upload failed (network/CORS)"));
+        xhr.open("POST", "/api/uploads/direct");
+        xhr.send(formData);
+      });
+
     const initRes = await fetch("/api/uploads/init", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1122,25 +1160,44 @@ export function AlbumWizard({
     const { key, uploadUrl, headers } = initJson;
     const contentType = headers?.["Content-Type"] || file.type || "application/octet-stream";
 
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable) return;
-        const percent = Math.round((event.loaded / event.total) * 100);
-        onProgress(percent);
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
-        } else {
-          reject(new Error(`Upload failed (status ${xhr.status})`));
-        }
-      };
-      xhr.onerror = () => reject(new Error("Upload failed (network/CORS)"));
-      xhr.open("PUT", uploadUrl);
-      xhr.setRequestHeader("Content-Type", contentType);
-      xhr.send(file);
-    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(percent);
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Upload failed (status ${xhr.status})`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Upload failed (network/CORS)"));
+        xhr.open("PUT", uploadUrl);
+        xhr.setRequestHeader("Content-Type", contentType);
+        xhr.send(file);
+      });
+    } catch (error) {
+      console.warn("[Upload][album] presigned PUT failed, fallback to direct", error);
+      const fallback = await directUploadFallback();
+      await fetch("/api/uploads/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId: currentSubmissionId,
+          kind: "audio",
+          key: fallback.objectKey,
+          filename: file.name,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          guestToken: isGuest ? currentGuestToken : undefined,
+        }),
+      }).catch(() => null);
+      return { objectKey: fallback.objectKey };
+    }
 
     await fetch("/api/uploads/complete", {
       method: "POST",
