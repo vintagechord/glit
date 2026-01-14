@@ -673,17 +673,6 @@ export function HomeReviewPanel({
           )}
         </div>
 
-        {activeSubmission ? (
-          <div className="flex justify-center">
-            <Link
-              href={`/dashboard/submissions/${activeSubmission.id}`}
-              className="rounded-full border border-border/70 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground shadow-sm transition hover:border-foreground hover:bg-foreground hover:text-background"
-            >
-              자세히 보기
-            </Link>
-          </div>
-        ) : null}
-
         <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">
@@ -779,6 +768,16 @@ export function HomeReviewPanel({
               </div>
             )}
           </div>
+          {activeSubmission ? (
+            <div className="mt-4 flex justify-center">
+              <Link
+                href={`/dashboard/submissions/${activeSubmission.id}`}
+                className="rounded-full border border-border/70 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:border-foreground hover:bg-white/90 dark:text-black"
+              >
+                자세히 보기
+              </Link>
+            </div>
+          ) : null}
         </div>
 
       </div>
