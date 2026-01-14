@@ -2823,9 +2823,14 @@ export function AlbumWizard({
                   accept=".wav,.zip,application/zip"
                   onChange={onFileChange}
                   className="hidden"
+                  disabled={!currentSubmissionId || isPreparingDraft}
                 />
                 <div className="flex min-h-[120px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
-                  <span>파일 첨부 (드래그 앤 드롭 가능)</span>
+                  <span>
+                    {currentSubmissionId
+                      ? "파일 첨부 (드래그 앤 드롭 가능)"
+                      : "접수 ID 준비 중... 잠시 후 첨부 가능"}
+                  </span>
                   <span className="inline-flex items-center gap-2 rounded-full border border-black bg-gradient-to-br from-black to-slate-900 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm">
                     허용 형식: <span className="font-mono text-[12px]">WAV/ZIP</span>
                     <span className="text-white/70">·</span>

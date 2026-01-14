@@ -12,7 +12,7 @@ export const maxDuration = 120;
 
 const schema = z.object({
   submissionId: z.string().uuid(),
-  kind: z.enum(["audio", "video"]),
+  kind: z.string().min(1),
   key: z.string().min(1),
   filename: z.string().min(1),
   mimeType: z.string().min(1),
@@ -20,9 +20,15 @@ const schema = z.object({
   guestToken: z.string().min(8).optional(),
 });
 
-const kindToFileKind: Record<"audio" | "video", "AUDIO" | "VIDEO"> = {
-  audio: "AUDIO",
-  video: "VIDEO",
+const mapKind = (kind: string): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
+  const upper = kind.toUpperCase();
+  if (upper === "AUDIO" || upper === "VIDEO" || upper === "LYRICS" || upper === "ETC") {
+    return upper as "AUDIO" | "VIDEO" | "LYRICS" | "ETC";
+  }
+  if (kind.toLowerCase() === "audio") return "AUDIO";
+  if (kind.toLowerCase() === "video") return "VIDEO";
+  if (kind.toLowerCase() === "lyrics") return "LYRICS";
+  return "ETC";
 };
 
 export async function POST(request: Request) {
@@ -74,7 +80,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const payload = {
       submission_id: submissionId,
-      kind: kindToFileKind[kind],
+      kind: mapKind(kind),
       file_path: key,
       object_key: key,
       original_name: filename,
