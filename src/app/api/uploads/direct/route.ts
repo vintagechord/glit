@@ -6,10 +6,11 @@ import { z } from "zod";
 import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const schema = z.object({
   submissionId: z.string().uuid(),
@@ -98,7 +99,19 @@ export async function POST(request: Request) {
 
   const parsePromise = new Promise<void>((resolve, reject) => {
     busboy.on("finish", resolve);
-    busboy.on("error", reject);
+    busboy.on("error", (error) => {
+      console.error("[Upload][direct] busboy error", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (parseErrorStatus === null) {
+        parseErrorStatus = 400;
+        parseErrorBody = {
+          error: "업로드 데이터를 읽을 수 없습니다.",
+          detail: error instanceof Error ? error.message : String(error),
+        };
+      }
+      reject(error);
+    });
   });
 
   const tryStartUpload = () => {
@@ -157,14 +170,18 @@ export async function POST(request: Request) {
       objectKey = key;
 
       const { client, bucket } = getB2Config();
-      const command = new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: filePart.stream,
-        ContentType: parsed.data.mimeType || undefined,
-        ContentLength: parsed.data.sizeBytes,
+      const uploader = new Upload({
+        client,
+        params: {
+          Bucket: bucket,
+          Key: key,
+          Body: filePart.stream,
+          ContentType: parsed.data.mimeType || undefined,
+          ContentLength: parsed.data.sizeBytes,
+        },
+        leavePartsOnError: false,
       });
-      uploadPromise = client.send(command);
+      uploadPromise = uploader.done();
     } catch (error) {
       const message =
         error instanceof B2ConfigError
