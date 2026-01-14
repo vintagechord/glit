@@ -11,6 +11,7 @@ import {
   resultStatusLabelMap,
   reviewStatusEnum,
   stationReviewStatusEnum,
+  stationReviewStatusValues,
 } from "@/constants/review-status";
 import { sendResultEmail } from "@/lib/email";
 import { summarizeTrackResults } from "@/lib/track-results";
@@ -436,6 +437,11 @@ export async function updateStationReviewAction(
 export async function updateStationReviewFormAction(
   formData: FormData,
 ): Promise<void> {
+  const statusRaw = String(formData.get("status") ?? "").toUpperCase();
+  const status = stationReviewStatusValues.includes(statusRaw as typeof stationReviewStatusValues[number])
+    ? (statusRaw as typeof stationReviewStatusValues[number])
+    : "NOT_SENT";
+
   let trackResults: Array<z.infer<typeof trackResultSchema>> | undefined;
   const trackResultsInput = formData.get("trackResults");
   if (typeof trackResultsInput === "string" && trackResultsInput.trim()) {
@@ -464,7 +470,7 @@ export async function updateStationReviewFormAction(
               ? Number(numbers[index])
               : undefined,
           title: typeof titles[index] === "string" ? titles[index] : undefined,
-          status: String(status) as z.infer<typeof trackResultStatusEnum>,
+          status: String(status).toUpperCase() as z.infer<typeof trackResultStatusEnum>,
         }))
         .filter((item) => Boolean(item.status));
     }
@@ -472,14 +478,17 @@ export async function updateStationReviewFormAction(
 
   const result = await updateStationReviewAction({
     reviewId: String(formData.get("reviewId") ?? ""),
-    status: String(formData.get("status") ?? "") as z.infer<
-      typeof stationReviewStatusEnum
-    >,
+    status: status as z.infer<typeof stationReviewStatusEnum>,
     resultNote: String(formData.get("resultNote") ?? "") || undefined,
     trackResults,
   });
   if (result.error) {
     console.error(result.error);
+    const submissionId = String(formData.get("submissionId") ?? "");
+    if (submissionId) {
+      redirect(`/admin/submissions/${submissionId}?saved=station_error`);
+    }
+    return;
   }
 
   revalidatePath("/admin/submissions");
