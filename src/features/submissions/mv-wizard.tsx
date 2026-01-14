@@ -217,6 +217,7 @@ export function MvWizard({
     stdParams: Record<string, string>;
     stdJsUrl: string;
   } | null>(null);
+  const [stdScriptReady, setStdScriptReady] = React.useState(false);
 
   const logStdPayParams = React.useCallback(
     (params: Record<string, string>, stdJsUrl: string) => {
@@ -241,7 +242,10 @@ export function MvWizard({
 
   const ensureStdPayReady = React.useCallback(async (stdJsUrl: string) => {
     if (typeof window === "undefined") return false;
-    if (window.INIStdPay) return true;
+    if (window.INIStdPay) {
+      setStdScriptReady(true);
+      return true;
+    }
     let script = document.querySelector(`script[src="${stdJsUrl}"]`) as
       | HTMLScriptElement
       | null;
@@ -260,6 +264,7 @@ export function MvWizard({
         script?.removeEventListener("error", onError);
         window.clearTimeout(timeout);
         window.clearTimeout(poll);
+        if (value) setStdScriptReady(true);
         resolve(value);
       };
       const timeout = window.setTimeout(() => cleanup(Boolean(window.INIStdPay)), 2000);
@@ -273,20 +278,7 @@ export function MvWizard({
     });
   }, []);
 
-  React.useEffect(() => {
-    if (!payData || process.env.NODE_ENV === "production") return;
-    const timer = window.setTimeout(() => {
-      const loaded = typeof window !== "undefined" && !!window.INIStdPay;
-      console.info("[Inicis][STDPay] INIStdPay.js loaded?", loaded, payData.stdJsUrl);
-      if (!loaded) {
-        console.warn("[Inicis][STDPay] INIStdPay.js not available. Check script src or CSP.");
-      }
-    }, 500);
-    return () => window.clearTimeout(timer);
-  }, [payData]);
-  const payFormId = React.useRef(
-    `inicis-subpay-${Math.random().toString(36).slice(2)}`,
-  );
+  const payFormId = React.useRef("inicis-stdpay-form-mv");
   const payFormRef = React.useRef<HTMLFormElement | null>(null);
   const payPopupNameRef = React.useRef(
     `inicis-popup-${Math.random().toString(36).slice(2)}`,
@@ -304,52 +296,51 @@ export function MvWizard({
   const submissionIdRef = React.useRef<string | null>(null);
   const guestTokenRef = React.useRef<string | null>(null);
 
-  React.useEffect(() => {
-    if (!payData) return;
-    let cancelled = false;
-    const launch = async () => {
-      const ready = await ensureStdPayReady(payData.stdJsUrl);
-      if (cancelled) return;
-      logStdPayParams(payData.stdParams, payData.stdJsUrl);
-      const formId = payFormId.current;
-      if (!ready || typeof window === "undefined" || !window.INIStdPay) {
-        console.warn("[Inicis][STDPay] INIStdPay.js not ready. Check script src or CSP.");
+  const triggerStdPay = React.useCallback(
+    async (data: { stdParams: Record<string, string>; stdJsUrl: string }) => {
+      if (typeof window === "undefined") return;
+      const ready = await ensureStdPayReady(data.stdJsUrl);
+      const formEl =
+        payFormRef.current ?? (document.getElementById(payFormId.current) as HTMLFormElement | null);
+      if (!ready || !window.INIStdPay) {
+        setNotice({ error: "결제 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요." });
+        console.warn("[Inicis][STDPay] INIStdPay not ready", {
+          ready,
+          hasWin: typeof window !== "undefined",
+          formId: payFormId.current,
+        });
         return;
       }
-      const tryPay = () => {
-        const formEl =
-          payFormRef.current ?? (document.getElementById(formId) as HTMLFormElement | null);
-        if (!formEl) {
-          console.warn("[Inicis][STDPay] form element not found", { formId });
-          return false;
-        }
-        const popupName = payPopupNameRef.current;
-        const features = "width=460,height=720,resizable=yes,scrollbars=yes";
-        window.open("", popupName, features);
-        formEl.setAttribute("target", popupName);
-        try {
-          window.INIStdPay?.pay(formId);
-          return true;
-        } catch (error) {
-          console.error("[Inicis][STDPay] pay() error", error);
-          return false;
-        }
-      };
-      if (!tryPay()) {
-        setTimeout(() => {
-          if (!tryPay()) {
-            setNotice({
-              error: "결제창을 여는 중 오류가 발생했습니다. 다시 시도해주세요.",
-            });
-          }
-        }, 180);
+      if (!formEl) {
+        setNotice({ error: "결제 폼을 찾을 수 없습니다. 다시 시도해주세요." });
+        console.warn("[Inicis][STDPay] form element not found", { formId: payFormId.current });
+        return;
       }
-    };
-    launch();
-    return () => {
-      cancelled = true;
-    };
-  }, [ensureStdPayReady, logStdPayParams, payData]);
+      while (formEl.firstChild) {
+        formEl.removeChild(formEl.firstChild);
+      }
+      Object.entries(data.stdParams).forEach(([key, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value;
+        formEl.appendChild(input);
+      });
+      formEl.setAttribute("target", payPopupNameRef.current);
+      const popupName = payPopupNameRef.current;
+      const features = "width=460,height=720,resizable=yes,scrollbars=yes";
+      window.open("", popupName, features);
+      try {
+        window.INIStdPay?.pay(payFormId.current);
+      } catch (error) {
+        console.error("[Inicis][STDPay] pay() error", error);
+        setNotice({
+          error: "결제창을 여는 중 오류가 발생했습니다. 다시 시도해주세요.",
+        });
+      }
+    },
+    [ensureStdPayReady, setNotice],
+  );
 
   if (!submissionIdRef.current) {
     submissionIdRef.current = crypto.randomUUID();
@@ -1039,6 +1030,8 @@ export function MvWizard({
               stdParams: json.stdParams,
             };
             setPayData(normalizedPayData);
+            logStdPayParams(normalizedPayData.stdParams, normalizedPayData.stdJsUrl);
+            await triggerStdPay(normalizedPayData);
             console.info("[Inicis][STDPay][init][client] order created", {
               orderId: json.orderId,
               stdJsUrl: json.stdJsUrl,
@@ -1095,24 +1088,19 @@ export function MvWizard({
         show={isSaving}
         label="심의 저장/결제 처리 중..."
       />
-      {payData ? (
-        <>
-          <Script src={payData.stdJsUrl} strategy="afterInteractive" />
-          <form
-            ref={payFormRef}
-            id={payFormId.current}
-            name={payFormId.current}
-            method="POST"
-            acceptCharset="UTF-8"
-            className="hidden"
-            target={payPopupNameRef.current}
-          >
-            {Object.entries(payData.stdParams).map(([key, value]) => (
-              <input key={key} type="hidden" name={key} value={value} />
-            ))}
-          </form>
-        </>
-      ) : null}
+      <Script
+        src={payData?.stdJsUrl ?? "https://stdpay.inicis.com/stdjs/INIStdPay.js"}
+        strategy="afterInteractive"
+      />
+      <form
+        ref={payFormRef}
+        id={payFormId.current}
+        name={payFormId.current}
+        method="POST"
+        acceptCharset="UTF-8"
+        className="hidden"
+        target={payPopupNameRef.current}
+      />
 
       {isDraggingOver && (
         <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />

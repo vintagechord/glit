@@ -320,11 +320,13 @@ export function AlbumWizard({
     stdParams: Record<string, string>;
     stdJsUrl: string;
   } | null>(null);
+  const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const payFormRef = React.useRef<HTMLFormElement | null>(null);
-  const [stdScriptReady, setStdScriptReady] = React.useState(false);
-  const payFormId = React.useRef(
-    `inicis-subpay-${Math.random().toString(36).slice(2)}`,
+  const payPopupNameRef = React.useRef(
+    `inicis-popup-${Math.random().toString(36).slice(2)}`,
   );
+  const [stdScriptReady, setStdScriptReady] = React.useState(false);
+  const payFormId = React.useRef("inicis-stdpay-form");
 
   const logStdPayParams = React.useCallback(
     (params: Record<string, string>, stdJsUrl: string) => {
@@ -390,50 +392,50 @@ export function AlbumWizard({
     void ensureStdPayReady("https://stdpay.inicis.com/stdjs/INIStdPay.js");
   }, [ensureStdPayReady]);
 
-  React.useEffect(() => {
-    if (!payData) return;
-    let cancelled = false;
-    const launch = async () => {
-      const ready = await ensureStdPayReady(payData.stdJsUrl);
-      if (cancelled) return;
-      logStdPayParams(payData.stdParams, payData.stdJsUrl);
-      const formId = payFormId.current;
-      if (!ready || typeof window === "undefined" || !window.INIStdPay) {
-        console.warn("[Inicis][STDPay] INIStdPay.js not ready. Check script src or CSP.");
+  const triggerStdPay = React.useCallback(
+    async (data: { stdParams: Record<string, string>; stdJsUrl: string }) => {
+      if (typeof window === "undefined") return;
+      const ready = await ensureStdPayReady(data.stdJsUrl);
+      const formEl =
+        payFormRef.current ?? (document.getElementById(payFormId.current) as HTMLFormElement | null);
+      if (!ready || !window.INIStdPay) {
+        setNotice({ error: "결제 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요." });
+        console.warn("[Inicis][STDPay] INIStdPay not ready", {
+          ready,
+          hasWin: typeof window !== "undefined",
+          formId: payFormId.current,
+        });
         return;
       }
-      const tryPay = () => {
-        const formEl =
-          payFormRef.current ?? (document.getElementById(formId) as HTMLFormElement | null);
-        if (!formEl) {
-          console.warn("[Inicis][STDPay] form element not found", { formId });
-          return false;
-        }
-        try {
-          window.INIStdPay?.pay(formId);
-          return true;
-        } catch (error) {
-          console.error("[Inicis][STDPay] pay() error", error);
-          return false;
-        }
-      };
-      if (!tryPay()) {
-        setTimeout(() => {
-          if (!tryPay()) {
-            setNotice({
-              error: "결제창을 여는 중 오류가 발생했습니다. 다시 시도해주세요.",
-            });
-          }
-        }, 120);
+      if (!formEl) {
+        setNotice({ error: "결제 폼을 찾을 수 없습니다. 다시 시도해주세요." });
+        console.warn("[Inicis][STDPay] form element not found", { formId: payFormId.current });
+        return;
       }
-    };
-    launch();
-    return () => {
-      cancelled = true;
-    };
-  }, [ensureStdPayReady, logStdPayParams, payData]);
+      // sync hidden inputs
+      while (formEl.firstChild) {
+        formEl.removeChild(formEl.firstChild);
+      }
+      Object.entries(data.stdParams).forEach(([key, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value;
+        formEl.appendChild(input);
+      });
+      formEl.setAttribute("target", payPopupNameRef.current);
+      try {
+        window.INIStdPay?.pay(payFormId.current);
+      } catch (error) {
+        console.error("[Inicis][STDPay] pay() error", error);
+        setNotice({
+          error: "결제창을 여는 중 오류가 발생했습니다. 다시 시도해주세요.",
+        });
+      }
+    },
+    [ensureStdPayReady, setNotice],
+  );
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
-  const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [completionId, setCompletionId] = React.useState<string | null>(null);
   const [completionTokens, setCompletionTokens] = React.useState<
     Array<{ token: string; title: string }>
@@ -1885,6 +1887,8 @@ export function AlbumWizard({
               stdParams: json.stdParams,
             };
             setPayData(normalizedPayData);
+            logStdPayParams(normalizedPayData.stdParams, normalizedPayData.stdJsUrl);
+            await triggerStdPay(normalizedPayData);
             console.info("[Inicis][STDPay][init][client] order created", {
               orderId: json.orderId,
               stdJsUrl: json.stdJsUrl,
@@ -1937,23 +1941,19 @@ export function AlbumWizard({
         show={isSaving || isAddingAlbum}
         label="심의 저장/결제 처리 중..."
       />
-      {payData ? (
-        <>
-          <Script src={payData.stdJsUrl} strategy="afterInteractive" />
-          <form
-            id={payFormId.current}
-            name={payFormId.current}
-            method="POST"
-            acceptCharset="UTF-8"
-            className="hidden"
-            ref={payFormRef}
-          >
-            {Object.entries(payData.stdParams).map(([key, value]) => (
-              <input key={key} type="hidden" name={key} value={value} />
-            ))}
-          </form>
-        </>
-      ) : null}
+      <Script
+        src={payData?.stdJsUrl ?? "https://stdpay.inicis.com/stdjs/INIStdPay.js"}
+        strategy="afterInteractive"
+      />
+      <form
+        id={payFormId.current}
+        name={payFormId.current}
+        method="POST"
+        acceptCharset="UTF-8"
+        className="hidden"
+        ref={payFormRef}
+        target={payPopupNameRef.current}
+      />
 
       {stepLabels}
 
