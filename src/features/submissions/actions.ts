@@ -377,6 +377,7 @@ const mvSubmissionSchema = z.object({
   selectedStationIds: z.array(z.string().uuid()).optional(),
   title: z.string().min(1),
   artistName: z.string().min(1),
+  applicantEmail: z.string().email().optional(),
   director: z.string().optional(),
   leadActor: z.string().optional(),
   storyline: z.string().optional(),
@@ -959,8 +960,8 @@ export async function saveAlbumSubmissionAction(
   let emailWarning: string | undefined;
   if (parsed.data.status === "SUBMITTED") {
     const recipientEmail =
-      parsed.data.guestEmail ??
       parsed.data.applicantEmail ??
+      parsed.data.guestEmail ??
       user?.email ??
       null;
     if (recipientEmail) {
@@ -976,7 +977,12 @@ export async function saveAlbumSubmissionAction(
         guestToken: parsed.data.guestToken ?? undefined,
         link,
       });
-      if (emailResult.skipped || !emailResult.ok) {
+      if (emailResult.skipped) {
+        console.warn("[Email][receipt] skipped (config missing)", {
+          submissionId: parsed.data.submissionId,
+          email: recipientEmail,
+        });
+      } else if (!emailResult.ok) {
         emailWarning =
           emailResult.message ??
           "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
@@ -1089,6 +1095,7 @@ export async function saveMvSubmissionAction(
     mv_lyrics: parsed.data.lyrics || null,
     package_id: parsed.data.packageId ?? null,
     amount_krw: amountKrw,
+    applicant_email: parsed.data.applicantEmail || null,
     mv_base_selected: parsed.data.mvBaseSelected ?? true,
     guest_name: isGuest ? parsed.data.guestName : null,
     guest_company: isGuest ? parsed.data.guestCompany ?? null : null,
@@ -1246,7 +1253,11 @@ export async function saveMvSubmissionAction(
 
   let emailWarning: string | undefined;
   if (parsed.data.status === "SUBMITTED") {
-    const recipientEmail = parsed.data.guestEmail ?? user?.email ?? null;
+    const recipientEmail =
+      parsed.data.applicantEmail ??
+      parsed.data.guestEmail ??
+      user?.email ??
+      null;
     if (recipientEmail) {
       const link =
         parsed.data.guestToken && parsed.data.guestToken.length >= 8
@@ -1260,7 +1271,12 @@ export async function saveMvSubmissionAction(
         guestToken: parsed.data.guestToken ?? undefined,
         link,
       });
-      if (emailResult.skipped || !emailResult.ok) {
+      if (emailResult.skipped) {
+        console.warn("[Email][receipt] skipped (config missing)", {
+          submissionId: parsed.data.submissionId,
+          email: recipientEmail,
+        });
+      } else if (!emailResult.ok) {
         emailWarning =
           emailResult.message ??
           "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
