@@ -304,8 +304,8 @@ export function MvWizard({
 
   const openInicisPopup = React.useCallback(() => {
     if (typeof window === "undefined") return null;
-    const width = 520;
-    const height = 860;
+    const width = 600;
+    const height = 920;
     const dualLeft = window.screenLeft ?? (window as unknown as { screenX?: number }).screenX ?? 0;
     const dualTop = window.screenTop ?? (window as unknown as { screenY?: number }).screenY ?? 0;
     const winWidth = window.outerWidth ?? window.innerWidth ?? 0;
