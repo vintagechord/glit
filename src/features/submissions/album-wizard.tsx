@@ -400,8 +400,8 @@ export function AlbumWizard({
 
   const openInicisPopup = React.useCallback(() => {
     if (typeof window === "undefined") return null;
-    const width = 600;
-    const height = 920;
+    const width = 820;
+    const height = 980;
     const dualLeft = window.screenLeft ?? (window as unknown as { screenX?: number }).screenX ?? 0;
     const dualTop = window.screenTop ?? (window as unknown as { screenY?: number }).screenY ?? 0;
     const winWidth = window.outerWidth ?? window.innerWidth ?? 0;
