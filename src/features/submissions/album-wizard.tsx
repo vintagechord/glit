@@ -390,57 +390,66 @@ export function AlbumWizard({
     void ensureStdPayReady("https://stdpay.inicis.com/stdjs/INIStdPay.js");
   }, [ensureStdPayReady]);
 
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
   const triggerStdPay = React.useCallback(
     async (data: { stdParams: Record<string, string>; stdJsUrl: string }) => {
       if (typeof window === "undefined") return;
-      const ready = await ensureStdPayReady(data.stdJsUrl);
       const popupName = payPopupNameRef.current;
-      const popup =
-        typeof window !== "undefined"
-          ? window.open("", popupName, "width=460,height=720,resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no")
-          : null;
+      const popup = window.open(
+        "",
+        popupName,
+        "width=430,height=750,resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no,status=no",
+      );
       if (!popup || popup.closed) {
         setNotice({
           error: "결제 팝업이 차단되었습니다. 브라우저에서 팝업을 허용한 뒤 다시 시도해주세요.",
         });
         return;
       }
-      const formEl =
-        payFormRef.current ?? (document.getElementById(payFormId.current) as HTMLFormElement | null);
-      if (!ready || !window.INIStdPay) {
+      const ready = await ensureStdPayReady(data.stdJsUrl);
+      if (!ready) {
         setNotice({ error: "결제 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요." });
-        console.warn("[Inicis][STDPay] INIStdPay not ready", {
-          ready,
-          hasWin: typeof window !== "undefined",
-          formId: payFormId.current,
-        });
         return;
       }
-      if (!formEl) {
-        setNotice({ error: "결제 폼을 찾을 수 없습니다. 다시 시도해주세요." });
-        console.warn("[Inicis][STDPay] form element not found", { formId: payFormId.current });
-        return;
-      }
-      // sync hidden inputs
-      while (formEl.firstChild) {
-        formEl.removeChild(formEl.firstChild);
-      }
-      Object.entries(data.stdParams).forEach(([key, value]) => {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = key;
-        input.value = value;
-        formEl.appendChild(input);
-      });
-      formEl.setAttribute("target", popupName);
+
+      const formFields = Object.entries(data.stdParams)
+        .map(
+          ([key, value]) =>
+            `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(String(value))}" />`,
+        )
+        .join("");
+      const html = `
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8" /><title>결제 진행</title></head>
+<body style="font-family:system-ui; padding:16px;">
+  <p>결제창을 여는 중입니다...</p>
+  <form id="SendPayForm" name="SendPayForm" method="post">
+    ${formFields}
+  </form>
+  <script src="${data.stdJsUrl}"></script>
+  <script>
+    (function retry() {
       try {
-        window.INIStdPay?.pay(payFormId.current);
-      } catch (error) {
-        console.error("[Inicis][STDPay] pay() error", error);
-        setNotice({
-          error: "결제창을 여는 중 오류가 발생했습니다. 다시 시도해주세요.",
-        });
+        if (!window.INIStdPay || !window.INIStdPay.pay) { return setTimeout(retry, 50); }
+        window.INIStdPay.pay("SendPayForm");
+      } catch (e) {
+        document.body.insertAdjacentHTML('beforeend','<pre>'+String(e)+'</pre>');
       }
+    })();
+  </script>
+</body>
+</html>`;
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
     },
     [ensureStdPayReady, setNotice],
   );
