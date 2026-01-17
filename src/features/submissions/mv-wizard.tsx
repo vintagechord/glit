@@ -219,6 +219,14 @@ export function MvWizard({
   } | null>(null);
   const [stdScriptReady, setStdScriptReady] = React.useState(false);
 
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
   const logStdPayParams = React.useCallback(
     (params: Record<string, string>, stdJsUrl: string) => {
       const len = (key: keyof typeof params) => String(params[key] ?? "").length;
@@ -294,58 +302,132 @@ export function MvWizard({
   const submissionIdRef = React.useRef<string | null>(null);
   const guestTokenRef = React.useRef<string | null>(null);
 
+  const openInicisPopup = React.useCallback(() => {
+    if (typeof window === "undefined") return null;
+    const width = 520;
+    const height = 860;
+    const dualLeft = window.screenLeft ?? (window as unknown as { screenX?: number }).screenX ?? 0;
+    const dualTop = window.screenTop ?? (window as unknown as { screenY?: number }).screenY ?? 0;
+    const winWidth = window.outerWidth ?? window.innerWidth ?? 0;
+    const winHeight = window.outerHeight ?? window.innerHeight ?? 0;
+    const left = Math.max(0, dualLeft + (winWidth - width) / 2);
+    const top = Math.max(0, dualTop + (winHeight - height) / 2);
+    const popup = window.open(
+      "",
+      payPopupNameRef.current,
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no,status=no`,
+    );
+    popup?.focus();
+    return popup;
+  }, []);
+
   const triggerStdPay = React.useCallback(
     async (data: { stdParams: Record<string, string>; stdJsUrl: string }) => {
       if (typeof window === "undefined") return;
-      const popupName = payPopupNameRef.current;
-      const popup =
-        typeof window !== "undefined"
-          ? window.open("", popupName, "width=460,height=720,resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no")
-          : null;
+      const popup = openInicisPopup();
       if (!popup || popup.closed) {
         setNotice({
           error: "결제 팝업이 차단되었습니다. 브라우저에서 팝업을 허용한 뒤 다시 시도해주세요.",
         });
         return;
       }
-      const ready = await ensureStdPayReady(data.stdJsUrl);
-      const formEl =
-        payFormRef.current ?? (document.getElementById(payFormId.current) as HTMLFormElement | null);
-      if (!ready || !window.INIStdPay) {
-        setNotice({ error: "결제 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요." });
-        console.warn("[Inicis][STDPay] INIStdPay not ready", {
-          ready,
-          hasWin: typeof window !== "undefined",
-          formId: payFormId.current,
-        });
-        return;
-      }
-      if (!formEl) {
-        setNotice({ error: "결제 폼을 찾을 수 없습니다. 다시 시도해주세요." });
-        console.warn("[Inicis][STDPay] form element not found", { formId: payFormId.current });
-        return;
-      }
-      while (formEl.firstChild) {
-        formEl.removeChild(formEl.firstChild);
-      }
-      Object.entries(data.stdParams).forEach(([key, value]) => {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = key;
-        input.value = value;
-        formEl.appendChild(input);
+
+      const formFields = Object.entries(data.stdParams)
+        .map(
+          ([key, value]) =>
+            `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(String(value))}" />`,
+        )
+        .join("");
+      const returnUrl = data.stdParams.returnUrl ?? "";
+      const closeUrl = data.stdParams.closeUrl ?? returnUrl;
+      const html = `
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>KG이니시스 결제</title>
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+      background: #fff;
+    }
+    #errorBox{
+      display:none;
+      box-sizing:border-box;
+      padding:16px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, Malgun Gothic, sans-serif;
+      line-height:1.45;
+    }
+    #errorBox button{
+      margin-top:12px;
+      padding:10px 12px;
+      font-size:14px;
+      cursor:pointer;
+    }
+    #SendPayForm{
+      visibility:hidden;
+      position:absolute;
+      left:-9999px;
+      top:-9999px;
+      width:1px;
+      height:1px;
+      overflow:hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="errorBox">
+    <div id="errorMsg"></div>
+    <button type="button" onclick="window.close()">닫기</button>
+  </div>
+
+  <form id="SendPayForm" name="SendPayForm" method="post">
+    ${formFields}
+    <input type="hidden" name="returnUrl" value="${escapeHtml(String(returnUrl))}" />
+    <input type="hidden" name="closeUrl" value="${escapeHtml(String(closeUrl))}" />
+  </form>
+
+  <script>
+    function showError(msg){
+      var box = document.getElementById('errorBox');
+      var el = document.getElementById('errorMsg');
+      if (el) el.textContent = msg;
+      if (box) box.style.display = 'block';
+    }
+    function waitForIniStdPay(maxMs){
+      return new Promise(function(resolve, reject){
+        var start = Date.now();
+        (function tick(){
+          if (window.INIStdPay && typeof window.INIStdPay.pay === 'function') return resolve();
+          if (Date.now() - start > maxMs) return reject(new Error('INIStdPay not ready'));
+          setTimeout(tick, 50);
+        })();
       });
-      formEl.setAttribute("target", popupName);
-      try {
-        window.INIStdPay?.pay(payFormId.current);
-      } catch (error) {
-        console.error("[Inicis][STDPay] pay() error", error);
-        setNotice({
-          error: "결제창을 여는 중 오류가 발생했습니다. 다시 시도해주세요.",
-        });
-      }
+    }
+    function runPay(){
+      waitForIniStdPay(2500).then(function(){
+        window.INIStdPay.pay('SendPayForm');
+      }).catch(function(){
+        showError('결제 모듈을 실행할 수 없습니다. 팝업 허용/네트워크 상태를 확인 후 다시 시도해주세요.');
+      });
+    }
+  </script>
+  <script src="${data.stdJsUrl}"
+    onload="runPay()"
+    onerror="showError('결제 모듈을 불러오지 못했습니다. 팝업 허용/네트워크 상태를 확인 후 다시 시도해주세요.');">
+  </script>
+</body>
+</html>`;
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
     },
-    [ensureStdPayReady, setNotice],
+    [openInicisPopup, setNotice],
   );
 
   if (!submissionIdRef.current) {
