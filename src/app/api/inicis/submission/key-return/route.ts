@@ -9,36 +9,33 @@ import {
 } from "../../../../../lib/payments/submission";
 import { getBaseUrl } from "../../../../../lib/url";
 
-const successRedirect = (
-  baseUrl: string,
-  submissionId: string,
-  guestToken?: string | null,
-) =>
-  guestToken
-    ? NextResponse.redirect(
-      `${baseUrl}/track/${guestToken}?payment=success&submissionId=${submissionId}`,
-    )
-    : NextResponse.redirect(
-      `${baseUrl}/dashboard/submissions/${submissionId}?payment=success`,
-    );
-
-const failureRedirect = (
-  baseUrl: string,
-  submissionId: string,
-  message: string,
-  guestToken?: string | null,
-) =>
-  guestToken
-    ? NextResponse.redirect(
-      `${baseUrl}/track/${guestToken}?payment=fail&message=${encodeURIComponent(
-        message,
-      )}&submissionId=${submissionId}`,
-    )
-    : NextResponse.redirect(
-      `${baseUrl}/dashboard/submissions/${submissionId}?payment=fail&message=${encodeURIComponent(
-        message,
-      )}`,
-    );
+const postMessageResponse = (type: "SUCCESS" | "FAIL" | "CANCEL" | "ERROR", payload: Record<string, unknown>) => {
+  const safePayload = JSON.stringify({ type: `INICIS:${type}`, payload });
+  const html = `
+<!DOCTYPE html>
+<html lang="ko">
+<body>
+<p>결제 창을 닫아주세요.</p>
+<script>
+  (function() {
+    try {
+      if (window.opener) {
+        window.opener.postMessage(${safePayload}, "*");
+      }
+    } catch (e) {
+      console.error("INICIS postMessage error", e);
+    }
+    window.close();
+  })();
+</script>
+</body>
+</html>
+`;
+  return new NextResponse(html, {
+    status: 200,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+};
 
 function maskMid(mid: string) {
   if (!mid) return "";
@@ -131,44 +128,36 @@ async function handler(req: NextRequest) {
       gotKeys: formKeys,
     });
 
-    // 토큰 미발급 등의 실패도 결제 실패로 기록 & 리다이렉트
+    // 토큰 미발급 등의 실패도 결제 실패로 기록
     if (orderId) {
       const { payment } = await getPaymentByOrderId(orderId);
       if (payment?.submission) {
-        const guestToken = payment.submission.guest_token ?? null;
         await markPaymentFailure(orderId, {
           result_code: resultCode || "AUTH_MISSING",
           result_message: resultMsg || "이니시스 인증 토큰을 받지 못했습니다.",
           raw_response: params,
         });
-        return failureRedirect(
-          baseUrl,
-          payment.submission.id,
-          resultMsg || "결제 인증이 완료되지 않았습니다.",
+        const guestToken = payment.submission.guest_token ?? null;
+        return postMessageResponse("FAIL", {
+          orderId,
+          submissionId: payment.submission.id,
           guestToken,
-        );
+          message: resultMsg || "결제 인증이 완료되지 않았습니다.",
+        });
       }
     }
 
-    return NextResponse.json(
-      {
-        error: "이니시스 인증 실패(토큰 미발급)",
-        method,
-        baseUrl,
-        contentType,
-        resultCode,
-        resultMsg,
-        orderNumber,
-        returnUrl,
-        missing: [
-          !authToken ? "authToken" : null,
-          !authUrl ? "authUrl" : null,
-          !orderId ? "oid" : null,
-        ].filter(Boolean),
-        gotKeys: formKeys,
-      },
-      { status: 400 },
-    );
+    return postMessageResponse("FAIL", {
+      orderId,
+      submissionId: null,
+      guestToken: null,
+      message: resultMsg || "결제 인증이 완료되지 않았습니다.",
+      missing: [
+        !authToken ? "authToken" : null,
+        !authUrl ? "authUrl" : null,
+        !orderId ? "oid" : null,
+      ].filter(Boolean),
+    });
   }
 
   // ---- MID 검증 ----
@@ -178,7 +167,12 @@ async function handler(req: NextRequest) {
       got: maskMid(mid),
       expected: maskMid(config.mid),
     });
-    return NextResponse.json({ error: "MID 불일치" }, { status: 400 });
+    return postMessageResponse("FAIL", {
+      orderId,
+      submissionId: null,
+      guestToken: null,
+      message: "MID 불일치",
+    });
   }
 
   console.info("[Inicis][STDPay][callback][submission] valid callback", {
@@ -194,10 +188,10 @@ async function handler(req: NextRequest) {
   // ---- 결제 내역 찾기 ----
   const { payment } = await getPaymentByOrderId(orderId);
   if (!payment?.submission) {
-    return NextResponse.json(
-      { error: "결제 내역을 찾을 수 없습니다.", orderId },
-      { status: 404 },
-    );
+    return postMessageResponse("FAIL", {
+      orderId,
+      message: "결제 내역을 찾을 수 없습니다.",
+    });
   }
   const guestToken = payment.submission.guest_token ?? null;
 
@@ -230,12 +224,12 @@ async function handler(req: NextRequest) {
       raw_response: approval.data ?? null,
     });
 
-    return failureRedirect(
-      baseUrl,
-      payment.submission.id,
-      "결제 승인에 실패했습니다.",
+    return postMessageResponse("FAIL", {
+      orderId,
+      submissionId: payment.submission.id,
       guestToken,
-    );
+      message: "결제 승인에 실패했습니다.",
+    });
   }
 
   // ---- 금액 검증 ----
@@ -263,12 +257,12 @@ async function handler(req: NextRequest) {
       raw_response: authData,
     });
 
-    return failureRedirect(
-      baseUrl,
-      payment.submission.id,
-      "금액이 일치하지 않습니다.",
+    return postMessageResponse("FAIL", {
+      orderId,
+      submissionId: payment.submission.id,
       guestToken,
-    );
+      message: "금액이 일치하지 않습니다.",
+    });
   }
 
   // ---- 성공 처리 ----
@@ -287,7 +281,13 @@ async function handler(req: NextRequest) {
     totPrice,
   });
 
-  return successRedirect(baseUrl, payment.submission.id, guestToken);
+  return postMessageResponse("SUCCESS", {
+    orderId,
+    submissionId: payment.submission.id,
+    guestToken,
+    resultCode: toCode(authData.resultCode, "0000"),
+    message: "결제가 완료되었습니다.",
+  });
 }
 
 export async function POST(req: NextRequest) {
