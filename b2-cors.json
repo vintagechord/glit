@@ -1,0 +1,11 @@
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["https://glit-b1yn.onrender.com"],
+      "AllowedMethods": ["PUT", "GET", "HEAD"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}

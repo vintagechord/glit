@@ -424,6 +424,10 @@ export function AlbumWizard({
         formEl.appendChild(input);
       });
       formEl.setAttribute("target", payPopupNameRef.current);
+      // Pre-open popup to avoid blocker and ensure parent page stays
+      const popupName = payPopupNameRef.current;
+      const features = "width=460,height=720,resizable=yes,scrollbars=yes";
+      window.open("", popupName, features);
       try {
         window.INIStdPay?.pay(payFormId.current);
       } catch (error) {
