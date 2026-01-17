@@ -9,7 +9,10 @@ import {
 } from "../../../../../lib/payments/submission";
 import { getBaseUrl } from "../../../../../lib/url";
 
-const postMessageResponse = (type: "SUCCESS" | "FAIL" | "CANCEL" | "ERROR", payload: Record<string, unknown>) => {
+const postMessageResponse = (
+  type: "SUCCESS" | "FAIL" | "CANCEL" | "ERROR",
+  payload: Record<string, unknown>,
+) => {
   const safePayload = JSON.stringify({ type: `INICIS:${type}`, payload });
   const html = `
 <!DOCTYPE html>
@@ -91,6 +94,7 @@ async function handler(req: NextRequest) {
   const orderId = params.oid ?? params.orderNumber ?? "";
   const mid = params.mid ?? "";
   const timestamp = params.timestamp ?? params.tstamp ?? Date.now().toString();
+  const isCancel = params.cancel === "1" || params.cancel === "true";
 
   const missing = {
     authToken: Boolean(authToken),
@@ -114,6 +118,25 @@ async function handler(req: NextRequest) {
   const resultMsg = params.resultMsg ?? "";
   const returnUrl = params.returnUrl ?? "";
   const orderNumber = params.orderNumber ?? params.oid ?? "";
+  if (isCancel && orderId) {
+    // Treat as user cancelled
+    const { payment } = await getPaymentByOrderId(orderId);
+    const submissionId = payment?.submission?.id ?? null;
+    const guestToken = payment?.submission?.guest_token ?? null;
+    if (payment?.submission) {
+      await markPaymentFailure(orderId, {
+        result_code: "CANCEL",
+        result_message: "사용자 취소",
+        raw_response: params,
+      });
+    }
+    return postMessageResponse("CANCEL", {
+      orderId,
+      submissionId,
+      guestToken,
+      message: "사용자가 결제를 취소했습니다.",
+    });
+  }
 
   // GET으로 직접 열거나 / POST가 비정상일 때 여기서 막히는게 정상
   if (!authToken || !authUrl || !orderId) {

@@ -280,9 +280,7 @@ export function MvWizard({
 
   const payFormId = React.useRef("inicis-stdpay-form-mv");
   const payFormRef = React.useRef<HTMLFormElement | null>(null);
-  const payPopupNameRef = React.useRef(
-    `inicis-popup-${Math.random().toString(36).slice(2)}`,
-  );
+  const payPopupNameRef = React.useRef("INICIS_STD_PAY");
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [confirmModal, setConfirmModal] = React.useState<{
     code: string;
@@ -299,6 +297,17 @@ export function MvWizard({
   const triggerStdPay = React.useCallback(
     async (data: { stdParams: Record<string, string>; stdJsUrl: string }) => {
       if (typeof window === "undefined") return;
+      const popupName = payPopupNameRef.current;
+      const popup =
+        typeof window !== "undefined"
+          ? window.open("", popupName, "width=460,height=720,resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no")
+          : null;
+      if (!popup || popup.closed) {
+        setNotice({
+          error: "결제 팝업이 차단되었습니다. 브라우저에서 팝업을 허용한 뒤 다시 시도해주세요.",
+        });
+        return;
+      }
       const ready = await ensureStdPayReady(data.stdJsUrl);
       const formEl =
         payFormRef.current ?? (document.getElementById(payFormId.current) as HTMLFormElement | null);
@@ -326,10 +335,7 @@ export function MvWizard({
         input.value = value;
         formEl.appendChild(input);
       });
-      formEl.setAttribute("target", payPopupNameRef.current);
-      const popupName = payPopupNameRef.current;
-      const features = "width=460,height=720,resizable=yes,scrollbars=yes";
-      window.open("", popupName, features);
+      formEl.setAttribute("target", popupName);
       try {
         window.INIStdPay?.pay(payFormId.current);
       } catch (error) {
@@ -348,6 +354,33 @@ export function MvWizard({
   if (!guestTokenRef.current) {
     guestTokenRef.current = crypto.randomUUID();
   }
+
+  React.useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (typeof window === "undefined") return;
+      if (event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+      const type = (data as { type?: string }).type;
+      const payload = (data as { payload?: Record<string, unknown> }).payload ?? {};
+      if (!type || !String(type).startsWith("INICIS:")) return;
+      const status = String(type).replace("INICIS:", "");
+      const submissionFromMsg = (payload.submissionId as string | undefined) || submissionIdRef.current;
+      const guestTokenFromMsg = payload.guestToken as string | undefined;
+      if (status === "SUCCESS" && submissionFromMsg) {
+        window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=success`;
+        return;
+      }
+      if ((status === "FAIL" || status === "CANCEL") && typeof payload.message === "string") {
+        setNotice({ error: payload.message });
+      }
+      if (status === "SUCCESS" && !submissionFromMsg && guestTokenFromMsg) {
+        window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
   const submissionId = submissionIdRef.current;
   const guestToken = guestTokenRef.current;
