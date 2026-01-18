@@ -239,7 +239,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
           height: 100% !important;
           margin: 0 !important;
           padding: 0 !important;
-          overflow: hidden !important;
+          overflow: auto !important;
           background: #fff !important;
         }
         body > * {
@@ -267,12 +267,25 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
           height: 100% !important;
           min-height: 100vh !important;
           margin: 0 !important;
+          padding: 0 !important;
         }
         #body_wrapper,
         #content,
         #container {
           overflow: auto !important;
           -webkit-overflow-scrolling: touch;
+        }
+        #popWrapLogo > *,
+        #popWrap > *,
+        .popWrap > * {
+          margin: 0 auto !important;
+          padding: 0 !important;
+        }
+        #wrapper,
+        .wrapper,
+        #kg_layer,
+        #body_wrapper {
+          padding: 0 !important;
         }
         #overlay_popup,
         #overlay_popups,
@@ -284,7 +297,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
         #popWrapLogo,
         .popWrap,
         #popWrap {
-          max-width: 700px !important;
+          max-width: 720px !important;
           margin: 0 auto !important;
           padding-left: 0 !important;
           padding-right: 0 !important;
