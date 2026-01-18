@@ -2,6 +2,8 @@
 
 import React from "react";
 
+import { openInicisCardPopup } from "@/lib/inicis/popup";
+
 type InicisResult =
   | { status: "idle" }
   | { status: "init" }
@@ -60,40 +62,12 @@ export default function InicisStdPay1000Page() {
     setLoading(true);
     setResult({ status: "init" });
 
-    const baseWidth = 520;
-    const baseHeight = 900;
-    const width = Math.max(520, Math.round(baseWidth));
-    const height = Math.max(900, Math.round(baseHeight));
-    const screenX = typeof window.screenX === "number" ? window.screenX : window.screenLeft ?? 0;
-    const screenY = typeof window.screenY === "number" ? window.screenY : window.screenTop ?? 0;
-    const left = screenX + Math.max(0, (window.outerWidth - width) / 2);
-    const top = screenY + Math.max(0, (window.outerHeight - height) / 2);
-    const features = [
-      `width=${width}`,
-      `height=${height}`,
-      `left=${Math.round(left)}`,
-      `top=${Math.round(top)}`,
-      "resizable=yes",
-      "scrollbars=yes",
-      "status=no",
-      "toolbar=no",
-      "menubar=no",
-      "location=no",
-    ].join(",");
-
-    const popup = window.open("/dev/inicis-stdpay-100/popup", POPUP_NAME, features);
-
-    if (!popup) {
-      setResult({
-        status: "error",
-        message: "팝업이 차단되었습니다. 팝업 차단을 해제한 후 다시 시도해주세요.",
-      });
-      setLoading(false);
-      return;
+    const { ok, error } = openInicisCardPopup({ context: "test1000", popupName: POPUP_NAME });
+    if (!ok) {
+      setResult({ status: "error", message: error ?? "팝업을 열 수 없습니다." });
+    } else {
+      setResult({ status: "popup" });
     }
-
-    popup.focus();
-    setResult({ status: "popup" });
     setLoading(false);
   };
 

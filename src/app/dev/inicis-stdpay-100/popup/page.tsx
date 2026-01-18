@@ -1,6 +1,4 @@
-import React from "react";
-
-import InicisStdPayPopupClientPage from "./client-page";
+import { redirect } from "next/navigation";
 
 export const viewport = {
   width: "device-width",
@@ -8,11 +6,6 @@ export const viewport = {
   viewportFit: "cover",
 };
 
-export const metadata = {
-  title: "이니시스 테스트 결제",
-  description: "KG 이니시스 STDPay 테스트 결제 팝업",
-};
-
-export default function InicisStdPayPopupPage() {
-  return <InicisStdPayPopupClientPage />;
+export default function LegacyInicisStdPayPopupPage() {
+  redirect("/pay/inicis/popup?context=test1000");
 }

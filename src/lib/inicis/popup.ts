@@ -1,0 +1,56 @@
+export type InicisPopupContext = "music" | "mv" | "oneclick" | "test1000";
+
+type OpenPopupOptions = {
+  context: InicisPopupContext;
+  submissionId?: string;
+  guestToken?: string;
+  orderId?: string;
+  popupName?: string;
+};
+
+export const openInicisCardPopup = (options: OpenPopupOptions) => {
+  if (typeof window === "undefined") {
+    return { ok: false, error: "window is not available" };
+  }
+
+  const { context, submissionId, guestToken, orderId, popupName = "INICIS_STD_PAY" } = options;
+
+  const params = new URLSearchParams({ mode: "card", context });
+  if (submissionId) params.set("submissionId", submissionId);
+  if (guestToken) params.set("guestToken", guestToken);
+  if (orderId) params.set("orderId", orderId);
+
+  const url = `/pay/inicis/popup?${params.toString()}`;
+
+  const baseWidth = 620;
+  const baseHeight = 860;
+  const width = Math.max(620, Math.round(baseWidth));
+  const height = Math.max(860, Math.round(baseHeight));
+  const screenX = typeof window.screenX === "number" ? window.screenX : window.screenLeft ?? 0;
+  const screenY = typeof window.screenY === "number" ? window.screenY : window.screenTop ?? 0;
+  const left = screenX + Math.max(0, (window.outerWidth - width) / 2);
+  const top = screenY + Math.max(0, (window.outerHeight - height) / 2);
+  const features = [
+    `width=${width}`,
+    `height=${height}`,
+    `left=${Math.round(left)}`,
+    `top=${Math.round(top)}`,
+    "resizable=yes",
+    "scrollbars=yes",
+    "status=no",
+    "toolbar=no",
+    "menubar=no",
+    "location=no",
+  ].join(",");
+
+  const popup = window.open(url, popupName, features);
+  if (!popup) {
+    return {
+      ok: false,
+      error: "팝업이 차단되었습니다. 팝업 차단을 해제한 후 다시 시도해주세요.",
+    };
+  }
+
+  popup.focus();
+  return { ok: true, popup };
+};

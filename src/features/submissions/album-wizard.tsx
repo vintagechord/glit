@@ -1,12 +1,12 @@
 "use client";
 
-import Script from "next/script";
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
+import { openInicisCardPopup } from "@/lib/inicis/popup";
 import {
   buildLegacyProfanityMatchers,
   extractProfanityWords,
@@ -18,13 +18,6 @@ import {
   saveAlbumSubmissionAction,
   type SubmissionActionState,
 } from "./actions";
-
-type StdPayInitResponse = {
-  orderId?: string;
-  stdJsUrl?: string;
-  stdParams?: Record<string, string>;
-  error?: string;
-};
 
 declare global {
   interface Window {
@@ -315,216 +308,8 @@ export function AlbumWizard({
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
-  const [payData, setPayData] = React.useState<{
-    orderId: string;
-    stdParams: Record<string, string>;
-    stdJsUrl: string;
-  } | null>(null);
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
-  const payFormRef = React.useRef<HTMLFormElement | null>(null);
-  const payPopupNameRef = React.useRef("INICIS_STD_PAY");
-  const [stdScriptReady, setStdScriptReady] = React.useState(false);
-  const payFormId = React.useRef("inicis-stdpay-form");
 
-  const logStdPayParams = React.useCallback(
-    (params: Record<string, string>, stdJsUrl: string) => {
-      const len = (key: keyof typeof params) => String(params[key] ?? "").length;
-      const mask = (value?: string) =>
-        value ? `${value.slice(0, 2)}***${value.slice(-2)}` : "";
-      console.info("[Inicis][STDPay][params-check]", {
-        mid: { masked: mask(params.mid), length: len("mid") },
-        oid: { present: Boolean(params.oid), length: len("oid") },
-        price: { present: Boolean(params.price), length: len("price") },
-        timestamp: { present: Boolean(params.timestamp), length: len("timestamp") },
-        returnUrl: { present: Boolean(params.returnUrl), length: len("returnUrl") },
-        closeUrl: { present: Boolean(params.closeUrl), length: len("closeUrl") },
-        signature: { present: Boolean(params.signature), length: len("signature") },
-        mKey: { present: Boolean(params.mKey), length: len("mKey") },
-        iniStdPay: Boolean(typeof window !== "undefined" && window.INIStdPay),
-        stdJsUrl,
-      });
-    },
-    [],
-  );
-
-  const ensureStdPayReady = React.useCallback(async (stdJsUrl: string) => {
-    if (typeof window === "undefined") return false;
-    if (window.INIStdPay) {
-      setStdScriptReady(true);
-      return true;
-    }
-    let script = document.querySelector(`script[src="${stdJsUrl}"]`) as
-      | HTMLScriptElement
-      | null;
-    if (!script) {
-      script = document.createElement("script");
-      script.src = stdJsUrl;
-      script.type = "text/javascript";
-      script.async = true;
-      document.body.appendChild(script);
-    }
-    return new Promise<boolean>((resolve) => {
-      const onReady = () => cleanup(Boolean(window.INIStdPay));
-      const onError = () => cleanup(false);
-      const cleanup = (value: boolean) => {
-        script?.removeEventListener("load", onReady);
-        script?.removeEventListener("error", onError);
-        window.clearTimeout(timeout);
-        window.clearTimeout(poll);
-        if (value) setStdScriptReady(true);
-        resolve(value);
-      };
-      const timeout = window.setTimeout(() => cleanup(Boolean(window.INIStdPay)), 2000);
-      const poll = window.setInterval(() => {
-        if (window.INIStdPay) {
-          cleanup(true);
-        }
-      }, 200);
-      script?.addEventListener("load", onReady);
-      script?.addEventListener("error", onError);
-    });
-  }, []);
-
-  // 사전 스크립트 로드 시도 (운영 기본 URL)
-  React.useEffect(() => {
-    void ensureStdPayReady("https://stdpay.inicis.com/stdjs/INIStdPay.js");
-  }, [ensureStdPayReady]);
-
-  const escapeHtml = (value: string) =>
-    value
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-
-  const openInicisPopup = React.useCallback(() => {
-    if (typeof window === "undefined") return null;
-    const width = 820;
-    const height = 980;
-    const dualLeft = window.screenLeft ?? (window as unknown as { screenX?: number }).screenX ?? 0;
-    const dualTop = window.screenTop ?? (window as unknown as { screenY?: number }).screenY ?? 0;
-    const winWidth = window.outerWidth ?? window.innerWidth ?? 0;
-    const winHeight = window.outerHeight ?? window.innerHeight ?? 0;
-    const left = Math.max(0, dualLeft + (winWidth - width) / 2);
-    const top = Math.max(0, dualTop + (winHeight - height) / 2);
-    const popup = window.open(
-      "",
-      payPopupNameRef.current,
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no,status=no`,
-    );
-    popup?.focus();
-    return popup;
-  }, []);
-
-  const triggerStdPay = React.useCallback(
-    async (data: { stdParams: Record<string, string>; stdJsUrl: string }) => {
-      if (typeof window === "undefined") return;
-      const popup = openInicisPopup();
-      if (!popup || popup.closed) {
-        setNotice({
-          error: "결제 팝업이 차단되었습니다. 브라우저에서 팝업을 허용한 뒤 다시 시도해주세요.",
-        });
-        return;
-      }
-
-      const formFields = Object.entries(data.stdParams)
-        .map(
-          ([key, value]) =>
-            `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(String(value))}" />`,
-        )
-        .join("");
-      const returnUrl = data.stdParams.returnUrl ?? "";
-      const closeUrl = data.stdParams.closeUrl ?? returnUrl;
-      const html = `
-<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>KG이니시스 결제</title>
-  <style>
-    html, body {
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      overflow: auto;
-      background: #fff;
-    }
-    #errorBox{
-      display:none;
-      box-sizing:border-box;
-      padding:16px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, Malgun Gothic, sans-serif;
-      line-height:1.45;
-    }
-    #errorBox button{
-      margin-top:12px;
-      padding:10px 12px;
-      font-size:14px;
-      cursor:pointer;
-    }
-    #SendPayForm{
-      visibility:hidden;
-      position:absolute;
-      left:-9999px;
-      top:-9999px;
-      width:1px;
-      height:1px;
-      overflow:hidden;
-    }
-  </style>
-</head>
-<body>
-  <div id="errorBox">
-    <div id="errorMsg"></div>
-    <button type="button" onclick="window.close()">닫기</button>
-  </div>
-
-  <form id="SendPayForm" name="SendPayForm" method="post">
-    ${formFields}
-    <input type="hidden" name="returnUrl" value="${escapeHtml(String(returnUrl))}" />
-    <input type="hidden" name="closeUrl" value="${escapeHtml(String(closeUrl))}" />
-  </form>
-
-  <script>
-    function showError(msg){
-      var box = document.getElementById('errorBox');
-      var el = document.getElementById('errorMsg');
-      if (el) el.textContent = msg;
-      if (box) box.style.display = 'block';
-    }
-    function waitForIniStdPay(maxMs){
-      return new Promise(function(resolve, reject){
-        var start = Date.now();
-        (function tick(){
-          if (window.INIStdPay && typeof window.INIStdPay.pay === 'function') return resolve();
-          if (Date.now() - start > maxMs) return reject(new Error('INIStdPay not ready'));
-          setTimeout(tick, 50);
-        })();
-      });
-    }
-    function runPay(){
-      waitForIniStdPay(2500).then(function(){
-        window.INIStdPay.pay('SendPayForm');
-      }).catch(function(){
-        showError('결제 모듈을 실행할 수 없습니다. 팝업 허용/네트워크 상태를 확인 후 다시 시도해주세요.');
-      });
-    }
-  </script>
-  <script src="${data.stdJsUrl}"
-    onload="runPay()"
-    onerror="showError('결제 모듈을 불러오지 못했습니다. 팝업 허용/네트워크 상태를 확인 후 다시 시도해주세요.');">
-  </script>
-</body>
-</html>`;
-      popup.document.open();
-      popup.document.write(html);
-      popup.document.close();
-    },
-    [openInicisPopup, setNotice],
-  );
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
   const [completionId, setCompletionId] = React.useState<string | null>(null);
   const [completionTokens, setCompletionTokens] = React.useState<
@@ -1954,70 +1739,17 @@ export function AlbumWizard({
 
       if (status === "SUBMITTED" && submissionIds.length > 0) {
         if (paymentMethod === "CARD") {
-          try {
-            const response = await fetch("/api/inicis/submission/order", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                submissionId: submissionIds[0],
-                guestToken: guestTokens[0]?.token ?? currentGuestToken ?? undefined,
-              }),
+          const { ok, error } = openInicisCardPopup({
+            context: isOneClick ? "oneclick" : "music",
+            submissionId: submissionIds[0],
+            guestToken: guestTokens[0]?.token ?? currentGuestToken ?? undefined,
+          });
+          if (!ok) {
+            setNotice({
+              error: error || "결제 팝업을 열지 못했습니다. 팝업 차단을 해제한 뒤 다시 시도해주세요.",
             });
-            let json: StdPayInitResponse | null = null;
-            let raw: string | null = null;
-            try {
-              raw = await response.text();
-              json = raw ? (JSON.parse(raw) as StdPayInitResponse) : null;
-            } catch (parseError) {
-              console.error("[Inicis][STDPay][init][client] parse error", parseError, {
-                status: response.status,
-                body: raw,
-              });
-            }
-            if (!response.ok || json?.error) {
-              console.error("[Inicis][STDPay][init][client]", {
-                status: response.status,
-                error: json?.error,
-                body: raw,
-              });
-              setNotice({
-                error:
-                  json?.error ||
-                  "카드 결제 요청에 실패했습니다. 관리자에게 문의해주세요.",
-              });
-              return;
-            }
-            if (!json) {
-              setNotice({
-                error: "결제 초기화 응답을 해석하지 못했습니다. 잠시 후 다시 시도해주세요.",
-              });
-              return;
-            }
-            if (!json.orderId || !json.stdJsUrl || !json.stdParams) {
-              setNotice({
-                error: "결제 초기화 응답이 올바르지 않습니다. 관리자에게 문의해주세요.",
-              });
-              return;
-            }
-            const normalizedPayData = {
-              orderId: json.orderId,
-              stdJsUrl: json.stdJsUrl,
-              stdParams: json.stdParams,
-            };
-            setPayData(normalizedPayData);
-            logStdPayParams(normalizedPayData.stdParams, normalizedPayData.stdJsUrl);
-            await triggerStdPay(normalizedPayData);
-            console.info("[Inicis][STDPay][init][client] order created", {
-              orderId: json.orderId,
-              stdJsUrl: json.stdJsUrl,
-              keys: Object.keys(json.stdParams ?? {}),
-            });
-            return;
-          } catch (error) {
-            console.error("[Inicis][STDPay][init][client] exception", error);
-            setNotice({ error: "카드 결제 초기화 중 오류가 발생했습니다." });
-            return;
           }
+          return;
         } else if (paymentMethod === "BANK") {
           if (typeof window !== "undefined") {
             window.alert("심의 접수가 완료되었습니다.");
@@ -2058,19 +1790,6 @@ export function AlbumWizard({
       <PendingOverlay
         show={isSaving || isAddingAlbum}
         label="심의 저장/결제 처리 중..."
-      />
-      <Script
-        src={payData?.stdJsUrl ?? "https://stdpay.inicis.com/stdjs/INIStdPay.js"}
-        strategy="afterInteractive"
-      />
-      <form
-        id={payFormId.current}
-        name={payFormId.current}
-        method="POST"
-        acceptCharset="UTF-8"
-        className="hidden"
-        ref={payFormRef}
-        target={payPopupNameRef.current}
       />
 
       {stepLabels}

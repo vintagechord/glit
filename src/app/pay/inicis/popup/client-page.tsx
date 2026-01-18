@@ -2,14 +2,16 @@
 
 import React from "react";
 
-type InitResponse = {
-  ok: boolean;
+type PopupContext = "music" | "mv" | "oneclick" | "test1000";
+
+type StdPayInit = {
+  ok?: boolean;
   orderId: string;
-  amount: number;
   stdParams: Record<string, string>;
   stdJsUrl: string;
-  returnUrl: string;
-  closeUrl: string;
+  amount?: number;
+  returnUrl?: string;
+  closeUrl?: string;
   error?: string;
 };
 
@@ -21,29 +23,14 @@ declare global {
 
 const FORM_ID = "SendPayForm";
 
-const usePopupChromeStyles = () => {
-  React.useEffect(() => {
-    const root = document.documentElement;
-    const body = document.body;
-    const prevRootStyle = root.getAttribute("style");
-    const prevBodyStyle = body.getAttribute("style");
-
-    root.setAttribute(
-      "style",
-      `${prevRootStyle ? `${prevRootStyle};` : ""}width:100%;height:100%;margin:0;padding:0;overflow:auto;background:#fff;`,
-    );
-    body.setAttribute(
-      "style",
-      `${prevBodyStyle ? `${prevBodyStyle};` : ""}width:100%;height:100%;margin:0;padding:0;overflow:auto;background:#fff;`,
-    );
-
-    return () => {
-      if (prevRootStyle) root.setAttribute("style", prevRootStyle);
-      else root.removeAttribute("style");
-      if (prevBodyStyle) body.setAttribute("style", prevBodyStyle);
-      else body.removeAttribute("style");
-    };
-  }, []);
+const normalizeContext = (value?: string | string[] | null): PopupContext | null => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (lower === "music" || lower === "mv" || lower === "oneclick" || lower === "test1000") {
+    return lower as PopupContext;
+  }
+  return null;
 };
 
 const useStdPayScript = (src: string | null, onReady: () => void, onError: (message: string) => void) => {
@@ -90,7 +77,7 @@ const useStdPayScript = (src: string | null, onReady: () => void, onError: (mess
       const ok = await ensureScript();
       if (cancelled) return;
       if (!ok) {
-        onError("결제 모듈 로딩 실패, 다시 시도해주세요.");
+        onError("결제 모듈 로딩에 실패했습니다. 팝업 허용 후 다시 시도해주세요.");
         return;
       }
       onReady();
@@ -102,10 +89,47 @@ const useStdPayScript = (src: string | null, onReady: () => void, onError: (mess
   }, [src, onError, onReady]);
 };
 
-export default function InicisStdPayPopupClientPage() {
+const usePopupChromeStyles = () => {
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    const prevRootStyle = root.getAttribute("style");
+    const prevBodyStyle = body.getAttribute("style");
+
+    root.setAttribute(
+      "style",
+      `${prevRootStyle ? `${prevRootStyle};` : ""}width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#fff;`,
+    );
+    body.setAttribute(
+      "style",
+      `${prevBodyStyle ? `${prevBodyStyle};` : ""}width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#fff;`,
+    );
+
+    return () => {
+      if (prevRootStyle) root.setAttribute("style", prevRootStyle);
+      else root.removeAttribute("style");
+      if (prevBodyStyle) body.setAttribute("style", prevBodyStyle);
+      else body.removeAttribute("style");
+    };
+  }, []);
+};
+
+type Props = {
+  searchParams: Record<string, string | string[] | undefined>;
+};
+
+export default function InicisPopupClientPage({ searchParams }: Props) {
   usePopupChromeStyles();
 
-  const [initData, setInitData] = React.useState<InitResponse | null>(null);
+  const context = normalizeContext(searchParams.context);
+  const submissionId = Array.isArray(searchParams.submissionId)
+    ? searchParams.submissionId[0]
+    : searchParams.submissionId;
+  const guestToken = Array.isArray(searchParams.guestToken)
+    ? searchParams.guestToken[0]
+    : searchParams.guestToken;
+
+  const [initData, setInitData] = React.useState<StdPayInit | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [loadingBarVisible, setLoadingBarVisible] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -138,40 +162,69 @@ export default function InicisStdPayPopupClientPage() {
     setLoading(true);
     setError(null);
 
-    void (async () => {
+    if (!context) {
+      setError("알 수 없는 결제 컨텍스트입니다.");
+      setLoading(false);
+      setLoadingBarVisible(false);
+      return;
+    }
+
+    const fetchInit = async () => {
       try {
-        const res = await fetch("/api/inicis/test-100", { method: "POST" });
-        const json = (await res.json()) as InitResponse;
+        let res: Response;
+        if (context === "test1000") {
+          res = await fetch("/api/inicis/test-100", { method: "POST" });
+        } else {
+          if (!submissionId) {
+            throw new Error("submissionId가 필요합니다.");
+          }
+          res = await fetch("/api/inicis/submission/order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ submissionId, guestToken }),
+          });
+        }
+
+        const raw = await res.text();
+        const json = raw ? ((JSON.parse(raw) as StdPayInit) || null) : null;
 
         if (cancelled) return;
-        if (!res.ok || !json?.ok) {
+
+        if (!res.ok || !json || json.error) {
           const message = json?.error ?? `초기화 실패 (status ${res.status})`;
           setError(message);
-          setLoadingBarVisible(false);
           setLoading(false);
+          setLoadingBarVisible(false);
           return;
         }
 
         setInitData(json);
         setLoading(false);
-        window.setTimeout(() => setLoadingBarVisible(false), 1800);
+        window.setTimeout(() => setLoadingBarVisible(false), 1200);
       } catch (err) {
         if (cancelled) return;
         console.error("[Inicis][STDPay][popup][init-error]", err);
-        setError("결제 모듈 로딩 실패, 다시 시도해주세요.");
-        setLoadingBarVisible(false);
+        setError("결제 초기화에 실패했습니다. 팝업 허용 후 다시 시도해주세요.");
         setLoading(false);
+        setLoadingBarVisible(false);
       }
-    })();
+    };
+
+    void fetchInit();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [context, submissionId, guestToken]);
 
   React.useEffect(() => {
     if (error) setLoadingBarVisible(false);
   }, [error]);
+
+  const amountLabel =
+    initData?.amount ??
+    (initData?.stdParams?.price ? Number(initData.stdParams.price) : null) ??
+    null;
 
   return (
     <div
@@ -185,8 +238,11 @@ export default function InicisStdPayPopupClientPage() {
           height: 100% !important;
           margin: 0 !important;
           padding: 0 !important;
-          overflow: auto !important;
+          overflow: hidden !important;
           background: #fff !important;
+        }
+        body > * {
+          height: 100% !important;
         }
         *,
         *::before,
@@ -196,78 +252,71 @@ export default function InicisStdPayPopupClientPage() {
         #wrapper,
         .wrapper,
         .kgLayer,
-        #body_wrapper {
+        #kg_layer,
+        #container,
+        #content,
+        #body_wrapper,
+        #overlay_popup,
+        #overlay_popups,
+        .popWrap,
+        #popWrap,
+        #popWrapLogo {
           width: 100% !important;
           max-width: none !important;
-          height: auto !important;
+          height: 100% !important;
           min-height: 100vh !important;
+          margin: 0 !important;
+        }
+        #body_wrapper,
+        #content,
+        #container {
+          overflow: auto !important;
+          -webkit-overflow-scrolling: touch;
+        }
+        #overlay_popup,
+        #overlay_popups,
+        .overlay,
+        .kgOverlay {
+          background: #fff !important;
+          height: 100% !important;
         }
         #popWrapLogo,
-        #popWrap,
         .popWrap,
-        .popwrap {
-          width: min(520px, 100%) !important;
-          max-width: 520px !important;
-          height: auto !important;
-          min-height: 100vh !important;
+        #popWrap {
+          max-width: 700px !important;
+          margin: 0 auto !important;
           padding-left: 0 !important;
           padding-right: 0 !important;
-          margin: 0 auto !important;
           box-sizing: border-box !important;
-        }
-        #popWrapLogo *,
-        #popWrap *,
-        .popWrap *,
-        .popwrap * {
-          box-sizing: border-box !important;
-        }
-        #popWrapLogo .btnArea,
-        #popWrap .btnArea,
-        .popWrap .btnArea,
-        .popwrap .btnArea,
-        #popWrapLogo .payList,
-        #popWrap .payList,
-        .popWrap .payList,
-        .popwrap .payList,
-        #popWrapLogo .paySelect,
-        #popWrap .paySelect,
-        .popWrap .paySelect,
-        .popwrap .paySelect {
-          width: 100% !important;
-        }
-        .kgBanner_left,
-        .kgBanner_right,
-        #bnrViewDiv {
-          display: none !important;
-        }
-        body {
-          padding-bottom: 120px !important;
         }
       `}</style>
+
       {loadingBarVisible && (
-        <div className="pointer-events-none fixed inset-x-0 top-0 z-20 flex justify-center">
+        <div className="pointer-events-none fixed inset-x-0 top-0 z-30 flex justify-center">
           <div className="mt-0.5 rounded-b-lg bg-black/85 px-4 py-2 text-xs font-medium text-white shadow-md">
             이니시스 결제창을 준비 중입니다...
           </div>
         </div>
       )}
 
-      <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-4 px-4 py-5">
+      <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-4 px-4 py-4">
         <div className="rounded-xl border border-border/60 bg-card/80 px-4 py-3 text-sm text-foreground shadow-sm">
           <div className="flex items-center justify-between">
             <p className="font-semibold">KG 이니시스 STDPay</p>
-            {initData?.amount ? <p className="text-xs text-muted-foreground">{initData.amount.toLocaleString()}원</p> : null}
+            {amountLabel ? <p className="text-xs text-muted-foreground">{Number(amountLabel).toLocaleString()}원</p> : null}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            팝업에서 스크롤이 가능한지 확인하고, 화면이 잘리지 않는지 확인하세요.
+            결제창이 화면을 채우도록 강제 적용되었습니다. 콘텐츠가 잘리지 않는지 확인하세요.
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground/90">
+            context: {context ?? "unknown"} {submissionId ? `· submissionId: ${submissionId}` : ""}
           </p>
         </div>
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
             <p className="font-semibold">결제 준비에 실패했습니다.</p>
-            <p className="mt-1">결제 모듈 로딩 실패, 다시 시도해주세요.</p>
-            <p className="mt-2 text-xs text-red-500">{error}</p>
+            <p className="mt-1">{error}</p>
           </div>
         ) : (
           <div className="rounded-xl border border-border/60 bg-card/60 px-4 py-4 text-sm text-foreground shadow-sm">
@@ -276,8 +325,8 @@ export default function InicisStdPayPopupClientPage() {
             {!loading && initData && (
               <ul className="space-y-1 text-xs text-muted-foreground">
                 <li>주문번호: {initData.orderId}</li>
-                <li>금액: {initData.amount.toLocaleString()}원</li>
-                <li>리턴: {initData.returnUrl}</li>
+                {initData.returnUrl ? <li>리턴: {initData.returnUrl}</li> : null}
+                {initData.closeUrl ? <li>닫기 URL: {initData.closeUrl}</li> : null}
               </ul>
             )}
           </div>
@@ -290,8 +339,20 @@ export default function InicisStdPayPopupClientPage() {
             ))}
           {initData ? (
             <>
-              <input type="hidden" name="returnUrl" value={initData.returnUrl} readOnly aria-hidden />
-              <input type="hidden" name="closeUrl" value={initData.closeUrl} readOnly aria-hidden />
+              <input
+                type="hidden"
+                name="returnUrl"
+                value={initData.returnUrl ?? initData.stdParams?.returnUrl ?? ""}
+                readOnly
+                aria-hidden
+              />
+              <input
+                type="hidden"
+                name="closeUrl"
+                value={initData.closeUrl ?? initData.stdParams?.closeUrl ?? ""}
+                readOnly
+                aria-hidden
+              />
             </>
           ) : null}
         </form>
