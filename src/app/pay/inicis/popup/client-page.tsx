@@ -236,14 +236,11 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
         html,
         body {
           width: 100% !important;
-          height: 100% !important;
+          min-height: 100vh !important;
           margin: 0 !important;
           padding: 0 !important;
           overflow: auto !important;
           background: #fff !important;
-        }
-        body > * {
-          height: 100% !important;
         }
         *,
         *::before,
@@ -264,7 +261,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
         #popWrapLogo {
           width: 100% !important;
           max-width: none !important;
-          height: 100% !important;
+          height: auto !important;
           min-height: 100vh !important;
           margin: 0 !important;
           padding: 0 !important;
