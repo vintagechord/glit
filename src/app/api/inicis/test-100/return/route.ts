@@ -55,7 +55,7 @@ async function handler(req: NextRequest) {
       Array.from(form.entries()).map(([k, v]) => [k, String(v)]),
     );
   } catch (error) {
-    console.warn("[Inicis][STDPay][test-100][callback] formData parse error", error);
+    console.warn("[Inicis][STDPay][test-1000][callback] formData parse error", error);
   }
 
   const authToken = params.authToken ?? "";
@@ -66,7 +66,7 @@ async function handler(req: NextRequest) {
   const timestamp = params.timestamp ?? params.tstamp ?? Date.now().toString();
   const isCancel = params.cancel === "1" || params.cancel === "true";
 
-  console.info("[Inicis][STDPay][test-100][callback] incoming", {
+  console.info("[Inicis][STDPay][test-1000][callback] incoming", {
     method: req.method,
     baseUrl,
     hasAuthToken: Boolean(authToken),
@@ -97,7 +97,7 @@ async function handler(req: NextRequest) {
 
   const config = getStdPayConfig();
   if (mid && mid !== config.mid) {
-    console.warn("[Inicis][STDPay][test-100][callback] MID mismatch", {
+    console.warn("[Inicis][STDPay][test-1000][callback] MID mismatch", {
       got: maskMid(mid),
       expected: maskMid(config.mid),
     });
