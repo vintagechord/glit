@@ -60,10 +60,10 @@ export default function InicisStdPay1000Page() {
     setLoading(true);
     setResult({ status: "init" });
 
-    const baseWidth = 460;
-    const baseHeight = 740;
-    const width = Math.max(420, Math.round(baseWidth));
-    const height = Math.max(700, Math.round(baseHeight));
+    const baseWidth = 520;
+    const baseHeight = 900;
+    const width = Math.max(520, Math.round(baseWidth));
+    const height = Math.max(900, Math.round(baseHeight));
     const screenX = typeof window.screenX === "number" ? window.screenX : window.screenLeft ?? 0;
     const screenY = typeof window.screenY === "number" ? window.screenY : window.screenTop ?? 0;
     const left = screenX + Math.max(0, (window.outerWidth - width) / 2);

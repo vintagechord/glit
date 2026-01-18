@@ -178,6 +178,72 @@ export default function InicisStdPayPopupClientPage() {
       className="min-h-screen w-full bg-white text-foreground"
       style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
     >
+      <style jsx global>{`
+        html,
+        body {
+          width: 100% !important;
+          height: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: auto !important;
+          background: #fff !important;
+        }
+        *,
+        *::before,
+        *::after {
+          box-sizing: border-box !important;
+        }
+        #wrapper,
+        .wrapper,
+        .kgLayer,
+        #body_wrapper {
+          width: 100% !important;
+          max-width: none !important;
+          height: auto !important;
+          min-height: 100vh !important;
+        }
+        #popWrapLogo,
+        #popWrap,
+        .popWrap,
+        .popwrap {
+          width: min(520px, 100%) !important;
+          max-width: 520px !important;
+          height: auto !important;
+          min-height: 100vh !important;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+          margin: 0 auto !important;
+          box-sizing: border-box !important;
+        }
+        #popWrapLogo *,
+        #popWrap *,
+        .popWrap *,
+        .popwrap * {
+          box-sizing: border-box !important;
+        }
+        #popWrapLogo .btnArea,
+        #popWrap .btnArea,
+        .popWrap .btnArea,
+        .popwrap .btnArea,
+        #popWrapLogo .payList,
+        #popWrap .payList,
+        .popWrap .payList,
+        .popwrap .payList,
+        #popWrapLogo .paySelect,
+        #popWrap .paySelect,
+        .popWrap .paySelect,
+        .popwrap .paySelect {
+          width: 100% !important;
+        }
+        .kgBanner_left,
+        .kgBanner_right,
+        #bnrViewDiv {
+          display: none !important;
+        }
+        body {
+          padding-bottom: 120px !important;
+        }
+      `}</style>
       {loadingBarVisible && (
         <div className="pointer-events-none fixed inset-x-0 top-0 z-20 flex justify-center">
           <div className="mt-0.5 rounded-b-lg bg-black/85 px-4 py-2 text-xs font-medium text-white shadow-md">
