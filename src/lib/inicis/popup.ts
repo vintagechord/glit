@@ -1,4 +1,6 @@
-export type InicisPopupContext = "music" | "mv" | "oneclick" | "test1000";
+import { type InicisPaymentContext } from "@/lib/inicis/context";
+
+export type InicisPopupContext = InicisPaymentContext;
 
 type OpenPopupOptions = {
   context: InicisPopupContext;

@@ -1,8 +1,9 @@
 "use client";
 
 import React from "react";
+import { useSearchParams } from "next/navigation";
 
-type PopupContext = "music" | "mv" | "oneclick" | "test1000";
+import { parseInicisContext, type InicisPaymentContext } from "@/lib/inicis/context";
 
 type StdPayInit = {
   ok?: boolean;
@@ -22,16 +23,6 @@ declare global {
 }
 
 const FORM_ID = "SendPayForm";
-
-const normalizeContext = (value?: string | string[] | null): PopupContext | null => {
-  const raw = Array.isArray(value) ? value[0] : value;
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  if (lower === "music" || lower === "mv" || lower === "oneclick" || lower === "test1000") {
-    return lower as PopupContext;
-  }
-  return null;
-};
 
 const useStdPayScript = (src: string | null, onReady: () => void, onError: (message: string) => void) => {
   React.useEffect(() => {
@@ -121,13 +112,14 @@ type Props = {
 export default function InicisPopupClientPage({ searchParams }: Props) {
   usePopupChromeStyles();
 
-  const context = normalizeContext(searchParams.context);
-  const submissionId = Array.isArray(searchParams.submissionId)
-    ? searchParams.submissionId[0]
-    : searchParams.submissionId;
-  const guestToken = Array.isArray(searchParams.guestToken)
-    ? searchParams.guestToken[0]
-    : searchParams.guestToken;
+  const runtimeSearchParams = useSearchParams();
+  const ctxValue = runtimeSearchParams.get("context") ?? (Array.isArray(searchParams.context) ? searchParams.context[0] : searchParams.context);
+  const modeValue = runtimeSearchParams.get("mode") ?? (Array.isArray(searchParams.mode) ? searchParams.mode[0] : searchParams.mode);
+  const submissionId = runtimeSearchParams.get("submissionId") ?? (Array.isArray(searchParams.submissionId) ? searchParams.submissionId[0] : searchParams.submissionId);
+  const guestToken = runtimeSearchParams.get("guestToken") ?? (Array.isArray(searchParams.guestToken) ? searchParams.guestToken[0] : searchParams.guestToken);
+  const debug = runtimeSearchParams.get("debug") === "1";
+
+  const context: InicisPaymentContext | null = parseInicisContext(ctxValue);
 
   const [initData, setInitData] = React.useState<StdPayInit | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -163,6 +155,8 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
     setError(null);
 
     if (!context) {
+      const rawParams = Object.fromEntries(runtimeSearchParams.entries());
+      console.error("[Inicis][STDPay][popup] invalid context", { ctxValue, rawParams });
       setError("알 수 없는 결제 컨텍스트입니다.");
       setLoading(false);
       setLoadingBarVisible(false);
@@ -181,7 +175,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
           res = await fetch("/api/inicis/submission/order", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ submissionId, guestToken }),
+            body: JSON.stringify({ submissionId, guestToken, context }),
           });
         }
 
@@ -192,6 +186,13 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
 
         if (!res.ok || !json || json.error) {
           const message = json?.error ?? `초기화 실패 (status ${res.status})`;
+          console.error("[Inicis][STDPay][popup][init-error]", {
+            status: res.status,
+            body: raw,
+            context,
+            submissionId,
+            guestToken: Boolean(guestToken),
+          });
           setError(message);
           setLoading(false);
           setLoadingBarVisible(false);
@@ -309,8 +310,13 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
             결제창이 화면을 채우도록 강제 적용되었습니다. 콘텐츠가 잘리지 않는지 확인하세요.
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground/90">
-            context: {context ?? "unknown"} {submissionId ? `· submissionId: ${submissionId}` : ""}
+            context: {context ?? "unknown"} {submissionId ? `· submissionId: ${submissionId}` : ""} {modeValue ? `· mode: ${modeValue}` : ""}
           </p>
+          {debug ? (
+            <pre className="mt-2 whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground">
+              raw searchParams: {JSON.stringify(Object.fromEntries(runtimeSearchParams.entries()), null, 2)}
+            </pre>
+          ) : null}
         </div>
 
         {error ? (
