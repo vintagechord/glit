@@ -5,6 +5,7 @@ import { getStdPayConfig } from "@/lib/inicis/config";
 import {
   getInicisTimestamp,
   makeAuthRequestSignature,
+  makeAuthSecureSignature,
 } from "@/lib/inicis/crypto";
 import {
   getPaymentByOrderId,
@@ -156,6 +157,13 @@ export async function handleInicisReturn(req: NextRequest) {
       params.tstamp ?? params.timestamp ?? getInicisTimestamp(),
     );
 
+    const pick = (k: string) => (typeof params[k] === "string" ? String(params[k]) : "");
+    const mask = (v: string | null | undefined, head = 4, tail = 2) => {
+      if (!v) return "";
+      if (v.length <= head + tail) return `${v[0] ?? ""}*`;
+      return `${v.slice(0, head)}***${v.slice(-tail)}`;
+    };
+
     console.info("[Inicis][STDPay][return]", {
       step: "callback_received",
       method,
@@ -167,6 +175,8 @@ export async function handleInicisReturn(req: NextRequest) {
       netCancelUrl: Boolean(netCancelUrl),
       tid: tidFromReturn ? mask(tidFromReturn) : null,
       mid: mid ? mask(mid) : null,
+      tstamp: pick("tstamp") || null,
+      totPrice: amountFromReturn || null,
       keys,
     });
 
@@ -345,15 +355,36 @@ export async function handleInicisReturn(req: NextRequest) {
     const totPrice = Number(
       authData.TotPrice ?? authData.price ?? amountFromReturn ?? 0,
     );
-    const tid =
-      toStrOrNull(
-        authData.P_TID ??
-          authData.tid ??
-          authData.TID ??
-          authData.CARD_TID ??
-          tidFromReturn ??
-          null,
-      ) ?? null;
+  const tid =
+    toStrOrNull(
+      authData.P_TID ??
+        authData.tid ??
+        authData.TID ??
+        authData.CARD_TID ??
+        tidFromReturn ??
+        null,
+    ) ?? null;
+
+    const maskSig = (v: string | null | undefined) =>
+      !v ? null : v.length <= 10 ? `${v[0] ?? ""}*` : `${v.slice(0, 6)}***${v.slice(-4)}`;
+    const tstampForSig =
+      authData.tstamp ??
+      authData.timestamp ??
+      params.tstamp ??
+      params.timestamp ??
+      timestamp;
+    const moidForSig = orderId;
+    const totPriceForSig = authData.TotPrice ?? authData.price ?? amountFromReturn ?? 0;
+    const authSignature =
+      (authData.authSignature as string | null | undefined) ??
+      (authData.AuthSignature as string | null | undefined) ??
+      null;
+    const ourSecureSignature = makeAuthSecureSignature({
+      mid: config.mid,
+      tstamp: tstampForSig ?? "",
+      MOID: moidForSig,
+      TotPrice: totPriceForSig,
+    });
 
     if (!payment?.submission || paymentError) {
       return buildBridgeRedirect(baseUrl, {
@@ -395,9 +426,11 @@ export async function handleInicisReturn(req: NextRequest) {
       resultCode: toCode(authData.resultCode, "0000"),
       totPrice,
       mid: mask(config.mid),
-      tstamp: authData.tstamp ?? params.tstamp ?? params.timestamp ?? timestamp,
-      moid: orderId,
+      tstamp: tstampForSig ?? null,
+      moid: moidForSig,
       secureSignatureMatches: approval.secureSignatureMatches ?? null,
+      authSignature: maskSig(authSignature),
+      secureSignature: maskSig(ourSecureSignature),
     });
 
     await markPaymentSuccess(orderId, {
