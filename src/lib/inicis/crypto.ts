@@ -112,7 +112,25 @@ export const makeAuthSecureSignature = (params: {
   tstamp: string | number;
   MOID: string;
   TotPrice: string | number;
-}) => makeSignature(params);
+  mKey?: string;
+  signKey?: string;
+}) => {
+  const derivedKey =
+    params.mKey ??
+    (params.signKey ? sha256(params.signKey) : "");
+  const normalized = {
+    mid: params.mid,
+    tstamp: params.tstamp,
+    MOID: params.MOID,
+    TotPrice: params.TotPrice,
+    mKey: derivedKey,
+  };
+  return sha256(
+    Object.entries(normalized)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("&"),
+  );
+};
 
 export const makeOrderId = (prefix = "SUB") =>
   `${prefix}-${Date.now()}-${randomBytes(4).toString("hex")}`;

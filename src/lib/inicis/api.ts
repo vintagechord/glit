@@ -45,7 +45,7 @@ export async function requestStdPayApproval({
   timestamp,
   skipNetCancel = false,
 }: StandardAuthParams) {
-  const { mid } = getStdPayConfig();
+  const { mid, signKey } = getStdPayConfig();
   const signature = makeAuthRequestSignature({ authToken, timestamp });
   const payload = {
     mid,
@@ -89,7 +89,8 @@ export async function requestStdPayApproval({
 
     const data = (await res.json()) as Record<string, string | number | null | undefined>;
     const moid = data.MOID != null ? String(data.MOID) : "";
-    const totPrice = data.TotPrice != null ? data.TotPrice : "";
+    const totPriceRaw = data.TotPrice != null ? data.TotPrice : "";
+    const totPrice = typeof totPriceRaw === "string" ? totPriceRaw.replace(/,/g, "") : totPriceRaw;
     const resultCode = data.resultCode != null ? String(data.resultCode) : "";
     const authSignature = data.authSignature != null ? String(data.authSignature) : null;
     const secureSignature = moid
@@ -98,6 +99,7 @@ export async function requestStdPayApproval({
           tstamp: data.tstamp ?? timestamp,
           MOID: moid,
           TotPrice: totPrice,
+          signKey,
         })
       : null;
 

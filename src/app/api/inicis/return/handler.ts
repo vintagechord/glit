@@ -6,6 +6,7 @@ import {
   getInicisTimestamp,
   makeAuthRequestSignature,
   makeAuthSecureSignature,
+  sha256,
 } from "@/lib/inicis/crypto";
 import {
   getPaymentByOrderId,
@@ -170,6 +171,10 @@ export async function handleInicisReturn(req: NextRequest) {
       return `${v.slice(0, head)}***${v.slice(-tail)}`;
     };
 
+    const config = getStdPayConfig();
+    const mKey = sha256(config.signKey ?? "");
+    const envSuffix = config.env === "prod" ? "PROD" : "STG";
+
     console.info("[Inicis][STDPay][return]", {
       step: "callback_received",
       method,
@@ -184,9 +189,13 @@ export async function handleInicisReturn(req: NextRequest) {
       tstamp: pick("tstamp") || null,
       totPrice: amountFromReturn || null,
       keys,
+      env: envSuffix,
+      midConfig: mask(config.mid),
+      stdJsUrl: config.stdJsUrl,
+      signKeyLen: config.signKey?.length ?? 0,
+      signKeyTrimmedLen: config.signKey?.trim().length ?? 0,
+      mKeyPrefix: mKey.slice(0, 6),
     });
-
-    const config = getStdPayConfig();
 
     const { payment, error: paymentError } = orderId
       ? await getPaymentByOrderId(orderId)
@@ -304,10 +313,10 @@ export async function handleInicisReturn(req: NextRequest) {
 
     const approval = await requestStdPayApproval({
       authUrl,
-      netCancelUrl: null,
+      netCancelUrl,
       authToken,
       timestamp,
-      skipNetCancel: true,
+      skipNetCancel: String(process.env.INICIS_DEBUG_NO_CANCEL ?? "").toLowerCase() === "true",
     });
 
     const authData =
@@ -327,16 +336,104 @@ export async function handleInicisReturn(req: NextRequest) {
       authResultCode,
       authResultMsg: authResultMsg ? String(authResultMsg).slice(0, 120) : null,
       secureSignatureMatches: approval.secureSignatureMatches ?? null,
+      authKeys: authData ? Object.keys(authData) : [],
+    });
+
+    const maskSig = (v: string | null | undefined) =>
+      !v ? null : v.length <= 10 ? `${v[0] ?? ""}*` : `${v.slice(0, 6)}***${v.slice(-4)}`;
+    const tstampForSig =
+      authData?.tstamp ??
+      authData?.timestamp ??
+      params.tstamp ??
+      params.timestamp ??
+      timestamp;
+    const moidForSig = orderId;
+    const normalizePrice = (value: string | number | null | undefined) => {
+      if (value == null) return "";
+      const str = String(value).replace(/,/g, "").trim();
+      return str;
+    };
+    const priceSources = [
+      { value: authData?.TotPrice, source: "auth.TotPrice" },
+      { value: authData?.price, source: "auth.price" },
+      { value: params.TotPrice, source: "params.TotPrice" },
+      { value: params.price, source: "params.price" },
+      { value: params.P_AMT, source: "params.P_AMT" },
+      { value: amountFromReturn, source: "amountFromReturn" },
+    ];
+    let totPriceForSig = "";
+    let totPriceSource = "unknown";
+    for (const candidate of priceSources) {
+      const normalized = normalizePrice(candidate.value);
+      if (normalized) {
+        totPriceForSig = normalized;
+        totPriceSource = candidate.source;
+        break;
+      }
+    }
+    const authSignature =
+      (authData?.authSignature as string | null | undefined) ??
+      (authData?.AuthSignature as string | null | undefined) ??
+      null;
+    const mKeyForSig = sha256(config.signKey ?? "");
+    const ourSecureSignature = makeAuthSecureSignature({
+      mid: config.mid,
+      tstamp: tstampForSig ?? "",
+      MOID: moidForSig,
+      TotPrice: totPriceForSig,
+      mKey: mKeyForSig,
+      signKey: config.signKey,
+    });
+    const localSigMatch =
+      authSignature && ourSecureSignature
+        ? authSignature === ourSecureSignature
+        : approval.secureSignatureMatches === true;
+
+    if (!totPriceForSig) {
+      console.info("[INICIS][signature_verify]", {
+        match: false,
+        reason: "missing_totprice",
+        midMasked: mask(config.mid),
+        tstamp: tstampForSig ?? null,
+        MOID: moidForSig,
+        TotPrice: totPriceForSig || null,
+        priceSource: totPriceSource,
+        authKeys: authData ? Object.keys(authData) : [],
+      });
+      return buildBridgeRedirect(baseUrl, {
+        status: "FAIL",
+        orderId,
+        submissionId,
+        guestToken,
+        message: "결제 금액을 확인할 수 없습니다.",
+        resultCode: "SIG_PRICE_MISSING",
+      });
+    }
+
+    console.info("[INICIS][signature_verify]", {
+      match: localSigMatch === true,
+      midMasked: mask(config.mid),
+      tstamp: tstampForSig ?? null,
+      MOID: moidForSig,
+      TotPrice: totPriceForSig,
+      totPriceSource,
+      ourSig: maskSig(ourSecureSignature),
+      authSig: maskSig(authSignature),
+      signKeyLen: config.signKey?.length ?? 0,
+      signKeyTrimmedLen: config.signKey?.trim().length ?? 0,
+      mKeyPrefix: mKeyForSig.slice(0, 6),
+      authSigLen: authSignature?.length ?? 0,
+      approvalKeys: authData ? Object.keys(authData) : [],
     });
 
     if (
       !approval.ok ||
       !authData ||
-      approval.secureSignatureMatches !== true ||
+      !localSigMatch ||
       !isInicisSuccessCode(authResultCode)
     ) {
       const failMessage =
-        approval.secureSignatureMatches === false
+        !localSigMatch
           ? "결제 서명 검증에 실패했습니다."
           : String(authResultMsg ?? "승인 요청에 실패했습니다.");
 
@@ -356,7 +453,7 @@ export async function handleInicisReturn(req: NextRequest) {
         orderId,
         status: "FAILED",
         reason:
-          approval.secureSignatureMatches !== true
+          !localSigMatch
             ? "sig_mismatch"
             : !isInicisSuccessCode(authResultCode)
               ? "auth_fail"
@@ -375,59 +472,21 @@ export async function handleInicisReturn(req: NextRequest) {
     }
 
     const totPrice = Number(
-      authData.TotPrice ?? authData.price ?? amountFromReturn ?? 0,
+      (totPriceForSig && totPriceForSig.length ? totPriceForSig : null) ??
+        authData.TotPrice ??
+        authData.price ??
+        amountFromReturn ??
+        0,
     );
-  const tid =
-    toStrOrNull(
-      authData.P_TID ??
-        authData.tid ??
-        authData.TID ??
-        authData.CARD_TID ??
-        tidFromReturn ??
-        null,
-    ) ?? null;
-
-  const maskSig = (v: string | null | undefined) =>
-    !v ? null : v.length <= 10 ? `${v[0] ?? ""}*` : `${v.slice(0, 6)}***${v.slice(-4)}`;
-  const tstampForSig =
-    authData.tstamp ??
-    authData.timestamp ??
-    params.tstamp ??
-    params.timestamp ??
-    timestamp;
-  const moidForSig = orderId;
-  const normalizePrice = (value: string | number | null | undefined) => {
-    if (value == null) return "";
-    const str = String(value).replace(/,/g, "").trim();
-    return str;
-  };
-  const totPriceForSig =
-    normalizePrice(authData.TotPrice) ||
-    normalizePrice(authData.price) ||
-    normalizePrice(amountFromReturn) ||
-    "";
-  const authSignature =
-    (authData.authSignature as string | null | undefined) ??
-    (authData.AuthSignature as string | null | undefined) ??
-    null;
-  const ourSecureSignature = makeAuthSecureSignature({
-    mid: config.mid,
-    tstamp: tstampForSig ?? "",
-    MOID: moidForSig,
-    TotPrice: totPriceForSig,
-  });
-
-    console.info("[INICIS][signature_verify]", {
-      match: approval.secureSignatureMatches === true,
-      midMasked: mask(config.mid),
-      tstamp: tstampForSig ?? null,
-      MOID: moidForSig,
-      TotPrice: totPriceForSig,
-      ourSig: maskSig(ourSecureSignature),
-      authSig: maskSig(authSignature),
-      signKeyLen: config.signKey?.length ?? 0,
-      signKeyTrimmedLen: config.signKey?.trim().length ?? 0,
-    });
+    const tid =
+      toStrOrNull(
+        authData.P_TID ??
+          authData.tid ??
+          authData.TID ??
+          authData.CARD_TID ??
+          tidFromReturn ??
+          null,
+      ) ?? null;
 
     if (!payment?.submission || paymentError) {
       console.info("[Inicis][STDPay][return]", {
@@ -485,7 +544,7 @@ export async function handleInicisReturn(req: NextRequest) {
       mid: mask(config.mid),
       tstamp: tstampForSig ?? null,
       moid: moidForSig,
-      secureSignatureMatches: approval.secureSignatureMatches ?? null,
+      secureSignatureMatches: localSigMatch === true,
       authSignature: maskSig(authSignature),
       secureSignature: maskSig(ourSecureSignature),
     });
@@ -505,7 +564,7 @@ export async function handleInicisReturn(req: NextRequest) {
       orderId,
       status: "APPROVED",
       resultCode: toCode(authData.resultCode, "0000"),
-      secureSignatureMatches: approval.secureSignatureMatches ?? null,
+      secureSignatureMatches: localSigMatch === true,
     });
 
     return buildBridgeRedirect(baseUrl, {
