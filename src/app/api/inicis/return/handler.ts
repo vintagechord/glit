@@ -322,9 +322,11 @@ export async function handleInicisReturn(req: NextRequest) {
       const failMessage =
         approval.secureSignatureMatches === false
           ? "결제 서명 검증에 실패했습니다."
-          : authData?.resultMsg ??
-            authData?.resultmsg ??
-            "승인 요청에 실패했습니다.";
+          : String(
+              authData?.resultMsg ??
+                authData?.resultmsg ??
+                "승인 요청에 실패했습니다.",
+            );
 
       if (payment?.submission) {
         await markPaymentFailure(orderId, {
