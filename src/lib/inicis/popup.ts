@@ -24,10 +24,10 @@ export const openInicisCardPopup = (options: OpenPopupOptions) => {
 
   const url = `/pay/inicis/popup?${params.toString()}`;
 
-  const baseWidth = 620;
-  const baseHeight = 860;
-  const width = Math.max(620, Math.round(baseWidth));
-  const height = Math.max(860, Math.round(baseHeight));
+  const availW = Math.max(window.screen.availWidth || 0, window.innerWidth || 0);
+  const availH = Math.max(window.screen.availHeight || 0, window.innerHeight || 0);
+  const width = Math.round(Math.min(Math.max(availW * 0.92, 1100), 1400));
+  const height = Math.round(Math.min(Math.max(availH * 0.92, 760), 1000));
   const screenX = typeof window.screenX === "number" ? window.screenX : window.screenLeft ?? 0;
   const screenY = typeof window.screenY === "number" ? window.screenY : window.screenTop ?? 0;
   const left = screenX + Math.max(0, (window.outerWidth - width) / 2);
@@ -51,6 +51,13 @@ export const openInicisCardPopup = (options: OpenPopupOptions) => {
       ok: false,
       error: "팝업이 차단되었습니다. 팝업 차단을 해제한 후 다시 시도해주세요.",
     };
+  }
+
+  try {
+    popup.resizeTo(width, height);
+    popup.moveTo(Math.max(0, Math.round(left)), Math.max(0, Math.round(top)));
+  } catch {
+    // 일부 브라우저에서는 move/resize가 막힐 수 있으므로 무시
   }
 
   popup.focus();

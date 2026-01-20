@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Manrope, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
+import { headers } from "next/headers";
 import { ChatbotWidget } from "@/components/chatbot-widget";
 import { SiteFooter } from "@/components/site/footer";
 import { SiteHeader } from "@/components/site/header";
@@ -31,6 +32,23 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const pathname =
+    headers().get("x-invoke-path") ??
+    headers().get("x-matched-path") ??
+    headers().get("x-pathname") ??
+    "";
+  const isPayPopup = pathname.startsWith("/pay/inicis/popup");
+
+  if (isPayPopup) {
+    return (
+      <html lang="ko" suppressHydrationWarning>
+        <body className={`${manrope.variable} ${spaceGrotesk.variable} min-h-screen bg-white font-sans antialiased`}>
+          {children}
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html lang="ko" suppressHydrationWarning>
       <body
