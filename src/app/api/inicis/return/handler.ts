@@ -377,7 +377,12 @@ export async function handleInicisReturn(req: NextRequest) {
       params.tstamp ??
       params.timestamp ??
       timestamp;
-    const moidForSig = orderId;
+    const moidForSig =
+      (authData?.MOID as string | null | undefined) ??
+      params.MOID ??
+      params.oid ??
+      params.orderId ??
+      orderId;
     const normalizePrice = (value: string | number | null | undefined) => {
       if (value == null) return "";
       const str = String(value).replace(/,/g, "").trim();
@@ -386,10 +391,6 @@ export async function handleInicisReturn(req: NextRequest) {
     const priceSources = [
       { value: authData?.TotPrice, source: "auth.TotPrice" },
       { value: authData?.price, source: "auth.price" },
-      { value: params.TotPrice, source: "params.TotPrice" },
-      { value: params.price, source: "params.price" },
-      { value: params.P_AMT, source: "params.P_AMT" },
-      { value: amountFromReturn, source: "amountFromReturn" },
     ];
     let totPriceForSig = "";
     let totPriceSource = "unknown";
@@ -414,14 +415,33 @@ export async function handleInicisReturn(req: NextRequest) {
       mKey: mKeyForSig,
       signKey: config.signKey,
     });
+    const hasSigInputs =
+      Boolean(authSignature) &&
+      Boolean(totPriceForSig) &&
+      Boolean(moidForSig) &&
+      Boolean(tstampForSig);
     const localSigMatch =
-      authSignature && ourSecureSignature
+      hasSigInputs && authSignature && ourSecureSignature
         ? authSignature === ourSecureSignature
-        : approval.secureSignatureMatches === true;
-    const sigMismatchReason = localSigMatch
-      ? null
-      : !totPriceForSig
-        ? "missing_totprice"
+        : null;
+    const verifyStatus =
+      localSigMatch === true
+        ? "verified"
+        : hasSigInputs
+          ? "failed"
+          : "unknown";
+    const sigMismatchReason = !hasSigInputs
+      ? !authSignature
+        ? "missing_auth_signature"
+        : !totPriceForSig
+          ? "missing_totprice"
+          : !moidForSig
+            ? "missing_moid"
+            : !tstampForSig
+              ? "missing_tstamp"
+              : "missing_input"
+      : localSigMatch
+        ? null
         : "sig_mismatch";
 
     console.info("[INICIS][signature_verify]", {
@@ -440,6 +460,7 @@ export async function handleInicisReturn(req: NextRequest) {
       authSigLen: authSignature?.length ?? 0,
       approvalKeys: authData ? Object.keys(authData) : [],
       secureSignatureMatches: approval.secureSignatureMatches ?? null,
+      verifyStatus,
     });
 
     const authSuccess = isInicisSuccessCode(authResultCode);
@@ -557,6 +578,8 @@ export async function handleInicisReturn(req: NextRequest) {
       secureSignatureMatches: localSigMatch === true,
       authSignature: maskSig(authSignature),
       secureSignature: maskSig(ourSecureSignature),
+      verifyStatus,
+      sigMismatchReason,
     });
 
     await markPaymentSuccess(orderId, {
@@ -568,6 +591,7 @@ export async function handleInicisReturn(req: NextRequest) {
         approval: authData,
         signatureVerification: {
           sigVerified: localSigMatch === true,
+          verifyStatus,
           sigMismatchReason,
           ourSig: maskSig(ourSecureSignature),
           authSig: maskSig(authSignature),
@@ -589,6 +613,7 @@ export async function handleInicisReturn(req: NextRequest) {
       secureSignatureMatches: localSigMatch === true,
       sigVerified: localSigMatch === true,
       sigMismatchReason,
+      verifyStatus,
     });
 
     return buildBridgeRedirect(baseUrl, {
