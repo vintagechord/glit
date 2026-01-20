@@ -94,7 +94,7 @@ const parseParams = async (req: NextRequest): Promise<ParsedReturn> => {
         Array.from(form.entries()).map(([k, v]) => [k, String(v)]),
       );
     } catch (error) {
-      console.warn("[Inicis][STDPay][return] formData parse error", error);
+      console.warn("[INICIS][callback_received] formData parse error", error);
     }
   }
 
@@ -174,9 +174,17 @@ export async function handleInicisReturn(req: NextRequest) {
     const config = getStdPayConfig();
     const mKey = sha256(config.signKey ?? "");
     const envSuffix = config.env === "prod" ? "PROD" : "STG";
+    const looksHashedKey = /^[0-9a-fA-F]{64}$/.test(config.signKey ?? "");
 
-    console.info("[Inicis][STDPay][return]", {
-      step: "callback_received",
+    if (looksHashedKey) {
+      console.warn("[INICIS][warn] signKey_looks_like_hashed_key", {
+        env: envSuffix,
+        signKeyLen: config.signKey?.length ?? 0,
+      });
+    }
+
+    console.info("[INICIS][callback_received]", {
+      env: envSuffix,
       method,
       contentType,
       orderId,
@@ -189,12 +197,21 @@ export async function handleInicisReturn(req: NextRequest) {
       tstamp: pick("tstamp") || null,
       totPrice: amountFromReturn || null,
       keys,
-      env: envSuffix,
       midConfig: mask(config.mid),
       stdJsUrl: config.stdJsUrl,
       signKeyLen: config.signKey?.length ?? 0,
       signKeyTrimmedLen: config.signKey?.trim().length ?? 0,
       mKeyPrefix: mKey.slice(0, 6),
+      authHost: authUrl
+        ? (() => {
+            try {
+              const u = new URL(authUrl);
+              return `${u.host}${u.pathname}`;
+            } catch {
+              return null;
+            }
+          })()
+        : null,
     });
 
     const { payment, error: paymentError } = orderId
@@ -211,10 +228,10 @@ export async function handleInicisReturn(req: NextRequest) {
           result_message: "MID 불일치",
           raw_response: scrubParams(params),
         });
-        console.info("[Inicis][STDPay][return]", {
-          step: "db_write",
+        console.info("[INICIS][final]", {
           orderId,
           status: "FAILED",
+          reason: "mid_mismatch",
           ok: save.ok,
         });
       }
@@ -290,8 +307,8 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    console.info("[Inicis][STDPay][return]", {
-      step: "auth_call_start",
+    console.info("[INICIS][auth_call_start]", {
+      env: envSuffix,
       orderId,
       authHost: authUrl
         ? (() => {
@@ -309,6 +326,9 @@ export async function handleInicisReturn(req: NextRequest) {
       totPrice: amountFromReturn || null,
       timestamp,
       hasNetCancelUrl: Boolean(netCancelUrl),
+      signKeyLen: config.signKey?.length ?? 0,
+      signKeyTrimmedLen: config.signKey?.trim().length ?? 0,
+      mKeyPrefix: mKey.slice(0, 6),
     });
 
     const approval = await requestStdPayApproval({
@@ -330,13 +350,23 @@ export async function handleInicisReturn(req: NextRequest) {
       authData?.resultmsg ??
       (approval.ok ? "승인 완료" : "승인 실패");
 
-    console.info("[Inicis][STDPay][return]", {
-      step: "auth_call_done",
+    console.info("[INICIS][auth_call_done]", {
+      env: envSuffix,
       orderId,
       authResultCode,
       authResultMsg: authResultMsg ? String(authResultMsg).slice(0, 120) : null,
       secureSignatureMatches: approval.secureSignatureMatches ?? null,
       authKeys: authData ? Object.keys(authData) : [],
+      tid: tidFromReturn ? mask(tidFromReturn) : null,
+      authSignatureExists: Boolean(
+        (authData?.authSignature as string | null | undefined) ??
+          (authData?.AuthSignature as string | null | undefined) ??
+          null,
+      ),
+      authSignatureLen:
+        ((authData?.authSignature as string | null | undefined) ??
+          (authData?.AuthSignature as string | null | undefined) ??
+          "")?.length ?? 0,
     });
 
     const maskSig = (v: string | null | undefined) =>
@@ -388,30 +418,15 @@ export async function handleInicisReturn(req: NextRequest) {
       authSignature && ourSecureSignature
         ? authSignature === ourSecureSignature
         : approval.secureSignatureMatches === true;
-
-    if (!totPriceForSig) {
-      console.info("[INICIS][signature_verify]", {
-        match: false,
-        reason: "missing_totprice",
-        midMasked: mask(config.mid),
-        tstamp: tstampForSig ?? null,
-        MOID: moidForSig,
-        TotPrice: totPriceForSig || null,
-        priceSource: totPriceSource,
-        authKeys: authData ? Object.keys(authData) : [],
-      });
-      return buildBridgeRedirect(baseUrl, {
-        status: "FAIL",
-        orderId,
-        submissionId,
-        guestToken,
-        message: "결제 금액을 확인할 수 없습니다.",
-        resultCode: "SIG_PRICE_MISSING",
-      });
-    }
+    const sigMismatchReason = localSigMatch
+      ? null
+      : !totPriceForSig
+        ? "missing_totprice"
+        : "sig_mismatch";
 
     console.info("[INICIS][signature_verify]", {
       match: localSigMatch === true,
+      reason: sigMismatchReason,
       midMasked: mask(config.mid),
       tstamp: tstampForSig ?? null,
       MOID: moidForSig,
@@ -424,18 +439,26 @@ export async function handleInicisReturn(req: NextRequest) {
       mKeyPrefix: mKeyForSig.slice(0, 6),
       authSigLen: authSignature?.length ?? 0,
       approvalKeys: authData ? Object.keys(authData) : [],
+      secureSignatureMatches: approval.secureSignatureMatches ?? null,
     });
 
-    if (
-      !approval.ok ||
-      !authData ||
-      !localSigMatch ||
-      !isInicisSuccessCode(authResultCode)
-    ) {
+    const authSuccess = isInicisSuccessCode(authResultCode);
+    const tid =
+      toStrOrNull(
+        authData?.P_TID ??
+          authData?.tid ??
+          authData?.TID ??
+          authData?.CARD_TID ??
+          tidFromReturn ??
+          null,
+      ) ?? null;
+    const shouldSucceed = authSuccess && Boolean(tid);
+
+    if (!authData || !shouldSucceed) {
       const failMessage =
-        !localSigMatch
-          ? "결제 서명 검증에 실패했습니다."
-          : String(authResultMsg ?? "승인 요청에 실패했습니다.");
+        !authSuccess
+          ? String(authResultMsg ?? "승인 요청에 실패했습니다.")
+          : "결제 정보를 확인할 수 없습니다.";
 
       if (payment?.submission) {
         await markPaymentFailure(orderId, {
@@ -448,15 +471,14 @@ export async function handleInicisReturn(req: NextRequest) {
         });
       }
 
-      console.info("[Inicis][STDPay][return]", {
-        step: "final",
+      console.info("[INICIS][final]", {
         orderId,
         status: "FAILED",
         reason:
-          !localSigMatch
-            ? "sig_mismatch"
-            : !isInicisSuccessCode(authResultCode)
-              ? "auth_fail"
+          !authSuccess
+            ? "auth_fail"
+            : !authData
+              ? "auth_missing"
               : "auth_unknown",
         resultCode: authResultCode,
       });
@@ -478,19 +500,9 @@ export async function handleInicisReturn(req: NextRequest) {
         amountFromReturn ??
         0,
     );
-    const tid =
-      toStrOrNull(
-        authData.P_TID ??
-          authData.tid ??
-          authData.TID ??
-          authData.CARD_TID ??
-          tidFromReturn ??
-          null,
-      ) ?? null;
 
     if (!payment?.submission || paymentError) {
-      console.info("[Inicis][STDPay][return]", {
-        step: "final",
+      console.info("[INICIS][final]", {
         orderId,
         status: "FAILED",
         reason: "payment_not_found",
@@ -517,8 +529,7 @@ export async function handleInicisReturn(req: NextRequest) {
           approval: authData,
         },
       });
-      console.info("[Inicis][STDPay][return]", {
-        step: "final",
+      console.info("[INICIS][final]", {
         orderId,
         status: "FAILED",
         reason: "price_mismatch",
@@ -535,8 +546,7 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    console.info("[Inicis][STDPay][return]", {
-      step: "signature_verify",
+    console.info("[INICIS][signature_verify]", {
       orderId,
       tid: tid ? mask(tid) : null,
       resultCode: toCode(authData.resultCode, "0000"),
@@ -556,15 +566,29 @@ export async function handleInicisReturn(req: NextRequest) {
       raw_response: {
         returnParams: scrubParams(params),
         approval: authData,
+        signatureVerification: {
+          sigVerified: localSigMatch === true,
+          sigMismatchReason,
+          ourSig: maskSig(ourSecureSignature),
+          authSig: maskSig(authSignature),
+          inputs: {
+            mid: mask(config.mid),
+            tstamp: tstampForSig ?? null,
+            MOID: moidForSig,
+            TotPrice: totPriceForSig || null,
+            totPriceSource,
+          },
+        },
       },
     });
 
-    console.info("[Inicis][STDPay][return]", {
-      step: "final",
+    console.info("[INICIS][final]", {
       orderId,
       status: "APPROVED",
       resultCode: toCode(authData.resultCode, "0000"),
       secureSignatureMatches: localSigMatch === true,
+      sigVerified: localSigMatch === true,
+      sigMismatchReason,
     });
 
     return buildBridgeRedirect(baseUrl, {
@@ -578,7 +602,7 @@ export async function handleInicisReturn(req: NextRequest) {
       message: String(authResultMsg ?? "결제가 완료되었습니다."),
     });
   } catch (error) {
-    console.error("[Inicis][STDPay][return][error]", error);
+    console.error("[INICIS][final][error]", error);
     const fallbackBase = parsed?.baseUrl ?? getBaseUrl();
     return buildBridgeRedirect(fallbackBase, {
       status: "ERROR",

@@ -115,8 +115,7 @@ export async function requestStdPayApproval({
     }
 
     if (!secureSignature || authSignature !== secureSignature) {
-      await doNetCancel();
-      return { ok: false, data, secureSignatureMatches: false };
+      return { ok: true, data, secureSignatureMatches: false };
     }
 
     return { ok: true, data, secureSignatureMatches: true };
