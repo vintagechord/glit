@@ -113,45 +113,6 @@ const parseParams = async (req: NextRequest): Promise<ParsedReturn> => {
   return { baseUrl, contentType, method, params, keys };
 };
 
-const attemptNetCancel = async (payload: {
-  netCancelUrl?: string | null;
-  mid: string;
-  authToken: string;
-  timestamp: string;
-}) => {
-  if (!payload.netCancelUrl || !payload.authToken) return false;
-  try {
-    const signature = makeAuthRequestSignature({
-      authToken: payload.authToken,
-      timestamp: payload.timestamp,
-    });
-    const formBody = new URLSearchParams(
-      Object.entries({
-        mid: payload.mid,
-        authToken: payload.authToken,
-        signature,
-        timestamp: payload.timestamp,
-        charset: "UTF-8",
-        format: "JSON",
-      }).map(([k, v]) => [k, String(v)]),
-    );
-
-    const res = await fetch(payload.netCancelUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formBody,
-      cache: "no-store",
-    });
-    console.warn("[Inicis][STDPay][return] step=net_cancel", {
-      status: res.status,
-    });
-    return true;
-  } catch (error) {
-    console.error("[Inicis][STDPay][return] net_cancel_error", error);
-    return false;
-  }
-};
-
 const toCode = (value: string | number | null | undefined, fallback: string) =>
   value == null ? fallback : String(value);
 
@@ -196,7 +157,7 @@ export async function handleInicisReturn(req: NextRequest) {
     );
 
     console.info("[Inicis][STDPay][return]", {
-      step: "receive_return",
+      step: "callback_received",
       method,
       contentType,
       orderId,
@@ -220,10 +181,16 @@ export async function handleInicisReturn(req: NextRequest) {
 
     if (mid && mid !== config.mid) {
       if (payment?.submission) {
-        await markPaymentFailure(orderId, {
+        const save = await markPaymentFailure(orderId, {
           result_code: "MID_MISMATCH",
           result_message: "MID 불일치",
           raw_response: scrubParams(params),
+        });
+        console.info("[Inicis][STDPay][return]", {
+          step: "db_write",
+          orderId,
+          status: "FAILED",
+          ok: save.ok,
         });
       }
       return buildBridgeRedirect(baseUrl, {
@@ -299,24 +266,29 @@ export async function handleInicisReturn(req: NextRequest) {
     }
 
     console.info("[Inicis][STDPay][return]", {
-      step: "call_authUrl",
-      orderId,
-      hasNetCancelUrl: Boolean(netCancelUrl),
-      timestamp,
-    });
-
-    console.info("[Inicis][STDPay][return]", {
       step: "auth_call_start",
       orderId,
+      authHost: authUrl
+        ? (() => {
+            try {
+              const u = new URL(authUrl);
+              return `${u.host}${u.pathname}`;
+            } catch {
+              return null;
+            }
+          })()
+        : null,
+      hasTstamp: Boolean(params.tstamp ?? params.timestamp),
       timestamp,
       hasNetCancelUrl: Boolean(netCancelUrl),
     });
 
     const approval = await requestStdPayApproval({
       authUrl,
-      netCancelUrl,
+      netCancelUrl: null,
       authToken,
       timestamp,
+      skipNetCancel: true,
     });
 
     const authData =
@@ -334,6 +306,7 @@ export async function handleInicisReturn(req: NextRequest) {
       step: "auth_call_done",
       orderId,
       authResultCode,
+      authResultMsg: authResultMsg ? String(authResultMsg).slice(0, 120) : null,
       secureSignatureMatches: approval.secureSignatureMatches ?? null,
     });
 
@@ -356,13 +329,6 @@ export async function handleInicisReturn(req: NextRequest) {
             returnParams: scrubParams(params),
             approval: authData,
           },
-        });
-      } else {
-        await attemptNetCancel({
-          netCancelUrl,
-          mid: config.mid,
-          authToken,
-          timestamp,
         });
       }
 
@@ -390,12 +356,6 @@ export async function handleInicisReturn(req: NextRequest) {
       ) ?? null;
 
     if (!payment?.submission || paymentError) {
-      await attemptNetCancel({
-        netCancelUrl,
-        mid: config.mid,
-        authToken,
-        timestamp,
-      });
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
         orderId,
@@ -418,12 +378,6 @@ export async function handleInicisReturn(req: NextRequest) {
           approval: authData,
         },
       });
-      await attemptNetCancel({
-        netCancelUrl,
-        mid: config.mid,
-        authToken,
-        timestamp,
-      });
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
         orderId,
@@ -440,6 +394,9 @@ export async function handleInicisReturn(req: NextRequest) {
       tid: tid ? mask(tid) : null,
       resultCode: toCode(authData.resultCode, "0000"),
       totPrice,
+      mid: mask(config.mid),
+      tstamp: authData.tstamp ?? params.tstamp ?? params.timestamp ?? timestamp,
+      moid: orderId,
       secureSignatureMatches: approval.secureSignatureMatches ?? null,
     });
 

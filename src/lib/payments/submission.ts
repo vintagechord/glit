@@ -146,7 +146,7 @@ export const markPaymentFailure = async (
   },
 ) => {
   const admin = createAdminClient();
-  await admin
+  const { error } = await admin
     .from("submission_payments")
     .update({
       status: "FAILED",
@@ -155,6 +155,7 @@ export const markPaymentFailure = async (
       raw_response: payload.raw_response ?? null,
     })
     .eq("order_id", orderId);
+  return { ok: !error, error };
 };
 
 export const markPaymentSuccess = async (
@@ -167,7 +168,7 @@ export const markPaymentSuccess = async (
   },
 ) => {
   const admin = createAdminClient();
-  const { data: updated } = await admin
+  const { data: updated, error } = await admin
     .from("submission_payments")
     .update({
       status: "APPROVED",
@@ -193,4 +194,6 @@ export const markPaymentSuccess = async (
       message: "KG이니시스 카드 결제 완료",
     });
   }
+
+  return { ok: !error, error, submissionId: updated?.submission_id ?? null };
 };

@@ -17,6 +17,7 @@ type StandardAuthParams = {
   netCancelUrl?: string | null;
   authToken: string;
   timestamp: string;
+  skipNetCancel?: boolean;
 };
 
 type BillingRequest = {
@@ -42,6 +43,7 @@ export async function requestStdPayApproval({
   netCancelUrl,
   authToken,
   timestamp,
+  skipNetCancel = false,
 }: StandardAuthParams) {
   const { mid } = getStdPayConfig();
   const signature = makeAuthRequestSignature({ authToken, timestamp });
@@ -59,7 +61,7 @@ export async function requestStdPayApproval({
   );
 
   const doNetCancel = async () => {
-    if (!netCancelUrl) return null;
+    if (!netCancelUrl || skipNetCancel) return null;
     try {
       await fetch(netCancelUrl, {
         method: "POST",
