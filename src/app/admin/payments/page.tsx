@@ -32,14 +32,30 @@ export default async function AdminPaymentsPage() {
   const { data, error } = await admin
     .from("submission_payments")
     .select(
-      "order_id, submission_id, amount_krw, status, paid_at, pg_tid, result_message, created_at, submission:submissions ( id, title, artist_name, payment_method, payment_status )",
+      `
+        order_id,
+        submission_id,
+        amount_krw,
+        status,
+        paid_at,
+        pg_tid,
+        result_message,
+        created_at,
+        submission:submissions (
+          id,
+          title,
+          artist_name,
+          payment_method,
+          payment_status
+        )
+      `,
     )
     .eq("status", "APPROVED")
     .order("paid_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(200);
 
-  const rows = (data ?? []) as PaymentRow[];
+  const rows = (data ?? []) as unknown as PaymentRow[];
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
