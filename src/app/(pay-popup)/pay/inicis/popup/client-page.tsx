@@ -323,24 +323,6 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
           Object.entries(initData.stdParams ?? {}).map(([k, v]) => (
             <input key={k} type="hidden" name={k} value={v} readOnly aria-hidden />
           ))}
-        {initData ? (
-          <>
-            <input
-              type="hidden"
-              name="returnUrl"
-              value={initData.returnUrl ?? initData.stdParams?.returnUrl ?? ""}
-              readOnly
-              aria-hidden
-            />
-            <input
-              type="hidden"
-              name="closeUrl"
-              value={initData.closeUrl ?? initData.stdParams?.closeUrl ?? ""}
-              readOnly
-              aria-hidden
-            />
-          </>
-        ) : null}
       </form>
     </div>
   );
