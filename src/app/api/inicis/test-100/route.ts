@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getStdPayConfig } from "@/lib/inicis/config";
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
-import { getBaseUrl } from "@/lib/url";
+import { buildUrl, getBaseUrl } from "@/lib/url";
 
 const TEST_AMOUNT = 1000;
 
@@ -14,8 +14,8 @@ export async function POST(req: NextRequest) {
     const baseUrl = getBaseUrl(req);
     const config = getStdPayConfig();
     const orderId = `TEST1000-${Date.now()}`;
-    const returnUrl = `${baseUrl}/api/inicis/test-100/return`;
-    const closeUrl = `${baseUrl}/api/inicis/test-100/close`;
+    const returnUrl = buildUrl("/api/inicis/test-100/return", baseUrl);
+    const closeUrl = buildUrl("/api/inicis/test-100/close", baseUrl);
 
     const stdParams = buildStdPayRequest({
       orderId,

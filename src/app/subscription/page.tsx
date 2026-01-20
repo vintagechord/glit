@@ -9,6 +9,7 @@ import {
   resolveSubscriptionPrice,
 } from "@/lib/inicis/stdpay";
 import { getStdPayConfig } from "@/lib/inicis/config";
+import { buildUrl } from "@/lib/url";
 import {
   createHistoryAttempt,
   getActiveSubscription,
@@ -65,8 +66,8 @@ export default async function SubscriptionPage() {
     | ReturnType<typeof buildMobileBillingRequest>
     | null = null;
   let orderId: string | null = null;
-  const returnUrl = `${baseUrl}/api/inicis/key-return`;
-  const mobileReturnUrl = `${baseUrl}/api/inicis/mobile-return`;
+  const returnUrl = buildUrl("/api/inicis/key-return", baseUrl);
+  const mobileReturnUrl = buildUrl("/api/inicis/mobile-return", baseUrl);
 
   if (!subscription) {
     const orderCreate = await createHistoryAttempt({
@@ -101,7 +102,10 @@ export default async function SubscriptionPage() {
       buyerEmail: user.email ?? "",
       buyerTel: "",
       returnUrl,
-      closeUrl: `${baseUrl}/subscription/result?orderId=${encodeURIComponent(orderId)}`,
+      closeUrl: buildUrl(
+        `/subscription/result?orderId=${encodeURIComponent(orderId)}`,
+        baseUrl,
+      ),
     });
 
     mobileParams = buildMobileBillingRequest({

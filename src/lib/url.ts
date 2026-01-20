@@ -19,6 +19,12 @@ export const getBaseUrl = (req?: NextRequest) => {
   return `${proto}://${host}`.replace(/\/+$/, "");
 };
 
+/**
+ * Safely builds an absolute URL from a base origin and a path using the WHATWG URL parser.
+ * This avoids accidental double slashes or malformed concatenation.
+ */
+export const buildUrl = (path: string, base: string) => new URL(path, base).toString();
+
 export const getClientIp = (req?: NextRequest) => {
   const forwarded = req?.headers.get("x-forwarded-for");
   if (forwarded) {

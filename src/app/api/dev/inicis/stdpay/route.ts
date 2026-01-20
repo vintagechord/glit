@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { buildStdPayRequest } from "../../../../../lib/inicis/stdpay";
-import { getBaseUrl } from "../../../../../lib/url";
+import { buildUrl, getBaseUrl } from "../../../../../lib/url";
 
 const clean = (value?: string | null) => {
   if (!value) return "";
@@ -81,8 +81,8 @@ export async function POST(req: NextRequest) {
       );
     }
     const orderId = `DEV-${Date.now()}`;
-    const returnUrl = `${baseUrl}/api/dev/inicis/stdpay-return`;
-    const closeUrl = `${baseUrl}/dev/inicis-stdpay`;
+    const returnUrl = buildUrl("/api/dev/inicis/stdpay-return", baseUrl);
+    const closeUrl = buildUrl("/dev/inicis-stdpay", baseUrl);
 
     const stdParams = buildStdPayRequest({
       orderId,
