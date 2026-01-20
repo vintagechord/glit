@@ -69,6 +69,11 @@ function ReturnBridgeContent() {
       ? "결제 결과를 전달하는 중입니다. 잠시만 기다려주세요."
       : "결제 결과를 전달하는 중입니다. 창을 닫지 말고 기다려주세요.");
 
+  const formatPrice = (value?: number) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? new Intl.NumberFormat("ko-KR").format(value) + "원"
+      : "알 수 없음";
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-white px-6 py-10">
       <div className="w-full max-w-md text-center">
@@ -79,12 +84,47 @@ function ReturnBridgeContent() {
         <p className="mt-2 text-sm text-slate-600">{detail}</p>
         <p className="mt-6 text-xs text-slate-500">
           창이 자동으로 닫히지 않으면 수동으로 닫아주세요.
-          {!payload.submissionId && !payload.orderId ? null : (
-            <span className="block mt-1">
-              주문번호: {payload.orderId ?? payload.submissionId}
-            </span>
-          )}
         </p>
+        {(payload.orderId || payload.submissionId || payload.tid || payload.amount) && (
+          <div className="mt-6 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm text-slate-700 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                주문 정보
+              </span>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                {status === "SUCCESS"
+                  ? "결제성공"
+                  : status === "CANCEL"
+                    ? "취소"
+                    : "실패"}
+              </span>
+            </div>
+            {payload.orderId ? (
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-xs text-slate-500">주문번호</span>
+                <span className="font-semibold text-slate-900">{payload.orderId}</span>
+              </div>
+            ) : null}
+            {payload.tid ? (
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-xs text-slate-500">거래번호(TID)</span>
+                <span className="font-medium text-slate-900">{payload.tid}</span>
+              </div>
+            ) : null}
+            {typeof payload.amount === "number" ? (
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-xs text-slate-500">결제금액</span>
+                <span className="font-semibold text-slate-900">{formatPrice(payload.amount)}</span>
+              </div>
+            ) : null}
+            {payload.resultCode ? (
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-xs text-slate-500">결과코드</span>
+                <span className="font-medium text-slate-900">{payload.resultCode}</span>
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );
