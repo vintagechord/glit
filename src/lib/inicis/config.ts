@@ -23,8 +23,8 @@ const clean = (value?: string | null) => {
 
 const loadStdPayConfig = (mode: InicisMode): StdPayEnvConfig => {
   const suffix = mode === "prod" ? "PROD" : "STG";
-  const mid = clean(process.env[`INICIS_MID_${suffix}`] ?? "");
-  const signKey = clean(process.env[`INICIS_SIGN_KEY_${suffix}`] ?? "");
+  const mid = clean(process.env[`INICIS_MID_${suffix}`] ?? "").trim();
+  const signKey = clean(process.env[`INICIS_SIGN_KEY_${suffix}`] ?? "").trim();
   const stdJsUrlRaw =
     mode === "prod"
       ? "https://stdpay.inicis.com/stdjs/INIStdPay.js"

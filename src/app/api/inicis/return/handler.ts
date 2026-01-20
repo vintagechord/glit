@@ -387,25 +387,46 @@ export async function handleInicisReturn(req: NextRequest) {
         null,
     ) ?? null;
 
-    const maskSig = (v: string | null | undefined) =>
-      !v ? null : v.length <= 10 ? `${v[0] ?? ""}*` : `${v.slice(0, 6)}***${v.slice(-4)}`;
-    const tstampForSig =
-      authData.tstamp ??
-      authData.timestamp ??
-      params.tstamp ??
-      params.timestamp ??
-      timestamp;
-    const moidForSig = orderId;
-    const totPriceForSig = authData.TotPrice ?? authData.price ?? amountFromReturn ?? 0;
-    const authSignature =
-      (authData.authSignature as string | null | undefined) ??
-      (authData.AuthSignature as string | null | undefined) ??
-      null;
-    const ourSecureSignature = makeAuthSecureSignature({
-      mid: config.mid,
-      tstamp: tstampForSig ?? "",
+  const maskSig = (v: string | null | undefined) =>
+    !v ? null : v.length <= 10 ? `${v[0] ?? ""}*` : `${v.slice(0, 6)}***${v.slice(-4)}`;
+  const tstampForSig =
+    authData.tstamp ??
+    authData.timestamp ??
+    params.tstamp ??
+    params.timestamp ??
+    timestamp;
+  const moidForSig = orderId;
+  const normalizePrice = (value: string | number | null | undefined) => {
+    if (value == null) return "";
+    const str = String(value).replace(/,/g, "").trim();
+    return str;
+  };
+  const totPriceForSig =
+    normalizePrice(authData.TotPrice) ||
+    normalizePrice(authData.price) ||
+    normalizePrice(amountFromReturn) ||
+    "";
+  const authSignature =
+    (authData.authSignature as string | null | undefined) ??
+    (authData.AuthSignature as string | null | undefined) ??
+    null;
+  const ourSecureSignature = makeAuthSecureSignature({
+    mid: config.mid,
+    tstamp: tstampForSig ?? "",
+    MOID: moidForSig,
+    TotPrice: totPriceForSig,
+  });
+
+    console.info("[INICIS][signature_verify]", {
+      match: approval.secureSignatureMatches === true,
+      midMasked: mask(config.mid),
+      tstamp: tstampForSig ?? null,
       MOID: moidForSig,
       TotPrice: totPriceForSig,
+      ourSig: maskSig(ourSecureSignature),
+      authSig: maskSig(authSignature),
+      signKeyLen: config.signKey?.length ?? 0,
+      signKeyTrimmedLen: config.signKey?.trim().length ?? 0,
     });
 
     if (!payment?.submission || paymentError) {
