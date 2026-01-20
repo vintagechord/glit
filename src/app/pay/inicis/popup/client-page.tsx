@@ -236,6 +236,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
         html,
         body {
           width: 100% !important;
+          height: 100% !important;
           min-height: 100vh !important;
           margin: 0 !important;
           padding: 0 !important;
@@ -260,29 +261,36 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
         #popWrap,
         #popWrapLogo {
           width: 100% !important;
-          max-width: none !important;
+          max-width: 100% !important;
           height: auto !important;
           min-height: 100vh !important;
           margin: 0 !important;
           padding: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
         }
         #body_wrapper,
         #content,
         #container {
           overflow: auto !important;
           -webkit-overflow-scrolling: touch;
+          flex: 1 1 auto !important;
+          display: flex !important;
+          flex-direction: column !important;
         }
         #popWrapLogo > *,
         #popWrap > *,
         .popWrap > * {
           margin: 0 auto !important;
           padding: 0 !important;
+          width: 100% !important;
         }
         #wrapper,
         .wrapper,
         #kg_layer,
         #body_wrapper {
           padding: 0 !important;
+          width: 100% !important;
         }
         #overlay_popup,
         #overlay_popups,
@@ -294,11 +302,23 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
         #popWrapLogo,
         .popWrap,
         #popWrap {
-          max-width: 720px !important;
+          max-width: 100% !important;
           margin: 0 auto !important;
           padding-left: 0 !important;
           padding-right: 0 !important;
           box-sizing: border-box !important;
+        }
+        #popWrapLogo .inner,
+        #popWrap .inner,
+        .popWrap .inner {
+          width: 100% !important;
+          max-width: 1200px !important;
+          margin: 0 auto !important;
+        }
+        #popWrapLogo *,
+        #popWrap *,
+        .popWrap * {
+          max-width: 100% !important;
         }
       `}</style>
 
