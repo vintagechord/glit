@@ -7,6 +7,11 @@ import {
   getInicisTimestamp,
 } from "./crypto";
 
+export const isInicisSuccessCode = (code?: string | number | null) => {
+  const normalized = code == null ? "" : String(code);
+  return normalized === "0000" || normalized === "00";
+};
+
 type StandardAuthParams = {
   authUrl: string;
   netCancelUrl?: string | null;
@@ -94,7 +99,9 @@ export async function requestStdPayApproval({
         })
       : null;
 
-    if (resultCode !== "0000") {
+    const success = isInicisSuccessCode(resultCode);
+
+    if (!success) {
       await doNetCancel();
       return {
         ok: false,

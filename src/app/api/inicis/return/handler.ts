@@ -12,6 +12,7 @@ import {
   markPaymentSuccess,
 } from "@/lib/payments/submission";
 import { getBaseUrl } from "@/lib/url";
+import { isInicisSuccessCode } from "@/lib/inicis/api";
 
 type ReturnStatus = "SUCCESS" | "FAIL" | "CANCEL" | "ERROR";
 
@@ -261,7 +262,7 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    if (resultCode && resultCode !== "0000") {
+    if (resultCode && !isInicisSuccessCode(resultCode)) {
       if (payment?.submission) {
         await markPaymentFailure(orderId, {
           result_code: resultCode,
@@ -304,6 +305,13 @@ export async function handleInicisReturn(req: NextRequest) {
       timestamp,
     });
 
+    console.info("[Inicis][STDPay][return]", {
+      step: "auth_call_start",
+      orderId,
+      timestamp,
+      hasNetCancelUrl: Boolean(netCancelUrl),
+    });
+
     const approval = await requestStdPayApproval({
       authUrl,
       netCancelUrl,
@@ -317,16 +325,28 @@ export async function handleInicisReturn(req: NextRequest) {
       authData?.resultCode ?? authData?.resultcode,
       "AUTH_FAIL",
     );
+    const authResultMsg =
+      authData?.resultMsg ??
+      authData?.resultmsg ??
+      (approval.ok ? "승인 완료" : "승인 실패");
 
-    if (!approval.ok || !authData || approval.secureSignatureMatches === false) {
+    console.info("[Inicis][STDPay][return]", {
+      step: "auth_call_done",
+      orderId,
+      authResultCode,
+      secureSignatureMatches: approval.secureSignatureMatches ?? null,
+    });
+
+    if (
+      !approval.ok ||
+      !authData ||
+      approval.secureSignatureMatches === false ||
+      !isInicisSuccessCode(authResultCode)
+    ) {
       const failMessage =
         approval.secureSignatureMatches === false
           ? "결제 서명 검증에 실패했습니다."
-          : String(
-              authData?.resultMsg ??
-                authData?.resultmsg ??
-                "승인 요청에 실패했습니다.",
-            );
+          : String(authResultMsg ?? "승인 요청에 실패했습니다.");
 
       if (payment?.submission) {
         await markPaymentFailure(orderId, {
@@ -414,11 +434,19 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
+    console.info("[Inicis][STDPay][return]", {
+      step: "signature_verify",
+      orderId,
+      tid: tid ? mask(tid) : null,
+      resultCode: toCode(authData.resultCode, "0000"),
+      totPrice,
+      secureSignatureMatches: approval.secureSignatureMatches ?? null,
+    });
+
     await markPaymentSuccess(orderId, {
       tid,
       result_code: toCode(authData.resultCode, "0000"),
-      result_message:
-        authData.resultMsg != null ? String(authData.resultMsg) : "결제 완료",
+      result_message: String(authResultMsg ?? "결제 완료"),
       raw_response: {
         returnParams: scrubParams(params),
         approval: authData,
@@ -442,10 +470,7 @@ export async function handleInicisReturn(req: NextRequest) {
       tid,
       amount: totPrice,
       resultCode: toCode(authData.resultCode, "0000"),
-      message:
-        authData.resultMsg != null
-          ? String(authData.resultMsg)
-          : "결제가 완료되었습니다.",
+      message: String(authResultMsg ?? "결제가 완료되었습니다."),
     });
   } catch (error) {
     console.error("[Inicis][STDPay][return][error]", error);

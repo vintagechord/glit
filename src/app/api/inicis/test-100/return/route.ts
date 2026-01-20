@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requestStdPayApproval } from "@/lib/inicis/api";
 import { getStdPayConfig } from "@/lib/inicis/config";
 import { getBaseUrl } from "@/lib/url";
+import { isInicisSuccessCode } from "@/lib/inicis/api";
 
 const postMessageResponse = (
   type: "SUCCESS" | "FAIL" | "CANCEL" | "ERROR",
@@ -65,6 +66,8 @@ async function handler(req: NextRequest) {
   const mid = params.mid ?? "";
   const timestamp = params.timestamp ?? params.tstamp ?? Date.now().toString();
   const isCancel = params.cancel === "1" || params.cancel === "true";
+  const resultCode = params.resultCode ?? params.resultcode ?? params.P_STATUS ?? "";
+  const resultMsg = params.resultMsg ?? params.resultmsg ?? params.P_RMESG1 ?? "";
 
   console.info("[Inicis][STDPay][test-1000][callback] incoming", {
     method: req.method,
@@ -75,6 +78,15 @@ async function handler(req: NextRequest) {
     mid: maskMid(mid),
     formKeys,
   });
+
+  if (resultCode && !isInicisSuccessCode(resultCode)) {
+    return postMessageResponse("FAIL", {
+      orderId,
+      resultCode,
+      resultMsg,
+      message: resultMsg || "이니시스 인증이 실패했습니다.",
+    });
+  }
 
   if (isCancel) {
     return postMessageResponse("CANCEL", {
@@ -114,7 +126,7 @@ async function handler(req: NextRequest) {
     timestamp: String(timestamp),
   });
 
-  if (!approval.ok) {
+  if (!approval.ok || !isInicisSuccessCode(approval.data?.resultCode ?? approval.data?.resultcode)) {
     const resultCode =
       approval.data?.resultCode ?? approval.data?.resultcode ?? "APPROVAL_FAIL";
     const resultMsg =
