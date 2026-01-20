@@ -101,6 +101,20 @@ export default function AdminPage() {
             회원 프로필과 연락처 정보를 조회하고 관리합니다.
           </p>
         </Link>
+        <Link
+          href="/admin/payments"
+          className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            카드 결제
+          </p>
+          <h2 className="mt-3 text-xl font-semibold text-foreground">
+            이니시스 승인 내역
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            승인 완료된 카드 결제 건을 조회합니다.
+          </p>
+        </Link>
       </div>
     </div>
   );
