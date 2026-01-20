@@ -8,14 +8,25 @@ type OpenPopupOptions = {
   guestToken?: string;
   orderId?: string;
   popupName?: string;
+  preferRedirectOnMobile?: boolean;
 };
+
+const isMobileUa = (ua: string) =>
+  /iphone|ipad|ipod|android|windows phone|mobile/i.test(ua);
 
 export const openInicisCardPopup = (options: OpenPopupOptions) => {
   if (typeof window === "undefined") {
     return { ok: false, error: "window is not available" };
   }
 
-  const { context, submissionId, guestToken, orderId, popupName = "INICIS_STD_PAY" } = options;
+  const {
+    context,
+    submissionId,
+    guestToken,
+    orderId,
+    popupName = "INICIS_STD_PAY",
+    preferRedirectOnMobile = true,
+  } = options;
 
   const params = new URLSearchParams({ mode: "card", context });
   if (submissionId) params.set("submissionId", submissionId);
@@ -23,6 +34,11 @@ export const openInicisCardPopup = (options: OpenPopupOptions) => {
   if (orderId) params.set("orderId", orderId);
 
   const url = `/pay/inicis/popup?${params.toString()}`;
+
+  if (preferRedirectOnMobile && isMobileUa(window.navigator.userAgent || "")) {
+    window.location.assign(url);
+    return { ok: true, popup: null, redirected: true };
+  }
 
   const availW = Math.max(window.screen.availWidth || 0, window.innerWidth || 0);
   const availH = Math.max(window.screen.availHeight || 0, window.innerHeight || 0);

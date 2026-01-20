@@ -36,10 +36,16 @@ function ReturnBridgeContent() {
 
   useEffect(() => {
     const message = { type: `INICIS:${status}`, payload };
+    const canPost = typeof window !== "undefined" && !!window.opener && window.opener !== window;
     try {
-      window.opener?.postMessage(message, window.location.origin);
+      if (canPost) {
+        window.opener?.postMessage(message, window.location.origin);
+      }
     } catch (error) {
       console.error("[Inicis][return-bridge] postMessage error", error);
+    }
+    if (!canPost) {
+      return;
     }
     const timer = window.setTimeout(() => {
       try {
@@ -73,6 +79,11 @@ function ReturnBridgeContent() {
         <p className="mt-2 text-sm text-slate-600">{detail}</p>
         <p className="mt-6 text-xs text-slate-500">
           창이 자동으로 닫히지 않으면 수동으로 닫아주세요.
+          {!payload.submissionId && !payload.orderId ? null : (
+            <span className="block mt-1">
+              주문번호: {payload.orderId ?? payload.submissionId}
+            </span>
+          )}
         </p>
       </div>
     </div>
