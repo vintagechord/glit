@@ -4,40 +4,18 @@ import { requestStdPayApproval, isInicisSuccessCode } from "@/lib/inicis/api";
 import { getStdPayConfig } from "@/lib/inicis/config";
 import { getBaseUrl } from "@/lib/url";
 
-const postMessageResponse = (
-  type: "SUCCESS" | "FAIL" | "CANCEL" | "ERROR",
-  payload: Record<string, unknown>,
-) => {
-  const safePayload = JSON.stringify({ type: `INICIS:${type}`, payload });
-  const html = `
-<!DOCTYPE html>
-<html lang="ko">
-<body>
-<p>결제 창을 닫아주세요.</p>
-<script>
-  (function() {
-    try {
-      if (window.opener) {
-        window.opener.postMessage(${safePayload}, "*");
-      }
-    } catch (e) {
-      console.error("INICIS postMessage error", e);
-    }
-    window.close();
-  })();
-</script>
-</body>
-</html>
-`;
-  return new NextResponse(html, {
-    status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
-  });
-};
-
 const maskMid = (mid: string) => {
   if (!mid) return "";
   return mid.length <= 4 ? `${mid.slice(0, 2)}**` : `${mid.slice(0, 2)}***${mid.slice(-2)}`;
+};
+
+const buildBridgeRedirect = (baseUrl: string, payload: Record<string, string | number | null | undefined>) => {
+  const url = new URL("/pay/inicis/return", baseUrl);
+  Object.entries(payload).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    url.searchParams.set(k, String(v));
+  });
+  return NextResponse.redirect(url.toString(), 303);
 };
 
 export const runtime = "nodejs";
@@ -92,30 +70,33 @@ async function handler(req: NextRequest) {
   });
 
   if (isCancel) {
-    return postMessageResponse("CANCEL", {
+    return buildBridgeRedirect(baseUrl, {
+      status: "CANCEL",
       orderId,
       message: "사용자가 결제를 취소했습니다.",
+      resultCode: resultCode || "CANCEL",
+      tid: tidRaw || null,
     });
   }
 
   if (resultCode && !isInicisSuccessCode(resultCode)) {
-    return postMessageResponse("FAIL", {
+    return buildBridgeRedirect(baseUrl, {
+      status: "FAILED",
       orderId,
       resultCode,
       resultMsg,
       message: resultMsg || "이니시스 인증이 실패했습니다.",
+      tid: tidRaw || null,
     });
   }
 
   if (!authToken || !authUrl || !orderId) {
-    return postMessageResponse("FAIL", {
+    return buildBridgeRedirect(baseUrl, {
+      status: "FAILED",
       orderId,
       message: "인증 토큰을 받지 못했습니다.",
-      missing: [
-        !authToken ? "authToken" : null,
-        !authUrl ? "authUrl/checkAckUrl" : null,
-        !orderId ? "oid" : null,
-      ].filter(Boolean),
+      resultCode: resultCode || "AUTH_MISSING",
+      tid: tidRaw || null,
     });
   }
 
@@ -125,9 +106,12 @@ async function handler(req: NextRequest) {
       got: maskMid(mid),
       expected: maskMid(config.mid),
     });
-    return postMessageResponse("FAIL", {
+    return buildBridgeRedirect(baseUrl, {
+      status: "FAILED",
       orderId,
       message: "MID 불일치",
+      resultCode: "MID_MISMATCH",
+      tid: tidRaw || null,
     });
   }
 
@@ -180,19 +164,32 @@ async function handler(req: NextRequest) {
       reason: "approval_failed",
       hasNetCancelUrl: Boolean(netCancelUrl),
     });
-    return postMessageResponse("FAIL", {
+    return buildBridgeRedirect(baseUrl, {
+      status: "FAILED",
       orderId,
       resultCode: approvalResultCode,
       resultMsg: approvalResultMsg ?? "승인에 실패했습니다.",
-      secureSignatureMatches: approval.secureSignatureMatches ?? null,
+      secureSignatureMatches:
+        approval.secureSignatureMatches == null
+          ? null
+          : approval.secureSignatureMatches
+            ? "true"
+            : "false",
+      tid: approvalTid ?? tidRaw ?? null,
     });
   }
 
-  return postMessageResponse("SUCCESS", {
+  return buildBridgeRedirect(baseUrl, {
+    status: "SUCCESS",
     orderId,
     resultCode: approvalResultCode,
     resultMsg: approvalResultMsg ?? "승인되었습니다.",
-    secureSignatureMatches: approval.secureSignatureMatches ?? null,
+    secureSignatureMatches:
+      approval.secureSignatureMatches == null
+        ? null
+        : approval.secureSignatureMatches
+          ? "true"
+          : "false",
     tid: approvalTid ?? null,
     amount: approval.data?.TotPrice ?? totPrice ?? null,
   });
