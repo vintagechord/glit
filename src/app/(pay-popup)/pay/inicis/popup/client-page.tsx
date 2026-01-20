@@ -234,6 +234,13 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
           overflow: auto !important;
           background: #fff !important;
         }
+        #__next,
+        body > div:first-child {
+          width: 100% !important;
+          height: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
         *,
         *::before,
         *::after {

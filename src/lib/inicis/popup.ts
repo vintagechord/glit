@@ -26,8 +26,8 @@ export const openInicisCardPopup = (options: OpenPopupOptions) => {
 
   const availW = Math.max(window.screen.availWidth || 0, window.innerWidth || 0);
   const availH = Math.max(window.screen.availHeight || 0, window.innerHeight || 0);
-  const width = Math.round(Math.min(Math.max(availW * 0.92, 1100), 1400));
-  const height = Math.round(Math.min(Math.max(availH * 0.92, 760), 1000));
+  const width = Math.round(Math.min(Math.max(availW * 0.92, 1100), 1200));
+  const height = Math.round(Math.min(Math.max(availH * 0.92, 760), 900));
   const screenX = typeof window.screenX === "number" ? window.screenX : window.screenLeft ?? 0;
   const screenY = typeof window.screenY === "number" ? window.screenY : window.screenTop ?? 0;
   const left = screenX + Math.max(0, (window.outerWidth - width) / 2);
