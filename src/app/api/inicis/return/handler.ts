@@ -131,7 +131,13 @@ export async function handleInicisReturn(req: NextRequest) {
     const mid = params.mid ?? "";
     const authToken =
       params.authToken ?? params.auth_token ?? params.authtoken ?? "";
-    const authUrl = params.authUrl ?? params.auth_url ?? params.authurl ?? "";
+    const authUrl =
+      params.checkAckUrl ??
+      params.checkAckURL ??
+      params.authUrl ??
+      params.auth_url ??
+      params.authurl ??
+      "";
     const netCancelUrl =
       params.netCancelUrl ??
       params.netCancelURL ??
@@ -289,6 +295,9 @@ export async function handleInicisReturn(req: NextRequest) {
           })()
         : null,
       hasTstamp: Boolean(params.tstamp ?? params.timestamp),
+      tstamp: params.tstamp ?? params.timestamp ?? null,
+      moid: orderId,
+      totPrice: amountFromReturn || null,
       timestamp,
       hasNetCancelUrl: Boolean(netCancelUrl),
     });
@@ -323,7 +332,7 @@ export async function handleInicisReturn(req: NextRequest) {
     if (
       !approval.ok ||
       !authData ||
-      approval.secureSignatureMatches === false ||
+      approval.secureSignatureMatches !== true ||
       !isInicisSuccessCode(authResultCode)
     ) {
       const failMessage =
@@ -341,6 +350,19 @@ export async function handleInicisReturn(req: NextRequest) {
           },
         });
       }
+
+      console.info("[Inicis][STDPay][return]", {
+        step: "final",
+        orderId,
+        status: "FAILED",
+        reason:
+          approval.secureSignatureMatches !== true
+            ? "sig_mismatch"
+            : !isInicisSuccessCode(authResultCode)
+              ? "auth_fail"
+              : "auth_unknown",
+        resultCode: authResultCode,
+      });
 
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
@@ -387,6 +409,12 @@ export async function handleInicisReturn(req: NextRequest) {
     });
 
     if (!payment?.submission || paymentError) {
+      console.info("[Inicis][STDPay][return]", {
+        step: "final",
+        orderId,
+        status: "FAILED",
+        reason: "payment_not_found",
+      });
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
         orderId,
@@ -408,6 +436,14 @@ export async function handleInicisReturn(req: NextRequest) {
           returnParams: scrubParams(params),
           approval: authData,
         },
+      });
+      console.info("[Inicis][STDPay][return]", {
+        step: "final",
+        orderId,
+        status: "FAILED",
+        reason: "price_mismatch",
+        totPrice,
+        expected: paymentAmount,
       });
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
@@ -444,11 +480,10 @@ export async function handleInicisReturn(req: NextRequest) {
     });
 
     console.info("[Inicis][STDPay][return]", {
-      step: "verify_signature",
+      step: "final",
       orderId,
-      tid: tid ? mask(tid) : null,
+      status: "APPROVED",
       resultCode: toCode(authData.resultCode, "0000"),
-      totPrice,
       secureSignatureMatches: approval.secureSignatureMatches ?? null,
     });
 
