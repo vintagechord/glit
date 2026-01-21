@@ -848,6 +848,7 @@ export function AlbumWizard({
         correctedText?: string;
         corrected?: string;
         changes?: Array<{ from?: unknown; to?: unknown; index?: unknown }>;
+        receivedLength?: number;
         suggestions?: Array<{
           start?: unknown;
           end?: unknown;
