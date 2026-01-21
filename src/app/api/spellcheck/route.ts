@@ -1,315 +1,101 @@
 import { NextResponse } from "next/server";
-import { KO_SPELLCHECK_RULES, Rule } from "@/lib/spellcheck/rules_ko";
 
-type Suggestion = {
-  start: number;
-  end: number;
-  before: string;
-  after: string;
-  reason: string;
-  confidence: number;
-  groupId?: string;
-  ruleIndex?: number;
+const MAX_TEXT_LENGTH = 20000;
+const DEFAULT_TIMEOUT_MS = 12_000;
+
+type SpellcheckPayload = {
+  text?: unknown;
 };
 
-function applyReplacementOnce(before: string, rule: Rule): string | null {
-  const flags = rule.pattern.flags.replace("g", "");
-  const once = new RegExp(rule.pattern.source, flags);
-  const m = once.exec(before);
-  if (!m) return null;
-  return before.replace(once, rule.replace);
-}
+type SpellcheckServiceResponse = {
+  ok?: boolean;
+  original?: string;
+  corrected?: string;
+  diffCount?: number;
+  chunks?: number;
+  warnings?: string[];
+  suggestions?: Array<{
+    start?: number;
+    end?: number;
+    before?: string;
+    after?: string;
+    reason?: string;
+  }>;
+};
 
-function collectMatches(text: string, rule: Rule, ruleIndex: number, baseOffset = 0): Suggestion[] {
-  const out: Suggestion[] = [];
-  const pattern = rule.pattern.flags.includes("g")
-    ? rule.pattern
-    : new RegExp(rule.pattern.source, rule.pattern.flags + "g");
-
-  let m: RegExpExecArray | null;
-  while ((m = pattern.exec(text)) !== null) {
-    const start = m.index;
-    const before = m[0];
-    const after = applyReplacementOnce(before, rule);
-    if (!after || after === before) continue;
-
-    out.push({
-      start: start + baseOffset,
-      end: start + before.length + baseOffset,
-      before,
-      after,
-      reason: rule.reason,
-      confidence: rule.confidence ?? 0.8,
-      ruleIndex,
-    });
-
-    if (pattern.lastIndex === start) pattern.lastIndex = start + 1;
-  }
-  return out;
-}
-
-const SHORT_BEFORE_ALLOW = new Set(["됬", "됫", "됐", "됏", "되야", "그낭"]);
-
-function dedupeAndResolveOverlaps(items: Suggestion[]): {
-  accepted: Suggestion[];
-  overlapRemoved: number;
-  shortRemoved: number;
-  rangeDeduped: number;
-} {
-  const bestByRange = new Map<string, Suggestion>();
-  for (const s of items) {
-    if (s.start < 0 || s.end > Number.MAX_SAFE_INTEGER || s.end <= s.start) continue;
-    const key = `${s.start}:${s.end}`;
-    const current = bestByRange.get(key);
-    if (!current || s.confidence > current.confidence) {
-      bestByRange.set(key, s);
-      continue;
-    }
-    if (current && s.confidence === current.confidence) {
-      const currentDelta = Math.abs(current.after.length - current.before.length);
-      const nextDelta = Math.abs(s.after.length - s.before.length);
-      if (nextDelta < currentDelta) {
-        bestByRange.set(key, s);
-      }
-    }
-  }
-
-  const seen = new Set<string>();
-  const unique: Suggestion[] = [];
-  for (const s of bestByRange.values()) {
-    const key = `${s.start}:${s.end}:${s.after}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(s);
-  }
-
-  unique.sort((a, b) => {
-    const c = (b.confidence ?? 0) - (a.confidence ?? 0);
-    if (c !== 0) return c;
-    const la = a.end - a.start;
-    const lb = b.end - b.start;
-    if (lb !== la) return lb - la;
-    return a.start - b.start;
-  });
-
-  const accepted: Suggestion[] = [];
-  let overlapRemoved = 0;
-  let shortRemoved = 0;
-  let rangeDeduped = items.length - unique.length;
-  let groupSeq = 0;
-
-  const overlaps = (a: Suggestion, b: Suggestion) => a.start < b.end && b.start < a.end;
-  const isSpacing = (s: Suggestion) => s.reason.includes("띄어쓰기");
-
-  for (const s of unique) {
-    if (s.before.length <= 2 && !SHORT_BEFORE_ALLOW.has(s.before)) {
-      shortRemoved++;
-      continue;
-    }
-
-    let skip = false;
-    const toRemove: number[] = [];
-    let groupId: string | undefined;
-
-    for (let i = 0; i < accepted.length; i++) {
-      const a = accepted[i];
-      if (!overlaps(a, s)) continue;
-
-      const lenA = a.end - a.start;
-      const lenS = s.end - s.start;
-      const aContains = a.start <= s.start && a.end >= s.end;
-      const sContains = s.start <= a.start && s.end >= a.end;
-      const spacingA = isSpacing(a);
-      const spacingS = isSpacing(s);
-
-      if (sContains && lenS > lenA) {
-        if (s.confidence - a.confidence >= 0.15) {
-          toRemove.push(i);
-          continue;
-        }
-        if (!groupId && a.groupId) groupId = a.groupId;
-        if (!groupId && !a.groupId) {
-          groupSeq += 1;
-          groupId = `g${groupSeq}`;
-          a.groupId = groupId;
-        }
-        continue;
-      }
-
-      if (aContains && lenA > lenS) {
-        if (a.confidence - s.confidence >= 0.15) {
-          skip = true;
-          break;
-        }
-        if (!groupId && a.groupId) groupId = a.groupId;
-        if (!groupId && !a.groupId) {
-          groupSeq += 1;
-          groupId = `g${groupSeq}`;
-          a.groupId = groupId;
-        }
-        continue;
-      }
-
-      if (spacingA !== spacingS) {
-        const diff = s.confidence - a.confidence;
-        if (Math.abs(diff) >= 0.15) {
-          if (diff > 0) {
-            toRemove.push(i);
-            continue;
-          } else {
-            skip = true;
-            break;
-          }
-        } else {
-          if (!groupId && a.groupId) groupId = a.groupId;
-          if (!groupId && !a.groupId) {
-            groupSeq += 1;
-            groupId = `g${groupSeq}`;
-            a.groupId = groupId;
-          }
-          continue;
-        }
-      }
-
-      const diffConf = Math.abs(s.confidence - a.confidence);
-      if (diffConf < 0.2) {
-        if (!groupId && a.groupId) groupId = a.groupId;
-        if (!groupId && !a.groupId) {
-          groupSeq += 1;
-          groupId = `g${groupSeq}`;
-          a.groupId = groupId;
-        }
-        continue;
-      }
-
-      if (s.confidence > a.confidence + 0.01 || lenS > lenA) {
-        toRemove.push(i);
-      } else {
-        skip = true;
-        break;
-      }
-    }
-
-    if (skip) {
-      overlapRemoved++;
-      continue;
-    }
-
-    if (groupId) s.groupId = groupId;
-    if (toRemove.length) {
-      toRemove.sort((a, b) => b - a);
-      overlapRemoved += toRemove.length;
-      for (const idx of toRemove) accepted.splice(idx, 1);
-    }
-    accepted.push(s);
-  }
-
-  accepted.sort((a, b) => a.start - b.start);
-  return { accepted, overlapRemoved, shortRemoved, rangeDeduped };
-}
+const buildFallback = (text: string, warnings: string[], status = 502) =>
+  NextResponse.json(
+    {
+      ok: false,
+      original: text,
+      corrected: text,
+      diffCount: 0,
+      chunks: 1,
+      warnings,
+      suggestions: [],
+      error: { message: warnings[0] ?? "proxy_error" },
+    },
+    { status },
+  );
 
 export async function POST(req: Request) {
+  let payload: SpellcheckPayload;
   try {
-    const url = new URL(req.url);
-    const debugFlag = url.searchParams.get("debug") === "true";
-    const body = await req.json().catch(() => null);
-    const text = typeof body?.text === "string" ? body.text : "";
-    const debug = debugFlag || body?.debug === true;
+    payload = await req.json();
+  } catch {
+    return NextResponse.json({ error: "INVALID_JSON" }, { status: 400 });
+  }
 
-    if (!text) {
-      return NextResponse.json({ error: "TEXT_REQUIRED" }, { status: 400 });
-    }
+  const text = typeof payload?.text === "string" ? payload.text : "";
+  if (!text.trim()) {
+    return NextResponse.json({ error: "TEXT_REQUIRED" }, { status: 400 });
+  }
 
-    const trimmed = text.trim();
-    if (!trimmed) {
-      return NextResponse.json({ error: "EMPTY_TEXT" }, { status: 400 });
-    }
+  if (text.length > MAX_TEXT_LENGTH) {
+    return buildFallback(text.slice(0, MAX_TEXT_LENGTH), ["payload_too_large"], 413);
+  }
 
-    if (text.length > 10000) {
-      return NextResponse.json({ error: "TEXT_TOO_LARGE", receivedLength: text.length }, { status: 413 });
-    }
+  const serviceUrl = process.env.SPELLCHECK_SERVICE_URL;
+  if (!serviceUrl) {
+    return buildFallback(text, ["service_unconfigured"], 500);
+  }
 
-    const ruleMatchCount: Array<{ ruleIndex: number; count: number; reason: string }> = [];
-    const collectForText = (rawText: string, offset = 0) => {
-      const matches: Suggestion[] = [];
-      for (let idx = 0; idx < KO_SPELLCHECK_RULES.length; idx++) {
-        const rule = KO_SPELLCHECK_RULES[idx];
-        const found = collectMatches(rawText, rule, idx, offset);
-        if (found.length) {
-          ruleMatchCount[idx] = {
-            ruleIndex: idx,
-            count: (ruleMatchCount[idx]?.count ?? 0) + found.length,
-            reason: rule.reason,
-          };
-        }
-        matches.push(...found);
-        if (matches.length >= 800) break;
-      }
-      return matches;
+  const endpoint = serviceUrl.endsWith("/spellcheck")
+    ? serviceUrl
+    : serviceUrl.endsWith("/")
+      ? `${serviceUrl}spellcheck`
+      : `${serviceUrl}/spellcheck`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
     };
-
-    let all = collectForText(text, 0);
-    const dedupedPrimary = dedupeAndResolveOverlaps(all);
-    let suggestions = dedupedPrimary.accepted;
-
-    if (suggestions.length < 5) {
-      const sentenceRegex = /[^.!?\n]+[.!?\n]?/g;
-      let m: RegExpExecArray | null;
-      while ((m = sentenceRegex.exec(text)) !== null) {
-        const span = m[0];
-        const start = m.index;
-        if (span.length > 2000) continue;
-        const subs = collectForText(span, start);
-        all = all.concat(subs);
-        if (all.length >= 800) break;
-      }
-      const dedupedSecondary = dedupeAndResolveOverlaps(all);
-      suggestions = dedupedSecondary.accepted;
-      dedupedPrimary.overlapRemoved += dedupedSecondary.overlapRemoved;
-      dedupedPrimary.shortRemoved += dedupedSecondary.shortRemoved;
-      dedupedPrimary.rangeDeduped += dedupedSecondary.rangeDeduped;
+    const sharedSecret = process.env.SPELLCHECK_SHARED_SECRET;
+    if (sharedSecret) {
+      headers["x-spellcheck-secret"] = sharedSecret;
     }
 
-    suggestions = suggestions.slice(0, 200);
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ text }),
+      signal: controller.signal,
+    });
 
-    const response: Record<string, any> = {
-      provider: "rules",
-      original: text,
-      receivedLength: text.length,
-      suggestionCount: suggestions.length,
-      suggestions,
-    };
+    const servicePayload: SpellcheckServiceResponse | null = await response.json().catch(() => null);
 
-    if (debug) {
-      const sortedRuleStats = ruleMatchCount
-        .filter(Boolean)
-        .sort((a, b) => (b?.count ?? 0) - (a?.count ?? 0))
-        .slice(0, 20);
-      response.debug = {
-        allMatches: all.length,
-        suggestions: suggestions.length,
-        overlapRemoved: dedupedPrimary.overlapRemoved,
-        shortRemoved: dedupedPrimary.shortRemoved,
-        rangeDeduped: dedupedPrimary.rangeDeduped,
-        topRules: sortedRuleStats,
-      };
+    if (!response.ok || !servicePayload) {
+      return buildFallback(text, ["proxy_error"], response.status || 502);
     }
 
-    return NextResponse.json(response);
-  } catch (e: any) {
-    return NextResponse.json(
-      {
-        provider: "rules",
-        original: "",
-        receivedLength: 0,
-        suggestionCount: 0,
-        suggestions: [],
-        error: "SPELLCHECK_INTERNAL_ERROR",
-        detail: { message: e?.message ?? String(e) },
-      },
-      { status: 200 },
-    );
+    return NextResponse.json(servicePayload, { status: 200 });
+  } catch (error: any) {
+    const isAbort = error?.name === "AbortError";
+    return buildFallback(text, [isAbort ? "proxy_timeout" : "proxy_error"], isAbort ? 504 : 502);
+  } finally {
+    clearTimeout(timeout);
   }
 }
-
-export default { POST };

@@ -34,6 +34,9 @@ NEXT_PUBLIC_PRE_REVIEW_PRICE=0
 NEXT_PUBLIC_UPLOAD_MAX_MB=1024
 NEXT_PUBLIC_AUDIO_UPLOAD_MAX_MB=1024
 NEXT_PUBLIC_VIDEO_UPLOAD_MAX_MB=4096
+# Spellcheck proxy (Python microservice)
+SPELLCHECK_SERVICE_URL=https://glit-spellcheck.onrender.com
+SPELLCHECK_SHARED_SECRET=optional-shared-secret
 
 # Optional (welcome email)
 RESEND_API_KEY=your_resend_key
