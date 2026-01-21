@@ -75,7 +75,10 @@ export async function HistoryPageView(config?: ShellConfig) {
       .from("submissions")
       .select(select)
       .order("updated_at", { ascending: false })
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .or(
+        "and(payment_method.eq.CARD,payment_status.eq.PAID),and(payment_method.eq.BANK,payment_status.in.(PAYMENT_PENDING,PAID))",
+      );
 
   const { data: initialData, error: submissionError } = await runSelect(fullSelect);
 

@@ -45,6 +45,8 @@ export async function StatusPageView(config?: ShellConfig) {
     }));
 
   const finalizedStatuses = ["RESULT_READY", "COMPLETED"];
+  const paymentFilter =
+    "and(payment_method.eq.CARD,payment_status.eq.PAID),and(payment_method.eq.BANK,payment_status.in.(PAYMENT_PENDING,PAID))";
   const { data: albumSubmissionsRaw } = await supabase
     .from("submissions")
     .select(
@@ -52,6 +54,7 @@ export async function StatusPageView(config?: ShellConfig) {
     )
     .eq("user_id", user.id)
     .eq("type", "ALBUM")
+    .or(paymentFilter)
     .not("status", "in", `(${finalizedStatuses.join(",")})`)
     .order("updated_at", { ascending: false })
     .limit(5);
@@ -61,6 +64,7 @@ export async function StatusPageView(config?: ShellConfig) {
     .select("id, title, artist_name, status, updated_at, payment_status, type")
     .eq("user_id", user.id)
     .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
+    .or(paymentFilter)
     .not("status", "in", `(${finalizedStatuses.join(",")})`)
     .order("updated_at", { ascending: false })
     .limit(5);
