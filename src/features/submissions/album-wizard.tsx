@@ -820,6 +820,10 @@ export function AlbumWizard({
       },
     }));
     try {
+      console.info("[Spellcheck][request][start]", {
+        length: lyrics.length,
+        trackIndex: activeTrackIndex,
+      });
       const response = await fetch("/api/spellcheck", {
         method: "POST",
         headers: {
@@ -828,6 +832,11 @@ export function AlbumWizard({
         body: JSON.stringify({ text: lyrics }),
       });
       const payload = await response.json().catch(() => null);
+      console.info("[Spellcheck][request][done]", {
+        status: response.status,
+        ok: response.ok,
+        keys: payload ? Object.keys(payload) : [],
+      });
       type SpellcheckResponse = {
         correctedText?: string;
         corrected?: string;
@@ -957,7 +966,7 @@ export function AlbumWizard({
         }
       });
     } catch (error) {
-      console.error(error);
+      console.error("[Spellcheck][request][error]", error);
       setSpellcheckNoticeMap((prev) => ({
         ...prev,
         [activeTrackIndex]: {

@@ -42,6 +42,7 @@ const buildSuggestionsFromChanges = (
     end: change.index + change.from.length,
     before: change.from,
     after: change.to,
+    reason: "rule_basic",
   }));
 
 const loadCustomTerms = async (): Promise<SpellcheckTerm[]> => {
