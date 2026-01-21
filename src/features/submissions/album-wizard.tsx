@@ -199,11 +199,10 @@ const broadcastRequirementMessage =
   "타이틀곡 지정해 주시고 4곡 이상의 앨범일 경우 원음방송 심의를 위해 3곡 지정 해주세요. (원음방송은 앨범당 3곡만 심의가 가능합니다.)";
 
 const oneClickPriceMap: Record<number, number> = {
-  7: 1000,
-  10: 1000,
-  11: 1000,
-  13: 1000,
-  15: 1000,
+  7: 100000,
+  10: 130000,
+  13: 150000,
+  15: 170000,
 };
 
 type AlbumDraft = {
