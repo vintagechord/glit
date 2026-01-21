@@ -1,72 +1,139 @@
 import { NextResponse } from "next/server";
+import { KO_SPELLCHECK_RULES, Rule } from "@/lib/spellcheck/rules_ko";
 
-import { applyRuleSuggestions } from "@/lib/spellcheck-rules";
-
-export const runtime = "nodejs";
-
-type IncomingBody = { text?: string };
-
-type OutSuggestion = {
+type Suggestion = {
   start: number;
   end: number;
   before: string;
   after: string;
   reason: string;
-  confidence?: number;
+  confidence: number;
 };
 
-const MAX_LEN = 10_000;
-
-function jsonError(status: number, error: string, detail?: unknown) {
-  return NextResponse.json({ error, detail }, { status });
+function escapeRegExp(str: string) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function dedupeSuggestions(list: OutSuggestion[]): OutSuggestion[] {
-  const sorted = [...list].sort((a, b) => {
-    if (a.start !== b.start) return a.start - b.start;
-    const ca = a.confidence ?? 0;
-    const cb = b.confidence ?? 0;
-    if (ca !== cb) return cb - ca;
-    const lenA = a.end - a.start;
-    const lenB = b.end - b.start;
-    if (lenA !== lenB) return lenB - lenA;
-    return a.reason.localeCompare(b.reason);
+function applyReplacementOnce(before: string, rule: Rule): string | null {
+  const flags = rule.pattern.flags.replace("g", "");
+  const once = new RegExp(rule.pattern.source, flags);
+  const m = once.exec(before);
+  if (!m) return null;
+  return before.replace(once, rule.replace);
+}
+
+function collectMatches(text: string, rule: Rule): Suggestion[] {
+  const out: Suggestion[] = [];
+  const pattern = rule.pattern.flags.includes("g")
+    ? rule.pattern
+    : new RegExp(rule.pattern.source, rule.pattern.flags + "g");
+
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(text)) !== null) {
+    const start = m.index;
+    const before = m[0];
+    const after = applyReplacementOnce(before, rule);
+    if (!after || after === before) continue;
+
+    out.push({
+      start,
+      end: start + before.length,
+      before,
+      after,
+      reason: rule.reason,
+      confidence: rule.confidence ?? 0.8,
+    });
+
+    if (pattern.lastIndex === start) pattern.lastIndex = start + 1;
+  }
+  return out;
+}
+
+function dedupeAndResolveOverlaps(items: Suggestion[]): Suggestion[] {
+  const seen = new Set<string>();
+  const unique: Suggestion[] = [];
+  for (const s of items) {
+    const key = `${s.start}:${s.end}:${s.after}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(s);
+  }
+
+  unique.sort((a, b) => {
+    const c = (b.confidence ?? 0) - (a.confidence ?? 0);
+    if (c !== 0) return c;
+    const la = a.end - a.start;
+    const lb = b.end - b.start;
+    if (lb !== la) return lb - la;
+    return a.start - b.start;
   });
 
-  const result: OutSuggestion[] = [];
-  for (const s of sorted) {
-    const overlap = result.some(
-      (r) => Math.max(r.start, s.start) < Math.min(r.end, s.end),
-    );
-    if (!overlap) result.push(s);
+  const accepted: Suggestion[] = [];
+  const occupied: Array<[number, number]> = [];
+
+  const overlaps = (aStart: number, aEnd: number) => {
+    for (const [s, e] of occupied) {
+      if (aStart < e && aEnd > s) return true;
+    }
+    return false;
+  };
+
+  for (const s of unique) {
+    if (s.start < 0 || s.end > Number.MAX_SAFE_INTEGER || s.end <= s.start) continue;
+    if (overlaps(s.start, s.end)) continue;
+    accepted.push(s);
+    occupied.push([s.start, s.end]);
   }
-  return result;
+
+  accepted.sort((a, b) => a.start - b.start);
+  return accepted;
 }
 
 export async function POST(req: Request) {
-  let body: IncomingBody;
   try {
-    body = (await req.json()) as IncomingBody;
-  } catch {
-    return jsonError(400, "INVALID_JSON");
-  }
+    const body = await req.json().catch(() => null);
+    const text = typeof body?.text === "string" ? body.text : "";
 
-  const text = body.text;
-  if (typeof text !== "string") return jsonError(400, "TEXT_REQUIRED");
-  if (text.trim().length === 0) return jsonError(400, "EMPTY_TEXT");
-  if (text.length > MAX_LEN) return jsonError(413, "TEXT_TOO_LARGE", { max: MAX_LEN });
+    if (!text) {
+      return NextResponse.json({ error: "TEXT_REQUIRED" }, { status: 400 });
+    }
 
-  const rawSuggestions = applyRuleSuggestions(text);
-  const suggestions = dedupeSuggestions(rawSuggestions);
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return NextResponse.json({ error: "EMPTY_TEXT" }, { status: 400 });
+    }
 
-  return NextResponse.json(
-    {
-      original: text,
-      correctedText: text,
-      receivedLength: text.length,
+    if (text.length > 10000) {
+      return NextResponse.json({ error: "TEXT_TOO_LARGE", receivedLength: text.length }, { status: 413 });
+    }
+
+    const all: Suggestion[] = [];
+    for (const rule of KO_SPELLCHECK_RULES) {
+      all.push(...collectMatches(text, rule));
+      if (all.length > 500) break;
+    }
+
+    const suggestions = dedupeAndResolveOverlaps(all).slice(0, 200);
+
+    return NextResponse.json({
       provider: "rules",
+      original: text,
+      receivedLength: text.length,
+      suggestionCount: suggestions.length,
       suggestions,
-    },
-    { status: 200 },
-  );
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      {
+        provider: "rules",
+        original: "",
+        receivedLength: 0,
+        suggestionCount: 0,
+        suggestions: [],
+        error: "SPELLCHECK_INTERNAL_ERROR",
+        detail: { message: e?.message ?? String(e) },
+      },
+      { status: 200 },
+    );
+  }
 }
