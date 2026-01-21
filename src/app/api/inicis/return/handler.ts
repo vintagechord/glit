@@ -79,6 +79,7 @@ const buildBridgeRedirect = (baseUrl: string, payload: BridgePayload) => {
   return NextResponse.redirect(url.toString(), 303);
 };
 
+// Parses STDPay callback payloads (form POST or query) for downstream approval handling.
 const parseParams = async (req: NextRequest): Promise<ParsedReturn> => {
   const baseUrl = getBaseUrl(req);
   const contentType = req.headers.get("content-type") ?? "";
@@ -132,13 +133,14 @@ export async function handleInicisReturn(req: NextRequest) {
     const mid = params.mid ?? "";
     const authToken =
       params.authToken ?? params.auth_token ?? params.authtoken ?? "";
-    const authUrl =
-      params.checkAckUrl ??
-      params.checkAckURL ??
-      params.authUrl ??
-      params.auth_url ??
-      params.authurl ??
+    const authUrlFromReturn =
+      params.authUrl ?? params.auth_url ?? params.authurl ?? "";
+    const checkAckUrl = params.checkAckUrl ?? params.checkAckURL ?? "";
+    const approvalUrl =
+      authUrlFromReturn ||
+      checkAckUrl ||
       "";
+    // FIX: use authUrl instead of checkAckUrl for approval (2026-01-21)
     const netCancelUrl =
       params.netCancelUrl ??
       params.netCancelURL ??
@@ -160,9 +162,15 @@ export async function handleInicisReturn(req: NextRequest) {
     const amountFromReturn = Number(
       params.price ?? params.TotPrice ?? params.P_AMT ?? 0,
     );
+    const orderTimestampFromId = (() => {
+      const parts = orderId.split("-");
+      if (parts.length >= 3 && /^\d+$/.test(parts[1])) return parts[1];
+      return null;
+    })();
     const timestamp = String(
-      params.tstamp ?? params.timestamp ?? getInicisTimestamp(),
+      params.tstamp ?? params.timestamp ?? orderTimestampFromId ?? getInicisTimestamp(),
     );
+    // FIX: reuse orderId timestamp for approval signature (2026-01-21)
 
     const pick = (k: string) => (typeof params[k] === "string" ? String(params[k]) : "");
     const mask = (v: string | null | undefined, head = 4, tail = 2) => {
@@ -183,6 +191,17 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
+    const approvalHost = approvalUrl
+      ? (() => {
+          try {
+            const u = new URL(approvalUrl);
+            return `${u.host}${u.pathname}`;
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+
     console.info("[INICIS][callback_received]", {
       env: envSuffix,
       method,
@@ -190,7 +209,9 @@ export async function handleInicisReturn(req: NextRequest) {
       orderId,
       resultCode,
       hasAuthToken: Boolean(authToken),
-      hasAuthUrl: Boolean(authUrl),
+      hasAuthUrl: Boolean(authUrlFromReturn),
+      hasCheckAckUrl: Boolean(checkAckUrl),
+      hasApprovalUrl: Boolean(approvalUrl),
       netCancelUrl: Boolean(netCancelUrl),
       tid: tidFromReturn ? mask(tidFromReturn) : null,
       mid: mid ? mask(mid) : null,
@@ -202,16 +223,7 @@ export async function handleInicisReturn(req: NextRequest) {
       signKeyLen: config.signKey?.length ?? 0,
       signKeyTrimmedLen: config.signKey?.trim().length ?? 0,
       mKeyPrefix: mKey.slice(0, 6),
-      authHost: authUrl
-        ? (() => {
-            try {
-              const u = new URL(authUrl);
-              return `${u.host}${u.pathname}`;
-            } catch {
-              return null;
-            }
-          })()
-        : null,
+      approvalHost,
     });
 
     const { payment, error: paymentError } = orderId
@@ -289,7 +301,16 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    if (!authToken || !authUrl) {
+    if (!authToken || !approvalUrl) {
+      if (!approvalUrl) {
+        console.error("[INICIS][error] missing approvalUrl", {
+          orderId,
+          hasAuthToken: Boolean(authToken),
+          hasAuthUrl: Boolean(authUrlFromReturn),
+          hasCheckAckUrl: Boolean(checkAckUrl),
+          parsedKeys: keys,
+        });
+      }
       if (payment?.submission) {
         await markPaymentFailure(orderId, {
           result_code: resultCode || "AUTH_MISSING",
@@ -310,16 +331,7 @@ export async function handleInicisReturn(req: NextRequest) {
     console.info("[INICIS][auth_call_start]", {
       env: envSuffix,
       orderId,
-      authHost: authUrl
-        ? (() => {
-            try {
-              const u = new URL(authUrl);
-              return `${u.host}${u.pathname}`;
-            } catch {
-              return null;
-            }
-          })()
-        : null,
+      approvalHost,
       hasTstamp: Boolean(params.tstamp ?? params.timestamp),
       tstamp: params.tstamp ?? params.timestamp ?? null,
       moid: orderId,
@@ -332,7 +344,7 @@ export async function handleInicisReturn(req: NextRequest) {
     });
 
     const approval = await requestStdPayApproval({
-      authUrl,
+      authUrl: approvalUrl,
       netCancelUrl,
       authToken,
       timestamp,
@@ -369,6 +381,7 @@ export async function handleInicisReturn(req: NextRequest) {
           "")?.length ?? 0,
     });
 
+    // Signature verification for STDPay approval response (secureSignature check).
     const maskSig = (v: string | null | undefined) =>
       !v ? null : v.length <= 10 ? `${v[0] ?? ""}*` : `${v.slice(0, 6)}***${v.slice(-4)}`;
     const tstampForSig =

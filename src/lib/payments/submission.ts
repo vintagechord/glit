@@ -59,7 +59,8 @@ export const createSubmissionPaymentOrder = async (
   if (amountKrw <= 0) {
     return { error: "결제 금액이 유효하지 않습니다." };
   }
-  const orderId = `SUBP-${Date.now()}-${submission.id.slice(0, 8)}`;
+  const orderTimestamp = Date.now().toString();
+  const orderId = `SUBP-${orderTimestamp}-${submission.id.slice(0, 8)}`;
   const config = getStdPayConfig();
   const packageName = Array.isArray(submission.package)
     ? (submission.package as Array<{ name?: string }>)[0]?.name
@@ -89,7 +90,7 @@ export const createSubmissionPaymentOrder = async (
     buyerTel,
     returnUrl,
     closeUrl,
-  });
+  }, orderTimestamp);
 
   console.info("[Inicis][STDPay][init]", {
     mode: getInicisMode(),
