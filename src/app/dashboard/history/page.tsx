@@ -61,7 +61,7 @@ export async function HistoryPageView(config?: ShellConfig) {
   }
 
   const fullSelect =
-    "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title ), station_reviews ( id, status, track_results, updated_at, station:stations ( name ) )";
+    "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title ), station_reviews ( id, status, updated_at, station:stations ( name ) )";
   const fallbackSelect =
     "id, title, artist_name, artist_id, status, created_at, updated_at, type, amount_krw, is_oneclick, station_reviews ( id, status, track_results, updated_at, station:stations ( name ) )";
   const fullSelectWithoutTracks =
@@ -133,24 +133,6 @@ export async function HistoryPageView(config?: ShellConfig) {
       );
     }
     hasTrackResultsColumn = false;
-  }
-
-  if (submissions && submissions.length > 0) {
-    await Promise.all(
-      submissions
-        .filter((submission) => submission.type === "ALBUM")
-        .map((submission) => {
-          const pkg = Array.isArray(submission.package)
-            ? submission.package[0]
-            : submission.package;
-          return ensureAlbumStationReviews(
-            supabase,
-            submission.id,
-            pkg?.station_count ?? null,
-            pkg?.name ?? null,
-          );
-        }),
-    );
   }
 
   // 그룹핑: 타입별 -> 아티스트별

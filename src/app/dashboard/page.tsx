@@ -107,64 +107,35 @@ export async function StatusPageView(config?: ShellConfig) {
     type: string;
   }>;
 
-  await Promise.all(
-    albumSubmissions.map(async (submission) => {
-      const packageInfo = Array.isArray(submission.package)
-        ? submission.package[0]
-        : submission.package;
-      await ensureAlbumStationReviews(
-        supabase,
-        submission.id,
-        packageInfo?.station_count ?? null,
-        packageInfo?.name ?? null,
-      );
-      const withTracks = "id, status, track_results, updated_at, station:stations ( name )";
-      const withoutTracks = "id, status, updated_at, station:stations ( name )";
-      const albumResult = await supabase
-        .from("station_reviews")
-        .select(withTracks)
-        .eq("submission_id", submission.id)
-        .order("updated_at", { ascending: false });
-      if (
-        albumResult.error?.message?.toLowerCase().includes("track_results") ||
-        albumResult.error?.code === "42703"
-      ) {
-        const fallback = await supabase
-          .from("station_reviews")
-          .select(withoutTracks)
-          .eq("submission_id", submission.id)
-          .order("updated_at", { ascending: false });
-        albumStationsMap[submission.id] = normalizeStations(fallback.data);
-      } else {
-        albumStationsMap[submission.id] = normalizeStations(albumResult.data);
-      }
-    }),
-  );
+  const albumSubmissionIds = albumSubmissions.map((submission) => submission.id).filter(Boolean);
+  if (albumSubmissionIds.length) {
+    const { data } = await supabase
+      .from("station_reviews")
+      .select("id, submission_id, status, updated_at, station:stations ( name )")
+      .in("submission_id", albumSubmissionIds)
+      .order("updated_at", { ascending: false });
+    data?.forEach((review) => {
+      albumStationsMap[review.submission_id] = [
+        ...(albumStationsMap[review.submission_id] ?? []),
+        ...normalizeStations([review]),
+      ];
+    });
+  }
 
-  await Promise.all(
-    mvSubmissions.map(async (submission) => {
-      const withTracks = "id, status, track_results, updated_at, station:stations ( name )";
-      const withoutTracks = "id, status, updated_at, station:stations ( name )";
-      const mvResult = await supabase
-        .from("station_reviews")
-        .select(withTracks)
-        .eq("submission_id", submission.id)
-        .order("updated_at", { ascending: false });
-      if (
-        mvResult.error?.message?.toLowerCase().includes("track_results") ||
-        mvResult.error?.code === "42703"
-      ) {
-        const fallback = await supabase
-          .from("station_reviews")
-          .select(withoutTracks)
-          .eq("submission_id", submission.id)
-          .order("updated_at", { ascending: false });
-        mvStationsMap[submission.id] = normalizeStations(fallback.data);
-      } else {
-        mvStationsMap[submission.id] = normalizeStations(mvResult.data);
-      }
-    }),
-  );
+  const mvSubmissionIds = mvSubmissions.map((submission) => submission.id).filter(Boolean);
+  if (mvSubmissionIds.length) {
+    const { data } = await supabase
+      .from("station_reviews")
+      .select("id, submission_id, status, updated_at, station:stations ( name )")
+      .in("submission_id", mvSubmissionIds)
+      .order("updated_at", { ascending: false });
+    data?.forEach((review) => {
+      mvStationsMap[review.submission_id] = [
+        ...(mvStationsMap[review.submission_id] ?? []),
+        ...normalizeStations([review]),
+      ];
+    });
+  }
 
   return (
     <DashboardShell
