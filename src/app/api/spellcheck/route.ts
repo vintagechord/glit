@@ -25,6 +25,7 @@ export interface SpellcheckResponse {
   original: string;
   correctedText: string;
   suggestions: SpellcheckSuggestion[];
+  receivedLength?: number;
   changes?: SpellcheckChange[];
   raw?: unknown;
   truncated?: boolean;
@@ -68,6 +69,7 @@ const spellcheckEngine = async (text: string): Promise<SpellcheckResponse> => {
     original: result.original,
     correctedText: result.corrected,
     suggestions,
+    receivedLength: result.original.length,
     changes: result.changes,
     truncated: result.truncated,
     raw: { engine: "rule-basic" },
@@ -78,33 +80,26 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as Partial<SpellcheckRequest>;
     const text = typeof body.text === "string" ? body.text : "";
 
-    if (!text.trim()) {
-      return NextResponse.json({
-        original: text,
-        correctedText: text,
-        suggestions: [],
-        changes: [],
-      } satisfies SpellcheckResponse);
+    if (!text || !text.trim()) {
+      return NextResponse.json(
+        { error: "EMPTY_TEXT", receivedLength: text?.length ?? 0 },
+        { status: 400 },
+      );
     }
 
     if (text.length > MAX_TEXT_LENGTH) {
       return NextResponse.json(
-        { error: "텍스트가 너무 깁니다. 10000자 이하로 나누어 적용해주세요." },
+        { error: "TEXT_TOO_LARGE", receivedLength: text.length },
         { status: 413 },
       );
     }
 
     const result = await spellcheckEngine(text);
     return NextResponse.json(result);
-
-    return NextResponse.json(
-      { error: "맞춤법 적용에 실패했습니다." },
-      { status: 500 },
-    );
   } catch (error) {
     console.error("Spellcheck failed", error);
     return NextResponse.json(
-      { error: "맞춤법 적용에 실패했습니다." },
+      { error: "SPELLCHECK_FAILED" },
       { status: 500 },
     );
   }

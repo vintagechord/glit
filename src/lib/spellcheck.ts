@@ -37,6 +37,9 @@ export const MIN_LENGTH_CHECK_THRESHOLD = 20;
 export const basicCorrections: SpellcheckRule[] = [
   { pattern: /됬/g, replace: "됐" },
   { pattern: /됫/g, replace: "됐" },
+  { pattern: /안되/g, replace: "안 돼" },
+  { pattern: /안돼다/g, replace: "안 되다" },
+  { pattern: /잇/g, replace: "있" },
   { pattern: /됄/g, replace: "될" },
   { pattern: /됬다/g, replace: "됐다" },
   { pattern: /됬어요/g, replace: "됐어요" },

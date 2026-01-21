@@ -778,7 +778,9 @@ export function AlbumWizard({
   };
 
   const handleSpellCheck = async () => {
-    const lyrics = activeTrack.lyrics;
+    const lyricsFromState = activeTrack.lyrics;
+    const lyricsFromDom = lyricsTextareaRef.current?.value ?? "";
+    const lyrics = lyricsFromDom || lyricsFromState;
     const trimmedLyrics = lyrics.trim();
     if (!trimmedLyrics) {
       setSpellcheckNoticeMap((prev) => ({
@@ -822,6 +824,10 @@ export function AlbumWizard({
     try {
       console.info("[Spellcheck][request][start]", {
         length: lyrics.length,
+        stateLength: lyricsFromState.length,
+        domLength: lyricsFromDom.length,
+        previewHead: lyrics.slice(0, 80),
+        previewTail: lyrics.slice(Math.max(0, lyrics.length - 80)),
         trackIndex: activeTrackIndex,
       });
       const response = await fetch("/api/spellcheck", {
@@ -836,6 +842,7 @@ export function AlbumWizard({
         status: response.status,
         ok: response.ok,
         keys: payload ? Object.keys(payload) : [],
+        receivedLength: payload?.receivedLength ?? null,
       });
       type SpellcheckResponse = {
         correctedText?: string;
@@ -929,7 +936,9 @@ export function AlbumWizard({
           ...prev,
           [activeTrackIndex]: {
             type: "info",
-            message: "맞춤법 제안이 없습니다.",
+            message: `맞춤법 제안이 없습니다. (text: ${lyrics.length}자, received: ${
+              spellcheckPayload?.receivedLength ?? "unknown"
+            }자)`,
           },
         }));
         return;
