@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import { KO_SPELLCHECK_RULES, Rule } from "@/lib/spellcheck/rules_ko";
+import * as mod from "../src/lib/spellcheck/rules_ko";
 
+type Rule = { pattern: RegExp; replace: string; reason: string; confidence?: number };
 type Suggestion = {
   start: number;
   end: number;
@@ -9,8 +9,14 @@ type Suggestion = {
   reason: string;
   confidence: number;
   groupId?: string;
-  ruleIndex?: number;
 };
+
+const RULES: Rule[] =
+  (mod as any).default?.KO_SPELLCHECK_RULES ||
+  (mod as any).KO_SPELLCHECK_RULES ||
+  (Array.isArray((mod as any).default) ? (mod as any).default : []);
+
+const SHORT_BEFORE_ALLOW = new Set(["됬", "됫", "됐", "됏", "되야", "그낭"]);
 
 function applyReplacementOnce(before: string, rule: Rule): string | null {
   const flags = rule.pattern.flags.replace("g", "");
@@ -20,7 +26,7 @@ function applyReplacementOnce(before: string, rule: Rule): string | null {
   return before.replace(once, rule.replace);
 }
 
-function collectMatches(text: string, rule: Rule, ruleIndex: number, baseOffset = 0): Suggestion[] {
+function collectMatches(text: string, rule: Rule, baseOffset = 0): Suggestion[] {
   const out: Suggestion[] = [];
   const pattern = rule.pattern.flags.includes("g")
     ? rule.pattern
@@ -32,7 +38,6 @@ function collectMatches(text: string, rule: Rule, ruleIndex: number, baseOffset 
     const before = m[0];
     const after = applyReplacementOnce(before, rule);
     if (!after || after === before) continue;
-
     out.push({
       start: start + baseOffset,
       end: start + before.length + baseOffset,
@@ -40,25 +45,16 @@ function collectMatches(text: string, rule: Rule, ruleIndex: number, baseOffset 
       after,
       reason: rule.reason,
       confidence: rule.confidence ?? 0.8,
-      ruleIndex,
     });
-
     if (pattern.lastIndex === start) pattern.lastIndex = start + 1;
   }
   return out;
 }
 
-const SHORT_BEFORE_ALLOW = new Set(["됬", "됫", "됐", "됏", "되야", "그낭"]);
-
-function dedupeAndResolveOverlaps(items: Suggestion[]): {
-  accepted: Suggestion[];
-  overlapRemoved: number;
-  shortRemoved: number;
-  rangeDeduped: number;
-} {
+function dedupeAndResolveOverlaps(items: Suggestion[]): Suggestion[] {
   const bestByRange = new Map<string, Suggestion>();
   for (const s of items) {
-    if (s.start < 0 || s.end > Number.MAX_SAFE_INTEGER || s.end <= s.start) continue;
+    if (s.start < 0 || s.end <= s.start) continue;
     const key = `${s.start}:${s.end}`;
     const current = bestByRange.get(key);
     if (!current || s.confidence > current.confidence) {
@@ -74,15 +70,7 @@ function dedupeAndResolveOverlaps(items: Suggestion[]): {
     }
   }
 
-  const seen = new Set<string>();
-  const unique: Suggestion[] = [];
-  for (const s of bestByRange.values()) {
-    const key = `${s.start}:${s.end}:${s.after}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(s);
-  }
-
+  const unique: Suggestion[] = Array.from(bestByRange.values());
   unique.sort((a, b) => {
     const c = (b.confidence ?? 0) - (a.confidence ?? 0);
     if (c !== 0) return c;
@@ -93,19 +81,12 @@ function dedupeAndResolveOverlaps(items: Suggestion[]): {
   });
 
   const accepted: Suggestion[] = [];
-  let overlapRemoved = 0;
-  let shortRemoved = 0;
-  let rangeDeduped = items.length - unique.length;
   let groupSeq = 0;
-
   const overlaps = (a: Suggestion, b: Suggestion) => a.start < b.end && b.start < a.end;
   const isSpacing = (s: Suggestion) => s.reason.includes("띄어쓰기");
 
   for (const s of unique) {
-    if (s.before.length <= 2 && !SHORT_BEFORE_ALLOW.has(s.before)) {
-      shortRemoved++;
-      continue;
-    }
+    if (s.before.length <= 2 && !SHORT_BEFORE_ALLOW.has(s.before)) continue;
 
     let skip = false;
     const toRemove: number[] = [];
@@ -190,126 +171,62 @@ function dedupeAndResolveOverlaps(items: Suggestion[]): {
       }
     }
 
-    if (skip) {
-      overlapRemoved++;
-      continue;
-    }
-
+    if (skip) continue;
     if (groupId) s.groupId = groupId;
     if (toRemove.length) {
       toRemove.sort((a, b) => b - a);
-      overlapRemoved += toRemove.length;
       for (const idx of toRemove) accepted.splice(idx, 1);
     }
     accepted.push(s);
   }
 
   accepted.sort((a, b) => a.start - b.start);
-  return { accepted, overlapRemoved, shortRemoved, rangeDeduped };
+  return accepted;
 }
 
-export async function POST(req: Request) {
-  try {
-    const url = new URL(req.url);
-    const debugFlag = url.searchParams.get("debug") === "true";
-    const body = await req.json().catch(() => null);
-    const text = typeof body?.text === "string" ? body.text : "";
-    const debug = debugFlag || body?.debug === true;
+type Case = { name: string; text: string; min: number };
 
-    if (!text) {
-      return NextResponse.json({ error: "TEXT_REQUIRED" }, { status: 400 });
-    }
+const cases: Case[] = [
+  {
+    name: "lyrics-board",
+    text:
+      "오늘은 왠지 기분이 이상햇다. 아침에 눈을 떴을 때 부터 마음이 좀 찝찝했어. 너한테 연락하려고 했는데 그냥 참앗다. 오랜만에 만난 친구가 웃엇다. 이거 오늘안에 꼭 되야해. 하루 종일 나갈까하다가 포기햇다. 집에 돌아와서도 할 수있는게 없어서 쉬고싶다. 보고싶은데도 못봤어. 그랬던것 같아.",
+    min: 12,
+  },
+  {
+    name: "typo-short",
+    text: "그낭 걸엇어.",
+    min: 2,
+  },
+];
 
-    const trimmed = text.trim();
-    if (!trimmed) {
-      return NextResponse.json({ error: "EMPTY_TEXT" }, { status: 400 });
-    }
-
-    if (text.length > 10000) {
-      return NextResponse.json({ error: "TEXT_TOO_LARGE", receivedLength: text.length }, { status: 413 });
-    }
-
-    const ruleMatchCount: Array<{ ruleIndex: number; count: number; reason: string }> = [];
-    const collectForText = (rawText: string, offset = 0) => {
-      const matches: Suggestion[] = [];
-      for (let idx = 0; idx < KO_SPELLCHECK_RULES.length; idx++) {
-        const rule = KO_SPELLCHECK_RULES[idx];
-        const found = collectMatches(rawText, rule, idx, offset);
-        if (found.length) {
-          ruleMatchCount[idx] = {
-            ruleIndex: idx,
-            count: (ruleMatchCount[idx]?.count ?? 0) + found.length,
-            reason: rule.reason,
-          };
-        }
-        matches.push(...found);
-        if (matches.length >= 800) break;
-      }
-      return matches;
-    };
-
-    let all = collectForText(text, 0);
-    const dedupedPrimary = dedupeAndResolveOverlaps(all);
-    let suggestions = dedupedPrimary.accepted;
-
-    if (suggestions.length < 5) {
-      const sentenceRegex = /[^.!?\n]+[.!?\n]?/g;
-      let m: RegExpExecArray | null;
-      while ((m = sentenceRegex.exec(text)) !== null) {
-        const span = m[0];
-        const start = m.index;
-        if (span.length > 2000) continue;
-        const subs = collectForText(span, start);
-        all = all.concat(subs);
-        if (all.length >= 800) break;
-      }
-      const dedupedSecondary = dedupeAndResolveOverlaps(all);
-      suggestions = dedupedSecondary.accepted;
-      dedupedPrimary.overlapRemoved += dedupedSecondary.overlapRemoved;
-      dedupedPrimary.shortRemoved += dedupedSecondary.shortRemoved;
-      dedupedPrimary.rangeDeduped += dedupedSecondary.rangeDeduped;
-    }
-
-    suggestions = suggestions.slice(0, 200);
-
-    const response: Record<string, any> = {
-      provider: "rules",
-      original: text,
-      receivedLength: text.length,
-      suggestionCount: suggestions.length,
-      suggestions,
-    };
-
-    if (debug) {
-      const sortedRuleStats = ruleMatchCount
-        .filter(Boolean)
-        .sort((a, b) => (b?.count ?? 0) - (a?.count ?? 0))
-        .slice(0, 20);
-      response.debug = {
-        allMatches: all.length,
-        suggestions: suggestions.length,
-        overlapRemoved: dedupedPrimary.overlapRemoved,
-        shortRemoved: dedupedPrimary.shortRemoved,
-        rangeDeduped: dedupedPrimary.rangeDeduped,
-        topRules: sortedRuleStats,
-      };
-    }
-
-    return NextResponse.json(response);
-  } catch (e: any) {
-    return NextResponse.json(
-      {
-        provider: "rules",
-        original: "",
-        receivedLength: 0,
-        suggestionCount: 0,
-        suggestions: [],
-        error: "SPELLCHECK_INTERNAL_ERROR",
-        detail: { message: e?.message ?? String(e) },
-      },
-      { status: 200 },
-    );
+function runCase(c: Case) {
+  let all: Suggestion[] = [];
+  for (const rule of RULES) {
+    all = all.concat(collectMatches(c.text, rule));
+    if (all.length > 1000) break;
   }
+  const suggestions = dedupeAndResolveOverlaps(all);
+  console.log(`[spellcheck-smoke] ${c.name} suggestions=${suggestions.length}`);
+  if (suggestions.length < c.min) {
+    console.error(`[spellcheck-smoke] FAIL: ${c.name} expected >=${c.min}, got ${suggestions.length}`);
+    process.exitCode = 1;
+  }
+  console.log(
+    JSON.stringify(
+      suggestions.slice(0, 12).map((s) => ({ before: s.before, after: s.after, reason: s.reason, conf: s.confidence })),
+      null,
+      2,
+    ),
+  );
 }
 
-export default { POST };
+function main() {
+  if (!Array.isArray(RULES) || !RULES.length) {
+    console.error("Rules not loaded");
+    process.exit(1);
+  }
+  for (const c of cases) runCase(c);
+}
+
+main();

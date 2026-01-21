@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --import tsx"
+    "test": "node --test --import tsx",
+    "spellcheck:smoke": "node --import tsx scripts/spellcheck_smoke.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.962.0",
