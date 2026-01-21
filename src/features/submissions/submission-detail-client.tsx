@@ -13,6 +13,7 @@ import {
   type TrackReviewResult,
 } from "@/lib/track-results";
 import { createClient } from "@/lib/supabase/client";
+import { APP_CONFIG } from "@/lib/config";
 
 type Submission = {
   id: string;
@@ -250,6 +251,7 @@ export function SubmissionDetailClient({
     stationName?: string;
     summary: ReturnType<typeof summarizeTrackResults>;
   } | null>(null);
+  const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
@@ -257,7 +259,14 @@ export function SubmissionDetailClient({
     submission.type === "MV_BROADCAST" || submission.type === "MV_DISTRIBUTION";
   const isResultReady =
     submission.status === "RESULT_READY" || submission.status === "COMPLETED";
-  const isPaymentDone = submission.payment_status === "PAID";
+  const isPaymentDone =
+    submission.payment_status === "PAID" || submission.status === "COMPLETED";
+  const isPaymentPending =
+    submission.payment_status === "WAITING_PAYMENT" ||
+    submission.payment_status === "PAYMENT_PENDING" ||
+    (!isPaymentDone &&
+      (submission.status === "WAITING_PAYMENT" ||
+        submission.status === "PRE_REVIEW"));
   const albumTracks = React.useMemo(
     () => submission.album_tracks ?? [],
     [submission.album_tracks],
@@ -612,6 +621,102 @@ export function SubmissionDetailClient({
           {statusLabels[submission.status] ?? submission.status}
         </div>
       </div>
+      {isPaymentPending ? (
+        <div className="mt-3 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => setShowPaymentInfo(true)}
+            className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
+          >
+            결제 안내 보기
+          </button>
+        </div>
+      ) : null}
+      {showPaymentInfo ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
+          <button
+            type="button"
+            onClick={() => setShowPaymentInfo(false)}
+            className="absolute inset-0 bg-black/50"
+            aria-label="결제 안내 닫기"
+          />
+          <div className="relative z-10 w-full max-w-xl rounded-3xl border border-border/80 bg-card/95 p-6 shadow-2xl backdrop-blur">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  결제 안내
+                </p>
+                <h2 className="mt-2 text-lg font-semibold text-foreground">
+                  {packageInfo?.name ?? submission.title ?? "신청 상품"}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  결제 대기 상태입니다. 아래 계좌로 입금 후 알려주세요.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPaymentInfo(false)}
+                className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-foreground hover:border-foreground hover:bg-foreground/5"
+              >
+                닫기
+              </button>
+            </div>
+            <div className="mt-4 grid gap-3 rounded-2xl border border-border/70 bg-background/80 p-4 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  결제 금액
+                </span>
+                <span className="text-base font-semibold text-foreground">
+                  {submission.amount_krw
+                    ? `${formatCurrency(submission.amount_krw)}원`
+                    : packageInfo?.price_krw
+                      ? `${formatCurrency(packageInfo.price_krw)}원`
+                      : "-"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  결제 방식
+                </span>
+                <span className="text-sm text-foreground">
+                  {submission.payment_method
+                    ? paymentMethodLabels[submission.payment_method] ??
+                      submission.payment_method
+                    : "무통장"}
+                </span>
+              </div>
+            </div>
+            <div className="mt-4 rounded-2xl border border-border/70 bg-background/80 p-4 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                무통장 입금 안내
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    은행
+                  </p>
+                  <p className="mt-1 font-semibold">{APP_CONFIG.bankName}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    계좌번호
+                  </p>
+                  <p className="mt-1 font-semibold">{APP_CONFIG.bankAccount}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    예금주
+                  </p>
+                  <p className="mt-1 font-semibold">{APP_CONFIG.bankHolder}</p>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                입금 후 문의하기로 알려주시면 확인을 빠르게 도와드립니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {isAdmin ? (
         <div className="mt-3 flex flex-wrap gap-3">
           <button
