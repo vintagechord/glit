@@ -252,6 +252,7 @@ export function SubmissionDetailClient({
     summary: ReturnType<typeof summarizeTrackResults>;
   } | null>(null);
   const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
+  const showAdminTools = isAdmin === true && !guestToken;
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
@@ -621,7 +622,7 @@ export function SubmissionDetailClient({
           {statusLabels[submission.status] ?? submission.status}
         </div>
       </div>
-      {isPaymentPending ? (
+      {showAdminTools && isPaymentPending ? (
         <div className="mt-3 flex flex-wrap gap-3">
           <button
             type="button"
@@ -717,7 +718,7 @@ export function SubmissionDetailClient({
           </div>
         </div>
       ) : null}
-      {isAdmin ? (
+      {showAdminTools ? (
         <div className="mt-3 flex flex-wrap gap-3">
           <button
             type="button"
