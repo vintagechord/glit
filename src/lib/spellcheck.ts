@@ -37,9 +37,15 @@ export const MIN_LENGTH_CHECK_THRESHOLD = 20;
 export const basicCorrections: SpellcheckRule[] = [
   { pattern: /됬/g, replace: "됐" },
   { pattern: /됫/g, replace: "됐" },
+  { pattern: /싫엇/g, replace: "싫었" },
+  { pattern: /이엇/g, replace: "이었" },
+  { pattern: /잇/g, replace: "있" },
+  { pattern: /거\s?같/g, replace: "것 같" },
+  { pattern: /놀리는거/g, replace: "놀리는 거" },
+  { pattern: /못햇다/g, replace: "못했다" },
+  { pattern: /못햇/g, replace: "못했" },
   { pattern: /안되/g, replace: "안 돼" },
   { pattern: /안돼다/g, replace: "안 되다" },
-  { pattern: /잇/g, replace: "있" },
   { pattern: /됄/g, replace: "될" },
   { pattern: /됬다/g, replace: "됐다" },
   { pattern: /됬어요/g, replace: "됐어요" },
@@ -143,4 +149,94 @@ export const spellcheckText = (text: string, rules: SpellcheckRule[]) => {
     changes,
     truncated,
   } satisfies SpellcheckSuccess;
+};
+
+// Masks english tokens to placeholders and builds index mapping to original text.
+const maskNonKoreanTokens = (text: string) => {
+  const regex = /[A-Za-z][A-Za-z0-9'_.-]*/g;
+  const replacements: Array<{
+    start: number;
+    end: number;
+    placeholder: string;
+    original: string;
+  }> = [];
+  let match: RegExpExecArray | null;
+  let counter = 0;
+  while ((match = regex.exec(text))) {
+    if (!match[0]) continue;
+    replacements.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      placeholder: `__EN${counter}__`,
+      original: match[0],
+    });
+    counter += 1;
+  }
+
+  if (!replacements.length) {
+    return { sanitized: text, indexMap: Array.from({ length: text.length }, (_, i) => i) };
+  }
+
+  let cursor = 0;
+  let sanitized = "";
+  const indexMap: number[] = [];
+
+  replacements.forEach((rep) => {
+    if (cursor < rep.start) {
+      const segment = text.slice(cursor, rep.start);
+      sanitized += segment;
+      for (let i = 0; i < segment.length; i += 1) {
+        indexMap.push(cursor + i);
+      }
+    }
+    sanitized += rep.placeholder;
+    for (let i = 0; i < rep.placeholder.length; i += 1) {
+      indexMap.push(rep.start);
+    }
+    cursor = rep.end;
+  });
+
+  if (cursor < text.length) {
+    const tail = text.slice(cursor);
+    sanitized += tail;
+    for (let i = 0; i < tail.length; i += 1) {
+      indexMap.push(cursor + i);
+    }
+  }
+
+  return { sanitized, indexMap };
+};
+
+export type LocalRuleSuggestion = {
+  start: number;
+  end: number;
+  before: string;
+  after: string;
+  reason?: string;
+};
+
+export const runLocalRuleEngine = (text: string, rules: SpellcheckRule[]) => {
+  const { sanitized, indexMap } = maskNonKoreanTokens(text.replace(/[“”]/g, '"').replace(/[’‘]/g, "'"));
+  const suggestions: LocalRuleSuggestion[] = [];
+  rules.forEach((rule) => {
+    const pattern = rule.pattern.global ? rule.pattern : new RegExp(rule.pattern.source, `${rule.pattern.flags}g`);
+    const matches = Array.from(sanitized.matchAll(pattern));
+    matches.forEach((match) => {
+      if (!match[0]) return;
+      const startSanitized = match.index ?? 0;
+      const endSanitized = startSanitized + match[0].length;
+      const start = indexMap[startSanitized] ?? startSanitized;
+      const end = (indexMap[endSanitized - 1] ?? endSanitized - 1) + 1;
+      const before = text.slice(start, end);
+      const after = match[0].replace(rule.pattern, rule.replace);
+      suggestions.push({
+        start,
+        end,
+        before,
+        after,
+        reason: "local_rule",
+      });
+    });
+  });
+  return { suggestions, ruleHitCount: suggestions.length };
 };
