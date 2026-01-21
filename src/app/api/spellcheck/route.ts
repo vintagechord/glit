@@ -50,9 +50,27 @@ function collectMatches(text: string, rule: Rule): Suggestion[] {
 }
 
 function dedupeAndResolveOverlaps(items: Suggestion[]): Suggestion[] {
+  const bestByRange = new Map<string, Suggestion>();
+  for (const s of items) {
+    if (s.start < 0 || s.end > Number.MAX_SAFE_INTEGER || s.end <= s.start) continue;
+    const key = `${s.start}:${s.end}`;
+    const current = bestByRange.get(key);
+    if (!current || s.confidence > current.confidence) {
+      bestByRange.set(key, s);
+      continue;
+    }
+    if (current && s.confidence === current.confidence) {
+      const currentDelta = Math.abs(current.after.length - current.before.length);
+      const nextDelta = Math.abs(s.after.length - s.before.length);
+      if (nextDelta < currentDelta) {
+        bestByRange.set(key, s);
+      }
+    }
+  }
+
   const seen = new Set<string>();
   const unique: Suggestion[] = [];
-  for (const s of items) {
+  for (const s of bestByRange.values()) {
     const key = `${s.start}:${s.end}:${s.after}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -79,7 +97,6 @@ function dedupeAndResolveOverlaps(items: Suggestion[]): Suggestion[] {
   };
 
   for (const s of unique) {
-    if (s.start < 0 || s.end > Number.MAX_SAFE_INTEGER || s.end <= s.start) continue;
     if (overlaps(s.start, s.end)) continue;
     accepted.push(s);
     occupied.push([s.start, s.end]);
@@ -110,7 +127,7 @@ export async function POST(req: Request) {
     const all: Suggestion[] = [];
     for (const rule of KO_SPELLCHECK_RULES) {
       all.push(...collectMatches(text, rule));
-      if (all.length > 500) break;
+      if (all.length >= 800) break;
     }
 
     const suggestions = dedupeAndResolveOverlaps(all).slice(0, 200);
