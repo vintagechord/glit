@@ -139,6 +139,8 @@ export default async function SubmissionDetailPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const { data: isAdminRpc } = await supabase.rpc("is_admin");
+  const isAdmin = isAdminRpc === true;
 
   const fetchSubmission = async (
     client: ReturnType<typeof createAdminClient> | Awaited<ReturnType<typeof createServerSupabase>>,
@@ -277,6 +279,7 @@ export default async function SubmissionDetailPage({
       initialEvents={[]}
       initialStationReviews={[]}
       initialFiles={[]}
+      isAdmin={isAdmin}
     />
   );
 }

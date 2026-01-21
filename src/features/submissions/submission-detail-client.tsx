@@ -208,6 +208,7 @@ export function SubmissionDetailClient({
   initialStationReviews,
   enableRealtime = true,
   guestToken,
+  isAdmin = false,
 }: {
   submissionId: string;
   initialSubmission: Submission;
@@ -216,6 +217,7 @@ export function SubmissionDetailClient({
   initialStationReviews: StationReview[];
   enableRealtime?: boolean;
   guestToken?: string;
+  isAdmin?: boolean;
 }) {
   const supabase = React.useMemo(
     () => (enableRealtime ? createClient() : null),
@@ -610,15 +612,17 @@ export function SubmissionDetailClient({
           {statusLabels[submission.status] ?? submission.status}
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={handleDownloadText}
-          className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
-        >
-          신청 내역 TXT 다운로드
-        </button>
-      </div>
+      {isAdmin ? (
+        <div className="mt-3 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handleDownloadText}
+            className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
+          >
+            신청 내역 TXT 다운로드
+          </button>
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
