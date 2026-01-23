@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
+import { safeRandomUUID } from "@/lib/uuid";
 
 import {
   createKaraokeRequestAction,
@@ -55,11 +56,11 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
 
   if (!guestTokenRef.current) {
-    guestTokenRef.current = crypto.randomUUID();
+    guestTokenRef.current = safeRandomUUID();
   }
 
   if (!uploadIdRef.current) {
-    uploadIdRef.current = crypto.randomUUID();
+    uploadIdRef.current = safeRandomUUID();
   }
 
   const handleSelectedFile = (selected: File | null) => {

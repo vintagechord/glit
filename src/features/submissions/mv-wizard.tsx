@@ -7,6 +7,7 @@ import { PendingOverlay } from "@/components/ui/pending-overlay";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { openInicisCardPopup } from "@/lib/inicis/popup";
+import { safeRandomUUID } from "@/lib/uuid";
 
 import {
   saveMvSubmissionAction,
@@ -220,10 +221,10 @@ export function MvWizard({
   const guestTokenRef = React.useRef<string | null>(null);
 
   if (!submissionIdRef.current) {
-    submissionIdRef.current = crypto.randomUUID();
+    submissionIdRef.current = safeRandomUUID();
   }
   if (!guestTokenRef.current) {
-    guestTokenRef.current = crypto.randomUUID();
+    guestTokenRef.current = safeRandomUUID();
   }
 
   React.useEffect(() => {

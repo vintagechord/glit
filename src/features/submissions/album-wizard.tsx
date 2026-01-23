@@ -18,6 +18,7 @@ import {
   saveAlbumSubmissionAction,
   type SubmissionActionState,
 } from "./actions";
+import { safeRandomUUID } from "@/lib/uuid";
 
 declare global {
   interface Window {
@@ -340,7 +341,7 @@ export function AlbumWizard({
   const [currentSubmissionId, setCurrentSubmissionId] =
     React.useState<string | null>(null);
   const [currentGuestToken, setCurrentGuestToken] = React.useState(() =>
-    crypto.randomUUID(),
+    safeRandomUUID(),
   );
   const profanityMatchers = React.useMemo(
     () => buildLegacyProfanityMatchers(profanityTerms),
@@ -1549,7 +1550,7 @@ export function AlbumWizard({
     setCurrentSubmissionId(null);
     setDraftError(null);
     void createDraft();
-    setCurrentGuestToken(crypto.randomUUID());
+    setCurrentGuestToken(safeRandomUUID());
   };
 
   const buildUploadsFromFiles = (fileList: UploadResult[]) =>
@@ -1638,6 +1639,18 @@ export function AlbumWizard({
       files: uploaded,
     };
   };
+
+  const confirmEmailSubmission = React.useCallback(() => {
+    const message =
+      "음원을 이메일로 제출하시겠습니까?\n(파일 업로드 없이 다음 단계로 이동합니다)";
+    const confirmed =
+      typeof window !== "undefined" ? window.confirm(message) : false;
+    if (confirmed) {
+      setEmailSubmitConfirmed(true);
+      setNotice({});
+    }
+    return confirmed;
+  }, []);
 
   const getTrackDisplayTitle = (track: TrackInput) =>
     track.trackTitle.trim() || "제목 미입력";
@@ -1747,13 +1760,10 @@ export function AlbumWizard({
 
     if (uploads.length === 0) {
       if (emailSubmitConfirmed) {
+        setNotice({});
         return true;
       }
-      if (
-        typeof window !== "undefined" &&
-        window.confirm("음원을 이메일로 제출하시겠습니까?")
-      ) {
-        setEmailSubmitConfirmed(true);
+      if (confirmEmailSubmission()) {
         return true;
       }
       setNotice({
@@ -3076,7 +3086,24 @@ export function AlbumWizard({
               ))}
               {uploads.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-center text-xs text-muted-foreground">
-                  아직 선택된 파일이 없습니다.
+                  <p className="font-semibold text-foreground">아직 선택된 파일이 없습니다.</p>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    업로드 없이 진행하려면 이메일 제출을 선택하세요.
+                  </p>
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={confirmEmailSubmission}
+                      className="rounded-full border border-border/70 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+                    >
+                      이메일 제출 선택
+                    </button>
+                    {emailSubmitConfirmed ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
+                        선택됨
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               )}
             </div>

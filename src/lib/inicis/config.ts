@@ -21,6 +21,30 @@ const clean = (value?: string | null) => {
   return trimmed.length > 0 ? trimmed : "";
 };
 
+const normalizeMode = (value?: string | null): InicisMode | null => {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "prod" || normalized === "production" || normalized === "live") {
+    return "prod";
+  }
+  if (
+    normalized === "stg" ||
+    normalized === "stage" ||
+    normalized === "staging" ||
+    normalized === "test"
+  ) {
+    return "stg";
+  }
+  return null;
+};
+
+const hasStdPayEnv = (mode: InicisMode) => {
+  const suffix = mode === "prod" ? "PROD" : "STG";
+  return Boolean(
+    clean(process.env[`INICIS_MID_${suffix}`]) &&
+      clean(process.env[`INICIS_SIGN_KEY_${suffix}`]),
+  );
+};
+
 const loadStdPayConfig = (mode: InicisMode): StdPayEnvConfig => {
   const suffix = mode === "prod" ? "PROD" : "STG";
   const mid = clean(process.env[`INICIS_MID_${suffix}`] ?? "").trim();
@@ -81,8 +105,18 @@ const loadBillingConfig = (mode: InicisMode): BillingEnvConfig => {
   return { mid, apiKey, apiIv, liteKey, apiUrl };
 };
 
-// 운영 결제만 사용하도록 기본 prod 강제 (env에 stg가 있어도 prod 우선)
-export const getInicisMode = (): InicisMode => "prod";
+export const getInicisMode = (): InicisMode => {
+  const override =
+    normalizeMode(process.env.INICIS_ENV) ??
+    normalizeMode(process.env.NEXT_PUBLIC_INICIS_ENV);
+  if (override) return override;
+
+  const prodReady = hasStdPayEnv("prod");
+  const stgReady = hasStdPayEnv("stg");
+
+  if (prodReady || !stgReady) return "prod";
+  return "stg";
+};
 
 export const getStdPayConfig = (): StdPayEnvConfig =>
   loadStdPayConfig(getInicisMode());

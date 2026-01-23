@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { createKaraokePromotionRecommendationAction } from "@/features/karaoke/actions";
+import { safeRandomUUID } from "@/lib/uuid";
 
 type PromotionSummary = {
   id: string;
@@ -124,7 +125,7 @@ export function KaraokeCreditPanel({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        submissionId: promotionId || crypto.randomUUID(),
+        submissionId: promotionId || safeRandomUUID(),
         filename: file.name,
         mimeType: file.type,
         sizeBytes: file.size,

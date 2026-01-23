@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { safeRandomUUID } from "@/lib/uuid";
 
 type InitResponse = {
   orderId: string;
@@ -26,7 +27,7 @@ export default function DevInicisStdPayPage() {
   const [scriptReady, setScriptReady] = React.useState(false);
 
   // React 18 useId는 ":"가 포함될 수 있어서 안전하게 제거
-  const formIdRef = React.useRef(`inicis-form-${crypto.randomUUID()}`);
+  const formIdRef = React.useRef(`inicis-form-${safeRandomUUID()}`);
   const formId = formIdRef.current;
   React.useEffect(() => {
     if (typeof window !== "undefined" && window.INIStdPay) {

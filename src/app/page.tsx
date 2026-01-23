@@ -222,7 +222,7 @@ const processStepTones = [
 const serviceCardTones = [
   "bg-[#8fe38f] text-[#111111] border-transparent",
   "bg-[#e6e35b] text-[#111111] border-transparent",
-  "bg-[#5f67f2] text-[#111111] border-transparent",
+  "oneclick-card text-[#111111] border-transparent",
 ];
 
 type StationSnapshot = {
