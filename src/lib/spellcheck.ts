@@ -7,6 +7,7 @@ export type SpellcheckTerm = {
 export type SpellcheckRule = {
   pattern: RegExp;
   replace: string;
+  reason?: string;
 };
 
 export type SpellcheckChange = {
@@ -83,7 +84,8 @@ export const buildCustomRules = (terms: SpellcheckTerm[]) =>
         language === "EN"
           ? new RegExp(`\\b${escapeRegExp(fromText)}\\b`, "gi")
           : new RegExp(escapeRegExp(fromText), "g");
-      return { pattern, replace: toText };
+      const reason = language === "EN" ? "custom_rule_en" : "custom_rule";
+      return { pattern, replace: toText, reason };
     })
     .filter(Boolean) as SpellcheckRule[];
 
@@ -234,7 +236,7 @@ export const runLocalRuleEngine = (text: string, rules: SpellcheckRule[]) => {
         end,
         before,
         after,
-        reason: "local_rule",
+        reason: rule.reason ?? "local_rule",
       });
     });
   });
