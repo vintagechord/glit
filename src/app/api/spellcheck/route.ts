@@ -210,8 +210,8 @@ export async function POST(req: Request) {
 
     const localPayload = await buildLocalResponse(workingText, ["proxy_error"], truncated);
     return NextResponse.json(localPayload, { status: 200 });
-  } catch (error: any) {
-    const isAbort = error?.name === "AbortError";
+  } catch (error: unknown) {
+    const isAbort = error instanceof Error && error.name === "AbortError";
     const warning = isAbort ? "proxy_timeout" : "proxy_error";
     const localPayload = await buildLocalResponse(workingText, [warning], truncated);
     return NextResponse.json(localPayload, { status: 200 });

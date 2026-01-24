@@ -5,7 +5,6 @@ import { z } from "zod";
 
 import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 
 export const runtime = "nodejs";
@@ -202,7 +201,10 @@ export async function POST(request: Request) {
   };
 
   try {
-    Readable.fromWeb(request.body as any).pipe(busboy);
+    if (!request.body) {
+      throw new Error("Request body is empty.");
+    }
+    Readable.fromWeb(request.body as unknown as ReadableStream).pipe(busboy);
     await parsePromise;
   } catch (error) {
     console.error("[Upload][direct] multipart parse error", {

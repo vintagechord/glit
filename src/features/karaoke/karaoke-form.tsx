@@ -5,6 +5,7 @@ import * as React from "react";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { safeRandomUUID } from "@/lib/uuid";
+import { openInicisCardPopup } from "@/lib/inicis/popup";
 
 import {
   createKaraokeRequestAction,
@@ -147,6 +148,10 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
       setNotice({ error: "곡명과 연락처를 입력해주세요." });
       return;
     }
+    if (paymentMethod === "CARD" && isGuest) {
+      setNotice({ error: "로그인 후 카드 결제를 이용해주세요." });
+      return;
+    }
     if (isGuest && (!guestName || !guestEmail)) {
       setNotice({ error: "담당자명과 이메일을 입력해주세요." });
       return;
@@ -222,7 +227,25 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
         return;
       }
 
-      setNotice({ message: result.message });
+      if (paymentMethod === "CARD") {
+        const requestId = result.requestId;
+        if (!requestId) {
+          setNotice({ error: "결제 요청 ID를 받을 수 없습니다. 다시 시도해주세요." });
+          return;
+        }
+        const { ok, error } = openInicisCardPopup({
+          context: "karaoke",
+          requestId,
+        });
+        if (!ok) {
+          setNotice({ error: error ?? "결제 창을 열지 못했습니다. 팝업 차단을 확인해주세요." });
+          return;
+        }
+        setNotice({ message: "결제 창을 열었습니다. 결제를 완료해주세요." });
+        return;
+      }
+
+      setNotice({ message: result.message, requestId: result.requestId });
       setTitle("");
       setArtist("");
       setContact("");
@@ -241,6 +264,28 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
       setIsSubmitting(false);
     }
   };
+
+  React.useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (typeof window === "undefined") return;
+      if (event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+      const type = (data as { type?: string }).type;
+      const payload = (data as { payload?: Record<string, unknown> }).payload ?? {};
+      if (!type || !String(type).startsWith("INICIS:")) return;
+      const status = String(type).replace("INICIS:", "");
+      if (status === "SUCCESS") {
+        window.location.href = "/karaoke-request?payment=success";
+        return;
+      }
+      if ((status === "FAIL" || status === "CANCEL" || status === "ERROR") && typeof payload.message === "string") {
+        setNotice({ error: payload.message });
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -439,7 +484,8 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <button
               type="button"
-              onClick={() => setPaymentMethod("CARD")}
+              onClick={() => !isGuest && setPaymentMethod("CARD")}
+              disabled={isGuest}
               className={`rounded-2xl border p-4 text-left transition ${
                 paymentMethod === "CARD"
                   ? "border-foreground bg-foreground text-background"
@@ -451,7 +497,9 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
               </p>
               <p className="mt-2 text-sm font-semibold">카드 결제</p>
               <p className="mt-2 text-xs opacity-80">
-                결제 모듈 연동 후 자동화 예정입니다.
+                {isGuest
+                  ? "로그인 후 이용 가능합니다."
+                  : "결제 창에서 카드 결제를 완료해주세요."}
               </p>
             </button>
             <button

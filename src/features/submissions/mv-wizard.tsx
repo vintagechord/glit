@@ -243,8 +243,12 @@ export function MvWizard({
         window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=success`;
         return;
       }
-      if ((status === "FAIL" || status === "CANCEL") && typeof payload.message === "string") {
-        setNotice({ error: payload.message });
+      if (status === "FAIL" || status === "CANCEL" || status === "ERROR") {
+        const message =
+          typeof payload.message === "string"
+            ? payload.message
+            : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
+        setNotice({ error: message });
       }
       if (status === "SUCCESS" && !submissionFromMsg && guestTokenFromMsg) {
         window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
@@ -691,7 +695,6 @@ export function MvWizard({
       };
       setUploads([...nextUploads]);
 
-      let signedUrl: string;
       let path: string;
       try {
         const uploadResult = await uploadWithProgress(file, (progress) => {

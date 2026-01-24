@@ -11,10 +11,14 @@ type Suggestion = {
   groupId?: string;
 };
 
+type RulesModule = { default?: unknown; KO_SPELLCHECK_RULES?: unknown };
+const moduleValue = mod as RulesModule;
+const defaultExport = moduleValue.default as RulesModule | Rule[] | undefined;
+const resolveRules = (value: unknown): Rule[] => (Array.isArray(value) ? (value as Rule[]) : []);
 const RULES: Rule[] =
-  (mod as any).default?.KO_SPELLCHECK_RULES ||
-  (mod as any).KO_SPELLCHECK_RULES ||
-  (Array.isArray((mod as any).default) ? (mod as any).default : []);
+  resolveRules(defaultExport && "KO_SPELLCHECK_RULES" in (defaultExport as object) ? (defaultExport as RulesModule).KO_SPELLCHECK_RULES : null) ||
+  resolveRules(moduleValue.KO_SPELLCHECK_RULES) ||
+  resolveRules(defaultExport);
 
 const SHORT_BEFORE_ALLOW = new Set(["됬", "됫", "됐", "됏", "되야", "그낭"]);
 

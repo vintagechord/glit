@@ -210,6 +210,7 @@ export function SubmissionDetailClient({
   enableRealtime = true,
   guestToken,
   isAdmin = false,
+  adminDownloadsEnabled = false,
 }: {
   submissionId: string;
   initialSubmission: Submission;
@@ -219,6 +220,7 @@ export function SubmissionDetailClient({
   enableRealtime?: boolean;
   guestToken?: string;
   isAdmin?: boolean;
+  adminDownloadsEnabled?: boolean;
 }) {
   const supabase = React.useMemo(
     () => (enableRealtime ? createClient() : null),
@@ -253,6 +255,7 @@ export function SubmissionDetailClient({
   } | null>(null);
   const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
   const showAdminTools = isAdmin === true && !guestToken;
+  const showAdminDownload = showAdminTools && adminDownloadsEnabled;
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
@@ -718,7 +721,7 @@ export function SubmissionDetailClient({
           </div>
         </div>
       ) : null}
-      {showAdminTools ? (
+      {showAdminDownload ? (
         <div className="mt-3 flex flex-wrap gap-3">
           <button
             type="button"

@@ -6,7 +6,6 @@ import {
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
 import { ArtistHistoryTabs } from "@/components/dashboard/artist-history";
-import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = {
@@ -68,6 +67,7 @@ export async function HistoryPageView(config?: ShellConfig) {
     "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title )";
   const fallbackSelectWithoutTracks =
     "id, title, artist_name, artist_id, status, created_at, updated_at, type, amount_krw, is_oneclick";
+  const paymentStatuses = ["PAYMENT_PENDING", "PAID"];
 
   // 1) 기본 쿼리: artist join 포함
   const runSelect = (select: string) =>
@@ -76,14 +76,11 @@ export async function HistoryPageView(config?: ShellConfig) {
       .select(select)
       .order("updated_at", { ascending: false })
       .eq("user_id", user.id)
-      .or(
-        "and(payment_method.eq.CARD,payment_status.eq.PAID),and(payment_method.eq.BANK,payment_status.in.(PAYMENT_PENDING,PAID))",
-      );
+      .in("payment_status", paymentStatuses);
 
   const { data: initialData, error: submissionError } = await runSelect(fullSelect);
 
   let submissions = (initialData ?? null) as SubmissionRow[] | null;
-  let hasTrackResultsColumn = true;
 
   // 2) 에러 발생 시 컬럼 축소한 fallback
   if (submissionError) {
@@ -93,9 +90,6 @@ export async function HistoryPageView(config?: ShellConfig) {
     if (fallbackError) {
       console.error("history fallback select error", fallbackError);
       submissions = [];
-      hasTrackResultsColumn =
-        !fallbackError.message?.toLowerCase().includes("track_results") &&
-        fallbackError.code !== "42703";
     } else {
       submissions =
         (fallbackData?.map((row) => {
@@ -132,7 +126,6 @@ export async function HistoryPageView(config?: ShellConfig) {
         (typeof row === "object" && row !== null ? row : {}) as SubmissionRow,
       );
     }
-    hasTrackResultsColumn = false;
   }
 
   // 그룹핑: 타입별 -> 아티스트별

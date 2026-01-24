@@ -6,7 +6,6 @@ import {
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
 import { HomeReviewPanel } from "@/features/home/home-review-panel";
-import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = {
@@ -45,29 +44,29 @@ export async function StatusPageView(config?: ShellConfig) {
     }));
 
   const finalizedStatuses = ["RESULT_READY", "COMPLETED"];
-  const paymentFilter =
-    "and(payment_method.eq.CARD,payment_status.eq.PAID),and(payment_method.eq.BANK,payment_status.in.(PAYMENT_PENDING,PAID))";
-  const { data: albumSubmissionsRaw } = await supabase
-    .from("submissions")
-    .select(
-      "id, title, artist_name, status, updated_at, payment_status, package:packages ( name, station_count )",
-    )
-    .eq("user_id", user.id)
-    .eq("type", "ALBUM")
-    .or(paymentFilter)
-    .not("status", "in", `(${finalizedStatuses.join(",")})`)
-    .order("updated_at", { ascending: false })
-    .limit(5);
-
-  const { data: mvSubmissionsRaw } = await supabase
-    .from("submissions")
-    .select("id, title, artist_name, status, updated_at, payment_status, type")
-    .eq("user_id", user.id)
-    .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
-    .or(paymentFilter)
-    .not("status", "in", `(${finalizedStatuses.join(",")})`)
-    .order("updated_at", { ascending: false })
-    .limit(5);
+  const paymentStatuses = ["PAYMENT_PENDING", "PAID"];
+  const [albumResult, mvResult] = await Promise.all([
+    supabase
+      .from("submissions")
+      .select(
+        "id, title, artist_name, status, updated_at, payment_status, package:packages ( name, station_count )",
+      )
+      .eq("user_id", user.id)
+      .eq("type", "ALBUM")
+      .in("payment_status", paymentStatuses)
+      .not("status", "in", `(${finalizedStatuses.join(",")})`)
+      .order("updated_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("submissions")
+      .select("id, title, artist_name, status, updated_at, payment_status, type")
+      .eq("user_id", user.id)
+      .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
+      .in("payment_status", paymentStatuses)
+      .not("status", "in", `(${finalizedStatuses.join(",")})`)
+      .order("updated_at", { ascending: false })
+      .limit(5),
+  ]);
 
   const albumStationsMap: Record<
     string,
@@ -88,7 +87,7 @@ export async function StatusPageView(config?: ShellConfig) {
     }>
   > = {};
 
-  const albumSubmissions = (albumSubmissionsRaw ?? []) as Array<{
+  const albumSubmissions = (albumResult.data ?? []) as Array<{
     id: string;
     title: string | null;
     artist_name?: string | null;
@@ -97,7 +96,7 @@ export async function StatusPageView(config?: ShellConfig) {
     payment_status?: string | null;
     package?: { name?: string | null; station_count?: number | null }[];
   }>;
-  const mvSubmissions = (mvSubmissionsRaw ?? []) as Array<{
+  const mvSubmissions = (mvResult.data ?? []) as Array<{
     id: string;
     title: string | null;
     artist_name?: string | null;
@@ -108,33 +107,35 @@ export async function StatusPageView(config?: ShellConfig) {
   }>;
 
   const albumSubmissionIds = albumSubmissions.map((submission) => submission.id).filter(Boolean);
-  if (albumSubmissionIds.length) {
-    const { data } = await supabase
-      .from("station_reviews")
-      .select("id, submission_id, status, updated_at, station:stations ( name )")
-      .in("submission_id", albumSubmissionIds)
-      .order("updated_at", { ascending: false });
-    data?.forEach((review) => {
-      albumStationsMap[review.submission_id] = [
-        ...(albumStationsMap[review.submission_id] ?? []),
-        ...normalizeStations([review]),
-      ];
-    });
-  }
-
   const mvSubmissionIds = mvSubmissions.map((submission) => submission.id).filter(Boolean);
-  if (mvSubmissionIds.length) {
+  const allSubmissionIds = [...albumSubmissionIds, ...mvSubmissionIds];
+  if (allSubmissionIds.length) {
+    const albumIdSet = new Set(albumSubmissionIds);
+    const mvIdSet = new Set(mvSubmissionIds);
     const { data } = await supabase
       .from("station_reviews")
       .select("id, submission_id, status, updated_at, station:stations ( name )")
-      .in("submission_id", mvSubmissionIds)
+      .in("submission_id", allSubmissionIds)
       .order("updated_at", { ascending: false });
-    data?.forEach((review) => {
-      mvStationsMap[review.submission_id] = [
-        ...(mvStationsMap[review.submission_id] ?? []),
-        ...normalizeStations([review]),
-      ];
-    });
+    data
+      ?.map((review) => normalizeStations([review])[0])
+      .filter(Boolean)
+      .forEach((review) => {
+        if (!review?.submission_id) return;
+        if (albumIdSet.has(review.submission_id)) {
+          albumStationsMap[review.submission_id] = [
+            ...(albumStationsMap[review.submission_id] ?? []),
+            review,
+          ];
+          return;
+        }
+        if (mvIdSet.has(review.submission_id)) {
+          mvStationsMap[review.submission_id] = [
+            ...(mvStationsMap[review.submission_id] ?? []),
+            review,
+          ];
+        }
+      });
   }
 
   return (

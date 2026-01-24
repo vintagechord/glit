@@ -4,7 +4,6 @@ import { requestStdPayApproval } from "@/lib/inicis/api";
 import { getStdPayConfig } from "@/lib/inicis/config";
 import {
   getInicisTimestamp,
-  makeAuthRequestSignature,
   makeAuthSecureSignature,
   sha256,
 } from "@/lib/inicis/crypto";
@@ -13,6 +12,11 @@ import {
   markPaymentFailure,
   markPaymentSuccess,
 } from "@/lib/payments/submission";
+import {
+  getKaraokePaymentByOrderId,
+  markKaraokePaymentFailure,
+  markKaraokePaymentSuccess,
+} from "@/lib/payments/karaoke";
 import { getBaseUrl } from "@/lib/url";
 import { isInicisSuccessCode } from "@/lib/inicis/api";
 
@@ -23,6 +27,7 @@ type BridgePayload = {
   orderId?: string | null;
   submissionId?: string | null;
   guestToken?: string | null;
+  requestId?: string | null;
   message?: string | null;
   resultCode?: string | null;
   tid?: string | null;
@@ -70,6 +75,7 @@ const buildBridgeRedirect = (baseUrl: string, payload: BridgePayload) => {
   if (payload.orderId) url.searchParams.set("orderId", payload.orderId);
   if (payload.submissionId) url.searchParams.set("submissionId", payload.submissionId);
   if (payload.guestToken) url.searchParams.set("guestToken", payload.guestToken);
+  if (payload.requestId) url.searchParams.set("requestId", payload.requestId);
   if (payload.message) url.searchParams.set("message", payload.message);
   if (payload.resultCode) url.searchParams.set("resultCode", payload.resultCode);
   if (payload.tid) url.searchParams.set("tid", payload.tid);
@@ -173,11 +179,6 @@ export async function handleInicisReturn(req: NextRequest) {
     // FIX: reuse orderId timestamp for approval signature (2026-01-21)
 
     const pick = (k: string) => (typeof params[k] === "string" ? String(params[k]) : "");
-    const mask = (v: string | null | undefined, head = 4, tail = 2) => {
-      if (!v) return "";
-      if (v.length <= head + tail) return `${v[0] ?? ""}*`;
-      return `${v.slice(0, head)}***${v.slice(-tail)}`;
-    };
 
     const config = getStdPayConfig();
     const mKey = sha256(config.signKey ?? "");
@@ -226,50 +227,60 @@ export async function handleInicisReturn(req: NextRequest) {
       approvalHost,
     });
 
-    const { payment, error: paymentError } = orderId
+    const { payment: submissionPayment, error: paymentError } = orderId
       ? await getPaymentByOrderId(orderId)
       : { payment: null, error: null };
-    const submissionId = payment?.submission?.id ?? null;
-    const guestToken = payment?.submission?.guest_token ?? null;
-    const paymentAmount = Number(payment?.amount_krw ?? NaN);
+    const { payment: karaokePayment } = orderId && !submissionPayment ? await getKaraokePaymentByOrderId(orderId) : { payment: null };
+    const submissionId = submissionPayment?.submission?.id ?? null;
+    const guestToken = submissionPayment?.submission?.guest_token ?? null;
+    const karaokeRequestId = karaokePayment?.request?.id ?? null;
+    const paymentAmount = submissionPayment
+      ? Number(submissionPayment.amount_krw ?? NaN)
+      : Number(
+          karaokePayment?.amount_krw ??
+            karaokePayment?.request?.amount_krw ??
+            NaN,
+        );
 
-    if (mid && mid !== config.mid) {
-      if (payment?.submission) {
-        const save = await markPaymentFailure(orderId, {
-          result_code: "MID_MISMATCH",
-          result_message: "MID 불일치",
-          raw_response: scrubParams(params),
-        });
-        console.info("[INICIS][final]", {
-          orderId,
-          status: "FAILED",
-          reason: "mid_mismatch",
-          ok: save.ok,
+    const saveFailure = async (code: string, message: string, raw?: Record<string, unknown>) => {
+      const scrubbed = raw ?? scrubParams(params);
+      if (submissionId) {
+        await markPaymentFailure(orderId, {
+          result_code: code,
+          result_message: message,
+          raw_response: scrubbed,
         });
       }
+      if (karaokeRequestId) {
+        await markKaraokePaymentFailure(orderId, {
+          result_code: code,
+          result_message: message,
+          raw_response: scrubbed,
+        });
+      }
+    };
+
+    if (mid && mid !== config.mid) {
+      await saveFailure("MID_MISMATCH", "MID 불일치");
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
         orderId,
         submissionId,
         guestToken,
+        requestId: karaokeRequestId,
         message: "MID 불일치",
         resultCode: "MID_MISMATCH",
       });
     }
 
     if (cancelFlag) {
-      if (payment?.submission) {
-        await markPaymentFailure(orderId, {
-          result_code: resultCode || "CANCEL",
-          result_message: resultMsg || "사용자 취소",
-          raw_response: scrubParams(params),
-        });
-      }
+      await saveFailure(resultCode || "CANCEL", resultMsg || "사용자 취소");
       return buildBridgeRedirect(baseUrl, {
         status: "CANCEL",
         orderId,
         submissionId,
         guestToken,
+        requestId: karaokeRequestId,
         message: resultMsg || "사용자가 결제를 취소했습니다.",
         resultCode: resultCode || "CANCEL",
       });
@@ -284,18 +295,13 @@ export async function handleInicisReturn(req: NextRequest) {
     }
 
     if (resultCode && !isInicisSuccessCode(resultCode)) {
-      if (payment?.submission) {
-        await markPaymentFailure(orderId, {
-          result_code: resultCode,
-          result_message: resultMsg || "결제 인증에 실패했습니다.",
-          raw_response: scrubParams(params),
-        });
-      }
+      await saveFailure(resultCode, resultMsg || "결제 인증에 실패했습니다.");
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
         orderId,
         submissionId,
         guestToken,
+        requestId: karaokeRequestId,
         message: resultMsg || "결제가 완료되지 않았습니다.",
         resultCode,
       });
@@ -311,18 +317,13 @@ export async function handleInicisReturn(req: NextRequest) {
           parsedKeys: keys,
         });
       }
-      if (payment?.submission) {
-        await markPaymentFailure(orderId, {
-          result_code: resultCode || "AUTH_MISSING",
-          result_message: resultMsg || "인증 토큰을 받지 못했습니다.",
-          raw_response: scrubParams(params),
-        });
-      }
+      await saveFailure(resultCode || "AUTH_MISSING", resultMsg || "인증 토큰을 받지 못했습니다.");
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
         orderId,
         submissionId,
         guestToken,
+        requestId: karaokeRequestId,
         message: resultMsg || "결제 인증이 완료되지 않았습니다.",
         resultCode: resultCode || "AUTH_MISSING",
       });
@@ -535,7 +536,7 @@ export async function handleInicisReturn(req: NextRequest) {
         0,
     );
 
-    if (!payment?.submission || paymentError) {
+    if ((!submissionPayment && !karaokePayment) || paymentError) {
       console.info("[INICIS][final]", {
         orderId,
         status: "FAILED",
@@ -544,6 +545,8 @@ export async function handleInicisReturn(req: NextRequest) {
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
         orderId,
+        submissionId,
+        requestId: karaokeRequestId,
         message: "결제 내역을 찾을 수 없습니다.",
         resultCode: "ORDER_NOT_FOUND",
       });
@@ -555,13 +558,9 @@ export async function handleInicisReturn(req: NextRequest) {
       totPrice > 0 &&
       paymentAmount !== totPrice
     ) {
-      await markPaymentFailure(orderId, {
-        result_code: "PRICE_MISMATCH",
-        result_message: `금액 불일치 (${totPrice} != ${paymentAmount})`,
-        raw_response: {
-          returnParams: scrubParams(params),
-          approval: authData,
-        },
+      await saveFailure("PRICE_MISMATCH", `금액 불일치 (${totPrice} != ${paymentAmount})`, {
+        returnParams: scrubParams(params),
+        approval: authData,
       });
       console.info("[INICIS][final]", {
         orderId,
@@ -575,6 +574,7 @@ export async function handleInicisReturn(req: NextRequest) {
         orderId,
         submissionId,
         guestToken,
+        requestId: karaokeRequestId,
         message: "결제 금액이 일치하지 않습니다.",
         resultCode: "PRICE_MISMATCH",
       });
@@ -595,7 +595,7 @@ export async function handleInicisReturn(req: NextRequest) {
       sigMismatchReason,
     });
 
-    await markPaymentSuccess(orderId, {
+    const successPayload = {
       tid,
       result_code: toCode(authData.resultCode, "0000"),
       result_message: String(authResultMsg ?? "결제 완료"),
@@ -617,7 +617,15 @@ export async function handleInicisReturn(req: NextRequest) {
           },
         },
       },
-    });
+    };
+
+    if (submissionId) {
+      await markPaymentSuccess(orderId, successPayload);
+    }
+
+    const karaokeSuccess = karaokeRequestId
+      ? await markKaraokePaymentSuccess(orderId, successPayload)
+      : { requestId: null };
 
     console.info("[INICIS][final]", {
       orderId,
@@ -634,6 +642,7 @@ export async function handleInicisReturn(req: NextRequest) {
       orderId,
       submissionId,
       guestToken,
+      requestId: karaokeSuccess.requestId ?? karaokeRequestId,
       tid,
       amount: totPrice,
       resultCode: toCode(authData.resultCode, "0000"),

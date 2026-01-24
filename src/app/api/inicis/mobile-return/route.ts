@@ -59,8 +59,6 @@ export async function POST(req: NextRequest) {
     "";
   const toCode = (value: string | number | null | undefined, fallback: string) =>
     value == null ? fallback : String(value);
-  const toStrOrNull = (value: string | number | null | undefined) =>
-    value == null ? null : String(value);
 
   if (!orderId) {
     return NextResponse.json(

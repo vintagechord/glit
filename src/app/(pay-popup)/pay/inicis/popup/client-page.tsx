@@ -116,13 +116,14 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
   const ctxValue = runtimeSearchParams.get("context") ?? (Array.isArray(searchParams.context) ? searchParams.context[0] : searchParams.context);
   const modeValue = runtimeSearchParams.get("mode") ?? (Array.isArray(searchParams.mode) ? searchParams.mode[0] : searchParams.mode);
   const submissionId = runtimeSearchParams.get("submissionId") ?? (Array.isArray(searchParams.submissionId) ? searchParams.submissionId[0] : searchParams.submissionId);
+  const requestId = runtimeSearchParams.get("requestId") ?? (Array.isArray(searchParams.requestId) ? searchParams.requestId[0] : searchParams.requestId);
   const guestToken = runtimeSearchParams.get("guestToken") ?? (Array.isArray(searchParams.guestToken) ? searchParams.guestToken[0] : searchParams.guestToken);
   const debug = runtimeSearchParams.get("debug") === "1";
 
   const context: InicisPaymentContext | null = parseInicisContext(ctxValue);
+  const isKaraoke = context === "karaoke";
 
   const [initData, setInitData] = React.useState<StdPayInit | null>(null);
-  const [loading, setLoading] = React.useState(true);
   const [loadingBarVisible, setLoadingBarVisible] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -151,14 +152,12 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
 
   React.useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     setError(null);
 
     if (!context) {
       const rawParams = Object.fromEntries(runtimeSearchParams.entries());
       console.error("[Inicis][STDPay][popup] invalid context", { ctxValue, rawParams });
       setError("알 수 없는 결제 컨텍스트입니다.");
-      setLoading(false);
       setLoadingBarVisible(false);
       return;
     }
@@ -169,14 +168,25 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
         if (context === "test1000") {
           res = await fetch("/api/inicis/test-100", { method: "POST" });
         } else {
-          if (!submissionId) {
-            throw new Error("submissionId가 필요합니다.");
+          if (isKaraoke) {
+            if (!requestId) {
+              throw new Error("requestId가 필요합니다.");
+            }
+            res = await fetch("/api/inicis/karaoke/order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ requestId, context }),
+            });
+          } else {
+            if (!submissionId) {
+              throw new Error("submissionId가 필요합니다.");
+            }
+            res = await fetch("/api/inicis/submission/order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ submissionId, guestToken, context }),
+            });
           }
-          res = await fetch("/api/inicis/submission/order", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ submissionId, guestToken, context }),
-          });
         }
 
         const raw = await res.text();
@@ -194,19 +204,16 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
             guestToken: Boolean(guestToken),
           });
           setError(message);
-          setLoading(false);
           setLoadingBarVisible(false);
           return;
         }
 
         setInitData(json);
-        setLoading(false);
         window.setTimeout(() => setLoadingBarVisible(false), 1200);
       } catch (err) {
         if (cancelled) return;
         console.error("[Inicis][STDPay][popup][init-error]", err);
         setError("결제 초기화에 실패했습니다. 팝업 허용 후 다시 시도해주세요.");
-        setLoading(false);
         setLoadingBarVisible(false);
       }
     };
@@ -216,7 +223,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [context, submissionId, guestToken, runtimeSearchParams, ctxValue]);
+  }, [context, submissionId, requestId, guestToken, runtimeSearchParams, ctxValue, isKaraoke]);
 
   React.useEffect(() => {
     if (error) setLoadingBarVisible(false);

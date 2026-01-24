@@ -25,6 +25,7 @@ function ReturnBridgeContent() {
         orderId: searchParams.get("orderId"),
         submissionId: searchParams.get("submissionId"),
         guestToken: searchParams.get("guestToken"),
+        requestId: searchParams.get("requestId"),
         message: searchParams.get("message"),
         resultCode: searchParams.get("resultCode"),
         tid: searchParams.get("tid"),
@@ -36,24 +37,60 @@ function ReturnBridgeContent() {
 
   useEffect(() => {
     const message = { type: `INICIS:${status}`, payload };
-    const canPost = typeof window !== "undefined" && !!window.opener && window.opener !== window;
+    const hasOpener = typeof window !== "undefined" && !!window.opener && window.opener !== window;
+    const buildRedirectTarget = () => {
+      const statusParam = status.toLowerCase();
+      if (status === "SUCCESS") {
+        if (payload.submissionId) {
+          return `/dashboard/submissions/${payload.submissionId}?payment=success`;
+        }
+        if (payload.guestToken) {
+          return `/track/${payload.guestToken}?payment=success`;
+        }
+        if (payload.requestId) {
+          return `/karaoke-request?payment=success&requestId=${payload.requestId}`;
+        }
+      } else {
+        if (payload.submissionId) {
+          return `/dashboard/submissions/${payload.submissionId}?payment=${statusParam}`;
+        }
+        if (payload.guestToken) {
+          return `/track/${payload.guestToken}?payment=${statusParam}`;
+        }
+        if (payload.requestId) {
+          return `/karaoke-request?payment=${statusParam}&requestId=${payload.requestId}`;
+        }
+      }
+      return "/";
+    };
+
     try {
-      if (canPost) {
+      if (hasOpener) {
         window.opener?.postMessage(message, window.location.origin);
       }
     } catch (error) {
       console.error("[Inicis][return-bridge] postMessage error", error);
     }
-    if (!canPost) {
-      return;
+    if (hasOpener) {
+      const timer = window.setTimeout(() => {
+        try {
+          window.close();
+        } catch {
+          // ignore
+        }
+      }, 200);
+      return () => window.clearTimeout(timer);
     }
+
+    // 모바일/리디렉션 흐름: opener가 없을 때는 최종 페이지로 보내준다.
+    const redirectTarget = buildRedirectTarget();
     const timer = window.setTimeout(() => {
       try {
-        window.close();
+        window.location.replace(redirectTarget);
       } catch {
-        // ignore
+        window.location.href = redirectTarget;
       }
-    }, 200);
+    }, 300);
     return () => window.clearTimeout(timer);
   }, [payload, status]);
 

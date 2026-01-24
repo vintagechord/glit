@@ -7,6 +7,7 @@ type OpenPopupOptions = {
   submissionId?: string;
   guestToken?: string;
   orderId?: string;
+  requestId?: string;
   popupName?: string;
   preferRedirectOnMobile?: boolean;
 };
@@ -24,6 +25,7 @@ export const openInicisCardPopup = (options: OpenPopupOptions) => {
     submissionId,
     guestToken,
     orderId,
+    requestId,
     popupName = "INICIS_STD_PAY",
     preferRedirectOnMobile = true,
   } = options;
@@ -32,6 +34,7 @@ export const openInicisCardPopup = (options: OpenPopupOptions) => {
   if (submissionId) params.set("submissionId", submissionId);
   if (guestToken) params.set("guestToken", guestToken);
   if (orderId) params.set("orderId", orderId);
+  if (requestId) params.set("requestId", requestId);
 
   const url = `/pay/inicis/popup?${params.toString()}`;
 

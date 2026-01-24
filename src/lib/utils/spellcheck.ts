@@ -33,7 +33,7 @@ export const spellcheckText = async (text: string, options: Options = {}): Promi
       corrected,
       warnings,
     };
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       original: text,

@@ -552,8 +552,12 @@ export function AlbumWizard({
         }
         return;
       }
-      if ((status === "FAIL" || status === "CANCEL") && typeof payload.message === "string") {
-        setNotice({ error: payload.message });
+      if (status === "FAIL" || status === "CANCEL" || status === "ERROR") {
+        const message =
+          typeof payload.message === "string"
+            ? payload.message
+            : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
+        setNotice({ error: message });
       }
     };
     window.addEventListener("message", handler);

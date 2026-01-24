@@ -9,6 +9,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 export type KaraokeActionState = {
   error?: string;
   message?: string;
+  requestId?: string;
 };
 
 export type KaraokeFileUrlActionState = {
@@ -99,6 +100,9 @@ export async function createKaraokeRequestAction(
   }
 
   const isGuest = !user;
+  if (parsed.data.paymentMethod === "CARD" && isGuest) {
+    return { error: "로그인 후 카드 결제를 이용해주세요." };
+  }
   if (isGuest && (!parsed.data.guestName || !parsed.data.guestEmail)) {
     return { error: "비회원 정보를 입력해주세요." };
   }
@@ -111,34 +115,38 @@ export async function createKaraokeRequestAction(
 
   const db = isGuest ? createAdminClient() : supabase;
 
-  const { error } = await db.from("karaoke_requests").insert({
-    user_id: user?.id ?? null,
-    guest_name: isGuest ? parsed.data.guestName : null,
-    guest_email: isGuest ? parsed.data.guestEmail : null,
-    guest_phone: isGuest
-      ? parsed.data.guestPhone ?? parsed.data.contact
-      : null,
-    title: parsed.data.title,
-    artist: parsed.data.artist || null,
-    contact: parsed.data.contact,
-    notes: parsed.data.notes || null,
-    file_path: parsed.data.filePath || null,
-    payment_method: parsed.data.paymentMethod,
-    payment_status: "PAYMENT_PENDING",
-    amount_krw: APP_CONFIG.karaokeFeeKrw,
-    bank_depositor_name:
-      parsed.data.paymentMethod === "BANK"
-        ? parsed.data.bankDepositorName?.trim() ?? null
+  const { data, error } = await db
+    .from("karaoke_requests")
+    .insert({
+      user_id: user?.id ?? null,
+      guest_name: isGuest ? parsed.data.guestName : null,
+      guest_email: isGuest ? parsed.data.guestEmail : null,
+      guest_phone: isGuest
+        ? parsed.data.guestPhone ?? parsed.data.contact
         : null,
-    tj_requested: parsed.data.tjRequested ?? true,
-    ky_requested: parsed.data.kyRequested ?? true,
-  });
+      title: parsed.data.title,
+      artist: parsed.data.artist || null,
+      contact: parsed.data.contact,
+      notes: parsed.data.notes || null,
+      file_path: parsed.data.filePath || null,
+      payment_method: parsed.data.paymentMethod,
+      payment_status: "PAYMENT_PENDING",
+      amount_krw: APP_CONFIG.karaokeFeeKrw,
+      bank_depositor_name:
+        parsed.data.paymentMethod === "BANK"
+          ? parsed.data.bankDepositorName?.trim() ?? null
+          : null,
+      tj_requested: parsed.data.tjRequested ?? true,
+      ky_requested: parsed.data.kyRequested ?? true,
+    })
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     return { error: "요청 접수에 실패했습니다." };
   }
 
-  return { message: "노래방 등록 요청이 접수되었습니다." };
+  return { message: "노래방 등록 요청이 접수되었습니다.", requestId: data?.id ?? undefined };
 }
 
 export async function getKaraokeRequestFileUrlAction(
