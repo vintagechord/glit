@@ -303,6 +303,12 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
         <p className="mt-3 text-xs text-muted-foreground">
           기본 신청 비용 {formatCurrency(APP_CONFIG.karaokeFeeKrw)}원
         </p>
+        <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm dark:border-amber-400/50 dark:bg-amber-400/20 dark:text-amber-50">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em]">주의사항</p>
+          <p className="mt-1">
+            노래방 등록 신청만 온사이드가 대행합니다. 신청 접수 후 해당 곡의 추천수가 많아야만 실제 노래방에 등록되게 됩니다.
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-6">
