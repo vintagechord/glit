@@ -22,6 +22,18 @@ type KaraokeRequestRow = {
   order_id?: string | null;
 };
 
+type KaraokePaymentRow = {
+  id: string;
+  request_id: string | null;
+  amount_krw: number | null;
+  status: string | null;
+  pg_tid?: string | null;
+  result_code?: string | null;
+  result_message?: string | null;
+  raw_response?: unknown;
+  request?: KaraokeRequestRow | null;
+};
+
 const maskMid = (mid: string) =>
   mid.length <= 4 ? `${mid.slice(0, 2)}**` : `${mid.slice(0, 2)}***${mid.slice(-2)}`;
 
@@ -35,7 +47,13 @@ export const findKaraokeRequestById = async (requestId: string) => {
   return { request: data as KaraokeRequestRow | null, error };
 };
 
-export const ensureKaraokeRequestOwner = async (requestId: string) => {
+export const ensureKaraokeRequestOwner = async (
+  requestId: string,
+): Promise<{
+  user: { id?: string } | null;
+  request: KaraokeRequestRow | null;
+  error: "NOT_FOUND" | "UNAUTHORIZED" | "FORBIDDEN" | null;
+}> => {
   const supabase = await createServerSupabase();
   const {
     data: { user },
@@ -43,15 +61,15 @@ export const ensureKaraokeRequestOwner = async (requestId: string) => {
 
   const { request, error } = await findKaraokeRequestById(requestId);
   if (error || !request) {
-    return { user, request: null, error: "NOT_FOUND" as const };
+    return { user, request: null, error: "NOT_FOUND" };
   }
   if (!user) {
-    return { user: null, request: null, error: "UNAUTHORIZED" as const };
+    return { user: null, request: null, error: "UNAUTHORIZED" };
   }
   if (request.user_id && request.user_id === user.id) {
-    return { user, request, error: null as const };
+    return { user, request, error: null };
   }
-  return { user, request: null, error: "FORBIDDEN" as const };
+  return { user, request: null, error: "FORBIDDEN" };
 };
 
 export const createKaraokePaymentOrder = async (
@@ -135,7 +153,7 @@ export const getKaraokePaymentByOrderId = async (orderId: string) => {
     )
     .eq("order_id", orderId)
     .maybeSingle();
-  return { payment: data as { request_id?: string | null; request?: KaraokeRequestRow | null } | null, error };
+  return { payment: data as KaraokePaymentRow | null, error };
 };
 
 export const markKaraokePaymentFailure = async (

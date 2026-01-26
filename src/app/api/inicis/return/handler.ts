@@ -495,16 +495,10 @@ export async function handleInicisReturn(req: NextRequest) {
           ? String(authResultMsg ?? "승인 요청에 실패했습니다.")
           : "결제 정보를 확인할 수 없습니다.";
 
-      if (payment?.submission) {
-        await markPaymentFailure(orderId, {
-          result_code: authResultCode,
-          result_message: failMessage,
-          raw_response: {
-            returnParams: scrubParams(params),
-            approval: authData,
-          },
-        });
-      }
+      await saveFailure(authResultCode, failMessage, {
+        returnParams: scrubParams(params),
+        approval: authData,
+      });
 
       console.info("[INICIS][final]", {
         orderId,

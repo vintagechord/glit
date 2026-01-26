@@ -201,10 +201,11 @@ export async function POST(request: Request) {
   };
 
   try {
-    if (!request.body) {
+    const webStream = request.body as unknown as import("stream/web").ReadableStream<any>;
+    if (!webStream) {
       throw new Error("Request body is empty.");
     }
-    Readable.fromWeb(request.body as unknown as ReadableStream).pipe(busboy);
+    Readable.fromWeb(webStream).pipe(busboy as any);
     await parsePromise;
   } catch (error) {
     console.error("[Upload][direct] multipart parse error", {

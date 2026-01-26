@@ -335,6 +335,7 @@ export default async function Home() {
   const normalizeStations = (
     reviews?: Array<{
       id: string;
+      submission_id?: string;
       status: string;
       updated_at: string;
       track_results?: unknown;
@@ -343,6 +344,7 @@ export default async function Home() {
   ) =>
     (reviews ?? []).map((review) => ({
       ...review,
+      submission_id: (review as { submission_id?: string }).submission_id,
       station: Array.isArray(review.station) ? review.station[0] : review.station ?? null,
     }));
 

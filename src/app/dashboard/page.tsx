@@ -30,6 +30,7 @@ export async function StatusPageView(config?: ShellConfig) {
   const normalizeStations = (
     reviews?: Array<{
       id: string;
+      submission_id?: string;
       status: string;
       track_results?: unknown;
       updated_at: string;
@@ -38,6 +39,7 @@ export async function StatusPageView(config?: ShellConfig) {
   ) =>
     (reviews ?? []).map((review) => ({
       ...review,
+      submission_id: (review as { submission_id?: string }).submission_id,
       station: Array.isArray(review.station)
         ? review.station[0]
         : review.station ?? null,
