@@ -39,16 +39,16 @@ export async function SiteHeader() {
                   src={logoLight}
                   alt="onside"
                   className="dark:hidden"
-                  width={90}
-                  height={22}
+                  width={140}
+                  height={38}
                   priority
                 />
                 <Image
                   src={logoDark}
                   alt="onside"
                   className="hidden dark:block"
-                  width={90}
-                  height={22}
+                  width={140}
+                  height={38}
                   priority
                 />
                 <span className="sr-only">온사이드</span>
