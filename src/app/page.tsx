@@ -123,7 +123,7 @@ const featureHighlights = [
   {
     title: "파일 업로드",
     description:
-      "글릿은 자체 스토리지를 운영하고 있습니다.\n안전하게 글릿에 음원과 영상을 업로드하세요.",
+      "온사이드는 자체 스토리지를 운영하고 있습니다.\n안전하게 온사이드에 음원과 영상을 업로드하세요.",
     card:
       "bg-white text-[#2d3444] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#e7fff2] via-white to-[#eaf7ff]",
@@ -309,7 +309,7 @@ export default async function Home() {
   const sampleAlbum: SubmissionSnapshot = {
     id: "sample-album",
     title: "샘플 앨범 심의",
-    artist_name: "글릿",
+    artist_name: "온사이드",
     status: "IN_PROGRESS",
     payment_status: "PAID",
     updated_at: new Date().toISOString(),
@@ -317,7 +317,7 @@ export default async function Home() {
   const sampleMv: SubmissionSnapshot = {
     id: "sample-mv",
     title: "샘플 MV 심의",
-    artist_name: "글릿",
+    artist_name: "온사이드",
     status: "WAITING_PAYMENT",
     payment_status: "PAYMENT_PENDING",
     updated_at: new Date().toISOString(),
@@ -490,14 +490,14 @@ export default async function Home() {
               </span>
               <h1 className="font-display text-3xl leading-tight text-white sm:text-4xl">
                 <span className="inline-block animate-[floaty_6s_ease-in-out_infinite] bg-gradient-to-r from-emerald-400 via-lime-300 to-emerald-500 bg-clip-text text-transparent drop-shadow-[0_8px_24px_rgba(52,211,153,0.25)]">
-                  GLIT(글릿)
+                  온사이드(onside)
                 </span>
                 <br />
                 음반 · M/V 심의를 쉽고 빠르게!
               </h1>
               <p className="max-w-xl text-base text-white/85 sm:text-lg whitespace-pre-line">
-                글릿에서 방송사별 심의 진행을 실시간으로 받아보세요.
-                {"\n"}나의 모든 심의 기록은 GLIT에서 모아 관리할 수 있습니다.
+                온사이드에서 방송사별 심의 진행을 실시간으로 받아보세요.
+                {"\n"}나의 모든 심의 기록은 온사이드에서 모아 관리할 수 있습니다.
               </p>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {heroCtas.map((cta) => (

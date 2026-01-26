@@ -84,7 +84,7 @@ export function AboutRevealSection() {
               정식 등록 업체
             </p>
             <p className="text-base leading-relaxed text-white/80">
-              GLIT은 뮤직 비즈니스 전문기업 (주)빈티지하우스의 심의 브랜드입니다.
+              온사이드는 뮤직 비즈니스 전문기업 (주)빈티지하우스의 심의 브랜드입니다.
               빈티지하우스는 음원거래 플랫폼{" "}
               <a
                 href="https://www.iamwatermelon.com"

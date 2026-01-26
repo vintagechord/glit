@@ -499,7 +499,7 @@ export function SubmissionDetailClient({
 
   const buildSubmissionText = () => {
     const lines: string[] = [];
-    lines.push("GLIT 신청 내역");
+    lines.push("온사이드 신청 내역");
     lines.push("=".repeat(40));
     lines.push(`제목: ${submission.title || "제목 미입력"}`);
     lines.push(`아티스트: ${submission.artist_name || "아티스트 미입력"}`);

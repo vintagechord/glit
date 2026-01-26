@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const stdParams = buildStdPayRequest({
       orderId,
       amountKrw: TEST_AMOUNT,
-      productName: "GLIT 1000원 테스트 결제",
+      productName: "온사이드 1000원 테스트 결제",
       buyerName: "테스터",
       buyerEmail: "",
       buyerTel: "",

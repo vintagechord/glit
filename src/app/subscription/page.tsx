@@ -57,7 +57,7 @@ export default async function SubscriptionPage() {
     );
   }
 
-  const productName = "Glit 정기 구독";
+  const productName = "온사이드 정기 구독";
 
   let stdParams:
     | ReturnType<typeof buildStdPayRequest>

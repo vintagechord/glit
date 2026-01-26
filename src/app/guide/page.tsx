@@ -24,8 +24,8 @@ const albumSteps = [
   },
   {
     number: "03",
-    title: "GLIT의 심의 대행",
-    description: "GLIT 플랫폼에서 쉽고 빠른 접수",
+    title: "온사이드의 심의 대행",
+    description: "온사이드 플랫폼에서 쉽고 빠른 접수",
     bullets: [
       "온라인/카드 결제 지원",
       "온라인 제출로 간편 접수",
@@ -55,7 +55,7 @@ const mvSteps = [
   },
   {
     number: "03",
-    title: "GLIT의 뮤비 심의 대행",
+    title: "온사이드의 뮤비 심의 대행",
     description: "뮤직비디오 접수를 방송 가능 상태까지 빠르고 정확하게 진행합니다.",
     bullets: [
       "온라인 신청서 작성과 파일 업로드 동시 지원",

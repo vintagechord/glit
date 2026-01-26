@@ -1,6 +1,6 @@
 export const metadata = {
   title: "KG 이니시스 결제",
-  description: "GLIT 결제 팝업",
+  description: "온사이드 결제 팝업",
 };
 
 export default function PayPopupLayout({ children }: { children: React.ReactNode }) {

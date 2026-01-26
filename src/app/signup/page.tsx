@@ -15,9 +15,9 @@ export default function SignupPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             Get Started
           </p>
-          <h1 className="font-display text-3xl text-foreground">GLIT 회원가입</h1>
+          <h1 className="font-display text-3xl text-foreground">온사이드 회원가입</h1>
           <p className="text-sm text-muted-foreground">
-            심의 접수와 결제, 결과 통보, 승인 기록 아카이브까지 GLIT에서 한 번에
+            심의 접수와 결제, 결과 통보, 승인 기록 아카이브까지 온사이드에서 한 번에
             관리하세요.
           </p>
           <div className="rounded-2xl border border-dashed border-border/70 bg-background/70 p-4 text-xs text-muted-foreground">

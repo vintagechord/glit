@@ -1,4 +1,4 @@
-# Glit Spellcheck Microservice
+# Onside Spellcheck Microservice
 
 FastAPI wrapper around `py-hanspell` that chunks long text and returns a simple correction payload.
 

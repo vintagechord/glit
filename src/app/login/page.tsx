@@ -12,10 +12,10 @@ export default function LoginPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             Welcome Back
           </p>
-          <h1 className="font-display text-3xl text-foreground">GLIT 로그인</h1>
+          <h1 className="font-display text-3xl text-foreground">온사이드 로그인</h1>
           <p className="text-sm text-muted-foreground">
             간편한 접수 이후 심의 진행 상황을 실시간으로 확인하고, 나의 모든 기록을
-            GLIT에 아카이빙하세요.
+            온사이드에 아카이빙하세요.
           </p>
         </div>
         <LoginForm />

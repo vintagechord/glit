@@ -29,7 +29,7 @@ allowed_origins = [
     if origin.strip()
 ]
 
-app = FastAPI(title="Glit Spellcheck", version="0.1.0")
+app = FastAPI(title="Onside Spellcheck", version="0.1.0")
 
 if allowed_origins:
     app.add_middleware(

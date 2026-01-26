@@ -18,11 +18,11 @@ const spaceGrotesk = Space_Grotesk({
 
 export const metadata: Metadata = {
   title: {
-    default: "GLIT",
-    template: "%s | GLIT",
+    default: "온사이드",
+    template: "%s | 온사이드",
   },
   description:
-    "GLIT — 음반·뮤직비디오 심의부터 방송 가능까지 한 번에. 접수, 승인, 아카이브를 온라인으로 관리하세요.",
+    "온사이드 — 음반·뮤직비디오 심의부터 방송 가능까지 한 번에. 접수, 승인, 아카이브를 온라인으로 관리하세요.",
 };
 
 export default function RootLayout({

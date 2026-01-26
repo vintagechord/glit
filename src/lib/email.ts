@@ -34,12 +34,12 @@ export async function sendWelcomeEmail(payload: WelcomeEmailPayload) {
     return { ok: false, skipped: true } as const;
   }
 
-  const name = payload.name?.trim() || "GLIT";
+  const name = payload.name?.trim() || "onside";
   const body = {
     from,
     to: payload.email,
-    subject: "Welcome to GLIT",
-    html: `<p>Hi ${name},</p><p>Your release is now officially greenlit with GLIT.</p><p>Submit, track, and archive every review in one place — we'll keep you posted.</p>`,
+    subject: "Welcome to onside",
+    html: `<p>Hi ${name},</p><p>Your release is now officially greenlit with onside.</p><p>Submit, track, and archive every review in one place — we'll keep you posted.</p>`,
   };
 
   try {
@@ -87,7 +87,7 @@ export async function sendPasswordResetEmail(
     <div style="font-family: Arial, sans-serif; background-color: #0b1120; padding: 32px 0; text-align: center;">
       <div style="max-width: 520px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 28px 24px; color: #e2e8f0;">
         <div style="font-size: 18px; font-weight: 700; margin: 0 0 8px 0;">비밀번호 재설정</div>
-        <p style="margin: 8px 0 0 0; color: #cbd5e1; line-height: 1.6;">GLIT 계정의 비밀번호를 새로 설정하려면 아래 버튼을 눌러주세요.</p>
+        <p style="margin: 8px 0 0 0; color: #cbd5e1; line-height: 1.6;">온사이드 계정의 비밀번호를 새로 설정하려면 아래 버튼을 눌러주세요.</p>
         <a href="${payload.link}" style="display: inline-block; margin: 18px 0 12px; padding: 12px 20px; border-radius: 999px; background: #fcd34d; color: #0f172a; font-weight: 700; text-decoration: none;">비밀번호 재설정하기</a>
         <p style="margin: 10px 0 0 0; font-size: 12px; color: #94a3b8;">버튼이 동작하지 않으면 아래 링크를 복사해 브라우저에 붙여넣어 주세요.</p>
         <p style="margin: 6px 0 0 0; font-size: 12px; color: #cbd5e1; word-break: break-all;">${payload.link}</p>
@@ -105,7 +105,7 @@ export async function sendPasswordResetEmail(
       body: JSON.stringify({
         from,
         to: payload.email,
-        subject: "[GLIT] 비밀번호 재설정 안내",
+        subject: "[onside] 비밀번호 재설정 안내",
         html,
       }),
     });
@@ -157,7 +157,7 @@ export async function sendSubmissionReceiptEmail(
     <div style="font-family: Arial, sans-serif; color: #0f172a;">
       <h2 style="margin:0 0 12px 0;">${kindLabel} 접수 완료</h2>
       ${lines.map((line) => `<p style="margin:4px 0;">${line}</p>`).join("")}
-      <p style="margin:12px 0 0 0;">GLIT이 진행 상황을 실시간으로 업데이트합니다.</p>
+      <p style="margin:12px 0 0 0;">온사이드가 진행 상황을 실시간으로 업데이트합니다.</p>
     </div>
   `;
 
@@ -171,7 +171,7 @@ export async function sendSubmissionReceiptEmail(
       body: JSON.stringify({
         from,
         to: payload.email,
-        subject: `[GLIT] ${kindLabel} 접수 완료 안내`,
+        subject: `[onside] ${kindLabel} 접수 완료 안내`,
         html,
       }),
     });
@@ -219,7 +219,7 @@ export async function sendResultEmail(
   const html = `
     <div style="font-family: Arial, sans-serif; background-color: #0b1120; padding: 32px 0; text-align: center;">
       <div style="max-width: 520px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 28px 24px; color: #e2e8f0;">
-        <div style="font-size: 18px; font-weight: 700; margin: 0 0 6px 0;">GLIT 심의 결과</div>
+        <div style="font-size: 18px; font-weight: 700; margin: 0 0 6px 0;">온사이드 심의 결과</div>
         <p style="margin: 4px 0 0 0; font-size: 22px; font-weight: 800; color: #fcd34d;">${statusLabel}</p>
         <p style="margin: 12px 0 0 0; color: #cbd5e1; line-height: 1.6;">
           ${payload.title}${payload.artist ? ` · ${payload.artist}` : ""}
@@ -230,7 +230,7 @@ export async function sendResultEmail(
             ? `<a href="${payload.link}" style="display: inline-block; margin: 18px 0 6px; padding: 12px 20px; border-radius: 999px; background: #fcd34d; color: #0f172a; font-weight: 700; text-decoration: none;">결과 상세 보기</a>`
             : ""
         }
-        <p style="margin: 10px 0 0 0; font-size: 12px; color: #94a3b8;">GLIT에 접수한 심의 결과를 안내드립니다.</p>
+        <p style="margin: 10px 0 0 0; font-size: 12px; color: #94a3b8;">온사이드에 접수한 심의 결과를 안내드립니다.</p>
       </div>
     </div>
   `;
@@ -245,7 +245,7 @@ export async function sendResultEmail(
       body: JSON.stringify({
         from,
         to: payload.email,
-        subject: `[GLIT] 심의 결과 안내 — ${statusLabel}`,
+        subject: `[onside] 심의 결과 안내 — ${statusLabel}`,
         html,
       }),
     });

@@ -37,7 +37,7 @@ export async function SiteHeader() {
               <>
                 <Image
                   src={logoLight}
-                  alt="GLIT"
+                  alt="onside"
                   className="dark:hidden"
                   width={90}
                   height={22}
@@ -45,17 +45,17 @@ export async function SiteHeader() {
                 />
                 <Image
                   src={logoDark}
-                  alt="GLIT"
+                  alt="onside"
                   className="hidden dark:block"
                   width={90}
                   height={22}
                   priority
                 />
-                <span className="sr-only">GLIT</span>
+                <span className="sr-only">온사이드</span>
               </>
             ) : (
               <span className="text-lg font-semibold tracking-[0.3em] text-foreground">
-                GLIT
+                onside
               </span>
             )}
           </Link>

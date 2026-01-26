@@ -1,4 +1,4 @@
-# GLIT (MVP → v1)
+# 온사이드 (MVP → v1)
 
 음원/뮤직비디오 심의를 접수하고 승인·아카이브까지 온라인으로 처리하는 서비스입니다.
 
@@ -40,7 +40,7 @@ SPELLCHECK_SHARED_SECRET=optional-shared-secret
 
 # Optional (welcome email)
 RESEND_API_KEY=your_resend_key
-RESEND_FROM="GLIT <help@vhouse.co.kr>"
+RESEND_FROM="onside <help@vhouse.co.kr>"
 
 # Inicis subscription billing (staging sample values)
 INICIS_ENV=stg

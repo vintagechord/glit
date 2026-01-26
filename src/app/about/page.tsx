@@ -29,13 +29,13 @@ export default function AboutPage() {
           <div className="relative z-10 grid gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.5em] text-[var(--about-ink)]">
-                GLIT PROFILE
+                ONSIDE PROFILE
               </p>
               <h1 className="font-display mt-3 text-3xl leading-tight text-[var(--about-ink)] md:text-4xl">
-                글릿(GLIT)
+                온사이드(onside)
               </h1>
               <p className="mt-3 text-base leading-relaxed text-[var(--about-ink)]/80 md:text-lg">
-                빈티지하우스가 운영하는 GLIT은 음반·뮤직비디오 심의를 온라인으로
+                빈티지하우스가 운영하는 온사이드는 음반·뮤직비디오 심의를 온라인으로
                 연결해 “방송 가능” 상태까지 빠르고 안전하게 만들어줍니다. 심의
                 진행, 승인, 기록 아카이브를 한 곳에서 관리하세요.
               </p>
@@ -59,7 +59,7 @@ export default function AboutPage() {
               <div className="relative overflow-hidden rounded-[28px] border border-border/60 bg-white/80">
                 <Image
                   src="/media/hero/glit-hero-poster.jpg"
-                  alt="GLIT 심의 서비스 소개 이미지"
+                  alt="온사이드 심의 서비스 소개 이미지"
                   width={960}
                   height={520}
                   className="h-[220px] w-full object-cover md:h-[260px]"
@@ -69,7 +69,7 @@ export default function AboutPage() {
               <div className="mt-3 flex items-center gap-3">
                 <Image
                   src="/brand/glit-logo.svg"
-                  alt="GLIT 로고"
+                  alt="온사이드 로고"
                   width={96}
                   height={24}
                   className="h-6 w-auto"
