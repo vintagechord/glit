@@ -34,17 +34,24 @@ export async function PATCH(
 
   const { data, error } = await supabase
     .from("submissions")
-    .update({ mv_rating: parsed.data.rating })
+    .update({ mv_desired_rating: parsed.data.rating })
     .eq("id", submissionId)
     .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
-    .select("id")
+    .select("id, mv_desired_rating")
     .maybeSingle();
 
-  if (error || !data) {
-    return NextResponse.json(
-      { error: error ? "등급을 저장하지 못했습니다." : "뮤직비디오 접수가 아닙니다." },
-      { status: 500 },
-    );
+  console.info("[admin][mv-rating] update", {
+    submissionId,
+    rating: parsed.data.rating,
+    updated: Boolean(data?.id),
+    error: error?.message,
+  });
+
+  if (error) {
+    return NextResponse.json({ error: "등급을 저장하지 못했습니다." }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: "뮤직비디오 접수를 찾을 수 없습니다." }, { status: 404 });
   }
 
   return NextResponse.json({ ok: true, rating: parsed.data.rating });
