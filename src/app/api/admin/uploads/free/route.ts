@@ -31,15 +31,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "업로드 데이터를 찾을 수 없습니다." }, { status: 400 });
   }
 
+  type FilePart = {
+    stream: PassThrough;
+    filename?: string;
+    mimeType?: string;
+    sizeBytes?: number;
+  };
+
   const fields: Record<string, string> = {};
-  let filePart:
-    | {
-        stream: PassThrough;
-        filename?: string;
-        mimeType?: string;
-        sizeBytes?: number;
-      }
-    | null = null;
+  let filePart: FilePart | null = null;
 
   const busboy = Busboy({ headers: { "content-type": contentType } });
 
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "파일이 포함되어 있지 않습니다." }, { status: 400 });
   }
 
-  const part = filePart!;
+  const part: FilePart = filePart;
   const filename = part.filename || fields.filename || "unnamed";
   const mimeType = part.mimeType || fields.mimeType || "application/octet-stream";
   const sizeBytes = Number(fields.sizeBytes || part.sizeBytes || 0);
