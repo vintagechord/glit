@@ -378,10 +378,12 @@ export default async function AdminSubmissionDetailPage({
   const extractMissingColumn = (error: { message?: string; code?: string } | null) => {
     const msg = error?.message ?? "";
     const match =
-      msg.match(/column \"([^\"]+)\"/) ||
-      msg.match(/column '([^']+)'/) ||
-      msg.match(/(\w+)\s+does not exist/i);
-    return match?.[1] ?? null;
+      msg.match(/column\s+\"?([^\s\"']+)\"?\s+does not exist/i) ||
+      msg.match(/column\s+'?([^\s\"']+)'?\s+does not exist/i);
+    if (!match?.[1]) return null;
+    const full = match[1];
+    const parts = full.split(".");
+    return parts.length > 1 ? { full, short: parts[parts.length - 1] } : { full, short: full };
   };
 
   let selectColumns = buildSelectColumns({
@@ -407,17 +409,19 @@ export default async function AdminSubmissionDetailPage({
     if (missing) {
       // drop any column string that includes the missing identifier
       const beforeLength = selectColumns.length;
-      selectColumns = selectColumns.filter((col) => !col.includes(missing));
+      selectColumns = selectColumns.filter(
+        (col) => !col.includes(missing.full) && !col.includes(missing.short),
+      );
 
       if (selectColumns.length === beforeLength) {
         break;
       }
       // also update flags if applicable
-      if (missing === "guest_name") hasGuestColumns = false;
-      if (["result_status", "result_memo", "result_notified_at"].includes(missing)) {
+      if (missing.short === "guest_name") hasGuestColumns = false;
+      if (["result_status", "result_memo", "result_notified_at"].includes(missing.short)) {
         hasResultColumns = false;
       }
-      if (missing === "mv_certificate_uploaded_at") {
+      if (missing.short === "mv_certificate_uploaded_at") {
         hasCertUploadedColumn = false;
       }
       continue;
@@ -438,8 +442,22 @@ export default async function AdminSubmissionDetailPage({
         </p>
         <h1 className="font-display mt-2 text-2xl text-foreground">접수 상세</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
-          접수 정보를 불러오지 못했습니다. ({submissionError.message ?? "알 수 없는 오류"})
+          서버 오류로 접수 정보를 불러오지 못했습니다.
         </p>
+        <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
+          요청 ID: {submissionId}
+        </div>
+        <div className="mt-2 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
+          상세: {submissionError.message ?? "알 수 없는 오류"}
+        </div>
+        <div className="mt-3 flex gap-3">
+          <Link
+            href="/admin/submissions"
+            className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+          >
+            목록으로 돌아가기
+          </Link>
+        </div>
       </div>
     );
   }
