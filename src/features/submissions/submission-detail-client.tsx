@@ -275,12 +275,6 @@ export function SubmissionDetailClient({
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
-  const [adminRating, setAdminRating] = React.useState(
-          submission.mv_desired_rating ?? "",
-  );
-  const [isSavingRating, setIsSavingRating] = React.useState(false);
-  const [certificateFile, setCertificateFile] = React.useState<File | null>(null);
-  const [isUploadingCert, setIsUploadingCert] = React.useState(false);
   const isMvSubmission =
     submission.type === "MV_BROADCAST" || submission.type === "MV_DISTRIBUTION";
   const isResultReady =
@@ -367,44 +361,6 @@ export function SubmissionDetailClient({
     params.set("filePath", submission.certificate_b2_path);
     if (guestToken) params.set("guestToken", guestToken);
     window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
-  };
-
-  const handleUploadCertificate = async () => {
-    if (!certificateFile) {
-      alert("필증 파일을 선택하세요.");
-      return;
-    }
-    setIsUploadingCert(true);
-    try {
-      const form = new FormData();
-      form.append("file", certificateFile);
-      form.append("filename", certificateFile.name);
-      form.append("mimeType", certificateFile.type || "application/octet-stream");
-      form.append("sizeBytes", String(certificateFile.size));
-
-      const res = await fetch(`/api/admin/submissions/${submissionId}/certificate`, {
-        method: "POST",
-        body: form,
-      });
-      const json = (await res.json().catch(() => null)) as { error?: string; objectKey?: string };
-      if (!res.ok || json?.error) {
-        throw new Error(json?.error || "필증 업로드에 실패했습니다.");
-      }
-      setSubmission((prev) => ({
-        ...prev,
-        certificate_b2_path: json.objectKey ?? prev.certificate_b2_path,
-        certificate_original_name: certificateFile.name,
-        certificate_mime: certificateFile.type || "application/octet-stream",
-        certificate_size: certificateFile.size,
-        certificate_uploaded_at: new Date().toISOString(),
-      }));
-      setCertificateFile(null);
-      alert("필증이 업로드되었습니다.");
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "필증 업로드에 실패했습니다.");
-    } finally {
-      setIsUploadingCert(false);
-    }
   };
 
   const handleSaveAdminRating = async () => {
@@ -750,51 +706,7 @@ export function SubmissionDetailClient({
           </div>
         </div>
       ) : null}
-      {showAdminTools && isMvSubmission ? (
-        <div className="mt-4 rounded-2xl border border-border/70 bg-card/80 p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              심의 등급
-              <select
-                value={adminRating}
-                onChange={(e) => setAdminRating(e.target.value)}
-                className="mt-1 w-40 rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-foreground"
-              >
-                <option value="">선택</option>
-                <option value="ALL">전체관람가</option>
-                <option value="12">12세</option>
-                <option value="15">15세</option>
-                <option value="18">18세(청소년불가)</option>
-                <option value="REJECT">심의불가</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={handleSaveAdminRating}
-              disabled={isSavingRating}
-              className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              등급 저장
-            </button>
-            <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              심의 필증 업로드
-              <input
-                type="file"
-                onChange={(e) => setCertificateFile(e.target.files?.[0] ?? null)}
-                className="mt-1 block w-64 rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-foreground"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={handleUploadCertificate}
-              disabled={isUploadingCert}
-              className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              필증 업로드
-            </button>
-          </div>
-        </div>
-      ) : null}
+      {/* 관리자용 등급/필증 편집 UI는 관리자 페이지에서만 제공 */}
       {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -914,12 +826,24 @@ export function SubmissionDetailClient({
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 심의 등급 / 가이드 / 필증
               </p>
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    등급
+            <div className="mt-4 space-y-3 text-sm">
+              {submission.mv_desired_rating ? (
+                <div className="rounded-2xl border border-amber-500/60 bg-amber-500/15 px-4 py-3 text-[13px] font-semibold text-amber-900">
+                  심의 등급: {mvRatingLabel(submission.mv_desired_rating)} (설정 완료)
+                  <span className="ml-2 text-xs font-normal text-amber-800">
+                    아래에서 등급 이미지와 필증 파일을 다운로드하세요.
                   </span>
-                  <button
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3 text-[13px] text-muted-foreground">
+                  심의 등급이 아직 설정되지 않았습니다.
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  등급
+                </span>
+                <button
                     type="button"
                     onClick={handleRatingDownload}
                     disabled={

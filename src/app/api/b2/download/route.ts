@@ -14,7 +14,8 @@ const normalizeFilePath = (raw: string) => raw.trim();
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const filePath = normalizeFilePath(url.searchParams.get("filePath") ?? "");
+  const rawFilePath = url.searchParams.get("filePath") ?? "";
+  const filePath = normalizeFilePath(rawFilePath);
   const guestToken = url.searchParams.get("guestToken") || undefined;
 
   if (!filePath) {
@@ -22,6 +23,14 @@ export async function GET(req: NextRequest) {
   }
   if (/^https?:\/\//i.test(filePath)) {
     return NextResponse.json({ error: "filePath는 B2 객체 키만 허용합니다. URL은 사용할 수 없습니다." }, { status: 400 });
+  }
+
+  // decode once to handle encodeURIComponent from client (supports 한글/공백)
+  let objectKey = filePath;
+  try {
+    objectKey = decodeURIComponent(filePath);
+  } catch {
+    objectKey = filePath;
   }
 
   const isPublic = filePath.startsWith(PUBLIC_PREFIX);
@@ -63,28 +72,28 @@ export async function GET(req: NextRequest) {
   try {
     const { bucket } = getB2Config();
     // 존재 여부 확인으로 NoSuchKey를 사전에 포착
-    await headObject(filePath);
-    console.info("[b2][download] presign", { bucket, key: filePath });
+    await headObject(objectKey);
+    console.info("[b2][download] presign", { bucket, key: objectKey });
   } catch (error) {
     const code =
       (error as { $metadata?: { httpStatusCode?: number }; name?: string })?.name ||
       (error as { Code?: string })?.Code ||
       "";
     if (code === "NotFound" || code === "NoSuchKey") {
-      console.warn("[b2][download] missing key", { filePath });
-      return NextResponse.json({ error: "파일을 찾을 수 없습니다.", filePath }, { status: 404 });
+      console.warn("[b2][download] missing key", { filePath: objectKey });
+      return NextResponse.json({ error: "파일을 찾을 수 없습니다.", filePath: objectKey }, { status: 404 });
     }
-    console.error("[b2][download] headObject error", { filePath, error });
+    console.error("[b2][download] headObject error", { filePath: objectKey, error });
     return NextResponse.json({ error: "파일 확인 중 오류가 발생했습니다." }, { status: 500 });
   }
 
   try {
-    const signed = await presignGetUrl(filePath, 60 * 10);
+    const signed = await presignGetUrl(objectKey, 60 * 10);
     return NextResponse.redirect(signed, 302);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "다운로드 링크를 생성하지 못했습니다.";
-    console.error("[b2][download] presign error", { filePath, error: message });
+    console.error("[b2][download] presign error", { filePath: objectKey, error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
