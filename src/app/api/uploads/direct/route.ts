@@ -1,6 +1,7 @@
 import Busboy from "busboy";
 import { NextResponse } from "next/server";
 import { PassThrough, Readable } from "stream";
+import { ReadableStream as NodeReadableStream } from "stream/web";
 import { z } from "zod";
 
 import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
@@ -218,8 +219,7 @@ export async function POST(request: Request) {
   };
 
   try {
-    type WebReadable<T = Uint8Array> = ReadableStream<T> & AsyncIterable<T>;
-    const webStream = request.body as unknown as WebReadable;
+    const webStream = request.body as unknown as NodeReadableStream;
     if (!webStream) {
       throw new Error("Request body is empty.");
     }
