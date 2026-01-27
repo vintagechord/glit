@@ -830,6 +830,32 @@ export function SubmissionDetailClient({
                   >
                     {ratingFile ? ratingFile.original_name : "등급분류 파일 다운로드"}
                   </button>
+                  <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                    {ratingFile
+                      ? null
+                      : [
+                          { kind: "MV_RATING_FILE_ALL", label: "전체관람가" },
+                          { kind: "MV_RATING_FILE_12", label: "12세" },
+                          { kind: "MV_RATING_FILE_15", label: "15세" },
+                          { kind: "MV_RATING_FILE_18", label: "18세" },
+                          { kind: "MV_RATING_FILE_REJECT", label: "심의불가" },
+                        ]
+                          .map((entry) => {
+                            const file = files.find((f) => f.kind === entry.kind);
+                            if (!file) return null;
+                            return (
+                              <button
+                                key={entry.kind}
+                                type="button"
+                                onClick={() => handleResultFileDownload(file.id)}
+                                className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
+                              >
+                                {entry.label}
+                              </button>
+                            );
+                          })
+                          .filter(Boolean)}
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -1183,7 +1209,7 @@ export function SubmissionDetailClient({
                         >
                           <div className="min-w-0 flex items-center gap-2">
                             <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-background/60">
-                              {review.station?.logo_url ? (
+                              {review.station && "logo_url" in review.station && review.station.logo_url ? (
                                 <Image
                                   src={review.station.logo_url}
                                   alt={review.station.name ?? "station logo"}

@@ -8,8 +8,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
-  submissionId: z.string().uuid(),
-  kind: z.enum(["MV_RATING_FILE", "MV_RESULT_FILE", "MV_LABEL_GUIDE_FILE"]),
+  submissionId: z.string().min(3),
+  kind: z.enum([
+    "MV_RATING_FILE",
+    "MV_RATING_FILE_ALL",
+    "MV_RATING_FILE_12",
+    "MV_RATING_FILE_15",
+    "MV_RATING_FILE_18",
+    "MV_RATING_FILE_REJECT",
+    "MV_RESULT_FILE",
+    "MV_LABEL_GUIDE_FILE",
+  ]),
   objectKey: z.string().min(1),
   filename: z.string().min(1),
   mimeType: z.string().min(1),
@@ -39,6 +48,19 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+
+  const { data: submission, error: submissionError } = await admin
+    .from("submissions")
+    .select("id")
+    .eq("id", parsed.data.submissionId)
+    .maybeSingle();
+
+  if (submissionError || !submission) {
+    return NextResponse.json(
+      { error: "접수를 찾을 수 없습니다. 올바른 Submission ID(UUID)를 입력해주세요." },
+      { status: 404 },
+    );
+  }
   const payload = {
     submission_id: parsed.data.submissionId,
     kind: parsed.data.kind,

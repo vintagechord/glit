@@ -13,7 +13,11 @@ type UploadedAttachment = {
 };
 
 const kindOptions = [
-  { value: "MV_RATING_FILE", label: "등급분류 파일 (MV)" },
+  { value: "MV_RATING_FILE_ALL", label: "등급분류 · 전체관람가 (MV)" },
+  { value: "MV_RATING_FILE_12", label: "등급분류 · 12세 이상 (MV)" },
+  { value: "MV_RATING_FILE_15", label: "등급분류 · 15세 이상 (MV)" },
+  { value: "MV_RATING_FILE_18", label: "등급분류 · 18세 이상 (MV)" },
+  { value: "MV_RATING_FILE_REJECT", label: "등급분류 · 심의 불가 (MV)" },
   { value: "MV_RESULT_FILE", label: "심의 결과 파일 (MV)" },
   { value: "MV_LABEL_GUIDE_FILE", label: "표기 방법 가이드 (MV)" },
 ];
@@ -21,14 +25,14 @@ const kindOptions = [
 export default function AdminFilesPage() {
   const [submissionId, setSubmissionId] = React.useState("");
   const [kind, setKind] = React.useState(kindOptions[0]?.value ?? "MV_RATING_FILE");
-  const [file, setFile] = React.useState<File | null>(null);
+  const [files, setFiles] = React.useState<FileList | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [isUploading, setIsUploading] = React.useState(false);
   const [uploaded, setUploaded] = React.useState<UploadedAttachment[]>([]);
 
   const handleSelectFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = event.target.files?.[0];
-    setFile(selected ?? null);
+    const selected = event.target.files;
+    setFiles(selected ?? null);
   };
 
   const resetForm = () => {
@@ -41,7 +45,7 @@ export default function AdminFilesPage() {
       setNotice("Submission ID를 입력하세요.");
       return;
     }
-    if (!file) {
+    if (!files || files.length === 0) {
       setNotice("업로드할 파일을 선택하세요.");
       return;
     }
@@ -49,52 +53,54 @@ export default function AdminFilesPage() {
     setIsUploading(true);
     setNotice(null);
     try {
-      const form = new FormData();
-      form.append("submissionId", submissionId.trim());
-      form.append("filename", file.name);
-      form.append("mimeType", file.type || "application/octet-stream");
-      form.append("sizeBytes", String(file.size));
-      form.append("file", file);
+      for (const fileItem of Array.from(files)) {
+        const form = new FormData();
+        form.append("submissionId", submissionId.trim());
+        form.append("filename", fileItem.name);
+        form.append("mimeType", fileItem.type || "application/octet-stream");
+        form.append("sizeBytes", String(fileItem.size));
+        form.append("file", fileItem);
 
-      const directRes = await fetch("/api/uploads/direct", {
-        method: "POST",
-        body: form,
-      });
-      const directJson = (await directRes.json().catch(() => ({}))) as {
-        objectKey?: string;
-        error?: string;
-      };
-      if (!directRes.ok || !directJson.objectKey) {
-        throw new Error(directJson.error || `직접 업로드 실패 (status ${directRes.status})`);
+        const directRes = await fetch("/api/uploads/direct", {
+          method: "POST",
+          body: form,
+        });
+        const directJson = (await directRes.json().catch(() => ({}))) as {
+          objectKey?: string;
+          error?: string;
+        };
+        if (!directRes.ok || !directJson.objectKey) {
+          throw new Error(directJson.error || `직접 업로드 실패 (status ${directRes.status})`);
+        }
+
+        const saveRes = await fetch("/api/admin/submission-files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            submissionId: submissionId.trim(),
+            kind,
+            objectKey: directJson.objectKey,
+            filename: fileItem.name,
+            mimeType: fileItem.type || "application/octet-stream",
+            sizeBytes: fileItem.size,
+          }),
+        });
+        const saveJson = (await saveRes.json().catch(() => null)) as { error?: string; attachmentId?: string };
+        if (!saveRes.ok || saveJson?.error) {
+          throw new Error(saveJson?.error || `파일 정보 저장 실패 (status ${saveRes.status})`);
+        }
+
+        setUploaded((prev) => [
+          {
+            id: saveJson.attachmentId,
+            kind,
+            name: fileItem.name,
+            size: fileItem.size,
+            createdAt: new Date().toISOString(),
+          },
+          ...prev,
+        ]);
       }
-
-      const saveRes = await fetch("/api/admin/submission-files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId: submissionId.trim(),
-          kind,
-          objectKey: directJson.objectKey,
-          filename: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-        }),
-      });
-      const saveJson = (await saveRes.json().catch(() => null)) as { error?: string; attachmentId?: string };
-      if (!saveRes.ok || saveJson?.error) {
-        throw new Error(saveJson?.error || `파일 정보 저장 실패 (status ${saveRes.status})`);
-      }
-
-      setUploaded((prev) => [
-        {
-          id: saveJson.attachmentId,
-          kind,
-          name: file.name,
-          size: file.size,
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
       resetForm();
       setNotice("업로드 완료되었습니다.");
     } catch (error) {
@@ -152,12 +158,15 @@ export default function AdminFilesPage() {
           </span>
           <input
             type="file"
+            multiple
             onChange={handleSelectFile}
             className="block w-full text-sm text-foreground file:mr-3 file:rounded-xl file:border file:border-border/70 file:bg-background file:px-4 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-[0.2em] file:text-foreground hover:file:border-foreground"
           />
-          {file ? (
+          {files && files.length > 0 ? (
             <p className="text-xs text-muted-foreground">
-              {file.name} · {Math.round(file.size / 1024).toLocaleString()} KB
+              {Array.from(files)
+                .map((item) => `${item.name} · ${Math.round(item.size / 1024).toLocaleString()} KB`)
+                .join(", ")}
             </p>
           ) : null}
         </label>
