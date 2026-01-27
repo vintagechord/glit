@@ -9,16 +9,7 @@ export const dynamic = "force-dynamic";
 
 const schema = z.object({
   submissionId: z.string().min(3),
-  kind: z.enum([
-    "MV_RATING_FILE",
-    "MV_RATING_FILE_ALL",
-    "MV_RATING_FILE_12",
-    "MV_RATING_FILE_15",
-    "MV_RATING_FILE_18",
-    "MV_RATING_FILE_REJECT",
-    "MV_RESULT_FILE",
-    "MV_LABEL_GUIDE_FILE",
-  ]),
+  kind: z.enum(["MV_RESULT_FILE"]),
   objectKey: z.string().min(1),
   filename: z.string().min(1),
   mimeType: z.string().min(1),
@@ -85,13 +76,6 @@ export async function POST(request: Request) {
       { error: "파일 정보를 저장할 수 없습니다." },
       { status: 500 },
     );
-  }
-
-  if (parsed.data.kind === "MV_RATING_FILE") {
-    await admin
-      .from("submissions")
-      .update({ mv_rating_file_path: parsed.data.objectKey })
-      .eq("id", parsed.data.submissionId);
   }
 
   return NextResponse.json({ ok: true, attachmentId: inserted?.id ?? null });

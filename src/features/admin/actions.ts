@@ -27,7 +27,6 @@ const submissionStatusSchema = z.object({
   submissionId: z.string().uuid(),
   status: reviewStatusEnum,
   adminMemo: z.string().optional(),
-  mvRatingFilePath: z.string().optional(),
 });
 
 const submissionBasicInfoSchema = z.object({
@@ -194,16 +193,10 @@ export async function updateSubmissionStatusAction(
   const updatePayload: {
     status: z.infer<typeof reviewStatusEnum>;
     admin_memo: string | null;
-    mv_rating_file_path?: string | null;
   } = {
     status: parsed.data.status,
     admin_memo: parsed.data.adminMemo || null,
   };
-
-  if (parsed.data.mvRatingFilePath !== undefined) {
-    const trimmed = parsed.data.mvRatingFilePath.trim();
-    updatePayload.mv_rating_file_path = trimmed ? trimmed : null;
-  }
 
   const { error } = await supabase
     .from("submissions")
@@ -226,14 +219,11 @@ export async function updateSubmissionStatusAction(
 export async function updateSubmissionStatusFormAction(
   formData: FormData,
 ): Promise<void> {
-  const rawRatingFilePath = formData.get("mvRatingFilePath");
   const submissionId = String(formData.get("submissionId") ?? "");
   const result = await updateSubmissionStatusAction({
     submissionId,
     status: String(formData.get("status") ?? "") as z.infer<typeof reviewStatusEnum>,
     adminMemo: String(formData.get("adminMemo") ?? "") || undefined,
-    mvRatingFilePath:
-      rawRatingFilePath !== null ? String(rawRatingFilePath ?? "") : undefined,
   });
   if (result.error) {
     console.error(result.error);

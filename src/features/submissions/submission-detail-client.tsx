@@ -3,10 +3,6 @@
 import Image from "next/image";
 import * as React from "react";
 import {
-  getMvRatingFileUrlAction,
-  getSubmissionFileUrlAction,
-} from "@/features/submissions/actions";
-import {
   SubmissionFilesPanel,
   type SubmissionFile,
 } from "@/features/submissions/submission-files-panel";
@@ -31,7 +27,11 @@ type Submission = {
   amount_krw: number | null;
   created_at: string;
   updated_at: string;
-  mv_rating_file_path?: string | null;
+  mv_rating?: string | null;
+  mv_certificate_object_key?: string | null;
+  mv_certificate_filename?: string | null;
+  mv_certificate_mime_type?: string | null;
+  mv_certificate_size_bytes?: number | null;
   release_date?: string | null;
   genre?: string | null;
   distributor?: string | null;
@@ -232,17 +232,11 @@ export function SubmissionDetailClient({
   const [files, setFiles] = React.useState<SubmissionFile[]>(
     initialFiles ?? [],
   );
-  const [ratingFileNotice, setRatingFileNotice] = React.useState<{
-    error?: string;
-  }>({});
-  const [isRatingDownloading, setIsRatingDownloading] =
-    React.useState(false);
+  const [isRatingDownloading, setIsRatingDownloading] = React.useState(false);
   const [activeResultNote, setActiveResultNote] = React.useState<{
     stationName?: string | null;
     note: string;
   } | null>(null);
-  const [isResultFileDownloading, setIsResultFileDownloading] =
-    React.useState(false);
   const [resultNotice, setResultNotice] = React.useState<string | null>(null);
   const [radioLinksModal, setRadioLinksModal] = React.useState<{
     stationName?: string;
@@ -256,6 +250,10 @@ export function SubmissionDetailClient({
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
+  const [adminRating, setAdminRating] = React.useState(submission.mv_rating ?? "");
+  const [isSavingRating, setIsSavingRating] = React.useState(false);
+  const [certificateFile, setCertificateFile] = React.useState<File | null>(null);
+  const [isUploadingCert, setIsUploadingCert] = React.useState(false);
   const isMvSubmission =
     submission.type === "MV_BROADCAST" || submission.type === "MV_DISTRIBUTION";
   const isResultReady =
@@ -293,12 +291,6 @@ export function SubmissionDetailClient({
     return 1;
   })();
 
-  const ratingFile =
-    files.find((file) => file.kind === "MV_RATING_FILE") ?? null;
-  const resultFile =
-    files.find((file) => file.kind === "MV_RESULT_FILE") ?? null;
-  const labelGuideFile =
-    files.find((file) => file.kind === "MV_LABEL_GUIDE_FILE") ?? null;
 
   const stationNames = React.useMemo(() => {
     const names = stationReviews
@@ -331,6 +323,109 @@ export function SubmissionDetailClient({
             },
           ]
         : stationReviews;
+
+  const handleGuideDownload = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (guestToken) params.set("guestToken", guestToken);
+      const res = await fetch(
+        `/api/submissions/${submissionId}/mv-guide?${params.toString()}`,
+      );
+      const json = (await res.json().catch(() => null)) as { url?: string; error?: string };
+      if (!res.ok || !json?.url) {
+        throw new Error(json?.error || "가이드 링크를 불러오지 못했습니다.");
+      }
+      window.open(json.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "가이드 링크를 불러오지 못했습니다.");
+    }
+  };
+
+  const handleCertificateDownload = async () => {
+    try {
+      setResultNotice(null);
+      const params = new URLSearchParams();
+      if (guestToken) params.set("guestToken", guestToken);
+      const res = await fetch(
+        `/api/submissions/${submissionId}/mv-certificate?${params.toString()}`,
+      );
+      const json = (await res.json().catch(() => null)) as {
+        url?: string;
+        error?: string;
+        filename?: string;
+      };
+      if (!res.ok || !json?.url) {
+        throw new Error(json?.error || "필증을 불러오지 못했습니다.");
+      }
+      window.open(json.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "필증을 불러오지 못했습니다.";
+      setResultNotice(message);
+      alert(message);
+    }
+  };
+
+  const handleSaveAdminRating = async () => {
+    if (!adminRating) {
+      alert("등급을 선택하세요.");
+      return;
+    }
+    setIsSavingRating(true);
+    try {
+      const res = await fetch(`/api/admin/submissions/${submissionId}/mv-rating`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: adminRating }),
+      });
+      const json = (await res.json().catch(() => null)) as { error?: string; rating?: string };
+      if (!res.ok || json?.error) {
+        throw new Error(json?.error || "등급을 저장하지 못했습니다.");
+      }
+      setSubmission((prev) => ({ ...prev, mv_rating: adminRating }));
+      alert("등급이 저장되었습니다.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "등급 저장에 실패했습니다.");
+    } finally {
+      setIsSavingRating(false);
+    }
+  };
+
+  const handleUploadCertificate = async () => {
+    if (!certificateFile) {
+      alert("필증 파일을 선택하세요.");
+      return;
+    }
+    setIsUploadingCert(true);
+    try {
+      const form = new FormData();
+      form.append("file", certificateFile);
+      form.append("filename", certificateFile.name);
+      form.append("mimeType", certificateFile.type || "application/octet-stream");
+      form.append("sizeBytes", String(certificateFile.size));
+
+      const res = await fetch(`/api/admin/submissions/${submissionId}/mv-certificate`, {
+        method: "POST",
+        body: form,
+      });
+      const json = (await res.json().catch(() => null)) as { error?: string; objectKey?: string };
+      if (!res.ok || json?.error) {
+        throw new Error(json?.error || "필증 업로드에 실패했습니다.");
+      }
+      setSubmission((prev) => ({
+        ...prev,
+        mv_certificate_object_key: json.objectKey ?? prev.mv_certificate_object_key,
+        mv_certificate_filename: certificateFile.name,
+        mv_certificate_mime_type: certificateFile.type || "application/octet-stream",
+        mv_certificate_size_bytes: certificateFile.size,
+      }));
+      setCertificateFile(null);
+      alert("필증이 업로드되었습니다.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "필증 업로드에 실패했습니다.");
+    } finally {
+      setIsUploadingCert(false);
+    }
+  };
 
   const buildTrackSummary = React.useCallback(
     (trackResults?: TrackReviewResult[] | null) => {
@@ -377,7 +472,7 @@ export function SubmissionDetailClient({
     const { data: submissionData } = await supabase
       .from("submissions")
       .select(
-        "id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating_file_path, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )",
+        "id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )",
       )
       .eq("id", submissionId)
       .maybeSingle();
@@ -515,45 +610,24 @@ export function SubmissionDetailClient({
     };
   }, [enableRealtime, fetchLatest, submissionId, supabase]);
 
-  const handleRatingFileDownload = async () => {
-    setRatingFileNotice({});
+  const handleRatingDownload = async () => {
     setIsRatingDownloading(true);
-    const result = await getMvRatingFileUrlAction({
-      submissionId,
-      guestToken: guestToken ?? undefined,
-    });
-    if (result.error) {
-      setRatingFileNotice({ error: result.error });
+    try {
+      const params = new URLSearchParams();
+      if (guestToken) params.set("guestToken", guestToken);
+      const res = await fetch(
+        `/api/submissions/${submissionId}/mv-rating-image?${params.toString()}`,
+      );
+      const json = (await res.json().catch(() => null)) as { url?: string; error?: string };
+      if (!res.ok || !json?.url) {
+        throw new Error(json?.error || "등급 이미지를 불러오지 못했습니다.");
+      }
+      window.open(json.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "등급 이미지를 불러오지 못했습니다.");
+    } finally {
       setIsRatingDownloading(false);
-      return;
     }
-    if (result.url) {
-      window.open(result.url, "_blank", "noopener,noreferrer");
-    }
-    setIsRatingDownloading(false);
-  };
-
-  const handleResultFileDownload = async (fileId?: string | null) => {
-    if (!fileId) {
-      setResultNotice("등록된 파일이 없습니다.");
-      return;
-    }
-    setIsResultFileDownloading(true);
-    setResultNotice(null);
-    const result = await getSubmissionFileUrlAction({
-      submissionId,
-      fileId,
-      guestToken: guestToken ?? undefined,
-    });
-    if (result.error) {
-      setResultNotice(result.error);
-      setIsResultFileDownloading(false);
-      return;
-    }
-    if (result.url) {
-      window.open(result.url, "_blank", "noopener,noreferrer");
-    }
-    setIsResultFileDownloading(false);
   };
 
   return (
@@ -670,6 +744,50 @@ export function SubmissionDetailClient({
           </div>
         </div>
       ) : null}
+      {showAdminTools ? (
+        <div className="mt-4 rounded-2xl border border-border/70 bg-card/80 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              심의 등급
+              <select
+                value={adminRating}
+                onChange={(e) => setAdminRating(e.target.value)}
+                className="mt-1 w-40 rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value="">선택</option>
+                <option value="ALL">전체관람가</option>
+                <option value="12">12세</option>
+                <option value="15">15세</option>
+                <option value="18">18세</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={handleSaveAdminRating}
+              disabled={isSavingRating}
+              className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              등급 저장
+            </button>
+            <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              심의 필증 업로드
+              <input
+                type="file"
+                onChange={(e) => setCertificateFile(e.target.files?.[0] ?? null)}
+                className="mt-1 block w-64 rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-foreground"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleUploadCertificate}
+              disabled={isUploadingCert}
+              className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              필증 업로드
+            </button>
+          </div>
+        </div>
+      ) : null}
       {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -751,34 +869,6 @@ export function SubmissionDetailClient({
                   {formatDateTime(submission.updated_at)}
                 </p>
               </div>
-              {isMvSubmission && (
-                <div className="md:col-span-2">
-                  <p className="text-sm text-muted-foreground">등급분류 파일</p>
-                  {isResultReady && submission.mv_rating_file_path ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={handleRatingFileDownload}
-                        disabled={isRatingDownloading}
-                        className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        등급분류 파일 다운로드
-                      </button>
-                      {ratingFileNotice.error && (
-                        <span className="text-xs text-red-500">
-                          {ratingFileNotice.error}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {isResultReady
-                        ? "등급분류 파일이 아직 등록되지 않았습니다."
-                        : "심의 완료 후 다운로드 가능합니다."}
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -812,62 +902,23 @@ export function SubmissionDetailClient({
               </div>
             </div>
           </div>
-          {isMvSubmission && isResultReady ? (
+          {isMvSubmission ? (
             <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                심의 결과 파일
+                심의 등급 / 가이드 / 필증
               </p>
               <div className="mt-4 space-y-3 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    등급분류
+                    등급
                   </span>
                   <button
                     type="button"
-                    onClick={handleRatingFileDownload}
-                    disabled={isRatingDownloading && !ratingFile}
+                    onClick={handleRatingDownload}
+                    disabled={!submission.mv_rating || isRatingDownloading}
                     className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {ratingFile ? ratingFile.original_name : "등급분류 파일 다운로드"}
-                  </button>
-                  <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                    {ratingFile
-                      ? null
-                      : [
-                          { kind: "MV_RATING_FILE_ALL", label: "전체관람가" },
-                          { kind: "MV_RATING_FILE_12", label: "12세" },
-                          { kind: "MV_RATING_FILE_15", label: "15세" },
-                          { kind: "MV_RATING_FILE_18", label: "18세" },
-                          { kind: "MV_RATING_FILE_REJECT", label: "심의불가" },
-                        ]
-                          .map((entry) => {
-                            const file = files.find((f) => f.kind === entry.kind);
-                            if (!file) return null;
-                            return (
-                              <button
-                                key={entry.kind}
-                                type="button"
-                                onClick={() => handleResultFileDownload(file.id)}
-                                className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
-                              >
-                                {entry.label}
-                              </button>
-                            );
-                          })
-                          .filter(Boolean)}
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    심의 결과
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleResultFileDownload(resultFile?.id)}
-                    disabled={!resultFile || isResultFileDownloading}
-                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {resultFile ? resultFile.original_name : "심의 결과 파일 미등록"}
+                    {submission.mv_rating ? `${submission.mv_rating}세 이미지 다운로드` : "등급 미설정"}
                   </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -876,11 +927,28 @@ export function SubmissionDetailClient({
                   </span>
                   <button
                     type="button"
-                    onClick={() => handleResultFileDownload(labelGuideFile?.id)}
-                    disabled={!labelGuideFile || isResultFileDownloading}
+                    onClick={handleGuideDownload}
+                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
+                  >
+                    가이드 PDF 다운로드
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                    심의 필증
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCertificateDownload}
+                    disabled={
+                      !submission.mv_certificate_object_key ||
+                      !(isResultReady || submission.status === "COMPLETED")
+                    }
                     className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {labelGuideFile ? labelGuideFile.original_name : "표기 가이드 미등록"}
+                    {submission.mv_certificate_filename
+                      ? submission.mv_certificate_filename
+                      : "필증 미등록"}
                   </button>
                 </div>
                 {resultNotice ? (

@@ -14,7 +14,7 @@ export const findSubmissionById = async (submissionId: string) => {
   const { data, error } = await admin
     .from("submissions")
     .select(
-      "id, user_id, guest_token, title, artist_name, applicant_name, applicant_email, applicant_phone, amount_krw, payment_method, payment_status, package:packages ( name )",
+      "id, user_id, guest_token, title, artist_name, applicant_name, applicant_email, applicant_phone, amount_krw, payment_method, payment_status, mv_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, package:packages ( name )",
     )
     .eq("id", submissionId)
     .maybeSingle();

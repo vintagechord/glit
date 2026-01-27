@@ -15,11 +15,6 @@ export type SubmissionActionState = {
   emailWarning?: string;
 };
 
-export type RatingFileActionState = {
-  error?: string;
-  url?: string;
-};
-
 export type SubmissionFileUrlActionState = {
   error?: string;
   url?: string;
@@ -418,11 +413,6 @@ const mvSubmissionSchema = z.object({
   files: z.array(fileSchema).optional(),
 });
 
-const ratingFileSchema = z.object({
-  submissionId: z.string().uuid(),
-  guestToken: z.string().min(8).optional(),
-});
-
 const submissionFileUrlSchema = z.object({
   submissionId: z.string().uuid(),
   fileId: z.string().uuid(),
@@ -431,88 +421,6 @@ const submissionFileUrlSchema = z.object({
 
 const isMvSubmissionType = (type: string) =>
   type === "MV_BROADCAST" || type === "MV_DISTRIBUTION";
-
-const isResultReadyStatus = (status: string) =>
-  status === "RESULT_READY" || status === "COMPLETED";
-
-export async function getMvRatingFileUrlAction(
-  payload: z.infer<typeof ratingFileSchema>,
-): Promise<RatingFileActionState> {
-  const parsed = ratingFileSchema.safeParse(payload);
-  if (!parsed.success) {
-    return { error: "입력값을 확인해주세요." };
-  }
-
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError && !isMissingSessionError(userError)) {
-    return { error: "로그인 정보를 확인할 수 없습니다." };
-  }
-
-  const admin = createAdminClient();
-  let submission:
-    | {
-        id: string;
-        status: string;
-        type: string;
-        mv_rating_file_path: string | null;
-        guest_token?: string | null;
-      }
-    | null = null;
-
-  if (user) {
-    const { data } = await supabase
-      .from("submissions")
-      .select("id, status, type, mv_rating_file_path")
-      .eq("id", parsed.data.submissionId)
-      .maybeSingle();
-    submission = data ?? null;
-  } else {
-    if (!parsed.data.guestToken) {
-      return { error: "비회원 인증 정보가 필요합니다." };
-    }
-    const { data } = await admin
-      .from("submissions")
-      .select("id, status, type, mv_rating_file_path, guest_token")
-      .eq("id", parsed.data.submissionId)
-      .maybeSingle();
-    if (!data || data.guest_token !== parsed.data.guestToken) {
-      return { error: "접근 권한이 없습니다." };
-    }
-    submission = data;
-  }
-
-  if (!submission) {
-    return { error: "접수 정보를 찾을 수 없습니다." };
-  }
-
-  if (!isMvSubmissionType(submission.type)) {
-    return { error: "등급분류 파일은 뮤직비디오 심의에만 제공됩니다." };
-  }
-
-  if (!isResultReadyStatus(submission.status)) {
-    return { error: "심의 완료 후 다운로드할 수 있습니다." };
-  }
-
-  const filePath = submission.mv_rating_file_path?.trim();
-  if (!filePath) {
-    return { error: "등록된 등급분류 파일이 없습니다." };
-  }
-
-  const { data, error } = await admin.storage
-    .from("submissions")
-    .createSignedUrl(filePath, 60 * 10);
-
-  if (error || !data?.signedUrl) {
-    return { error: "다운로드 링크를 생성할 수 없습니다." };
-  }
-
-  return { url: data.signedUrl };
-}
 
 export async function getSubmissionFileUrlAction(
   payload: z.infer<typeof submissionFileUrlSchema>,

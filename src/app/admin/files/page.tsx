@@ -12,15 +12,7 @@ type UploadedAttachment = {
   createdAt?: string | null;
 };
 
-const kindOptions = [
-  { value: "MV_RATING_FILE_ALL", label: "등급분류 · 전체관람가 (MV)" },
-  { value: "MV_RATING_FILE_12", label: "등급분류 · 12세 이상 (MV)" },
-  { value: "MV_RATING_FILE_15", label: "등급분류 · 15세 이상 (MV)" },
-  { value: "MV_RATING_FILE_18", label: "등급분류 · 18세 이상 (MV)" },
-  { value: "MV_RATING_FILE_REJECT", label: "등급분류 · 심의 불가 (MV)" },
-  { value: "MV_RESULT_FILE", label: "심의 결과 파일 (MV)" },
-  { value: "MV_LABEL_GUIDE_FILE", label: "표기 방법 가이드 (MV)" },
-];
+const kindOptions = [{ value: "MV_RESULT_FILE", label: "심의 결과 파일 (MV)" }];
 
 type Mode = "attach" | "free";
 
@@ -167,8 +159,8 @@ export default function AdminFilesPage() {
       </p>
       <h1 className="font-display mt-2 text-2xl text-foreground">심의 결과/가이드 파일 업로드</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        심의 결과/등급분류/표기 가이드 파일을 접수에 바로 연결하거나, 자유 업로드로 B2에 저장해둔 뒤 필요 시
-        objectKey를 연결할 수 있습니다.
+        심의 결과 파일을 접수에 바로 연결하거나, 자유 업로드로 B2에 저장해둔 뒤 필요 시 objectKey를 연결할 수
+        있습니다. 등급 이미지와 가이드는 공용 리소스로 관리되며 여기서 올리지 않습니다.
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">

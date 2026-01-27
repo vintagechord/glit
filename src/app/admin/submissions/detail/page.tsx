@@ -101,11 +101,15 @@ type SubmissionRow = {
   payment_method: string | null;
   amount_krw: number | null;
   mv_base_selected: boolean | null;
+  mv_rating?: string | null;
+  mv_certificate_object_key?: string | null;
+  mv_certificate_filename?: string | null;
+  mv_certificate_mime_type?: string | null;
+  mv_certificate_size_bytes?: number | null;
   pre_review_requested: boolean | null;
   karaoke_requested: boolean | null;
   bank_depositor_name: string | null;
   admin_memo: string | null;
-  mv_rating_file_path: string | null;
   result_status?: ResultStatus | null;
   result_memo?: string | null;
   result_notified_at?: string | null;
@@ -248,7 +252,7 @@ export default async function AdminSubmissionDetailPage({
 
   const supabase = createAdminClient();
   const baseSelectCore =
-    "id, user_id, title, artist_name, artist_name_kr, artist_name_en, status, payment_status, payment_method, amount_krw, mv_base_selected, pre_review_requested, karaoke_requested, bank_depositor_name, admin_memo, mv_rating_file_path, result_status, result_memo, result_notified_at, applicant_email, applicant_name, applicant_phone, created_at, updated_at, type, package:packages ( name, station_count )";
+    "id, user_id, title, artist_name, artist_name_kr, artist_name_en, status, payment_status, payment_method, amount_krw, mv_base_selected, mv_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, pre_review_requested, karaoke_requested, bank_depositor_name, admin_memo, result_status, result_memo, result_notified_at, applicant_email, applicant_name, applicant_phone, created_at, updated_at, type, package:packages ( name, station_count )";
   const albumExtra =
     "release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, is_oneclick, melon_url";
   const mvExtra =
@@ -662,22 +666,6 @@ export default async function AdminSubmissionDetailPage({
                     </option>
                   ))}
                 </select>
-                {isMvSubmission && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      등급분류 파일 경로
-                    </label>
-                    <input
-                      name="mvRatingFilePath"
-                      defaultValue={submission.mv_rating_file_path ?? ""}
-                      placeholder="submissions/ratings/..."
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      스토리지 submissions 버킷에 업로드한 파일 경로를 입력하세요.
-                    </p>
-                  </div>
-                )}
                 <textarea
                   name="adminMemo"
                   defaultValue={submission.admin_memo ?? ""}
