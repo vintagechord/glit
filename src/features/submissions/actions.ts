@@ -1205,7 +1205,7 @@ export async function saveMvSubmissionAction(
     }
   }
 
-  if (parsed.data.status === "SUBMITTED") {
+  if (isSubmitted) {
     let stationIds = parsed.data.selectedStationIds ?? [];
 
     if (stationIds.length === 0 && parsed.data.packageId) {
