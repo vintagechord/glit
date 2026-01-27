@@ -253,10 +253,19 @@ export async function updateSubmissionMvRatingAction(
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("submissions")
-    .update({ mv_rating: parsed.data.rating })
-    .eq("id", parsed.data.submissionId);
+  const attemptUpdate = async (column: "mv_rating" | "mv_desired_rating") =>
+    supabase
+      .from("submissions")
+      .update({ [column]: parsed.data.rating })
+      .eq("id", parsed.data.submissionId);
+
+  let { error } = await attemptUpdate("mv_rating");
+
+  if (error?.code === "42703") {
+    // mv_rating 컬럼이 없는 환경: 기존 mv_desired_rating을 결과 등급 저장 용도로 임시 사용
+    const fallback = await attemptUpdate("mv_desired_rating");
+    error = fallback.error ?? null;
+  }
 
   if (error) {
     return { error: "등급을 저장하지 못했습니다." };

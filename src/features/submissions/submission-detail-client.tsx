@@ -270,7 +270,9 @@ export function SubmissionDetailClient({
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
-  const [adminRating, setAdminRating] = React.useState(submission.mv_rating ?? "");
+  const [adminRating, setAdminRating] = React.useState(
+    submission.mv_rating ?? submission.mv_desired_rating ?? "",
+  );
   const [isSavingRating, setIsSavingRating] = React.useState(false);
   const [certificateFile, setCertificateFile] = React.useState<File | null>(null);
   const [isUploadingCert, setIsUploadingCert] = React.useState(false);
@@ -492,7 +494,7 @@ export function SubmissionDetailClient({
     const { data: submissionData } = await supabase
       .from("submissions")
       .select(
-        "id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )",
+        "id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating, mv_desired_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )",
       )
       .eq("id", submissionId)
       .maybeSingle();
@@ -937,11 +939,13 @@ export function SubmissionDetailClient({
                   <button
                     type="button"
                     onClick={handleRatingDownload}
-                    disabled={!submission.mv_rating || isRatingDownloading}
+                    disabled={
+                      !(submission.mv_rating || submission.mv_desired_rating) || isRatingDownloading
+                    }
                     className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {submission.mv_rating
-                      ? `${mvRatingLabel(submission.mv_rating)} 이미지 다운로드`
+                    {submission.mv_rating || submission.mv_desired_rating
+                      ? `${mvRatingLabel(submission.mv_rating ?? submission.mv_desired_rating)} 이미지 다운로드`
                       : "등급 미설정"}
                   </button>
                 </div>
