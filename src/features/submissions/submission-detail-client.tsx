@@ -980,13 +980,13 @@ export function SubmissionDetailClient({
         <div>
           <p className="text-sm text-muted-foreground">발매일</p>
           <p className="mt-1 font-semibold">
-            {submission.release_date ? formatDateTime(submission.release_date) : \"-\"}
+            {submission.release_date ? formatDateTime(submission.release_date) : "-"}
           </p>
         </div>
         <div>
           <p className="text-sm text-muted-foreground">장르</p>
           <p className="mt-1 font-semibold">
-            {submission.genre || \"-\"}
+            {submission.genre || "-"}
           </p>
         </div>
         <div>
