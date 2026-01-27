@@ -172,12 +172,6 @@ const flowSteps = [
   "결과 확인",
 ];
 
-const submissionTypeLabels: Record<string, string> = {
-  ALBUM: "음반 심의",
-  MV_DISTRIBUTION: "M/V 심의 (유통/온라인)",
-  MV_BROADCAST: "M/V 심의 (TV 송출)",
-};
-
 const radioSubmissionLinks: Array<{ name: string; url: string }> = [
   { name: "KBS Cool FM 신청곡/사연 접수", url: "https://program.kbs.co.kr/pc/fm" },
   { name: "MBC 라디오 미니(사연/신청곡)", url: "https://mini.imbc.com/" },
@@ -210,7 +204,6 @@ export function SubmissionDetailClient({
   enableRealtime = true,
   guestToken,
   isAdmin = false,
-  adminDownloadsEnabled = false,
 }: {
   submissionId: string;
   initialSubmission: Submission;
@@ -220,7 +213,6 @@ export function SubmissionDetailClient({
   enableRealtime?: boolean;
   guestToken?: string;
   isAdmin?: boolean;
-  adminDownloadsEnabled?: boolean;
 }) {
   const supabase = React.useMemo(
     () => (enableRealtime ? createClient() : null),
@@ -246,6 +238,9 @@ export function SubmissionDetailClient({
     stationName?: string | null;
     note: string;
   } | null>(null);
+  const [isResultFileDownloading, setIsResultFileDownloading] =
+    React.useState(false);
+  const [resultNotice, setResultNotice] = React.useState<string | null>(null);
   const [radioLinksModal, setRadioLinksModal] = React.useState<{
     stationName?: string;
   } | null>(null);
@@ -255,7 +250,6 @@ export function SubmissionDetailClient({
   } | null>(null);
   const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
   const showAdminTools = isAdmin === true && !guestToken;
-  const showAdminDownload = showAdminTools && adminDownloadsEnabled;
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
@@ -295,6 +289,13 @@ export function SubmissionDetailClient({
       return 3;
     return 1;
   })();
+
+  const ratingFile =
+    files.find((file) => file.kind === "MV_RATING_FILE") ?? null;
+  const resultFile =
+    files.find((file) => file.kind === "MV_RESULT_FILE") ?? null;
+  const labelGuideFile =
+    files.find((file) => file.kind === "MV_LABEL_GUIDE_FILE") ?? null;
 
   const buildTrackSummary = React.useCallback(
     (trackResults?: TrackReviewResult[] | null) => {
@@ -497,114 +498,27 @@ export function SubmissionDetailClient({
     setIsRatingDownloading(false);
   };
 
-  const buildSubmissionText = () => {
-    const lines: string[] = [];
-    lines.push("온사이드 신청 내역");
-    lines.push("=".repeat(40));
-    lines.push(`제목: ${submission.title || "제목 미입력"}`);
-    lines.push(`아티스트: ${submission.artist_name || "아티스트 미입력"}`);
-    lines.push(`접수 ID: ${submission.id}`);
-    lines.push(`접수 유형: ${submissionTypeLabels[submission.type] ?? submission.type}`);
-    lines.push(`패키지: ${packageInfo?.name ?? "-"}`);
-    lines.push(`방송국 수: ${packageInfo?.station_count ?? "-"}`);
-    lines.push(
-      `금액: ${
-        submission.amount_krw
-          ? `${formatCurrency(submission.amount_krw)}원`
-          : packageInfo?.price_krw
-            ? `${formatCurrency(packageInfo.price_krw)}원`
-            : "-"
-      }`,
-    );
-    lines.push(`결제 상태: ${submission.payment_status || "-"}`);
-    lines.push(
-      `결제 방식: ${
-        submission.payment_method
-          ? paymentMethodLabels[submission.payment_method] ?? submission.payment_method
-          : "-"
-      }`,
-    );
-    lines.push(`접수 일시: ${formatDateTime(submission.created_at)}`);
-    lines.push(`최근 업데이트: ${formatDateTime(submission.updated_at)}`);
-    lines.push("");
-    lines.push("작성 신청서");
-    lines.push("-".repeat(24));
-    lines.push(
-      `${submission.type === "ALBUM" ? "앨범 제목" : "영상 제목"}: ${submission.title || "-"}`,
-    );
-    lines.push(
-      `아티스트명: ${submission.artist_name || "-"}${submission.artist_name_kr ? ` / ${submission.artist_name_kr}` : ""}${submission.artist_name_en ? ` / ${submission.artist_name_en}` : ""}`,
-    );
-    lines.push(`신청자: ${submission.applicant_name || "-"}`);
-    lines.push(`신청자 연락처: ${submission.applicant_phone || "-"}`);
-    lines.push(`신청자 이메일: ${submission.applicant_email || "-"}`);
-    lines.push(`유통사: ${submission.distributor || "-"}`);
-    lines.push(`제작사: ${submission.production_company || "-"}`);
-    lines.push(
-      `발매일: ${submission.release_date ? formatDateTime(submission.release_date) : "-"}`,
-    );
-    lines.push(`장르: ${submission.genre || "-"}`);
-    lines.push(`이전 발매: ${submission.previous_release || "-"}`);
-    lines.push(`그룹/솔로: ${artistTypeLabel}`);
-    lines.push(`성별: ${artistGenderLabel}`);
-    lines.push(`멤버: ${submission.artist_members || "-"}`);
-    lines.push(`멜론 링크: ${submission.melon_url || "-"}`);
-    if (isMvSubmission) {
-      lines.push(`러닝타임: ${submission.mv_runtime || "-"}`);
-      lines.push(`포맷: ${submission.mv_format || "-"}`);
-      lines.push(`감독: ${submission.mv_director || "-"}`);
-      lines.push(`주연: ${submission.mv_lead_actor || "-"}`);
-      lines.push(`스토리라인: ${submission.mv_storyline || "-"}`);
-      lines.push(`제작사: ${submission.mv_production_company || "-"}`);
-      lines.push(`에이전시: ${submission.mv_agency || "-"}`);
-      lines.push(`앨범 제목: ${submission.mv_album_title || "-"}`);
-      lines.push(
-        `제작일: ${submission.mv_production_date ? formatDateTime(submission.mv_production_date) : "-"}`,
-      );
-      lines.push(`배급사: ${submission.mv_distribution_company || "-"}`);
-      lines.push(`사업자등록번호: ${submission.mv_business_reg_no || "-"}`);
-      lines.push(`용도: ${submission.mv_usage || "-"}`);
-      lines.push(`희망 등급: ${submission.mv_desired_rating || "-"}`);
-      lines.push(
-        `곡 제목: ${submission.mv_song_title || submission.mv_song_title_kr || submission.mv_song_title_en || "-"}`,
-      );
-      lines.push(
-        `작곡/작사/편곡: ${submission.mv_composer || "-"} / ${submission.mv_lyricist || "-"} / ${submission.mv_arranger || "-"}`,
-      );
-      lines.push(`메모: ${submission.mv_memo || "-"}`);
-      lines.push(`가사: ${submission.mv_lyrics || "-"}`);
-    } else {
-      lines.push(`아티스트 유형: ${artistTypeLabel}`);
-      lines.push(`이전 발매: ${submission.previous_release || "-"}`);
+  const handleResultFileDownload = async (fileId?: string | null) => {
+    if (!fileId) {
+      setResultNotice("등록된 파일이 없습니다.");
+      return;
     }
-    if (!isMvSubmission && albumTracks.length > 0) {
-      lines.push("");
-      lines.push("트랙 리스트");
-      lines.push("-".repeat(16));
-      albumTracks.forEach((track, index) => {
-        lines.push(
-          `${track.track_no ?? index + 1}. ${track.track_title || track.track_title_kr || track.track_title_en || "제목 미입력"}${track.is_title ? " · 타이틀" : ""}`,
-        );
-        lines.push(
-          `   작곡 ${track.composer || "-"} / 작사 ${track.lyricist || "-"} / 편곡 ${track.arranger || "-"}`,
-        );
-        if (track.lyrics) {
-          lines.push(`   가사: ${track.lyrics}`);
-        }
-      });
+    setIsResultFileDownloading(true);
+    setResultNotice(null);
+    const result = await getSubmissionFileUrlAction({
+      submissionId,
+      fileId,
+      guestToken: guestToken ?? undefined,
+    });
+    if (result.error) {
+      setResultNotice(result.error);
+      setIsResultFileDownloading(false);
+      return;
     }
-    return lines.join("\n");
-  };
-
-  const handleDownloadText = () => {
-    const content = buildSubmissionText();
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `submission-${submission.id}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+    if (result.url) {
+      window.open(result.url, "_blank", "noopener,noreferrer");
+    }
+    setIsResultFileDownloading(false);
   };
 
   return (
@@ -721,17 +635,7 @@ export function SubmissionDetailClient({
           </div>
         </div>
       ) : null}
-      {showAdminDownload ? (
-        <div className="mt-3 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={handleDownloadText}
-            className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
-          >
-            신청 내역 TXT 다운로드
-          </button>
-        </div>
-      ) : null}
+      {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
@@ -850,9 +754,59 @@ export function SubmissionDetailClient({
               </div>
             </div>
           </div>
-
+          {isMvSubmission && isResultReady ? (
+            <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                심의 결과 파일
+              </p>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                    등급분류
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleRatingFileDownload}
+                    disabled={isRatingDownloading && !ratingFile}
+                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {ratingFile ? ratingFile.original_name : "등급분류 파일 다운로드"}
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                    심의 결과
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleResultFileDownload(resultFile?.id)}
+                    disabled={!resultFile || isResultFileDownloading}
+                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {resultFile ? resultFile.original_name : "심의 결과 파일 미등록"}
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                    표기 가이드
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleResultFileDownload(labelGuideFile?.id)}
+                    disabled={!labelGuideFile || isResultFileDownloading}
+                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {labelGuideFile ? labelGuideFile.original_name : "표기 가이드 미등록"}
+                  </button>
+                </div>
+                {resultNotice ? (
+                  <p className="text-xs text-red-500">{resultNotice}</p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
 
     <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
       <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
