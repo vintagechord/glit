@@ -1,5 +1,7 @@
+// Supabase signed URL for onside logo (long expiry). If public bucket is enabled,
+// you can swap this to the public object URL instead.
 const DEFAULT_LOGO =
-  "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/logo/onside_logo.svg";
+  "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/sign/logo/onside_logo.svg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8xMDAwNTc4YS0wOTBiLTRmOTYtYTRlMC1mNTM5ODlhNjRjMDgiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJsb2dvL29uc2lkZV9sb2dvLnN2ZyIsImlhdCI6MTc2OTUzNzI0NiwiZXhwIjoyMDg0ODk3MjQ2fQ.b_hTQcgrSOHS0u5nn0mcJbIy5xwFytJY-st0_6UKijY";
 
 export const APP_CONFIG = {
   logoPath: process.env.NEXT_PUBLIC_LOGO_PATH ?? DEFAULT_LOGO,
