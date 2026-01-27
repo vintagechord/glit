@@ -206,6 +206,8 @@ export function MvWizard({
   const [fileDigest, setFileDigest] = React.useState("");
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
+  const [draftError, setDraftError] = React.useState<string | null>(null);
 
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [confirmModal, setConfirmModal] = React.useState<{
@@ -220,9 +222,6 @@ export function MvWizard({
   const submissionIdRef = React.useRef<string | null>(null);
   const guestTokenRef = React.useRef<string | null>(null);
 
-  if (!submissionIdRef.current) {
-    submissionIdRef.current = safeRandomUUID();
-  }
   if (!guestTokenRef.current) {
     guestTokenRef.current = safeRandomUUID();
   }
@@ -257,6 +256,52 @@ export function MvWizard({
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, []);
+
+  const requireSubmissionId = React.useCallback(() => {
+    if (submissionIdRef.current) return submissionIdRef.current;
+    throw new Error("접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.");
+  }, []);
+
+  const createDraft = React.useCallback(async () => {
+    if (isPreparingDraft || submissionIdRef.current) return;
+    setIsPreparingDraft(true);
+    setDraftError(null);
+    try {
+      const res = await fetch("/api/submissions/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: mvType,
+          guestToken: isGuest ? guestTokenRef.current : undefined,
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        submissionId?: string;
+        error?: string;
+      };
+      if (res.ok && json?.submissionId) {
+        submissionIdRef.current = json.submissionId;
+        return;
+      }
+      setDraftError(
+        json?.error ||
+          "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
+      );
+    } catch (error) {
+      setDraftError(
+        error instanceof Error
+          ? error.message
+          : "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
+      );
+    } finally {
+      setIsPreparingDraft(false);
+    }
+  }, [isGuest, isPreparingDraft, mvType]);
+
+  React.useEffect(() => {
+    if (submissionIdRef.current || isPreparingDraft) return;
+    void createDraft();
+  }, [createDraft, isPreparingDraft]);
 
   const submissionId = submissionIdRef.current;
   const guestToken = guestTokenRef.current;
@@ -409,6 +454,15 @@ export function MvWizard({
   };
 
   const addFiles = (selected: File[]) => {
+    if (!submissionIdRef.current) {
+      setNotice({
+        error:
+          draftError ||
+          "접수 초안을 준비하는 중입니다. 잠시 후 다시 시도하거나 다시 시도 버튼을 눌러주세요.",
+      });
+      void createDraft();
+      return;
+    }
     const allowAllExtensions = mvType === "MV_DISTRIBUTION";
     const allowedTypes = new Set([
       "video/mp4",
@@ -485,6 +539,7 @@ export function MvWizard({
     file: File,
     onProgress: (percent: number) => void,
   ) => {
+    const submissionId = requireSubmissionId();
     const directUploadFallback = () =>
       new Promise<{ objectKey: string }>((resolve, reject) => {
         const formData = new FormData();
@@ -764,6 +819,21 @@ export function MvWizard({
         : songTitleOfficial === "EN"
           ? songTitleEnValue
           : songTitleKrValue || songTitleEnValue;
+
+    let submissionId: string;
+    try {
+      submissionId = requireSubmissionId();
+    } catch (error) {
+      setNotice({
+        error:
+          draftError ||
+          (error instanceof Error
+            ? error.message
+            : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
+      });
+      void createDraft();
+      return;
+    }
 
     if (!title || !artistName) {
       setNotice({ error: "제목과 아티스트명을 입력해주세요." });
