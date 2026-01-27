@@ -147,15 +147,48 @@ export default async function SubmissionDetailPage({
   const { data: isAdminRpc } = await supabase.rpc("is_admin");
   const isAdmin = isAdminRpc === true;
 
+  const extractMissingColumn = (error: PostgrestError | null) => {
+    const msg = error?.message ?? "";
+    const match =
+      msg.match(/column\\s+\"?([^\\s\\\"']+)\"?\\s+does not exist/i) ||
+      msg.match(/column\\s+'?([^\\s\\\"']+)'?\\s+does not exist/i);
+    if (!match?.[1]) return null;
+    const full = match[1];
+    const parts = full.split(".");
+    return parts[parts.length - 1];
+  };
+
+  const dropColumnFromSelect = (select: string, column: string) =>
+    select
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => !s.includes(column))
+      .join(", ");
+
   const fetchSubmission = async (
     client: ReturnType<typeof createAdminClient> | Awaited<ReturnType<typeof createServerSupabase>>,
   ): Promise<{ submission: SubmissionRow | null; error: PostgrestError | null }> => {
-    const { data, error } = await client
-      .from("submissions")
-      .select(lightSelect)
-      .eq("id", submissionId)
-      .maybeSingle();
-    return { submission: data as SubmissionRow | null, error: error as PostgrestError | null };
+    let selectClause = lightSelect;
+    let submission: SubmissionRow | null = null;
+    let error: PostgrestError | null = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data, error: err } = await client
+        .from("submissions")
+        .select(selectClause)
+        .eq("id", submissionId)
+        .maybeSingle();
+      submission = (data as SubmissionRow | null) ?? null;
+      error = err as PostgrestError | null;
+      if (!error) break;
+
+      const missing = extractMissingColumn(error);
+      if (!missing) break;
+      const next = dropColumnFromSelect(selectClause, missing);
+      if (next === selectClause) break;
+      selectClause = next;
+    }
+    return { submission, error };
   };
 
   const admin = createAdminClient();
