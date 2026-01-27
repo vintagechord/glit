@@ -8,8 +8,8 @@ const ratingOptions = [
   { value: "ALL", label: "전체연령" },
   { value: "12", label: "12세 이상" },
   { value: "15", label: "15세 이상" },
-  { value: "19", label: "19세 이상" },
   { value: "REJECT", label: "심의 불가" },
+  { value: "18", label: "청소년불가(18세)" },
 ];
 
 export function MvRatingControl({
@@ -45,6 +45,7 @@ export function MvRatingControl({
       }
       setNotice("저장 완료");
       setError(null);
+      alert("저장 완료");
       // 즉시 화면 반영
       router.refresh();
     } catch (err) {

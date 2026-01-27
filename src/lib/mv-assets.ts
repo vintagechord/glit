@@ -5,8 +5,9 @@ const DEFAULT_RATING_MAP: Record<"ALL" | "12" | "15" | "18" | "19" | "REJECT", s
   "12": "submissions/admin-free/free-upload/12세 로고.png",
   "15": "submissions/admin-free/free-upload/15세 로고.png",
   "18": "submissions/admin-free/free-upload/18세 로고.png",
-  "19": "submissions/admin-free/free-upload/19세 로고.png",
-  REJECT: "submissions/admin-free/free-upload/심의불가.png",
+  // 19/REJECT fall back to 18 로고 to avoid missing objects
+  "19": "submissions/admin-free/free-upload/18세 로고.png",
+  REJECT: "submissions/admin-free/free-upload/18세 로고.png",
 };
 
 const getEnvKey = (name: string, fallback: string) =>

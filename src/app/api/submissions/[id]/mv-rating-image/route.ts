@@ -26,7 +26,7 @@ export async function GET(
     return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
   }
 
-  const rating = submission?.mv_rating ?? (submission as any)?.mv_desired_rating ?? null;
+  const rating = (submission as any)?.mv_desired_rating ?? null;
   if (!isRatingCode(rating)) {
     return NextResponse.json({ error: "등급이 설정되지 않았습니다." }, { status: 404 });
   }

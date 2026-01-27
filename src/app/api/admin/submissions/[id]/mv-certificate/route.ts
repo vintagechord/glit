@@ -4,8 +4,9 @@ import { PassThrough, Readable } from "stream";
 import { ReadableStream as NodeReadableStream } from "stream/web";
 import { Upload } from "@aws-sdk/lib-storage";
 
-import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
+import { B2ConfigError, getB2Config } from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -91,9 +92,10 @@ export async function POST(
   }
 
   try {
-    const { data: submission } = await supabase
+    const admin = createAdminClient();
+    const { data: submission } = await admin
       .from("submissions")
-      .select("id, mv_rating, type")
+      .select("id, type")
       .eq("id", submissionId)
       .maybeSingle();
 
@@ -105,12 +107,8 @@ export async function POST(
     }
 
     const { client, bucket } = getB2Config();
-    const objectKey = buildObjectKey({
-      userId: "admin-certificate",
-      submissionId,
-      title: submission.mv_rating ?? "certificate",
-      filename,
-    });
+    const safeName = filename.replace(/[^A-Za-z0-9._-]+/g, "_");
+    const objectKey = `submissions/${submissionId}/certificate/${Date.now()}_${safeName || "certificate"}`;
 
     const uploader = new Upload({
       client,
@@ -126,14 +124,14 @@ export async function POST(
 
     await uploader.done();
 
-    const { error } = await supabase
+    const { error } = await admin
       .from("submissions")
       .update({
-        mv_certificate_object_key: objectKey,
-        mv_certificate_filename: filename,
-        mv_certificate_mime_type: mimeType,
-        mv_certificate_size_bytes: sizeBytes,
-        mv_certificate_uploaded_at: new Date().toISOString(),
+        certificate_b2_path: objectKey,
+        certificate_original_name: filename,
+        certificate_mime: mimeType,
+        certificate_size: sizeBytes,
+        certificate_uploaded_at: new Date().toISOString(),
       })
       .eq("id", submissionId);
 

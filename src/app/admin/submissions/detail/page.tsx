@@ -24,8 +24,10 @@ import { formatDateTime } from "@/lib/format";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { MvRatingControl } from "@/components/admin/mv-rating-control";
+import { CertificateUploader } from "@/components/admin/certificate-uploader";
 
 export const metadata = {
   title: "접수 상세 관리",
@@ -70,6 +72,11 @@ type SubmissionRow = {
   mv_usage?: string | null;
   is_oneclick?: boolean | null;
   mv_desired_rating?: string | null;
+  certificate_b2_path?: string | null;
+  certificate_original_name?: string | null;
+  certificate_mime?: string | null;
+  certificate_size?: number | null;
+  certificate_uploaded_at?: string | null;
   mv_memo?: string | null;
   mv_song_title?: string | null;
   mv_song_title_kr?: string | null;
@@ -102,7 +109,6 @@ type SubmissionRow = {
   payment_method: string | null;
   amount_krw: number | null;
   mv_base_selected: boolean | null;
-  mv_rating?: string | null;
   pre_review_requested: boolean | null;
   karaoke_requested: boolean | null;
   bank_depositor_name: string | null;
@@ -248,118 +254,6 @@ export default async function AdminSubmissionDetailPage({
   );
 
   const supabase = createAdminClient();
-  const baseSelectCoreColumns = [
-    "id",
-    "user_id",
-    "title",
-    "artist_name",
-    "artist_name_kr",
-    "artist_name_en",
-    "status",
-    "payment_status",
-    "payment_method",
-    "amount_krw",
-    "mv_base_selected",
-    "mv_desired_rating",
-    "pre_review_requested",
-    "karaoke_requested",
-    "bank_depositor_name",
-    "admin_memo",
-    "result_status",
-    "result_memo",
-    "result_notified_at",
-    "applicant_email",
-    "applicant_name",
-    "applicant_phone",
-    "created_at",
-    "updated_at",
-    "type",
-    "package:packages ( name, station_count )",
-  ];
-  const albumExtraColumns = [
-    "release_date",
-    "genre",
-    "distributor",
-    "production_company",
-    "previous_release",
-    "artist_type",
-    "artist_gender",
-    "artist_members",
-    "is_oneclick",
-    "melon_url",
-  ];
-  const mvExtraColumns = [
-    "mv_runtime",
-    "mv_format",
-    "mv_director",
-    "mv_lead_actor",
-    "mv_storyline",
-    "mv_production_company",
-    "mv_agency",
-    "mv_album_title",
-    "mv_production_date",
-    "mv_distribution_company",
-    "mv_business_reg_no",
-    "mv_usage",
-    "mv_desired_rating",
-    "mv_memo",
-    "mv_song_title",
-    "mv_song_title_kr",
-    "mv_song_title_en",
-    "mv_song_title_official",
-    "mv_composer",
-    "mv_lyricist",
-    "mv_arranger",
-    "mv_song_memo",
-    "mv_lyrics",
-  ];
-  const trackRelation =
-    "album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, track_title_official, featuring, composer, lyricist, arranger, lyrics, notes, is_title, title_role, broadcast_selected )";
-
-  const buildSelectColumns = ({
-    includeGuest,
-    includeResult,
-  }: {
-    includeGuest: boolean;
-    includeResult: boolean;
-  }) => {
-    const coreCols = baseSelectCoreColumns.filter((col) => {
-      if (!includeResult && ["result_status", "result_memo", "result_notified_at"].includes(col)) {
-        return false;
-      }
-      return true;
-    });
-    return [
-      ...coreCols,
-      ...albumExtraColumns,
-      ...mvExtraColumns,
-      trackRelation,
-      ...(includeGuest
-        ? ["guest_name", "guest_company", "guest_email", "guest_phone"]
-        : []),
-    ];
-  };
-
-  let hasGuestColumns = true;
-  let hasResultColumns = true;
-  let submission: SubmissionRow | null = null;
-  let submissionError: { message?: string; code?: string } | null = null;
-
-  const isColumnMissing = (
-    error: { message?: string; code?: string } | null,
-    column: string,
-  ) =>
-    error?.code === "42703" ||
-    error?.message?.toLowerCase().includes(column.toLowerCase());
-
-  const isNotFoundError = (error: { message?: string; code?: string } | null) =>
-    error?.code === "PGRST116" ||
-    error?.message?.toLowerCase().includes("row not found") ||
-    error?.message?.toLowerCase().includes("results contain 0 rows");
-
-  const runFetch = async (selectColumns: string[]) =>
-    supabase.from("submissions").select(selectColumns.join(", ")).eq("id", submissionId).single();
-
   const extractMissingColumn = (error: { message?: string; code?: string } | null) => {
     const msg = error?.message ?? "";
     const match =
@@ -368,18 +262,33 @@ export default async function AdminSubmissionDetailPage({
     if (!match?.[1]) return null;
     const full = match[1];
     const parts = full.split(".");
-    return parts.length > 1 ? { full, short: parts[parts.length - 1] } : { full, short: full };
+    return parts.length > 1 ? parts[parts.length - 1] : full;
   };
 
-  let selectColumns = buildSelectColumns({
-    includeGuest: hasGuestColumns,
-    includeResult: hasResultColumns,
-  });
+  const dropColumnFromSelect = (select: string, column: string) =>
+    select
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => !s.includes(column))
+      .join(", ");
 
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const result = await runFetch(selectColumns);
-    submission = (result.data ?? null) as SubmissionRow | null;
-    submissionError = result.error ?? null;
+  const isNotFoundError = (error: { message?: string; code?: string } | null) =>
+    error?.code === "PGRST116" ||
+    error?.message?.toLowerCase().includes("row not found") ||
+    error?.message?.toLowerCase().includes("results contain 0 rows");
+
+  let submission: SubmissionRow | null = null;
+  let submissionError: { message?: string; code?: string } | null = null;
+  let selectClause = SUBMISSION_ADMIN_DETAIL_SELECT;
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const { data, error } = await supabase
+      .from("submissions")
+      .select(selectClause)
+      .eq("id", submissionId)
+      .maybeSingle();
+    submission = (data as SubmissionRow | null) ?? null;
+    submissionError = error ?? null;
 
     if (!submissionError) {
       break;
@@ -390,25 +299,14 @@ export default async function AdminSubmissionDetailPage({
     }
 
     const missing = extractMissingColumn(submissionError);
-    if (missing) {
-      // drop any column string that includes the missing identifier
-      const beforeLength = selectColumns.length;
-      selectColumns = selectColumns.filter(
-        (col) => !col.includes(missing.full) && !col.includes(missing.short),
-      );
-
-      if (selectColumns.length === beforeLength) {
-        break;
-      }
-      // also update flags if applicable
-      if (missing.short === "guest_name") hasGuestColumns = false;
-      if (["result_status", "result_memo", "result_notified_at"].includes(missing.short)) {
-        hasResultColumns = false;
-      }
-      continue;
+    if (!missing) {
+      break;
     }
-    // unknown error; stop loop
-    break;
+    const next = dropColumnFromSelect(selectClause, missing);
+    if (next === selectClause) {
+      break;
+    }
+    selectClause = next;
   }
 
   if (isNotFoundError(submissionError) || !submission) {
@@ -442,6 +340,12 @@ export default async function AdminSubmissionDetailPage({
       </div>
     );
   }
+
+  const hasGuestColumns =
+    submission.guest_name !== undefined ||
+    submission.guest_company !== undefined ||
+    submission.guest_email !== undefined ||
+    submission.guest_phone !== undefined;
 
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
@@ -767,7 +671,17 @@ export default async function AdminSubmissionDetailPage({
                 <div className="mt-4">
                   <MvRatingControl
                     submissionId={submission.id}
-                    initialRating={submission.mv_rating ?? submission.mv_desired_rating ?? ""}
+                    initialRating={submission.mv_desired_rating ?? ""}
+                  />
+                </div>
+                <div className="mt-6 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                    심의 필증 업로드
+                  </p>
+                  <CertificateUploader
+                    submissionId={submission.id}
+                    currentName={submission.certificate_original_name}
+                    currentUploadedAt={submission.certificate_uploaded_at}
                   />
                 </div>
               </div>

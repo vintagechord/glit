@@ -35,7 +35,11 @@ type SubmissionRow = {
   payment_status: string | null;
   payment_method?: string | null;
   amount_krw: number | null;
-  mv_rating?: string | null;
+  certificate_b2_path?: string | null;
+  certificate_original_name?: string | null;
+  certificate_mime?: string | null;
+  certificate_size?: number | null;
+  certificate_uploaded_at?: string | null;
   created_at: string;
   updated_at: string;
   release_date?: string | null;
@@ -281,10 +285,6 @@ export default async function SubmissionDetailPage({
 
   const resolvedSubmission = {
     ...(userSubmission ?? adminSubmission),
-    mv_rating:
-      (userSubmission ?? adminSubmission)?.mv_rating ??
-      (userSubmission ?? adminSubmission)?.mv_desired_rating ??
-      null,
   };
   const packageInfo = Array.isArray(resolvedSubmission.package)
     ? resolvedSubmission.package[0]

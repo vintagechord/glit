@@ -13,6 +13,7 @@ import {
 } from "@/lib/track-results";
 import { createClient } from "@/lib/supabase/client";
 import { APP_CONFIG } from "@/lib/config";
+import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 
 type Submission = {
   id: string;
@@ -27,12 +28,11 @@ type Submission = {
   amount_krw: number | null;
   created_at: string;
   updated_at: string;
-  mv_rating?: string | null;
-  mv_certificate_object_key?: string | null;
-  mv_certificate_filename?: string | null;
-  mv_certificate_mime_type?: string | null;
-  mv_certificate_size_bytes?: number | null;
-  mv_certificate_uploaded_at?: string | null;
+  certificate_b2_path?: string | null;
+  certificate_original_name?: string | null;
+  certificate_mime?: string | null;
+  certificate_size?: number | null;
+  certificate_uploaded_at?: string | null;
   release_date?: string | null;
   genre?: string | null;
   distributor?: string | null;
@@ -119,6 +119,15 @@ const statusLabels: Record<string, string> = {
   RESULT_READY: "결과 확인",
   COMPLETED: "완료",
 };
+
+const RATING_PATHS: Record<string, string> = {
+  ALL: "submissions/admin-free/free-upload/all 로고.png",
+  "12": "submissions/admin-free/free-upload/12세 로고.png",
+  "15": "submissions/admin-free/free-upload/15세 로고.png",
+  "18": "submissions/admin-free/free-upload/18세 로고.png",
+  REJECT: "submissions/admin-free/free-upload/18세 로고.png",
+};
+const GUIDE_PATH = "submissions/admin-free/free-upload/온사이드 뮤직비디오 등급표시 방법 안내.pdf";
 
 const paymentMethodLabels: Record<string, string> = {
   BANK: "무통장",
@@ -271,7 +280,7 @@ export function SubmissionDetailClient({
     ? submission.package[0]
     : submission.package;
   const [adminRating, setAdminRating] = React.useState(
-    submission.mv_rating ?? submission.mv_desired_rating ?? "",
+          submission.mv_desired_rating ?? "",
   );
   const [isSavingRating, setIsSavingRating] = React.useState(false);
   const [certificateFile, setCertificateFile] = React.useState<File | null>(null);
@@ -347,44 +356,21 @@ export function SubmissionDetailClient({
         : stationReviews;
 
   const handleGuideDownload = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (guestToken) params.set("guestToken", guestToken);
-      const res = await fetch(
-        `/api/submissions/${submissionId}/mv-guide?${params.toString()}`,
-      );
-      const json = (await res.json().catch(() => null)) as { url?: string; error?: string };
-      if (!res.ok || !json?.url) {
-        throw new Error(json?.error || "가이드 링크를 불러오지 못했습니다.");
-      }
-      window.open(json.url, "_blank", "noopener,noreferrer");
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "가이드 링크를 불러오지 못했습니다.");
-    }
+    const params = new URLSearchParams();
+    params.set("filePath", GUIDE_PATH);
+    if (guestToken) params.set("guestToken", guestToken);
+    window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
   };
 
   const handleCertificateDownload = async () => {
-    try {
-      setResultNotice(null);
-      const params = new URLSearchParams();
-      if (guestToken) params.set("guestToken", guestToken);
-      const res = await fetch(
-        `/api/submissions/${submissionId}/mv-certificate?${params.toString()}`,
-      );
-      const json = (await res.json().catch(() => null)) as {
-        url?: string;
-        error?: string;
-        filename?: string;
-      };
-      if (!res.ok || !json?.url) {
-        throw new Error(json?.error || "필증을 불러오지 못했습니다.");
-      }
-      window.open(json.url, "_blank", "noopener,noreferrer");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "필증을 불러오지 못했습니다.";
-      setResultNotice(message);
-      alert(message);
+    if (!submission.certificate_b2_path) {
+      setResultNotice("필증이 아직 업로드되지 않았습니다.");
+      return;
     }
+    const params = new URLSearchParams();
+    params.set("filePath", submission.certificate_b2_path);
+    if (guestToken) params.set("guestToken", guestToken);
+    window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
   };
 
   const handleSaveAdminRating = async () => {
@@ -403,7 +389,7 @@ export function SubmissionDetailClient({
       if (!res.ok || json?.error) {
         throw new Error(json?.error || "등급을 저장하지 못했습니다.");
       }
-      setSubmission((prev) => ({ ...prev, mv_rating: adminRating }));
+      setSubmission((prev) => ({ ...prev, mv_desired_rating: adminRating }));
       alert("등급이 저장되었습니다.");
     } catch (error) {
       alert(error instanceof Error ? error.message : "등급 저장에 실패했습니다.");
@@ -435,10 +421,11 @@ export function SubmissionDetailClient({
       }
       setSubmission((prev) => ({
         ...prev,
-        mv_certificate_object_key: json.objectKey ?? prev.mv_certificate_object_key,
-        mv_certificate_filename: certificateFile.name,
-        mv_certificate_mime_type: certificateFile.type || "application/octet-stream",
-        mv_certificate_size_bytes: certificateFile.size,
+        certificate_b2_path: json.objectKey ?? prev.certificate_b2_path,
+        certificate_original_name: certificateFile.name,
+        certificate_mime: certificateFile.type || "application/octet-stream",
+        certificate_size: certificateFile.size,
+        certificate_uploaded_at: new Date().toISOString(),
       }));
       setCertificateFile(null);
       alert("필증이 업로드되었습니다.");
@@ -491,13 +478,13 @@ export function SubmissionDetailClient({
 
   const fetchLatest = React.useCallback(async () => {
     if (!supabase) return;
-    const { data: submissionData } = await supabase
+    const { data: submissionDataRaw } = await supabase
       .from("submissions")
-      .select(
-        "id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, mv_rating, mv_desired_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, created_at, updated_at, release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, melon_url, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics, applicant_name, applicant_email, applicant_phone, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )",
-      )
+      .select(SUBMISSION_ADMIN_DETAIL_SELECT)
       .eq("id", submissionId)
       .maybeSingle();
+
+    const submissionData = submissionDataRaw as any;
 
     if (submissionData) {
       const nextPackage = Array.isArray(submissionData.package)
@@ -635,16 +622,15 @@ export function SubmissionDetailClient({
   const handleRatingDownload = async () => {
     setIsRatingDownloading(true);
     try {
-      const params = new URLSearchParams();
-      if (guestToken) params.set("guestToken", guestToken);
-      const res = await fetch(
-        `/api/submissions/${submissionId}/mv-rating-image?${params.toString()}`,
-      );
-      const json = (await res.json().catch(() => null)) as { url?: string; error?: string };
-      if (!res.ok || !json?.url) {
-        throw new Error(json?.error || "등급 이미지를 불러오지 못했습니다.");
+      const rating = submission.mv_desired_rating;
+      const path = rating ? RATING_PATHS[rating] : null;
+      if (!rating || !path) {
+        throw new Error("등급이 설정되지 않았습니다.");
       }
-      window.open(json.url, "_blank", "noopener,noreferrer");
+      const params = new URLSearchParams();
+      params.set("filePath", path);
+      if (guestToken) params.set("guestToken", guestToken);
+      window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
     } catch (error) {
       alert(error instanceof Error ? error.message : "등급 이미지를 불러오지 못했습니다.");
     } finally {
@@ -781,7 +767,6 @@ export function SubmissionDetailClient({
                 <option value="12">12세</option>
                 <option value="15">15세</option>
                 <option value="18">18세(청소년불가)</option>
-                <option value="19">19세</option>
                 <option value="REJECT">심의불가</option>
               </select>
             </label>
@@ -940,12 +925,12 @@ export function SubmissionDetailClient({
                     type="button"
                     onClick={handleRatingDownload}
                     disabled={
-                      !(submission.mv_rating || submission.mv_desired_rating) || isRatingDownloading
+                      !submission.mv_desired_rating || isRatingDownloading
                     }
                     className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {submission.mv_rating || submission.mv_desired_rating
-                      ? `${mvRatingLabel(submission.mv_rating ?? submission.mv_desired_rating)} 이미지 다운로드`
+                    {submission.mv_desired_rating
+                      ? `${mvRatingLabel(submission.mv_desired_rating)} 이미지 다운로드`
                       : "등급 미설정"}
                   </button>
                 </div>
@@ -969,13 +954,13 @@ export function SubmissionDetailClient({
                     type="button"
                     onClick={handleCertificateDownload}
                     disabled={
-                      !submission.mv_certificate_object_key ||
+                      !submission.certificate_b2_path ||
                       !(isResultReady || submission.status === "COMPLETED")
                     }
                     className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {submission.mv_certificate_filename
-                      ? submission.mv_certificate_filename
+                    {submission.certificate_original_name
+                      ? submission.certificate_original_name
                       : "필증 미등록"}
                   </button>
                 </div>

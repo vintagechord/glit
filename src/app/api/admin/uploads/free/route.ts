@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       stream: pass,
       filename: info.filename,
       mimeType: info.mimeType,
-      sizeBytes: Number(fields.sizeBytes ?? info.mimeType ? 0 : 0),
+      sizeBytes: Number(fields.sizeBytes ?? 0) || undefined,
     };
   });
 
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "파일이 포함되어 있지 않습니다." }, { status: 400 });
   }
 
-  const part: FilePart = filePart;
+  const part = filePart as FilePart;
   const filename = part.filename || fields.filename || "unnamed";
   const mimeType = part.mimeType || fields.mimeType || "application/octet-stream";
   const sizeBytes = Number(fields.sizeBytes || part.sizeBytes || 0);

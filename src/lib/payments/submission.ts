@@ -12,9 +12,9 @@ export type StdPayInitResult = {
 export const findSubmissionById = async (submissionId: string) => {
   const admin = createAdminClient();
   const selectWithRating =
-    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, amount_krw, payment_method, payment_status, mv_rating, mv_desired_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, mv_certificate_uploaded_at, package:packages ( name )";
+    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, amount_krw, payment_method, payment_status, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, package:packages ( name )";
   const selectFallback =
-    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, amount_krw, payment_method, payment_status, mv_desired_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, mv_certificate_uploaded_at, package:packages ( name )";
+    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, amount_krw, payment_method, payment_status, mv_desired_rating, package:packages ( name )";
 
   let { data, error } = await admin
     .from("submissions")
@@ -30,10 +30,6 @@ export const findSubmissionById = async (submissionId: string) => {
       .maybeSingle();
     data = fallback.data as any;
     error = fallback.error;
-  }
-
-  if (data && !(data as any).mv_rating) {
-    (data as any).mv_rating = (data as any).mv_desired_rating ?? null;
   }
 
   return { submission: data, error };

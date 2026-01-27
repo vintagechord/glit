@@ -4,6 +4,7 @@ import { SubmissionDetailClient } from "@/features/submissions/submission-detail
 import type { TrackReviewResult } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 
 export const metadata = {
   title: "비회원 진행 상황",
@@ -21,10 +22,8 @@ export default async function TrackDetailPage({
   }
 
   const admin = createAdminClient();
-  const baseSelect =
-    "id, title, artist_name, type, status, payment_status, amount_krw, created_at, updated_at, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )";
-  const fullSelect =
-  "id, title, artist_name, type, status, payment_status, payment_method, amount_krw, mv_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, created_at, updated_at, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title, title_role, broadcast_selected )";
+  const baseSelect = SUBMISSION_ADMIN_DETAIL_SELECT;
+  const fullSelect = SUBMISSION_ADMIN_DETAIL_SELECT;
 
   const fetchSubmission = async (column: "guest_token" | "id", value: string) => {
     const { data, error } = await admin
@@ -49,7 +48,7 @@ export default async function TrackDetailPage({
     return null;
   };
 
-  let submission = await fetchSubmission("guest_token", token);
+  let submission = (await fetchSubmission("guest_token", token)) as any;
 
   if (!submission) {
     const isUuid =
@@ -57,7 +56,7 @@ export default async function TrackDetailPage({
         token,
       );
     if (isUuid) {
-      submission = await fetchSubmission("id", token);
+      submission = (await fetchSubmission("id", token)) as any;
     }
   }
 
