@@ -32,6 +32,7 @@ type Submission = {
   mv_certificate_filename?: string | null;
   mv_certificate_mime_type?: string | null;
   mv_certificate_size_bytes?: number | null;
+  mv_certificate_uploaded_at?: string | null;
   release_date?: string | null;
   genre?: string | null;
   distributor?: string | null;

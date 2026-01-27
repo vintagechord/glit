@@ -130,6 +130,7 @@ export async function POST(
         mv_certificate_filename: filename,
         mv_certificate_mime_type: mimeType,
         mv_certificate_size_bytes: sizeBytes,
+        mv_certificate_uploaded_at: new Date().toISOString(),
       })
       .eq("id", submissionId);
 

@@ -106,6 +106,7 @@ type SubmissionRow = {
   mv_certificate_filename?: string | null;
   mv_certificate_mime_type?: string | null;
   mv_certificate_size_bytes?: number | null;
+  mv_certificate_uploaded_at?: string | null;
   pre_review_requested: boolean | null;
   karaoke_requested: boolean | null;
   bank_depositor_name: string | null;
@@ -252,7 +253,7 @@ export default async function AdminSubmissionDetailPage({
 
   const supabase = createAdminClient();
   const baseSelectCore =
-    "id, user_id, title, artist_name, artist_name_kr, artist_name_en, status, payment_status, payment_method, amount_krw, mv_base_selected, mv_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, pre_review_requested, karaoke_requested, bank_depositor_name, admin_memo, result_status, result_memo, result_notified_at, applicant_email, applicant_name, applicant_phone, created_at, updated_at, type, package:packages ( name, station_count )";
+    "id, user_id, title, artist_name, artist_name_kr, artist_name_en, status, payment_status, payment_method, amount_krw, mv_base_selected, mv_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, mv_certificate_uploaded_at, pre_review_requested, karaoke_requested, bank_depositor_name, admin_memo, result_status, result_memo, result_notified_at, applicant_email, applicant_name, applicant_phone, created_at, updated_at, type, package:packages ( name, station_count )";
   const albumExtra =
     "release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, is_oneclick, melon_url";
   const mvExtra =

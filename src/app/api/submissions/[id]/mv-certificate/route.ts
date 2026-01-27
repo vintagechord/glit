@@ -28,6 +28,10 @@ export async function GET(
     return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
   }
 
+  if (submission.status && !["RESULT_READY", "COMPLETED"].includes(submission.status)) {
+    return NextResponse.json({ error: "아직 결과가 준비되지 않았습니다." }, { status: 403 });
+  }
+
   const key = submission.mv_certificate_object_key?.trim();
   if (!key) {
     return NextResponse.json({ error: "필증이 등록되지 않았습니다." }, { status: 404 });
