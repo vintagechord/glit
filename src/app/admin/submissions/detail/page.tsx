@@ -17,7 +17,6 @@ import {
   updatePaymentStatusFormAction,
   updateStationReviewFormAction,
   updateSubmissionStatusFormAction,
-  updateSubmissionMvRatingFormAction,
   createTrackForSubmissionAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
@@ -26,6 +25,7 @@ import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AdminSaveToast } from "@/components/admin/save-toast";
+import { MvRatingControl } from "@/components/admin/mv-rating-control";
 
 export const metadata = {
   title: "접수 상세 관리",
@@ -784,35 +784,12 @@ export default async function AdminSubmissionDetailPage({
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   MV 등급 설정
                 </p>
-                <form action={updateSubmissionMvRatingFormAction} className="mt-4 space-y-3">
-                  <input type="hidden" name="submissionId" value={submission.id} />
-                  <label className="space-y-2">
-                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      결과 등급
-                    </span>
-                    <select
-                      name="rating"
-                      defaultValue={submission.mv_rating ?? ""}
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                    >
-                      <option value="">결과 미입력</option>
-                      <option value="ALL">전체연령</option>
-                      <option value="12">12세 이상</option>
-                      <option value="15">15세 이상</option>
-                      <option value="19">19세 이상</option>
-                      <option value="REJECT">심의 불가</option>
-                    </select>
-                  </label>
-                  <p className="text-xs text-muted-foreground">
-                    선택한 등급은 사용자 상세 화면에 표시되며, 해당 등급 이미지·가이드·필증 다운로드에 사용됩니다.
-                  </p>
-                  <button
-                    type="submit"
-                    className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background"
-                  >
-                    등급 저장
-                  </button>
-                </form>
+                <div className="mt-4">
+                  <MvRatingControl
+                    submissionId={submission.id}
+                    initialRating={submission.mv_rating ?? submission.mv_desired_rating ?? ""}
+                  />
+                </div>
               </div>
             ) : null}
 
