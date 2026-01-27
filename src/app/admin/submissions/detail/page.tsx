@@ -325,7 +325,7 @@ export default async function AdminSubmissionDetailPage({
   const trackRelation =
     "album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, track_title_official, featuring, composer, lyricist, arranger, lyrics, notes, is_title, title_role, broadcast_selected )";
 
-  const buildSelect = ({
+  const buildSelectColumns = ({
     includeGuest,
     includeResult,
     includeCertificateUploaded,
@@ -343,7 +343,7 @@ export default async function AdminSubmissionDetailPage({
       }
       return true;
     });
-    const columns = [
+    return [
       ...coreCols,
       ...albumExtraColumns,
       ...mvExtraColumns,
@@ -352,7 +352,6 @@ export default async function AdminSubmissionDetailPage({
         ? ["guest_name", "guest_company", "guest_email", "guest_phone"]
         : []),
     ];
-    return columns.join(", ");
   };
 
   let hasGuestColumns = true;
@@ -373,79 +372,58 @@ export default async function AdminSubmissionDetailPage({
     error?.message?.toLowerCase().includes("row not found") ||
     error?.message?.toLowerCase().includes("results contain 0 rows");
 
-  const runFetch = async (select: string) =>
-    supabase.from("submissions").select(select).eq("id", submissionId).single();
+  const runFetch = async (selectColumns: string[]) =>
+    supabase.from("submissions").select(selectColumns.join(", ")).eq("id", submissionId).single();
 
-  let result = await runFetch(
-    buildSelect({
-      includeGuest: hasGuestColumns,
-      includeResult: hasResultColumns,
-      includeCertificateUploaded: hasCertUploadedColumn,
-    }),
-  );
-  submission = (result.data ?? null) as SubmissionRow | null;
-  submissionError = result.error ?? null;
+  const extractMissingColumn = (error: { message?: string; code?: string } | null) => {
+    const msg = error?.message ?? "";
+    const match =
+      msg.match(/column \"([^\"]+)\"/) ||
+      msg.match(/column '([^']+)'/) ||
+      msg.match(/(\w+)\s+does not exist/i);
+    return match?.[1] ?? null;
+  };
 
-  if (isNotFoundError(submissionError)) {
-    return renderSubmissionNotFound(submissionError?.message);
-  }
+  let selectColumns = buildSelectColumns({
+    includeGuest: hasGuestColumns,
+    includeResult: hasResultColumns,
+    includeCertificateUploaded: hasCertUploadedColumn,
+  });
 
-  if (isColumnMissing(submissionError, "guest_name")) {
-    hasGuestColumns = false;
-    result = await runFetch(
-      buildSelect({
-        includeGuest: hasGuestColumns,
-        includeResult: hasResultColumns,
-        includeCertificateUploaded: hasCertUploadedColumn,
-      }),
-    );
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const result = await runFetch(selectColumns);
     submission = (result.data ?? null) as SubmissionRow | null;
     submissionError = result.error ?? null;
-  }
 
-  if (isNotFoundError(submissionError)) {
-    return renderSubmissionNotFound(submissionError?.message);
-  }
+    if (!submissionError) {
+      break;
+    }
 
-  if (isColumnMissing(submissionError, "result_status")) {
-    hasResultColumns = false;
-    result = await runFetch(
-      buildSelect({
-        includeGuest: hasGuestColumns,
-        includeResult: hasResultColumns,
-        includeCertificateUploaded: hasCertUploadedColumn,
-      }),
-    );
-    submission = (result.data ?? null) as SubmissionRow | null;
-    submissionError = result.error ?? null;
-  }
+    if (isNotFoundError(submissionError)) {
+      return renderSubmissionNotFound(submissionError?.message);
+    }
 
-  if (isColumnMissing(submissionError, "mv_certificate_uploaded_at")) {
-    hasCertUploadedColumn = false;
-    result = await runFetch(
-      buildSelect({
-        includeGuest: hasGuestColumns,
-        includeResult: hasResultColumns,
-        includeCertificateUploaded: hasCertUploadedColumn,
-      }),
-    );
-    submission = (result.data ?? null) as SubmissionRow | null;
-    submissionError = result.error ?? null;
-  }
+    const missing = extractMissingColumn(submissionError);
+    if (missing) {
+      // drop any column string that includes the missing identifier
+      const beforeLength = selectColumns.length;
+      selectColumns = selectColumns.filter((col) => !col.includes(missing));
 
-  if (isNotFoundError(submissionError)) {
-    return renderSubmissionNotFound(submissionError?.message);
-  }
-
-  if (isColumnMissing(submissionError, "applicant_email")) {
-    const baseSelect = buildSelect({
-      includeGuest: hasGuestColumns,
-      includeResult: hasResultColumns,
-      includeCertificateUploaded: hasCertUploadedColumn,
-    }).replace(", applicant_email", "");
-    result = await runFetch(baseSelect);
-    submission = (result.data ?? null) as SubmissionRow | null;
-    submissionError = result.error ?? null;
+      if (selectColumns.length === beforeLength) {
+        break;
+      }
+      // also update flags if applicable
+      if (missing === "guest_name") hasGuestColumns = false;
+      if (["result_status", "result_memo", "result_notified_at"].includes(missing)) {
+        hasResultColumns = false;
+      }
+      if (missing === "mv_certificate_uploaded_at") {
+        hasCertUploadedColumn = false;
+      }
+      continue;
+    }
+    // unknown error; stop loop
+    break;
   }
 
   if (isNotFoundError(submissionError) || !submission) {
