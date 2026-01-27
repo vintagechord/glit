@@ -1,13 +1,13 @@
 import { presignGetUrl } from "@/lib/b2";
 
 const DEFAULT_RATING_MAP: Record<"ALL" | "12" | "15" | "18" | "19" | "REJECT", string> = {
-  ALL: "submissions/admin-free/free-upload/all 로고.png",
-  "12": "submissions/admin-free/free-upload/12세 로고.png",
-  "15": "submissions/admin-free/free-upload/15세 로고.png",
-  "18": "submissions/admin-free/free-upload/18세 로고.png",
+  ALL: "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/mv/All.png",
+  "12": "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/mv/12.png",
+  "15": "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/mv/15.png",
+  "18": "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/mv/18.png",
   // 19/REJECT fall back to 18 로고 to avoid missing objects
-  "19": "submissions/admin-free/free-upload/18세 로고.png",
-  REJECT: "submissions/admin-free/free-upload/18세 로고.png",
+  "19": "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/mv/18.png",
+  REJECT: "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/mv/18.png",
 };
 
 const getEnvKey = (name: string, fallback: string) =>
@@ -24,7 +24,7 @@ export const RATING_IMAGE_MAP: Record<"ALL" | "12" | "15" | "18" | "19" | "REJEC
 
 export const LABEL_GUIDE_KEY = getEnvKey(
   "MV_LABEL_GUIDE_KEY",
-  "submissions/admin-free/free-upload/온사이드 뮤직비디오 등급표시 방법 안내.pdf",
+  "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/mv/mv_guide.pdf",
 );
 
 export type RatingCode = keyof typeof RATING_IMAGE_MAP;

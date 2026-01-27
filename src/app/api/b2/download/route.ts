@@ -69,22 +69,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
   }
 
-  try {
-    const { bucket } = getB2Config();
-    // 존재 여부 확인으로 NoSuchKey를 사전에 포착
-    await headObject(objectKey);
-    console.info("[b2][download] presign", { bucket, key: objectKey });
-  } catch (error) {
-    const code =
-      (error as { $metadata?: { httpStatusCode?: number }; name?: string })?.name ||
-      (error as { Code?: string })?.Code ||
-      "";
-    if (code === "NotFound" || code === "NoSuchKey") {
-      console.warn("[b2][download] missing key", { filePath: objectKey });
-      return NextResponse.json({ error: "파일을 찾을 수 없습니다.", filePath: objectKey }, { status: 404 });
+  if (!isPublic) {
+    try {
+      const { bucket } = getB2Config();
+      // 존재 여부 확인으로 NoSuchKey를 사전에 포착
+      await headObject(objectKey);
+      console.info("[b2][download] presign", { bucket, key: objectKey });
+    } catch (error) {
+      const code =
+        (error as { $metadata?: { httpStatusCode?: number }; name?: string })?.name ||
+        (error as { Code?: string })?.Code ||
+        "";
+      if (code === "NotFound" || code === "NoSuchKey") {
+        console.warn("[b2][download] missing key", { filePath: objectKey });
+        return NextResponse.json({ error: "파일을 찾을 수 없습니다.", filePath: objectKey }, { status: 404 });
+      }
+      console.error("[b2][download] headObject error", { filePath: objectKey, error });
+      return NextResponse.json({ error: "파일 확인 중 오류가 발생했습니다." }, { status: 500 });
     }
-    console.error("[b2][download] headObject error", { filePath: objectKey, error });
-    return NextResponse.json({ error: "파일 확인 중 오류가 발생했습니다." }, { status: 500 });
   }
 
   try {

@@ -311,6 +311,12 @@ export function SubmissionDetailClient({
       return 3;
     return 1;
   })();
+  const isReviewComplete =
+    isMvSubmission &&
+    Boolean(submission.mv_desired_rating) &&
+    Boolean(submission.certificate_b2_path) &&
+    isResultReady;
+  const ratingReason = submission.result_memo?.trim() || null;
 
 
   const stationNames = React.useMemo(() => {
@@ -346,6 +352,10 @@ export function SubmissionDetailClient({
         : stationReviews;
 
   const handleGuideDownload = async () => {
+    if (LABEL_GUIDE_KEY.startsWith("http")) {
+      window.open(LABEL_GUIDE_KEY, "_blank", "noopener,noreferrer");
+      return;
+    }
     const params = new URLSearchParams();
     params.set("filePath", LABEL_GUIDE_KEY);
     if (guestToken) params.set("guestToken", guestToken);
@@ -556,10 +566,14 @@ export function SubmissionDetailClient({
       if (!code || !path) {
         throw new Error("등급이 설정되지 않았습니다.");
       }
-      const params = new URLSearchParams();
-      params.set("filePath", path);
-      if (guestToken) params.set("guestToken", guestToken);
-      window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
+      if (path.startsWith("http")) {
+        window.open(path, "_blank", "noopener,noreferrer");
+      } else {
+        const params = new URLSearchParams();
+        params.set("filePath", path);
+        if (guestToken) params.set("guestToken", guestToken);
+        window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
+      }
     } catch (error) {
       alert(error instanceof Error ? error.message : "등급 이미지를 불러오지 못했습니다.");
     } finally {
@@ -790,9 +804,11 @@ export function SubmissionDetailClient({
                 })}
               </div>
               <div className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-xs text-muted-foreground">
-                {isPaymentDone
-                  ? "결제가 확인되었고 심의 절차가 진행됩니다."
-                  : "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다."}
+                {isReviewComplete
+                  ? "모든 심의 절차가 완료되었습니다."
+                  : isPaymentDone
+                    ? "결제가 확인되었고 심의 절차가 진행됩니다."
+                    : "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다."}
               </div>
             </div>
           </div>
@@ -1127,7 +1143,9 @@ export function SubmissionDetailClient({
                   </div>
                   <div className="divide-y divide-border/60">
                     {renderStationReviews.map((review) => {
-                      const reception = getReviewReception(review.status);
+                      const reception = isReviewComplete
+                        ? { label: "결과 통보", tone: "bg-emerald-500/15 text-emerald-800" }
+                        : getReviewReception(review.status);
                       const trackInfo = buildTrackSummary(review.track_results);
                       const note = review.result_note?.trim();
                       const showNote =
@@ -1147,17 +1165,22 @@ export function SubmissionDetailClient({
                       const pendingCount = trackInfo.counts.pending + pendingGap;
                       const hasTrackDetails = totalTracksForDisplay > 1;
                       const resultTone =
-                        trackInfo.outcome === "APPROVED"
-                          ? reviewResultMap.APPROVED
-                          : trackInfo.outcome === "REJECTED"
-                            ? reviewResultMap.REJECTED
-                            : trackInfo.outcome === "PARTIAL"
-                              ? {
-                                  label: "부분 통과",
-                                  tone:
-                                    "bg-amber-500/15 text-amber-700 dark:text-amber-200",
-                                }
-                              : getReviewResult(review.status);
+                        isReviewComplete && submission.mv_desired_rating
+                          ? {
+                              label: mvRatingLabel(submission.mv_desired_rating),
+                              tone: "bg-emerald-500/15 text-emerald-800",
+                            }
+                          : trackInfo.outcome === "APPROVED"
+                            ? reviewResultMap.APPROVED
+                            : trackInfo.outcome === "REJECTED"
+                              ? reviewResultMap.REJECTED
+                              : trackInfo.outcome === "PARTIAL"
+                                ? {
+                                    label: "부분 통과",
+                                    tone:
+                                      "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+                                  }
+                                : getReviewResult(review.status);
                       const trackSummaryLine = hasTrackDetails
                         ? `${trackInfo.counts.approved}곡 통과 · ${trackInfo.counts.rejected}곡 불통과${
                             pendingCount > 0 ? ` · ${pendingCount}곡 대기` : ""
@@ -1231,7 +1254,20 @@ export function SubmissionDetailClient({
                           <span className="text-right text-[11px] text-muted-foreground">
                             {formatDateTime(review.updated_at)}
                           </span>
-                          {showNote ? (
+                          {ratingReason ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActiveResultNote({
+                                  stationName: review.station?.name ?? "-",
+                                  note: ratingReason,
+                                })
+                              }
+                              className="justify-self-center rounded-full border border-border/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:text-foreground"
+                            >
+                              사유 보기
+                            </button>
+                          ) : showNote ? (
                             <button
                               type="button"
                               onClick={() =>
