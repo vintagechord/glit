@@ -8,7 +8,12 @@ type TranslateRequest = {
 
 export const runtime = "nodejs";
 
-const translateLine = async (
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const translateLineOnce = async (
   text: string,
   source: string,
   target: string,
@@ -39,6 +44,34 @@ const translateLine = async (
     .join("");
 };
 
+const translateLine = async (
+  text: string,
+  source: string,
+  target: string,
+) => {
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await translateLineOnce(text, source, target);
+    } catch (error) {
+      const isLastAttempt = attempt === maxAttempts;
+      console.error(
+        "[translate] failed attempt",
+        attempt,
+        "length",
+        text.length,
+        error,
+      );
+      if (isLastAttempt) {
+        return "";
+      }
+      await sleep(200 * attempt);
+    }
+  }
+  return "";
+};
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as TranslateRequest;
@@ -50,9 +83,12 @@ export async function POST(request: Request) {
     const source = typeof body.source === "string" ? body.source : "en";
     const target = typeof body.target === "string" ? body.target : "ko";
 
-    const translations = await Promise.all(
-      lines.map((line) => translateLine(line, source, target)),
-    );
+    const translations: string[] = [];
+
+    for (const line of lines) {
+      const translation = await translateLine(line, source, target);
+      translations.push(translation);
+    }
 
     return NextResponse.json({ translations });
   } catch (error) {
