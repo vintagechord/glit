@@ -17,8 +17,28 @@ export const revalidate = 0;
 const uuidPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-const lightSelect =
-  "id, user_id, artist_id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, created_at, updated_at, mv_desired_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, mv_certificate_uploaded_at, package:packages ( name, station_count, price_krw )";
+// 사용자 상세 조회에서 사용되는 columns (DB 없는 컬럼이 들어가면 전체 쿼리가 실패하므로 최소 컬럼만 유지)
+const lightSelectColumns = [
+  "id",
+  "user_id",
+  "artist_id",
+  "title",
+  "artist_name",
+  "artist_name_kr",
+  "artist_name_en",
+  "type",
+  "status",
+  "payment_status",
+  "payment_method",
+  "amount_krw",
+  "created_at",
+  "updated_at",
+  // mv_rating 계열은 DB마다 없을 수 있으므로 안전하게 mv_desired_rating만 조회
+  "mv_desired_rating",
+  "package:packages ( name, station_count, price_krw )",
+];
+
+const lightSelect = lightSelectColumns.join(", ");
 
 type SubmissionDetailClientProps = React.ComponentProps<typeof SubmissionDetailClient>;
 
@@ -290,6 +310,14 @@ export default async function SubmissionDetailPage({
       (userSubmission ?? adminSubmission)?.mv_rating ??
       (userSubmission ?? adminSubmission)?.mv_desired_rating ??
       null,
+    mv_certificate_object_key:
+      (userSubmission ?? adminSubmission)?.mv_certificate_object_key ?? null,
+    mv_certificate_filename:
+      (userSubmission ?? adminSubmission)?.mv_certificate_filename ?? null,
+    mv_certificate_mime_type:
+      (userSubmission ?? adminSubmission)?.mv_certificate_mime_type ?? null,
+    mv_certificate_size_bytes:
+      (userSubmission ?? adminSubmission)?.mv_certificate_size_bytes ?? null,
   };
   const packageInfo = Array.isArray(resolvedSubmission.package)
     ? resolvedSubmission.package[0]
