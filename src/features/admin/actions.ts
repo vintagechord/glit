@@ -17,6 +17,7 @@ import { sendResultEmail } from "@/lib/email";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isRatingCode } from "@/lib/mv-assets";
 
 export type AdminActionState = {
   error?: string;
@@ -233,6 +234,54 @@ export async function updateSubmissionStatusFormAction(
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
     redirect(`/admin/submissions/${submissionId}?saved=status`);
+  }
+}
+
+// ----- MV Rating -----
+
+const mvRatingSchema = z.object({
+  submissionId: z.string().uuid(),
+  rating: z.string().refine(isRatingCode, "유효하지 않은 등급입니다."),
+});
+
+export async function updateSubmissionMvRatingAction(
+  payload: z.infer<typeof mvRatingSchema>,
+): Promise<AdminActionState> {
+  const parsed = mvRatingSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { error: "등급 값을 확인해주세요." };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("submissions")
+    .update({ mv_rating: parsed.data.rating })
+    .eq("id", parsed.data.submissionId)
+    .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
+
+  if (error) {
+    return { error: "등급을 저장하지 못했습니다." };
+  }
+
+  await insertEvent(parsed.data.submissionId, `MV 등급 설정: ${parsed.data.rating}`, "ADMIN_STATUS");
+
+  return { message: "등급이 저장되었습니다." };
+}
+
+export async function updateSubmissionMvRatingFormAction(
+  formData: FormData,
+): Promise<void> {
+  const submissionId = String(formData.get("submissionId") ?? "");
+  const rating = String(formData.get("rating") ?? "");
+  const result = await updateSubmissionMvRatingAction({ submissionId, rating });
+  if (result.error) {
+    console.error(result.error);
+  }
+  revalidatePath("/admin/submissions");
+  if (submissionId) {
+    revalidatePath(`/admin/submissions/${submissionId}`);
+    revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
+    redirect(`/admin/submissions/${submissionId}?saved=rating`);
   }
 }
 

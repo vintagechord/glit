@@ -17,6 +17,7 @@ import {
   updatePaymentStatusFormAction,
   updateStationReviewFormAction,
   updateSubmissionStatusFormAction,
+  updateSubmissionMvRatingFormAction,
   createTrackForSubmissionAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
@@ -758,6 +759,43 @@ export default async function AdminSubmissionDetailPage({
                 </button>
               </form>
             </div>
+            {submission.type?.startsWith("MV_") ? (
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  MV 등급 설정
+                </p>
+                <form action={updateSubmissionMvRatingFormAction} className="mt-4 space-y-3">
+                  <input type="hidden" name="submissionId" value={submission.id} />
+                  <label className="space-y-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      결과 등급
+                    </span>
+                    <select
+                      name="rating"
+                      defaultValue={submission.mv_rating ?? ""}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                    >
+                      <option value="">결과 미입력</option>
+                      <option value="ALL">전체연령</option>
+                      <option value="12">12세 이상</option>
+                      <option value="15">15세 이상</option>
+                      <option value="18">18세(청소년불가)</option>
+                      <option value="19">19세 이상</option>
+                      <option value="REJECT">심의 불가</option>
+                    </select>
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    선택한 등급은 사용자 상세 화면에 표시되며, 해당 등급 이미지·가이드·필증 다운로드에 사용됩니다.
+                  </p>
+                  <button
+                    type="submit"
+                    className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background"
+                  >
+                    등급 저장
+                  </button>
+                </form>
+              </div>
+            ) : null}
 
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
