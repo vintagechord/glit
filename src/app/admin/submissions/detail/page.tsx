@@ -547,6 +547,26 @@ export default async function AdminSubmissionDetailPage({
     stationReviews = (fallback.data as typeof stationReviews) ?? stationReviews;
   }
 
+  if ((!stationReviews || stationReviews.length === 0) && submission.type?.startsWith("MV_")) {
+    const fallbackStationName =
+      submission.type === "MV_DISTRIBUTION"
+        ? "영상물등급위원회"
+        : submission.package && !Array.isArray(submission.package)
+          ? submission.package.name || "신청 방송국"
+          : "신청 방송국";
+    stationReviews = [
+      {
+        id: `fallback-${submissionId}`,
+        status: submission.status ?? "SUBMITTED",
+        result_note: null,
+        track_results: null,
+        updated_at: submission.updated_at,
+        station_id: null,
+        station: [{ id: null as unknown as string, name: fallbackStationName, code: null }],
+      },
+    ];
+  }
+
   const { data: events } = await supabase
     .from("submission_events")
     .select("id, event_type, message, created_at")
