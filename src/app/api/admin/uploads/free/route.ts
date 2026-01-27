@@ -106,7 +106,7 @@ export async function POST(request: Request) {
       params: {
         Bucket: bucket,
         Key: objectKey,
-        Body: filePart.stream,
+        Body: part.stream,
         ContentType: mimeType || undefined,
         ContentLength: sizeBytes,
       },
