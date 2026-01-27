@@ -280,7 +280,6 @@ export default async function SubmissionDetailPage({
       initialStationReviews={[]}
       initialFiles={[]}
       isAdmin={isAdmin}
-      adminDownloadsEnabled={isAdmin}
     />
   );
 }
