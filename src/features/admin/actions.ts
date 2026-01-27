@@ -646,7 +646,6 @@ export async function updateSubmissionResultAction(
   const { error } = await supabase
     .from("submissions")
     .update({
-      result_status: parsed.data.resultStatus,
       result_memo: parsed.data.resultMemo || null,
     })
     .eq("id", parsed.data.submissionId);
@@ -689,65 +688,9 @@ export async function updateSubmissionResultFormAction(
 export async function notifySubmissionResultAction(
   submissionId: string,
 ): Promise<AdminActionState> {
-  if (!submissionId) return { error: "접수 ID가 없습니다." };
-
-  const supabase = await createServerSupabase();
-  const { data: submission, error: submissionError } = await supabase
-    .from("submissions")
-    .select(
-      "id, title, artist_name, applicant_email, guest_email, result_status, result_memo, user_id",
-    )
-    .eq("id", submissionId)
-    .maybeSingle();
-
-  if (submissionError || !submission) {
-    return { error: "접수 정보를 찾을 수 없습니다." };
-  }
-  if (!submission.result_status) {
-    return { error: "먼저 결과 상태를 저장해주세요." };
-  }
-
-  let recipient = submission.applicant_email || submission.guest_email || "";
-  if (!recipient && submission.user_id) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("email")
-      .eq("user_id", submission.user_id)
-      .maybeSingle();
-    if (profile?.email) {
-      recipient = profile.email;
-    }
-  }
-
-  if (!recipient) {
-    return { error: "보낼 이메일 주소를 찾을 수 없습니다." };
-  }
-
-  const emailResult = await sendResultEmail({
-    email: recipient,
-    title: submission.title || "제목 미입력",
-    artist: submission.artist_name,
-    resultStatus: submission.result_status as z.infer<typeof resultStatusEnum>,
-    resultMemo: submission.result_memo,
-  });
-
-  if (!emailResult.ok) {
-    return { error: emailResult.message ?? "결과 메일 발송에 실패했습니다." };
-  }
-
-  await supabase
-    .from("submissions")
-    .update({ result_notified_at: new Date().toISOString() })
-    .eq("id", submissionId);
-
-  await insertEvent(
-    submissionId,
-    "심의 결과 메일 발송",
-    "RESULT_NOTIFY",
-  );
-
-  revalidatePath(`/admin/submissions/${submissionId}`);
-  return { message: "심의 결과가 발송되었습니다." };
+  return {
+    error: "현재 환경에 result_status 컬럼이 없어 결과 통보 기능을 사용할 수 없습니다.",
+  };
 }
 
 export async function updateArtistAction(formData: FormData): Promise<void> {

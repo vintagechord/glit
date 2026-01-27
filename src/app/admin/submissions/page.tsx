@@ -3,11 +3,9 @@ import Link from "next/link";
 import {
   paymentStatusLabelMap,
   paymentStatusOptions,
-  resultStatusOptions,
   reviewStatusLabelMap,
   reviewStatusOptions,
   type PaymentStatus,
-  type ResultStatus,
   type ReviewStatus,
 } from "@/constants/review-status";
 import { formatDateTime } from "@/lib/format";
@@ -31,15 +29,10 @@ const typeLabelMap: Record<string, string> = Object.fromEntries(
   typeOptions.map((option) => [option.value, option.label]),
 );
 
-const resultLabelMap: Record<string, string> = Object.fromEntries(
-  (resultStatusOptions ?? []).map((option) => [option.value, option.label]),
-);
-
 const labelMap = {
   status: reviewStatusLabelMap,
   payment: paymentStatusLabelMap,
   type: typeLabelMap,
-  result: resultLabelMap,
 } as const;
 
 type SubmissionRow = {
@@ -47,7 +40,6 @@ type SubmissionRow = {
   title: string | null;
   artist_name: string | null;
   status: ReviewStatus;
-  result_status?: ResultStatus | null;
   payment_status: PaymentStatus | null;
   type: string;
   created_at: string;
@@ -79,12 +71,9 @@ export default async function AdminSubmissionsPage({
       ? Math.floor(Number(searchParams.page))
       : 1;
   const offset = (page - 1) * PAGE_SIZE;
-  const baseSelectWithResult =
-    "id, title, artist_name, status, payment_status, result_status, type, created_at, updated_at, amount_krw, package:packages ( name )";
-  const baseSelectWithoutResult =
+  const baseSelect =
     "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, package:packages ( name )";
-  const guestSelectWithResult = `${baseSelectWithResult}, guest_name`;
-  const guestSelectWithoutResult = `${baseSelectWithoutResult}, guest_name`;
+  const guestSelect = `${baseSelect}, guest_name`;
 
   const buildQuery = (selectFields: string, includeGuestColumns: boolean) => {
     let query = supabase
@@ -125,12 +114,11 @@ export default async function AdminSubmissionsPage({
   };
 
   let hasGuestColumns = true;
-  let hasResultStatusColumn = true;
   let submissions: SubmissionRow[] = [];
   let submissionsError = null as { message?: string; code?: string } | null;
   let totalCount = 0;
 
-  const guestResult = await buildQuery(guestSelectWithResult, true);
+  const guestResult = await buildQuery(guestSelect, true);
   submissionsError = guestResult.error ?? null;
   submissions = (guestResult.data ?? []) as unknown as SubmissionRow[];
   totalCount = guestResult.count ?? 0;
@@ -140,24 +128,7 @@ export default async function AdminSubmissionsPage({
     submissionsError?.code === "42703"
   ) {
     hasGuestColumns = false;
-    const fallback = await buildQuery(
-      hasResultStatusColumn ? baseSelectWithResult : baseSelectWithoutResult,
-      false,
-    );
-    submissions = (fallback.data ?? []) as unknown as SubmissionRow[];
-    submissionsError = fallback.error ?? null;
-    totalCount = fallback.count ?? totalCount;
-  }
-
-  if (
-    submissionsError?.message?.toLowerCase().includes("result_status") ||
-    submissionsError?.code === "42703"
-  ) {
-    hasResultStatusColumn = false;
-    const fallback = await buildQuery(
-      hasGuestColumns ? guestSelectWithoutResult : baseSelectWithoutResult,
-      hasGuestColumns,
-    );
+    const fallback = await buildQuery(baseSelect, false);
     submissions = (fallback.data ?? []) as unknown as SubmissionRow[];
     submissionsError = fallback.error ?? null;
     totalCount = fallback.count ?? totalCount;
@@ -327,15 +298,7 @@ export default async function AdminSubmissionsPage({
                   <p>
                     결제: {paymentStatusLabel}
                   </p>
-                  {hasResultStatusColumn && "result_status" in submission ? (
-                    <p>
-                      결과:{" "}
-                      {submission.result_status
-                        ? labelMap.result[submission.result_status] ??
-                          submission.result_status
-                        : "-"}
-                    </p>
-                  ) : null}
+                  <p>결과: -</p>
                 </div>
                 <div className="text-xs text-muted-foreground md:text-right">
                   <p>{packageInfo?.name ?? "-"}</p>
