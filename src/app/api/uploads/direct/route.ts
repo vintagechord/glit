@@ -20,7 +20,15 @@ const schema = z.object({
   sizeBytes: z.coerce.number().int().positive(),
 });
 
-const MAX_SIZE_BYTES = 1 * 1024 * 1024 * 1024; // 1GB
+const MAX_AUDIO_BYTES = 1 * 1024 * 1024 * 1024; // 1GB
+const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
+
+const isVideoLike = (mime?: string | null, filename?: string | null) => {
+  const lowerMime = (mime || "").toLowerCase();
+  const lowerName = (filename || "").toLowerCase();
+  if (lowerMime.startsWith("video/")) return true;
+  return /\.(mp4|mov|mkv|webm|avi|wmv|m4v|mpg|mpeg)$/.test(lowerName);
+};
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabase();
@@ -152,9 +160,18 @@ export async function POST(request: Request) {
       return;
     }
 
-    if (parsed.data.sizeBytes > MAX_SIZE_BYTES) {
+    const videoLike = isVideoLike(
+      filePart.mimeType || parsed.data.mimeType,
+      filePart.filename || parsed.data.filename,
+    );
+    const maxSizeBytes = videoLike ? MAX_VIDEO_BYTES : MAX_AUDIO_BYTES;
+    if (parsed.data.sizeBytes > maxSizeBytes) {
       parseErrorStatus = 400;
-      parseErrorBody = { error: "파일 용량이 허용 한도(1GB)를 초과했습니다." };
+      parseErrorBody = {
+        error: `파일 용량이 허용 한도(${
+          videoLike ? "4GB" : "1GB"
+        })를 초과했습니다.`,
+      };
       filePart.stream.resume();
       return;
     }
@@ -201,11 +218,11 @@ export async function POST(request: Request) {
   };
 
   try {
-    const webStream = request.body as unknown as import("stream/web").ReadableStream<any>;
+    const webStream = request.body as unknown as ReadableStream<Uint8Array>;
     if (!webStream) {
       throw new Error("Request body is empty.");
     }
-    Readable.fromWeb(webStream).pipe(busboy as any);
+    Readable.fromWeb(webStream).pipe(busboy as unknown as NodeJS.WritableStream);
     await parsePromise;
   } catch (error) {
     console.error("[Upload][direct] multipart parse error", {

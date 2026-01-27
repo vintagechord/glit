@@ -492,6 +492,7 @@ export function MvWizard({
         formData.append("filename", file.name);
         formData.append("mimeType", file.type || "application/octet-stream");
         formData.append("sizeBytes", String(file.size));
+        formData.append("kind", "video");
         if (isGuest && guestToken) formData.append("guestToken", guestToken);
         if (title.trim()) formData.append("title", title.trim());
         formData.append("file", file);
@@ -1791,7 +1792,7 @@ export function MvWizard({
                 </p>
                 <p className="mt-2 text-sm font-semibold">카드 결제</p>
                 <p className="mt-2 text-xs opacity-80">
-                  KG모빌리언스 연동 예정 · 접수 후 결제 링크 안내
+                  KG이니시스 카드 결제 · 결제 팝업에서 즉시 진행
                 </p>
               </button>
               <button
@@ -1847,8 +1848,9 @@ export function MvWizard({
             </div>
           ) : (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
-              카드 결제는 KG모빌리언스 연동 후 자동화 예정입니다. 현재는 접수
-              완료 후 담당자가 결제 링크를 안내드립니다.
+              카드 결제 선택 시 결제 팝업(이니시스 STDPay)이 열립니다. 팝업이
+              차단된 경우 해제 후 다시 시도해주세요. 테스트용/실결제 카드 모두
+              지원합니다.
             </div>
           )}
 

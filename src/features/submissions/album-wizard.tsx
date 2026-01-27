@@ -1294,6 +1294,7 @@ export function AlbumWizard({
         formData.append("filename", file.name);
         formData.append("mimeType", file.type || "application/octet-stream");
         formData.append("sizeBytes", String(file.size));
+        formData.append("kind", "audio");
         if (isGuest && currentGuestToken) formData.append("guestToken", currentGuestToken);
         if (title.trim()) formData.append("title", title.trim());
         formData.append("file", file);
