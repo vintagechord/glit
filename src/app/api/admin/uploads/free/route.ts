@@ -82,9 +82,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "파일이 포함되어 있지 않습니다." }, { status: 400 });
   }
 
-  const filename = filePart.filename || fields.filename || "unnamed";
-  const mimeType = filePart.mimeType || fields.mimeType || "application/octet-stream";
-  const sizeBytes = Number(fields.sizeBytes || filePart.sizeBytes || 0);
+  const part = filePart as NonNullable<typeof filePart>;
+  const filename = part.filename || fields.filename || "unnamed";
+  const mimeType = part.mimeType || fields.mimeType || "application/octet-stream";
+  const sizeBytes = Number(fields.sizeBytes || part.sizeBytes || 0);
   if (!sizeBytes || Number.isNaN(sizeBytes)) {
     return NextResponse.json({ error: "파일 크기를 확인할 수 없습니다." }, { status: 400 });
   }
