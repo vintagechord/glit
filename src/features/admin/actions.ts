@@ -256,8 +256,7 @@ export async function updateSubmissionMvRatingAction(
   const { error } = await supabase
     .from("submissions")
     .update({ mv_rating: parsed.data.rating })
-    .eq("id", parsed.data.submissionId)
-    .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
+    .eq("id", parsed.data.submissionId);
 
   if (error) {
     return { error: "등급을 저장하지 못했습니다." };

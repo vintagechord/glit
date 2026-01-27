@@ -779,7 +779,6 @@ export default async function AdminSubmissionDetailPage({
                       <option value="ALL">전체연령</option>
                       <option value="12">12세 이상</option>
                       <option value="15">15세 이상</option>
-                      <option value="18">18세(청소년불가)</option>
                       <option value="19">19세 이상</option>
                       <option value="REJECT">심의 불가</option>
                     </select>
