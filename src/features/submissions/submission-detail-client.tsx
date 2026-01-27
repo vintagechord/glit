@@ -62,6 +62,7 @@ type Submission = {
   mv_usage?: string | null;
   mv_desired_rating?: string | null;
   mv_memo?: string | null;
+  result_memo?: string | null;
   mv_song_title?: string | null;
   mv_song_title_kr?: string | null;
   mv_song_title_en?: string | null;

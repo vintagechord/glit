@@ -1,9 +1,12 @@
+const DEFAULT_LOGO =
+  "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/logo/onside_logo.svg";
+
 export const APP_CONFIG = {
-  logoPath: process.env.NEXT_PUBLIC_LOGO_PATH ?? "/brand/glit-logo.svg",
+  logoPath: process.env.NEXT_PUBLIC_LOGO_PATH ?? DEFAULT_LOGO,
   logoLightPath:
-    process.env.NEXT_PUBLIC_LOGO_LIGHT_PATH ?? "/brand/glit-logo-light.svg",
+    process.env.NEXT_PUBLIC_LOGO_LIGHT_PATH ?? DEFAULT_LOGO,
   logoDarkPath:
-    process.env.NEXT_PUBLIC_LOGO_DARK_PATH ?? "/brand/glit-logo-dark.svg",
+    process.env.NEXT_PUBLIC_LOGO_DARK_PATH ?? DEFAULT_LOGO,
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "help@vhouse.co.kr",
   supportPhone: process.env.NEXT_PUBLIC_SUPPORT_PHONE ?? "010-8436-9035",
   supportHours:

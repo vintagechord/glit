@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import Image from "next/image";
 
 import { AboutRevealSection } from "@/components/about/about-reveal-section";
+import { APP_CONFIG } from "@/lib/config";
 
 export const metadata = {
   title: "회사소개",
@@ -68,7 +69,7 @@ export default function AboutPage() {
               </div>
               <div className="mt-3 flex items-center gap-3">
                 <Image
-                  src="/brand/glit-logo.svg"
+                  src={APP_CONFIG.logoLightPath || APP_CONFIG.logoPath}
                   alt="온사이드 로고"
                   width={96}
                   height={24}
