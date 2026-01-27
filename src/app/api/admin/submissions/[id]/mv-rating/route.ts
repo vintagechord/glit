@@ -36,11 +36,15 @@ export async function PATCH(
     .from("submissions")
     .update({ mv_rating: parsed.data.rating })
     .eq("id", submissionId)
+    .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
     .select("id")
     .maybeSingle();
 
   if (error || !data) {
-    return NextResponse.json({ error: "등급을 저장하지 못했습니다." }, { status: 500 });
+    return NextResponse.json(
+      { error: error ? "등급을 저장하지 못했습니다." : "뮤직비디오 접수가 아닙니다." },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true, rating: parsed.data.rating });

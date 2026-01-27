@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
   const { data: submission, error: submissionError } = await admin
     .from("submissions")
-    .select("id")
+    .select("id, type")
     .eq("id", parsed.data.submissionId)
     .maybeSingle();
 
@@ -50,6 +50,12 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "접수를 찾을 수 없습니다. 올바른 Submission ID(UUID)를 입력해주세요." },
       { status: 404 },
+    );
+  }
+  if (!["MV_DISTRIBUTION", "MV_BROADCAST"].includes(submission.type ?? "")) {
+    return NextResponse.json(
+      { error: "뮤직비디오 접수에서만 결과 파일을 연결할 수 있습니다." },
+      { status: 400 },
     );
   }
   const payload = {

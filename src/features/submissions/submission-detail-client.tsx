@@ -125,6 +125,25 @@ const paymentMethodLabels: Record<string, string> = {
   CARD: "카드",
 };
 
+const mvRatingLabel = (code?: string | null) => {
+  switch (code) {
+    case "ALL":
+      return "전체관람가";
+    case "12":
+      return "12세";
+    case "15":
+      return "15세";
+    case "18":
+      return "18세(청소년불가)";
+    case "19":
+      return "19세";
+    case "REJECT":
+      return "심의불가";
+    default:
+      return "등급 미설정";
+  }
+};
+
 const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
     label: "접수예정",
@@ -745,7 +764,7 @@ export function SubmissionDetailClient({
           </div>
         </div>
       ) : null}
-      {showAdminTools ? (
+      {showAdminTools && isMvSubmission ? (
         <div className="mt-4 rounded-2xl border border-border/70 bg-card/80 p-4">
           <div className="flex flex-wrap items-center gap-3">
             <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -759,7 +778,9 @@ export function SubmissionDetailClient({
                 <option value="ALL">전체관람가</option>
                 <option value="12">12세</option>
                 <option value="15">15세</option>
-                <option value="18">18세</option>
+                <option value="18">18세(청소년불가)</option>
+                <option value="19">19세</option>
+                <option value="REJECT">심의불가</option>
               </select>
             </label>
             <button
@@ -919,7 +940,9 @@ export function SubmissionDetailClient({
                     disabled={!submission.mv_rating || isRatingDownloading}
                     className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {submission.mv_rating ? `${submission.mv_rating}세 이미지 다운로드` : "등급 미설정"}
+                    {submission.mv_rating
+                      ? `${mvRatingLabel(submission.mv_rating)} 이미지 다운로드`
+                      : "등급 미설정"}
                   </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

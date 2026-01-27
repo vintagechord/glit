@@ -93,12 +93,15 @@ export async function POST(
   try {
     const { data: submission } = await supabase
       .from("submissions")
-      .select("id, mv_rating")
+      .select("id, mv_rating, type")
       .eq("id", submissionId)
       .maybeSingle();
 
     if (!submission) {
       return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
+    }
+    if (!["MV_DISTRIBUTION", "MV_BROADCAST"].includes(submission.type ?? "")) {
+      return NextResponse.json({ error: "뮤직비디오 접수에서만 업로드 가능합니다." }, { status: 400 });
     }
 
     const { client, bucket } = getB2Config();
