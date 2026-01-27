@@ -8,7 +8,7 @@ export const APP_CONFIG = {
   logoLightPath:
     process.env.NEXT_PUBLIC_LOGO_LIGHT_PATH ?? DEFAULT_LOGO,
   logoDarkPath:
-    process.env.NEXT_PUBLIC_LOGO_DARK_PATH ?? DEFAULT_LOGO,
+    process.env.NEXT_PUBLIC_LOGO_DARK_PATH ?? "",
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "help@vhouse.co.kr",
   supportPhone: process.env.NEXT_PUBLIC_SUPPORT_PHONE ?? "010-8436-9035",
   supportHours:

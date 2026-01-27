@@ -26,14 +26,14 @@ export async function SiteHeader() {
   } = await supabase.auth.getUser();
 
   const logoLight = APP_CONFIG.logoLightPath || APP_CONFIG.logoPath;
-  const logoDark = APP_CONFIG.logoDarkPath || logoLight;
+  const logoDark = APP_CONFIG.logoDarkPath || "";
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-2">
-            {logoLight || logoDark ? (
+            {logoLight ? (
               <>
                 <Image
                   src={logoLight}
@@ -43,14 +43,20 @@ export async function SiteHeader() {
                   height={38}
                   priority
                 />
-                <Image
-                  src={logoDark}
-                  alt="onside"
-                  className="hidden dark:block"
-                  width={140}
-                  height={38}
-                  priority
-                />
+                {logoDark ? (
+                  <Image
+                    src={logoDark}
+                    alt="onside"
+                    className="hidden dark:block"
+                    width={140}
+                    height={38}
+                    priority
+                  />
+                ) : (
+                  <span className="hidden dark:inline text-lg font-semibold tracking-[0.3em] text-white">
+                    ONSIDE
+                  </span>
+                )}
                 <span className="sr-only">온사이드</span>
               </>
             ) : (
