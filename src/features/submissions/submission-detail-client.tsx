@@ -2,7 +2,10 @@
 
 import Image from "next/image";
 import * as React from "react";
-import { getMvRatingFileUrlAction } from "@/features/submissions/actions";
+import {
+  getMvRatingFileUrlAction,
+  getSubmissionFileUrlAction,
+} from "@/features/submissions/actions";
 import {
   SubmissionFilesPanel,
   type SubmissionFile,
