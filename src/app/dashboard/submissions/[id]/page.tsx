@@ -35,12 +35,6 @@ const lightSelectColumns = [
   "updated_at",
   // mv_rating 계열은 DB마다 없을 수 있으므로 안전하게 mv_desired_rating만 조회
   "mv_desired_rating",
-  // 인증서(필증) 메타 - 존재하는 컬럼만 자동 필터링됨
-  "mv_certificate_object_key",
-  "mv_certificate_filename",
-  "mv_certificate_mime_type",
-  "mv_certificate_size_bytes",
-  "mv_certificate_uploaded_at",
   "package:packages ( name, station_count, price_krw )",
 ];
 
@@ -62,11 +56,6 @@ type SubmissionRow = {
   payment_method?: string | null;
   amount_krw: number | null;
   mv_rating?: string | null;
-  mv_certificate_object_key?: string | null;
-  mv_certificate_filename?: string | null;
-  mv_certificate_mime_type?: string | null;
-  mv_certificate_size_bytes?: number | null;
-  mv_certificate_uploaded_at?: string | null;
   created_at: string;
   updated_at: string;
   release_date?: string | null;
@@ -316,14 +305,6 @@ export default async function SubmissionDetailPage({
       (userSubmission ?? adminSubmission)?.mv_rating ??
       (userSubmission ?? adminSubmission)?.mv_desired_rating ??
       null,
-    mv_certificate_object_key:
-      (userSubmission ?? adminSubmission)?.mv_certificate_object_key ?? null,
-    mv_certificate_filename:
-      (userSubmission ?? adminSubmission)?.mv_certificate_filename ?? null,
-    mv_certificate_mime_type:
-      (userSubmission ?? adminSubmission)?.mv_certificate_mime_type ?? null,
-    mv_certificate_size_bytes:
-      (userSubmission ?? adminSubmission)?.mv_certificate_size_bytes ?? null,
   };
   const packageInfo = Array.isArray(resolvedSubmission.package)
     ? resolvedSubmission.package[0]
