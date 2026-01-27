@@ -1227,9 +1227,11 @@ export function SubmissionDetailClient({
                               <p className="truncate font-semibold text-foreground">
                                 {review.station?.name ?? "-"}
                               </p>
-                              <p className="text-[10px] text-muted-foreground">
-                                {review.station?.code ?? ""}
-                              </p>
+                              {review.station && "code" in review.station ? (
+                                <p className="text-[10px] text-muted-foreground">
+                                  {review.station.code ?? ""}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                           <span
