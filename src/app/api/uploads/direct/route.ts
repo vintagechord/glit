@@ -218,7 +218,8 @@ export async function POST(request: Request) {
   };
 
   try {
-    const webStream = request.body as unknown as ReadableStream<Uint8Array>;
+    type WebReadable<T = Uint8Array> = ReadableStream<T> & AsyncIterable<T>;
+    const webStream = request.body as unknown as WebReadable;
     if (!webStream) {
       throw new Error("Request body is empty.");
     }
