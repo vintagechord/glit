@@ -252,25 +252,112 @@ export default async function AdminSubmissionDetailPage({
   );
 
   const supabase = createAdminClient();
-  const baseSelectCore =
-    "id, user_id, title, artist_name, artist_name_kr, artist_name_en, status, payment_status, payment_method, amount_krw, mv_base_selected, mv_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, mv_certificate_uploaded_at, pre_review_requested, karaoke_requested, bank_depositor_name, admin_memo, result_status, result_memo, result_notified_at, applicant_email, applicant_name, applicant_phone, created_at, updated_at, type, package:packages ( name, station_count )";
-  const albumExtra =
-    "release_date, genre, distributor, production_company, previous_release, artist_type, artist_gender, artist_members, is_oneclick, melon_url";
-  const mvExtra =
-    "mv_runtime, mv_format, mv_director, mv_lead_actor, mv_storyline, mv_production_company, mv_agency, mv_album_title, mv_production_date, mv_distribution_company, mv_business_reg_no, mv_usage, mv_desired_rating, mv_memo, mv_song_title, mv_song_title_kr, mv_song_title_en, mv_song_title_official, mv_composer, mv_lyricist, mv_arranger, mv_song_memo, mv_lyrics";
+  const baseSelectCoreColumns = [
+    "id",
+    "user_id",
+    "title",
+    "artist_name",
+    "artist_name_kr",
+    "artist_name_en",
+    "status",
+    "payment_status",
+    "payment_method",
+    "amount_krw",
+    "mv_base_selected",
+    "mv_rating",
+    "mv_certificate_object_key",
+    "mv_certificate_filename",
+    "mv_certificate_mime_type",
+    "mv_certificate_size_bytes",
+    "mv_certificate_uploaded_at",
+    "pre_review_requested",
+    "karaoke_requested",
+    "bank_depositor_name",
+    "admin_memo",
+    "result_status",
+    "result_memo",
+    "result_notified_at",
+    "applicant_email",
+    "applicant_name",
+    "applicant_phone",
+    "created_at",
+    "updated_at",
+    "type",
+    "package:packages ( name, station_count )",
+  ];
+  const albumExtraColumns = [
+    "release_date",
+    "genre",
+    "distributor",
+    "production_company",
+    "previous_release",
+    "artist_type",
+    "artist_gender",
+    "artist_members",
+    "is_oneclick",
+    "melon_url",
+  ];
+  const mvExtraColumns = [
+    "mv_runtime",
+    "mv_format",
+    "mv_director",
+    "mv_lead_actor",
+    "mv_storyline",
+    "mv_production_company",
+    "mv_agency",
+    "mv_album_title",
+    "mv_production_date",
+    "mv_distribution_company",
+    "mv_business_reg_no",
+    "mv_usage",
+    "mv_desired_rating",
+    "mv_memo",
+    "mv_song_title",
+    "mv_song_title_kr",
+    "mv_song_title_en",
+    "mv_song_title_official",
+    "mv_composer",
+    "mv_lyricist",
+    "mv_arranger",
+    "mv_song_memo",
+    "mv_lyrics",
+  ];
   const trackRelation =
     "album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, track_title_official, featuring, composer, lyricist, arranger, lyrics, notes, is_title, title_role, broadcast_selected )";
 
-  const baseSelectWithResult = `${baseSelectCore}, ${albumExtra}, ${mvExtra}, ${trackRelation}`;
-  const baseSelectWithoutResult = `${baseSelectCore.replace(
-    ", result_status, result_memo, result_notified_at",
-    "",
-  )}, ${albumExtra}, ${mvExtra}, ${trackRelation}`;
-  const guestSelectWithResult = `${baseSelectWithResult}, guest_name, guest_company, guest_email, guest_phone`;
-  const guestSelectWithoutResult = `${baseSelectWithoutResult}, guest_name, guest_company, guest_email, guest_phone`;
+  const buildSelect = ({
+    includeGuest,
+    includeResult,
+    includeCertificateUploaded,
+  }: {
+    includeGuest: boolean;
+    includeResult: boolean;
+    includeCertificateUploaded: boolean;
+  }) => {
+    const coreCols = baseSelectCoreColumns.filter((col) => {
+      if (!includeResult && ["result_status", "result_memo", "result_notified_at"].includes(col)) {
+        return false;
+      }
+      if (!includeCertificateUploaded && col === "mv_certificate_uploaded_at") {
+        return false;
+      }
+      return true;
+    });
+    const columns = [
+      ...coreCols,
+      ...albumExtraColumns,
+      ...mvExtraColumns,
+      trackRelation,
+      ...(includeGuest
+        ? ["guest_name", "guest_company", "guest_email", "guest_phone"]
+        : []),
+    ];
+    return columns.join(", ");
+  };
 
   let hasGuestColumns = true;
   let hasResultColumns = true;
+  let hasCertUploadedColumn = true;
   let submission: SubmissionRow | null = null;
   let submissionError: { message?: string; code?: string } | null = null;
 
@@ -289,7 +376,13 @@ export default async function AdminSubmissionDetailPage({
   const runFetch = async (select: string) =>
     supabase.from("submissions").select(select).eq("id", submissionId).single();
 
-  let result = await runFetch(guestSelectWithResult);
+  let result = await runFetch(
+    buildSelect({
+      includeGuest: hasGuestColumns,
+      includeResult: hasResultColumns,
+      includeCertificateUploaded: hasCertUploadedColumn,
+    }),
+  );
   submission = (result.data ?? null) as SubmissionRow | null;
   submissionError = result.error ?? null;
 
@@ -300,7 +393,11 @@ export default async function AdminSubmissionDetailPage({
   if (isColumnMissing(submissionError, "guest_name")) {
     hasGuestColumns = false;
     result = await runFetch(
-      hasResultColumns ? baseSelectWithResult : baseSelectWithoutResult,
+      buildSelect({
+        includeGuest: hasGuestColumns,
+        includeResult: hasResultColumns,
+        includeCertificateUploaded: hasCertUploadedColumn,
+      }),
     );
     submission = (result.data ?? null) as SubmissionRow | null;
     submissionError = result.error ?? null;
@@ -313,7 +410,24 @@ export default async function AdminSubmissionDetailPage({
   if (isColumnMissing(submissionError, "result_status")) {
     hasResultColumns = false;
     result = await runFetch(
-      hasGuestColumns ? guestSelectWithoutResult : baseSelectWithoutResult,
+      buildSelect({
+        includeGuest: hasGuestColumns,
+        includeResult: hasResultColumns,
+        includeCertificateUploaded: hasCertUploadedColumn,
+      }),
+    );
+    submission = (result.data ?? null) as SubmissionRow | null;
+    submissionError = result.error ?? null;
+  }
+
+  if (isColumnMissing(submissionError, "mv_certificate_uploaded_at")) {
+    hasCertUploadedColumn = false;
+    result = await runFetch(
+      buildSelect({
+        includeGuest: hasGuestColumns,
+        includeResult: hasResultColumns,
+        includeCertificateUploaded: hasCertUploadedColumn,
+      }),
     );
     submission = (result.data ?? null) as SubmissionRow | null;
     submissionError = result.error ?? null;
@@ -324,13 +438,12 @@ export default async function AdminSubmissionDetailPage({
   }
 
   if (isColumnMissing(submissionError, "applicant_email")) {
-    const select = hasResultColumns
-      ? baseSelectWithResult.replace(", applicant_email", "")
-      : baseSelectWithoutResult.replace(", applicant_email", "");
-    const guestSelect = hasGuestColumns
-      ? `${select}, guest_name, guest_company, guest_email, guest_phone`
-      : select;
-    result = await runFetch(guestSelect);
+    const baseSelect = buildSelect({
+      includeGuest: hasGuestColumns,
+      includeResult: hasResultColumns,
+      includeCertificateUploaded: hasCertUploadedColumn,
+    }).replace(", applicant_email", "");
+    result = await runFetch(baseSelect);
     submission = (result.data ?? null) as SubmissionRow | null;
     submissionError = result.error ?? null;
   }
