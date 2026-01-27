@@ -803,9 +803,9 @@ export function SubmissionDetailClient({
               </p>
             <div className="mt-4 space-y-3 text-sm">
               {submission.mv_desired_rating ? (
-                <div className="rounded-2xl border border-amber-500/60 bg-amber-500/15 px-4 py-3 text-[13px] font-semibold text-amber-900">
+                <div className="rounded-2xl border border-transparent bg-yellow-300 px-4 py-3 text-[13px] font-semibold text-black shadow-sm">
                   심의 등급: {mvRatingLabel(submission.mv_desired_rating)} (설정 완료)
-                  <span className="ml-2 text-xs font-normal text-amber-800">
+                  <span className="ml-2 text-xs font-normal text-black/80">
                     아래에서 등급 이미지와 필증 파일을 다운로드하세요.
                   </span>
                 </div>
