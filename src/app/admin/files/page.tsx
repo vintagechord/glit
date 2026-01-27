@@ -36,7 +36,6 @@ export default function AdminFilesPage() {
   };
 
   const resetForm = () => {
-    setFile(null);
     setNotice(null);
   };
 
