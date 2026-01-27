@@ -149,8 +149,8 @@ export default async function SubmissionDetailPage({
   const extractMissingColumn = (error: PostgrestError | null) => {
     const msg = error?.message ?? "";
     const match =
-      msg.match(/column\\s+\"?([^\\s\\\"']+)\"?\\s+does not exist/i) ||
-      msg.match(/column\\s+'?([^\\s\\\"']+)'?\\s+does not exist/i);
+      msg.match(/column\s+\"?([^\s\"']+)\"?\s+does not exist/i) ||
+      msg.match(/column\s+'?([^\s\"']+)'?\s+does not exist/i);
     if (!match?.[1]) return null;
     const full = match[1];
     const parts = full.split(".");
@@ -170,8 +170,9 @@ export default async function SubmissionDetailPage({
     let selectClause = lightSelect;
     let submission: SubmissionRow | null = null;
     let error: PostgrestError | null = null;
+    const maxAttempts = Math.max(6, selectClause.split(",").length);
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const { data, error: err } = await client
         .from("submissions")
         .select(selectClause)

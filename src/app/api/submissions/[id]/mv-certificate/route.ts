@@ -32,7 +32,7 @@ export async function GET(
     return NextResponse.json({ error: "아직 결과가 준비되지 않았습니다." }, { status: 403 });
   }
 
-  const key = submission.certificate_b2_path?.trim();
+  const key = (submission as any)?.certificate_b2_path?.trim?.();
   if (!key) {
     return NextResponse.json({ error: "필증이 등록되지 않았습니다." }, { status: 404 });
   }
@@ -41,9 +41,9 @@ export async function GET(
     const urlSigned = await presignGetUrl(key, 60 * 10);
     return NextResponse.json({
       url: urlSigned,
-      filename: submission.certificate_original_name,
-      mimeType: submission.certificate_mime,
-      sizeBytes: submission.certificate_size,
+      filename: (submission as any)?.certificate_original_name ?? null,
+      mimeType: (submission as any)?.certificate_mime ?? null,
+      sizeBytes: (submission as any)?.certificate_size ?? null,
     });
   } catch (err) {
     return NextResponse.json({ error: "필증 링크를 생성하지 못했습니다." }, { status: 500 });

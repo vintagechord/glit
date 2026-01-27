@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { presignGetUrl } from "@/lib/b2";
+import { headObject, presignGetUrl, getB2Config } from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -10,20 +10,31 @@ export const dynamic = "force-dynamic";
 const CERT_PATH_PATTERN = /^submissions\/([0-9a-fA-F-]{36})\/certificate\//i;
 const PUBLIC_PREFIX = "submissions/admin-free/free-upload/";
 
+const normalizeFilePath = (raw: string) => raw.trim();
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const filePath = url.searchParams.get("filePath")?.trim();
+  const filePath = normalizeFilePath(url.searchParams.get("filePath") ?? "");
   const guestToken = url.searchParams.get("guestToken") || undefined;
 
   if (!filePath) {
     return NextResponse.json({ error: "filePath를 전달해주세요." }, { status: 400 });
   }
+  if (/^https?:\/\//i.test(filePath)) {
+    return NextResponse.json({ error: "filePath는 B2 객체 키만 허용합니다. URL은 사용할 수 없습니다." }, { status: 400 });
+  }
 
   const isPublic = filePath.startsWith(PUBLIC_PREFIX);
   const certMatch = filePath.match(CERT_PATH_PATTERN);
-  let allowed = isPublic;
+  let allowed = false;
 
-  if (certMatch) {
+  if (isPublic) {
+    const supabase = await createServerSupabase();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    allowed = Boolean(user);
+  } else if (certMatch) {
     const submissionId = certMatch[1];
     const { submission, error } = await ensureSubmissionOwner(submissionId, guestToken);
     if (error === "UNAUTHORIZED") {
@@ -50,12 +61,30 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const { bucket } = getB2Config();
+    // 존재 여부 확인으로 NoSuchKey를 사전에 포착
+    await headObject(filePath);
+    console.info("[b2][download] presign", { bucket, key: filePath });
+  } catch (error) {
+    const code =
+      (error as { $metadata?: { httpStatusCode?: number }; name?: string })?.name ||
+      (error as { Code?: string })?.Code ||
+      "";
+    if (code === "NotFound" || code === "NoSuchKey") {
+      console.warn("[b2][download] missing key", { filePath });
+      return NextResponse.json({ error: "파일을 찾을 수 없습니다.", filePath }, { status: 404 });
+    }
+    console.error("[b2][download] headObject error", { filePath, error });
+    return NextResponse.json({ error: "파일 확인 중 오류가 발생했습니다." }, { status: 500 });
+  }
+
+  try {
     const signed = await presignGetUrl(filePath, 60 * 10);
     return NextResponse.redirect(signed, 302);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "다운로드 링크를 생성하지 못했습니다.";
+    console.error("[b2][download] presign error", { filePath, error: message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

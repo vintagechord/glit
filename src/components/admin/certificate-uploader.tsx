@@ -19,6 +19,16 @@ export function CertificateUploader({ submissionId, currentName, currentUploaded
       alert("업로드할 파일을 선택하세요.");
       return;
     }
+    const allowedTypes = ["application/pdf", "image/png", "image/jpeg"];
+    if (!allowedTypes.includes(file.type)) {
+      alert("PDF, PNG, JPG만 업로드할 수 있습니다.");
+      return;
+    }
+    const maxSize = 20 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert("파일 크기는 20MB 이하만 허용됩니다.");
+      return;
+    }
     setIsUploading(true);
     try {
       const form = new FormData();
@@ -27,7 +37,7 @@ export function CertificateUploader({ submissionId, currentName, currentUploaded
       form.append("mimeType", file.type || "application/octet-stream");
       form.append("sizeBytes", String(file.size));
 
-      const res = await fetch(`/api/admin/submissions/${submissionId}/mv-certificate`, {
+      const res = await fetch(`/api/admin/submissions/${submissionId}/certificate`, {
         method: "POST",
         body: form,
       });
@@ -69,4 +79,3 @@ export function CertificateUploader({ submissionId, currentName, currentUploaded
     </div>
   );
 }
-

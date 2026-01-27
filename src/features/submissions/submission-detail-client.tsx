@@ -14,6 +14,12 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { APP_CONFIG } from "@/lib/config";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
+import {
+  RATING_IMAGE_MAP,
+  LABEL_GUIDE_KEY,
+  isRatingCode,
+  type RatingCode,
+} from "@/lib/mv-assets";
 
 type Submission = {
   id: string;
@@ -119,15 +125,6 @@ const statusLabels: Record<string, string> = {
   RESULT_READY: "결과 확인",
   COMPLETED: "완료",
 };
-
-const RATING_PATHS: Record<string, string> = {
-  ALL: "submissions/admin-free/free-upload/all 로고.png",
-  "12": "submissions/admin-free/free-upload/12세 로고.png",
-  "15": "submissions/admin-free/free-upload/15세 로고.png",
-  "18": "submissions/admin-free/free-upload/18세 로고.png",
-  REJECT: "submissions/admin-free/free-upload/18세 로고.png",
-};
-const GUIDE_PATH = "submissions/admin-free/free-upload/온사이드 뮤직비디오 등급표시 방법 안내.pdf";
 
 const paymentMethodLabels: Record<string, string> = {
   BANK: "무통장",
@@ -266,7 +263,6 @@ export function SubmissionDetailClient({
     stationName?: string | null;
     note: string;
   } | null>(null);
-  const [resultNotice, setResultNotice] = React.useState<string | null>(null);
   const [radioLinksModal, setRadioLinksModal] = React.useState<{
     stationName?: string;
   } | null>(null);
@@ -283,8 +279,6 @@ export function SubmissionDetailClient({
           submission.mv_desired_rating ?? "",
   );
   const [isSavingRating, setIsSavingRating] = React.useState(false);
-  const [certificateFile, setCertificateFile] = React.useState<File | null>(null);
-  const [isUploadingCert, setIsUploadingCert] = React.useState(false);
   const isMvSubmission =
     submission.type === "MV_BROADCAST" || submission.type === "MV_DISTRIBUTION";
   const isResultReady =
@@ -357,14 +351,14 @@ export function SubmissionDetailClient({
 
   const handleGuideDownload = async () => {
     const params = new URLSearchParams();
-    params.set("filePath", GUIDE_PATH);
+    params.set("filePath", LABEL_GUIDE_KEY);
     if (guestToken) params.set("guestToken", guestToken);
     window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
   };
 
   const handleCertificateDownload = async () => {
     if (!submission.certificate_b2_path) {
-      setResultNotice("필증이 아직 업로드되지 않았습니다.");
+      alert("필증이 아직 업로드되지 않았습니다.");
       return;
     }
     const params = new URLSearchParams();
@@ -395,44 +389,6 @@ export function SubmissionDetailClient({
       alert(error instanceof Error ? error.message : "등급 저장에 실패했습니다.");
     } finally {
       setIsSavingRating(false);
-    }
-  };
-
-  const handleUploadCertificate = async () => {
-    if (!certificateFile) {
-      alert("필증 파일을 선택하세요.");
-      return;
-    }
-    setIsUploadingCert(true);
-    try {
-      const form = new FormData();
-      form.append("file", certificateFile);
-      form.append("filename", certificateFile.name);
-      form.append("mimeType", certificateFile.type || "application/octet-stream");
-      form.append("sizeBytes", String(certificateFile.size));
-
-      const res = await fetch(`/api/admin/submissions/${submissionId}/mv-certificate`, {
-        method: "POST",
-        body: form,
-      });
-      const json = (await res.json().catch(() => null)) as { error?: string; objectKey?: string };
-      if (!res.ok || json?.error) {
-        throw new Error(json?.error || "필증 업로드에 실패했습니다.");
-      }
-      setSubmission((prev) => ({
-        ...prev,
-        certificate_b2_path: json.objectKey ?? prev.certificate_b2_path,
-        certificate_original_name: certificateFile.name,
-        certificate_mime: certificateFile.type || "application/octet-stream",
-        certificate_size: certificateFile.size,
-        certificate_uploaded_at: new Date().toISOString(),
-      }));
-      setCertificateFile(null);
-      alert("필증이 업로드되었습니다.");
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "필증 업로드에 실패했습니다.");
-    } finally {
-      setIsUploadingCert(false);
     }
   };
 
@@ -623,8 +579,10 @@ export function SubmissionDetailClient({
     setIsRatingDownloading(true);
     try {
       const rating = submission.mv_desired_rating;
-      const path = rating ? RATING_PATHS[rating] : null;
-      if (!rating || !path) {
+      const code: RatingCode | null =
+        rating && isRatingCode(rating) ? rating : null;
+      const path = code ? RATING_IMAGE_MAP[code] : null;
+      if (!code || !path) {
         throw new Error("등급이 설정되지 않았습니다.");
       }
       const params = new URLSearchParams();
@@ -953,20 +911,17 @@ export function SubmissionDetailClient({
                   <button
                     type="button"
                     onClick={handleCertificateDownload}
-                    disabled={
-                      !submission.certificate_b2_path ||
-                      !(isResultReady || submission.status === "COMPLETED")
-                    }
+                    disabled={!submission.certificate_b2_path}
                     className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {submission.certificate_original_name
                       ? submission.certificate_original_name
                       : "필증 미등록"}
                   </button>
+                  {!submission.certificate_b2_path ? (
+                    <span className="text-xs text-muted-foreground">업로드 완료 후 다운로드 가능</span>
+                  ) : null}
                 </div>
-                {resultNotice ? (
-                  <p className="text-xs text-red-500">{resultNotice}</p>
-                ) : null}
               </div>
             </div>
           ) : null}
@@ -1025,13 +980,13 @@ export function SubmissionDetailClient({
         <div>
           <p className="text-sm text-muted-foreground">발매일</p>
           <p className="mt-1 font-semibold">
-            {submission.release_date ? formatDateTime(submission.release_date) : "-"}
+            {submission.release_date ? formatDateTime(submission.release_date) : \"-\"}
           </p>
         </div>
         <div>
           <p className="text-sm text-muted-foreground">장르</p>
           <p className="mt-1 font-semibold">
-            {submission.genre || "-"}
+            {submission.genre || \"-\"}
           </p>
         </div>
         <div>

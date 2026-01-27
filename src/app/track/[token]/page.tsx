@@ -22,27 +22,44 @@ export default async function TrackDetailPage({
   }
 
   const admin = createAdminClient();
-  const baseSelect = SUBMISSION_ADMIN_DETAIL_SELECT;
-  const fullSelect = SUBMISSION_ADMIN_DETAIL_SELECT;
+  const extractMissingColumn = (error: { message?: string; code?: string } | null) => {
+    const msg = error?.message ?? "";
+    const match =
+      msg.match(/column\s+\"?([^\s\"']+)\"?\s+does not exist/i) ||
+      msg.match(/column\s+'?([^\s\"']+)'?\s+does not exist/i);
+    if (!match?.[1]) return null;
+    const full = match[1];
+    const parts = full.split(".");
+    return parts.length > 1 ? parts[parts.length - 1] : full;
+  };
+
+  const dropColumnFromSelect = (select: string, column: string) =>
+    select
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => !s.includes(column))
+      .join(", ");
 
   const fetchSubmission = async (column: "guest_token" | "id", value: string) => {
-    const { data, error } = await admin
-      .from("submissions")
-      .select(fullSelect)
-      .eq(column, value)
-      .maybeSingle();
+    let selectClause = SUBMISSION_ADMIN_DETAIL_SELECT;
+    const maxAttempts = Math.max(6, selectClause.split(",").length);
 
-    if (!error) {
-      return data;
-    }
-
-    if (error.code === "PGRST204") {
-      const { data: fallbackData } = await admin
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const { data, error } = await admin
         .from("submissions")
-        .select(baseSelect)
+        .select(selectClause)
         .eq(column, value)
         .maybeSingle();
-      return fallbackData ?? null;
+
+      if (!error) {
+        return data;
+      }
+
+      const missing = extractMissingColumn(error);
+      if (!missing) break;
+      const next = dropColumnFromSelect(selectClause, missing);
+      if (next === selectClause) break;
+      selectClause = next;
     }
 
     return null;

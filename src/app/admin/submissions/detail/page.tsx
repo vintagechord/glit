@@ -281,7 +281,9 @@ export default async function AdminSubmissionDetailPage({
   let submissionError: { message?: string; code?: string } | null = null;
   let selectClause = SUBMISSION_ADMIN_DETAIL_SELECT;
 
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  const maxAttempts = Math.max(6, selectClause.split(",").length);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const { data, error } = await supabase
       .from("submissions")
       .select(selectClause)
@@ -683,6 +685,23 @@ export default async function AdminSubmissionDetailPage({
                     currentName={submission.certificate_original_name}
                     currentUploadedAt={submission.certificate_uploaded_at}
                   />
+                  {submission.certificate_b2_path ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <a
+                        className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+                        href={`/api/b2/download?filePath=${encodeURIComponent(submission.certificate_b2_path)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        필증 다운로드 (테스트)
+                      </a>
+                      {submission.certificate_uploaded_at ? (
+                        <span className="text-xs text-muted-foreground">
+                          업로드: {formatDateTime(submission.certificate_uploaded_at)}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : null}
