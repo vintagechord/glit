@@ -35,6 +35,12 @@ const lightSelectColumns = [
   "updated_at",
   // mv_rating 계열은 DB마다 없을 수 있으므로 안전하게 mv_desired_rating만 조회
   "mv_desired_rating",
+  // 인증서(필증) 메타 - 존재하는 컬럼만 자동 필터링됨
+  "mv_certificate_object_key",
+  "mv_certificate_filename",
+  "mv_certificate_mime_type",
+  "mv_certificate_size_bytes",
+  "mv_certificate_uploaded_at",
   "package:packages ( name, station_count, price_krw )",
 ];
 
