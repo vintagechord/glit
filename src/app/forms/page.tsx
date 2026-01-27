@@ -11,12 +11,14 @@ export default function FormsPage() {
     {
       label: "HWP",
       title: "음반 심의 신청서 (한글)",
-      href: "/forms/GLIT_music_application_hangul_form.hwp",
+      href:
+        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_music_application_hangul_form(2026).hwp",
     },
     {
       label: "Word",
       title: "음반 심의 신청서 (Word)",
-      href: "/forms/GLIT_music_application_word_form.doc",
+      href:
+        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_music_application_word_form(2026).doc",
     },
   ];
 
@@ -24,12 +26,14 @@ export default function FormsPage() {
     {
       label: "HWP",
       title: "M/V 심의 신청서 (한글)",
-      href: "/forms/GLIT_MVapplication_hangul_form.hwp",
+      href:
+        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_MVapplication_hangul_form(2026).hwp",
     },
     {
       label: "Word",
       title: "M/V 심의 신청서 (Word)",
-      href: "/forms/GLIT_MVapplication_word_form.doc",
+      href:
+        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_MVapplication_word_form(2026).doc",
     },
   ];
 
