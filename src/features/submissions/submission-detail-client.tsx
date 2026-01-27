@@ -363,31 +363,6 @@ export function SubmissionDetailClient({
     window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
   };
 
-  const handleSaveAdminRating = async () => {
-    if (!adminRating) {
-      alert("등급을 선택하세요.");
-      return;
-    }
-    setIsSavingRating(true);
-    try {
-      const res = await fetch(`/api/admin/submissions/${submissionId}/mv-rating`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating: adminRating }),
-      });
-      const json = (await res.json().catch(() => null)) as { error?: string; rating?: string };
-      if (!res.ok || json?.error) {
-        throw new Error(json?.error || "등급을 저장하지 못했습니다.");
-      }
-      setSubmission((prev) => ({ ...prev, mv_desired_rating: adminRating }));
-      alert("등급이 저장되었습니다.");
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "등급 저장에 실패했습니다.");
-    } finally {
-      setIsSavingRating(false);
-    }
-  };
-
   const buildTrackSummary = React.useCallback(
     (trackResults?: TrackReviewResult[] | null) => {
       const base = summarizeTrackResults(trackResults, albumTracks);
