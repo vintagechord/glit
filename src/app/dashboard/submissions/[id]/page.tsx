@@ -18,7 +18,7 @@ const uuidPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 const lightSelect =
-  "id, user_id, artist_id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, created_at, updated_at, mv_rating, mv_desired_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, mv_certificate_uploaded_at, package:packages ( name, station_count, price_krw )";
+  "id, user_id, artist_id, title, artist_name, artist_name_kr, artist_name_en, type, status, payment_status, payment_method, amount_krw, created_at, updated_at, mv_desired_rating, mv_certificate_object_key, mv_certificate_filename, mv_certificate_mime_type, mv_certificate_size_bytes, mv_certificate_uploaded_at, package:packages ( name, station_count, price_krw )";
 
 type SubmissionDetailClientProps = React.ComponentProps<typeof SubmissionDetailClient>;
 
@@ -286,7 +286,10 @@ export default async function SubmissionDetailPage({
 
   const resolvedSubmission = {
     ...(userSubmission ?? adminSubmission),
-    mv_rating: (userSubmission ?? adminSubmission)?.mv_rating ?? (userSubmission ?? adminSubmission)?.mv_desired_rating ?? null,
+    mv_rating:
+      (userSubmission ?? adminSubmission)?.mv_rating ??
+      (userSubmission ?? adminSubmission)?.mv_desired_rating ??
+      null,
   };
   const packageInfo = Array.isArray(resolvedSubmission.package)
     ? resolvedSubmission.package[0]
