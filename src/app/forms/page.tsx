@@ -61,6 +61,21 @@ export default function FormsPage() {
         </span>
       </p>
 
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <Link
+          href="https://youngforever.firstmall.kr"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
+        >
+          옛날 사이트로 이동
+          <span aria-hidden>↗</span>
+        </Link>
+        <span className="text-xs text-muted-foreground">
+          기존 이메일 접수 안내가 필요하면 위 버튼을 눌러 방문하세요.
+        </span>
+      </div>
+
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <section className="group relative overflow-hidden rounded-[28px] border border-border/60 bg-card/80 p-6 text-foreground shadow-[0_18px_50px_rgba(15,23,42,0.12)] transition hover:-translate-y-1 hover:border-foreground/40 hover:bg-background">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
