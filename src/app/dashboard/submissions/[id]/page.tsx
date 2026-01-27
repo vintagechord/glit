@@ -6,6 +6,7 @@ import { SubmissionDetailClient } from "@/features/submissions/submission-detail
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 
 export const metadata = {
   title: "심의 상세",
@@ -17,28 +18,7 @@ export const revalidate = 0;
 const uuidPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-// 사용자 상세 조회에서 사용되는 columns (DB 없는 컬럼이 들어가면 전체 쿼리가 실패하므로 최소 컬럼만 유지)
-const lightSelectColumns = [
-  "id",
-  "user_id",
-  "artist_id",
-  "title",
-  "artist_name",
-  "artist_name_kr",
-  "artist_name_en",
-  "type",
-  "status",
-  "payment_status",
-  "payment_method",
-  "amount_krw",
-  "created_at",
-  "updated_at",
-  // mv_rating 계열은 DB마다 없을 수 있으므로 안전하게 mv_desired_rating만 조회
-  "mv_desired_rating",
-  "package:packages ( name, station_count, price_krw )",
-];
-
-const lightSelect = lightSelectColumns.join(", ");
+const lightSelect = SUBMISSION_USER_DETAIL_SELECT;
 
 type SubmissionDetailClientProps = React.ComponentProps<typeof SubmissionDetailClient>;
 

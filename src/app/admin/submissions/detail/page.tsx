@@ -103,11 +103,6 @@ type SubmissionRow = {
   amount_krw: number | null;
   mv_base_selected: boolean | null;
   mv_rating?: string | null;
-  mv_certificate_object_key?: string | null;
-  mv_certificate_filename?: string | null;
-  mv_certificate_mime_type?: string | null;
-  mv_certificate_size_bytes?: number | null;
-  mv_certificate_uploaded_at?: string | null;
   pre_review_requested: boolean | null;
   karaoke_requested: boolean | null;
   bank_depositor_name: string | null;
@@ -265,12 +260,7 @@ export default async function AdminSubmissionDetailPage({
     "payment_method",
     "amount_krw",
     "mv_base_selected",
-    "mv_rating",
-    "mv_certificate_object_key",
-    "mv_certificate_filename",
-    "mv_certificate_mime_type",
-    "mv_certificate_size_bytes",
-    "mv_certificate_uploaded_at",
+    "mv_desired_rating",
     "pre_review_requested",
     "karaoke_requested",
     "bank_depositor_name",
@@ -329,17 +319,12 @@ export default async function AdminSubmissionDetailPage({
   const buildSelectColumns = ({
     includeGuest,
     includeResult,
-    includeCertificateUploaded,
   }: {
     includeGuest: boolean;
     includeResult: boolean;
-    includeCertificateUploaded: boolean;
   }) => {
     const coreCols = baseSelectCoreColumns.filter((col) => {
       if (!includeResult && ["result_status", "result_memo", "result_notified_at"].includes(col)) {
-        return false;
-      }
-      if (!includeCertificateUploaded && col === "mv_certificate_uploaded_at") {
         return false;
       }
       return true;
@@ -357,7 +342,6 @@ export default async function AdminSubmissionDetailPage({
 
   let hasGuestColumns = true;
   let hasResultColumns = true;
-  let hasCertUploadedColumn = true;
   let submission: SubmissionRow | null = null;
   let submissionError: { message?: string; code?: string } | null = null;
 
@@ -390,7 +374,6 @@ export default async function AdminSubmissionDetailPage({
   let selectColumns = buildSelectColumns({
     includeGuest: hasGuestColumns,
     includeResult: hasResultColumns,
-    includeCertificateUploaded: hasCertUploadedColumn,
   });
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -421,9 +404,6 @@ export default async function AdminSubmissionDetailPage({
       if (missing.short === "guest_name") hasGuestColumns = false;
       if (["result_status", "result_memo", "result_notified_at"].includes(missing.short)) {
         hasResultColumns = false;
-      }
-      if (missing.short === "mv_certificate_uploaded_at") {
-        hasCertUploadedColumn = false;
       }
       continue;
     }
