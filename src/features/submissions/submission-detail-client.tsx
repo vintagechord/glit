@@ -279,6 +279,8 @@ export function SubmissionDetailClient({
           submission.mv_desired_rating ?? "",
   );
   const [isSavingRating, setIsSavingRating] = React.useState(false);
+  const [certificateFile, setCertificateFile] = React.useState<File | null>(null);
+  const [isUploadingCert, setIsUploadingCert] = React.useState(false);
   const isMvSubmission =
     submission.type === "MV_BROADCAST" || submission.type === "MV_DISTRIBUTION";
   const isResultReady =
@@ -365,6 +367,44 @@ export function SubmissionDetailClient({
     params.set("filePath", submission.certificate_b2_path);
     if (guestToken) params.set("guestToken", guestToken);
     window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
+  };
+
+  const handleUploadCertificate = async () => {
+    if (!certificateFile) {
+      alert("필증 파일을 선택하세요.");
+      return;
+    }
+    setIsUploadingCert(true);
+    try {
+      const form = new FormData();
+      form.append("file", certificateFile);
+      form.append("filename", certificateFile.name);
+      form.append("mimeType", certificateFile.type || "application/octet-stream");
+      form.append("sizeBytes", String(certificateFile.size));
+
+      const res = await fetch(`/api/admin/submissions/${submissionId}/certificate`, {
+        method: "POST",
+        body: form,
+      });
+      const json = (await res.json().catch(() => null)) as { error?: string; objectKey?: string };
+      if (!res.ok || json?.error) {
+        throw new Error(json?.error || "필증 업로드에 실패했습니다.");
+      }
+      setSubmission((prev) => ({
+        ...prev,
+        certificate_b2_path: json.objectKey ?? prev.certificate_b2_path,
+        certificate_original_name: certificateFile.name,
+        certificate_mime: certificateFile.type || "application/octet-stream",
+        certificate_size: certificateFile.size,
+        certificate_uploaded_at: new Date().toISOString(),
+      }));
+      setCertificateFile(null);
+      alert("필증이 업로드되었습니다.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "필증 업로드에 실패했습니다.");
+    } finally {
+      setIsUploadingCert(false);
+    }
   };
 
   const handleSaveAdminRating = async () => {
