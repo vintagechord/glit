@@ -300,6 +300,38 @@ export function SubmissionDetailClient({
   const labelGuideFile =
     files.find((file) => file.kind === "MV_LABEL_GUIDE_FILE") ?? null;
 
+  const stationNames = React.useMemo(() => {
+    const names = stationReviews
+      .map((review) => review.station?.name?.trim() || "")
+      .filter(Boolean);
+    return Array.from(new Set(names));
+  }, [stationReviews]);
+
+  const mvOptions = React.useMemo(() => {
+    if (!isMvSubmission) return null;
+    if (submission.type === "MV_DISTRIBUTION") {
+      // 온라인 유통 심의 기본 옵션은 영상물등급위원회로 표기
+      return ["영상물등급위원회", ...stationNames];
+    }
+    return stationNames;
+  }, [isMvSubmission, stationNames, submission.type]);
+
+  const renderStationReviews =
+    stationReviews.length > 0
+      ? stationReviews
+      : submission.type === "MV_DISTRIBUTION"
+        ? [
+            {
+              id: `fallback-${submission.id}`,
+              status: submission.status,
+              result_note: null,
+              track_results: null,
+              updated_at: submission.updated_at,
+              station: { name: "영상물등급위원회" },
+            },
+          ]
+        : stationReviews;
+
   const buildTrackSummary = React.useCallback(
     (trackResults?: TrackReviewResult[] | null) => {
       const base = summarizeTrackResults(trackResults, albumTracks);
@@ -647,18 +679,41 @@ export function SubmissionDetailClient({
               접수 정보
             </p>
             <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
-              <div>
-                <p className="text-sm text-muted-foreground">패키지</p>
-                <p className="mt-1 font-semibold">
-                  {packageInfo?.name ?? "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">방송국 수</p>
-                <p className="mt-1 font-semibold">
-                  {packageInfo?.station_count ?? "-"}곳
-                </p>
-              </div>
+              {isMvSubmission ? (
+                <>
+                  <div>
+                    <p className="text-sm text-muted-foreground">신청 옵션</p>
+                    <p className="mt-1 font-semibold">
+                      {mvOptions && mvOptions.length > 0
+                        ? mvOptions.join(", ")
+                        : "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">옵션 수</p>
+                    <p className="mt-1 font-semibold">
+                      {mvOptions && mvOptions.length > 0
+                        ? `${mvOptions.length}곳`
+                        : "-"}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <p className="text-sm text-muted-foreground">패키지</p>
+                    <p className="mt-1 font-semibold">
+                      {packageInfo?.name ?? "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">방송국 수</p>
+                    <p className="mt-1 font-semibold">
+                      {packageInfo?.station_count ?? "-"}곳
+                    </p>
+                  </div>
+                </>
+              )}
               <div>
                 <p className="text-sm text-muted-foreground">금액</p>
                 <p className="mt-1 font-semibold">
@@ -1058,7 +1113,7 @@ export function SubmissionDetailClient({
           </span>
         </div>
         <div className="mt-5">
-          {stationReviews && stationReviews.length > 0 ? (
+          {renderStationReviews && renderStationReviews.length > 0 ? (
             <div className="rounded-2xl border border-border/60 bg-background/70">
               <div className="overflow-x-auto">
                 <div className="min-w-[640px]">
@@ -1070,7 +1125,7 @@ export function SubmissionDetailClient({
                     <span className="text-center">사유</span>
                   </div>
                   <div className="divide-y divide-border/60">
-                    {stationReviews.map((review) => {
+                    {renderStationReviews.map((review) => {
                       const reception = getReviewReception(review.status);
                       const trackInfo = buildTrackSummary(review.track_results);
                       const note = review.result_note?.trim();
