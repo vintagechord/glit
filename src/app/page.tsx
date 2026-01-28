@@ -434,14 +434,17 @@ export default async function Home() {
 
     if (allIds.length) {
       const withTracks =
-        "id, submission_id, status, track_results, updated_at, station:stations ( name, code, region )";
-      const withoutTracks = "id, submission_id, status, updated_at, station:stations ( name, code, region )";
+        "id, submission_id, status, result_note, track_results, updated_at, station:stations ( name, code, region )";
+      const withoutTracks =
+        "id, submission_id, status, result_note, updated_at, station:stations ( name, code, region )";
       const albumIdSet = new Set(albumIds);
       const mvIdSet = new Set(mvIds);
 
       const reviewResult = await supabase
         .from("station_reviews")
-        .select(withTracks)
+        .select(
+          "id, submission_id, status, result_note, track_results, updated_at, station:stations ( name, code, region )",
+        )
         .in("submission_id", allIds)
         .order("updated_at", { ascending: false });
 

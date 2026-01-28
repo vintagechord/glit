@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 
 export const runtime = "nodejs";
@@ -89,13 +90,14 @@ export async function GET() {
 
   // Ensure station review placeholders exist so 진행 상황 리스트 shows all stations even pre-payment.
   if (albumSubmissions.length) {
+    const admin = createAdminClient();
     await Promise.all(
       albumSubmissions.map(async (submission) => {
         const pkg = Array.isArray(submission.package)
           ? submission.package[0]
           : submission.package;
         await ensureAlbumStationReviews(
-          supabase,
+          admin,
           submission.id,
           pkg?.station_count ?? null,
           pkg?.name ?? null,
@@ -127,7 +129,7 @@ export async function GET() {
 
     const { data } = await supabase
       .from("station_reviews")
-      .select("id, submission_id, status, updated_at, track_results, station:stations ( name )")
+      .select("id, submission_id, status, result_note, updated_at, track_results, station:stations ( name )")
       .in("submission_id", allSubmissionIds)
       .order("updated_at", { ascending: false });
 
