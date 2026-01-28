@@ -128,7 +128,7 @@ export default async function TrackDetailPage({
         result_note: null,
         track_results: null,
         updated_at: submission.updated_at,
-        station: { id: null, name: submission.package?.name ?? "신청 방송국", code: null },
+        station: { id: submission.package?.name ?? "신청 방송국", name: submission.package?.name ?? "신청 방송국", code: null },
       },
     ];
   }

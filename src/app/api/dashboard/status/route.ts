@@ -17,7 +17,7 @@ export async function GET() {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
-  const paymentStatuses = ["PAYMENT_PENDING", "PAID"];
+  const paymentStatuses = ["PAYMENT_PENDING", "PAID", "UNPAID"];
   const recentResultCutoff = new Date(
     Date.now() - 30 * 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -38,15 +38,17 @@ export async function GET() {
       )
       .eq("user_id", user.id)
       .eq("type", "ALBUM")
-      .in("payment_status", paymentStatuses);
+      .in("payment_status", paymentStatuses)
+      .not("status", "eq", "DRAFT");
 
   const buildMvBase = () =>
     supabase
       .from("submissions")
-      .select("id, title, artist_name, status, updated_at, payment_status, type")
+      .select("id, title, artist_name, status, updated_at, payment_status, type, package:packages ( name, station_count )")
       .eq("user_id", user.id)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
-      .in("payment_status", paymentStatuses);
+      .in("payment_status", paymentStatuses)
+      .not("status", "eq", "DRAFT");
 
   let albumResult = await buildAlbumBase()
     .or(`result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}`)
@@ -88,40 +90,6 @@ export async function GET() {
     package?: { name?: string | null; station_count?: number | null }[];
   }>;
 
-  // Ensure station review placeholders exist so 진행 상황 리스트 shows all stations even pre-payment.
-  if (albumSubmissions.length) {
-    const admin = createAdminClient();
-    await Promise.all(
-      albumSubmissions.map(async (submission) => {
-        const pkg = Array.isArray(submission.package)
-          ? submission.package[0]
-          : submission.package;
-        await ensureAlbumStationReviews(
-          admin,
-          submission.id,
-          pkg?.station_count ?? null,
-          pkg?.name ?? null,
-        );
-      }),
-    );
-  }
-
-  if (mvSubmissions.length) {
-    const admin = createAdminClient();
-    await Promise.all(
-      mvSubmissions.map(async (submission) => {
-        const pkg = Array.isArray(submission.package)
-          ? submission.package[0]
-          : (submission as any).package;
-        await ensureAlbumStationReviews(
-          admin,
-          submission.id,
-          pkg?.station_count ?? null,
-          pkg?.name ?? null,
-        );
-      }),
-    );
-  }
   const mvSubmissions = (mvResult.data ?? []) as Array<{
     id: string;
     title: string | null;
@@ -135,6 +103,23 @@ export async function GET() {
   const allSubmissionIds = [...albumSubmissions, ...mvSubmissions]
     .map((item) => item.id)
     .filter(Boolean);
+
+  // Ensure station review placeholders exist so 진행 상황 리스트 shows all stations even pre-payment.
+  if (albumSubmissions.length || mvSubmissions.length) {
+    const admin = createAdminClient();
+    const tasks = [...albumSubmissions, ...mvSubmissions].map(async (submission: any) => {
+      const pkg = Array.isArray(submission.package)
+        ? submission.package[0]
+        : submission.package;
+      await ensureAlbumStationReviews(
+        admin,
+        submission.id,
+        pkg?.station_count ?? null,
+        pkg?.name ?? null,
+      );
+    });
+    await Promise.all(tasks);
+  }
 
   const albumStationsMap: Record<string, unknown[]> = {};
   const mvStationsMap: Record<string, unknown[]> = {};
