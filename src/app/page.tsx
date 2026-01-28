@@ -520,8 +520,8 @@ export default async function Home() {
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-10 px-6 py-10 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 lg:min-h-[520px] lg:h-full">
-              <span className="inline-flex w-fit items-center rounded-full border border-white/60 bg-black/35 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/90 backdrop-blur-sm">
-                Officially Greenlit
+              <span className="inline-flex w-fit items-center rounded-full border border-white/60 bg-black/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/90 backdrop-blur-sm">
+                OFFICIAL MUSIC & VIDEO REVIEW
               </span>
               <h1 className="font-display text-3xl leading-tight text-white sm:text-4xl">
                 <span className="inline-block animate-[floaty_6s_ease-in-out_infinite] bg-gradient-to-r from-emerald-400 via-lime-300 to-emerald-500 bg-clip-text text-transparent drop-shadow-[0_8px_24px_rgba(52,211,153,0.25)]">

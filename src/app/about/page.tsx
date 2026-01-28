@@ -77,7 +77,7 @@ export default function AboutPage() {
                   priority={false}
                 />
                 <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--about-ink)]/60">
-                  Ready to Air · Officially Greenlit
+                  Ready to Air · OFFICIAL MUSIC & VIDEO REVIEW
                 </p>
               </div>
             </div>
