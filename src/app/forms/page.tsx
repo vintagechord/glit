@@ -72,7 +72,7 @@ export default function FormsPage() {
           <span aria-hidden>↗</span>
         </Link>
         <span className="text-xs text-muted-foreground">
-          기존 이메일 접수 안내가 필요하면 위 버튼을 눌러 방문하세요.
+          구버전 사이트에서의 접수 또한 동일하게 심의 접수 진행이 가능하며, 결과 안내 페이지는 따로 드립니다.
         </span>
       </div>
 
