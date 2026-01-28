@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-reviews";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -252,9 +252,24 @@ export async function GET() {
       submission: (typeof albumSubmissions)[number] | (typeof mvSubmissions)[number],
       targetMap: Record<string, unknown[]>,
     ) => {
-      const pkgStations = submission.package_id
-        ? packageStationsMap.get(submission.package_id) ?? []
-        : [];
+      let pkgStations =
+        submission.package_id && packageStationsMap.has(submission.package_id)
+          ? packageStationsMap.get(submission.package_id) ?? []
+          : [];
+
+      if (!pkgStations.length) {
+        const pkg = Array.isArray((submission as any).package)
+          ? (submission as any).package[0]
+          : (submission as any).package;
+        const fallbackPkg = submission.package_id ? packageMap.get(submission.package_id) : null;
+        const resolvedName = pkg?.name ?? fallbackPkg?.name ?? null;
+        const resolvedCount = pkg?.station_count ?? fallbackPkg?.station_count ?? null;
+        pkgStations = getPackageStations(resolvedCount, resolvedName).map((station) => ({
+          id: "",
+          code: station.code,
+          name: station.name,
+        }));
+      }
       const reviews = reviewMap.get(submission.id) ?? new Map();
 
       const rows = pkgStations.map((station) => {
