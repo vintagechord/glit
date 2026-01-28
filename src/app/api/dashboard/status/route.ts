@@ -119,6 +119,11 @@ export async function GET() {
     { id: string; name: string | null; station_count: number | null }
   >();
 
+  const packageStationsMap = new Map<
+    string,
+    Array<{ id: string; code: string | null; name: string | null }>
+  >();
+
   if (packageIds.length) {
     const { data: packages, error: packageError } = await admin
       .from("packages")
@@ -133,6 +138,25 @@ export async function GET() {
         name: pkg.name ?? null,
         station_count: pkg.station_count ?? null,
       });
+    });
+
+    const { data: packageStations, error: packageStationsError } = await admin
+      .from("package_stations")
+      .select("package_id, station:stations ( id, code, name )")
+      .in("package_id", packageIds);
+
+    if (packageStationsError) {
+      console.error("[dashboard status] package_stations query error", packageStationsError);
+    }
+
+    (packageStations ?? []).forEach((row) => {
+      const pkgId = row.package_id;
+      const station = Array.isArray(row.station) ? row.station[0] : row.station;
+      if (!pkgId || !station) return;
+      packageStationsMap.set(pkgId, [
+        ...(packageStationsMap.get(pkgId) ?? []),
+        { id: station.id, code: station.code ?? null, name: station.name ?? null },
+      ]);
     });
   }
 
@@ -179,7 +203,7 @@ export async function GET() {
     let { data, error: stationReviewsError } = await admin
       .from("station_reviews")
       .select(
-        "id, submission_id, status, result_note, updated_at, track_results, station:stations!station_reviews_station_id_fkey ( name, code )",
+        "id, submission_id, station_id, status, result_note, updated_at, track_results, station:stations!station_reviews_station_id_fkey ( id, name, code )",
       )
       .in("submission_id", allSubmissionIds)
       .order("updated_at", { ascending: false });
@@ -189,7 +213,7 @@ export async function GET() {
       const fallback = await admin
         .from("station_reviews")
         .select(
-          "id, submission_id, status, result_note, updated_at, track_results, station:stations ( name, code )",
+          "id, submission_id, station_id, status, result_note, updated_at, track_results, station:stations ( id, name, code )",
         )
         .in("submission_id", allSubmissionIds)
         .order("updated_at", { ascending: false });
@@ -199,48 +223,96 @@ export async function GET() {
       }
     }
 
-    (data ?? []).forEach((review) => {
-      const normalized = {
+    const reviewMap = new Map<
+      string,
+      Map<string, any>
+    >();
+
+    (data ?? []).forEach((review: any) => {
+      const submissionId = review.submission_id;
+      const stationId = review.station_id || (Array.isArray(review.station) ? review.station[0]?.id : review.station?.id);
+      if (!submissionId || !stationId) return;
+      const normalizedStation = Array.isArray(review.station)
+        ? review.station[0]
+        : review.station ?? null;
+      const map = reviewMap.get(submissionId) ?? new Map();
+      map.set(stationId, {
         ...review,
-        station: Array.isArray(review.station) ? review.station[0] : review.station ?? null,
-      };
-      if (!review.submission_id) return;
-      if (albumIdSet.has(review.submission_id)) {
-        albumStationsMap[review.submission_id] = [
-          ...(albumStationsMap[review.submission_id] ?? []),
-          normalized,
-        ];
-      } else if (mvIdSet.has(review.submission_id)) {
-        mvStationsMap[review.submission_id] = [
-          ...(mvStationsMap[review.submission_id] ?? []),
-          normalized,
-        ];
-      }
+        station: normalizedStation,
+      });
+      reviewMap.set(submissionId, map);
     });
+
+    const logoFor = (code?: string | null) =>
+      code
+        ? admin.storage.from("broadcast").getPublicUrl(`${code}.png`).data.publicUrl ?? null
+        : null;
+
+    const buildRows = (
+      submission: (typeof albumSubmissions)[number] | (typeof mvSubmissions)[number],
+      targetMap: Record<string, unknown[]>,
+    ) => {
+      const pkgStations = submission.package_id
+        ? packageStationsMap.get(submission.package_id) ?? []
+        : [];
+      const reviews = reviewMap.get(submission.id) ?? new Map();
+
+      const rows = pkgStations.map((station) => {
+        const review = station.id ? reviews.get(station.id) : null;
+        return {
+          id: review?.id ?? `placeholder-${submission.id}-${station.code ?? station.id}`,
+          submission_id: submission.id,
+          status: review?.status ?? submission.status ?? "NOT_SENT",
+          result_note: review?.result_note ?? null,
+          track_results: review?.track_results ?? null,
+          updated_at: review?.updated_at ?? submission.updated_at,
+          station: {
+            id: station.id,
+            code: station.code,
+            name: station.name,
+            logo_url: logoFor(station.code ?? undefined),
+          },
+        };
+      });
+
+      if (rows.length === 0 && reviews.size) {
+        reviews.forEach((review) => {
+          const station = Array.isArray(review.station)
+            ? review.station[0]
+            : review.station ?? {};
+          rows.push({
+            ...review,
+            station: {
+              ...station,
+              logo_url: logoFor(station.code ?? undefined),
+            },
+          });
+        });
+      }
+
+      if (rows.length === 0) {
+        rows.push({
+          id: `placeholder-${submission.id}`,
+          submission_id: submission.id,
+          status: submission.status || "NOT_SENT",
+          result_note: null,
+          track_results: null,
+          updated_at: submission.updated_at,
+          station: {
+            id: "",
+            code: "",
+            name: (submission as any)?.package?.[0]?.name ?? "신청 방송국",
+            logo_url: null,
+          },
+        });
+      }
+
+      targetMap[submission.id] = rows;
+    };
+
+    albumSubmissions.forEach((submission) => buildRows(submission, albumStationsMap));
+    mvSubmissions.forEach((submission) => buildRows(submission as any, mvStationsMap));
   }
-
-  // Ensure at least one placeholder station row per submission for UI display
-  const makePlaceholder = (submission: { id: string; status: string; updated_at: string; package?: { name?: string | null }[] }) => ({
-    id: `placeholder-${submission.id}`,
-    submission_id: submission.id,
-    status: submission.status || "NOT_SENT",
-    result_note: null,
-    track_results: null,
-    updated_at: submission.updated_at,
-    station: { name: submission.package?.[0]?.name ?? "신청 방송국" },
-  });
-
-  albumSubmissions.forEach((submission) => {
-    if (!albumStationsMap[submission.id] || albumStationsMap[submission.id].length === 0) {
-      albumStationsMap[submission.id] = [makePlaceholder(submission)];
-    }
-  });
-
-  mvSubmissions.forEach((submission) => {
-    if (!mvStationsMap[submission.id] || mvStationsMap[submission.id].length === 0) {
-      mvStationsMap[submission.id] = [makePlaceholder(submission as any)];
-    }
-  });
 
   return NextResponse.json(
     {
