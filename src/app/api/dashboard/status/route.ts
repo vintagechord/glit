@@ -33,7 +33,7 @@ export async function GET() {
     supabase
       .from("submissions")
       .select(
-        "id, title, artist_name, status, updated_at, payment_status, package:packages ( name, station_count )",
+        "id, title, artist_name, status, updated_at, payment_status, package_id, package:packages ( name, station_count )",
       )
       .eq("user_id", user.id)
       .eq("type", "ALBUM")
@@ -42,7 +42,7 @@ export async function GET() {
   const buildMvBase = () =>
     supabase
       .from("submissions")
-      .select("id, title, artist_name, status, updated_at, payment_status, type, package:packages ( name, station_count )")
+      .select("id, title, artist_name, status, updated_at, payment_status, type, package_id, package:packages ( name, station_count )")
       .eq("user_id", user.id)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
       .not("status", "eq", "DRAFT");
@@ -86,6 +86,7 @@ export async function GET() {
     status: string;
     updated_at: string;
     payment_status?: string | null;
+    package_id?: string | null;
     package?: { name?: string | null; station_count?: number | null }[];
   }>;
 
@@ -97,11 +98,43 @@ export async function GET() {
     updated_at: string;
     payment_status?: string | null;
     type: string;
+    package_id?: string | null;
   }>;
 
   const allSubmissionIds = [...albumSubmissions, ...mvSubmissions]
     .map((item) => item.id)
     .filter(Boolean);
+
+  // Load package info via admin as fallback when user-facing join is empty (RLS)
+  const packageIds = Array.from(
+    new Set(
+      [...albumSubmissions, ...mvSubmissions]
+        .map((item) => item.package_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  const packageMap = new Map<
+    string,
+    { id: string; name: string | null; station_count: number | null }
+  >();
+
+  if (packageIds.length) {
+    const { data: packages, error: packageError } = await admin
+      .from("packages")
+      .select("id, name, station_count")
+      .in("id", packageIds);
+    if (packageError) {
+      console.error("[dashboard status] package fallback query error", packageError);
+    }
+    (packages ?? []).forEach((pkg) => {
+      packageMap.set(pkg.id, {
+        id: pkg.id,
+        name: pkg.name ?? null,
+        station_count: pkg.station_count ?? null,
+      });
+    });
+  }
 
   // Ensure station review placeholders exist so 진행 상황 리스트 shows all stations even pre-payment.
   if (albumSubmissions.length || mvSubmissions.length) {
@@ -109,11 +142,28 @@ export async function GET() {
       const pkg = Array.isArray(submission.package)
         ? submission.package[0]
         : submission.package;
+      const fallbackPkg = submission.package_id
+        ? packageMap.get(submission.package_id)
+        : null;
+
+      const resolvedName = pkg?.name ?? fallbackPkg?.name ?? null;
+      const resolvedCount = pkg?.station_count ?? fallbackPkg?.station_count ?? null;
+
+      console.log("[dashboard status] ensure stations", {
+        submissionId: submission.id,
+        packageId: submission.package_id,
+        joinPkg: pkg,
+        fallbackPkg,
+        resolvedName,
+        resolvedCount,
+        expectedCount: resolvedCount,
+      });
+
       await ensureAlbumStationReviews(
         admin,
         submission.id,
-        pkg?.station_count ?? null,
-        pkg?.name ?? null,
+        resolvedCount,
+        resolvedName,
       );
     });
     await Promise.all(tasks);
@@ -126,11 +176,28 @@ export async function GET() {
     const albumIdSet = new Set(albumSubmissions.map((s) => s.id));
     const mvIdSet = new Set(mvSubmissions.map((s) => s.id));
 
-    const { data } = await admin
+    let { data, error: stationReviewsError } = await admin
       .from("station_reviews")
-      .select("id, submission_id, status, result_note, updated_at, track_results, station:stations ( name )")
+      .select(
+        "id, submission_id, status, result_note, updated_at, track_results, station:stations!station_reviews_station_id_fkey ( name, code )",
+      )
       .in("submission_id", allSubmissionIds)
       .order("updated_at", { ascending: false });
+
+    if (stationReviewsError) {
+      console.error("[dashboard status] station_reviews join error", stationReviewsError);
+      const fallback = await admin
+        .from("station_reviews")
+        .select(
+          "id, submission_id, status, result_note, updated_at, track_results, station:stations ( name, code )",
+        )
+        .in("submission_id", allSubmissionIds)
+        .order("updated_at", { ascending: false });
+      data = fallback.data;
+      if (fallback.error) {
+        console.error("[dashboard status] station_reviews fallback join error", fallback.error);
+      }
+    }
 
     (data ?? []).forEach((review) => {
       const normalized = {

@@ -244,6 +244,7 @@ type SubmissionSnapshot = {
   payment_status: string | null;
   updated_at: string;
   type?: string;
+  package_id?: string | null;
   package?:
   | Array<{ name?: string | null; station_count?: number | null }>
   | { name?: string | null; station_count?: number | null }
@@ -367,7 +368,7 @@ export default async function Home() {
       supabase
         .from("submissions")
         .select(
-          "id, title, artist_name, status, updated_at, payment_status, package:packages ( name, station_count )",
+          "id, title, artist_name, status, updated_at, payment_status, package_id, package:packages ( name, station_count )",
         )
         .eq("user_id", user.id)
         .eq("type", "ALBUM")
@@ -376,7 +377,7 @@ export default async function Home() {
     const buildMvBase = () =>
       supabase
         .from("submissions")
-        .select("id, title, artist_name, status, updated_at, payment_status, type, package:packages ( name, station_count )")
+        .select("id, title, artist_name, status, updated_at, payment_status, type, package_id, package:packages ( name, station_count )")
         .eq("user_id", user.id)
         .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
         .not("status", "eq", "DRAFT");
@@ -414,26 +415,81 @@ export default async function Home() {
     albumSubmissions = albumDataResult.data ?? [];
     mvSubmissions = mvDataResult.data ?? [];
 
+    const packageIds = Array.from(
+      new Set(
+        [...albumSubmissions, ...mvSubmissions]
+          .map((item) => item.package_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+
+    const packageMap = new Map<string, { id: string; name: string | null; station_count: number | null }>();
+
+    if (packageIds.length) {
+      const { data: packages, error: packageError } = await admin
+        .from("packages")
+        .select("id, name, station_count")
+        .in("id", packageIds);
+      if (packageError) {
+        console.error("[home] package fallback query error", packageError);
+      }
+      (packages ?? []).forEach((pkg) => {
+        packageMap.set(pkg.id, {
+          id: pkg.id,
+          name: pkg.name ?? null,
+          station_count: pkg.station_count ?? null,
+        });
+      });
+    }
+
     // Ensure station review placeholders
     await Promise.all(
       albumSubmissions.map(async (submission) => {
         const pkg = Array.isArray(submission.package) ? submission.package[0] : submission.package;
+        const fallbackPkg = submission.package_id ? packageMap.get(submission.package_id) : null;
+
+        const resolvedName = pkg?.name ?? fallbackPkg?.name ?? null;
+        const resolvedCount = pkg?.station_count ?? fallbackPkg?.station_count ?? null;
+
+        console.log("[home] ensure stations album", {
+          submissionId: submission.id,
+          packageId: submission.package_id,
+          joinPkg: pkg,
+          fallbackPkg,
+          resolvedName,
+          resolvedCount,
+        });
+
         await ensureAlbumStationReviews(
           admin,
           submission.id,
-          pkg?.station_count ?? null,
-          pkg?.name ?? null,
+          resolvedCount,
+          resolvedName,
         );
       }),
     );
     await Promise.all(
       mvSubmissions.map(async (submission) => {
         const pkg = Array.isArray(submission.package) ? submission.package[0] : submission.package;
+        const fallbackPkg = submission.package_id ? packageMap.get(submission.package_id) : null;
+
+        const resolvedName = pkg?.name ?? fallbackPkg?.name ?? null;
+        const resolvedCount = pkg?.station_count ?? fallbackPkg?.station_count ?? null;
+
+        console.log("[home] ensure stations mv", {
+          submissionId: submission.id,
+          packageId: submission.package_id,
+          joinPkg: pkg,
+          fallbackPkg,
+          resolvedName,
+          resolvedCount,
+        });
+
         await ensureAlbumStationReviews(
           admin,
           submission.id,
-          pkg?.station_count ?? null,
-          pkg?.name ?? null,
+          resolvedCount,
+          resolvedName,
         );
       }),
     );
@@ -443,12 +499,15 @@ export default async function Home() {
         albumSubmissions.map(async (submission) => {
           const packageInfo = Array.isArray(submission.package) ? submission.package[0] : submission.package;
           submission.package = packageInfo ? [packageInfo] : null;
+          const fallbackPkg = submission.package_id ? packageMap.get(submission.package_id) : null;
+          const resolvedName = packageInfo?.name ?? fallbackPkg?.name ?? null;
+          const resolvedCount = packageInfo?.station_count ?? fallbackPkg?.station_count ?? null;
 
           await ensureAlbumStationReviews(
             supabase,
             submission.id,
-            packageInfo?.station_count ?? null,
-            packageInfo?.name ?? null,
+            resolvedCount,
+            resolvedName,
           );
         }),
       );
@@ -469,12 +528,12 @@ export default async function Home() {
       const reviewResult = await admin
         .from("station_reviews")
         .select(
-          "id, submission_id, status, result_note, track_results, updated_at, station:stations ( name, code, region )",
+          "id, submission_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( name, code, region )",
         )
         .in("submission_id", allIds)
         .order("updated_at", { ascending: false });
 
-      const reviewRows =
+      let reviewRows =
         reviewResult.error &&
         (reviewResult.error.message?.toLowerCase().includes("track_results") ||
           reviewResult.error.code === "42703")
@@ -486,6 +545,21 @@ export default async function Home() {
                 .order("updated_at", { ascending: false })
             ).data ?? []
           : reviewResult.data ?? [];
+
+      if (reviewResult.error && !reviewRows.length) {
+        console.error("[home] station_reviews join error", reviewResult.error);
+        const fallback = await admin
+          .from("station_reviews")
+          .select(
+            "id, submission_id, status, result_note, track_results, updated_at, station:stations ( name, code, region )",
+          )
+          .in("submission_id", allIds)
+          .order("updated_at", { ascending: false });
+        if (fallback.error) {
+          console.error("[home] station_reviews fallback join error", fallback.error);
+        }
+        reviewRows = fallback.data ?? reviewRows;
+      }
 
       reviewRows
         .map((row) => normalizeStations([row])[0])

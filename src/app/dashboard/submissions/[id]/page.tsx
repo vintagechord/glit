@@ -77,6 +77,7 @@ type SubmissionRow = {
   applicant_name?: string | null;
   applicant_email?: string | null;
   applicant_phone?: string | null;
+  package_id?: string | null;
   package?:
     | Array<{ name?: string | null; station_count?: number | null; price_krw?: number | null }>
     | { name?: string | null; station_count?: number | null; price_krw?: number | null }
@@ -201,6 +202,21 @@ export default async function SubmissionDetailPage({
     error: adminError?.message,
   });
 
+  const fallbackPackage =
+    adminSubmission?.package_id && !adminSubmission.package
+      ? await (async () => {
+          const { data, error } = await admin
+            .from("packages")
+            .select("id, name, station_count, price_krw")
+            .eq("id", adminSubmission.package_id)
+            .maybeSingle();
+          if (error) {
+            console.error("[Dashboard SubmissionDetail] package fallback error", error);
+          }
+          return data ?? null;
+        })()
+      : null;
+
   if (!adminSubmission) {
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-12">
@@ -286,6 +302,9 @@ export default async function SubmissionDetailPage({
 
   const resolvedSubmission = {
     ...(userSubmission ?? adminSubmission),
+    package:
+      (userSubmission ?? adminSubmission)?.package ??
+      (fallbackPackage ? [fallbackPackage] : null),
   };
   const packageInfo = Array.isArray(resolvedSubmission.package)
     ? resolvedSubmission.package[0]

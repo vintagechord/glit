@@ -266,17 +266,19 @@ export async function ensureAlbumStationReviews(
 
   if (missingIds.length === 0) return;
 
-  const { error: insertError } = await client.from("station_reviews").insert(
-    missingIds.map((stationId) => ({
-      submission_id: submissionId,
-      station_id: stationId,
-      status: "NOT_SENT",
-    })),
-  );
+  const upsertRows = missingIds.map((stationId) => ({
+    submission_id: submissionId,
+    station_id: stationId,
+    status: "NOT_SENT",
+  }));
+
+  const { error: insertError } = await client
+    .from("station_reviews")
+    .upsert(upsertRows, { onConflict: "submission_id,station_id" });
 
   if (insertError) {
-    if (!shouldSuppressError(insertError.message)) {
-      console.warn("Failed to backfill station reviews", insertError);
-    }
+    const suppressed = shouldSuppressError(insertError.message);
+    console.warn("Failed to backfill station reviews", insertError);
+    if (suppressed) return;
   }
 }
