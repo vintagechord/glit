@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createServerSupabase } from "@/lib/supabase/server";
+import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,6 +86,23 @@ export async function GET() {
     payment_status?: string | null;
     package?: { name?: string | null; station_count?: number | null }[];
   }>;
+
+  // Ensure station review placeholders exist so 진행 상황 리스트 shows all stations even pre-payment.
+  if (albumSubmissions.length) {
+    await Promise.all(
+      albumSubmissions.map(async (submission) => {
+        const pkg = Array.isArray(submission.package)
+          ? submission.package[0]
+          : submission.package;
+        await ensureAlbumStationReviews(
+          supabase,
+          submission.id,
+          pkg?.station_count ?? null,
+          pkg?.name ?? null,
+        );
+      }),
+    );
+  }
 
   const mvSubmissions = (mvResult.data ?? []) as Array<{
     id: string;
