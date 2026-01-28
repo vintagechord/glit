@@ -77,6 +77,8 @@ export async function GET() {
     console.error("[dashboard status] mv query error", mvResult.error);
   }
 
+  const admin = createAdminClient();
+
   const albumSubmissions = (albumResult.data ?? []) as Array<{
     id: string;
     title: string | null;
@@ -103,7 +105,6 @@ export async function GET() {
 
   // Ensure station review placeholders exist so 진행 상황 리스트 shows all stations even pre-payment.
   if (albumSubmissions.length || mvSubmissions.length) {
-    const admin = createAdminClient();
     const tasks = [...albumSubmissions, ...mvSubmissions].map(async (submission: any) => {
       const pkg = Array.isArray(submission.package)
         ? submission.package[0]
@@ -125,7 +126,7 @@ export async function GET() {
     const albumIdSet = new Set(albumSubmissions.map((s) => s.id));
     const mvIdSet = new Set(mvSubmissions.map((s) => s.id));
 
-    const { data } = await supabase
+    const { data } = await admin
       .from("station_reviews")
       .select("id, submission_id, status, result_note, updated_at, track_results, station:stations ( name )")
       .in("submission_id", allSubmissionIds)
