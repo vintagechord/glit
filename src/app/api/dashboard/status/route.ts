@@ -17,7 +17,6 @@ export async function GET() {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
-  const paymentStatuses = ["PAYMENT_PENDING", "PAID", "UNPAID"];
   const recentResultCutoff = new Date(
     Date.now() - 30 * 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -38,7 +37,6 @@ export async function GET() {
       )
       .eq("user_id", user.id)
       .eq("type", "ALBUM")
-      .in("payment_status", paymentStatuses)
       .not("status", "eq", "DRAFT");
 
   const buildMvBase = () =>
@@ -47,7 +45,6 @@ export async function GET() {
       .select("id, title, artist_name, status, updated_at, payment_status, type, package:packages ( name, station_count )")
       .eq("user_id", user.id)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
-      .in("payment_status", paymentStatuses)
       .not("status", "eq", "DRAFT");
 
   let albumResult = await buildAlbumBase()

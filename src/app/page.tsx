@@ -371,7 +371,6 @@ export default async function Home() {
         )
         .eq("user_id", user.id)
         .eq("type", "ALBUM")
-        .in("payment_status", paymentStatuses)
         .not("status", "eq", "DRAFT");
 
     const buildMvBase = () =>
@@ -380,7 +379,6 @@ export default async function Home() {
         .select("id, title, artist_name, status, updated_at, payment_status, type, package:packages ( name, station_count )")
         .eq("user_id", user.id)
         .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
-        .in("payment_status", paymentStatuses)
         .not("status", "eq", "DRAFT");
 
     let albumDataResult = await buildAlbumBase()
@@ -468,7 +466,7 @@ export default async function Home() {
       const albumIdSet = new Set(albumIds);
       const mvIdSet = new Set(mvIds);
 
-      const reviewResult = await supabase
+      const reviewResult = await admin
         .from("station_reviews")
         .select(
           "id, submission_id, status, result_note, track_results, updated_at, station:stations ( name, code, region )",
@@ -481,7 +479,7 @@ export default async function Home() {
         (reviewResult.error.message?.toLowerCase().includes("track_results") ||
           reviewResult.error.code === "42703")
           ? (
-              await supabase
+              await admin
                 .from("station_reviews")
                 .select(withoutTracks)
                 .in("submission_id", allIds)
