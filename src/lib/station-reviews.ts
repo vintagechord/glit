@@ -48,7 +48,7 @@ const albumStationCodesByCount: Record<number, string[]> = {
   ],
 };
 
-const stationNameByCode: Record<string, string> = {
+export const stationNameByCode: Record<string, string> = {
   KBS: "KBS",
   MBC: "MBC",
   SBS: "SBS",
@@ -76,6 +76,30 @@ const shouldSuppressError = (message?: string | null) => {
     lowered.includes("row level security")
   );
 };
+
+export function getPackageStationCodes(
+  stationCount?: number | null,
+  packageName?: string | null,
+): string[] {
+  let resolved = stationCount ?? null;
+  if (!resolved && packageName) {
+    const match = packageName.match(/(\d+)/);
+    if (match) {
+      const parsed = Number(match[1]);
+      if (Number.isFinite(parsed)) resolved = parsed;
+    }
+  }
+  const codes = resolved ? albumStationCodesByCount[resolved] : null;
+  return codes && codes.length ? codes : [];
+}
+
+export function getPackageStations(
+  stationCount?: number | null,
+  packageName?: string | null,
+): Array<{ code: string; name: string }> {
+  const codes = getPackageStationCodes(stationCount, packageName);
+  return codes.map((code) => ({ code, name: stationNameByCode[code] ?? code }));
+}
 
 export async function syncAlbumStationCatalog(client: SupabaseClient) {
   const stationRows = Object.entries(stationNameByCode).map(([code, name]) => ({
@@ -172,19 +196,7 @@ export async function ensureAlbumStationReviews(
   stationCount?: number | null,
   packageName?: string | null,
 ) {
-  let resolvedCount = stationCount ?? null;
-  if (!resolvedCount && packageName) {
-    const match = packageName.match(/(\\d+)/);
-    if (match) {
-      const parsed = Number(match[1]);
-      if (Number.isFinite(parsed)) {
-        resolvedCount = parsed;
-      }
-    }
-  }
-
-  if (!resolvedCount) return;
-  const expectedCodes = albumStationCodesByCount[resolvedCount];
+  const expectedCodes = getPackageStationCodes(stationCount, packageName);
   if (!expectedCodes || expectedCodes.length === 0) return;
 
   const { data: stations, error: stationError } = await client
