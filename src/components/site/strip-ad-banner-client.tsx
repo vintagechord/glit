@@ -207,9 +207,9 @@ function BannerContent({ banner }: { banner: AdBanner }) {
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/25 via-black/10 to-transparent transition duration-300 group-hover/banner:from-white/25 group-hover/banner:via-white/10 group-hover/banner:to-transparent dark:from-black/35 dark:via-black/20" />
         </div>
         <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 sm:px-4">
-          <div className="min-w-0">
+          <div className="min-w-0 hidden sm:block">
             <div className="text-[10px] font-semibold uppercase leading-tight tracking-[0.2em] text-muted-foreground">
-              <p>Out</p>
+              <p>Our</p>
               <p>Other</p>
               <p>Brand</p>
             </div>
