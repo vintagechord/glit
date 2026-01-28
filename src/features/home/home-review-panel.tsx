@@ -700,68 +700,110 @@ export function HomeReviewPanel({
             </div>
           </div>
           <div className="mt-3 overflow-hidden rounded-2xl border border-border/60 bg-background/70">
-            <div className="grid grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <div className="hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid">
               <span>방송국</span>
               <span className="justify-self-center text-center">접수 상태</span>
               <span className="justify-self-center text-center">통과 여부</span>
               <span className="text-right">Updated</span>
             </div>
             {activeStations.length > 0 ? (
-              <div className="text-xs">
-                <div
-                  className="relative cursor-grab touch-none active:cursor-grabbing"
-                  style={{ height: `${pageHeight}px` }}
-                  onPointerDown={handlePointerDown}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  onPointerCancel={handlePointerCancel}
-                  onPointerLeave={handlePointerCancel}
-                >
+              <>
+                <div className="hidden text-xs sm:block">
                   <div
-                    className="grid gap-2 py-3"
-                    style={{
-                      transform: `translateY(${translateY}px)`,
-                      transition: isDragging ? "none" : "transform 0.4s ease",
-                    }}
+                    className="relative cursor-grab touch-none active:cursor-grabbing"
+                    style={{ height: `${pageHeight}px` }}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerCancel}
+                    onPointerLeave={handlePointerCancel}
                   >
-                    {activeStations.map((station, index) => {
-                      const reception = getReceptionStatus(station.status);
-                      const result = getResultStatus(station);
-                      return (
-                        <div
-                          key={`${station.id}-${index}`}
-                          className="grid min-h-[52px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-[11px]"
-                        >
-                          <span className="flex items-center gap-2 truncate font-semibold text-foreground">
-                            <StationLogo name={station.station?.name ?? undefined} hideOnMobile />
-                            <span className="truncate">{station.station?.name ?? "-"}</span>
-                          </span>
-                          <span
-                            className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
+                    <div
+                      className="grid gap-2 py-3"
+                      style={{
+                        transform: `translateY(${translateY}px)`,
+                        transition: isDragging ? "none" : "transform 0.4s ease",
+                      }}
+                    >
+                      {activeStations.map((station, index) => {
+                        const reception = getReceptionStatus(station.status);
+                        const result = getResultStatus(station);
+                        return (
+                          <div
+                            key={`${station.id}-${index}`}
+                            className="grid min-h-[52px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-[11px]"
                           >
-                            {reception.label}
-                          </span>
-                          <div className="flex flex-col items-center justify-center gap-1 justify-self-center">
-                            <span
-                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
-                            >
-                              {result.label}
+                            <span className="flex items-center gap-2 truncate font-semibold text-foreground">
+                              <StationLogo name={station.station?.name ?? undefined} hideOnMobile />
+                              <span className="truncate">{station.station?.name ?? "-"}</span>
                             </span>
-                            {result.summaryText ? (
-                              <span className="text-[9px] leading-tight text-muted-foreground text-center">
-                                {result.summaryText}
+                            <span
+                              className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
+                            >
+                              {reception.label}
+                            </span>
+                            <div className="flex flex-col items-center justify-center gap-1 justify-self-center">
+                              <span
+                                className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                              >
+                                {result.label}
                               </span>
-                            ) : null}
+                              {result.summaryText ? (
+                                <span className="text-[9px] leading-tight text-muted-foreground text-center">
+                                  {result.summaryText}
+                                </span>
+                              ) : null}
+                            </div>
+                            <span className="text-right text-[10px] text-muted-foreground">
+                              {formatDate(station.updated_at)}
+                            </span>
                           </div>
-                          <span className="text-right text-[10px] text-muted-foreground">
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 px-3 py-3 sm:hidden">
+                  {activeStations.map((station, index) => {
+                    const reception = getReceptionStatus(station.status);
+                    const result = getResultStatus(station);
+                    return (
+                      <div
+                        key={`${station.id}-mobile-${index}`}
+                        className="rounded-xl border border-border/50 bg-background/80 p-3 text-[12px] shadow-sm"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-2 truncate font-semibold text-foreground">
+                            <StationLogo name={station.station?.name ?? undefined} />
+                            <span className="truncate text-sm">{station.station?.name ?? "-"}</span>
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
                             {formatDate(station.updated_at)}
                           </span>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span
+                            className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
+                          >
+                            {reception.label}
+                          </span>
+                          <span
+                            className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                          >
+                            {result.label}
+                          </span>
+                        </div>
+                        {result.summaryText ? (
+                          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                            {result.summaryText}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+              </>
             ) : (
               <div className="px-3 py-5 text-center text-xs text-muted-foreground">
                 접수 후 방송국 진행 정보를 확인할 수 있습니다.
