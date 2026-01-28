@@ -4,7 +4,6 @@ import { SubmissionDetailClient } from "@/features/submissions/submission-detail
 import type { TrackReviewResult } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
-import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 
 export const metadata = {
   title: "비회원 진행 상황",
@@ -22,47 +21,28 @@ export default async function TrackDetailPage({
   }
 
   const admin = createAdminClient();
-  const extractMissingColumn = (error: { message?: string; code?: string } | null) => {
-    const msg = error?.message ?? "";
-    const match =
-      msg.match(/column\s+\"?([^\s\"']+)\"?\s+does not exist/i) ||
-      msg.match(/column\s+'?([^\s\"']+)'?\s+does not exist/i);
-    if (!match?.[1]) return null;
-    const full = match[1];
-    const parts = full.split(".");
-    return parts.length > 1 ? parts[parts.length - 1] : full;
-  };
+  const baseSelect =
+    "id, user_id, guest_token, title, artist_name, status, payment_status, payment_method, amount_krw, type, created_at, updated_at, applicant_email, applicant_name, applicant_phone, guest_name, guest_email, guest_phone, guest_company, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title ), certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, mv_desired_rating, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_distribution_company, mv_production_company, mv_usage, mv_song_title, mv_composer, mv_lyricist, mv_arranger, mv_album_title";
 
-  const dropColumnFromSelect = (select: string, column: string) =>
-    select
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => !s.includes(column))
-      .join(", ");
+  const fallbackSelect =
+    "id, guest_token, title, artist_name, status, type, payment_status, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title )";
 
   const fetchSubmission = async (column: "guest_token" | "id", value: string) => {
-    let selectClause = SUBMISSION_ADMIN_DETAIL_SELECT;
-    const maxAttempts = Math.max(6, selectClause.split(",").length);
+    const { data, error } = await admin
+      .from("submissions")
+      .select(baseSelect)
+      .eq(column, value)
+      .maybeSingle();
 
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const { data, error } = await admin
-        .from("submissions")
-        .select(selectClause)
-        .eq(column, value)
-        .maybeSingle();
+    if (!error && data) return data;
 
-      if (!error) {
-        return data;
-      }
+    const { data: fallback } = await admin
+      .from("submissions")
+      .select(fallbackSelect)
+      .eq(column, value)
+      .maybeSingle();
 
-      const missing = extractMissingColumn(error);
-      if (!missing) break;
-      const next = dropColumnFromSelect(selectClause, missing);
-      if (next === selectClause) break;
-      selectClause = next;
-    }
-
-    return null;
+    return fallback;
   };
 
   let submission = (await fetchSubmission("guest_token", token)) as any;
@@ -133,12 +113,25 @@ export default async function TrackDetailPage({
       .order("updated_at", { ascending: false });
     stationReviews = (fallback.data as typeof stationReviews) ?? stationReviews;
   }
-  const normalizedStationReviews =
+  let normalizedStationReviews =
     stationReviews?.map((review) => ({
       ...review,
       track_results: review.track_results as TrackReviewResult[] | null | undefined,
       station: Array.isArray(review.station) ? review.station[0] : review.station,
     })) ?? [];
+
+  if (!normalizedStationReviews.length) {
+    normalizedStationReviews = [
+      {
+        id: `placeholder-${submission.id}`,
+        status: submission.status ?? "NOT_SENT",
+        result_note: null,
+        track_results: null,
+        updated_at: submission.updated_at,
+        station: { id: null, name: submission.package?.name ?? "신청 방송국", code: null },
+      },
+    ];
+  }
 
   const { data: submissionFiles } = await admin
     .from("submission_files")

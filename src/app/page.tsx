@@ -353,6 +353,7 @@ export default async function Home() {
     const recentResultCutoff = new Date(
       Date.now() - 30 * 24 * 60 * 60 * 1000,
     ).toISOString();
+    const admin = createAdminClient();
     const isResultNotifiedMissing = (error?: { message?: string; code?: string | number }) =>
       Boolean(
         error &&
@@ -374,7 +375,7 @@ export default async function Home() {
     const buildMvBase = () =>
       supabase
         .from("submissions")
-        .select("id, title, artist_name, status, updated_at, payment_status, type")
+        .select("id, title, artist_name, status, updated_at, payment_status, type, package:packages ( name, station_count )")
         .eq("user_id", user.id)
         .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
         .in("payment_status", paymentStatuses);
@@ -411,6 +412,30 @@ export default async function Home() {
 
     albumSubmissions = albumDataResult.data ?? [];
     mvSubmissions = mvDataResult.data ?? [];
+
+    // Ensure station review placeholders
+    await Promise.all(
+      albumSubmissions.map(async (submission) => {
+        const pkg = Array.isArray(submission.package) ? submission.package[0] : submission.package;
+        await ensureAlbumStationReviews(
+          admin,
+          submission.id,
+          pkg?.station_count ?? null,
+          pkg?.name ?? null,
+        );
+      }),
+    );
+    await Promise.all(
+      mvSubmissions.map(async (submission) => {
+        const pkg = Array.isArray(submission.package) ? submission.package[0] : submission.package;
+        await ensureAlbumStationReviews(
+          admin,
+          submission.id,
+          pkg?.station_count ?? null,
+          pkg?.name ?? null,
+        );
+      }),
+    );
 
     if (albumSubmissions.length) {
       await Promise.all(
@@ -477,6 +502,47 @@ export default async function Home() {
             mvStationsMap[row.submission_id] = [...(mvStationsMap[row.submission_id] ?? []), row];
           }
         });
+
+      // Add placeholders when no station rows
+      const makePlaceholder = (
+        submissionId: string,
+        submissionStatus: string,
+        updated: string,
+        pkgName?: string | null,
+      ) => ({
+        id: `placeholder-${submissionId}`,
+        submission_id: submissionId,
+        status: submissionStatus || "NOT_SENT",
+        result_note: null,
+        track_results: null,
+        updated_at: updated,
+        station: { name: pkgName ?? "신청 방송국" },
+      });
+
+      albumSubmissions.forEach((submission) => {
+        if (!albumStationsMap[submission.id] || albumStationsMap[submission.id].length === 0) {
+          albumStationsMap[submission.id] = [
+            makePlaceholder(
+              submission.id,
+              submission.status,
+              submission.updated_at,
+              Array.isArray(submission.package) ? submission.package?.[0]?.name : null,
+            ),
+          ];
+        }
+      });
+      mvSubmissions.forEach((submission) => {
+        if (!mvStationsMap[submission.id] || mvStationsMap[submission.id].length === 0) {
+          mvStationsMap[submission.id] = [
+            makePlaceholder(
+              submission.id,
+              submission.status,
+              submission.updated_at,
+              Array.isArray(submission.package) ? submission.package?.[0]?.name : null,
+            ),
+          ];
+        }
+      });
     }
   }
 

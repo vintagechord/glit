@@ -30,7 +30,7 @@ export default function AboutPage() {
           <div className="relative z-10 grid gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.5em] text-[var(--about-ink)]">
-                ONSIDE PROFILE
+                Since 2017
               </p>
               <h1 className="font-display mt-3 text-3xl leading-tight text-[var(--about-ink)] md:text-4xl">
                 온사이드(onside)

@@ -106,6 +106,22 @@ export async function GET() {
     );
   }
 
+  if (mvSubmissions.length) {
+    const admin = createAdminClient();
+    await Promise.all(
+      mvSubmissions.map(async (submission) => {
+        const pkg = Array.isArray(submission.package)
+          ? submission.package[0]
+          : (submission as any).package;
+        await ensureAlbumStationReviews(
+          admin,
+          submission.id,
+          pkg?.station_count ?? null,
+          pkg?.name ?? null,
+        );
+      }),
+    );
+  }
   const mvSubmissions = (mvResult.data ?? []) as Array<{
     id: string;
     title: string | null;
@@ -152,6 +168,29 @@ export async function GET() {
       }
     });
   }
+
+  // Ensure at least one placeholder station row per submission for UI display
+  const makePlaceholder = (submission: { id: string; status: string; updated_at: string; package?: { name?: string | null }[] }) => ({
+    id: `placeholder-${submission.id}`,
+    submission_id: submission.id,
+    status: submission.status || "NOT_SENT",
+    result_note: null,
+    track_results: null,
+    updated_at: submission.updated_at,
+    station: { name: submission.package?.[0]?.name ?? "신청 방송국" },
+  });
+
+  albumSubmissions.forEach((submission) => {
+    if (!albumStationsMap[submission.id] || albumStationsMap[submission.id].length === 0) {
+      albumStationsMap[submission.id] = [makePlaceholder(submission)];
+    }
+  });
+
+  mvSubmissions.forEach((submission) => {
+    if (!mvStationsMap[submission.id] || mvStationsMap[submission.id].length === 0) {
+      mvStationsMap[submission.id] = [makePlaceholder(submission as any)];
+    }
+  });
 
   return NextResponse.json(
     {
