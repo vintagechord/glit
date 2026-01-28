@@ -5,7 +5,7 @@ import type React from "react";
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-reviews";
 import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 
 export const metadata = {
@@ -331,12 +331,90 @@ export default async function SubmissionDetailPage({
       : null,
   };
 
+  // Build initial station reviews (package stations + existing reviews) for SSR
+  const packageId = adminSubmission?.package_id ?? fallbackPackage?.id ?? null;
+  const packageMapEntry = packageId
+    ? { id: packageId, name: fallbackPackage?.name ?? null, station_count: fallbackPackage?.station_count ?? null }
+    : null;
+
+  let packageStations: Array<{ id: string; code: string | null; name: string | null }> = [];
+  if (packageId) {
+    const { data: pkgStations, error: pkgStationError } = await admin
+      .from("package_stations")
+      .select("package_id, station:stations ( id, code, name )")
+      .eq("package_id", packageId);
+    if (pkgStationError) {
+      console.error("[Dashboard SubmissionDetail] package_stations error", pkgStationError);
+    }
+    packageStations =
+      pkgStations?.map((row) => {
+        const station = Array.isArray(row.station) ? row.station[0] : row.station;
+        return station
+          ? { id: station.id, code: station.code ?? null, name: station.name ?? null }
+          : null;
+      }).filter(Boolean) as Array<{ id: string; code: string | null; name: string | null }>;
+  }
+
+  if (!packageStations.length) {
+    const pkg = Array.isArray(resolvedSubmission.package)
+      ? resolvedSubmission.package[0]
+      : resolvedSubmission.package;
+    const resolvedCount = pkg?.station_count ?? packageMapEntry?.station_count ?? null;
+    const resolvedName = pkg?.name ?? packageMapEntry?.name ?? null;
+    packageStations = getPackageStations(resolvedCount, resolvedName).map((station) => ({
+      id: "",
+      code: station.code,
+      name: station.name,
+    }));
+  }
+
+  const { data: stationReviewsData, error: stationReviewsError } = await admin
+    .from("station_reviews")
+    .select(
+      "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )",
+    )
+    .eq("submission_id", submissionId)
+    .order("updated_at", { ascending: false });
+  if (stationReviewsError) {
+    console.error("[Dashboard SubmissionDetail] station_reviews join error", stationReviewsError);
+  }
+
+  const reviewMap = new Map<string, any>();
+  (stationReviewsData ?? []).forEach((review: any) => {
+    const stationId = review.station_id || (Array.isArray(review.station) ? review.station[0]?.id : review.station?.id);
+    if (!stationId) return;
+    reviewMap.set(stationId, {
+      ...review,
+      station: Array.isArray(review.station) ? review.station[0] : review.station ?? null,
+    });
+  });
+
+  const logoFor = (code?: string | null) =>
+    code ? admin.storage.from("broadcast").getPublicUrl(`${code}.png`).data.publicUrl ?? null : null;
+
+  const initialStationReviews = packageStations.map((station) => {
+    const review = station.id ? reviewMap.get(station.id) : null;
+    return {
+      id: review?.id ?? `placeholder-${submissionId}-${station.code ?? station.id}`,
+      status: review?.status ?? resolvedSubmission.status ?? "NOT_SENT",
+      result_note: review?.result_note ?? null,
+      track_results: review?.track_results ?? null,
+      updated_at: review?.updated_at ?? resolvedSubmission.updated_at,
+      station: {
+        id: station.id || "",
+        name: station.name,
+        code: station.code,
+        logo_url: logoFor(station.code ?? undefined),
+      },
+    };
+  });
+
   return (
     <SubmissionDetailClient
       submissionId={submissionId}
       initialSubmission={initialSubmission as unknown as SubmissionDetailClientProps["initialSubmission"]}
       initialEvents={[]}
-      initialStationReviews={[]}
+      initialStationReviews={initialStationReviews as any}
       initialFiles={[]}
       isAdmin={isAdmin}
     />

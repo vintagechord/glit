@@ -3,7 +3,7 @@ import Link from "next/link";
 import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { HomeReviewPanel } from "@/features/home/home-review-panel";
-import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-reviews";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -230,9 +230,13 @@ type StationSnapshot = {
   id: string;
   status: string;
   updated_at: string;
+  result_note?: string | null;
   track_results?: unknown;
   station?: {
+    id?: string | null;
     name?: string | null;
+    code?: string | null;
+    logo_url?: string | null;
   } | null;
 };
 
@@ -424,6 +428,7 @@ export default async function Home() {
     );
 
     const packageMap = new Map<string, { id: string; name: string | null; station_count: number | null }>();
+    const packageStationsMap = new Map<string, Array<{ id: string; code: string | null; name: string | null }>>();
 
     if (packageIds.length) {
       const { data: packages, error: packageError } = await admin
@@ -439,6 +444,25 @@ export default async function Home() {
           name: pkg.name ?? null,
           station_count: pkg.station_count ?? null,
         });
+      });
+
+      const { data: packageStations, error: packageStationsError } = await admin
+        .from("package_stations")
+        .select("package_id, station:stations ( id, code, name )")
+        .in("package_id", packageIds);
+
+      if (packageStationsError) {
+        console.error("[home] package_stations query error", packageStationsError);
+      }
+
+      (packageStations ?? []).forEach((row) => {
+        const pkgId = row.package_id;
+        const station = Array.isArray(row.station) ? row.station[0] : row.station;
+        if (!pkgId || !station) return;
+        packageStationsMap.set(pkgId, [
+          ...(packageStationsMap.get(pkgId) ?? []),
+          { id: station.id, code: station.code ?? null, name: station.name ?? null },
+        ]);
       });
     }
 
@@ -519,16 +543,16 @@ export default async function Home() {
 
     if (allIds.length) {
       const withTracks =
-        "id, submission_id, status, result_note, track_results, updated_at, station:stations ( name, code, region )";
+        "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code, region )";
       const withoutTracks =
-        "id, submission_id, status, result_note, updated_at, station:stations ( name, code, region )";
+        "id, submission_id, station_id, status, result_note, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code, region )";
       const albumIdSet = new Set(albumIds);
       const mvIdSet = new Set(mvIds);
 
       const reviewResult = await admin
         .from("station_reviews")
         .select(
-          "id, submission_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( name, code, region )",
+          "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code, region )",
         )
         .in("submission_id", allIds)
         .order("updated_at", { ascending: false });
@@ -551,7 +575,7 @@ export default async function Home() {
         const fallback = await admin
           .from("station_reviews")
           .select(
-            "id, submission_id, status, result_note, track_results, updated_at, station:stations ( name, code, region )",
+            "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations ( id, name, code, region )",
           )
           .in("submission_id", allIds)
           .order("updated_at", { ascending: false });
@@ -561,63 +585,94 @@ export default async function Home() {
         reviewRows = fallback.data ?? reviewRows;
       }
 
-      reviewRows
-        .map((row) => normalizeStations([row])[0])
-        .filter(Boolean)
-        .forEach((row) => {
-          if (!row?.submission_id) return;
-          if (albumIdSet.has(row.submission_id)) {
-            albumStationsMap[row.submission_id] = [
-              ...(albumStationsMap[row.submission_id] ?? []),
-              row,
-            ];
-            return;
-          }
-          if (mvIdSet.has(row.submission_id)) {
-            mvStationsMap[row.submission_id] = [...(mvStationsMap[row.submission_id] ?? []), row];
-          }
+      const reviewMap = new Map<string, Map<string, any>>();
+      reviewRows.forEach((row: any) => {
+        const submissionId = row.submission_id;
+        const stationId = row.station_id || (Array.isArray(row.station) ? row.station[0]?.id : row.station?.id);
+        if (!submissionId || !stationId) return;
+        const normalizedStation = Array.isArray(row.station) ? row.station[0] : row.station ?? null;
+        const map = reviewMap.get(submissionId) ?? new Map();
+        map.set(stationId, { ...row, station: normalizedStation });
+        reviewMap.set(submissionId, map);
+      });
+
+      const logoFor = (code?: string | null) =>
+        code ? admin.storage.from("broadcast").getPublicUrl(`${code}.png`).data.publicUrl ?? null : null;
+
+      const buildRows = (
+        submission: (typeof albumSubmissions)[number] | (typeof mvSubmissions)[number],
+        targetMap: Record<string, StationSnapshot[]>,
+      ) => {
+        let pkgStations =
+          submission.package_id && packageStationsMap.has(submission.package_id)
+            ? packageStationsMap.get(submission.package_id) ?? []
+            : [];
+
+        if (!pkgStations.length) {
+          const pkgInfo = Array.isArray(submission.package) ? submission.package[0] : submission.package;
+          const fallbackPkg = submission.package_id ? packageMap.get(submission.package_id) : null;
+          const resolvedName = pkgInfo?.name ?? fallbackPkg?.name ?? null;
+          const resolvedCount = pkgInfo?.station_count ?? fallbackPkg?.station_count ?? null;
+          pkgStations = getPackageStations(resolvedCount, resolvedName).map((station) => ({
+            id: "",
+            code: station.code,
+            name: station.name,
+          }));
+        }
+
+        const reviews = reviewMap.get(submission.id) ?? new Map();
+
+        const rows = pkgStations.map((station) => {
+          const review = station.id ? reviews.get(station.id) : null;
+          return {
+            id: review?.id ?? `placeholder-${submission.id}-${station.code ?? station.id}`,
+            status: review?.status ?? submission.status ?? "NOT_SENT",
+            result_note: review?.result_note ?? null,
+            track_results: review?.track_results ?? null,
+            updated_at: review?.updated_at ?? submission.updated_at,
+            station: {
+              id: station.id,
+              name: station.name,
+              code: station.code,
+              logo_url: logoFor(station.code ?? undefined),
+            },
+          } as StationSnapshot;
         });
 
-      // Add placeholders when no station rows
-      const makePlaceholder = (
-        submissionId: string,
-        submissionStatus: string,
-        updated: string,
-        pkgName?: string | null,
-      ) => ({
-        id: `placeholder-${submissionId}`,
-        submission_id: submissionId,
-        status: submissionStatus || "NOT_SENT",
-        result_note: null,
-        track_results: null,
-        updated_at: updated,
-        station: { name: pkgName ?? "신청 방송국" },
-      });
+        if (rows.length === 0 && reviews.size) {
+          reviews.forEach((review) => {
+            const station = Array.isArray(review.station) ? review.station[0] : review.station ?? {};
+            rows.push({
+              ...review,
+              station: {
+                ...station,
+                logo_url: logoFor(station.code ?? undefined),
+              },
+            } as StationSnapshot);
+          });
+        }
 
-      albumSubmissions.forEach((submission) => {
-        if (!albumStationsMap[submission.id] || albumStationsMap[submission.id].length === 0) {
-          albumStationsMap[submission.id] = [
-            makePlaceholder(
-              submission.id,
-              submission.status,
-              submission.updated_at,
-              Array.isArray(submission.package) ? submission.package?.[0]?.name : null,
-            ),
-          ];
+        if (rows.length === 0) {
+          rows.push({
+            id: `placeholder-${submission.id}`,
+            status: submission.status || "NOT_SENT",
+            result_note: null,
+            track_results: null,
+            updated_at: submission.updated_at,
+            station: {
+              id: "",
+              name: Array.isArray(submission.package) ? submission.package?.[0]?.name ?? "신청 방송국" : "신청 방송국",
+              code: "",
+              logo_url: null,
+            },
+          });
         }
-      });
-      mvSubmissions.forEach((submission) => {
-        if (!mvStationsMap[submission.id] || mvStationsMap[submission.id].length === 0) {
-          mvStationsMap[submission.id] = [
-            makePlaceholder(
-              submission.id,
-              submission.status,
-              submission.updated_at,
-              Array.isArray(submission.package) ? submission.package?.[0]?.name : null,
-            ),
-          ];
-        }
-      });
+
+        targetMap[submission.id] = rows;
+      };
+
+      albumSubmissions.forEach((submission) => buildRows(submission, albumStationsMap));
+      mvSubmissions.forEach((submission) => buildRows(submission as any, mvStationsMap));
     }
   }
 
