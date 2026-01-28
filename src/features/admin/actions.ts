@@ -1222,3 +1222,94 @@ export async function deleteSubmissionsFormAction(
     redirect(redirectTo);
   }
 }
+
+export async function saveSubmissionAdminFormAction(
+  formData: FormData,
+): Promise<AdminActionState> {
+  const submissionId = String(formData.get("submissionId") ?? "");
+  if (!submissionId) {
+    return { error: "접수 ID가 없습니다." };
+  }
+
+  const supabase = await createAdminClient();
+  const status = String(formData.get("status") ?? "").trim();
+  const adminMemo = String(formData.get("adminMemo") ?? "").trim();
+
+  if (status) {
+    const { error: submissionError } = await supabase
+      .from("submissions")
+      .update({
+        status,
+        admin_memo: adminMemo || null,
+      })
+      .eq("id", submissionId);
+    if (submissionError) {
+      console.error("admin save submission status error", submissionError);
+      return { error: "접수 상태 저장에 실패했습니다." };
+    }
+  }
+
+  const entries = Array.from(formData.entries());
+  const reviewIds = formData
+    .getAll("reviewIds")
+    .map((value) => String(value))
+    .filter((id) => id.length > 0 && z.string().uuid().safeParse(id).success);
+
+  for (const reviewId of reviewIds) {
+    const stationStatus = String(formData.get(`stationStatus-${reviewId}`) ?? "").trim();
+    const resultNote = String(formData.get(`stationResultNote-${reviewId}`) ?? "").trim();
+
+    const trackResults: Array<{
+      track_id?: string | null;
+      track_no?: number | null;
+      title?: string | null;
+      status: z.infer<typeof trackResultStatusEnum>;
+    }> = [];
+
+    const trackStatusEntries = entries.filter(([key]) =>
+      key.startsWith(`trackStatus-${reviewId}-`),
+    );
+
+    for (const [key, value] of trackStatusEntries) {
+      const index = key.split("-").pop() ?? "";
+      const statusValue = String(value || "PENDING") as z.infer<typeof trackResultStatusEnum>;
+      const trackId = String(formData.get(`trackId-${reviewId}-${index}`) ?? "") || null;
+      const trackNoRaw = String(formData.get(`trackNo-${reviewId}-${index}`) ?? "");
+      const trackNo = trackNoRaw ? Number(trackNoRaw) : null;
+      const trackTitle =
+        String(formData.get(`trackTitle-${reviewId}-${index}`) ?? "").trim() || null;
+
+      if (!trackResultStatusEnum.safeParse(statusValue).success) continue;
+      trackResults.push({
+        track_id: trackId || null,
+        track_no: Number.isFinite(trackNo) ? (trackNo as number) : null,
+        title: trackTitle,
+        status: statusValue,
+      });
+    }
+
+    const { error: stationError } = await supabase
+      .from("station_reviews")
+      .update({
+        status: stationStatus || "NOT_SENT",
+        result_note: resultNote || null,
+        track_results: trackResults.length > 0 ? trackResults : null,
+      })
+      .eq("id", reviewId)
+      .eq("submission_id", submissionId);
+
+    if (stationError) {
+      console.error("admin save station review error", stationError);
+      return { error: "방송국 진행 저장에 실패했습니다." };
+    }
+  }
+
+  revalidatePath("/admin/submissions");
+  revalidatePath(`/admin/submissions/${submissionId}`);
+  revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
+  revalidatePath("/dashboard/status");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/");
+
+  return { message: "저장되었습니다." };
+}

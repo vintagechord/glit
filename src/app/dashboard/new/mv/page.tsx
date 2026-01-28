@@ -42,7 +42,6 @@ export default async function MvSubmissionPage() {
           뮤직비디오 심의, 이것만 확인하세요
         </h2>
         <ul className="mt-4 space-y-2 text-base text-muted-foreground">
-          <li>뮤직비디오 심의는 음원 심의 완료 후 진행 가능합니다.</li>
           <li>TV 송출 목적은 방송국별 개별 심의가 필요합니다.</li>
           <li>온라인 업로드 목적은 기본 MV 심의로 유통/업로드 가능합니다.</li>
         </ul>

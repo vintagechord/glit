@@ -10,7 +10,7 @@ import {
 } from "@/constants/review-status";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { deleteSubmissionsFormAction } from "@/features/admin/actions";
+import { AdminDeleteButton } from "@/components/admin/delete-button";
 
 export const metadata = {
   title: "접수 관리",
@@ -328,15 +328,7 @@ export default async function AdminSubmissionsPage({
                   >
                     상세보기
                   </Link>
-                  <form action={deleteSubmissionsFormAction}>
-                    <input type="hidden" name="ids" value={submission.id} />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-rose-200/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700"
-                    >
-                      삭제
-                    </button>
-                  </form>
+                  <AdminDeleteButton ids={[submission.id]} />
                 </div>
               </div>
             );

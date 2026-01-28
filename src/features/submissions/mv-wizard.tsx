@@ -1092,7 +1092,8 @@ export function MvWizard({
               {
                 value: "MV_BROADCAST",
                 label: "TV 송출 목적의 심의",
-                description: "방송국별로 개별 심의가 필요합니다.",
+                description:
+                  "방송국별로 개별 심의를 진행해야하며, 음원 심의가 완료된 앨범의 뮤비에 한하여 심의가 가능합니다.",
               },
             ].map((item) => {
               const active = mvType === item.value;

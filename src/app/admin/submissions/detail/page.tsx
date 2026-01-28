@@ -15,10 +15,8 @@ import {
 import {
   updateSubmissionBasicInfoFormAction,
   updatePaymentStatusFormAction,
-  updateStationReviewFormAction,
-  updateSubmissionStatusFormAction,
   createTrackForSubmissionAction,
-  deleteSubmissionsFormAction,
+  saveSubmissionAdminFormAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
@@ -28,6 +26,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { MvRatingControl } from "@/components/admin/mv-rating-control";
+import { AdminDeleteButton } from "@/components/admin/delete-button";
 import { CertificateUploader } from "@/components/admin/certificate-uploader";
 
 export const metadata = {
@@ -499,16 +498,7 @@ export default async function AdminSubmissionDetailPage({
           <span className="text-muted-foreground">
             Updated {formatDateTime(submission.updated_at ?? submission.created_at)}
           </span>
-          <form action={deleteSubmissionsFormAction}>
-            <input type="hidden" name="ids" value={submission.id} />
-            <input type="hidden" name="redirectTo" value="/admin/submissions" />
-            <button
-              type="submit"
-              className="rounded-full border border-rose-200/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700"
-            >
-              삭제
-            </button>
-          </form>
+          <AdminDeleteButton ids={[submission.id]} redirectTo="/admin/submissions" className="rounded-full border border-rose-200/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700" />
         </div>
       </div>
 
@@ -719,37 +709,37 @@ export default async function AdminSubmissionDetailPage({
               </div>
             ) : null}
 
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                접수 상태 변경
-              </p>
-              <form action={updateSubmissionStatusFormAction} className="mt-4 space-y-4">
-                <input type="hidden" name="submissionId" value={submission.id} />
-                <select
-                  name="status"
-                  defaultValue={submission.status}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                >
-                  {reviewStatusOptions.map((status) => (
-                    <option key={status.value} value={status.value}>
-                      {status.label}
-                    </option>
-                  ))}
-                </select>
-                <textarea
-                  name="adminMemo"
-                  defaultValue={submission.admin_memo ?? ""}
-                  className="h-24 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                  placeholder="관리자 메모"
-                />
-                <button
-                  type="submit"
-                  className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background"
-                >
-                  상태 저장
-                </button>
-              </form>
-            </div>
+            <form
+              action={saveSubmissionAdminFormAction}
+              className="space-y-6"
+              id="admin-save-form"
+            >
+              <input type="hidden" name="submissionId" value={submission.id} />
+
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  접수 상태 변경
+                </p>
+                <div className="mt-4 space-y-4">
+                  <select
+                    name="status"
+                    defaultValue={submission.status}
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                  >
+                    {reviewStatusOptions.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))}
+                  </select>
+                  <textarea
+                    name="adminMemo"
+                    defaultValue={submission.admin_memo ?? ""}
+                    className="h-24 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                    placeholder="관리자 메모"
+                  />
+                </div>
+              </div>
           </div>
 
         </div>
@@ -852,173 +842,186 @@ export default async function AdminSubmissionDetailPage({
         </div>
       </div>
 
-      <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          방송국별 진행 관리
-        </p>
-        <div className="mt-4 space-y-4">
-          {stationReviews && stationReviews.length > 0 ? (
-            stationReviews.map((review) => {
-              const stationInfo = Array.isArray(review.station)
-                ? review.station[0]
-                : review.station;
-              const trackSummary = summarizeTrackResults(review.track_results, albumTracks);
-              const trackResults = trackSummary.results;
-              const trackResultsForDisplay = albumTracks.map((track, index) => {
-                const fallbackTrackNo = track.track_no ?? index + 1;
-                const matched =
-                  trackResults.find(
-                    (item) =>
-                      (item.track_id && item.track_id === track.id) ||
-                      (typeof item.track_no === "number" &&
-                        item.track_no === fallbackTrackNo),
-                  ) ?? {
-                    track_id: track.id,
-                    track_no: fallbackTrackNo,
-                    title:
-                      track.track_title ??
-                      track.track_title_kr ??
-                      track.track_title_en ??
-                      "트랙",
-                    status: "PENDING",
-                  };
-                return {
-                  ...matched,
-                  track_no: matched.track_no ?? track.track_no ?? index + 1,
-                  title:
-                    matched.title ??
-                    track.track_title ??
-                    track.track_title_kr ??
-                    track.track_title_en ??
-                    "트랙",
-                  composer: track.composer,
-                  lyricist: track.lyricist,
-                  arranger: track.arranger,
-                  is_title: track.is_title,
-                };
-              });
-              const trackCounts = trackResultsForDisplay.reduce(
-                (acc, item) => {
-                  if (item.status === "APPROVED") acc.approved += 1;
-                  else if (item.status === "REJECTED") acc.rejected += 1;
-                  else acc.pending += 1;
-                  acc.total += 1;
-                  return acc;
-                },
-                { total: 0, approved: 0, rejected: 0, pending: 0 },
-              );
-              return (
-                <form
-                  key={review.id}
-                  action={updateStationReviewFormAction}
-                  className="grid gap-4 rounded-2xl border border-border/60 bg-background/80 p-4 md:grid-cols-[1.2fr_1fr_1.2fr_auto]"
-                >
-                  <input type="hidden" name="reviewId" value={review.id} />
-                  <input type="hidden" name="submissionId" value={submission.id} />
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {stationInfo?.name ?? "-"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {stationInfo?.code ?? ""}
-                    </p>
-                  </div>
-                  <select
-                    name="status"
-                    defaultValue={review.status}
-                    className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-                  >
-                    {stationReviewStatusOptions.map((status) => (
-                      <option key={status.value} value={status.value}>
-                        {status.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    name="resultNote"
-                    defaultValue={review.result_note ?? ""}
-                    placeholder="결과 메모"
-                    className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-                  />
-                  <button
-                    type="submit"
-                    className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background"
-                  >
-                    저장
-                  </button>
-                  {albumTracks.length > 1 ? (
-                    <div className="md:col-span-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          트랙별 결과
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {trackCounts.approved}곡 통과 · {trackCounts.rejected}곡 불통과
-                          {trackCounts.pending > 0
-                            ? ` · ${trackCounts.pending}곡 대기`
-                            : ""}
-                        </p>
-                      </div>
-                      <div className="mt-2 space-y-2 rounded-2xl border border-border/60 bg-background/60 p-3">
-                        {trackResultsForDisplay.map((track, index) => {
-                          const trackLabel = track.title || "트랙";
-                          const trackKey = track.track_id ?? track.track_no ?? index;
-                          return (
-                            <div
-                              key={trackKey}
-                              className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-xs md:grid-cols-[1fr_180px]"
-                            >
-                              <div className="min-w-0">
-                                <input
-                                  type="hidden"
-                                  name={`trackResultId-${index}`}
-                                  value={track.track_id ?? ""}
-                                />
-                                <input
-                                  type="hidden"
-                                  name={`trackResultNo-${index}`}
-                                  value={track.track_no ?? index + 1}
-                                />
-                                <input
-                                  type="hidden"
-                                  name={`trackResultTitle-${index}`}
-                                  value={trackLabel}
-                                />
-                                <p className="truncate font-semibold text-foreground">
-                                  {track.track_no ? `${track.track_no}. ` : ""}
-                                  {trackLabel}
-                                  {track.is_title ? " · 타이틀" : ""}
+              <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  방송국별 진행 관리
+                </p>
+                <div className="mt-4 space-y-4">
+                  {stationReviews && stationReviews.length > 0 ? (
+                    stationReviews.map((review) => {
+                      const stationInfo = Array.isArray(review.station)
+                        ? review.station[0]
+                        : review.station;
+                      const isPersistedReview =
+                        typeof review.id === "string" && review.id.length > 20;
+                      const trackSummary = summarizeTrackResults(review.track_results, albumTracks);
+                      const trackResults = trackSummary.results;
+                      const trackResultsForDisplay = albumTracks.map((track, index) => {
+                        const fallbackTrackNo = track.track_no ?? index + 1;
+                        const matched =
+                          trackResults.find(
+                            (item) =>
+                              (item.track_id && item.track_id === track.id) ||
+                              (typeof item.track_no === "number" &&
+                                item.track_no === fallbackTrackNo),
+                          ) ?? {
+                            track_id: track.id,
+                            track_no: fallbackTrackNo,
+                            title:
+                              track.track_title ??
+                              track.track_title_kr ??
+                              track.track_title_en ??
+                              "트랙",
+                            status: "PENDING",
+                          };
+                        return {
+                          ...matched,
+                          track_no: matched.track_no ?? track.track_no ?? index + 1,
+                          title:
+                            matched.title ??
+                            track.track_title ??
+                            track.track_title_kr ??
+                            track.track_title_en ??
+                            "트랙",
+                          composer: track.composer,
+                          lyricist: track.lyricist,
+                          arranger: track.arranger,
+                          is_title: track.is_title,
+                        };
+                      });
+                      const trackCounts = trackResultsForDisplay.reduce(
+                        (acc, item) => {
+                          if (item.status === "APPROVED") acc.approved += 1;
+                          else if (item.status === "REJECTED") acc.rejected += 1;
+                          else acc.pending += 1;
+                          acc.total += 1;
+                          return acc;
+                        },
+                        { total: 0, approved: 0, rejected: 0, pending: 0 },
+                      );
+                      return (
+                        <div
+                          key={review.id}
+                          className="grid gap-4 rounded-2xl border border-border/60 bg-background/80 p-4 md:grid-cols-[1.2fr_1fr_1.2fr]"
+                        >
+                          {isPersistedReview ? (
+                            <input type="hidden" name="reviewIds" value={review.id} />
+                          ) : null}
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">
+                              {stationInfo?.name ?? "-"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {stationInfo?.code ?? ""}
+                            </p>
+                          </div>
+                          <select
+                            name={`stationStatus-${review.id}`}
+                            defaultValue={review.status}
+                            disabled={!isPersistedReview}
+                            className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
+                          >
+                            {stationReviewStatusOptions.map((status) => (
+                              <option key={status.value} value={status.value}>
+                                {status.label}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            name={`stationResultNote-${review.id}`}
+                            defaultValue={review.result_note ?? ""}
+                            placeholder="결과 메모"
+                            disabled={!isPersistedReview}
+                            className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
+                          />
+                          {albumTracks.length > 1 ? (
+                            <div className="md:col-span-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                                  트랙별 결과
                                 </p>
-                                <p className="text-[10px] text-muted-foreground">
-                                  작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} /
-                                  편곡 {track.arranger || "-"}
+                                <p className="text-[11px] text-muted-foreground">
+                                  {trackCounts.approved}곡 통과 · {trackCounts.rejected}곡 불통과
+                                  {trackCounts.pending > 0
+                                    ? ` · ${trackCounts.pending}곡 대기`
+                                    : ""}
                                 </p>
                               </div>
-                              <select
-                                name={`trackResultStatus-${index}`}
-                                defaultValue={(track.status as string) || "PENDING"}
-                                className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-[11px]"
-                              >
-                                <option value="PENDING">대기</option>
-                                <option value="APPROVED">통과</option>
-                                <option value="REJECTED">불통과</option>
-                              </select>
+                              <div className="mt-2 space-y-2 rounded-2xl border border-border/60 bg-background/60 p-3">
+                                {trackResultsForDisplay.map((track, index) => {
+                                  const trackLabel = track.title || "트랙";
+                                  const trackKey = track.track_id ?? track.track_no ?? index;
+                                  return (
+                                    <div
+                                      key={trackKey}
+                                      className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-xs md:grid-cols-[1fr_180px]"
+                                    >
+                                      <div className="min-w-0">
+                                        {isPersistedReview ? (
+                                          <>
+                                            <input
+                                              type="hidden"
+                                              name={`trackId-${review.id}-${index}`}
+                                              value={track.track_id ?? ""}
+                                            />
+                                            <input
+                                              type="hidden"
+                                              name={`trackNo-${review.id}-${index}`}
+                                              value={track.track_no ?? index + 1}
+                                            />
+                                            <input
+                                              type="hidden"
+                                              name={`trackTitle-${review.id}-${index}`}
+                                              value={trackLabel}
+                                            />
+                                          </>
+                                        ) : null}
+                                        <p className="truncate font-semibold text-foreground">
+                                          {track.track_no ? `${track.track_no}. ` : ""}
+                                          {trackLabel}
+                                          {track.is_title ? " · 타이틀" : ""}
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground">
+                                          작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} /
+                                          편곡 {track.arranger || "-"}
+                                        </p>
+                                      </div>
+                                      <select
+                                        name={`trackStatus-${review.id}-${index}`}
+                                        defaultValue={(track.status as string) || "PENDING"}
+                                        disabled={!isPersistedReview}
+                                        className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-[11px]"
+                                      >
+                                        <option value="PENDING">대기</option>
+                                        <option value="APPROVED">통과</option>
+                                        <option value="REJECTED">불통과</option>
+                                      </select>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          );
-                        })}
-                      </div>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
+                      방송국 진행 정보가 없습니다.
                     </div>
-                  ) : null}
-                </form>
-              );
-            })
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
-              방송국 진행 정보가 없습니다.
-            </div>
-          )}
-        </div>
-      </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="rounded-full bg-foreground px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-background"
+                >
+                  저장
+                </button>
+              </div>
+            </form>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
