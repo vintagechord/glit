@@ -1225,27 +1225,34 @@ export async function deleteSubmissionsFormAction(
 
 export async function saveSubmissionAdminFormAction(
   formData: FormData,
-): Promise<AdminActionState> {
+): Promise<void> {
   const submissionId = String(formData.get("submissionId") ?? "");
   if (!submissionId) {
-    return { error: "접수 ID가 없습니다." };
+    return;
   }
 
   const supabase = await createAdminClient();
   const status = String(formData.get("status") ?? "").trim();
   const adminMemo = String(formData.get("adminMemo") ?? "").trim();
+  const paymentStatus = String(formData.get("paymentStatus") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  const artistName = String(formData.get("artistName") ?? "").trim();
 
-  if (status) {
+  const submissionUpdate: Record<string, unknown> = {};
+  if (status) submissionUpdate.status = status;
+  submissionUpdate.admin_memo = adminMemo || null;
+  if (paymentStatus) submissionUpdate.payment_status = paymentStatus;
+  if (title) submissionUpdate.title = title;
+  if (artistName) submissionUpdate.artist_name = artistName;
+
+  if (Object.keys(submissionUpdate).length > 0) {
     const { error: submissionError } = await supabase
       .from("submissions")
-      .update({
-        status,
-        admin_memo: adminMemo || null,
-      })
+      .update(submissionUpdate)
       .eq("id", submissionId);
     if (submissionError) {
       console.error("admin save submission status error", submissionError);
-      return { error: "접수 상태 저장에 실패했습니다." };
+      return;
     }
   }
 
@@ -1300,7 +1307,7 @@ export async function saveSubmissionAdminFormAction(
 
     if (stationError) {
       console.error("admin save station review error", stationError);
-      return { error: "방송국 진행 저장에 실패했습니다." };
+      return;
     }
   }
 
@@ -1311,5 +1318,5 @@ export async function saveSubmissionAdminFormAction(
   revalidatePath("/dashboard/history");
   revalidatePath("/");
 
-  return { message: "저장되었습니다." };
+  return;
 }
