@@ -349,9 +349,19 @@ export default async function Home() {
     }));
 
   if (user) {
-    const finalizedStatuses = ["RESULT_READY", "COMPLETED"];
     const paymentStatuses = ["PAYMENT_PENDING", "PAID"];
-    const [albumDataResult, mvDataResult] = await Promise.all([
+    const recentResultCutoff = new Date(
+      Date.now() - 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const isResultNotifiedMissing = (error?: { message?: string; code?: string | number }) =>
+      Boolean(
+        error &&
+          (error.code === "42703" ||
+            error.code === "42P01" ||
+            error.message?.toLowerCase().includes("result_notified_at")),
+      );
+
+    const buildAlbumBase = () =>
       supabase
         .from("submissions")
         .select(
@@ -359,20 +369,45 @@ export default async function Home() {
         )
         .eq("user_id", user.id)
         .eq("type", "ALBUM")
-        .in("payment_status", paymentStatuses)
-        .not("status", "in", `(${finalizedStatuses.join(",")})`)
-        .order("updated_at", { ascending: false })
-        .limit(5),
+        .in("payment_status", paymentStatuses);
+
+    const buildMvBase = () =>
       supabase
         .from("submissions")
         .select("id, title, artist_name, status, updated_at, payment_status, type")
         .eq("user_id", user.id)
         .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
-        .in("payment_status", paymentStatuses)
-        .not("status", "in", `(${finalizedStatuses.join(",")})`)
+        .in("payment_status", paymentStatuses);
+
+    let albumDataResult = await buildAlbumBase()
+      .or(`result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}`)
+      .order("updated_at", { ascending: false })
+      .limit(5);
+
+    if (albumDataResult.error && isResultNotifiedMissing(albumDataResult.error)) {
+      console.warn("[home] result_notified_at missing for album, falling back", albumDataResult.error);
+      albumDataResult = await buildAlbumBase()
+        .not("status", "in", "(RESULT_READY,COMPLETED)")
         .order("updated_at", { ascending: false })
-        .limit(5),
-    ]);
+        .limit(5);
+    } else if (albumDataResult.error) {
+      console.error("[home] album query error", albumDataResult.error);
+    }
+
+    let mvDataResult = await buildMvBase()
+      .or(`result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}`)
+      .order("updated_at", { ascending: false })
+      .limit(5);
+
+    if (mvDataResult.error && isResultNotifiedMissing(mvDataResult.error)) {
+      console.warn("[home] result_notified_at missing for mv, falling back", mvDataResult.error);
+      mvDataResult = await buildMvBase()
+        .not("status", "in", "(RESULT_READY,COMPLETED)")
+        .order("updated_at", { ascending: false })
+        .limit(5);
+    } else if (mvDataResult.error) {
+      console.error("[home] mv query error", mvDataResult.error);
+    }
 
     albumSubmissions = albumDataResult.data ?? [];
     mvSubmissions = mvDataResult.data ?? [];

@@ -15,10 +15,20 @@ export async function GET() {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
-  const finalizedStatuses = ["RESULT_READY", "COMPLETED"];
   const paymentStatuses = ["PAYMENT_PENDING", "PAID"];
+  const recentResultCutoff = new Date(
+    Date.now() - 30 * 24 * 60 * 60 * 1000,
+  ).toISOString();
 
-  const [albumResult, mvResult] = await Promise.all([
+  const isResultNotifiedMissing = (error?: { message?: string; code?: string | number }) =>
+    Boolean(
+      error &&
+        (error.code === "42703" ||
+          error.code === "42P01" ||
+          error.message?.toLowerCase().includes("result_notified_at")),
+    );
+
+  const buildAlbumBase = () =>
     supabase
       .from("submissions")
       .select(
@@ -26,20 +36,45 @@ export async function GET() {
       )
       .eq("user_id", user.id)
       .eq("type", "ALBUM")
-      .in("payment_status", paymentStatuses)
-      .not("status", "in", `(${finalizedStatuses.join(",")})`)
-      .order("updated_at", { ascending: false })
-      .limit(5),
+      .in("payment_status", paymentStatuses);
+
+  const buildMvBase = () =>
     supabase
       .from("submissions")
       .select("id, title, artist_name, status, updated_at, payment_status, type")
       .eq("user_id", user.id)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
-      .in("payment_status", paymentStatuses)
-      .not("status", "in", `(${finalizedStatuses.join(",")})`)
+      .in("payment_status", paymentStatuses);
+
+  let albumResult = await buildAlbumBase()
+    .or(`result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}`)
+    .order("updated_at", { ascending: false })
+    .limit(5);
+
+  if (albumResult.error && isResultNotifiedMissing(albumResult.error)) {
+    console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
+    albumResult = await buildAlbumBase()
+      .not("status", "in", "(RESULT_READY,COMPLETED)")
       .order("updated_at", { ascending: false })
-      .limit(5),
-  ]);
+      .limit(5);
+  } else if (albumResult.error) {
+    console.error("[dashboard status] album query error", albumResult.error);
+  }
+
+  let mvResult = await buildMvBase()
+    .or(`result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}`)
+    .order("updated_at", { ascending: false })
+    .limit(5);
+
+  if (mvResult.error && isResultNotifiedMissing(mvResult.error)) {
+    console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);
+    mvResult = await buildMvBase()
+      .not("status", "in", "(RESULT_READY,COMPLETED)")
+      .order("updated_at", { ascending: false })
+      .limit(5);
+  } else if (mvResult.error) {
+    console.error("[dashboard status] mv query error", mvResult.error);
+  }
 
   const albumSubmissions = (albumResult.data ?? []) as Array<{
     id: string;

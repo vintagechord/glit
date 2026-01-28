@@ -39,8 +39,8 @@ export async function SiteHeader() {
                   src={logoLight}
                   alt="onside"
                   className="dark:hidden"
-                  width={140}
-                  height={38}
+                  width={118}
+                  height={32}
                   priority
                 />
                 {logoDark ? (
@@ -48,8 +48,8 @@ export async function SiteHeader() {
                     src={logoDark}
                     alt="onside"
                     className="hidden dark:block"
-                    width={140}
-                    height={38}
+                    width={118}
+                    height={32}
                     priority
                   />
                 ) : (
