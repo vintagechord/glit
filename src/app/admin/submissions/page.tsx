@@ -10,6 +10,7 @@ import {
 } from "@/constants/review-status";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { deleteSubmissionsFormAction } from "@/features/admin/actions";
 
 export const metadata = {
   title: "접수 관리",
@@ -275,47 +276,69 @@ export default async function AdminSubmissionsPage({
                 submission.payment_status
               : "-";
             return (
-              <Link
+              <div
                 key={submission.id}
-                prefetch={false}
-                href={`/admin/submissions/${submission.id}`}
-                className="grid gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 text-sm transition hover:border-foreground md:grid-cols-[1.4fr_1fr_1fr_0.8fr]"
+                className="rounded-2xl border border-border/60 bg-card/80 p-4 text-sm transition hover:border-foreground"
               >
-                <div>
-                  <p className="font-semibold text-foreground">
-                    {submission.title || "제목 미입력"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {submission.artist_name || "아티스트 미입력"} ·{" "}
-                    {labelMap.type[submission.type] ?? submission.type}
-                    {hasGuestColumns && submission.guest_name ? " · 비회원" : ""}
-                  </p>
+                <div className="grid gap-4 md:grid-cols-[1.4fr_1fr_1fr_0.9fr]">
+                  <div>
+                    <Link
+                      prefetch={false}
+                      href={`/admin/submissions/${submission.id}`}
+                      className="font-semibold text-foreground hover:underline"
+                    >
+                      {submission.title || "제목 미입력"}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">
+                      {submission.artist_name || "아티스트 미입력"} ·{" "}
+                      {labelMap.type[submission.type] ?? submission.type}
+                      {hasGuestColumns && submission.guest_name ? " · 비회원" : ""}
+                    </p>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    <p>
+                      상태: {labelMap.status[submission.status] ?? submission.status}
+                    </p>
+                    <p>
+                      결제: {paymentStatusLabel}
+                    </p>
+                    <p>결과: -</p>
+                  </div>
+                  <div className="text-xs text-muted-foreground md:text-right">
+                    <p>{packageInfo?.name ?? "-"}</p>
+                    <p>
+                      업데이트:{" "}
+                      {formatDateTime(submission.updated_at ?? submission.created_at)}
+                    </p>
+                  </div>
+                  <div className="text-xs text-muted-foreground md:text-right">
+                    <p>
+                      {submission.amount_krw
+                        ? `${submission.amount_krw.toLocaleString()}원`
+                        : "-"}
+                    </p>
+                    <p className="text-foreground">상세 보기 →</p>
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  <p>
-                    상태: {labelMap.status[submission.status] ?? submission.status}
-                  </p>
-                  <p>
-                    결제: {paymentStatusLabel}
-                  </p>
-                  <p>결과: -</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2 md:justify-end">
+                  <Link
+                    prefetch={false}
+                    href={`/admin/submissions/${submission.id}`}
+                    className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+                  >
+                    상세보기
+                  </Link>
+                  <form action={deleteSubmissionsFormAction}>
+                    <input type="hidden" name="ids" value={submission.id} />
+                    <button
+                      type="submit"
+                      className="rounded-full border border-rose-200/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700"
+                    >
+                      삭제
+                    </button>
+                  </form>
                 </div>
-                <div className="text-xs text-muted-foreground md:text-right">
-                  <p>{packageInfo?.name ?? "-"}</p>
-                  <p>
-                    업데이트:{" "}
-                    {formatDateTime(submission.updated_at ?? submission.created_at)}
-                  </p>
-                </div>
-                <div className="text-xs text-muted-foreground md:text-right">
-                  <p>
-                    {submission.amount_krw
-                      ? `${submission.amount_krw.toLocaleString()}원`
-                      : "-"}
-                  </p>
-                  <p>상세 보기 →</p>
-                </div>
-              </Link>
+              </div>
             );
           })
         ) : (

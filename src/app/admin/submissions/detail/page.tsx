@@ -18,6 +18,7 @@ import {
   updateStationReviewFormAction,
   updateSubmissionStatusFormAction,
   createTrackForSubmissionAction,
+  deleteSubmissionsFormAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
@@ -494,8 +495,20 @@ export default async function AdminSubmissionDetailPage({
               </span>
             </div>
         </div>
-        <div className="text-xs text-muted-foreground">
-          Updated {formatDateTime(submission.updated_at ?? submission.created_at)}
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <span className="text-muted-foreground">
+            Updated {formatDateTime(submission.updated_at ?? submission.created_at)}
+          </span>
+          <form action={deleteSubmissionsFormAction}>
+            <input type="hidden" name="ids" value={submission.id} />
+            <input type="hidden" name="redirectTo" value="/admin/submissions" />
+            <button
+              type="submit"
+              className="rounded-full border border-rose-200/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700"
+            >
+              삭제
+            </button>
+          </form>
         </div>
       </div>
 

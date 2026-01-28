@@ -107,6 +107,10 @@ const spellcheckTermSchema = z.object({
   isActive: z.boolean(),
 });
 
+const deleteSubmissionsSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1),
+});
+
 const bannerBucket = "banners";
 const bannerFolder = "strip";
 
@@ -1165,4 +1169,56 @@ export async function deleteSpellcheckTermFormAction(
   }
   revalidatePath("/admin/config");
   revalidatePath("/dashboard/new/album");
+}
+
+export async function deleteSubmissionsAction(
+  payload: z.infer<typeof deleteSubmissionsSchema>,
+): Promise<AdminActionState> {
+  const parsed = deleteSubmissionsSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { error: "삭제할 접수 ID를 확인해주세요." };
+  }
+
+  const supabase = await createAdminClient();
+  const { error } = await supabase
+    .from("submissions")
+    .delete()
+    .in("id", parsed.data.ids);
+
+  if (error) {
+    console.error("admin delete submissions error", error);
+    return { error: "접수 삭제에 실패했습니다." };
+  }
+
+  revalidatePath("/admin/submissions");
+  revalidatePath("/dashboard/status");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/mypage");
+  revalidatePath("/");
+  parsed.data.ids.forEach((id) => {
+    revalidatePath(`/admin/submissions/${id}`);
+    revalidatePath(`/admin/submissions/detail?id=${id}`);
+  });
+
+  return { message: "접수가 삭제되었습니다." };
+}
+
+export async function deleteSubmissionsFormAction(
+  formData: FormData,
+): Promise<void> {
+  const ids = String(formData.get("ids") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const redirectTo = String(formData.get("redirectTo") ?? "");
+
+  const result = await deleteSubmissionsAction({ ids });
+  if (result.error) {
+    console.error(result.error);
+    return;
+  }
+
+  if (redirectTo) {
+    redirect(redirectTo);
+  }
 }
