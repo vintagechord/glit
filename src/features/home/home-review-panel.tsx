@@ -13,7 +13,10 @@ type StationItem = {
   updated_at: string;
   track_results?: unknown;
   station?: {
+    id?: string | null;
     name?: string | null;
+    code?: string | null;
+    logo_url?: string | null;
   } | null;
 };
 
@@ -233,29 +236,52 @@ const isStationCompleted = (review: StationItem) => {
 };
 
 function StationLogo({
-  name,
+  station,
   hideOnMobile = false,
 }: {
-  name?: string | null;
+  station?: { name?: string | null; code?: string | null; logo_url?: string | null } | null;
   hideOnMobile?: boolean;
 }) {
-  const key = (name ?? "").trim().toUpperCase();
-  const logoSource = stationLogoSources.find((entry) =>
+  const key = (station?.name ?? station?.code ?? "").trim().toUpperCase();
+  const visibilityClass = hideOnMobile ? "hidden sm:inline-flex" : "inline-flex";
+  const fallbackLocal = "/station-logos/default.svg";
+
+  const mappedLogo = stationLogoSources.find((entry) =>
     entry.patterns.some(
       (pattern) => key === pattern || key.startsWith(pattern),
     ),
   );
-  const visibilityClass = hideOnMobile ? "hidden sm:inline-flex" : "inline-flex";
 
-  if (logoSource) {
+  const initialSrc = station?.logo_url ?? mappedLogo?.src ?? null;
+  const [src, setSrc] = React.useState<string | null>(initialSrc);
+
+  React.useEffect(() => {
+    setSrc(initialSrc);
+  }, [initialSrc]);
+
+  const handleError = React.useCallback(() => {
+    if (src && src !== mappedLogo?.src && mappedLogo?.src) {
+      setSrc(mappedLogo.src);
+      return;
+    }
+    if (src !== fallbackLocal) {
+      setSrc(fallbackLocal);
+      return;
+    }
+    setSrc(null);
+  }, [mappedLogo?.src, src]);
+
+  if (src) {
     return (
       <span className={`${visibilityClass} h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-white shadow-sm`}>
         <Image
-          src={logoSource.src}
-          alt={logoSource.alt}
+          src={src}
+          alt={station?.name ?? station?.code ?? "station logo"}
           width={28}
           height={28}
           className="h-7 w-7 object-contain"
+          unoptimized
+          onError={handleError}
         />
       </span>
     );
@@ -734,7 +760,7 @@ export function HomeReviewPanel({
                             className="grid min-h-[52px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-[11px]"
                           >
                             <span className="flex items-center gap-2 truncate font-semibold text-foreground">
-                              <StationLogo name={station.station?.name ?? undefined} hideOnMobile />
+                              <StationLogo station={station.station ?? undefined} hideOnMobile />
                               <span className="truncate">{station.station?.name ?? "-"}</span>
                             </span>
                             <span
@@ -775,7 +801,7 @@ export function HomeReviewPanel({
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="flex items-center gap-2 truncate font-semibold text-foreground">
-                            <StationLogo name={station.station?.name ?? undefined} />
+                            <StationLogo station={station.station ?? undefined} />
                             <span className="truncate text-sm">{station.station?.name ?? "-"}</span>
                           </span>
                           <span className="text-[10px] text-muted-foreground">

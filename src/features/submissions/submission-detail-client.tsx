@@ -117,6 +117,53 @@ type StationReview = {
   } | null;
 };
 
+const fallbackStationLogo = "/station-logos/default.svg";
+
+function StationLogoWithFallback({
+  station,
+}: {
+  station?: { id?: string | null; name?: string | null; code?: string | null; logo_url?: string | null } | null;
+}) {
+  const key = (station?.name ?? station?.code ?? "").trim() || "S";
+  const mappedLogo = station?.code ? `/station-logos/${station.code.toLowerCase()}.svg` : null;
+  const initialSrc = station?.logo_url ?? mappedLogo;
+  const [src, setSrc] = React.useState<string | null>(initialSrc);
+
+  React.useEffect(() => {
+    setSrc(initialSrc);
+  }, [initialSrc]);
+
+  const handleError = React.useCallback(() => {
+    if (src && mappedLogo && src !== mappedLogo) {
+      setSrc(mappedLogo);
+      return;
+    }
+    if (src !== fallbackStationLogo) {
+      setSrc(fallbackStationLogo);
+      return;
+    }
+    setSrc(null);
+  }, [mappedLogo, src]);
+
+  return (
+    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-background/60">
+      {src ? (
+        <Image
+          src={src}
+          alt={station?.name ?? station?.code ?? "station logo"}
+          width={36}
+          height={36}
+          className="h-full w-full object-cover"
+          unoptimized
+          onError={handleError}
+        />
+      ) : (
+        <span className="text-sm font-semibold text-foreground">{key.charAt(0)}</span>
+      )}
+    </div>
+  );
+}
+
 const statusLabels: Record<string, string> = {
   DRAFT: "임시 저장",
   SUBMITTED: "접수 완료",
@@ -1207,21 +1254,7 @@ export function SubmissionDetailClient({
                           className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 px-4 py-3 text-xs"
                         >
                           <div className="min-w-0 flex items-center gap-2">
-                            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-background/60">
-                              {review.station && "logo_url" in review.station && review.station.logo_url ? (
-                                <Image
-                                  src={review.station.logo_url}
-                                  alt={review.station.name ?? "station logo"}
-                                  width={36}
-                                  height={36}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-sm font-semibold text-foreground">
-                                  {(review.station?.name || "S").charAt(0)}
-                                </span>
-                              )}
-                            </div>
+                            <StationLogoWithFallback station={review.station} />
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-foreground">
                                 {review.station?.name ?? "-"}
