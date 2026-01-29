@@ -12,7 +12,11 @@ import {
   type ResultStatus,
   type ReviewStatus,
 } from "@/constants/review-status";
-import { createTrackForSubmissionAction, saveSubmissionAdminFormAction } from "@/features/admin/actions";
+import {
+  createTrackForSubmissionAction,
+  deleteTrackForSubmissionAction,
+  saveSubmissionAdminFormAction,
+} from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
@@ -23,6 +27,7 @@ import { AdminSaveToast } from "@/components/admin/save-toast";
 import { MvRatingControl } from "@/components/admin/mv-rating-control";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
 import { CertificateUploader } from "@/components/admin/certificate-uploader";
+import { ConfirmForm } from "@/components/admin/confirm-form";
 
 export const metadata = {
   title: "접수 상세 관리",
@@ -172,6 +177,19 @@ export default async function AdminSubmissionDetailPage({
   const cookieUuid = uuidPattern.test(cookieId) ? cookieId : "";
 
   const rawSubmissionId = urlId || refererId || cookieUuid;
+  const saveMessage = savedFlag
+    ? savedFlag === "track"
+      ? "트랙이 추가되었습니다."
+      : savedFlag === "track_deleted"
+        ? "트랙을 삭제했습니다."
+        : savedFlag === "station"
+          ? "방송국 진행 상태를 저장했습니다."
+          : savedFlag === "station_error"
+            ? "방송국 상태 저장 중 오류가 발생했습니다."
+          : savedFlag === "error"
+            ? "저장 중 오류가 발생했습니다. 다시 시도해주세요."
+          : "저장이 완료되었습니다."
+    : "";
 
   if (!rawSubmissionId) {
     return (
@@ -462,7 +480,7 @@ export default async function AdminSubmissionDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
-      {savedFlag ? <AdminSaveToast message="저장 완료" /> : null}
+      {saveMessage ? <AdminSaveToast message={saveMessage} /> : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -547,10 +565,11 @@ export default async function AdminSubmissionDetailPage({
               </div>
             </div>
           </div>
-          <form
+          <ConfirmForm
             action={saveSubmissionAdminFormAction}
             className="space-y-8"
             id="admin-save-form"
+            message="저장하시겠습니까?"
           >
             <input type="hidden" name="submissionId" value={submission.id} />
 
@@ -896,7 +915,7 @@ export default async function AdminSubmissionDetailPage({
                             disabled={!isPersistedReview}
                             className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
                           />
-                          {albumTracks.length > 1 ? (
+                          {albumTracks.length > 0 ? (
                             <div className="md:col-span-3">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -983,7 +1002,7 @@ export default async function AdminSubmissionDetailPage({
                   저장
                 </button>
               </div>
-            </form>
+            </ConfirmForm>
         </div>
       </div>
 
@@ -1067,10 +1086,28 @@ export default async function AdminSubmissionDetailPage({
                     key={`${track.track_no}-${track.track_title}-${track.track_title_kr}`}
                     className="border-b border-border/40 py-2 last:border-b-0"
                   >
-                    <p className="font-semibold text-foreground">
-                      {track.track_no}. {track.track_title || track.track_title_kr || "-"}
-                      {track.is_title ? " · 타이틀" : ""}
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold text-foreground">
+                        {track.track_no}. {track.track_title || track.track_title_kr || "-"}
+                        {track.is_title ? " · 타이틀" : ""}
+                      </p>
+                      {track.id ? (
+                        <ConfirmForm
+                          action={deleteTrackForSubmissionAction}
+                          message="해당 트랙을 삭제하시겠습니까?"
+                          className="m-0"
+                        >
+                          <input type="hidden" name="submissionId" value={submission.id} />
+                          <input type="hidden" name="trackId" value={track.id} />
+                          <button
+                            type="submit"
+                            className="rounded-full border border-border/60 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-foreground hover:text-foreground"
+                          >
+                            트랙 삭제
+                          </button>
+                        </ConfirmForm>
+                      ) : null}
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} / 편곡{" "}
                       {track.arranger || "-"}
@@ -1096,9 +1133,10 @@ export default async function AdminSubmissionDetailPage({
               <p className="text-xs text-muted-foreground">
                 원클릭 접수에는 트랙 정보가 없어 관리자 등록이 필요합니다. 추가 후 방송국별 진행 관리에서 트랙별 통과/불통과를 설정하세요.
               </p>
-              <form
+              <ConfirmForm
                 action={createTrackForSubmissionAction}
                 className="grid gap-3 md:grid-cols-[90px_1fr] lg:grid-cols-[90px_1fr_1fr]"
+                message="트랙을 추가하시겠습니까?"
               >
                 <input type="hidden" name="submissionId" value={submission.id} />
                 <div className="space-y-1">
@@ -1148,7 +1186,7 @@ export default async function AdminSubmissionDetailPage({
                     트랙 추가
                   </button>
                 </div>
-              </form>
+              </ConfirmForm>
             </div>
           ) : null}
           {isMvSubmission && submission.mv_lyrics ? (

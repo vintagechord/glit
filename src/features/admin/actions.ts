@@ -13,7 +13,6 @@ import {
   stationReviewStatusEnum,
   stationReviewStatusValues,
 } from "@/constants/review-status";
-import { sendResultEmail } from "@/lib/email";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -590,6 +589,11 @@ const createTrackSchema = z.object({
   arranger: z.string().optional(),
 });
 
+const deleteTrackSchema = z.object({
+  submissionId: z.string().uuid(),
+  trackId: z.string().uuid(),
+});
+
 export async function createTrackForSubmissionAction(
   formData: FormData,
 ): Promise<void> {
@@ -636,6 +640,88 @@ export async function createTrackForSubmissionAction(
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${parsed.data.submissionId}`);
   redirect(`/admin/submissions/${parsed.data.submissionId}?saved=track`);
+}
+
+export async function deleteTrackForSubmissionAction(
+  formData: FormData,
+): Promise<void> {
+  const parsed = deleteTrackSchema.safeParse({
+    submissionId: formData.get("submissionId"),
+    trackId: formData.get("trackId"),
+  });
+
+  if (!parsed.success) {
+    console.error("deleteTrack validation failed", parsed.error.flatten().fieldErrors);
+    return;
+  }
+
+  const admin = createAdminClient();
+  const { data: trackRow } = await admin
+    .from("album_tracks")
+    .select("track_no")
+    .eq("id", parsed.data.trackId)
+    .eq("submission_id", parsed.data.submissionId)
+    .maybeSingle();
+
+  const trackNo = trackRow?.track_no ?? null;
+
+  const { error: deleteError } = await admin
+    .from("album_tracks")
+    .delete()
+    .eq("id", parsed.data.trackId)
+    .eq("submission_id", parsed.data.submissionId);
+
+  if (deleteError) {
+    console.error("deleteTrack delete error", deleteError);
+  }
+
+  const { data: stationReviews } = await admin
+    .from("station_reviews")
+    .select("id, track_results")
+    .eq("submission_id", parsed.data.submissionId);
+
+  if (stationReviews && stationReviews.length > 0) {
+    type TrackResultEntry = {
+      track_id?: unknown;
+      trackId?: unknown;
+      track_no?: unknown;
+      trackNo?: unknown;
+      [key: string]: unknown;
+    };
+    for (const review of stationReviews) {
+      const rawResults = Array.isArray(review.track_results)
+        ? (review.track_results as TrackResultEntry[])
+        : [];
+      const filtered = rawResults.filter((entry) => {
+        const idMatch =
+          (typeof entry.track_id === "string" && entry.track_id === parsed.data.trackId) ||
+          (typeof entry.trackId === "string" && entry.trackId === parsed.data.trackId);
+        const noMatch =
+          trackNo !== null &&
+          ((typeof entry.track_no === "number" && entry.track_no === trackNo) ||
+            (typeof entry.trackNo === "number" && entry.trackNo === trackNo));
+        return !idMatch && !noMatch;
+      });
+
+      if (filtered.length !== rawResults.length) {
+        const { error: updateError } = await admin
+          .from("station_reviews")
+          .update({ track_results: filtered.length > 0 ? filtered : null })
+          .eq("id", review.id);
+        if (updateError) {
+          console.error("deleteTrack track_results update error", updateError);
+        }
+      }
+    }
+  }
+
+  revalidatePath("/admin/submissions");
+  revalidatePath(`/admin/submissions/${parsed.data.submissionId}`);
+  revalidatePath(`/admin/submissions/detail?id=${parsed.data.submissionId}`);
+  revalidatePath("/dashboard/status");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/");
+  redirect(`/admin/submissions/${parsed.data.submissionId}?saved=track_deleted`);
 }
 
 export async function updateSubmissionResultAction(
@@ -689,9 +775,7 @@ export async function updateSubmissionResultFormAction(
   }
 }
 
-export async function notifySubmissionResultAction(
-  submissionId: string,
-): Promise<AdminActionState> {
+export async function notifySubmissionResultAction(): Promise<AdminActionState> {
   return {
     error: "현재 환경에 result_status 컬럼이 없어 결과 통보 기능을 사용할 수 없습니다.",
   };
@@ -1232,6 +1316,14 @@ export async function saveSubmissionAdminFormAction(
   }
 
   const supabase = await createAdminClient();
+  const { data: existingReviews } = await supabase
+    .from("station_reviews")
+    .select("id, status, track_results")
+    .eq("submission_id", submissionId);
+  const reviewMap = new Map(
+    (existingReviews ?? []).map((review) => [review.id, review]),
+  );
+
   const status = String(formData.get("status") ?? "").trim();
   const adminMemo = String(formData.get("adminMemo") ?? "").trim();
   const paymentStatus = String(formData.get("paymentStatus") ?? "").trim();
@@ -1252,18 +1344,28 @@ export async function saveSubmissionAdminFormAction(
       .eq("id", submissionId);
     if (submissionError) {
       console.error("admin save submission status error", submissionError);
-      return;
+      redirect(`/admin/submissions/${submissionId}?saved=error`);
     }
   }
 
   const entries = Array.from(formData.entries());
-  const reviewIds = formData
+  let reviewIds = formData
     .getAll("reviewIds")
     .map((value) => String(value))
     .filter((id) => id.length > 0 && z.string().uuid().safeParse(id).success);
 
+  if (!reviewIds.length && reviewMap.size > 0) {
+    reviewIds = Array.from(reviewMap.keys());
+  }
+
+  let lastError: string | null = null;
+
   for (const reviewId of reviewIds) {
-    const stationStatus = String(formData.get(`stationStatus-${reviewId}`) ?? "").trim();
+    const current = reviewMap.get(reviewId);
+    const stationStatusRaw = String(formData.get(`stationStatus-${reviewId}`) ?? "").trim();
+    const stationStatus = stationReviewStatusEnum.safeParse(stationStatusRaw).success
+      ? (stationStatusRaw as z.infer<typeof stationReviewStatusEnum>)
+      : (current?.status as z.infer<typeof stationReviewStatusEnum>) ?? "NOT_SENT";
     const resultNote = String(formData.get(`stationResultNote-${reviewId}`) ?? "").trim();
 
     const trackResults: Array<{
@@ -1295,19 +1397,26 @@ export async function saveSubmissionAdminFormAction(
       });
     }
 
+    const nextTrackResults =
+      trackResults.length > 0
+        ? trackResults
+        : current?.track_results && Array.isArray(current.track_results)
+          ? current.track_results
+          : null;
+
     const { error: stationError } = await supabase
       .from("station_reviews")
       .update({
         status: stationStatus || "NOT_SENT",
         result_note: resultNote || null,
-        track_results: trackResults.length > 0 ? trackResults : null,
+        track_results: nextTrackResults,
       })
       .eq("id", reviewId)
       .eq("submission_id", submissionId);
 
     if (stationError) {
       console.error("admin save station review error", stationError);
-      return;
+      lastError = stationError.message ?? "error";
     }
   }
 
@@ -1318,5 +1427,5 @@ export async function saveSubmissionAdminFormAction(
   revalidatePath("/dashboard/history");
   revalidatePath("/");
 
-  return;
+  redirect(`/admin/submissions/${submissionId}?saved=${lastError ? "error" : "1"}`);
 }
