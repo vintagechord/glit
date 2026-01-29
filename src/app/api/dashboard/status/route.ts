@@ -87,19 +87,19 @@ export async function GET() {
       .not("status", "eq", "DRAFT");
 
   const recentWindowOr =
-    `or=(and(updated_at.gte.${recentResultCutoff},result_notified_at.is.null),and(updated_at.gte.${recentResultCutoff},result_notified_at.gte.${recentResultCutoff}))`;
+    `and(updated_at.gte.${recentResultCutoff},or(result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}))`;
 
   let albumResult = await buildAlbumBase()
     .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .range(0, 9999);
+    .range(0, 499);
 
   if (albumResult.error && isResultNotifiedMissing(albumResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
     albumResult = await buildAlbumBase()
       .gte("updated_at", recentResultCutoff)
       .order("updated_at", { ascending: false })
-      .range(0, 9999);
+      .range(0, 499);
   } else if (albumResult.error) {
     console.error("[dashboard status] album query error", albumResult.error);
     return NextResponse.json({ error: "ALBUM_QUERY_FAILED" }, { status: 500 });
@@ -108,14 +108,14 @@ export async function GET() {
   let mvResult = await buildMvBase()
     .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .range(0, 9999);
+    .range(0, 499);
 
   if (mvResult.error && isResultNotifiedMissing(mvResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);
     mvResult = await buildMvBase()
       .gte("updated_at", recentResultCutoff)
       .order("updated_at", { ascending: false })
-      .range(0, 9999);
+      .range(0, 499);
   } else if (mvResult.error) {
     console.error("[dashboard status] mv query error", mvResult.error);
     return NextResponse.json({ error: "MV_QUERY_FAILED" }, { status: 500 });
@@ -181,7 +181,6 @@ export async function GET() {
       .in("id", packageIds);
     if (packageError) {
       console.error("[dashboard status] package fallback query error", packageError);
-      return NextResponse.json({ error: "PACKAGE_QUERY_FAILED" }, { status: 500 });
     }
     (packages ?? []).forEach((pkg) => {
       packageMap.set(pkg.id, {
@@ -198,7 +197,6 @@ export async function GET() {
 
     if (packageStationsError) {
       console.error("[dashboard status] package_stations query error", packageStationsError);
-      return NextResponse.json({ error: "PACKAGE_STATIONS_QUERY_FAILED" }, { status: 500 });
     }
 
     (packageStations ?? []).forEach((row) => {
@@ -215,7 +213,8 @@ export async function GET() {
       stations.forEach((station) => {
         if (!station) return;
         const key = station.id ?? station.code ?? "";
-        if (key && merged.some((s) => (s.id ?? s.code) === key)) return;
+        if (!key) return;
+        if (merged.some((s) => (s.id ?? s.code) === key)) return;
         merged.push({
           id: station.id,
           code: station.code ?? null,
@@ -250,11 +249,7 @@ export async function GET() {
         console.warn("[dashboard status] ensure stations failed", error);
       }
     });
-    const results = await Promise.allSettled(tasks);
-    const rejected = results.filter((r) => r.status === "rejected");
-    if (rejected.length) {
-      return NextResponse.json({ error: "ALBUM_STATION_BACKFILL_FAILED" }, { status: 500 });
-    }
+    await Promise.allSettled(tasks);
   }
 
   const albumStationsMap: Record<string, unknown[]> = {};
@@ -286,7 +281,7 @@ export async function GET() {
       data = (fallback.data as StationReviewRow[] | null) ?? null;
       if (fallback.error) {
         console.error("[dashboard status] station_reviews fallback join error", fallback.error);
-        return NextResponse.json({ error: "STATION_REVIEWS_QUERY_FAILED" }, { status: 500 });
+        data = null;
       }
     }
 
