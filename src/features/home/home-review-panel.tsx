@@ -281,6 +281,7 @@ function StationLogo({
           height={28}
           className="h-7 w-7 object-contain"
           unoptimized
+          loading="lazy"
           onError={handleError}
         />
       </span>
@@ -799,7 +800,7 @@ export function HomeReviewPanel({
                         key={`${station.id}-mobile-${index}`}
                         className="rounded-xl border border-border/50 bg-background/80 p-3 text-[12px] shadow-sm"
                       >
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center justify-between gap-2">
                           <span className="flex items-center gap-2 truncate font-semibold text-foreground">
                             <StationLogo station={station.station ?? undefined} />
                             <span className="truncate text-sm">{station.station?.name ?? "-"}</span>
