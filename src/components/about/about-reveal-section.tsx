@@ -96,10 +96,20 @@ export function AboutRevealSection() {
                 >
                   워터멜론
                 </a>
-                (Beat 마켓), 음향기기 수리 서비스 ‘마하픽스’, 레코딩·믹스를 진행하는 뮤직
-                스튜디오{" "}
+                (Beat 마켓), 음향기기 수리 서비스{" "}
                 <a
-                  href="https://vhouse.co.kr"
+                  href="https://machfix.co.kr"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold underline decoration-white/60 underline-offset-4"
+                >
+                  마하픽스
+                </a>
+                , 레코딩·믹스를 진행하는 뮤직 스튜디오{" "}
+                <a
+                  href="https://naver.me/FMckTrml"
+                  target="_blank"
+                  rel="noreferrer"
                   className="font-semibold underline decoration-white/60 underline-offset-4"
                 >
                   V-House
