@@ -1318,11 +1318,16 @@ export async function saveSubmissionAdminFormAction(
   const supabase = await createAdminClient();
   const { data: existingReviews } = await supabase
     .from("station_reviews")
-    .select("id, status, track_results")
+    .select("id, status, track_results, station_id, station:stations ( code )")
     .eq("submission_id", submissionId);
   const reviewMap = new Map(
     (existingReviews ?? []).map((review) => [review.id, review]),
   );
+
+  console.info("[admin save] start", {
+    submissionId,
+    reviewCount: reviewMap.size,
+  });
 
   const status = String(formData.get("status") ?? "").trim();
   const adminMemo = String(formData.get("adminMemo") ?? "").trim();
@@ -1343,8 +1348,15 @@ export async function saveSubmissionAdminFormAction(
       .update(submissionUpdate)
       .eq("id", submissionId);
     if (submissionError) {
-      console.error("admin save submission status error", submissionError);
-      redirect(`/admin/submissions/${submissionId}?saved=error`);
+      console.error("admin save submission status error", submissionError, {
+        submissionId,
+        update: submissionUpdate,
+      });
+      redirect(
+        `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
+          submissionError.message ?? "submission update error",
+        )}`,
+      );
     }
   }
 
@@ -1358,10 +1370,63 @@ export async function saveSubmissionAdminFormAction(
     reviewIds = Array.from(reviewMap.keys());
   }
 
-  let lastError: string | null = null;
+  let lastError: { message: string; code?: string } | null = null;
+
+  const updateStationReview = async (
+    reviewId: string,
+    stationCode: string | null,
+    payload: {
+      status: z.infer<typeof stationReviewStatusEnum>;
+      result_note: string | null;
+      track_results: unknown;
+    },
+  ) => {
+    const logPrefix = `[admin save] review ${reviewId} (${stationCode ?? "unknown"})`;
+    const attempt = async (includeTracks: boolean) => {
+      const updatePayload = includeTracks
+        ? payload
+        : { status: payload.status, result_note: payload.result_note };
+      const { data, error } = await supabase
+        .from("station_reviews")
+        .update(updatePayload)
+        .eq("id", reviewId)
+        .eq("submission_id", submissionId)
+        .select("id, status, result_note, track_results, station_id");
+      return { data, error };
+    };
+
+    let { data, error } = await attempt(true);
+    if (error && (error.code === "42703" || error.message?.includes("track_results"))) {
+      console.warn(`${logPrefix} track_results column missing, retrying without track_results`, {
+        error,
+      });
+      ({ data, error } = await attempt(false));
+    }
+
+    console.info(`${logPrefix} update result`, {
+      payload,
+      dataLength: data?.length ?? 0,
+      error,
+    });
+
+    if (!error && data && data.length > 0) {
+      const refreshed = await supabase
+        .from("station_reviews")
+        .select("id, status, result_note, track_results, station_id")
+        .eq("id", reviewId)
+        .maybeSingle();
+      console.info(`${logPrefix} refreshed`, { refreshed: refreshed.data, error: refreshed.error });
+    }
+
+    return { data, error };
+  };
 
   for (const reviewId of reviewIds) {
     const current = reviewMap.get(reviewId);
+    const stationCode =
+      (Array.isArray(current?.station) && current?.station?.[0]?.code) ||
+      (typeof current?.station?.code === "string" ? current.station.code : null) ||
+      null;
     const stationStatusRaw = String(formData.get(`stationStatus-${reviewId}`) ?? "").trim();
     const stationStatus = stationReviewStatusEnum.safeParse(stationStatusRaw).success
       ? (stationStatusRaw as z.infer<typeof stationReviewStatusEnum>)
@@ -1404,19 +1469,20 @@ export async function saveSubmissionAdminFormAction(
           ? current.track_results
           : null;
 
-    const { error: stationError } = await supabase
-      .from("station_reviews")
-      .update({
-        status: stationStatus || "NOT_SENT",
-        result_note: resultNote || null,
-        track_results: nextTrackResults,
-      })
-      .eq("id", reviewId)
-      .eq("submission_id", submissionId);
+    const payload = {
+      status: stationStatus || "NOT_SENT",
+      result_note: resultNote || null,
+      track_results: nextTrackResults,
+    };
+
+    const { error: stationError } = await updateStationReview(reviewId, stationCode, payload);
 
     if (stationError) {
-      console.error("admin save station review error", stationError);
-      lastError = stationError.message ?? "error";
+      console.error("admin save station review error", stationError, {
+        reviewId,
+        payload,
+      });
+      lastError = { message: stationError.message ?? "error", code: stationError.code };
     }
   }
 
@@ -1427,5 +1493,13 @@ export async function saveSubmissionAdminFormAction(
   revalidatePath("/dashboard/history");
   revalidatePath("/");
 
-  redirect(`/admin/submissions/${submissionId}?saved=${lastError ? "error" : "1"}`);
+  if (lastError) {
+    redirect(
+      `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
+        `${lastError.code ?? ""} ${lastError.message}`,
+      )}`,
+    );
+  } else {
+    redirect(`/admin/submissions/${submissionId}?saved=station`);
+  }
 }

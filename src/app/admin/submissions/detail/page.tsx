@@ -141,7 +141,7 @@ export default async function AdminSubmissionDetailPage({
   searchParams,
   params,
 }: {
-  searchParams?: { id?: string | string[]; saved?: string };
+  searchParams?: { id?: string | string[]; saved?: string; savedError?: string };
   params?: { id?: string };
 }) {
   const paramId = params?.id;
@@ -149,6 +149,9 @@ export default async function AdminSubmissionDetailPage({
   const savedFlag = Array.isArray(searchParams?.saved)
     ? searchParams?.saved[0]
     : searchParams?.saved;
+  const savedErrorParam = Array.isArray(searchParams?.savedError)
+    ? searchParams?.savedError[0]
+    : searchParams?.savedError;
   const urlId = Array.isArray(searchId)
     ? searchId.find((v) => typeof v === "string" && uuidPattern.test(v)) ?? ""
     : typeof searchId === "string"
@@ -190,6 +193,14 @@ export default async function AdminSubmissionDetailPage({
             ? "저장 중 오류가 발생했습니다. 다시 시도해주세요."
           : "저장이 완료되었습니다."
     : "";
+  const isSaveError =
+    savedFlag === "error" || savedFlag === "station_error" || Boolean(savedErrorParam);
+  const errorMessage =
+    typeof savedErrorParam === "string" && savedErrorParam.length > 0
+      ? savedErrorParam
+      : isSaveError
+        ? "저장 중 문제가 발생했습니다."
+        : "";
 
   if (!rawSubmissionId) {
     return (
@@ -480,7 +491,12 @@ export default async function AdminSubmissionDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
-      {saveMessage ? <AdminSaveToast message={saveMessage} /> : null}
+      {!isSaveError && saveMessage ? <AdminSaveToast message={saveMessage} /> : null}
+      {isSaveError && errorMessage ? (
+        <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+          저장 오류: {errorMessage}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
