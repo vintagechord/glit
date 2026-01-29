@@ -1421,12 +1421,22 @@ export async function saveSubmissionAdminFormAction(
     return { data, error };
   };
 
+  type StationValue = { code?: unknown } | Array<{ code?: unknown }> | null | undefined;
+  const getStationCode = (value: StationValue): string | null => {
+    if (Array.isArray(value)) {
+      const first = value[0];
+      return typeof first?.code === "string" ? first.code : null;
+    }
+    if (value && typeof value === "object" && "code" in value) {
+      const code = (value as { code?: unknown }).code;
+      return typeof code === "string" ? code : null;
+    }
+    return null;
+  };
+
   for (const reviewId of reviewIds) {
     const current = reviewMap.get(reviewId);
-    const stationCode =
-      (Array.isArray(current?.station) && current?.station?.[0]?.code) ||
-      (typeof current?.station?.code === "string" ? current.station.code : null) ||
-      null;
+    const stationCode = getStationCode((current as { station?: StationValue })?.station);
     const stationStatusRaw = String(formData.get(`stationStatus-${reviewId}`) ?? "").trim();
     const stationStatus = stationReviewStatusEnum.safeParse(stationStatusRaw).success
       ? (stationStatusRaw as z.infer<typeof stationReviewStatusEnum>)
