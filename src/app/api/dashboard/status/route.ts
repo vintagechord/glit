@@ -252,7 +252,7 @@ export async function GET() {
       .select(withTracksSelect)
       .in("submission_id", allSubmissionIds)
       .order("updated_at", { ascending: false });
-    let data = initialStationData;
+    let data: StationReviewRow[] | null = (initialStationData as StationReviewRow[] | null) ?? null;
 
     if (stationReviewsError) {
       console.error("[dashboard status] station_reviews join error", stationReviewsError);
@@ -264,7 +264,7 @@ export async function GET() {
         .select(missingTrackColumn ? noTracksSelect : withTracksSelect)
         .in("submission_id", allSubmissionIds)
         .order("updated_at", { ascending: false });
-      data = fallback.data;
+      data = (fallback.data as StationReviewRow[] | null) ?? null;
       if (fallback.error) {
         console.error("[dashboard status] station_reviews fallback join error", fallback.error);
       }
