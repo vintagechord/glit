@@ -469,7 +469,7 @@ export function SubmissionDetailClient({
       .eq("id", submissionId)
       .maybeSingle();
 
-    const submissionData = submissionDataRaw as any;
+    const submissionData = submissionDataRaw as Submission | null;
 
     if (submissionData) {
       const nextPackage = Array.isArray(submissionData.package)

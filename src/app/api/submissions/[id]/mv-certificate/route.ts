@@ -6,11 +6,19 @@ import { presignGetUrl } from "@/lib/b2";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type CertificateFields = {
+  certificate_b2_path?: string | null;
+  certificate_original_name?: string | null;
+  certificate_mime?: string | null;
+  certificate_size?: number | null;
+  status?: string | null;
+};
+
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> },
+  context: { params: { id: string } },
 ) {
-  const { id: submissionId } = await context.params;
+  const { id: submissionId } = context.params;
   const url = new URL(req.url);
   const guestToken = url.searchParams.get("guestToken") || undefined;
 
@@ -32,7 +40,8 @@ export async function GET(
     return NextResponse.json({ error: "아직 결과가 준비되지 않았습니다." }, { status: 403 });
   }
 
-  const key = (submission as any)?.certificate_b2_path?.trim?.();
+  const cert = submission as CertificateFields;
+  const key = cert.certificate_b2_path?.trim();
   if (!key) {
     return NextResponse.json({ error: "필증이 등록되지 않았습니다." }, { status: 404 });
   }
@@ -41,9 +50,9 @@ export async function GET(
     const urlSigned = await presignGetUrl(key, 60 * 10);
     return NextResponse.json({
       url: urlSigned,
-      filename: (submission as any)?.certificate_original_name ?? null,
-      mimeType: (submission as any)?.certificate_mime ?? null,
-      sizeBytes: (submission as any)?.certificate_size ?? null,
+      filename: cert.certificate_original_name ?? null,
+      mimeType: cert.certificate_mime ?? null,
+      sizeBytes: cert.certificate_size ?? null,
     });
   } catch (err) {
     return NextResponse.json({ error: "필증 링크를 생성하지 못했습니다." }, { status: 500 });

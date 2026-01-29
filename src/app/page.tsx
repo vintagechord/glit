@@ -7,6 +7,10 @@ import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-rev
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+const RECENT_RESULT_CUTOFF = new Date(
+  Date.now() - 30 * 24 * 60 * 60 * 1000,
+).toISOString();
+
 const heroCtas = [
   {
     title: "음반 심의 신청",
@@ -356,9 +360,7 @@ export default async function Home() {
 
   if (user) {
     const paymentStatuses = ["PAYMENT_PENDING", "PAID", "UNPAID"];
-    const recentResultCutoff = new Date(
-      Date.now() - 30 * 24 * 60 * 60 * 1000,
-    ).toISOString();
+    const recentResultCutoff = RECENT_RESULT_CUTOFF;
     const admin = createAdminClient();
     const isResultNotifiedMissing = (error?: { message?: string; code?: string | number }) =>
       Boolean(
@@ -585,8 +587,22 @@ export default async function Home() {
         reviewRows = fallback.data ?? reviewRows;
       }
 
-      const reviewMap = new Map<string, Map<string, any>>();
-      reviewRows.forEach((row: any) => {
+      type ReviewRow = {
+        id: string;
+        submission_id: string;
+        station_id: string | null;
+        status: string;
+        result_note: string | null;
+        track_results?: unknown;
+        updated_at: string;
+        station?:
+          | { id?: string | null; name?: string | null; code?: string | null }
+          | Array<{ id?: string | null; name?: string | null; code?: string | null }>
+          | null;
+      };
+
+      const reviewMap = new Map<string, Map<string, ReviewRow>>();
+      reviewRows.forEach((row: ReviewRow) => {
         const submissionId = row.submission_id;
         const stationId = row.station_id || (Array.isArray(row.station) ? row.station[0]?.id : row.station?.id);
         if (!submissionId || !stationId) return;
@@ -672,7 +688,7 @@ export default async function Home() {
       };
 
       albumSubmissions.forEach((submission) => buildRows(submission, albumStationsMap));
-      mvSubmissions.forEach((submission) => buildRows(submission as any, mvStationsMap));
+      mvSubmissions.forEach((submission) => buildRows(submission, mvStationsMap));
     }
   }
 

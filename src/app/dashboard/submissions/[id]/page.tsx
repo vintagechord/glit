@@ -379,9 +379,25 @@ export default async function SubmissionDetailPage({
     console.error("[Dashboard SubmissionDetail] station_reviews join error", stationReviewsError);
   }
 
-  const reviewMap = new Map<string, any>();
-  (stationReviewsData ?? []).forEach((review: any) => {
-    const stationId = review.station_id || (Array.isArray(review.station) ? review.station[0]?.id : review.station?.id);
+  type StationReviewRow = {
+    id: string;
+    submission_id: string;
+    station_id: string | null;
+    status: string;
+    result_note: string | null;
+    track_results?: unknown;
+    updated_at: string;
+    station?:
+      | { id?: string | null; name?: string | null; code?: string | null }
+      | Array<{ id?: string | null; name?: string | null; code?: string | null }>
+      | null;
+  };
+
+  const reviewMap = new Map<string, StationReviewRow>();
+  (stationReviewsData ?? []).forEach((review: StationReviewRow) => {
+    const stationId =
+      review.station_id ||
+      (Array.isArray(review.station) ? review.station[0]?.id : review.station?.id);
     if (!stationId) return;
     reviewMap.set(stationId, {
       ...review,
@@ -414,7 +430,7 @@ export default async function SubmissionDetailPage({
       submissionId={submissionId}
       initialSubmission={initialSubmission as unknown as SubmissionDetailClientProps["initialSubmission"]}
       initialEvents={[]}
-      initialStationReviews={initialStationReviews as any}
+      initialStationReviews={initialStationReviews}
       initialFiles={[]}
       isAdmin={isAdmin}
     />

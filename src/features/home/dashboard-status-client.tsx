@@ -83,7 +83,7 @@ export function DashboardStatusClient({
     <DashboardShell
       title={title}
       description={description}
-      activeTab={(activeTab as any) ?? "status"}
+      activeTab={activeTab ?? "status"}
       tabs={tabs}
       contextLabel={contextLabel}
     >

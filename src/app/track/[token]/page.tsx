@@ -27,6 +27,17 @@ export default async function TrackDetailPage({
   const fallbackSelect =
     "id, guest_token, title, artist_name, status, type, payment_status, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title )";
 
+  type TrackSubmission = {
+    id: string;
+    type?: string | null;
+    status?: string | null;
+    updated_at?: string | null;
+    package?:
+      | Array<{ name?: string | null; station_count?: number | null }>
+      | { name?: string | null; station_count?: number | null }
+      | null;
+  };
+
   const fetchSubmission = async (column: "guest_token" | "id", value: string) => {
     const { data, error } = await admin
       .from("submissions")
@@ -45,7 +56,7 @@ export default async function TrackDetailPage({
     return fallback;
   };
 
-  let submission = (await fetchSubmission("guest_token", token)) as any;
+  let submission = (await fetchSubmission("guest_token", token)) as TrackSubmission | null;
 
   if (!submission) {
     const isUuid =
@@ -53,7 +64,7 @@ export default async function TrackDetailPage({
         token,
       );
     if (isUuid) {
-      submission = (await fetchSubmission("id", token)) as any;
+      submission = (await fetchSubmission("id", token)) as TrackSubmission | null;
     }
   }
 

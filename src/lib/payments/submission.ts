@@ -9,6 +9,29 @@ export type StdPayInitResult = {
   stdJsUrl: string;
 };
 
+type SubmissionRecord = {
+  id: string;
+  user_id?: string | null;
+  guest_token?: string | null;
+  title?: string | null;
+  artist_name?: string | null;
+  status?: string | null;
+  type?: string | null;
+  applicant_name?: string | null;
+  applicant_email?: string | null;
+  applicant_phone?: string | null;
+  amount_krw?: number | null;
+  payment_method?: string | null;
+  payment_status?: string | null;
+  mv_desired_rating?: string | null;
+  certificate_b2_path?: string | null;
+  certificate_original_name?: string | null;
+  certificate_mime?: string | null;
+  certificate_size?: number | null;
+  certificate_uploaded_at?: string | null;
+  package?: Array<{ name?: string | null }> | { name?: string | null } | null;
+};
+
 export const findSubmissionById = async (submissionId: string) => {
   const admin = createAdminClient();
   const selectWithRating =
@@ -28,7 +51,7 @@ export const findSubmissionById = async (submissionId: string) => {
       .select(selectFallback)
       .eq("id", submissionId)
       .maybeSingle();
-    data = fallback.data as any;
+    data = fallback.data as SubmissionRecord | null;
     error = fallback.error;
   }
 

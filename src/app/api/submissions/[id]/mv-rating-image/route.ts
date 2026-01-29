@@ -7,11 +7,13 @@ import { ensureSubmissionOwner } from "@/lib/payments/submission";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type RatingFields = { mv_desired_rating?: string | null };
+
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> },
+  context: { params: { id: string } },
 ) {
-  const { id: submissionId } = await context.params;
+  const { id: submissionId } = context.params;
   const url = new URL(req.url);
   const guestToken = url.searchParams.get("guestToken") || undefined;
 
@@ -26,7 +28,7 @@ export async function GET(
     return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
   }
 
-  const rating = (submission as any)?.mv_desired_rating ?? null;
+  const rating = (submission as RatingFields)?.mv_desired_rating ?? null;
   if (!isRatingCode(rating)) {
     return NextResponse.json({ error: "등급이 설정되지 않았습니다." }, { status: 404 });
   }
