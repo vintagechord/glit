@@ -87,19 +87,19 @@ export async function GET() {
       .not("status", "eq", "DRAFT");
 
   const recentWindowOr =
-    `result_notified_at.gte.${recentResultCutoff},and(result_notified_at.is.null,updated_at.gte.${recentResultCutoff})`;
+    `or=(and(updated_at.gte.${recentResultCutoff},result_notified_at.is.null),and(updated_at.gte.${recentResultCutoff},result_notified_at.gte.${recentResultCutoff}))`;
 
   let albumResult = await buildAlbumBase()
     .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .limit(10000);
+    .range(0, 9999);
 
   if (albumResult.error && isResultNotifiedMissing(albumResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
     albumResult = await buildAlbumBase()
       .gte("updated_at", recentResultCutoff)
       .order("updated_at", { ascending: false })
-      .limit(10000);
+      .range(0, 9999);
   } else if (albumResult.error) {
     console.error("[dashboard status] album query error", albumResult.error);
     return NextResponse.json({ error: "ALBUM_QUERY_FAILED" }, { status: 500 });
@@ -108,14 +108,14 @@ export async function GET() {
   let mvResult = await buildMvBase()
     .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .limit(10000);
+    .range(0, 9999);
 
   if (mvResult.error && isResultNotifiedMissing(mvResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);
     mvResult = await buildMvBase()
       .gte("updated_at", recentResultCutoff)
       .order("updated_at", { ascending: false })
-      .limit(10000);
+      .range(0, 9999);
   } else if (mvResult.error) {
     console.error("[dashboard status] mv query error", mvResult.error);
     return NextResponse.json({ error: "MV_QUERY_FAILED" }, { status: 500 });
@@ -250,7 +250,11 @@ export async function GET() {
         console.warn("[dashboard status] ensure stations failed", error);
       }
     });
-    await Promise.allSettled(tasks);
+    const results = await Promise.allSettled(tasks);
+    const rejected = results.filter((r) => r.status === "rejected");
+    if (rejected.length) {
+      return NextResponse.json({ error: "ALBUM_STATION_BACKFILL_FAILED" }, { status: 500 });
+    }
   }
 
   const albumStationsMap: Record<string, unknown[]> = {};
@@ -292,31 +296,45 @@ export async function GET() {
       const r = review as StationReviewRow;
       const submissionId = r.submission_id;
       const stationRel = r.station;
-      const stationRelItem = Array.isArray(stationRel) ? stationRel[0] : stationRel ?? null;
-      const stationId =
-        r.station_id ??
-        stationRelItem?.id ??
-        stationRelItem?.code ??
-        null;
-      if (!submissionId || !stationId) return;
-      const normalizedStation = stationRelItem;
-      const map = reviewMap.get(submissionId) ?? new Map();
-      if (!map.has(stationId)) {
-        map.set(stationId, {
-          ...r,
-          station: normalizedStation,
-        });
-      }
-      reviewMap.set(submissionId, map);
+      const stationList = Array.isArray(stationRel)
+        ? stationRel.filter(Boolean)
+        : stationRel
+          ? [stationRel]
+          : [];
+      const candidates = stationList.length ? stationList : [null];
+      candidates.forEach((stationRelItem) => {
+        const stationId =
+          r.station_id ??
+          stationRelItem?.id ??
+          stationRelItem?.code ??
+          null;
+        if (!submissionId || !stationId) return;
+        const normalizedStation = stationRelItem;
+        const map = reviewMap.get(submissionId) ?? new Map();
+        if (!map.has(stationId)) {
+          map.set(stationId, {
+            ...r,
+            station: normalizedStation,
+          });
+        }
+        reviewMap.set(submissionId, map);
+      });
     });
 
     const logoCache = new Map<string, string | null>();
     const logoFor = (code?: string | null) => {
-      const safe = code?.toString().replace(/[^A-Za-z0-9_-]/g, "").toUpperCase();
-      if (!safe) return null;
-      if (logoCache.has(safe)) return logoCache.get(safe) ?? null;
-      const url = admin.storage.from("broadcast").getPublicUrl(`${safe}.png`).data.publicUrl ?? null;
-      logoCache.set(safe, url);
+      const safe = code?.toString().replace(/[^A-Za-z0-9_-]/g, "");
+      if (!safe) return "/station-logos/default.svg";
+      const cacheKey = safe.toLowerCase();
+      if (logoCache.has(cacheKey)) return logoCache.get(cacheKey) ?? "/station-logos/default.svg";
+
+      const tryUrl = (path: string) =>
+        admin.storage.from("broadcast").getPublicUrl(path).data.publicUrl ?? null;
+
+      const lowerUrl = tryUrl(`${safe.toLowerCase()}.png`);
+      const upperUrl = lowerUrl ? null : tryUrl(`${safe.toUpperCase()}.png`);
+      const url = lowerUrl ?? upperUrl ?? "/station-logos/default.svg";
+      logoCache.set(cacheKey, url);
       return url;
     };
 
@@ -349,13 +367,14 @@ export async function GET() {
           ? pkgStations.map((station) => {
               const reviewKey = station.id ?? station.code ?? "";
               const review = reviewKey ? reviews.get(reviewKey) : null;
+              const isLatest = review ? true : false;
               return {
                 id: review?.id ?? `placeholder-${submission.id}-${station.code ?? station.id}`,
                 submission_id: submission.id,
                 status: review?.status ?? submission.status ?? "NOT_SENT",
                 result_note: review?.result_note ?? null,
                 track_results: review?.track_results ?? null,
-                updated_at: review?.updated_at ?? submission.updated_at,
+                updated_at: isLatest ? review?.updated_at ?? submission.updated_at : submission.updated_at,
                 station: {
                   id: station.id,
                   code: station.code,
@@ -393,8 +412,8 @@ export async function GET() {
           station: {
             id: "",
             code: "",
-            name: pkg?.name ?? "신청 방송국",
-            logo_url: null,
+            name: pkg?.name ?? "선택 방송국",
+            logo_url: "/station-logos/default.svg",
           },
         });
       }
