@@ -274,6 +274,7 @@ export async function GET() {
 
     (data ?? []).forEach((review) => {
       const r = review as StationReviewRow;
+      const submissionId = r.submission_id;
       const stationRel = r.station;
       const stationId =
         r.station_id ??
