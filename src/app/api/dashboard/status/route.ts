@@ -273,19 +273,18 @@ export async function GET() {
     const reviewMap = new Map<string, Map<string, StationReviewRow>>();
 
     (data ?? []).forEach((review) => {
-      const submissionId = (review as StationReviewRow).submission_id;
+      const r = review as StationReviewRow;
+      const stationRel = r.station;
       const stationId =
-        (review as StationReviewRow).station_id ||
-        (Array.isArray((review as StationReviewRow).station)
-          ? (review as StationReviewRow).station?.[0]?.id
-          : (review as StationReviewRow).station?.id);
+        r.station_id ??
+        (Array.isArray(stationRel) ? stationRel[0]?.id : stationRel?.id);
       if (!submissionId || !stationId) return;
-      const normalizedStation = Array.isArray((review as StationReviewRow).station)
-        ? (review as StationReviewRow).station?.[0]
-        : (review as StationReviewRow).station ?? null;
+      const normalizedStation = Array.isArray(stationRel)
+        ? stationRel?.[0]
+        : stationRel ?? null;
       const map = reviewMap.get(submissionId) ?? new Map();
       map.set(stationId, {
-        ...(review as StationReviewRow),
+        ...r,
         station: normalizedStation,
       });
       reviewMap.set(submissionId, map);
