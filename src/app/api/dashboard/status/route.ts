@@ -92,14 +92,14 @@ export async function GET() {
   let albumResult = await buildAlbumBase()
     .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .range(0, 499);
+    .range(0, 1999);
 
   if (albumResult.error && isResultNotifiedMissing(albumResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
     albumResult = await buildAlbumBase()
       .gte("updated_at", recentResultCutoff)
       .order("updated_at", { ascending: false })
-      .range(0, 499);
+      .range(0, 1999);
   } else if (albumResult.error) {
     console.error("[dashboard status] album query error", albumResult.error);
     return NextResponse.json({ error: "ALBUM_QUERY_FAILED" }, { status: 500 });
@@ -108,14 +108,14 @@ export async function GET() {
   let mvResult = await buildMvBase()
     .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .range(0, 499);
+    .range(0, 1999);
 
   if (mvResult.error && isResultNotifiedMissing(mvResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);
     mvResult = await buildMvBase()
       .gte("updated_at", recentResultCutoff)
       .order("updated_at", { ascending: false })
-      .range(0, 499);
+      .range(0, 1999);
   } else if (mvResult.error) {
     console.error("[dashboard status] mv query error", mvResult.error);
     return NextResponse.json({ error: "MV_QUERY_FAILED" }, { status: 500 });
@@ -329,7 +329,9 @@ export async function GET() {
       const lowerUrl = tryUrl(`${safe.toLowerCase()}.png`);
       const upperUrl = lowerUrl ? null : tryUrl(`${safe.toUpperCase()}.png`);
       const url = lowerUrl ?? upperUrl ?? "/station-logos/default.svg";
-      logoCache.set(cacheKey, url);
+      if (url !== "/station-logos/default.svg") {
+        logoCache.set(cacheKey, url);
+      }
       return url;
     };
 
@@ -355,16 +357,28 @@ export async function GET() {
           name: station.name,
         }));
       }
+      if (!pkgStations.length && isMv) {
+        const pkg = resolvePackage(submission);
+        const fallbackPkg = submission.package_id ? packageMap.get(submission.package_id) : null;
+        const name = pkg?.name ?? fallbackPkg?.name ?? "선택 방송국";
+        pkgStations = [
+          {
+            id: "",
+            code: submission.package_id ?? "",
+            name,
+          },
+        ];
+      }
       const reviews = reviewMap.get(submission.id) ?? new Map();
 
       const rows =
         pkgStations.length > 0
           ? pkgStations.map((station) => {
-              const reviewKey = station.id ?? station.code ?? "";
+              const reviewKey = station.id ?? station.code ?? null;
               const review = reviewKey ? reviews.get(reviewKey) : null;
               const isLatest = review ? true : false;
               return {
-                id: review?.id ?? `placeholder-${submission.id}-${station.code ?? station.id}`,
+                id: review?.id ?? `placeholder-${submission.id}-${station.code ?? station.id ?? "station"}`,
                 submission_id: submission.id,
                 status: review?.status ?? submission.status ?? "NOT_SENT",
                 result_note: review?.result_note ?? null,
