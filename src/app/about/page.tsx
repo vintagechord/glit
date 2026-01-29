@@ -44,7 +44,6 @@ export default function AboutPage() {
                 {[
                   "Album Review",
                   "MV Review",
-                  "Online Delivery",
                   "Real-time Update",
                 ].map((chip) => (
                   <span
@@ -77,7 +76,7 @@ export default function AboutPage() {
                   priority={false}
                 />
                 <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--about-ink)]/60">
-                  Ready to Air · OFFICIAL MUSIC & VIDEO REVIEW
+                  Ready to Air
                 </p>
               </div>
             </div>

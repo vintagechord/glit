@@ -83,26 +83,34 @@ export function AboutRevealSection() {
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
               정식 등록 업체
             </p>
-            <p className="text-base leading-relaxed text-white/80">
-              온사이드는 뮤직 비즈니스 전문기업 (주)빈티지하우스의 심의 브랜드입니다.
-              빈티지하우스는 음원거래 플랫폼{" "}
-              <a
-                href="https://www.iamwatermelon.com"
-                className="font-semibold underline decoration-white/60 underline-offset-4"
-              >
-                워터멜론
-              </a>
-              (Beat 마켓), 마하픽스(음향기기 수리), 레코딩&믹스를 진행하는 뮤직 스튜디오{" "}
-              <a
-                href="https://vhouse.co.kr"
-                className="font-semibold underline decoration-white/60 underline-offset-4"
-              >
-                V-House
-              </a>
-              등을 운영하고 있습니다. 통신판매업, 대중문화예술기획업,
-              음반/음악영상물제작업 등을 완료한 정식 업체로 세금계산서, 현금영수증,
-              거래내역서 등 모든 서류의 발급이 원활합니다.
-            </p>
+            <div className="space-y-3 text-base leading-relaxed text-white/80">
+              <p>
+                온사이드는 뮤직 비즈니스 전문기업 (주)빈티지하우스가 운영하는 심의 전문
+                브랜드입니다.
+              </p>
+              <p>
+                빈티지하우스는 음원 거래 플랫폼{" "}
+                <a
+                  href="https://www.iamwatermelon.com"
+                  className="font-semibold underline decoration-white/60 underline-offset-4"
+                >
+                  워터멜론
+                </a>
+                (Beat 마켓), 음향기기 수리 서비스 ‘마하픽스’, 레코딩·믹스를 진행하는 뮤직
+                스튜디오{" "}
+                <a
+                  href="https://vhouse.co.kr"
+                  className="font-semibold underline decoration-white/60 underline-offset-4"
+                >
+                  V-House
+                </a>
+                를 함께 운영하고 있습니다.
+              </p>
+              <ul className="list-disc space-y-1 pl-4 text-white/80">
+                <li>통신판매업, 대중문화예술기획업, 음반·음악영상물제작업 등록 업체</li>
+                <li>세금계산서·현금영수증·거래내역서 등 각종 증빙 서류 발급 가능</li>
+              </ul>
+            </div>
           </div>
         </section>
 
