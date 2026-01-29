@@ -1,10 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 
-import { APP_CONFIG } from "@/lib/config";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { ThemeToggle } from "./theme-toggle";
+import { SiteLogo } from "./site-logo";
 
 const primaryLinkClass =
   "group flex items-center gap-2 rounded-full px-3 py-1 text-foreground/80 transition hover:bg-foreground hover:text-background dark:text-foreground dark:hover:bg-white dark:hover:text-black";
@@ -25,46 +24,11 @@ export async function SiteHeader() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const logoLight = APP_CONFIG.logoLightPath || APP_CONFIG.logoPath;
-  const logoDark = APP_CONFIG.logoDarkPath || "";
-
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-4">
         <div className="flex items-center gap-4">
-          <Link href="/" className="flex items-center gap-2">
-            {logoLight ? (
-              <>
-                <Image
-                  src={logoLight}
-                  alt="onside"
-                  className="dark:hidden"
-                  width={118}
-                  height={32}
-                  priority
-                />
-                {logoDark ? (
-                  <Image
-                    src={logoDark}
-                    alt="onside"
-                    className="hidden dark:block"
-                    width={118}
-                    height={32}
-                    priority
-                  />
-                ) : (
-                  <span className="hidden dark:inline text-lg font-semibold tracking-[0.3em] text-white">
-                    ONSIDE
-                  </span>
-                )}
-                <span className="sr-only">온사이드</span>
-              </>
-            ) : (
-              <span className="text-lg font-semibold tracking-[0.3em] text-foreground">
-                onside
-              </span>
-            )}
-          </Link>
+          <SiteLogo />
           <nav className="hidden items-center gap-3 text-base font-semibold text-foreground/80 md:flex">
             <Link
               href={navLinks[0].href}

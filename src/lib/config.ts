@@ -1,14 +1,40 @@
-// Supabase signed URL for onside logo (long expiry). If public bucket is enabled,
-// you can swap this to the public object URL instead.
-const DEFAULT_LOGO =
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+
+const PUBLIC_LOGO_BASE = SUPABASE_URL
+  ? `${SUPABASE_URL}/storage/v1/object/public/logo`
+  : undefined;
+
+const PUBLIC_LOGO_LIGHT = PUBLIC_LOGO_BASE
+  ? `${PUBLIC_LOGO_BASE}/onside-logo-light.svg`
+  : undefined;
+
+const PUBLIC_LOGO_DARK = PUBLIC_LOGO_BASE
+  ? `${PUBLIC_LOGO_BASE}/onside-logo-dark.svg`
+  : undefined;
+
+const PUBLIC_LOGO_FALLBACK = PUBLIC_LOGO_BASE
+  ? `${PUBLIC_LOGO_BASE}/onside_logo.svg`
+  : undefined;
+
+// Long-lived signed URL kept as a final fallback to avoid broken branding when
+// env vars are missing or the bucket is private.
+const DEFAULT_SIGNED_LOGO =
   "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/sign/logo/onside_logo.svg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8xMDAwNTc4YS0wOTBiLTRmOTYtYTRlMC1mNTM5ODlhNjRjMDgiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJsb2dvL29uc2lkZV9sb2dvLnN2ZyIsImlhdCI6MTc2OTUzNzI0NiwiZXhwIjoyMDg0ODk3MjQ2fQ.b_hTQcgrSOHS0u5nn0mcJbIy5xwFytJY-st0_6UKijY";
 
 export const APP_CONFIG = {
-  logoPath: process.env.NEXT_PUBLIC_LOGO_PATH ?? DEFAULT_LOGO,
+  logoPath:
+    process.env.NEXT_PUBLIC_LOGO_PATH ??
+    PUBLIC_LOGO_FALLBACK ??
+    DEFAULT_SIGNED_LOGO,
   logoLightPath:
-    process.env.NEXT_PUBLIC_LOGO_LIGHT_PATH ?? DEFAULT_LOGO,
+    process.env.NEXT_PUBLIC_LOGO_LIGHT_PATH ??
+    PUBLIC_LOGO_LIGHT ??
+    PUBLIC_LOGO_FALLBACK ??
+    DEFAULT_SIGNED_LOGO,
   logoDarkPath:
-    process.env.NEXT_PUBLIC_LOGO_DARK_PATH ?? "",
+    process.env.NEXT_PUBLIC_LOGO_DARK_PATH ??
+    PUBLIC_LOGO_DARK ??
+    "",
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "help@vhouse.co.kr",
   supportPhone: process.env.NEXT_PUBLIC_SUPPORT_PHONE ?? "010-8436-9035",
   supportHours:

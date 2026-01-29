@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import Image from "next/image";
 
 import { AboutRevealSection } from "@/components/about/about-reveal-section";
-import { APP_CONFIG } from "@/lib/config";
+import { SiteLogo } from "@/components/site/site-logo";
 
 export const metadata = {
   title: "회사소개",
@@ -67,13 +67,12 @@ export default function AboutPage() {
                 />
               </div>
               <div className="mt-3 flex items-center gap-3">
-                <Image
-                  src={APP_CONFIG.logoLightPath || APP_CONFIG.logoPath}
-                  alt="온사이드 로고"
+                <SiteLogo
+                  href={null}
                   width={96}
                   height={24}
                   className="h-6 w-auto"
-                  priority={false}
+                  showSrLabel={false}
                 />
                 <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--about-ink)]/60">
                   Ready to Air

@@ -86,32 +86,39 @@ export async function GET() {
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
       .not("status", "eq", "DRAFT");
 
+  const recentWindowOr =
+    `result_notified_at.gte.${recentResultCutoff},and(result_notified_at.is.null,updated_at.gte.${recentResultCutoff})`;
+
   let albumResult = await buildAlbumBase()
-    .or(`result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}`)
+    .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .limit(5);
+    .limit(10000);
 
   if (albumResult.error && isResultNotifiedMissing(albumResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
     albumResult = await buildAlbumBase()
+      .gte("updated_at", recentResultCutoff)
       .order("updated_at", { ascending: false })
-      .limit(5);
+      .limit(10000);
   } else if (albumResult.error) {
     console.error("[dashboard status] album query error", albumResult.error);
+    return NextResponse.json({ error: "ALBUM_QUERY_FAILED" }, { status: 500 });
   }
 
   let mvResult = await buildMvBase()
-    .or(`result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}`)
+    .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .limit(5);
+    .limit(10000);
 
   if (mvResult.error && isResultNotifiedMissing(mvResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);
     mvResult = await buildMvBase()
+      .gte("updated_at", recentResultCutoff)
       .order("updated_at", { ascending: false })
-      .limit(5);
+      .limit(10000);
   } else if (mvResult.error) {
     console.error("[dashboard status] mv query error", mvResult.error);
+    return NextResponse.json({ error: "MV_QUERY_FAILED" }, { status: 500 });
   }
 
   const albumSubmissions = (albumResult.data ?? []) as Array<{
@@ -134,6 +141,7 @@ export async function GET() {
     payment_status?: string | null;
     type: string;
     package_id?: string | null;
+    package?: { name?: string | null; station_count?: number | null }[];
   }>;
 
   const allSubmissionIds = [...albumSubmissions, ...mvSubmissions]
@@ -173,6 +181,7 @@ export async function GET() {
       .in("id", packageIds);
     if (packageError) {
       console.error("[dashboard status] package fallback query error", packageError);
+      return NextResponse.json({ error: "PACKAGE_QUERY_FAILED" }, { status: 500 });
     }
     (packages ?? []).forEach((pkg) => {
       packageMap.set(pkg.id, {
@@ -189,22 +198,37 @@ export async function GET() {
 
     if (packageStationsError) {
       console.error("[dashboard status] package_stations query error", packageStationsError);
+      return NextResponse.json({ error: "PACKAGE_STATIONS_QUERY_FAILED" }, { status: 500 });
     }
 
     (packageStations ?? []).forEach((row) => {
       const pkgId = row.package_id;
-      const station = Array.isArray(row.station) ? row.station[0] : row.station;
-      if (!pkgId || !station) return;
-      packageStationsMap.set(pkgId, [
-        ...(packageStationsMap.get(pkgId) ?? []),
-        { id: station.id, code: station.code ?? null, name: station.name ?? null },
-      ]);
+      const stations = Array.isArray(row.station)
+        ? row.station
+        : row.station
+          ? [row.station]
+          : [];
+      if (!pkgId || stations.length === 0) return;
+
+      const current = packageStationsMap.get(pkgId) ?? [];
+      const merged = [...current];
+      stations.forEach((station) => {
+        if (!station) return;
+        const key = station.id ?? station.code ?? "";
+        if (key && merged.some((s) => (s.id ?? s.code) === key)) return;
+        merged.push({
+          id: station.id,
+          code: station.code ?? null,
+          name: station.name ?? null,
+        });
+      });
+      packageStationsMap.set(pkgId, merged);
     });
   }
 
   // Ensure station review placeholders exist so 진행 상황 리스트 shows all stations even pre-payment.
-  if (albumSubmissions.length || mvSubmissions.length) {
-    const tasks = [...albumSubmissions, ...mvSubmissions].map(async (submission: DashboardSubmission) => {
+  if (albumSubmissions.length) {
+    const tasks = albumSubmissions.map(async (submission: DashboardSubmission) => {
       const pkg = Array.isArray(submission.package)
         ? submission.package[0]
         : submission.package;
@@ -215,33 +239,24 @@ export async function GET() {
       const resolvedName = pkg?.name ?? fallbackPkg?.name ?? null;
       const resolvedCount = pkg?.station_count ?? fallbackPkg?.station_count ?? null;
 
-      console.log("[dashboard status] ensure stations", {
-        submissionId: submission.id,
-        packageId: submission.package_id,
-        joinPkg: pkg,
-        fallbackPkg,
-        resolvedName,
-        resolvedCount,
-        expectedCount: resolvedCount,
-      });
-
-      await ensureAlbumStationReviews(
-        admin,
-        submission.id,
-        resolvedCount,
-        resolvedName,
-      );
+      try {
+        await ensureAlbumStationReviews(
+          admin,
+          submission.id,
+          resolvedCount,
+          resolvedName,
+        );
+      } catch (error) {
+        console.warn("[dashboard status] ensure stations failed", error);
+      }
     });
-    await Promise.all(tasks);
+    await Promise.allSettled(tasks);
   }
 
   const albumStationsMap: Record<string, unknown[]> = {};
   const mvStationsMap: Record<string, unknown[]> = {};
 
   if (allSubmissionIds.length) {
-    const albumIdSet = new Set(albumSubmissions.map((s) => s.id));
-    const mvIdSet = new Set(mvSubmissions.map((s) => s.id));
-
     const withTracksSelect =
       "id, submission_id, station_id, status, result_note, updated_at, track_results, station:stations!station_reviews_station_id_fkey ( id, name, code )";
     const noTracksSelect =
@@ -267,6 +282,7 @@ export async function GET() {
       data = (fallback.data as StationReviewRow[] | null) ?? null;
       if (fallback.error) {
         console.error("[dashboard status] station_reviews fallback join error", fallback.error);
+        return NextResponse.json({ error: "STATION_REVIEWS_QUERY_FAILED" }, { status: 500 });
       }
     }
 
@@ -276,36 +292,46 @@ export async function GET() {
       const r = review as StationReviewRow;
       const submissionId = r.submission_id;
       const stationRel = r.station;
+      const stationRelItem = Array.isArray(stationRel) ? stationRel[0] : stationRel ?? null;
       const stationId =
         r.station_id ??
-        (Array.isArray(stationRel) ? stationRel[0]?.id : stationRel?.id);
+        stationRelItem?.id ??
+        stationRelItem?.code ??
+        null;
       if (!submissionId || !stationId) return;
-      const normalizedStation = Array.isArray(stationRel)
-        ? stationRel?.[0]
-        : stationRel ?? null;
+      const normalizedStation = stationRelItem;
       const map = reviewMap.get(submissionId) ?? new Map();
-      map.set(stationId, {
-        ...r,
-        station: normalizedStation,
-      });
+      if (!map.has(stationId)) {
+        map.set(stationId, {
+          ...r,
+          station: normalizedStation,
+        });
+      }
       reviewMap.set(submissionId, map);
     });
 
-    const logoFor = (code?: string | null) =>
-      code
-        ? admin.storage.from("broadcast").getPublicUrl(`${code}.png`).data.publicUrl ?? null
-        : null;
+    const logoCache = new Map<string, string | null>();
+    const logoFor = (code?: string | null) => {
+      const safe = code?.toString().replace(/[^A-Za-z0-9_-]/g, "").toUpperCase();
+      if (!safe) return null;
+      if (logoCache.has(safe)) return logoCache.get(safe) ?? null;
+      const url = admin.storage.from("broadcast").getPublicUrl(`${safe}.png`).data.publicUrl ?? null;
+      logoCache.set(safe, url);
+      return url;
+    };
 
     const buildRows = (
       submission: (typeof albumSubmissions)[number] | (typeof mvSubmissions)[number],
       targetMap: Record<string, unknown[]>,
     ) => {
+      const isMv = (submission as { type?: string }).type && (submission as { type?: string }).type !== "ALBUM";
+
       let pkgStations =
         submission.package_id && packageStationsMap.has(submission.package_id)
           ? packageStationsMap.get(submission.package_id) ?? []
           : [];
 
-      if (!pkgStations.length) {
+      if (!pkgStations.length && !isMv) {
         const pkg = resolvePackage(submission);
         const fallbackPkg = submission.package_id ? packageMap.get(submission.package_id) : null;
         const resolvedName = pkg?.name ?? fallbackPkg?.name ?? null;
@@ -318,23 +344,27 @@ export async function GET() {
       }
       const reviews = reviewMap.get(submission.id) ?? new Map();
 
-      const rows = pkgStations.map((station) => {
-        const review = station.id ? reviews.get(station.id) : null;
-        return {
-          id: review?.id ?? `placeholder-${submission.id}-${station.code ?? station.id}`,
-          submission_id: submission.id,
-          status: review?.status ?? submission.status ?? "NOT_SENT",
-          result_note: review?.result_note ?? null,
-          track_results: review?.track_results ?? null,
-          updated_at: review?.updated_at ?? submission.updated_at,
-          station: {
-            id: station.id,
-            code: station.code,
-            name: station.name,
-            logo_url: logoFor(station.code ?? undefined),
-          },
-        };
-      });
+      const rows =
+        pkgStations.length > 0
+          ? pkgStations.map((station) => {
+              const reviewKey = station.id ?? station.code ?? "";
+              const review = reviewKey ? reviews.get(reviewKey) : null;
+              return {
+                id: review?.id ?? `placeholder-${submission.id}-${station.code ?? station.id}`,
+                submission_id: submission.id,
+                status: review?.status ?? submission.status ?? "NOT_SENT",
+                result_note: review?.result_note ?? null,
+                track_results: review?.track_results ?? null,
+                updated_at: review?.updated_at ?? submission.updated_at,
+                station: {
+                  id: station.id,
+                  code: station.code,
+                  name: station.name,
+                  logo_url: logoFor(station.code ?? undefined),
+                },
+              };
+            })
+          : [];
 
       if (rows.length === 0 && reviews.size) {
         reviews.forEach((review) => {
@@ -385,7 +415,7 @@ export async function GET() {
     },
     {
       headers: {
-        "Cache-Control": "private, max-age=30",
+        "Cache-Control": "private, no-store",
       },
     },
   );
