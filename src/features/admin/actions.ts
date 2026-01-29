@@ -110,6 +110,10 @@ const deleteSubmissionsSchema = z.object({
   ids: z.array(z.string().uuid()).min(1),
 });
 
+const deleteArtistSchema = z.object({
+  id: z.string().uuid(),
+});
+
 const bannerBucket = "banners";
 const bannerFolder = "strip";
 
@@ -1305,6 +1309,40 @@ export async function deleteSubmissionsFormAction(
   if (redirectTo) {
     redirect(redirectTo);
   }
+}
+
+export async function deleteArtistAction(
+  payload: z.infer<typeof deleteArtistSchema>,
+): Promise<AdminActionState> {
+  const parsed = deleteArtistSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { error: "삭제할 아티스트 ID를 확인해주세요." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("artists").delete().eq("id", parsed.data.id);
+  if (error) {
+    console.error("admin delete artist error", error);
+    return { error: "아티스트 삭제에 실패했습니다." };
+  }
+
+  revalidatePath("/admin/artists");
+  revalidatePath(`/admin/artists/${parsed.data.id}`);
+  revalidatePath("/admin/submissions");
+  revalidatePath("/dashboard/status");
+  revalidatePath("/dashboard/history");
+  return { message: "아티스트를 삭제했습니다." };
+}
+
+export async function deleteArtistFormAction(formData: FormData): Promise<void> {
+  const id = String(formData.get("id") ?? "");
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/artists");
+  const result = await deleteArtistAction({ id });
+  if (result.error) {
+    console.error(result.error);
+    return;
+  }
+  redirect(redirectTo);
 }
 
 export async function saveSubmissionAdminFormAction(

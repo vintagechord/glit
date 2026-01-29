@@ -3,6 +3,8 @@ import Link from "next/link";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/format";
+import { ConfirmForm } from "@/components/admin/confirm-form";
+import { deleteArtistFormAction } from "@/features/admin/actions";
 
 export const metadata = {
   title: "아티스트 관리",
@@ -20,13 +22,19 @@ type ArtistRow = {
 export default async function AdminArtistsPage({
   searchParams,
 }: {
-  searchParams: { q?: string | null; sort?: string | null };
+  searchParams: { q?: string | null; sort?: string | null; page?: string | null };
 }) {
   const admin = createAdminClient();
+  const pageSize = 30;
+  const page = Math.max(1, Number(searchParams.page ?? "1") || 1);
+  const offset = (page - 1) * pageSize;
+
   let query = admin
     .from("artists")
-    .select("id, name, thumbnail_url, submissions:submissions ( id, created_at )")
-    .limit(200);
+    .select("id, name, thumbnail_url, submissions:submissions ( id, created_at )", {
+      count: "exact",
+    })
+    .range(offset, offset + pageSize - 1);
 
   if (searchParams.q) {
     query = query.ilike("name", `%${searchParams.q}%`);
@@ -37,8 +45,10 @@ export default async function AdminArtistsPage({
     query = query.order("updated_at", { ascending: false });
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
   const artists = (data ?? []) as ArtistRow[];
+  const total = count ?? artists.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -93,6 +103,7 @@ export default async function AdminArtistsPage({
               <th className="px-4 py-3 font-semibold">아티스트명</th>
               <th className="px-4 py-3 font-semibold">접수 건수</th>
               <th className="px-4 py-3 font-semibold">최근 접수일</th>
+              <th className="px-4 py-3 font-semibold text-right">관리</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
@@ -136,6 +147,22 @@ export default async function AdminArtistsPage({
                   <td className="px-4 py-3 text-muted-foreground">
                     {recent ? formatDate(recent) : "-"}
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    <ConfirmForm
+                      action={deleteArtistFormAction}
+                      message="해당 아티스트를 삭제하시겠습니까?"
+                      className="inline"
+                    >
+                      <input type="hidden" name="id" value={artist.id} />
+                      <input type="hidden" name="redirectTo" value="/admin/artists" />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-border/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700"
+                      >
+                        삭제
+                      </button>
+                    </ConfirmForm>
+                  </td>
                 </tr>
               );
             })}
@@ -151,6 +178,33 @@ export default async function AdminArtistsPage({
             )}
           </tbody>
         </table>
+      </div>
+      <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+        <div>
+          총 {total.toLocaleString()}명 · 페이지 {page} / {totalPages}
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href={{
+              pathname: "/admin/artists",
+              query: { ...searchParams, page: Math.max(1, page - 1) },
+            }}
+            className="rounded-full border border-border/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-foreground transition hover:border-foreground aria-disabled:opacity-40"
+            aria-disabled={page <= 1}
+          >
+            이전
+          </Link>
+          <Link
+            href={{
+              pathname: "/admin/artists",
+              query: { ...searchParams, page: Math.min(totalPages, page + 1) },
+            }}
+            className="rounded-full border border-border/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-foreground transition hover:border-foreground aria-disabled:opacity-40"
+            aria-disabled={page >= totalPages}
+          >
+            다음
+          </Link>
+        </div>
       </div>
     </div>
   );
