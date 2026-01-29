@@ -7,6 +7,43 @@ import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-rev
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type DashboardSubmission =
+  | {
+      id: string;
+      title: string | null;
+      artist_name?: string | null;
+      status: string;
+      updated_at: string;
+      payment_status?: string | null;
+      package_id?: string | null;
+      package?: { name?: string | null; station_count?: number | null }[];
+    }
+  | {
+      id: string;
+      title: string | null;
+      artist_name?: string | null;
+      status: string;
+      updated_at: string;
+      payment_status?: string | null;
+      type: string;
+      package_id?: string | null;
+      package?: { name?: string | null; station_count?: number | null }[];
+    };
+
+type StationReviewRow = {
+  id: string;
+  submission_id: string;
+  station_id: string | null;
+  status: string;
+  result_note?: string | null;
+  updated_at: string;
+  track_results?: unknown;
+  station?:
+    | { id?: string | null; name?: string | null; code?: string | null }
+    | Array<{ id?: string | null; name?: string | null; code?: string | null }>
+    | null;
+};
+
 export async function GET() {
   const supabase = await createServerSupabase();
   const {
@@ -29,8 +66,10 @@ export async function GET() {
           error.message?.toLowerCase().includes("result_notified_at")),
     );
 
+  const admin = createAdminClient();
+
   const buildAlbumBase = () =>
-    supabase
+    admin
       .from("submissions")
       .select(
         "id, title, artist_name, status, updated_at, payment_status, package_id, package:packages ( name, station_count )",
@@ -40,7 +79,7 @@ export async function GET() {
       .not("status", "eq", "DRAFT");
 
   const buildMvBase = () =>
-    supabase
+    admin
       .from("submissions")
       .select("id, title, artist_name, status, updated_at, payment_status, type, package_id, package:packages ( name, station_count )")
       .eq("user_id", user.id)
@@ -55,7 +94,6 @@ export async function GET() {
   if (albumResult.error && isResultNotifiedMissing(albumResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
     albumResult = await buildAlbumBase()
-      .not("status", "in", "(RESULT_READY,COMPLETED)")
       .order("updated_at", { ascending: false })
       .limit(5);
   } else if (albumResult.error) {
@@ -70,14 +108,11 @@ export async function GET() {
   if (mvResult.error && isResultNotifiedMissing(mvResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);
     mvResult = await buildMvBase()
-      .not("status", "in", "(RESULT_READY,COMPLETED)")
       .order("updated_at", { ascending: false })
       .limit(5);
   } else if (mvResult.error) {
     console.error("[dashboard status] mv query error", mvResult.error);
   }
-
-  const admin = createAdminClient();
 
   const albumSubmissions = (albumResult.data ?? []) as Array<{
     id: string;
@@ -124,6 +159,13 @@ export async function GET() {
     Array<{ id: string; code: string | null; name: string | null }>
   >();
 
+  const resolvePackage = (submission: DashboardSubmission) => {
+    const pkg = Array.isArray(submission.package)
+      ? submission.package?.[0]
+      : submission.package ?? null;
+    return pkg ?? null;
+  };
+
   if (packageIds.length) {
     const { data: packages, error: packageError } = await admin
       .from("packages")
@@ -162,7 +204,7 @@ export async function GET() {
 
   // Ensure station review placeholders exist so 진행 상황 리스트 shows all stations even pre-payment.
   if (albumSubmissions.length || mvSubmissions.length) {
-    const tasks = [...albumSubmissions, ...mvSubmissions].map(async (submission: any) => {
+    const tasks = [...albumSubmissions, ...mvSubmissions].map(async (submission: DashboardSubmission) => {
       const pkg = Array.isArray(submission.package)
         ? submission.package[0]
         : submission.package;
@@ -200,21 +242,26 @@ export async function GET() {
     const albumIdSet = new Set(albumSubmissions.map((s) => s.id));
     const mvIdSet = new Set(mvSubmissions.map((s) => s.id));
 
-    let { data, error: stationReviewsError } = await admin
+    const withTracksSelect =
+      "id, submission_id, station_id, status, result_note, updated_at, track_results, station:stations!station_reviews_station_id_fkey ( id, name, code )";
+    const noTracksSelect =
+      "id, submission_id, station_id, status, result_note, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )";
+
+    const { data: initialStationData, error: stationReviewsError } = await admin
       .from("station_reviews")
-      .select(
-        "id, submission_id, station_id, status, result_note, updated_at, track_results, station:stations!station_reviews_station_id_fkey ( id, name, code )",
-      )
+      .select(withTracksSelect)
       .in("submission_id", allSubmissionIds)
       .order("updated_at", { ascending: false });
+    let data = initialStationData;
 
     if (stationReviewsError) {
       console.error("[dashboard status] station_reviews join error", stationReviewsError);
+      const missingTrackColumn =
+        stationReviewsError.code === "42703" ||
+        stationReviewsError.message?.toLowerCase().includes("track_results");
       const fallback = await admin
         .from("station_reviews")
-        .select(
-          "id, submission_id, station_id, status, result_note, updated_at, track_results, station:stations ( id, name, code )",
-        )
+        .select(missingTrackColumn ? noTracksSelect : withTracksSelect)
         .in("submission_id", allSubmissionIds)
         .order("updated_at", { ascending: false });
       data = fallback.data;
@@ -223,21 +270,22 @@ export async function GET() {
       }
     }
 
-    const reviewMap = new Map<
-      string,
-      Map<string, any>
-    >();
+    const reviewMap = new Map<string, Map<string, StationReviewRow>>();
 
-    (data ?? []).forEach((review: any) => {
-      const submissionId = review.submission_id;
-      const stationId = review.station_id || (Array.isArray(review.station) ? review.station[0]?.id : review.station?.id);
+    (data ?? []).forEach((review) => {
+      const submissionId = (review as StationReviewRow).submission_id;
+      const stationId =
+        (review as StationReviewRow).station_id ||
+        (Array.isArray((review as StationReviewRow).station)
+          ? (review as StationReviewRow).station?.[0]?.id
+          : (review as StationReviewRow).station?.id);
       if (!submissionId || !stationId) return;
-      const normalizedStation = Array.isArray(review.station)
-        ? review.station[0]
-        : review.station ?? null;
+      const normalizedStation = Array.isArray((review as StationReviewRow).station)
+        ? (review as StationReviewRow).station?.[0]
+        : (review as StationReviewRow).station ?? null;
       const map = reviewMap.get(submissionId) ?? new Map();
       map.set(stationId, {
-        ...review,
+        ...(review as StationReviewRow),
         station: normalizedStation,
       });
       reviewMap.set(submissionId, map);
@@ -258,9 +306,7 @@ export async function GET() {
           : [];
 
       if (!pkgStations.length) {
-        const pkg = Array.isArray((submission as any).package)
-          ? (submission as any).package[0]
-          : (submission as any).package;
+        const pkg = resolvePackage(submission);
         const fallbackPkg = submission.package_id ? packageMap.get(submission.package_id) : null;
         const resolvedName = pkg?.name ?? fallbackPkg?.name ?? null;
         const resolvedCount = pkg?.station_count ?? fallbackPkg?.station_count ?? null;
@@ -306,6 +352,7 @@ export async function GET() {
       }
 
       if (rows.length === 0) {
+        const pkg = resolvePackage(submission);
         rows.push({
           id: `placeholder-${submission.id}`,
           submission_id: submission.id,
@@ -316,7 +363,7 @@ export async function GET() {
           station: {
             id: "",
             code: "",
-            name: (submission as any)?.package?.[0]?.name ?? "신청 방송국",
+            name: pkg?.name ?? "신청 방송국",
             logo_url: null,
           },
         });
@@ -326,7 +373,7 @@ export async function GET() {
     };
 
     albumSubmissions.forEach((submission) => buildRows(submission, albumStationsMap));
-    mvSubmissions.forEach((submission) => buildRows(submission as any, mvStationsMap));
+    mvSubmissions.forEach((submission) => buildRows(submission, mvStationsMap));
   }
 
   return NextResponse.json(
