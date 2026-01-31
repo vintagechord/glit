@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-reviews";
+import { normalizeTrackResults } from "@/lib/track-results";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -377,12 +378,15 @@ export async function GET() {
               const reviewKey = station.id ?? station.code ?? null;
               const review = reviewKey ? reviews.get(reviewKey) : null;
               const isLatest = review ? true : false;
+              const normalizedTracks = review
+                ? normalizeTrackResults(review.track_results)
+                : null;
               return {
                 id: review?.id ?? `placeholder-${submission.id}-${station.code ?? station.id ?? "station"}`,
                 submission_id: submission.id,
                 status: review?.status ?? submission.status ?? "NOT_SENT",
                 result_note: review?.result_note ?? null,
-                track_results: review?.track_results ?? null,
+                track_results: normalizedTracks,
                 updated_at: isLatest ? review?.updated_at ?? submission.updated_at : submission.updated_at,
                 station: {
                   id: station.id,
