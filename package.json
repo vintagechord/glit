@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test --import tsx",
+    "health": "tsx scripts/health.ts",
     "spellcheck:smoke": "node --import tsx scripts/spellcheck_smoke.ts"
   },
   "dependencies": {
