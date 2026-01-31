@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 
 import {
-  applyReplacementRules,
   buildCustomRules,
   MAX_TEXT_LENGTH,
-  runLocalRuleEngine,
   type LocalRuleSuggestion,
   type SpellcheckRule,
 } from "@/lib/spellcheck";
 import { KO_SPELLCHECK_RULES } from "@/lib/spellcheck-rules";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { runHybridSpellcheck } from "@/lib/spellcheck-hybrid";
 
 const DEFAULT_TIMEOUT_MS = 12_000;
 const CUSTOM_RULE_CACHE_MS = 1000 * 60 * 5;
@@ -111,9 +110,17 @@ const fetchCustomRules = async () => {
 
 const buildLocalResponse = async (text: string, warnings: string[], truncated: boolean) => {
   const rules = [...(await fetchCustomRules()), ...baseLocalRules];
-  const { corrected, changes } = applyReplacementRules(text, rules);
-  const { suggestions: rawSuggestions } = runLocalRuleEngine(text, rules);
-  const suggestions = normalizeSuggestions(rawSuggestions, text.length);
+  const { corrected, changes } = runHybridSpellcheck(text, { maxIterations: 5 });
+  const suggestions = normalizeSuggestions(
+    changes.map((c) => ({
+      start: c.start,
+      end: c.end,
+      before: c.before,
+      after: c.after,
+      reason: c.rule,
+    })),
+    text.length,
+  );
   const warningsWithLocal = [...warnings, "local_rules"];
   if (truncated) {
     warningsWithLocal.push("text_truncated");
