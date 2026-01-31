@@ -77,7 +77,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof B2ConfigError
-        ? error.message
+        ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
         : "업로드 URL을 생성할 수 없습니다.";
     console.error("[Upload][presign] error", {
       submissionId,
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     if (error instanceof B2ConfigError) {
       return NextResponse.json(
         { error: message },
-        { status: 500 },
+        { status: 503 },
       );
     }
     return NextResponse.json(

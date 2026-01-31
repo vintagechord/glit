@@ -29,10 +29,13 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof B2ConfigError
-        ? error.message
+        ? "파일 저장소가 아직 설정되지 않았습니다. 관리자에게 문의해주세요."
         : error instanceof Error
           ? error.message
           : "URL을 생성하지 못했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message },
+      { status: error instanceof B2ConfigError ? 503 : 500 },
+    );
   }
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { headObject, presignGetUrl, getB2Config } from "@/lib/b2";
+import { headObject, presignGetUrl, getB2Config, B2ConfigError } from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -80,6 +80,12 @@ export async function GET(req: NextRequest) {
         (error as { $metadata?: { httpStatusCode?: number }; name?: string })?.name ||
         (error as { Code?: string })?.Code ||
         "";
+      if (error instanceof B2ConfigError) {
+        return NextResponse.json(
+          { error: "파일 저장소가 아직 설정되지 않았습니다. 관리자에게 문의해주세요." },
+          { status: 503 },
+        );
+      }
       if (code === "NotFound" || code === "NoSuchKey") {
         console.warn("[b2][download] missing key", { filePath: objectKey });
         return NextResponse.json({ error: "파일을 찾을 수 없습니다.", filePath: objectKey }, { status: 404 });
@@ -93,6 +99,12 @@ export async function GET(req: NextRequest) {
     const signed = await presignGetUrl(objectKey, 60 * 10);
     return NextResponse.redirect(signed, 302);
   } catch (error) {
+    if (error instanceof B2ConfigError) {
+      return NextResponse.json(
+        { error: "파일 저장소가 아직 설정되지 않았습니다. 관리자에게 문의해주세요." },
+        { status: 503 },
+      );
+    }
     const message =
       error instanceof Error ? error.message : "다운로드 링크를 생성하지 못했습니다.";
     console.error("[b2][download] presign error", { filePath: objectKey, error: message });
