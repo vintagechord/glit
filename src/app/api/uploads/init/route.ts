@@ -127,9 +127,10 @@ export async function POST(request: Request) {
       submissionId,
     });
   } catch (error) {
+    const isConfig = error instanceof B2ConfigError;
     const message =
-      error instanceof B2ConfigError
-        ? error.message
+      isConfig
+        ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
         : error instanceof Error
           ? error.message
           : "업로드 URL을 생성할 수 없습니다.";
@@ -138,8 +139,11 @@ export async function POST(request: Request) {
       kind,
       sizeBytes,
       user: null,
-      message,
+      raw: error instanceof Error ? error.message : error,
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message },
+      { status: isConfig ? 503 : 500 },
+    );
   }
 }

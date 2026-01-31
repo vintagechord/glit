@@ -90,10 +90,12 @@ export async function GET() {
   const recentWindowOr =
     `and(updated_at.gte.${recentResultCutoff},or(result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}))`;
 
+  const maxRows = 4999;
+
   let albumResult = await buildAlbumBase()
     .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .range(0, 1999);
+    .range(0, maxRows);
 
   if (albumResult.error && isResultNotifiedMissing(albumResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
@@ -109,7 +111,7 @@ export async function GET() {
   let mvResult = await buildMvBase()
     .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .range(0, 1999);
+    .range(0, maxRows);
 
   if (mvResult.error && isResultNotifiedMissing(mvResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);
