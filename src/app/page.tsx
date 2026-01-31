@@ -342,24 +342,7 @@ export default async function Home() {
     ? {}
     : { [sampleMv.id]: sampleStations };
 
-  const normalizeStations = (
-    reviews?: Array<{
-      id: string;
-      submission_id?: string;
-      status: string;
-      updated_at: string;
-      track_results?: unknown;
-      station?: { name?: string | null } | Array<{ name?: string | null }>;
-    }> | null,
-  ) =>
-    (reviews ?? []).map((review) => ({
-      ...review,
-      submission_id: (review as { submission_id?: string }).submission_id,
-      station: Array.isArray(review.station) ? review.station[0] : review.station ?? null,
-    }));
-
   if (user) {
-    const paymentStatuses = ["PAYMENT_PENDING", "PAID", "UNPAID"];
     const recentResultCutoff = RECENT_RESULT_CUTOFF;
     const admin = createAdminClient();
     const isResultNotifiedMissing = (error?: { message?: string; code?: string | number }) =>
@@ -544,12 +527,8 @@ export default async function Home() {
     const allIds = [...albumIds, ...mvIds];
 
     if (allIds.length) {
-      const withTracks =
-        "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code, region )";
       const withoutTracks =
         "id, submission_id, station_id, status, result_note, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code, region )";
-      const albumIdSet = new Set(albumIds);
-      const mvIdSet = new Set(mvIds);
 
       const reviewResult = await admin
         .from("station_reviews")

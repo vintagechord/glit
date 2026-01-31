@@ -419,9 +419,6 @@ const submissionFileUrlSchema = z.object({
   guestToken: z.string().min(8).optional(),
 });
 
-const isMvSubmissionType = (type: string) =>
-  type === "MV_BROADCAST" || type === "MV_DISTRIBUTION";
-
 export async function getSubmissionFileUrlAction(
   payload: z.infer<typeof submissionFileUrlSchema>,
 ): Promise<SubmissionFileUrlActionState> {

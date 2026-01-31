@@ -11,9 +11,9 @@ type RatingFields = { mv_desired_rating?: string | null };
 
 export async function GET(
   req: NextRequest,
-  context: { params: { id: string } },
+  context: { params: Promise<{ id: string }> },
 ) {
-  const { id: submissionId } = context.params;
+  const { id: submissionId } = await context.params;
   const url = new URL(req.url);
   const guestToken = url.searchParams.get("guestToken") || undefined;
 
@@ -39,7 +39,12 @@ export async function GET(
   try {
     const urlSigned = await presignGetUrl(objectKey, 60 * 10);
     return NextResponse.json({ url: urlSigned, rating });
-  } catch (err) {
+  } catch (error) {
+    console.error("[mv-rating-image] failed to presign rating image", {
+      submissionId,
+      rating,
+      error,
+    });
     return NextResponse.json({ error: "이미지 링크를 생성하지 못했습니다." }, { status: 500 });
   }
 }

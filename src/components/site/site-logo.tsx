@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import * as React from "react";
 
 import { APP_CONFIG } from "@/lib/config";
@@ -62,7 +63,7 @@ export function SiteLogo({
 
   const img = (
     <>
-      <img
+      <Image
         src={currentSrc}
         alt={alt}
         height={height}
@@ -70,6 +71,7 @@ export function SiteLogo({
         className={cn("h-8 w-auto", className)}
         loading="lazy"
         onError={handleError}
+        priority={false}
       />
       {showSrLabel ? <span className="sr-only">{alt}</span> : null}
     </>

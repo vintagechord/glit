@@ -28,7 +28,11 @@ export async function GET(
   try {
     const urlSigned = await getGuideSignedUrl();
     return NextResponse.json({ url: urlSigned });
-  } catch (err) {
+  } catch (error) {
+    console.error("[mv-guide] failed to presign guide", {
+      submissionId,
+      error,
+    });
     return NextResponse.json({ error: "가이드 링크를 생성하지 못했습니다." }, { status: 500 });
   }
 }

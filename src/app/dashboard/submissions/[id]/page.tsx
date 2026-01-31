@@ -6,6 +6,7 @@ import { SubmissionDetailClient } from "@/features/submissions/submission-detail
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-reviews";
+import { normalizeTrackResults } from "@/lib/track-results";
 import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 
 export const metadata = {
@@ -410,11 +411,14 @@ export default async function SubmissionDetailPage({
 
   const initialStationReviews = packageStations.map((station) => {
     const review = station.id ? reviewMap.get(station.id) : null;
+    const trackResults = review
+      ? normalizeTrackResults(review.track_results, resolvedSubmission.album_tracks)
+      : null;
     return {
       id: review?.id ?? `placeholder-${submissionId}-${station.code ?? station.id}`,
       status: review?.status ?? resolvedSubmission.status ?? "NOT_SENT",
       result_note: review?.result_note ?? null,
-      track_results: review?.track_results ?? null,
+      track_results: trackResults,
       updated_at: review?.updated_at ?? resolvedSubmission.updated_at,
       station: {
         id: station.id || "",

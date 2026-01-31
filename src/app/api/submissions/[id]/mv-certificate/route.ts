@@ -16,9 +16,9 @@ type CertificateFields = {
 
 export async function GET(
   req: NextRequest,
-  context: { params: { id: string } },
+  context: { params: Promise<{ id: string }> },
 ) {
-  const { id: submissionId } = context.params;
+  const { id: submissionId } = await context.params;
   const url = new URL(req.url);
   const guestToken = url.searchParams.get("guestToken") || undefined;
 
@@ -54,7 +54,11 @@ export async function GET(
       mimeType: cert.certificate_mime ?? null,
       sizeBytes: cert.certificate_size ?? null,
     });
-  } catch (err) {
+  } catch (error) {
+    console.error("[mv-certificate] failed to presign certificate", {
+      submissionId,
+      error,
+    });
     return NextResponse.json({ error: "필증 링크를 생성하지 못했습니다." }, { status: 500 });
   }
 }

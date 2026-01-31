@@ -11,19 +11,19 @@ export type StdPayInitResult = {
 
 type SubmissionRecord = {
   id: string;
-  user_id?: string | null;
-  guest_token?: string | null;
-  title?: string | null;
-  artist_name?: string | null;
-  status?: string | null;
-  type?: string | null;
-  applicant_name?: string | null;
-  applicant_email?: string | null;
-  applicant_phone?: string | null;
-  amount_krw?: number | null;
-  payment_method?: string | null;
-  payment_status?: string | null;
-  mv_desired_rating?: string | null;
+  user_id: string | null;
+  guest_token: string | null;
+  title: string | null;
+  artist_name: string | null;
+  status: string | null;
+  type: string | null;
+  applicant_name: string | null;
+  applicant_email: string | null;
+  applicant_phone: string | null;
+  amount_krw: number | null;
+  payment_method: string | null;
+  payment_status: string | null;
+  mv_desired_rating: string | null;
   certificate_b2_path?: string | null;
   certificate_original_name?: string | null;
   certificate_mime?: string | null;
@@ -39,11 +39,13 @@ export const findSubmissionById = async (submissionId: string) => {
   const selectFallback =
     "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, amount_krw, payment_method, payment_status, mv_desired_rating, package:packages ( name )";
 
-  let { data, error } = await admin
+  const primary = await admin
     .from("submissions")
     .select(selectWithRating)
     .eq("id", submissionId)
     .maybeSingle();
+  let data = primary.data as SubmissionRecord | null;
+  let error = primary.error;
 
   if (error?.code === "42703") {
     const fallback = await admin
