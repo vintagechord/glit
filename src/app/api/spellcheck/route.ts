@@ -135,9 +135,9 @@ const buildLocalResponse = async (text: string, warnings: string[], truncated: b
     warnings: warningsWithLocal,
     suggestions,
     changes: changes.map((change) => ({
-      from: change.from,
-      to: change.to,
-      index: change.index,
+      from: change.before,
+      to: change.after,
+      index: change.start,
     })),
     receivedLength: text.length,
     meta: { source: "local", truncated },

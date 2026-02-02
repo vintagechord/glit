@@ -134,6 +134,10 @@ const applyRules = (
         typeof rule.replace === "function"
           ? rule.replace(match, ...(args as string[]))
           : match.replace(rule.pattern, rule.replace);
+      // Skip recording when the rule would not change the text.
+      if (after === before) {
+        return match;
+      }
       if (rule.confidence >= options.confidenceThreshold) {
         changes.push({
           start: index,
