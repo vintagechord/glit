@@ -56,6 +56,15 @@ const trackResultSchema = z.object({
   status: trackResultStatusEnum,
 });
 
+const stationReviewPayloadSchema = z.object({
+  reviewId: z.string().uuid().optional(),
+  submissionId: z.string().uuid(),
+  stationId: z.string().uuid().optional(),
+  status: stationReviewStatusEnum,
+  resultNote: z.string().optional(),
+  trackResults: z.array(trackResultSchema).optional(),
+});
+
 const isMissingTrackResultsColumn = (error?: { code?: string; message?: string | null }) => {
   if (!error) return false;
   const msg = error.message?.toLowerCase() ?? "";
@@ -431,19 +440,38 @@ export async function updatePaymentStatusFormAction(
 }
 
 export async function updateStationReviewAction(
-  payload: z.infer<typeof stationReviewSchema>,
+  payload: z.infer<typeof stationReviewPayloadSchema>,
 ): Promise<AdminActionState> {
-  const parsed = stationReviewSchema.safeParse(payload);
+  const parsed = stationReviewPayloadSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "입력값을 확인해주세요." };
   }
 
   const supabase = createAdminClient();
-  const { data: review } = await supabase
-    .from("station_reviews")
-    .select("submission_id")
-    .eq("id", parsed.data.reviewId)
-    .maybeSingle();
+
+  const logContext = {
+    reviewId: parsed.data.reviewId ?? "new",
+    submissionId: parsed.data.submissionId,
+    stationId: parsed.data.stationId ?? "unknown",
+    status: parsed.data.status,
+    trackResultsCount: parsed.data.trackResults?.length ?? 0,
+  };
+
+  const { data: existing } = parsed.data.reviewId
+    ? await supabase
+        .from("station_reviews")
+        .select("id, submission_id, station_id, status, track_results")
+        .eq("id", parsed.data.reviewId)
+        .maybeSingle()
+    : { data: null };
+
+  const submissionId = existing?.submission_id ?? parsed.data.submissionId;
+  const stationId = existing?.station_id ?? parsed.data.stationId;
+
+  if (!stationId) {
+    console.error("[station_review][save][error][missing_station]", logContext);
+    return { error: "방송국 ID를 확인할 수 없습니다." };
+  }
 
   const trackSummary = parsed.data.trackResults
     ? summarizeTrackResults(parsed.data.trackResults)
@@ -458,35 +486,69 @@ export async function updateStationReviewAction(
           ? "NEEDS_FIX"
           : null;
   const resolvedStatus = derivedStatus ?? parsed.data.status;
-  const updatePayload: Record<string, unknown> = {
+
+  const upsertPayload: Record<string, unknown> = {
+    id: parsed.data.reviewId,
+    submission_id: submissionId,
+    station_id: stationId,
     status: resolvedStatus,
     result_note: parsed.data.resultNote || null,
+    updated_at: new Date().toISOString(),
   };
   if (normalizedTrackResults !== undefined) {
-    updatePayload.track_results = normalizedTrackResults;
+    upsertPayload.track_results = normalizedTrackResults;
   }
 
-  const { error } = await supabase
+  console.info("[station_review][save][upsert][start]", {
+    ...logContext,
+    derivedStatus,
+    resolvedStatus,
+    trackResultsSample: normalizedTrackResults?.slice?.(0, 3),
+  });
+
+  const { data: upserted, error } = await supabase
     .from("station_reviews")
-    .update(updatePayload)
-    .eq("id", parsed.data.reviewId);
+    .upsert(upsertPayload, { onConflict: "submission_id,station_id" })
+    .select("id, submission_id, station_id, status, result_note, track_results");
 
   if (error) {
     if (isMissingTrackResultsColumn(error)) {
       return {
-        error: "TRACK_RESULTS_COLUMN_MISSING: station_reviews.track_results 컬럼이 없습니다. 최신 DB 마이그레이션을 적용해주세요.",
+        error:
+          "TRACK_RESULTS_COLUMN_MISSING: station_reviews.track_results 컬럼이 없습니다. 최신 DB 마이그레이션을 적용해주세요.",
       };
     }
+    console.error("[station_review][save][upsert][error]", { ...logContext, error });
     return { error: "방송국 상태 업데이트에 실패했습니다." };
   }
 
-  if (review?.submission_id) {
-    await insertEvent(
-      review.submission_id,
-      `방송국 상태 변경: ${resolvedStatus}`,
-      "STATION_UPDATE",
-    );
+  const savedRow = upserted?.[0];
+  const statusMatches = savedRow?.status === resolvedStatus;
+  const tracksMatch =
+    normalizedTrackResults === undefined ||
+    JSON.stringify(savedRow?.track_results ?? []) ===
+      JSON.stringify(normalizedTrackResults ?? []);
+
+  if (!statusMatches || !tracksMatch) {
+    console.error("[station_review][save][mismatch]", {
+      ...logContext,
+      savedRow,
+      expectedStatus: resolvedStatus,
+      expectedTracksLen: normalizedTrackResults?.length ?? 0,
+    });
+    return { error: "방송국 상태 저장 결과가 반영되지 않았습니다." };
   }
+
+  await insertEvent(
+    submissionId,
+    `방송국 상태 변경: ${resolvedStatus}`,
+    "STATION_UPDATE",
+  );
+
+  console.info("[station_review][save][upsert][success]", {
+    ...logContext,
+    savedId: savedRow?.id,
+  });
 
   return { message: "방송국 상태가 업데이트되었습니다." };
 }
@@ -573,6 +635,8 @@ export async function updateStationReviewFormAction(
 
   const result = await updateStationReviewAction({
     reviewId: String(formData.get("reviewId") ?? ""),
+    submissionId: String(formData.get("submissionId") ?? ""),
+    stationId: String(formData.get("stationId") ?? "") || undefined,
     status: status as z.infer<typeof stationReviewStatusEnum>,
     resultNote: String(formData.get("resultNote") ?? "") || undefined,
     trackResults,
@@ -1432,18 +1496,25 @@ export async function saveSubmissionAdminFormAction(
       status: z.infer<typeof stationReviewStatusEnum>;
       result_note: string | null;
       track_results: unknown;
+      station_id?: string | null;
     },
   ) => {
     const logPrefix = `[admin save] review ${reviewId} (${stationCode ?? "unknown"})`;
     const attempt = async (includeTracks: boolean) => {
-      const updatePayload = includeTracks
+      const upsertPayload = includeTracks
         ? payload
-        : { status: payload.status, result_note: payload.result_note };
+        : {
+            status: payload.status,
+            result_note: payload.result_note,
+            station_id: payload.station_id,
+          };
+      const base = {
+        id: reviewId,
+        submission_id: submissionId,
+      };
       const { data, error } = await supabase
         .from("station_reviews")
-        .update(updatePayload)
-        .eq("id", reviewId)
-        .eq("submission_id", submissionId)
+        .upsert({ ...base, ...upsertPayload }, { onConflict: "submission_id,station_id" })
         .select("id, status, result_note, track_results, station_id");
       return { data, error };
     };
@@ -1503,6 +1574,10 @@ export async function saveSubmissionAdminFormAction(
   for (const reviewId of reviewIds) {
     const current = reviewMap.get(reviewId);
     const stationCode = getStationCode((current as { station?: StationValue })?.station);
+    const stationIdFromForm = String(formData.get(`stationId-${reviewId}`) ?? "") || null;
+    const stationId =
+      stationIdFromForm ||
+      (current && typeof current.station_id === "string" ? current.station_id : null);
     const stationStatusRaw = String(formData.get(`stationStatus-${reviewId}`) ?? "").trim();
     const stationStatus = stationReviewStatusEnum.safeParse(stationStatusRaw).success
       ? (stationStatusRaw as z.infer<typeof stationReviewStatusEnum>)
@@ -1551,7 +1626,10 @@ export async function saveSubmissionAdminFormAction(
       track_results: nextTrackResults,
     };
 
-    const { error: stationError } = await updateStationReview(reviewId, stationCode, payload);
+    const { error: stationError } = await updateStationReview(reviewId, stationCode, {
+      ...payload,
+      station_id: stationId,
+    });
 
     if (stationError) {
       console.error("admin save station review error", stationError, {

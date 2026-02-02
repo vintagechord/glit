@@ -905,6 +905,9 @@ export default async function AdminSubmissionDetailPage({
                           {isPersistedReview ? (
                             <input type="hidden" name="reviewIds" value={review.id} />
                           ) : null}
+                          {isPersistedReview ? (
+                            <input type="hidden" name={`stationId-${review.id}`} value={review.station_id ?? ""} />
+                          ) : null}
                           <div>
                             <p className="text-sm font-semibold text-foreground">
                               {stationInfo?.name ?? "-"}
