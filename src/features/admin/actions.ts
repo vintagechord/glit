@@ -22,6 +22,15 @@ import { isRatingCode } from "@/lib/mv-assets";
 export type AdminActionState = {
   error?: string;
   message?: string;
+  row?: {
+    id?: string | null;
+    submission_id?: string | null;
+    station_id?: string | null;
+    status?: string | null;
+    result_note?: string | null;
+    track_results?: unknown;
+    updated_at?: string | null;
+  };
 };
 
 const submissionStatusSchema = z.object({
@@ -70,13 +79,6 @@ const isMissingTrackResultsColumn = (error?: { code?: string; message?: string |
   const msg = error.message?.toLowerCase() ?? "";
   return error.code === "42703" || msg.includes("track_results");
 };
-
-const stationReviewSchema = z.object({
-  reviewId: z.string().uuid(),
-  status: stationReviewStatusEnum,
-  resultNote: z.string().optional(),
-  trackResults: z.array(trackResultSchema).optional(),
-});
 
 const packageSchema = z.object({
   id: z.string().uuid().optional(),
@@ -523,18 +525,27 @@ export async function updateStationReviewAction(
   }
 
   const savedRow = upserted?.[0];
-  const statusMatches = savedRow?.status === resolvedStatus;
+  const { data: fetchedRow, error: refetchError } = await supabase
+    .from("station_reviews")
+    .select("id, submission_id, station_id, status, result_note, track_results, updated_at")
+    .eq("submission_id", submissionId)
+    .eq("station_id", stationId)
+    .maybeSingle();
+
+  const effectiveRow = fetchedRow ?? savedRow;
+  const statusMatches = effectiveRow?.status === resolvedStatus;
   const tracksMatch =
     normalizedTrackResults === undefined ||
-    JSON.stringify(savedRow?.track_results ?? []) ===
+    JSON.stringify(effectiveRow?.track_results ?? []) ===
       JSON.stringify(normalizedTrackResults ?? []);
 
   if (!statusMatches || !tracksMatch) {
     console.error("[station_review][save][mismatch]", {
       ...logContext,
-      savedRow,
+      savedRow: effectiveRow,
       expectedStatus: resolvedStatus,
       expectedTracksLen: normalizedTrackResults?.length ?? 0,
+      refetchError,
     });
     return { error: "방송국 상태 저장 결과가 반영되지 않았습니다." };
   }
@@ -547,103 +558,96 @@ export async function updateStationReviewAction(
 
   console.info("[station_review][save][upsert][success]", {
     ...logContext,
-    savedId: savedRow?.id,
+    savedId: effectiveRow?.id,
+    refetched: Boolean(fetchedRow),
   });
 
-  return { message: "방송국 상태가 업데이트되었습니다." };
+  return { message: "방송국 상태가 업데이트되었습니다.", row: effectiveRow ?? undefined };
 }
 
 export async function updateStationReviewFormAction(
   formData: FormData,
 ): Promise<void> {
-  const statusRaw = String(formData.get("status") ?? "").toUpperCase();
+  const submissionId = String(formData.get("submission_id") ?? "").trim();
+  const stationId = String(formData.get("station_id") ?? "").trim();
+  const reviewId = String(formData.get("review_id") ?? "").trim();
+  const statusRaw = String(formData.get("station_status") ?? "").trim().toUpperCase();
+  const resultNote = String(formData.get("station_memo") ?? "").trim();
+  const trackResultsJson = String(formData.get("track_results_json") ?? "").trim();
+
+  console.info("[station_review][form][parse][start]", {
+    submissionId,
+    stationId,
+    reviewId,
+    statusRaw,
+    trackResultsJsonLength: trackResultsJson.length,
+  });
+
+  if (!submissionId || !stationId || !statusRaw || !trackResultsJson) {
+    console.error("[station_review][form][parse][missing_fields]", {
+      submissionId,
+      stationId,
+      statusRaw,
+      hasTrackJson: Boolean(trackResultsJson),
+    });
+    redirect(
+      `/admin/submissions/${submissionId || ""}?saved=station_error&savedError=${encodeURIComponent(
+        "필수 값이 누락되었습니다.",
+      )}`,
+    );
+  }
+
   const status = stationReviewStatusValues.includes(statusRaw as typeof stationReviewStatusValues[number])
     ? (statusRaw as typeof stationReviewStatusValues[number])
     : "NOT_SENT";
 
-  let trackResults: Array<z.infer<typeof trackResultSchema>> | undefined;
-  const indexedTrackMap = new Map<number, { trackId?: string; trackNo?: number; title?: string; status?: string }>();
-
-  const trackResultsInput = formData.get("trackResults");
-  if (typeof trackResultsInput === "string" && trackResultsInput.trim()) {
-    try {
-      const parsed = JSON.parse(trackResultsInput);
-      if (Array.isArray(parsed)) {
-        trackResults = parsed as Array<z.infer<typeof trackResultSchema>>;
-      }
-    } catch (error) {
-      console.error("Failed to parse trackResults JSON", error, trackResultsInput);
-    }
-  }
-
-  // New parsing: trackResultStatus-0, trackResultId-0, trackResultNo-0, trackResultTitle-0
-  for (const [key, value] of formData.entries()) {
-    const match = key.match(/^trackResult(Status|Id|No|Title)-(\d+)$/);
-    if (!match) continue;
-    const [, field, idxRaw] = match;
-    const idx = Number(idxRaw);
-    if (!Number.isFinite(idx)) continue;
-    const entry = indexedTrackMap.get(idx) ?? {};
-    if (field === "Status") {
-      entry.status = String(value);
-    } else if (field === "Id") {
-      entry.trackId = typeof value === "string" && value ? value : undefined;
-    } else if (field === "No") {
-      const asNumber = Number(value);
-      entry.trackNo = Number.isFinite(asNumber) ? asNumber : undefined;
-    } else if (field === "Title") {
-      entry.title = typeof value === "string" ? value : undefined;
-    }
-    indexedTrackMap.set(idx, entry);
-  }
-
-  if (indexedTrackMap.size > 0) {
-    trackResults = Array.from(indexedTrackMap.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([, item]) => ({
-        trackId: item.trackId,
-        trackNo: item.trackNo,
-        title: item.title,
-        status: String(item.status ?? "PENDING").toUpperCase() as z.infer<
-          typeof trackResultStatusEnum
-        >,
+  let trackResults: Array<z.infer<typeof trackResultSchema>> = [];
+  try {
+    const parsed = JSON.parse(trackResultsJson);
+    if (Array.isArray(parsed)) {
+      trackResults = parsed.map((item) => ({
+        trackId: typeof item?.track_id === "string" ? item.track_id : undefined,
+        trackNo:
+          typeof item?.track_no === "number" && Number.isFinite(item.track_no)
+            ? item.track_no
+            : undefined,
+        title: typeof item?.title === "string" ? item.title : undefined,
+        status: trackResultStatusEnum.parse(
+          typeof item?.status === "string" ? item.status.toUpperCase() : "PENDING",
+        ),
       }));
+    }
+  } catch (error) {
+    console.error("[station_review][form][parse][track_results_json_error]", {
+      error,
+      trackResultsJson,
+    });
+    redirect(
+      `/admin/submissions/${submissionId}?saved=station_error&savedError=${encodeURIComponent(
+        "트랙 결과 파싱 실패",
+      )}`,
+    );
   }
 
-  // Backward-compatible fallback if indexed names are absent
-  if (!trackResults) {
-    const statuses = formData.getAll("trackResultStatus");
-    const ids = formData.getAll("trackResultId");
-    const numbers = formData.getAll("trackResultNo");
-    const titles = formData.getAll("trackResultTitle");
-    if (statuses.length > 0) {
-      trackResults = statuses
-        .map((status, index) => ({
-          trackId: typeof ids[index] === "string" && ids[index] ? String(ids[index]) : undefined,
-          trackNo:
-            typeof numbers[index] === "string" &&
-            numbers[index] !== "" &&
-            Number.isFinite(Number(numbers[index]))
-              ? Number(numbers[index])
-              : undefined,
-          title: typeof titles[index] === "string" ? titles[index] : undefined,
-          status: String(status).toUpperCase() as z.infer<typeof trackResultStatusEnum>,
-        }))
-        .filter((item) => Boolean(item.status));
-    }
-  }
+  console.info("[station_review][form][parse][done]", {
+    submissionId,
+    stationId,
+    reviewId,
+    status,
+    trackResultsCount: trackResults.length,
+    trackResultsSample: trackResults.slice(0, 2),
+  });
 
   const result = await updateStationReviewAction({
-    reviewId: String(formData.get("reviewId") ?? ""),
-    submissionId: String(formData.get("submissionId") ?? ""),
-    stationId: String(formData.get("stationId") ?? "") || undefined,
-    status: status as z.infer<typeof stationReviewStatusEnum>,
-    resultNote: String(formData.get("resultNote") ?? "") || undefined,
+    reviewId: reviewId || undefined,
+    submissionId,
+    stationId,
+    status,
+    resultNote: resultNote || undefined,
     trackResults,
   });
   if (result.error) {
     console.error(result.error);
-    const submissionId = String(formData.get("submissionId") ?? "");
     if (submissionId) {
       redirect(
         `/admin/submissions/${submissionId}?saved=station_error&savedError=${encodeURIComponent(
@@ -655,9 +659,6 @@ export async function updateStationReviewFormAction(
   }
 
   revalidatePath("/admin/submissions");
-  const submissionId =
-    String(formData.get("submissionId") ?? "") ||
-    String(formData.get("reviewId") ?? "");
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
     redirect(`/admin/submissions/${submissionId}?saved=station`);
