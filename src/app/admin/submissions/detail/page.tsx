@@ -28,6 +28,7 @@ import { MvRatingControl } from "@/components/admin/mv-rating-control";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
 import { CertificateUploader } from "@/components/admin/certificate-uploader";
 import { ConfirmForm } from "@/components/admin/confirm-form";
+import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 
 export const metadata = {
   title: "접수 상세 관리",
@@ -581,11 +582,11 @@ export default async function AdminSubmissionDetailPage({
               </div>
             </div>
           </div>
-          <ConfirmForm
+          <form
             action={saveSubmissionAdminFormAction}
+            method="post"
             className="space-y-8"
             id="admin-save-form"
-            message="저장하시겠습니까?"
           >
             <input type="hidden" name="submissionId" value={submission.id} />
 
@@ -1011,14 +1012,14 @@ export default async function AdminSubmissionDetailPage({
               </div>
 
               <div className="flex justify-end">
-                <button
-                  type="submit"
+                <ConfirmSubmitButton
                   className="rounded-full bg-foreground px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-background"
+                  message="저장하시겠습니까?"
                 >
                   저장
-                </button>
+                </ConfirmSubmitButton>
               </div>
-            </ConfirmForm>
+            </form>
         </div>
       </div>
 
