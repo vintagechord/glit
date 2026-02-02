@@ -10,11 +10,13 @@ export function ConfirmForm({
   message = "저장하시겠습니까?",
   onSubmit,
   children,
+  method,
   ...props
 }: ConfirmFormProps) {
   return (
     <form
       {...props}
+      method={method ?? "post"}
       onSubmit={(event) => {
         if (onSubmit) {
           onSubmit(event);

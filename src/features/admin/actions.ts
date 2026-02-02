@@ -1399,13 +1399,12 @@ export async function saveSubmissionAdminFormAction(
   }
 
   const entries = Array.from(formData.entries());
-  let reviewIds = formData
-    .getAll("reviewIds")
-    .map((value) => String(value))
-    .filter((id) => id.length > 0 && z.string().uuid().safeParse(id).success);
-
-  if (!reviewIds.length && reviewMap.size > 0) {
-    reviewIds = Array.from(reviewMap.keys());
+  let reviewIds = Array.from(reviewMap.keys());
+  if (!reviewIds.length) {
+    reviewIds = formData
+      .getAll("reviewIds")
+      .map((value) => String(value))
+      .filter((id) => id.length > 0 && z.string().uuid().safeParse(id).success);
   }
 
   let lastError: { message: string; code?: string } | null = null;
@@ -1539,6 +1538,12 @@ export async function saveSubmissionAdminFormAction(
   revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
   revalidatePath("/dashboard/status");
   revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard");
+  revalidatePath(`/dashboard/submissions/${submissionId}`);
+  revalidatePath("/dashboard/submissions");
+  revalidatePath(`/mypage/submissions/${submissionId}`);
+  revalidatePath("/mypage/history");
+  revalidatePath("/mypage");
   revalidatePath("/");
 
   if (lastError) {
