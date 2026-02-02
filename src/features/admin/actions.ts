@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { PostgrestError } from "@supabase/supabase-js";
 
 import {
   paymentStatusEnum,
@@ -54,6 +55,12 @@ const trackResultSchema = z.object({
   title: z.string().optional(),
   status: trackResultStatusEnum,
 });
+
+const isMissingTrackResultsColumn = (error?: { code?: string; message?: string | null }) => {
+  if (!error) return false;
+  const msg = error.message?.toLowerCase() ?? "";
+  return error.code === "42703" || msg.includes("track_results");
+};
 
 const stationReviewSchema = z.object({
   reviewId: z.string().uuid(),
@@ -465,6 +472,11 @@ export async function updateStationReviewAction(
     .eq("id", parsed.data.reviewId);
 
   if (error) {
+    if (isMissingTrackResultsColumn(error)) {
+      return {
+        error: "TRACK_RESULTS_COLUMN_MISSING: station_reviews.track_results 컬럼이 없습니다. 최신 DB 마이그레이션을 적용해주세요.",
+      };
+    }
     return { error: "방송국 상태 업데이트에 실패했습니다." };
   }
 
@@ -569,7 +581,11 @@ export async function updateStationReviewFormAction(
     console.error(result.error);
     const submissionId = String(formData.get("submissionId") ?? "");
     if (submissionId) {
-      redirect(`/admin/submissions/${submissionId}?saved=station_error`);
+      redirect(
+        `/admin/submissions/${submissionId}?saved=station_error&savedError=${encodeURIComponent(
+          result.error,
+        )}`,
+      );
     }
     return;
   }
@@ -1432,11 +1448,13 @@ export async function saveSubmissionAdminFormAction(
       return { data, error };
     };
 
+    let columnMissing = false;
     let { data, error } = await attempt(true);
-    if (error && (error.code === "42703" || error.message?.includes("track_results"))) {
+    if (error && isMissingTrackResultsColumn(error)) {
       console.warn(`${logPrefix} track_results column missing, retrying without track_results`, {
         error,
       });
+      columnMissing = true;
       ({ data, error } = await attempt(false));
     }
 
@@ -1453,6 +1471,17 @@ export async function saveSubmissionAdminFormAction(
         .eq("id", reviewId)
         .maybeSingle();
       console.info(`${logPrefix} refreshed`, { refreshed: refreshed.data, error: refreshed.error });
+    }
+
+    if (columnMissing && !error) {
+      error = {
+        code: "42703",
+        message:
+          "TRACK_RESULTS_COLUMN_MISSING: station_reviews.track_results 컬럼이 없어 트랙 결과를 저장하지 못했습니다. 최신 DB 마이그레이션을 적용하세요.",
+        details: "",
+        hint: "",
+        name: "PostgrestError",
+      } as PostgrestError;
     }
 
     return { data, error };
