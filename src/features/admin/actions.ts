@@ -712,8 +712,11 @@ export async function updateStationReviewAction(
       updated_at?: string | null;
     };
 
-    const updateWithPayload = async (payload: Record<string, unknown>) => {
-      let query = supabase.from("station_reviews").update(payload);
+    const updateWithPayload = async (
+      client: SupabaseClient,
+      payload: Record<string, unknown>,
+    ) => {
+      let query = client.from("station_reviews").update(payload);
       if (parsed.data.reviewId) {
         query = query.eq("id", parsed.data.reviewId);
       } else {
@@ -726,9 +729,24 @@ export async function updateStationReviewAction(
     };
 
     let { data: trackUpdated, error: trackError } = await updateWithPayload(
+      supabase,
       buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN, LEGACY_TRACK_RESULTS_COLUMN]),
     );
     trackResultsColumnUsed = "dual";
+
+    if (trackError && shouldRetryWithUserSession(trackError)) {
+      console.warn("[station_review][save][track_results][update][retry-user-session]", {
+        ...logContext,
+        errorCode: trackError.code,
+        errorMessage: trackError.message,
+      });
+      const userClient = await createServerSupabase();
+      ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+        userClient as SupabaseClient,
+        buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN, LEGACY_TRACK_RESULTS_COLUMN]),
+      ));
+      trackResultsColumnUsed = "dual";
+    }
 
     if (trackError && isMissingTrackResultsColumn(trackError)) {
       const message = trackError.message?.toLowerCase() ?? "";
@@ -743,26 +761,49 @@ export async function updateStationReviewAction(
 
       if (missingJson && !missingLegacy) {
         ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+          supabase,
           buildTrackPayload([LEGACY_TRACK_RESULTS_COLUMN]),
         ));
         trackResultsColumnUsed = LEGACY_TRACK_RESULTS_COLUMN;
       } else if (missingLegacy && !missingJson) {
         ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+          supabase,
           buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN]),
         ));
         trackResultsColumnUsed = STATION_REVIEW_TRACK_RESULTS_COLUMN;
       } else {
         ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+          supabase,
           buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN]),
         ));
         trackResultsColumnUsed = STATION_REVIEW_TRACK_RESULTS_COLUMN;
         if (trackError && isMissingTrackResultsColumn(trackError)) {
           ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+            supabase,
             buildTrackPayload([LEGACY_TRACK_RESULTS_COLUMN]),
           ));
           trackResultsColumnUsed = LEGACY_TRACK_RESULTS_COLUMN;
         }
       }
+    }
+
+    if (trackError && shouldRetryWithUserSession(trackError)) {
+      console.warn("[station_review][save][track_results][update][retry-user-session:fallback]", {
+        ...logContext,
+        errorCode: trackError.code,
+        errorMessage: trackError.message,
+      });
+      const userClient = await createServerSupabase();
+      ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+        userClient as SupabaseClient,
+        buildTrackPayload(
+          trackResultsColumnUsed === LEGACY_TRACK_RESULTS_COLUMN
+            ? [LEGACY_TRACK_RESULTS_COLUMN]
+            : trackResultsColumnUsed === STATION_REVIEW_TRACK_RESULTS_COLUMN
+              ? [STATION_REVIEW_TRACK_RESULTS_COLUMN]
+              : [STATION_REVIEW_TRACK_RESULTS_COLUMN],
+        ),
+      ));
     }
 
     if (trackError) {
