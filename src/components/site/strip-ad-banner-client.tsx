@@ -212,9 +212,6 @@ function BannerContent({ banner }: { banner: AdBanner }) {
               <p>Brand</p>
             </div>
           </div>
-          <span className="shrink-0 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1.5 text-[10px] font-semibold tracking-[0.18em] text-white shadow-sm transition duration-300 group-hover/banner:-translate-y-0.5 group-hover/banner:border-[#f3c63a] group-hover/banner:bg-[#f3c63a] sm:px-4 sm:py-2 sm:text-xs">
-            {banner.title}
-          </span>
         </div>
       </div>
     </div>
