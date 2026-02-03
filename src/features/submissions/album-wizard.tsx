@@ -70,6 +70,9 @@ type UploadResult = {
   originalName: string;
   mime?: string;
   size: number;
+  checksum?: string;
+  durationSeconds?: number;
+  accessUrl?: string;
 };
 
 type DraftSnapshot = {
@@ -343,6 +346,7 @@ export function AlbumWizard({
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
+  const [resumeChecked, setResumeChecked] = React.useState(false);
 
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
   const [completionId, setCompletionId] = React.useState<string | null>(null);
@@ -364,6 +368,14 @@ export function AlbumWizard({
     React.useState<string | null>(null);
   const [currentGuestToken, setCurrentGuestToken] = React.useState(() =>
     safeRandomUUID(),
+  );
+  const draftStorageKey = React.useMemo(
+    () => `onside:draft:album:${userId ?? "guest"}`,
+    [userId],
+  );
+  const guestTokenStorageKey = React.useMemo(
+    () => `onside:guest-token:album:${userId ?? "guest"}`,
+    [userId],
   );
   const profanityMatchers = React.useMemo(
     () => buildLegacyProfanityMatchers(profanityTerms),
@@ -436,6 +448,49 @@ export function AlbumWizard({
       }
     : null;
 
+  const readDraftStorage = React.useCallback(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(draftStorageKey);
+      if (!raw) return null;
+      return JSON.parse(raw) as {
+        ids?: string[];
+        updatedAt?: number;
+        guestToken?: string;
+      };
+    } catch {
+      return null;
+    }
+  }, [draftStorageKey]);
+
+  const writeDraftStorage = React.useCallback((payload: {
+    ids: string[];
+    guestToken?: string | null;
+  }) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        draftStorageKey,
+        JSON.stringify({
+          ids: payload.ids,
+          guestToken: payload.guestToken ?? null,
+          updatedAt: Date.now(),
+        }),
+      );
+    } catch {
+      // ignore storage errors
+    }
+  }, [draftStorageKey]);
+
+  const clearDraftStorage = React.useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(draftStorageKey);
+    } catch {
+      // ignore
+    }
+  }, [draftStorageKey]);
+
   const createDraft = React.useCallback(async () => {
     if (isPreparingDraft) return;
     setIsPreparingDraft(true);
@@ -470,9 +525,10 @@ export function AlbumWizard({
   }, [currentGuestToken, isGuest, isPreparingDraft]);
 
   React.useEffect(() => {
+    if (!resumeChecked) return;
     if (currentSubmissionId || isPreparingDraft) return;
     void createDraft();
-  }, [createDraft, currentSubmissionId, isPreparingDraft]);
+  }, [createDraft, currentSubmissionId, isPreparingDraft, resumeChecked]);
 
   React.useEffect(() => {
     if (spellcheckAppliedMap[activeTrackIndex]) {
@@ -553,6 +609,31 @@ export function AlbumWizard({
       setArtistGender("");
     }
   }, [artistGender, artistType]);
+
+  React.useEffect(() => {
+    if (!isGuest || typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(guestTokenStorageKey);
+      if (stored && stored !== currentGuestToken) {
+        setCurrentGuestToken(stored);
+        return;
+      }
+      if (!stored) {
+        window.localStorage.setItem(guestTokenStorageKey, currentGuestToken);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [currentGuestToken, guestTokenStorageKey, isGuest]);
+
+  React.useEffect(() => {
+    if (!isGuest || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(guestTokenStorageKey, currentGuestToken);
+    } catch {
+      // ignore
+    }
+  }, [currentGuestToken, guestTokenStorageKey, isGuest]);
 
   React.useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -1694,6 +1775,53 @@ export function AlbumWizard({
       mime: file.mime,
     }));
 
+  const normalizeDateValue = React.useCallback((value: unknown) => {
+    if (!value) return "";
+    const text = String(value);
+    return text.length >= 10 ? text.slice(0, 10) : text;
+  }, []);
+
+  const mapDraftFiles = React.useCallback(
+    (files: Array<Record<string, unknown>>): UploadResult[] =>
+      files.map((file) => ({
+        path: String(file.object_key ?? file.file_path ?? ""),
+        originalName: String(
+          file.original_name ??
+            file.file_path ??
+            file.object_key ??
+            "파일",
+        ),
+        mime: typeof file.mime === "string" ? file.mime : undefined,
+        size: Number(file.size ?? 0),
+        accessUrl:
+          typeof file.access_url === "string" ? file.access_url : undefined,
+        checksum: typeof file.checksum === "string" ? file.checksum : undefined,
+        durationSeconds:
+          typeof file.duration_seconds === "number"
+            ? file.duration_seconds
+            : undefined,
+      })),
+    [],
+  );
+
+  const mapDraftTracks = React.useCallback(
+    (rows: Array<Record<string, unknown>>): TrackInput[] =>
+      rows.map((row) => ({
+        trackTitle: String(row.track_title ?? ""),
+        featuring: String(row.featuring ?? ""),
+        composer: String(row.composer ?? ""),
+        lyricist: String(row.lyricist ?? ""),
+        arranger: String(row.arranger ?? ""),
+        lyrics: String(row.lyrics ?? ""),
+        notes: String(row.notes ?? ""),
+        isTitle: Boolean(row.is_title),
+        titleRole:
+          (row.title_role as "" | "MAIN" | "SUB" | null | undefined) ?? "",
+        broadcastSelected: Boolean(row.broadcast_selected),
+      })),
+    [],
+  );
+
   const captureCurrentDraft = (): AlbumDraft => ({
     submissionId: requireSubmissionId(),
     guestToken: currentGuestToken,
@@ -1750,6 +1878,144 @@ export function AlbumWizard({
     setCurrentSubmissionId(draft.submissionId);
     setCurrentGuestToken(draft.guestToken);
   };
+
+  const applyStoredDrafts = React.useCallback((
+    draftRows: Array<Record<string, unknown>>,
+    fallbackGuestToken: string,
+  ) => {
+    if (draftRows.length === 0) return;
+    const sorted = [...draftRows].sort((a, b) => {
+      const aTime = new Date(String(a.updated_at ?? a.created_at ?? 0)).getTime();
+      const bTime = new Date(String(b.updated_at ?? b.created_at ?? 0)).getTime();
+      return bTime - aTime;
+    });
+    const mappedDrafts = sorted.map((row) => {
+      const files = mapDraftFiles(
+        Array.isArray(row.files) ? (row.files as Array<Record<string, unknown>>) : [],
+      );
+      const tracks = mapDraftTracks(
+        Array.isArray(row.tracks) ? (row.tracks as Array<Record<string, unknown>>) : [],
+      );
+      const guestTokenValue =
+        typeof row.guest_token === "string" && row.guest_token.length > 0
+          ? row.guest_token
+          : fallbackGuestToken;
+      return {
+        submissionId: String(row.id),
+        guestToken: guestTokenValue,
+        title: String(row.title ?? ""),
+        artistName: String(row.artist_name ?? ""),
+        artistNameKr: String(row.artist_name_kr ?? ""),
+        artistNameEn: String(row.artist_name_en ?? ""),
+        releaseDate: normalizeDateValue(row.release_date),
+        genre: String(row.genre ?? ""),
+        distributor: String(row.distributor ?? ""),
+        productionCompany: String(row.production_company ?? ""),
+        previousRelease: String(row.previous_release ?? ""),
+        artistType: String(row.artist_type ?? ""),
+        artistGender: String(row.artist_gender ?? ""),
+        artistMembers: String(row.artist_members ?? ""),
+        melonUrl: String(row.melon_url ?? ""),
+        tracks: tracks.length > 0 ? tracks : [initialTrack],
+        files,
+        emailSubmitConfirmed: files.length === 0,
+      } as AlbumDraft;
+    });
+
+    const baseRow = sorted[0];
+    const baseDraft = mappedDrafts[0];
+    const nextPackageId =
+      typeof baseRow.package_id === "string" ? baseRow.package_id : null;
+    const matchedPackage = nextPackageId
+      ? packages.find((pkg) => pkg.id === nextPackageId) ?? null
+      : null;
+    if (matchedPackage) {
+      setSelectedPackage(matchedPackage);
+    }
+    setIsOneClick(Boolean(baseRow.is_oneclick));
+    setApplicantName(String(baseRow.applicant_name ?? ""));
+    setApplicantEmail(String(baseRow.applicant_email ?? ""));
+    setApplicantPhone(String(baseRow.applicant_phone ?? ""));
+    if (baseRow.payment_method === "CARD" || baseRow.payment_method === "BANK") {
+      setPaymentMethod(baseRow.payment_method);
+    }
+    setBankDepositorName(String(baseRow.bank_depositor_name ?? ""));
+
+    setAlbumDrafts(mappedDrafts.slice(1));
+    setUploadDrafts(mappedDrafts);
+    setUploadDraftIndex(0);
+    applyDraftToForm(baseDraft, {
+      emailSubmitConfirmed: baseDraft.emailSubmitConfirmed,
+    });
+    setStep(2);
+  }, [applyDraftToForm, mapDraftFiles, mapDraftTracks, normalizeDateValue, packages]);
+
+  React.useEffect(() => {
+    if (resumeChecked) return;
+    if (typeof window === "undefined") {
+      setResumeChecked(true);
+      return;
+    }
+    const run = async () => {
+      const stored = readDraftStorage();
+      const storedGuestToken =
+        stored?.guestToken ??
+        (isGuest ? currentGuestToken : null) ??
+        undefined;
+      const payload = {
+        type: "ALBUM",
+        ids: stored?.ids,
+        guestToken: isGuest ? storedGuestToken : undefined,
+      };
+      try {
+        const res = await fetch("/api/submissions/drafts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = (await res.json().catch(() => null)) as {
+          drafts?: Array<Record<string, unknown>>;
+        } | null;
+        const drafts = Array.isArray(json?.drafts) ? json!.drafts : [];
+        if (drafts.length === 0) {
+          setResumeChecked(true);
+          return;
+        }
+        const shouldResume =
+          typeof window !== "undefined" &&
+          window.confirm(
+            "임시저장된 신청서가 있습니다. 불러오시겠습니까?",
+          );
+        if (!shouldResume) {
+          clearDraftStorage();
+          setResumeChecked(true);
+          return;
+        }
+        const fallbackGuestToken =
+          storedGuestToken ?? currentGuestToken ?? safeRandomUUID();
+        applyStoredDrafts(drafts, fallbackGuestToken);
+        writeDraftStorage({
+          ids: drafts
+            .map((draft) => String(draft.id ?? ""))
+            .filter(Boolean),
+          guestToken: isGuest ? fallbackGuestToken : null,
+        });
+      } catch (error) {
+        console.warn("[AlbumDraft][resume] failed", error);
+      } finally {
+        setResumeChecked(true);
+      }
+    };
+    void run();
+  }, [
+    applyStoredDrafts,
+    clearDraftStorage,
+    currentGuestToken,
+    isGuest,
+    readDraftStorage,
+    resumeChecked,
+    writeDraftStorage,
+  ]);
 
   React.useEffect(() => {
     if (!uploadDrafts) return;
@@ -2060,6 +2326,12 @@ export function AlbumWizard({
         }
       }
 
+      const fallbackIds = drafts.map((draft) => draft.submissionId);
+      const storedIds = submissionIds.length > 0 ? submissionIds : fallbackIds;
+      writeDraftStorage({
+        ids: storedIds,
+        guestToken: isGuest ? currentGuestToken : null,
+      });
       setNotice({ submissionId: submissionIds[0] ?? currentSubmissionId });
       return true;
     } catch {
@@ -2315,6 +2587,7 @@ export function AlbumWizard({
       }
 
       if (status === "SUBMITTED" && submissionIds.length > 0) {
+        clearDraftStorage();
         if (paymentMethod === "CARD") {
           const { ok, error } = openInicisCardPopup({
             context: isOneClick ? "oneclick" : "music",

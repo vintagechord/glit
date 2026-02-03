@@ -280,6 +280,7 @@ export function MvWizard({
   const [fileDigest, setFileDigest] = React.useState("");
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [resumeChecked, setResumeChecked] = React.useState(false);
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [openBroadcastSpec, setOpenBroadcastSpec] = React.useState<string | null>(
@@ -298,10 +299,87 @@ export function MvWizard({
   >(null);
   const submissionIdRef = React.useRef<string | null>(null);
   const guestTokenRef = React.useRef<string | null>(null);
+  const draftStorageKey = React.useMemo(
+    () => `onside:draft:mv:${userId ?? "guest"}`,
+    [userId],
+  );
+  const guestTokenStorageKey = React.useMemo(
+    () => `onside:guest-token:mv:${userId ?? "guest"}`,
+    [userId],
+  );
 
   if (!guestTokenRef.current) {
     guestTokenRef.current = safeRandomUUID();
   }
+
+  const readDraftStorage = React.useCallback(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(draftStorageKey);
+      if (!raw) return null;
+      return JSON.parse(raw) as {
+        id?: string;
+        updatedAt?: number;
+        guestToken?: string;
+        mvType?: string;
+        tvStations?: string[];
+        onlineOptions?: string[];
+        onlineBaseSelected?: boolean;
+      };
+    } catch {
+      return null;
+    }
+  }, [draftStorageKey]);
+
+  const writeDraftStorage = React.useCallback((payload: {
+    id: string;
+    guestToken?: string | null;
+    mvType?: string;
+    tvStations?: string[];
+    onlineOptions?: string[];
+    onlineBaseSelected?: boolean;
+  }) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        draftStorageKey,
+        JSON.stringify({
+          id: payload.id,
+          guestToken: payload.guestToken ?? null,
+          mvType: payload.mvType,
+          tvStations: payload.tvStations ?? [],
+          onlineOptions: payload.onlineOptions ?? [],
+          onlineBaseSelected: payload.onlineBaseSelected ?? false,
+          updatedAt: Date.now(),
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [draftStorageKey]);
+
+  const clearDraftStorage = React.useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(draftStorageKey);
+    } catch {
+      // ignore
+    }
+  }, [draftStorageKey]);
+
+  React.useEffect(() => {
+    if (!isGuest || typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(guestTokenStorageKey);
+      if (stored) {
+        guestTokenRef.current = stored;
+      } else if (guestTokenRef.current) {
+        window.localStorage.setItem(guestTokenStorageKey, guestTokenRef.current);
+      }
+    } catch {
+      // ignore
+    }
+  }, [guestTokenStorageKey, isGuest]);
 
   React.useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -376,9 +454,10 @@ export function MvWizard({
   }, [isGuest, isPreparingDraft, mvType]);
 
   React.useEffect(() => {
+    if (!resumeChecked) return;
     if (submissionIdRef.current || isPreparingDraft) return;
     void createDraft();
-  }, [createDraft, isPreparingDraft]);
+  }, [createDraft, isPreparingDraft, resumeChecked]);
 
   const submissionId = submissionIdRef.current;
   const guestToken = guestTokenRef.current;
@@ -1064,7 +1143,7 @@ export function MvWizard({
     targetFiles: File[] = files,
     initialUploads: UploadItem[] = uploads,
   ) => {
-    if (targetFiles.length === 0) return [];
+    if (targetFiles.length === 0) return uploadedFiles;
 
     const digest = targetFiles
       .map((file) => `${file.name}-${file.size}-${file.lastModified}`)
@@ -1150,6 +1229,207 @@ export function MvWizard({
     setFileDigest(digest);
     return results;
   };
+
+  const buildUploadsFromFiles = React.useCallback(
+    (fileList: UploadResult[]) =>
+      fileList.map((file) => ({
+        name: file.originalName,
+        size: file.size,
+        progress: 100,
+        status: "done" as const,
+        path: file.path,
+        mime: file.mime,
+      })),
+    [],
+  );
+
+  const normalizeDateValue = React.useCallback((value: unknown) => {
+    if (!value) return "";
+    const text = String(value);
+    return text.length >= 10 ? text.slice(0, 10) : text;
+  }, []);
+
+  const mapDraftFiles = React.useCallback(
+    (files: Array<Record<string, unknown>>): UploadResult[] =>
+      files.map((file) => ({
+        path: String(file.object_key ?? file.file_path ?? ""),
+        originalName: String(
+          file.original_name ??
+            file.file_path ??
+            file.object_key ??
+            "파일",
+        ),
+        mime: typeof file.mime === "string" ? file.mime : undefined,
+        size: Number(file.size ?? 0),
+        accessUrl:
+          typeof file.access_url === "string" ? file.access_url : undefined,
+        checksum: typeof file.checksum === "string" ? file.checksum : undefined,
+        durationSeconds:
+          typeof file.duration_seconds === "number"
+            ? file.duration_seconds
+            : undefined,
+      })),
+    [],
+  );
+
+  const applyStoredDraft = React.useCallback((
+    draft: Record<string, unknown>,
+    storedSelection?: {
+      mvType?: string;
+      tvStations?: string[];
+      onlineOptions?: string[];
+      onlineBaseSelected?: boolean;
+    } | null,
+  ) => {
+    const draftType =
+      draft.type === "MV_BROADCAST" ? "MV_BROADCAST" : "MV_DISTRIBUTION";
+    setMvType(draftType);
+    setTitle(String(draft.title ?? ""));
+    setArtistName(String(draft.artist_name ?? ""));
+    setArtistNameOfficial(String(draft.artist_name_kr ?? ""));
+    setDirector(String(draft.mv_director ?? ""));
+    setLeadActor(String(draft.mv_lead_actor ?? ""));
+    setStoryline(String(draft.mv_storyline ?? ""));
+    setProductionCompany(String(draft.mv_production_company ?? ""));
+    setAgency(String(draft.mv_agency ?? ""));
+    setAlbumTitle(String(draft.mv_album_title ?? ""));
+    setProductionDate(normalizeDateValue(draft.mv_production_date));
+    setDistributionCompany(String(draft.mv_distribution_company ?? ""));
+    setBusinessRegNo(String(draft.mv_business_reg_no ?? ""));
+    setUsage(String(draft.mv_usage ?? ""));
+    setDesiredRating(String(draft.mv_desired_rating ?? ""));
+    setMemo(String(draft.mv_memo ?? ""));
+    setSongTitleKr(String(draft.mv_song_title_kr ?? ""));
+    setSongTitleEn(String(draft.mv_song_title_en ?? ""));
+    setSongTitleOfficial(
+      draft.mv_song_title_official === "KR" || draft.mv_song_title_official === "EN"
+        ? draft.mv_song_title_official
+        : "",
+    );
+    setComposer(String(draft.mv_composer ?? ""));
+    setLyricist(String(draft.mv_lyricist ?? ""));
+    setArranger(String(draft.mv_arranger ?? ""));
+    setSongMemo(String(draft.mv_song_memo ?? ""));
+    setLyrics(String(draft.mv_lyrics ?? ""));
+    setReleaseDate(normalizeDateValue(draft.release_date));
+    setGenre(String(draft.genre ?? ""));
+    setRuntime(String(draft.mv_runtime ?? ""));
+    setFormat(String(draft.mv_format ?? ""));
+
+    if (draft.payment_method === "CARD" || draft.payment_method === "BANK") {
+      setPaymentMethod(draft.payment_method);
+    }
+    setBankDepositorName(String(draft.bank_depositor_name ?? ""));
+
+    if (isGuest) {
+      setGuestName(String(draft.guest_name ?? ""));
+      setGuestCompany(String(draft.guest_company ?? ""));
+      setGuestEmail(String(draft.guest_email ?? ""));
+      setGuestPhone(String(draft.guest_phone ?? ""));
+    }
+
+    const selection = storedSelection?.mvType === draftType ? storedSelection : null;
+    if (draftType === "MV_BROADCAST") {
+      setTvStations(Array.isArray(selection?.tvStations) ? selection!.tvStations : []);
+      setOnlineOptions([]);
+      setOnlineBaseSelected(false);
+    } else {
+      setTvStations([]);
+      setOnlineOptions(Array.isArray(selection?.onlineOptions) ? selection!.onlineOptions : []);
+      const baseSelected =
+        typeof selection?.onlineBaseSelected === "boolean"
+          ? selection.onlineBaseSelected
+          : typeof draft.mv_base_selected === "boolean"
+            ? draft.mv_base_selected
+            : false;
+      setOnlineBaseSelected(baseSelected);
+    }
+
+    const files = mapDraftFiles(
+      Array.isArray(draft.files) ? (draft.files as Array<Record<string, unknown>>) : [],
+    );
+    setUploadedFiles(files);
+    setUploads(files.length > 0 ? buildUploadsFromFiles(files) : []);
+    setFiles([]);
+    setFileDigest("");
+
+    submissionIdRef.current = String(draft.id ?? "");
+    if (isGuest && typeof draft.guest_token === "string") {
+      guestTokenRef.current = draft.guest_token;
+    }
+
+    setNotice({});
+    setStep(2);
+  }, [buildUploadsFromFiles, isGuest, mapDraftFiles, normalizeDateValue]);
+
+  React.useEffect(() => {
+    if (resumeChecked) return;
+    if (typeof window === "undefined") {
+      setResumeChecked(true);
+      return;
+    }
+    const run = async () => {
+      const stored = readDraftStorage();
+      const storedGuestToken =
+        stored?.guestToken ?? (isGuest ? guestTokenRef.current : null);
+      try {
+        const res = await fetch("/api/submissions/drafts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "MV",
+            ids: stored?.id ? [stored.id] : undefined,
+            guestToken: isGuest ? storedGuestToken : undefined,
+          }),
+        });
+        const json = (await res.json().catch(() => null)) as {
+          drafts?: Array<Record<string, unknown>>;
+        } | null;
+        const drafts = Array.isArray(json?.drafts) ? json!.drafts : [];
+        if (drafts.length === 0) {
+          setResumeChecked(true);
+          return;
+        }
+        const shouldResume =
+          typeof window !== "undefined" &&
+          window.confirm(
+            "임시저장된 신청서가 있습니다. 불러오시겠습니까?",
+          );
+        if (!shouldResume) {
+          clearDraftStorage();
+          setResumeChecked(true);
+          return;
+        }
+        applyStoredDraft(drafts[0], stored ?? null);
+        const draftId = String(drafts[0].id ?? "");
+        if (draftId) {
+          writeDraftStorage({
+            id: draftId,
+            guestToken: isGuest ? (storedGuestToken ?? null) : null,
+            mvType:
+              drafts[0].type === "MV_BROADCAST"
+                ? "MV_BROADCAST"
+                : "MV_DISTRIBUTION",
+            tvStations: Array.isArray(stored?.tvStations) ? stored!.tvStations : [],
+            onlineOptions: Array.isArray(stored?.onlineOptions) ? stored!.onlineOptions : [],
+            onlineBaseSelected: stored?.onlineBaseSelected ?? false,
+          });
+        }
+      } catch (error) {
+        console.warn("[MvDraft][resume] failed", error);
+      } finally {
+        setResumeChecked(true);
+      }
+    };
+    void run();
+  }, [
+    applyStoredDraft,
+    clearDraftStorage,
+    isGuest,
+    readDraftStorage,
+    resumeChecked,
+    writeDraftStorage,
+  ]);
 
   const resolveSongTitleValues = () => {
     const songTitleKrValue = songTitleKr.trim();
@@ -1324,6 +1604,14 @@ export function MvWizard({
         return false;
       }
 
+      writeDraftStorage({
+        id: submissionId,
+        guestToken: isGuest ? guestTokenRef.current : null,
+        mvType,
+        tvStations,
+        onlineOptions,
+        onlineBaseSelected,
+      });
       setNotice({ submissionId: result.submissionId });
       return true;
     } catch {
@@ -1413,6 +1701,7 @@ export function MvWizard({
       }
 
       if (result.submissionId) {
+        clearDraftStorage();
         if (paymentMethod === "CARD") {
           const { ok, error } = openInicisCardPopup({
             context: "mv",
