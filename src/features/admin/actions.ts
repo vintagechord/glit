@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -91,6 +92,25 @@ const isMissingTrackResultsColumn = (error?: { code?: string; message?: string |
     msg.includes("track_results_json") ||
     msg.includes("track_results")
   );
+};
+
+const shouldRetryWithUserSession = (error?: { code?: string; message?: string | null }) => {
+  if (!error) return false;
+  const msg = error.message?.toLowerCase() ?? "";
+  return (
+    error.code === "42501" ||
+    msg.includes("row level security") ||
+    msg.includes("permission") ||
+    msg.includes("invalid api key") ||
+    msg.includes("jwt")
+  );
+};
+
+const formatSupabaseError = (error?: { code?: string; message?: string | null }) => {
+  if (!error) return "unknown error";
+  const code = error.code ? `(${error.code})` : "";
+  const message = error.message ?? "unknown error";
+  return `${code} ${message}`.trim();
 };
 
 const packageSchema = z.object({
@@ -576,10 +596,25 @@ export async function updateStationReviewAction(
     derivedStatus,
   });
 
-  const { data: upserted, error: baseError } = await supabase
-    .from("station_reviews")
-    .upsert(basePayload, { onConflict: "submission_id,station_id" })
-    .select("id, submission_id, station_id, status, result_note, updated_at");
+  const runBaseUpsert = async (client: SupabaseClient) =>
+    client
+      .from("station_reviews")
+      .upsert(basePayload, { onConflict: "submission_id,station_id" })
+      .select("id, submission_id, station_id, status, result_note, updated_at");
+
+  let { data: upserted, error: baseError } = await runBaseUpsert(supabase);
+
+  if (baseError && shouldRetryWithUserSession(baseError)) {
+    console.warn("[station_review][save][base][upsert][retry-user-session]", {
+      ...logContext,
+      errorCode: baseError.code,
+      errorMessage: baseError.message,
+    });
+    const userClient = await createServerSupabase();
+    const retry = await runBaseUpsert(userClient as SupabaseClient);
+    upserted = retry.data;
+    baseError = retry.error;
+  }
 
   if (baseError) {
     console.error("[station_review][save][base][upsert][error]", {
@@ -594,7 +629,9 @@ export async function updateStationReviewAction(
     if (process.env.NODE_ENV === "development") {
       throw new Error(`station_reviews upsert failed: ${baseError.message}`);
     }
-    return { error: "방송국 상태 업데이트에 실패했습니다." };
+    return {
+      error: `방송국 상태 업데이트에 실패했습니다. ${formatSupabaseError(baseError)}`,
+    };
   }
 
   let warning: string | undefined;
