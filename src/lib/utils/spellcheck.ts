@@ -24,11 +24,25 @@ export const spellcheckText = async (text: string, options: Options = {}): Promi
       signal,
     });
     const payload = await response.json().catch(() => null);
-    const corrected = typeof payload?.corrected === "string" ? payload.corrected : text;
-    const original = typeof payload?.original === "string" ? payload.original : text;
-    const warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
+    const corrected =
+      typeof payload?.correctedText === "string"
+        ? payload.correctedText
+        : typeof payload?.corrected === "string"
+          ? payload.corrected
+          : text;
+    const original =
+      typeof payload?.originalText === "string"
+        ? payload.originalText
+        : typeof payload?.original === "string"
+          ? payload.original
+          : text;
+    const warnings = Array.isArray(payload?.meta?.providers)
+      ? payload.meta.providers.flatMap((p: any) => p?.warnings ?? [])
+      : Array.isArray(payload?.warnings)
+        ? payload.warnings
+        : [];
     return {
-      ok: payload?.ok === true && response.ok,
+      ok: response.ok,
       original,
       corrected,
       warnings,

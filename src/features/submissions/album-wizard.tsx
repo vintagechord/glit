@@ -78,11 +78,23 @@ type DraftSnapshot = {
 };
 
 type SpellcheckSuggestion = {
+  id?: string;
   start: number;
   end: number;
   before: string;
   after: string;
   reason?: string;
+  source?: string;
+  confidence?: number;
+  type?: string;
+};
+
+type SpellcheckDiff = {
+  op: "equal" | "insert" | "delete" | "replace";
+  a: string;
+  b: string;
+  indexA: number;
+  indexB: number;
 };
 
 const initialTrack: TrackInput = {
@@ -312,6 +324,10 @@ export function AlbumWizard({
     React.useState<Record<number, SpellcheckSuggestion[]>>({});
   const [spellcheckOriginalByTrack, setSpellcheckOriginalByTrack] =
     React.useState<Record<number, string>>({});
+  const [spellcheckCorrectedByTrack, setSpellcheckCorrectedByTrack] =
+    React.useState<Record<number, string>>({});
+  const [spellcheckDiffsByTrack, setSpellcheckDiffsByTrack] =
+    React.useState<Record<number, SpellcheckDiff[]>>({});
   const [spellcheckModalOpen, setSpellcheckModalOpen] =
     React.useState(false);
   const [spellcheckPendingTrack, setSpellcheckPendingTrack] =
@@ -667,6 +683,16 @@ export function AlbumWizard({
     setSpellcheckPendingTrack(null);
   };
 
+  const buildChangesFromDiffs = (diffs: SpellcheckDiff[]) =>
+    diffs
+      .filter((diff) => diff.op !== "equal")
+      .map((diff) => ({
+        before: diff.a ?? "",
+        after: diff.b ?? "",
+        index: diff.indexA,
+      }))
+      .filter((change) => change.before || change.after);
+
   const applySpellcheckSuggestions = (
     trackIndex: number,
     suggestionsToApply: SpellcheckSuggestion[],
@@ -686,12 +712,13 @@ export function AlbumWizard({
           : suggestion.start + suggestion.before.length;
       const end = Math.max(start, expectedEnd);
       const before = suggestion.before ?? "";
+      const after = suggestion.after ?? "";
       if (!before) return;
       const slice = nextLyrics.slice(start, end);
       if (slice === before) {
         nextLyrics =
           nextLyrics.slice(0, start) +
-          suggestion.after +
+          after +
           nextLyrics.slice(end);
         applied.push({ ...suggestion, start, end });
         return;
@@ -703,7 +730,7 @@ export function AlbumWizard({
       if (fallbackIndex >= 0) {
         nextLyrics =
           nextLyrics.slice(0, fallbackIndex) +
-          suggestion.after +
+          after +
           nextLyrics.slice(fallbackIndex + before.length);
         applied.push({
           ...suggestion,
@@ -769,6 +796,14 @@ export function AlbumWizard({
       [activeTrackIndex]: false,
     }));
     setSpellcheckChangesByTrack((prev) => ({
+      ...prev,
+      [activeTrackIndex]: [],
+    }));
+    setSpellcheckCorrectedByTrack((prev) => ({
+      ...prev,
+      [activeTrackIndex]: original,
+    }));
+    setSpellcheckDiffsByTrack((prev) => ({
       ...prev,
       [activeTrackIndex]: [],
     }));
@@ -840,37 +875,47 @@ export function AlbumWizard({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: lyrics }),
+        body: JSON.stringify({ text: lyrics, mode: "balanced", domain: "music" }),
       });
       const payload = await response.json().catch(() => null);
       console.info("[Spellcheck][request][done]", {
         status: response.status,
         ok: response.ok,
         keys: payload ? Object.keys(payload) : [],
-        receivedLength: payload?.receivedLength ?? null,
+        traceId: payload?.meta?.traceId ?? null,
       });
       type SpellcheckResponse = {
+        originalText?: string;
+        normalizedText?: string;
         correctedText?: string;
         corrected?: string;
-        changes?: Array<{ from?: unknown; to?: unknown; index?: unknown }>;
-        receivedLength?: number;
         suggestions?: Array<{
+          id?: unknown;
           start?: unknown;
           end?: unknown;
-          before?: unknown;
-          after?: unknown;
-          reason?: unknown;
+          original?: unknown;
+          replacement?: unknown;
+          type?: unknown;
+          confidence?: unknown;
+          message?: unknown;
+          source?: unknown;
         }>;
-        original?: string;
+        diffs?: Array<{
+          op?: unknown;
+          a?: unknown;
+          b?: unknown;
+          indexA?: unknown;
+          indexB?: unknown;
+        }>;
+        meta?: { truncated?: boolean; reasonIfEmpty?: string; traceId?: string };
         error?: { message?: string };
-        truncated?: boolean;
-        meta?: { truncated?: boolean };
       };
       const spellcheckPayload = payload as SpellcheckResponse | null;
       const rawSuggestions: SpellcheckSuggestion[] = Array.isArray(
         spellcheckPayload?.suggestions,
       )
         ? (spellcheckPayload?.suggestions ?? []).map((item) => ({
+            id: typeof item?.id === "string" ? item.id : undefined,
             start:
               typeof item?.start === "number"
                 ? item.start
@@ -880,11 +925,26 @@ export function AlbumWizard({
                 ? item.end
                 : Number(item?.end ?? -1),
             before:
-              typeof item?.before === "string" ? item.before : String(item?.before ?? ""),
+              typeof item?.original === "string"
+                ? item.original
+                : String(item?.original ?? ""),
             after:
-              typeof item?.after === "string" ? item.after : String(item?.after ?? ""),
+              typeof item?.replacement === "string"
+                ? item.replacement
+                : String(item?.replacement ?? ""),
             reason:
-              typeof item?.reason === "string" ? item.reason : undefined,
+              typeof item?.message === "string"
+                ? item.message
+                : typeof item?.type === "string"
+                  ? item.type
+                  : undefined,
+            source:
+              typeof item?.source === "string" ? item.source : undefined,
+            confidence:
+              typeof item?.confidence === "number"
+                ? item.confidence
+                : undefined,
+            type: typeof item?.type === "string" ? item.type : undefined,
           }))
         : [];
       const parsedSuggestions = rawSuggestions.filter(
@@ -894,38 +954,46 @@ export function AlbumWizard({
           typeof item.before === "string" &&
           item.before.length > 0 &&
           typeof item.after === "string" &&
-          item.after.length > 0 &&
           item.start >= 0 &&
           item.end >= item.start,
       );
-      const derivedChanges: Array<{
-        before: string;
-        after: string;
-        index?: number;
-      }> = Array.isArray(spellcheckPayload?.changes)
-        ? (spellcheckPayload?.changes ?? [])
-            .map((change: { from?: unknown; to?: unknown; index?: unknown }) => ({
-              before: typeof change?.from === "string" ? change.from : "",
-              after: typeof change?.to === "string" ? change.to : "",
-              index:
-                typeof change?.index === "number" ? change.index : undefined,
-            }))
-            .filter((change) => Boolean(change.before && change.after))
+      const diffs: SpellcheckDiff[] = Array.isArray(spellcheckPayload?.diffs)
+        ? (spellcheckPayload?.diffs ?? [])
+            .map((diff) => {
+              const resolvedOp: SpellcheckDiff["op"] =
+                diff?.op === "equal" ||
+                diff?.op === "insert" ||
+                diff?.op === "delete" ||
+                diff?.op === "replace"
+                  ? diff.op
+                  : "equal";
+              return {
+                op: resolvedOp,
+                a: typeof diff?.a === "string" ? diff.a : String(diff?.a ?? ""),
+                b: typeof diff?.b === "string" ? diff.b : String(diff?.b ?? ""),
+                indexA:
+                  typeof diff?.indexA === "number"
+                    ? diff.indexA
+                    : Number(diff?.indexA ?? 0),
+                indexB:
+                  typeof diff?.indexB === "number"
+                    ? diff.indexB
+                    : Number(diff?.indexB ?? 0),
+              };
+            })
+            .filter((diff) => Number.isFinite(diff.indexA) && Number.isFinite(diff.indexB))
         : [];
-      const fallbackSuggestions =
-        parsedSuggestions.length > 0
-          ? parsedSuggestions
-          : derivedChanges.map((change) => ({
-              start: change.index ?? 0,
-              end: (change.index ?? 0) + change.before.length,
-              before: change.before,
-              after: change.after,
-            }));
-      const suggestions = fallbackSuggestions;
+      const correctedText =
+        typeof spellcheckPayload?.correctedText === "string"
+          ? spellcheckPayload.correctedText
+          : typeof spellcheckPayload?.corrected === "string"
+            ? spellcheckPayload.corrected
+            : lyrics;
       const originalText =
-        typeof spellcheckPayload?.original === "string"
-          ? spellcheckPayload.original
+        typeof spellcheckPayload?.originalText === "string"
+          ? spellcheckPayload.originalText
           : lyrics;
+      const reasonIfEmpty = spellcheckPayload?.meta?.reasonIfEmpty;
       if (!response.ok) {
         const message =
           spellcheckPayload?.error?.message ??
@@ -937,14 +1005,23 @@ export function AlbumWizard({
         return;
       }
 
-      if (!suggestions.length) {
+      setSpellcheckCorrectedByTrack((prev) => ({
+        ...prev,
+        [activeTrackIndex]: correctedText,
+      }));
+      setSpellcheckDiffsByTrack((prev) => ({
+        ...prev,
+        [activeTrackIndex]: diffs,
+      }));
+
+      if (!parsedSuggestions.length) {
         setSpellcheckNoticeMap((prev) => ({
           ...prev,
           [activeTrackIndex]: {
             type: "info",
-            message: `맞춤법 제안이 없습니다. (text: ${lyrics.length}자, received: ${
-              spellcheckPayload?.receivedLength ?? "unknown"
-            }자)`,
+            message: `맞춤법 제안이 없습니다.${
+              reasonIfEmpty ? ` (사유: ${reasonIfEmpty})` : ""
+            }`,
           },
         }));
         return;
@@ -956,13 +1033,13 @@ export function AlbumWizard({
       }));
       setSpellcheckSuggestionsByTrack((prev) => ({
         ...prev,
-        [activeTrackIndex]: suggestions,
+        [activeTrackIndex]: parsedSuggestions,
       }));
       setSpellcheckNoticeMap((prev) => ({
         ...prev,
         [activeTrackIndex]: {
           type: "info",
-          message: `맞춤법 제안 ${suggestions.length}건을 검토 후 적용하세요.`,
+          message: `맞춤법 제안 ${parsedSuggestions.length}건을 검토 후 적용하세요.`,
         },
       }));
       setSpellcheckPendingTrack(activeTrackIndex);
@@ -997,6 +1074,41 @@ export function AlbumWizard({
 
   const handleApplyAllSpellcheck = () => {
     const suggestions = spellcheckSuggestionsByTrack[activeTrackIndex] ?? [];
+    const corrected = spellcheckCorrectedByTrack[activeTrackIndex];
+    const diffs = spellcheckDiffsByTrack[activeTrackIndex] ?? [];
+    if (typeof corrected === "string" && corrected.length > 0) {
+      updateTrack(activeTrackIndex, "lyrics", corrected);
+      const appliedChanges =
+        diffs.length > 0 ? buildChangesFromDiffs(diffs) : suggestions.map((item) => ({
+          before: item.before,
+          after: item.after ?? "",
+          index: item.start,
+        }));
+      setSpellcheckChangesByTrack((prev) => ({
+        ...prev,
+        [activeTrackIndex]: appliedChanges,
+      }));
+      setSpellcheckAppliedMap((prev) => ({
+        ...prev,
+        [activeTrackIndex]: true,
+      }));
+      setLyricsTab("spellcheck");
+      markLyricsToolApplied(activeTrackIndex);
+      setSpellcheckNoticeMap((prev) => ({
+        ...prev,
+        [activeTrackIndex]: {
+          type: "success",
+          message: `맞춤법이 적용되었습니다. (${appliedChanges.length}건)`,
+        },
+      }));
+      clearSpellcheckModal();
+      setSpellcheckSuggestionsByTrack((prev) => ({
+        ...prev,
+        [activeTrackIndex]: [],
+      }));
+      return;
+    }
+
     applySpellcheckSuggestions(activeTrackIndex, suggestions, {
       closeModal: true,
     });
