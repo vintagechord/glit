@@ -1225,8 +1225,14 @@ export function SubmissionDetailClient({
                         : getReviewReception(review.status);
                       const trackInfo = buildTrackSummary(review.track_results);
                       const note = review.result_note?.trim();
-                      const showNote =
-                        Boolean(note) && rejectedReviewStatuses.has(review.status);
+                      const hasRejection = trackInfo.counts.rejected > 0;
+                      const showNote = Boolean(note) && hasRejection;
+                      const notePreview =
+                        showNote && note
+                          ? note.length > 28
+                            ? `${note.slice(0, 28)}…`
+                            : note
+                          : null;
                       const isApproved = review.status === "APPROVED";
                       const totalTracksForDisplay =
                         albumTracks.length > 1
@@ -1346,9 +1352,11 @@ export function SubmissionDetailClient({
                                   note: note ?? "",
                                 })
                               }
-                              className="justify-self-center rounded-full border border-border/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:text-foreground"
+                              className="justify-self-center max-w-[140px] rounded-full border border-border/60 px-3 py-1 text-[10px] font-semibold text-muted-foreground transition hover:text-foreground"
                             >
-                              사유 보기
+                              <span className="block truncate">
+                                {notePreview ?? "사유 보기"}
+                              </span>
                             </button>
                           ) : (
                             <span className="text-center text-[10px] text-muted-foreground">
@@ -1422,9 +1430,11 @@ export function SubmissionDetailClient({
                 {activeResultNote.stationName}
               </p>
             ) : null}
-            <p className="mt-3 whitespace-pre-line text-sm text-muted-foreground">
-              {activeResultNote.note}
-            </p>
+            <textarea
+              readOnly
+              value={activeResultNote.note}
+              className="mt-3 h-40 w-full resize-none rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
+            />
             <button
               type="button"
               onClick={() => setActiveResultNote(null)}
