@@ -195,18 +195,16 @@ function BannerContent({ banner }: { banner: AdBanner }) {
   return (
     <div className="px-2 py-2 sm:px-3 sm:py-3">
       <div className="group/banner relative flex h-20 overflow-hidden rounded-2xl border border-white/20 bg-white/25 shadow-[0_10px_30px_rgba(15,23,42,0.14)] backdrop-blur-md transition duration-300 hover:shadow-[0_18px_50px_rgba(0,0,0,0.25)] hover:border-border/70 dark:border-white/10 dark:bg-black/35 sm:h-24">
-        <div className="relative h-full flex-[0_0_68%] sm:flex-[0_0_74%] md:flex-[0_0_80%]">
-          <Image
-            src={banner.image_url}
-            alt={banner.title}
-            className="h-full w-full object-cover"
-            width={800}
-            height={200}
-            priority={false}
-          />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/25 via-black/10 to-transparent transition duration-300 group-hover/banner:from-white/25 group-hover/banner:via-white/10 group-hover/banner:to-transparent dark:from-black/35 dark:via-black/20" />
-        </div>
-        <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 sm:px-4">
+        <Image
+          src={banner.image_url}
+          alt={banner.title}
+          className="absolute inset-0 h-full w-full object-cover"
+          width={1200}
+          height={240}
+          priority={false}
+        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/30 via-black/10 to-white/85 transition duration-300 group-hover/banner:from-white/20 group-hover/banner:via-white/10 group-hover/banner:to-white/90 dark:from-black/45 dark:via-black/30 dark:to-black/85" />
+        <div className="relative z-10 flex w-full min-w-0 items-center justify-between gap-3 px-3 sm:px-4">
           <div className="min-w-0 hidden sm:block">
             <div className="text-[10px] font-semibold uppercase leading-tight tracking-[0.2em] text-muted-foreground">
               <p>Our</p>
