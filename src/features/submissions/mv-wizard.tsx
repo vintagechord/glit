@@ -163,7 +163,7 @@ export function MvWizard({
   );
   const [tvStations, setTvStations] = React.useState<string[]>([]);
   const [onlineOptions, setOnlineOptions] = React.useState<string[]>([]);
-  const [onlineBaseSelected, setOnlineBaseSelected] = React.useState(true);
+  const [onlineBaseSelected, setOnlineBaseSelected] = React.useState(false);
   const [title, setTitle] = React.useState("");
   const [artistName, setArtistName] = React.useState("");
   const [director, setDirector] = React.useState("");
