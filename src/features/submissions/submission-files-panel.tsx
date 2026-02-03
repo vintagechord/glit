@@ -95,7 +95,7 @@ export function SubmissionFilesPanel({
                 type="button"
                 onClick={() => handleDownload(file.id)}
                 disabled={downloadingId === file.id}
-                className="rounded-full border border-border/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full border border-border/70 bg-foreground/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/10 dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {downloadingId === file.id ? "다운로드 중" : "다운로드"}
               </button>

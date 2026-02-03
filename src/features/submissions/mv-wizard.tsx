@@ -1774,7 +1774,7 @@ export function MvWizard({
               type="button"
               onClick={() => setStep(1)}
               disabled={isSaving}
-              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-white disabled:cursor-not-allowed"
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
             >
               이전 단계
             </button>
@@ -1783,7 +1783,7 @@ export function MvWizard({
                 type="button"
                 onClick={() => handleSave("DRAFT")}
                 disabled={isSaving}
-                className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground disabled:cursor-not-allowed"
+                className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/10 dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed"
               >
                 임시 저장
               </button>
@@ -1935,7 +1935,7 @@ export function MvWizard({
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="rounded-full border border-border/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-white"
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
             </button>

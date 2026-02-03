@@ -6,11 +6,11 @@ import { ThemeToggle } from "./theme-toggle";
 import { SiteLogo } from "./site-logo";
 
 const primaryLinkClass =
-  "group flex items-center gap-2 rounded-full px-3 py-1 text-foreground/80 transition hover:bg-foreground hover:text-background dark:text-foreground dark:hover:bg-white dark:hover:text-black";
+  "group flex items-center gap-2 rounded-full bg-foreground/5 px-3 py-1 text-foreground/80 transition hover:bg-foreground hover:text-background dark:bg-transparent dark:text-foreground dark:hover:bg-white dark:hover:text-black";
 const mobileLinkClass =
-  "group flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-1 text-foreground/80 transition hover:bg-foreground hover:text-background dark:text-foreground dark:hover:bg-white dark:hover:text-black";
+  "group flex items-center gap-2 whitespace-nowrap rounded-full bg-foreground/5 px-3 py-1 text-foreground/80 transition hover:bg-foreground hover:text-background dark:bg-transparent dark:text-foreground dark:hover:bg-white dark:hover:text-black";
 const ghostButtonClass =
-  "rounded-full border border-border/70 bg-transparent px-3 py-1 text-sm font-semibold text-foreground whitespace-nowrap shrink-0 transition hover:bg-foreground hover:text-background dark:text-foreground dark:hover:bg-white dark:hover:text-black";
+  "rounded-full border border-border/70 bg-foreground/5 px-3 py-1 text-sm font-semibold text-foreground whitespace-nowrap shrink-0 transition hover:bg-foreground hover:text-background dark:bg-transparent dark:text-foreground dark:hover:bg-white dark:hover:text-black";
 
 const navLinks = [
   { label: "심의 신청", href: "/dashboard/new" },

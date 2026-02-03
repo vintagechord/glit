@@ -703,7 +703,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex <= 0}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-white text-xs font-bold text-black shadow-sm transition hover:border-black hover:bg-slate-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-black/5 text-xs font-bold text-black shadow-sm transition hover:border-black hover:bg-black/10 hover:text-black dark:bg-white dark:hover:bg-slate-900 dark:hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="이전 접수"
           >
             ←
@@ -730,7 +730,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex >= Math.max(0, activeList.length - 1)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-white text-xs font-bold text-black shadow-sm transition hover:border-black hover:bg-slate-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-black/5 text-xs font-bold text-black shadow-sm transition hover:border-black hover:bg-black/10 hover:text-black dark:bg-white dark:hover:bg-slate-900 dark:hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="다음 접수"
           >
             →
@@ -787,7 +787,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handlePrev}
                 disabled={page <= 0}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/60 text-xs text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-foreground/5 text-xs text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="이전 심의 진행 상태"
               >
                 ↑
@@ -796,7 +796,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handleNext}
                 disabled={page >= maxPage}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/60 text-xs text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-foreground/5 text-xs text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="다음 심의 진행 상태"
               >
                 ↓
@@ -918,7 +918,7 @@ export function HomeReviewPanel({
             <div className="mt-4 flex justify-center">
               <Link
                 href={`/dashboard/submissions/${activeSubmission.id}`}
-                className="rounded-full border border-border/70 bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:border-foreground hover:bg-white/90 dark:text-black"
+                className="rounded-full border border-border/70 bg-black/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:border-foreground hover:bg-black/10 dark:bg-white dark:text-black dark:hover:bg-white/90"
               >
                 자세히 보기
               </Link>
