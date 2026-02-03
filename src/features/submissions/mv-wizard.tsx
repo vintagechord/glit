@@ -1845,7 +1845,7 @@ export function MvWizard({
     <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving}
-        label="심의 저장/결제 처리 중..."
+        label={step <= 2 ? "신청서 저장" : "심의 저장/결제 처리 중..."}
       />
 
       {isDraggingOver && (
