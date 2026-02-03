@@ -31,6 +31,14 @@ type SubmissionSummary = {
 
 type TabKey = "album" | "mv";
 
+type DashboardStatusResponse = {
+  albumSubmissions: SubmissionSummary[];
+  mvSubmissions: SubmissionSummary[];
+  albumStationsMap: Record<string, StationItem[]>;
+  mvStationsMap: Record<string, StationItem[]>;
+  error?: string;
+};
+
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
     label: "접수대기",
@@ -356,6 +364,7 @@ export function HomeReviewPanel({
     stationsById: mvStationsMap,
     index: 0,
   }));
+  const [didFetchRemote, setDidFetchRemote] = React.useState(false);
 
   const availableTabs = React.useMemo<TabKey[]>(() => {
     if (!hideEmptyTabs) return ["album", "mv"];
@@ -370,6 +379,49 @@ export function HomeReviewPanel({
       setTab(availableTabs[0] ?? "album");
     }
   }, [availableTabs, tab]);
+
+  React.useEffect(() => {
+    if (!isLoggedIn || didFetchRemote) return;
+    if (albumState.submissions.length > 0 || mvState.submissions.length > 0) return;
+    let cancelled = false;
+    setDidFetchRemote(true);
+    const fetchRemote = async () => {
+      try {
+        const res = await fetch("/api/dashboard/status", { cache: "no-store" });
+        const json = (await res.json().catch(() => null)) as DashboardStatusResponse | null;
+        if (cancelled || !res.ok || !json || json.error) return;
+        const normalizeMap = (map: Record<string, StationItem[]>) =>
+          Object.fromEntries(
+            Object.entries(map ?? {}).map(([key, value]) => [
+              key,
+              normalizeStations(value),
+            ]),
+          );
+        setAlbumState({
+          submissions: json.albumSubmissions ?? [],
+          stationsById: normalizeMap(json.albumStationsMap ?? {}),
+          index: 0,
+        });
+        setMvState({
+          submissions: json.mvSubmissions ?? [],
+          stationsById: normalizeMap(json.mvStationsMap ?? {}),
+          index: 0,
+        });
+      } catch {
+        // ignore
+      }
+    };
+    fetchRemote();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    albumState.submissions.length,
+    didFetchRemote,
+    isLoggedIn,
+    mvState.submissions.length,
+    normalizeStations,
+  ]);
 
   const activeList = tab === "album" ? albumState.submissions : mvState.submissions;
   const activeIndex = tab === "album" ? albumState.index : mvState.index;
