@@ -44,7 +44,13 @@ type UploadResult = {
   size: number;
 };
 
-const steps = ["목적 선택", "신청서/파일 업로드", "결제하기", "접수 완료"];
+const steps = [
+  "목적 선택",
+  "신청서 작성",
+  "파일 업로드",
+  "결제하기",
+  "접수 완료",
+];
 
 const uploadMaxMb = Number(
   process.env.NEXT_PUBLIC_VIDEO_UPLOAD_MAX_MB ??
@@ -470,7 +476,7 @@ export function MvWizard({
     selectedStepTone ?? "border-amber-200 bg-amber-200 text-slate-900";
 
   const stepLabels = (
-    <div className="grid gap-3 md:grid-cols-4">
+    <div className="grid gap-3 md:grid-cols-5">
       {steps.map((label, index) => {
         const active = index + 1 <= step;
         return (
@@ -854,7 +860,7 @@ export function MvWizard({
     return results;
   };
 
-  const handleSave = async (status: "DRAFT" | "SUBMITTED") => {
+  const resolveSongTitleValues = () => {
     const songTitleKrValue = songTitleKr.trim();
     const songTitleEnValue = songTitleEn.trim();
     const songTitleOfficialValue =
@@ -863,6 +869,186 @@ export function MvWizard({
         : songTitleOfficial === "EN"
           ? songTitleEnValue
           : songTitleKrValue || songTitleEnValue;
+    return { songTitleKrValue, songTitleEnValue, songTitleOfficialValue };
+  };
+
+  const validateMvForm = (options?: { requirePayment?: boolean }) => {
+    const { songTitleKrValue, songTitleEnValue } = resolveSongTitleValues();
+    const requirePayment = options?.requirePayment ?? false;
+
+    if (!title || !artistName) {
+      setNotice({ error: "제목과 아티스트명을 입력해주세요." });
+      return false;
+    }
+    if (!artistNameOfficial.trim()) {
+      setNotice({ error: "아티스트명 공식 표기를 입력해주세요." });
+      return false;
+    }
+    if (!director.trim() || !leadActor.trim() || !storyline.trim()) {
+      setNotice({ error: "감독, 주연, 줄거리 정보를 입력해주세요." });
+      return false;
+    }
+    if (
+      !productionCompany.trim() ||
+      !agency.trim() ||
+      !albumTitle.trim() ||
+      !productionDate ||
+      !distributionCompany.trim() ||
+      !usage.trim()
+    ) {
+      setNotice({
+        error:
+          "제작 정보(제작사/소속사/앨범명/제작 연월일/유통사/용도)를 입력해주세요.",
+      });
+      return false;
+    }
+    if (!songTitleKrValue || !songTitleEnValue) {
+      setNotice({ error: "곡명(한글/영문)을 모두 입력해주세요." });
+      return false;
+    }
+    if (!lyrics.trim()) {
+      setNotice({ error: "가사를 입력해주세요." });
+      return false;
+    }
+    if (!songTitleOfficial) {
+      setNotice({ error: "곡명의 공식 표기를 선택해주세요." });
+      return false;
+    }
+    if (!composer.trim()) {
+      setNotice({ error: "작곡자 정보를 입력해주세요." });
+      return false;
+    }
+    if (mvType === "MV_BROADCAST" && tvStations.length === 0) {
+      setNotice({ error: "TV 송출 심의를 원하는 방송국을 선택해주세요." });
+      return false;
+    }
+    if (
+      mvType === "MV_DISTRIBUTION" &&
+      !onlineBaseSelected &&
+      onlineOptions.length === 0
+    ) {
+      setNotice({ error: "온라인 심의 옵션을 선택해주세요." });
+      return false;
+    }
+    if (isGuest && (!guestName || !guestEmail || !guestPhone)) {
+      setNotice({ error: "비회원 담당자 정보(이름/연락처/이메일)를 입력해주세요." });
+      return false;
+    }
+    if (
+      requirePayment &&
+      paymentMethod === "BANK" &&
+      !bankDepositorName.trim()
+    ) {
+      setNotice({ error: "입금자명을 입력해주세요." });
+      return false;
+    }
+    return true;
+  };
+
+  const validateMvUploads = () => {
+    if (uploads.length === 0) {
+      setNotice({ error: "영상 파일을 업로드해주세요." });
+      return false;
+    }
+    if (uploads.some((upload) => upload.status === "error")) {
+      setNotice({ error: "업로드에 실패한 파일이 있습니다." });
+      return false;
+    }
+    if (uploads.some((upload) => upload.status !== "done")) {
+      setNotice({ error: "파일 업로드가 완료될 때까지 기다려주세요." });
+      return false;
+    }
+    return true;
+  };
+
+  const saveMvDraft = async (options: { includeFiles: boolean }) => {
+    const { songTitleKrValue, songTitleEnValue, songTitleOfficialValue } =
+      resolveSongTitleValues();
+    let submissionId: string;
+    try {
+      submissionId = requireSubmissionId();
+    } catch (error) {
+      setNotice({
+        error:
+          draftError ||
+          (error instanceof Error
+            ? error.message
+            : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
+      });
+      void createDraft();
+      return false;
+    }
+
+    setIsSaving(true);
+    setNotice({});
+    try {
+      const uploaded = options.includeFiles ? await uploadFiles() : undefined;
+      const result = await saveMvSubmissionAction({
+        submissionId,
+        amountKrw: totalAmount,
+        selectedStationIds,
+        title,
+        artistName,
+        director: director.trim() || undefined,
+        leadActor: leadActor.trim() || undefined,
+        storyline: storyline.trim() || undefined,
+        productionCompany: productionCompany.trim() || undefined,
+        agency: agency.trim() || undefined,
+        albumTitle: albumTitle.trim() || undefined,
+        productionDate: productionDate || undefined,
+        distributionCompany: distributionCompany.trim() || undefined,
+        businessRegNo: businessRegNo.trim() || undefined,
+        usage: usage.trim() || undefined,
+        desiredRating: desiredRating.trim() || undefined,
+        memo: memo.trim() || undefined,
+        songTitle: songTitleOfficialValue || undefined,
+        songTitleKr: songTitleKrValue || undefined,
+        songTitleEn: songTitleEnValue || undefined,
+        songTitleOfficial: songTitleOfficial || undefined,
+        composer: composer.trim() || undefined,
+        lyricist: lyricist.trim() || undefined,
+        arranger: arranger.trim() || undefined,
+        songMemo: songMemo.trim() || undefined,
+        lyrics: lyrics.trim() || undefined,
+        artistNameOfficial: artistNameOfficial.trim() || undefined,
+        releaseDate: releaseDate || undefined,
+        genre: genre || undefined,
+        mvType,
+        runtime: runtime || undefined,
+        format: format || undefined,
+        mvBaseSelected:
+          mvType === "MV_DISTRIBUTION" ? onlineBaseSelected : false,
+        guestToken: isGuest ? guestToken : undefined,
+        guestName: isGuest ? guestName : undefined,
+        guestCompany: isGuest ? guestCompany : undefined,
+        guestEmail: isGuest ? guestEmail : undefined,
+        guestPhone: isGuest ? guestPhone : undefined,
+        paymentMethod,
+        status: "DRAFT",
+        files: uploaded,
+      });
+
+      if (result.error) {
+        setNotice({ error: result.error });
+        return false;
+      }
+
+      setNotice({ submissionId: result.submissionId });
+      return true;
+    } catch {
+      setNotice({ error: "저장 중 오류가 발생했습니다." });
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!validateMvForm({ requirePayment: true })) return;
+    if (!validateMvUploads()) return;
+
+    const { songTitleKrValue, songTitleEnValue, songTitleOfficialValue } =
+      resolveSongTitleValues();
 
     let submissionId: string;
     try {
@@ -876,80 +1062,6 @@ export function MvWizard({
             : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
       });
       void createDraft();
-      return;
-    }
-
-    if (!title || !artistName) {
-      setNotice({ error: "제목과 아티스트명을 입력해주세요." });
-      return;
-    }
-    if (status === "SUBMITTED" && !artistNameOfficial.trim()) {
-      setNotice({ error: "아티스트명 공식 표기를 입력해주세요." });
-      return;
-    }
-    if (
-      status === "SUBMITTED" &&
-      (!director.trim() || !leadActor.trim() || !storyline.trim())
-    ) {
-      setNotice({ error: "감독, 주연, 줄거리 정보를 입력해주세요." });
-      return;
-    }
-    if (
-      status === "SUBMITTED" &&
-      (!productionCompany.trim() ||
-        !agency.trim() ||
-        !albumTitle.trim() ||
-        !productionDate ||
-        !distributionCompany.trim() ||
-        !usage.trim())
-    ) {
-      setNotice({
-        error:
-          "제작 정보(제작사/소속사/앨범명/제작 연월일/유통사/용도)를 입력해주세요.",
-      });
-      return;
-    }
-    if (
-      status === "SUBMITTED" &&
-      (!songTitleKrValue || !songTitleEnValue)
-    ) {
-      setNotice({ error: "곡명(한글/영문)을 모두 입력해주세요." });
-      return;
-    }
-    if (status === "SUBMITTED" && !lyrics.trim()) {
-      setNotice({ error: "가사를 입력해주세요." });
-      return;
-    }
-    if (status === "SUBMITTED" && !songTitleOfficial) {
-      setNotice({ error: "곡명의 공식 표기를 선택해주세요." });
-      return;
-    }
-    if (status === "SUBMITTED" && !composer.trim()) {
-      setNotice({ error: "작곡자 정보를 입력해주세요." });
-      return;
-    }
-    if (mvType === "MV_BROADCAST" && tvStations.length === 0) {
-      setNotice({ error: "TV 송출 심의를 원하는 방송국을 선택해주세요." });
-      return;
-    }
-    if (
-      mvType === "MV_DISTRIBUTION" &&
-      !onlineBaseSelected &&
-      onlineOptions.length === 0
-    ) {
-      setNotice({ error: "온라인 심의 옵션을 선택해주세요." });
-      return;
-    }
-    if (isGuest && (!guestName || !guestEmail || !guestPhone)) {
-      setNotice({ error: "비회원 담당자 정보(이름/연락처/이메일)를 입력해주세요." });
-      return;
-    }
-    if (
-      status === "SUBMITTED" &&
-      paymentMethod === "BANK" &&
-      !bankDepositorName.trim()
-    ) {
-      setNotice({ error: "입금자명을 입력해주세요." });
       return;
     }
 
@@ -999,8 +1111,8 @@ export function MvWizard({
         guestPhone: isGuest ? guestPhone : undefined,
         paymentMethod,
         bankDepositorName:
-          status === "SUBMITTED" ? bankDepositorName.trim() : undefined,
-        status,
+          paymentMethod === "BANK" ? bankDepositorName.trim() : undefined,
+        status: "SUBMITTED",
         files: uploaded,
       });
 
@@ -1009,7 +1121,7 @@ export function MvWizard({
         return;
       }
 
-      if (status === "SUBMITTED" && result.submissionId) {
+      if (result.submissionId) {
         if (paymentMethod === "CARD") {
           const { ok, error } = openInicisCardPopup({
             context: "mv",
@@ -1018,11 +1130,14 @@ export function MvWizard({
           });
           if (!ok) {
             setNotice({
-              error: error || "결제 팝업을 열지 못했습니다. 팝업 차단을 해제한 뒤 다시 시도해주세요.",
+              error:
+                error ||
+                "결제 팝업을 열지 못했습니다. 팝업 차단을 해제한 뒤 다시 시도해주세요.",
             });
           }
           return;
-        } else if (paymentMethod === "BANK") {
+        }
+        if (paymentMethod === "BANK") {
           if (typeof window !== "undefined") {
             window.alert("심의 접수가 완료되었습니다.");
             if (result.emailWarning) {
@@ -1035,24 +1150,36 @@ export function MvWizard({
           } else if (isGuest) {
             setCompletionGuestToken(guestToken);
           }
-          setStep(4);
-          return;
-        } else {
-          console.warn("[Inicis][STDPay][init][client] unknown payment method", paymentMethod);
-          setNotice({ error: "지원하지 않는 결제 수단입니다." });
+          setStep(5);
           return;
         }
+        console.warn(
+          "[Inicis][STDPay][init][client] unknown payment method",
+          paymentMethod,
+        );
+        setNotice({ error: "지원하지 않는 결제 수단입니다." });
+        return;
       }
-
-      if (result.emailWarning && typeof window !== "undefined") {
-        window.alert(result.emailWarning);
-      }
-
-      setNotice({ submissionId: result.submissionId });
     } catch {
       setNotice({ error: "저장 중 오류가 발생했습니다." });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleStep2Next = async () => {
+    if (!validateMvForm()) return;
+    const saved = await saveMvDraft({ includeFiles: false });
+    if (saved) {
+      setStep(3);
+    }
+  };
+
+  const handleStep3Next = async () => {
+    if (!validateMvUploads()) return;
+    const saved = await saveMvDraft({ includeFiles: true });
+    if (saved) {
+      setStep(4);
     }
   };
 
@@ -1391,10 +1518,10 @@ export function MvWizard({
                 STEP 02
               </p>
               <h2 className="font-display mt-2 text-2xl text-foreground">
-                M/V 파일 및 신청서 정보를 입력하세요.
+                M/V 신청서 정보를 입력하세요.
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                제목/러닝타임/포맷을 입력하고 영상 파일을 업로드합니다.
+                제목/러닝타임/포맷 등 기본 정보를 입력합니다.
               </p>
             </div>
           </div>
@@ -1782,6 +1909,66 @@ export function MvWizard({
             </div>
           )}
 
+          {notice.error && (
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+              {notice.error}
+            </div>
+          )}
+          {notice.submissionId && (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
+              임시 저장이 완료되었습니다.
+            </div>
+          )}
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              disabled={isSaving}
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+            >
+              이전 단계
+            </button>
+            {!isGuest && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!validateMvForm()) return;
+                  await saveMvDraft({ includeFiles: false });
+                }}
+                disabled={isSaving}
+                className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/10 dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed"
+              >
+                임시 저장
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleStep2Next}
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900"
+            >
+              다음 단계
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-8">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                STEP 03
+              </p>
+              <h2 className="font-display mt-2 text-2xl text-foreground">
+                파일 업로드
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                방송국 심의 규격에 맞는 파일을 업로드해주세요.
+              </p>
+            </div>
+          </div>
+
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               MV 파일 업로드
@@ -1918,16 +2105,20 @@ export function MvWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(1)}
-              disabled={isSaving}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+              onClick={() => setStep(2)}
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
             </button>
             {!isGuest && (
               <button
                 type="button"
-                onClick={() => handleSave("DRAFT")}
+                onClick={async () => {
+                  const uploadsReady =
+                    uploads.length > 0 &&
+                    uploads.every((upload) => upload.status === "done");
+                  await saveMvDraft({ includeFiles: uploadsReady });
+                }}
                 disabled={isSaving}
                 className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/10 dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed"
               >
@@ -1936,8 +2127,9 @@ export function MvWizard({
             )}
             <button
               type="button"
-              onClick={() => setStep(3)}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900"
+              onClick={handleStep3Next}
+              disabled={isSaving}
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
             >
               다음 단계
             </button>
@@ -1945,12 +2137,12 @@ export function MvWizard({
         </div>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <div className="space-y-8">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 03
+                STEP 04
               </p>
               <h2 className="font-display mt-2 text-2xl text-foreground">
                 결제하기
@@ -2080,14 +2272,14 @@ export function MvWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => setStep(3)}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
             </button>
             <button
               type="button"
-              onClick={() => handleSave("SUBMITTED")}
+              onClick={handleSubmit}
               disabled={isSaving}
               className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
             >
@@ -2097,10 +2289,10 @@ export function MvWizard({
         </div>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <div className="rounded-[32px] border border-border/60 bg-card/80 p-10 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            STEP 04
+            STEP 05
           </p>
           <h2 className="font-display mt-3 text-3xl text-foreground">
             접수 완료

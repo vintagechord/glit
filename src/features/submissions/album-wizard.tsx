@@ -112,7 +112,8 @@ const initialTrack: TrackInput = {
 
 const steps = [
   "패키지 선택",
-  "신청서/파일 업로드",
+  "신청서 작성",
+  "파일 업로드",
   "결제하기",
   "접수 완료",
 ];
@@ -244,6 +245,7 @@ type AlbumDraft = {
   melonUrl: string;
   tracks: TrackInput[];
   files: UploadResult[];
+  emailSubmitConfirmed: boolean;
 };
 
 export function AlbumWizard({
@@ -351,6 +353,10 @@ export function AlbumWizard({
     string[]
   >([]);
   const [albumDrafts, setAlbumDrafts] = React.useState<AlbumDraft[]>([]);
+  const [uploadDrafts, setUploadDrafts] = React.useState<AlbumDraft[] | null>(
+    null,
+  );
+  const [uploadDraftIndex, setUploadDraftIndex] = React.useState(0);
   const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
   const [baseDraftSnapshot, setBaseDraftSnapshot] =
     React.useState<DraftSnapshot | null>(null);
@@ -581,7 +587,7 @@ export function AlbumWizard({
   }, [currentSubmissionId]);
 
   const stepLabels = (
-    <div className="grid gap-3 md:grid-cols-4">
+    <div className="grid gap-3 md:grid-cols-5">
       {steps.map((label, index) => {
         const active = index + 1 <= step;
         const isPackageStep = index === 0;
@@ -1369,6 +1375,14 @@ export function AlbumWizard({
     setUploads(nextUploads);
     setFileDigest("");
     setEmailSubmitConfirmed(false);
+    setUploadDrafts((prev) => {
+      if (!prev) return prev;
+      return prev.map((draft, index) =>
+        index === uploadDraftIndex
+          ? { ...draft, emailSubmitConfirmed: false }
+          : draft,
+      );
+    });
     if (filtered.length > 0) {
       void uploadFiles(combinedFiles, nextUploads).catch((error: unknown) => {
         const message =
@@ -1698,6 +1712,7 @@ export function AlbumWizard({
     melonUrl: melonUrl.trim(),
     tracks: tracks.map((track) => ({ ...track })),
     files: uploadedFiles,
+    emailSubmitConfirmed,
   });
 
   const applyDraftToForm = (
@@ -1727,15 +1742,41 @@ export function AlbumWizard({
     setUploadedFiles(draft.files);
     setFileDigest("");
     setEmailSubmitConfirmed(
-      options?.emailSubmitConfirmed ?? draft.files.length === 0,
+      options?.emailSubmitConfirmed ??
+        draft.emailSubmitConfirmed ??
+        draft.files.length === 0,
     );
     setNotice({});
     setCurrentSubmissionId(draft.submissionId);
     setCurrentGuestToken(draft.guestToken);
   };
 
-  const buildAlbumDraft = async (): Promise<AlbumDraft> => {
-    const uploaded = await uploadFiles();
+  React.useEffect(() => {
+    if (!uploadDrafts) return;
+    setUploadDrafts((prev) => {
+      if (!prev) return prev;
+      const current = prev[uploadDraftIndex];
+      if (!current) return prev;
+      const sameFiles =
+        current.files.length === uploadedFiles.length &&
+        current.files.every((file, index) => file.path === uploadedFiles[index]?.path);
+      const sameEmail = current.emailSubmitConfirmed === emailSubmitConfirmed;
+      if (sameFiles && sameEmail) return prev;
+      const next = [...prev];
+      next[uploadDraftIndex] = {
+        ...current,
+        files: uploadedFiles,
+        emailSubmitConfirmed,
+      };
+      return next;
+    });
+  }, [uploadDraftIndex, uploadDrafts, uploadedFiles, emailSubmitConfirmed]);
+
+  const buildAlbumDraft = async (options?: {
+    includeUpload?: boolean;
+  }): Promise<AlbumDraft> => {
+    const includeUpload = options?.includeUpload ?? true;
+    const uploaded = includeUpload ? await uploadFiles() : uploadedFiles;
     return {
       submissionId: requireSubmissionId(),
       guestToken: currentGuestToken,
@@ -1754,6 +1795,7 @@ export function AlbumWizard({
       melonUrl: melonUrl.trim(),
       tracks: tracks.map((track) => ({ ...track })),
       files: uploaded,
+      emailSubmitConfirmed,
     };
   };
 
@@ -1765,9 +1807,17 @@ export function AlbumWizard({
     if (confirmed) {
       setEmailSubmitConfirmed(true);
       setNotice({});
+      setUploadDrafts((prev) => {
+        if (!prev) return prev;
+        return prev.map((draft, index) =>
+          index === uploadDraftIndex
+            ? { ...draft, emailSubmitConfirmed: true }
+            : draft,
+        );
+      });
     }
     return confirmed;
-  }, []);
+  }, [uploadDraftIndex]);
 
   const getTrackDisplayTitle = (track: TrackInput) =>
     track.trackTitle.trim() || "제목 미입력";
@@ -1787,7 +1837,7 @@ export function AlbumWizard({
     }));
   };
 
-  const validateStep2 = () => {
+  const validateFormStep = () => {
     if (!selectedPackage) {
       setNotice({ error: "패키지를 선택해주세요." });
       return false;
@@ -1874,28 +1924,29 @@ export function AlbumWizard({
         return false;
       }
     }
+    return true;
+  };
 
-    if (uploads.length === 0) {
-      if (emailSubmitConfirmed) {
-        setNotice({});
-        return true;
-      }
-      if (confirmEmailSubmission()) {
+  const validateUploadStep = (drafts: AlbumDraft[]) => {
+    if (uploads.some((upload) => upload.status === "error")) {
+      setNotice({ error: "업로드에 실패한 파일이 있습니다." });
+      return false;
+    }
+    if (uploads.some((upload) => upload.status !== "done")) {
+      setNotice({ error: "파일 업로드가 완료될 때까지 기다려주세요." });
+      return false;
+    }
+
+    const missingUploads = drafts.filter(
+      (draft) => draft.files.length === 0 && !draft.emailSubmitConfirmed,
+    );
+    if (missingUploads.length > 0) {
+      if (missingUploads.length === 1 && confirmEmailSubmission()) {
         return true;
       }
       setNotice({
         error: "음원 파일을 업로드하거나 이메일 제출을 선택해주세요.",
       });
-      return false;
-    }
-
-    if (uploads.some((upload) => upload.status === "error")) {
-      setNotice({ error: "업로드에 실패한 파일이 있습니다." });
-      return false;
-    }
-
-    if (uploads.some((upload) => upload.status !== "done")) {
-      setNotice({ error: "파일 업로드가 완료될 때까지 기다려주세요." });
       return false;
     }
 
@@ -1932,18 +1983,101 @@ export function AlbumWizard({
 
     setEditingIndex(index);
     applyDraftToForm(draft, {
-      emailSubmitConfirmed: draft.files.length === 0,
+      emailSubmitConfirmed: draft.emailSubmitConfirmed,
     });
   };
 
+  const saveAlbumDrafts = async (
+    drafts: AlbumDraft[],
+    options: { includeFiles: boolean },
+  ) => {
+    if (!selectedPackage) {
+      setNotice({ error: "패키지를 선택해주세요." });
+      return false;
+    }
+    if (basePriceKrw <= 0) {
+      setNotice({ error: "결제 금액 정보를 확인할 수 없습니다." });
+      return false;
+    }
+
+    const applicantNameValue = applicantName.trim();
+    const applicantEmailValue = applicantEmail.trim();
+    const applicantPhoneValue = applicantPhone.trim();
+    const submissionIds: string[] = [];
+
+    setIsSaving(true);
+    setNotice({});
+    try {
+      for (let index = 0; index < drafts.length; index += 1) {
+        const draft = drafts[index];
+        const albumPrice = index === 0 ? basePriceKrw : additionalPriceKrw;
+        const safeTitle =
+          draft.title.trim() || (isOneClick ? "원클릭 접수" : "");
+        const safeArtist =
+          draft.artistName.trim() || (isOneClick ? "원클릭 접수" : "");
+        const result = await saveAlbumSubmissionAction({
+          submissionId: draft.submissionId,
+          packageId: selectedPackage.id,
+          amountKrw: albumPrice,
+          title: safeTitle,
+          artistName: safeArtist,
+          artistNameKr: draft.artistNameKr.trim(),
+          artistNameEn: draft.artistNameEn.trim(),
+          releaseDate: draft.releaseDate || undefined,
+          genre: draft.genre || undefined,
+          distributor: draft.distributor || undefined,
+          productionCompany: draft.productionCompany || undefined,
+          applicantName: applicantNameValue,
+          applicantEmail: applicantEmailValue,
+          applicantPhone: applicantPhoneValue,
+          previousRelease: draft.previousRelease || undefined,
+          artistType: draft.artistType || undefined,
+          artistGender: draft.artistGender || undefined,
+          artistMembers:
+            draft.artistType === "GROUP"
+              ? draft.artistMembers || undefined
+              : undefined,
+          isOneClick,
+          melonUrl: isOneClick ? draft.melonUrl || undefined : undefined,
+          guestToken: draft.guestToken,
+          guestName: applicantNameValue,
+          guestCompany: draft.productionCompany || undefined,
+          guestEmail: applicantEmailValue,
+          guestPhone: applicantPhoneValue,
+          paymentMethod,
+          status: "DRAFT",
+          tracks: isOneClick ? undefined : mapTracksForSave(draft.tracks),
+          files: options.includeFiles ? draft.files : undefined,
+        });
+
+        if (result.error) {
+          setNotice({ error: result.error });
+          return false;
+        }
+
+        if (result.submissionId) {
+          submissionIds.push(result.submissionId);
+        }
+      }
+
+      setNotice({ submissionId: submissionIds[0] ?? currentSubmissionId });
+      return true;
+    } catch {
+      setNotice({ error: "저장 중 오류가 발생했습니다." });
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleAddAlbum = async () => {
-    if (!validateStep2()) {
+    if (!validateFormStep()) {
       return;
     }
     setIsAddingAlbum(true);
     setNotice({});
     try {
-      const draft = await buildAlbumDraft();
+      const draft = await buildAlbumDraft({ includeUpload: false });
       if (editingIndex !== null) {
         setAlbumDrafts((prev) =>
           prev.map((item, idx) => (idx === editingIndex ? draft : item)),
@@ -1985,13 +2119,88 @@ export function AlbumWizard({
     }
   };
 
-  const handleStep2Next = () => {
+  const handleStep2Next = async () => {
     if (editingIndex !== null) {
       setNotice({ error: "수정 중인 앨범을 저장한 뒤 진행해주세요." });
       return;
     }
-    if (validateStep2()) {
-      setStep(3);
+    if (!validateFormStep()) {
+      return;
+    }
+    let currentDraft: AlbumDraft;
+    try {
+      currentDraft = captureCurrentDraft();
+    } catch (error) {
+      setNotice({
+        error:
+          draftError ||
+          (error instanceof Error
+            ? error.message
+            : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
+      });
+      void createDraft();
+      return;
+    }
+    const allDrafts = [currentDraft, ...albumDrafts];
+    const saved = await saveAlbumDrafts(allDrafts, { includeFiles: false });
+    if (!saved) return;
+    setUploadDrafts(allDrafts);
+    setUploadDraftIndex(0);
+    applyDraftToForm(allDrafts[0], {
+      emailSubmitConfirmed: allDrafts[0].emailSubmitConfirmed,
+    });
+    setStep(3);
+  };
+
+  const handleSelectUploadDraft = (index: number) => {
+    if (!uploadDrafts || !uploadDrafts[index]) return;
+    if (uploads.some((upload) => upload.status !== "done")) {
+      setNotice({ error: "파일 업로드가 완료된 뒤 변경할 수 있습니다." });
+      return;
+    }
+    setUploadDraftIndex(index);
+    applyDraftToForm(uploadDrafts[index], {
+      emailSubmitConfirmed: uploadDrafts[index].emailSubmitConfirmed,
+    });
+  };
+
+  const resolveUploadDrafts = () => {
+    if (uploadDrafts && uploadDrafts.length > 0) {
+      const nextDrafts = [...uploadDrafts];
+      const current = nextDrafts[uploadDraftIndex];
+      if (current) {
+        nextDrafts[uploadDraftIndex] = {
+          ...current,
+          files: uploadedFiles,
+          emailSubmitConfirmed,
+        };
+      }
+      return nextDrafts;
+    }
+    try {
+      return [captureCurrentDraft(), ...albumDrafts];
+    } catch (error) {
+      setNotice({
+        error:
+          draftError ||
+          (error instanceof Error
+            ? error.message
+            : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
+      });
+      void createDraft();
+      return null;
+    }
+  };
+
+  const handleStep3Next = async () => {
+    const draftsForUpload = resolveUploadDrafts();
+    if (!draftsForUpload) return;
+    if (!validateUploadStep(draftsForUpload)) {
+      return;
+    }
+    const saved = await saveAlbumDrafts(draftsForUpload, { includeFiles: true });
+    if (saved) {
+      setStep(4);
     }
   };
 
@@ -2000,7 +2209,7 @@ export function AlbumWizard({
       setNotice({ error: "수정 중인 앨범을 저장한 뒤 진행해주세요." });
       return;
     }
-    if (!validateStep2()) {
+    if (!validateFormStep()) {
       return;
     }
     if (
@@ -2009,6 +2218,18 @@ export function AlbumWizard({
       !bankDepositorName.trim()
     ) {
       setNotice({ error: "입금자명을 입력해주세요." });
+      return;
+    }
+    const draftsForSubmit =
+      status === "SUBMITTED" && uploadDrafts?.length
+        ? uploadDrafts
+        : [
+            await buildAlbumDraft({
+              includeUpload: status === "SUBMITTED",
+            }),
+            ...albumDrafts,
+          ];
+    if (status === "SUBMITTED" && !validateUploadStep(draftsForSubmit)) {
       return;
     }
 
@@ -2023,8 +2244,6 @@ export function AlbumWizard({
         setNotice({ error: "결제 금액 정보를 확인할 수 없습니다." });
         return;
       }
-      const currentDraft = await buildAlbumDraft();
-      const allDrafts = [currentDraft, ...albumDrafts];
       const applicantNameValue = applicantName.trim();
       const applicantEmailValue = applicantEmail.trim();
       const applicantPhoneValue = applicantPhone.trim();
@@ -2032,8 +2251,8 @@ export function AlbumWizard({
       const guestTokens: Array<{ token: string; title: string }> = [];
       let emailWarning: string | undefined;
 
-      for (let index = 0; index < allDrafts.length; index += 1) {
-        const draft = allDrafts[index];
+      for (let index = 0; index < draftsForSubmit.length; index += 1) {
+        const draft = draftsForSubmit[index];
         const albumPrice = index === 0 ? basePriceKrw : additionalPriceKrw;
         const safeTitle =
           draft.title.trim() || (isOneClick ? "원클릭 접수" : "");
@@ -2073,7 +2292,7 @@ export function AlbumWizard({
             status === "SUBMITTED" ? bankDepositorName.trim() : undefined,
           status,
           tracks: isOneClick ? undefined : mapTracksForSave(draft.tracks),
-          files: draft.files,
+          files: status === "SUBMITTED" ? draft.files : undefined,
         });
 
         if (result.error) {
@@ -2120,7 +2339,7 @@ export function AlbumWizard({
           if (guestTokens.length > 0) {
             setCompletionTokens(guestTokens);
           }
-          setStep(4);
+          setStep(5);
           return;
         } else {
           console.warn("[Inicis][STDPay][init][client] unknown payment method", paymentMethod);
@@ -2402,9 +2621,6 @@ export function AlbumWizard({
 
       {step === 2 && (
         <div className="space-y-8">
-          {isDraggingOver && (
-            <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
-          )}
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -2415,8 +2631,8 @@ export function AlbumWizard({
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 {isOneClick
-                  ? "멜론 링크와 음원 파일만 업로드합니다."
-                  : "트랙 정보와 음원 파일을 업로드합니다."}
+                  ? "멜론 링크와 기본 정보를 입력한 뒤 다음 단계에서 음원 파일을 업로드합니다."
+                  : "트랙 정보를 입력한 뒤 다음 단계에서 음원 파일을 업로드합니다."}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 현재 앨범 {albumDrafts.length + 1} 입력 중
@@ -3100,6 +3316,189 @@ export function AlbumWizard({
             </div>
           )}
 
+
+
+          {albumDrafts.length > 0 && (
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                등록 앨범 목록
+              </p>
+              <div className="mt-3 space-y-2">
+                {albumDrafts.map((draft, index) => (
+                  <div
+                    key={draft.submissionId}
+                    onClick={() => startEditingDraft(index)}
+                    role="button"
+                    tabIndex={0}
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${
+                      editingIndex === index
+                        ? "border-amber-200 bg-amber-200/20"
+                        : "border-border/60 bg-background/70 hover:border-foreground"
+                    }`}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        앨범 {index + 1}
+                        {editingIndex === index && (
+                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                            수정 중
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {(draft.title.trim() ||
+                          (isOneClick ? "원클릭 접수" : "제목 미입력")) +
+                          " · " +
+                          (draft.artistName.trim() ||
+                            (isOneClick ? "원클릭 접수" : "아티스트 미입력"))}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeAlbumDraft(index);
+                      }}
+                      className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {notice.submissionId && (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
+              임시 저장이 완료되었습니다.
+            </div>
+          )}
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              disabled={isSaving || isAddingAlbum}
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+            >
+              이전 단계
+            </button>
+            {!isGuest && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (editingIndex !== null) {
+                    setNotice({
+                      error: "수정 중인 앨범을 저장한 뒤 진행해주세요.",
+                    });
+                    return;
+                  }
+                  if (!validateFormStep()) return;
+                  let draftsForSave: AlbumDraft[];
+                  try {
+                    draftsForSave = [captureCurrentDraft(), ...albumDrafts];
+                  } catch (error) {
+                    setNotice({
+                      error:
+                        draftError ||
+                        (error instanceof Error
+                          ? error.message
+                          : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
+                    });
+                    void createDraft();
+                    return;
+                  }
+                  await saveAlbumDrafts(draftsForSave, { includeFiles: false });
+                }}
+                disabled={isSaving || isAddingAlbum}
+                className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+              >
+                임시 저장
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleAddAlbum}
+              disabled={isSaving || isAddingAlbum}
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+            >
+              {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 등록"}
+            </button>
+            <button
+              type="button"
+              onClick={handleStep2Next}
+              disabled={isSaving || isAddingAlbum || editingIndex !== null}
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
+            >
+              다음 단계
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-8">
+          {isDraggingOver && (
+            <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
+          )}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                STEP 03
+              </p>
+              <h2 className="font-display mt-2 text-2xl text-foreground">
+                파일 업로드
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                업로드 대상 앨범을 선택한 뒤 음원 파일을 첨부하세요.
+              </p>
+            </div>
+          </div>
+
+          {uploadDrafts && uploadDrafts.length > 0 && (
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                업로드 대상 앨범
+              </p>
+              <div className="mt-3 space-y-2">
+                {uploadDrafts.map((draft, index) => (
+                  <div
+                    key={draft.submissionId}
+                    onClick={() => handleSelectUploadDraft(index)}
+                    role="button"
+                    tabIndex={0}
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${
+                      uploadDraftIndex === index
+                        ? "border-amber-200 bg-amber-200/20"
+                        : "border-border/60 bg-background/70 hover:border-foreground"
+                    }`}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        앨범 {index + 1}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {(draft.title.trim() ||
+                          (isOneClick ? "원클릭 접수" : "제목 미입력")) +
+                          " · " +
+                          (draft.artistName.trim() ||
+                            (isOneClick ? "원클릭 접수" : "아티스트 미입력"))}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      {draft.files.length > 0
+                        ? "업로드 완료"
+                        : draft.emailSubmitConfirmed
+                          ? "이메일 제출"
+                          : "업로드 필요"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               전체 음원 파일 업로드
@@ -3203,7 +3602,9 @@ export function AlbumWizard({
               ))}
               {uploads.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-center text-xs text-muted-foreground">
-                  <p className="font-semibold text-foreground">아직 선택된 파일이 없습니다.</p>
+                  <p className="font-semibold text-foreground">
+                    아직 선택된 파일이 없습니다.
+                  </p>
                   <p className="mt-2 text-[11px] text-muted-foreground">
                     업로드 없이 진행하려면 이메일 제출을 선택하세요.
                   </p>
@@ -3247,57 +3648,11 @@ export function AlbumWizard({
             </div>
           </div>
 
-          {albumDrafts.length > 0 && (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                등록 앨범 목록
-              </p>
-              <div className="mt-3 space-y-2">
-                {albumDrafts.map((draft, index) => (
-                  <div
-                    key={draft.submissionId}
-                    onClick={() => startEditingDraft(index)}
-                    role="button"
-                    tabIndex={0}
-                    className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${
-                      editingIndex === index
-                        ? "border-amber-200 bg-amber-200/20"
-                        : "border-border/60 bg-background/70 hover:border-foreground"
-                    }`}
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        앨범 {index + 1}
-                        {editingIndex === index && (
-                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200">
-                            수정 중
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {(draft.title.trim() ||
-                          (isOneClick ? "원클릭 접수" : "제목 미입력")) +
-                          " · " +
-                          (draft.artistName.trim() ||
-                            (isOneClick ? "원클릭 접수" : "아티스트 미입력"))}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        removeAlbumDraft(index);
-                      }}
-                      className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                ))}
-              </div>
+          {notice.error && (
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+              {notice.error}
             </div>
           )}
-
           {notice.submissionId && (
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
               임시 저장이 완료되었습니다.
@@ -3307,7 +3662,7 @@ export function AlbumWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(1)}
+              onClick={() => setStep(2)}
               disabled={isSaving || isAddingAlbum}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
             >
@@ -3316,7 +3671,15 @@ export function AlbumWizard({
             {!isGuest && (
               <button
                 type="button"
-                onClick={() => handleSave("DRAFT")}
+                onClick={async () => {
+                  const draftsForUpload = resolveUploadDrafts();
+                  if (!draftsForUpload) return;
+                  const uploadsReady =
+                    uploads.length > 0 &&
+                    uploads.every((upload) => upload.status === "done");
+                  const includeFiles = uploadsReady || emailSubmitConfirmed;
+                  await saveAlbumDrafts(draftsForUpload, { includeFiles });
+                }}
                 disabled={isSaving || isAddingAlbum}
                 className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
               >
@@ -3325,16 +3688,8 @@ export function AlbumWizard({
             )}
             <button
               type="button"
-              onClick={handleAddAlbum}
+              onClick={handleStep3Next}
               disabled={isSaving || isAddingAlbum}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
-            >
-              {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 등록"}
-            </button>
-            <button
-              type="button"
-              onClick={handleStep2Next}
-              disabled={isSaving || isAddingAlbum || editingIndex !== null}
               className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
             >
               다음 단계
@@ -3343,12 +3698,12 @@ export function AlbumWizard({
         </div>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <div className="space-y-8">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 03
+                STEP 04
               </p>
               <h2 className="font-display mt-2 text-2xl text-foreground">
                 결제하기
@@ -3502,7 +3857,7 @@ export function AlbumWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => setStep(3)}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
@@ -3519,10 +3874,10 @@ export function AlbumWizard({
         </div>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <div className="rounded-[32px] border border-border/60 bg-card/80 p-10 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            STEP 04
+            STEP 05
           </p>
           <h2 className="font-display mt-3 text-3xl text-foreground">
             접수 완료

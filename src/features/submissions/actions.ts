@@ -746,36 +746,38 @@ export async function saveAlbumSubmissionAction(
     return { error: "트랙 정보를 입력해주세요." };
   }
 
-  await db
-    .from("submission_files")
-    .delete()
-    .eq("submission_id", parsed.data.submissionId)
-    .eq("kind", "AUDIO");
+  if (parsed.data.files !== undefined) {
+    await db
+      .from("submission_files")
+      .delete()
+      .eq("submission_id", parsed.data.submissionId)
+      .eq("kind", "AUDIO");
 
-  const fileRows =
-    parsed.data.files?.map((file) => ({
-      submission_id: parsed.data.submissionId,
-      kind: "AUDIO",
-      file_path: file.path,
-      object_key: file.path,
-      storage_provider: "b2",
-      status: "UPLOADED",
-      uploaded_at: new Date().toISOString(),
-      original_name: file.originalName,
-      mime: file.mime || null,
-      size: file.size,
-    })) ?? [];
+    const fileRows =
+      parsed.data.files?.map((file) => ({
+        submission_id: parsed.data.submissionId,
+        kind: "AUDIO",
+        file_path: file.path,
+        object_key: file.path,
+        storage_provider: "b2",
+        status: "UPLOADED",
+        uploaded_at: new Date().toISOString(),
+        original_name: file.originalName,
+        mime: file.mime || null,
+        size: file.size,
+      })) ?? [];
 
-  if (fileRows.length > 0) {
-    const fileResult = await insertWithColumnFallback(
-      db,
-      "submission_files",
-      fileRows,
-    );
-    const fileError = fileResult.error;
+    if (fileRows.length > 0) {
+      const fileResult = await insertWithColumnFallback(
+        db,
+        "submission_files",
+        fileRows,
+      );
+      const fileError = fileResult.error;
 
-    if (fileError) {
-      return { error: "파일 정보를 저장할 수 없습니다." };
+      if (fileError) {
+        return { error: "파일 정보를 저장할 수 없습니다." };
+      }
     }
   }
 
@@ -1085,36 +1087,38 @@ export async function saveMvSubmissionAction(
     return { error: formatSubmissionError(submissionError) };
   }
 
-  await db
-    .from("submission_files")
-    .delete()
-    .eq("submission_id", parsed.data.submissionId)
-    .eq("kind", "VIDEO");
+  if (parsed.data.files !== undefined) {
+    await db
+      .from("submission_files")
+      .delete()
+      .eq("submission_id", parsed.data.submissionId)
+      .eq("kind", "VIDEO");
 
-  const fileRows =
-    parsed.data.files?.map((file) => ({
-      submission_id: parsed.data.submissionId,
-      kind: "VIDEO",
-      file_path: file.path,
-      object_key: file.path,
-      storage_provider: "b2",
-      status: "UPLOADED",
-      uploaded_at: new Date().toISOString(),
-      original_name: file.originalName,
-      mime: file.mime || null,
-      size: file.size,
-    })) ?? [];
+    const fileRows =
+      parsed.data.files?.map((file) => ({
+        submission_id: parsed.data.submissionId,
+        kind: "VIDEO",
+        file_path: file.path,
+        object_key: file.path,
+        storage_provider: "b2",
+        status: "UPLOADED",
+        uploaded_at: new Date().toISOString(),
+        original_name: file.originalName,
+        mime: file.mime || null,
+        size: file.size,
+      })) ?? [];
 
-  if (fileRows.length > 0) {
-    const fileResult = await insertWithColumnFallback(
-      db,
-      "submission_files",
-      fileRows,
-    );
-    const fileError = fileResult.error;
+    if (fileRows.length > 0) {
+      const fileResult = await insertWithColumnFallback(
+        db,
+        "submission_files",
+        fileRows,
+      );
+      const fileError = fileResult.error;
 
-    if (fileError) {
-      return { error: "파일 정보를 저장할 수 없습니다." };
+      if (fileError) {
+        return { error: "파일 정보를 저장할 수 없습니다." };
+      }
     }
   }
 
