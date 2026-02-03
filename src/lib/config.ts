@@ -21,6 +21,12 @@ const PUBLIC_LOGO_FALLBACK = PUBLIC_LOGO_BASE
 const DEFAULT_SIGNED_LOGO =
   "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/sign/logo/onside_logo.svg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8xMDAwNTc4YS0wOTBiLTRmOTYtYTRlMC1mNTM5ODlhNjRjMDgiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJsb2dvL29uc2lkZV9sb2dvLnN2ZyIsImlhdCI6MTc2OTUzNzI0NiwiZXhwIjoyMDg0ODk3MjQ2fQ.b_hTQcgrSOHS0u5nn0mcJbIy5xwFytJY-st0_6UKijY";
 
+const DEFAULT_SIGNED_LOGO_LIGHT =
+  "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/sign/logo/onside-logo-light.svg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8xMDAwNTc4YS0wOTBiLTRmOTYtYTRlMC1mNTM5ODlhNjRjMDgiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJsb2dvL29uc2lkZS1sb2dvLWxpZ2h0LnN2ZyIsImlhdCI6MTc3MDEyMTM5MSwiZXhwIjoyMDg1NDgxMzkxfQ.pVNc81TMLP0AuP_Cew8q_bqCEBBo_78IRYyrTZRld2w";
+
+const DEFAULT_SIGNED_LOGO_DARK =
+  "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/sign/logo/onside-logo-dark.svg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8xMDAwNTc4YS0wOTBiLTRmOTYtYTRlMC1mNTM5ODlhNjRjMDgiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJsb2dvL29uc2lkZS1sb2dvLWRhcmsuc3ZnIiwiaWF0IjoxNzcwMTIxMzY2LCJleHAiOjIwODU0ODEzNjZ9.S2DdfforrelUeNcrtcVIvh1iJuUxTYTSSkz5opI_tDQ";
+
 export const APP_CONFIG = {
   logoPath:
     process.env.NEXT_PUBLIC_LOGO_PATH ??
@@ -29,11 +35,14 @@ export const APP_CONFIG = {
   logoLightPath:
     process.env.NEXT_PUBLIC_LOGO_LIGHT_PATH ??
     PUBLIC_LOGO_LIGHT ??
+    DEFAULT_SIGNED_LOGO_LIGHT ??
     PUBLIC_LOGO_FALLBACK ??
     DEFAULT_SIGNED_LOGO,
   logoDarkPath:
     process.env.NEXT_PUBLIC_LOGO_DARK_PATH ??
     PUBLIC_LOGO_DARK ??
+    DEFAULT_SIGNED_LOGO_DARK ??
+    PUBLIC_LOGO_FALLBACK ??
     "",
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "help@vhouse.co.kr",
   supportPhone: process.env.NEXT_PUBLIC_SUPPORT_PHONE ?? "010-8436-9035",
