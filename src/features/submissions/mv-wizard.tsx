@@ -278,6 +278,7 @@ export function MvWizard({
   const [uploads, setUploads] = React.useState<UploadItem[]>([]);
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadResult[]>([]);
   const [fileDigest, setFileDigest] = React.useState("");
+  const [emailSubmitConfirmed, setEmailSubmitConfirmed] = React.useState(false);
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [resumeChecked, setResumeChecked] = React.useState(false);
@@ -325,6 +326,7 @@ export function MvWizard({
         tvStations?: string[];
         onlineOptions?: string[];
         onlineBaseSelected?: boolean;
+        emailSubmitConfirmed?: boolean;
       };
     } catch {
       return null;
@@ -338,6 +340,7 @@ export function MvWizard({
     tvStations?: string[];
     onlineOptions?: string[];
     onlineBaseSelected?: boolean;
+    emailSubmitConfirmed?: boolean;
   }) => {
     if (typeof window === "undefined") return;
     try {
@@ -350,6 +353,7 @@ export function MvWizard({
           tvStations: payload.tvStations ?? [],
           onlineOptions: payload.onlineOptions ?? [],
           onlineBaseSelected: payload.onlineBaseSelected ?? false,
+          emailSubmitConfirmed: payload.emailSubmitConfirmed ?? false,
           updatedAt: Date.now(),
         }),
       );
@@ -1272,6 +1276,18 @@ export function MvWizard({
     [],
   );
 
+  const confirmEmailSubmission = React.useCallback(() => {
+    const message =
+      "영상 파일을 이메일로 제출하시겠습니까?\n(파일 업로드 없이 다음 단계로 이동합니다)";
+    const confirmed =
+      typeof window !== "undefined" ? window.confirm(message) : false;
+    if (confirmed) {
+      setEmailSubmitConfirmed(true);
+      setNotice({});
+    }
+    return confirmed;
+  }, []);
+
   const applyStoredDraft = React.useCallback((
     draft: Record<string, unknown>,
     storedSelection?: {
@@ -1279,6 +1295,7 @@ export function MvWizard({
       tvStations?: string[];
       onlineOptions?: string[];
       onlineBaseSelected?: boolean;
+      emailSubmitConfirmed?: boolean;
     } | null,
   ) => {
     const draftType =
@@ -1352,6 +1369,9 @@ export function MvWizard({
     setUploads(files.length > 0 ? buildUploadsFromFiles(files) : []);
     setFiles([]);
     setFileDigest("");
+    setEmailSubmitConfirmed(
+      Boolean(storedSelection?.emailSubmitConfirmed) && files.length === 0,
+    );
 
     submissionIdRef.current = String(draft.id ?? "");
     if (isGuest && typeof draft.guest_token === "string") {
@@ -1413,6 +1433,7 @@ export function MvWizard({
             tvStations: Array.isArray(stored?.tvStations) ? stored!.tvStations : [],
             onlineOptions: Array.isArray(stored?.onlineOptions) ? stored!.onlineOptions : [],
             onlineBaseSelected: stored?.onlineBaseSelected ?? false,
+            emailSubmitConfirmed: stored?.emailSubmitConfirmed ?? false,
           });
         }
       } catch (error) {
@@ -1517,6 +1538,7 @@ export function MvWizard({
   };
 
   const validateMvUploads = () => {
+    if (emailSubmitConfirmed) return true;
     if (uploads.length === 0) {
       setNotice({ error: "영상 파일을 업로드해주세요." });
       return false;
@@ -1611,6 +1633,7 @@ export function MvWizard({
         tvStations,
         onlineOptions,
         onlineBaseSelected,
+        emailSubmitConfirmed,
       });
       setNotice({ submissionId: result.submissionId });
       return true;
@@ -1647,7 +1670,7 @@ export function MvWizard({
     setIsSaving(true);
     setNotice({});
     try {
-      const uploaded = await uploadFiles();
+    const uploaded = uploads.length > 0 ? await uploadFiles() : [];
       const result = await saveMvSubmissionAction({
         submissionId,
         amountKrw: totalAmount,
@@ -1757,7 +1780,9 @@ export function MvWizard({
 
   const handleStep3Next = async () => {
     if (!validateMvUploads()) return;
-    const saved = await saveMvDraft({ includeFiles: true });
+    const uploadsReady =
+      uploads.length > 0 && uploads.every((upload) => upload.status === "done");
+    const saved = await saveMvDraft({ includeFiles: uploadsReady });
     if (saved) {
       setStep(4);
     }
@@ -2665,7 +2690,26 @@ export function MvWizard({
               ))}
               {uploads.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-center text-xs text-muted-foreground">
-                  아직 선택된 파일이 없습니다.
+                  <p className="font-semibold text-foreground">
+                    아직 선택된 파일이 없습니다.
+                  </p>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    업로드 없이 진행하려면 이메일 제출을 선택하세요.
+                  </p>
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={confirmEmailSubmission}
+                      className="rounded-full border border-border/70 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+                    >
+                      이메일 제출 선택
+                    </button>
+                    {emailSubmitConfirmed ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
+                        선택됨
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               )}
             </div>
