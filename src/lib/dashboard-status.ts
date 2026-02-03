@@ -280,15 +280,30 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
       reviewRows = (fallback.data ?? reviewRows) as StationReviewRow[];
     }
 
-    const reviewMap = new Map<string, Map<string, StationReviewRow>>();
+    const reviewMap = new Map<
+      string,
+      { byId: Map<string, StationReviewRow>; byCode: Map<string, StationReviewRow> }
+    >();
     reviewRows.forEach((row) => {
       const submissionId = row.submission_id;
-      const stationId = row.station_id || (Array.isArray(row.station) ? row.station[0]?.id : row.station?.id);
-      if (!submissionId || !stationId) return;
-      const normalizedStation = Array.isArray(row.station) ? row.station[0] : row.station ?? null;
-      const map = reviewMap.get(submissionId) ?? new Map();
-      map.set(stationId, { ...row, station: normalizedStation });
-      reviewMap.set(submissionId, map);
+      if (!submissionId) return;
+      const normalizedStation = Array.isArray(row.station)
+        ? row.station[0]
+        : row.station ?? null;
+      const stationId = row.station_id || normalizedStation?.id || null;
+      const stationCode = normalizedStation?.code ?? null;
+      const entry = reviewMap.get(submissionId) ?? {
+        byId: new Map<string, StationReviewRow>(),
+        byCode: new Map<string, StationReviewRow>(),
+      };
+      const normalizedRow = { ...row, station: normalizedStation };
+      if (stationId) {
+        entry.byId.set(stationId, normalizedRow);
+      }
+      if (stationCode) {
+        entry.byCode.set(stationCode, normalizedRow);
+      }
+      reviewMap.set(submissionId, entry);
     });
 
     const logoFor = (code?: string | null) =>
@@ -303,17 +318,26 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
       const resolvedCount = pkg?.station_count ?? fallbackPackage?.station_count ?? null;
       const resolvedName = pkg?.name ?? fallbackPackage?.name ?? null;
 
-      const reviews = reviewMap.get(submission.id) ?? new Map();
+      const reviewLookup = reviewMap.get(submission.id);
+      const reviewsById = reviewLookup?.byId ?? new Map<string, StationReviewRow>();
+      const reviewsByCode = reviewLookup?.byCode ?? new Map<string, StationReviewRow>();
       const expectedStations = getPackageStations(resolvedCount, resolvedName);
-      const resolvedStations = expectedStations.map((station) => ({
-        id: station.code ?? station.name,
-        code: station.code,
-        name: station.name,
-      }));
-
       const fallbackStations = submission.package_id
         ? packageStationsMap.get(submission.package_id) ?? []
         : [];
+      const fallbackByCode = new Map(
+        fallbackStations
+          .filter((station) => Boolean(station.code))
+          .map((station) => [station.code as string, station]),
+      );
+      const resolvedStations = expectedStations.map((station) => {
+        const fallback = station.code ? fallbackByCode.get(station.code) : null;
+        return {
+          id: String(fallback?.id ?? station.code ?? station.name ?? ""),
+          code: station.code ?? fallback?.code ?? null,
+          name: station.name ?? fallback?.name ?? station.code ?? null,
+        };
+      });
 
       const stationList =
         resolvedStations.length > 0
@@ -325,12 +349,14 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
       const rows =
         stationList.length > 0
           ? stationList.map((station) => {
-              const review = station.id ? reviews.get(station.id) : undefined;
+              const review =
+                (station.id ? reviewsById.get(station.id) : undefined) ??
+                (station.code ? reviewsByCode.get(station.code) : undefined);
               const normalizedTrackResults = normalizeTrackResults(review?.track_results);
               return {
                 id: review?.id ?? `placeholder-${submission.id}-${station.id}`,
                 submission_id: submission.id,
-                station_id: review?.station_id ?? station.id,
+                station_id: review?.station_id ?? (typeof station.id === "string" ? station.id : null),
                 status: review?.status ?? "NOT_SENT",
                 result_note: review?.result_note ?? null,
                 track_results: normalizedTrackResults.length ? normalizedTrackResults : null,
@@ -345,19 +371,33 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
             })
           : [];
 
-      if (rows.length === 0 && reviews.size) {
-        reviews.forEach((review) => {
+      if (rows.length === 0 && (reviewsById.size || reviewsByCode.size)) {
+        const seen = new Set<string>();
+        const pushReview = (review: StationReviewRow) => {
+          if (seen.has(review.id)) return;
+          seen.add(review.id);
           const station = Array.isArray(review.station)
             ? review.station[0]
             : review.station ?? {};
+          const normalizedTrackResults = normalizeTrackResults(review.track_results);
           rows.push({
-            ...review,
+            id: review.id,
+            submission_id: review.submission_id,
+            station_id: review.station_id ?? null,
+            status: review.status,
+            result_note: review.result_note ?? null,
+            track_results: normalizedTrackResults.length ? normalizedTrackResults : null,
+            updated_at: review.updated_at,
             station: {
-              ...station,
+              id: String(station.id ?? station.code ?? ""),
+              code: station.code ?? null,
+              name: station.name ?? null,
               logo_url: logoFor(station.code ?? undefined),
             },
           });
-        });
+        };
+        reviewsById.forEach(pushReview);
+        reviewsByCode.forEach(pushReview);
       }
 
       if (rows.length === 0) {
