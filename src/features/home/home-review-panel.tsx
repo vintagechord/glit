@@ -327,6 +327,7 @@ export function HomeReviewPanel({
   mvStationsMap,
   hideEmptyTabs = false,
   forceLiveBadge = false,
+  enableRemoteSync = false,
 }: {
   isLoggedIn: boolean;
   albumSubmissions: SubmissionSummary[];
@@ -335,6 +336,7 @@ export function HomeReviewPanel({
   mvStationsMap: Record<string, StationItem[]>;
   hideEmptyTabs?: boolean;
   forceLiveBadge?: boolean;
+  enableRemoteSync?: boolean;
 }) {
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
@@ -364,7 +366,9 @@ export function HomeReviewPanel({
     stationsById: mvStationsMap,
     index: 0,
   }));
-  const [didFetchRemote, setDidFetchRemote] = React.useState(false);
+  const [remoteStatus, setRemoteStatus] = React.useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle");
 
   const availableTabs = React.useMemo<TabKey[]>(() => {
     if (!hideEmptyTabs) return ["album", "mv"];
@@ -381,15 +385,19 @@ export function HomeReviewPanel({
   }, [availableTabs, tab]);
 
   React.useEffect(() => {
-    if (!isLoggedIn || didFetchRemote) return;
-    if (albumState.submissions.length > 0 || mvState.submissions.length > 0) return;
+    if (!enableRemoteSync || !isLoggedIn) return;
+    if (remoteStatus !== "idle") return;
     let cancelled = false;
-    setDidFetchRemote(true);
+    setRemoteStatus("loading");
     const fetchRemote = async () => {
       try {
         const res = await fetch("/api/dashboard/status", { cache: "no-store" });
         const json = (await res.json().catch(() => null)) as DashboardStatusResponse | null;
-        if (cancelled || !res.ok || !json || json.error) return;
+        if (cancelled) return;
+        if (!res.ok || !json || json.error) {
+          setRemoteStatus("error");
+          return;
+        }
         const normalizeMap = (map: Record<string, StationItem[]>) =>
           Object.fromEntries(
             Object.entries(map ?? {}).map(([key, value]) => [
@@ -407,21 +415,16 @@ export function HomeReviewPanel({
           stationsById: normalizeMap(json.mvStationsMap ?? {}),
           index: 0,
         });
+        setRemoteStatus("loaded");
       } catch {
-        // ignore
+        if (!cancelled) setRemoteStatus("error");
       }
     };
     fetchRemote();
     return () => {
       cancelled = true;
     };
-  }, [
-    albumState.submissions.length,
-    didFetchRemote,
-    isLoggedIn,
-    mvState.submissions.length,
-    normalizeStations,
-  ]);
+  }, [enableRemoteSync, isLoggedIn, normalizeStations, remoteStatus]);
 
   const activeList = tab === "album" ? albumState.submissions : mvState.submissions;
   const activeIndex = tab === "album" ? albumState.index : mvState.index;
@@ -767,7 +770,9 @@ export function HomeReviewPanel({
             </div>
           ) : (
             <p className="mt-2 text-sm font-semibold text-foreground">
-              아직 접수된 내역이 없습니다.
+              {enableRemoteSync && remoteStatus === "loading"
+                ? "불러오는 중..."
+                : "아직 접수된 내역이 없습니다."}
             </p>
           )}
         </div>

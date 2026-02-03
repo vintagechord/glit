@@ -805,6 +805,7 @@ export default async function Home() {
               mvSubmissions={mvSubmissions}
               albumStationsMap={albumStationsMap}
               mvStationsMap={mvStationsMap}
+              enableRemoteSync
             />
           </div>
         </div>
