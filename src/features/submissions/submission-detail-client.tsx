@@ -200,43 +200,54 @@ const mvRatingLabel = (code?: string | null) => {
 
 const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
-    label: "접수예정",
+    label: "접수대기",
     tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
   SENT: {
-    label: "접수",
+    label: "접수완료",
     tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   },
   RECEIVED: {
-    label: "접수",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+    label: "심의진행중",
+    tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
   },
   APPROVED: {
-    label: "접수완료",
+    label: "결과통보",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   REJECTED: {
-    label: "접수완료",
+    label: "결과통보",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   NEEDS_FIX: {
-    label: "접수완료",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    label: "수정요청",
+    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
 };
 
 const reviewResultMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
-    label: "적격",
+    label: "통과",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   REJECTED: {
     label: "불통과",
     tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
+};
+
+const stationResultFallbackMap: Record<string, { label: string; tone: string }> = {
+  APPROVED: {
+    label: "결과통보",
+    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+  },
+  REJECTED: {
+    label: "결과통보",
+    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+  },
   NEEDS_FIX: {
-    label: "불통과",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    label: "수정요청",
+    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
 };
 
@@ -267,7 +278,7 @@ const getReviewReception = (status: string) =>
   };
 
 const getReviewResult = (status: string) =>
-  reviewResultMap[status] ?? {
+  stationResultFallbackMap[status] ?? {
     label: "대기",
     tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
   };
@@ -1203,7 +1214,7 @@ export function SubmissionDetailClient({
                   <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     <span>방송국</span>
                     <span className="text-center">접수 상태</span>
-                    <span className="text-center">통과 여부</span>
+                    <span className="text-center">트랙 결과</span>
                     <span className="text-right">접수 날짜</span>
                     <span className="text-center">사유</span>
                   </div>
@@ -1229,7 +1240,7 @@ export function SubmissionDetailClient({
                         0,
                       );
                       const pendingCount = trackInfo.counts.pending + pendingGap;
-                      const hasTrackDetails = totalTracksForDisplay > 1;
+                      const hasTrackDetails = totalTracksForDisplay > 0;
                       const resultTone =
                         isReviewComplete && submission.mv_desired_rating
                           ? {
@@ -1246,12 +1257,19 @@ export function SubmissionDetailClient({
                                     tone:
                                       "bg-amber-500/15 text-amber-700 dark:text-amber-200",
                                   }
-                                : getReviewResult(review.status);
-                      const trackSummaryLine = hasTrackDetails
-                        ? `${trackInfo.counts.approved}곡 통과 · ${trackInfo.counts.rejected}곡 불통과${
-                            pendingCount > 0 ? ` · ${pendingCount}곡 대기` : ""
-                          }`
-                        : null;
+                                : hasTrackDetails
+                                  ? {
+                                      label: "대기",
+                                      tone:
+                                        "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+                                    }
+                                  : getReviewResult(review.status);
+                      const trackSummaryLine =
+                        totalTracksForDisplay > 1
+                          ? `${trackInfo.counts.approved}곡 통과 · ${trackInfo.counts.rejected}곡 불통과${
+                              pendingCount > 0 ? ` · ${pendingCount}곡 대기` : ""
+                            }`
+                          : null;
 
                       const handleResultClick = () => {
                         if (hasTrackDetails) {

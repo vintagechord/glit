@@ -76,18 +76,32 @@ export const stationReviewStatusOptions: Array<{
   value: StationReviewStatus;
   label: string;
 }> = [
-  { value: "NOT_SENT", label: "미전달" },
-  { value: "SENT", label: "전달 완료" },
-  { value: "RECEIVED", label: "접수 완료" },
-  { value: "APPROVED", label: "통과" },
-  { value: "REJECTED", label: "불통과" },
-  { value: "NEEDS_FIX", label: "수정 요청" },
+  { value: "NOT_SENT", label: "접수대기" },
+  { value: "SENT", label: "접수완료" },
+  { value: "RECEIVED", label: "심의진행중" },
+  { value: "APPROVED", label: "결과통보" },
+  { value: "NEEDS_FIX", label: "수정요청" },
 ];
 
-export const stationReviewStatusLabelMap: Record<StationReviewStatus, string> =
-  Object.fromEntries(
-    stationReviewStatusOptions.map((option) => [option.value, option.label]),
-  ) as Record<StationReviewStatus, string>;
+export const stationReviewStatusLabelMap: Record<StationReviewStatus, string> = {
+  NOT_SENT: "접수대기",
+  SENT: "접수완료",
+  RECEIVED: "심의진행중",
+  APPROVED: "결과통보",
+  REJECTED: "결과통보",
+  NEEDS_FIX: "수정요청",
+};
+
+export const normalizeStationReviewStatus = (
+  status?: string | null,
+): StationReviewStatus => {
+  switch (status) {
+    case "REJECTED":
+      return "APPROVED";
+    default:
+      return (status as StationReviewStatus) ?? "NOT_SENT";
+  }
+};
 
 // 결과 상태 (전체 접수 요약)
 export const resultStatusValues = ["APPROVED", "REJECTED", "NEEDS_FIX"] as const;

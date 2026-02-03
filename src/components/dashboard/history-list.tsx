@@ -90,27 +90,27 @@ const paymentMethodLabels: Record<string, string> = {
 
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
-    label: "접수 예정",
+    label: "접수대기",
     tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
   },
   SENT: {
-    label: "접수",
+    label: "접수완료",
     tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   },
   RECEIVED: {
-    label: "접수 완료",
+    label: "심의진행중",
     tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
   },
   APPROVED: {
-    label: "접수 완료",
+    label: "결과통보",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   REJECTED: {
-    label: "접수 완료",
+    label: "결과통보",
     tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
   NEEDS_FIX: {
-    label: "접수 완료",
+    label: "수정요청",
     tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
 };
@@ -137,7 +137,7 @@ const resultStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
   NEEDS_FIX: {
-    label: "수정 요청",
+    label: "수정요청",
     tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
 };
@@ -513,7 +513,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               <div className="grid grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 <span>방송국</span>
                 <span className="justify-self-center text-center">접수 상태</span>
-                <span className="justify-self-center text-center">통과 여부</span>
+                <span className="justify-self-center text-center">트랙 결과</span>
                 <span className="text-right">접수 날짜</span>
               </div>
               {activeSubmission.stationReviews.length > 0 ? (

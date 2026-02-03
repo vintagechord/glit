@@ -33,32 +33,32 @@ type TabKey = "album" | "mv";
 
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
-    label: "접수예정",
+    label: "접수대기",
     tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
   SENT: {
-    label: "접수",
+    label: "접수완료",
     tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   },
   RECEIVED: {
-    label: "접수",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+    label: "심의진행중",
+    tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
   },
   APPROVED: {
-    label: "접수완료",
+    label: "결과통보",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   REJECTED: {
-    label: "접수완료",
+    label: "결과통보",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   NEEDS_FIX: {
-    label: "접수완료",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    label: "수정요청",
+    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
 };
 
-const resultStatusMap: Record<string, { label: string; tone: string }> = {
+const trackResultStatusMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
     label: "통과",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
@@ -67,9 +67,20 @@ const resultStatusMap: Record<string, { label: string; tone: string }> = {
     label: "불통과",
     tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
+};
+
+const stationResultFallbackMap: Record<string, { label: string; tone: string }> = {
+  APPROVED: {
+    label: "결과통보",
+    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+  },
+  REJECTED: {
+    label: "결과통보",
+    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+  },
   NEEDS_FIX: {
-    label: "불통과",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    label: "수정요청",
+    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
   },
 };
 
@@ -109,15 +120,15 @@ function getResultStatus(review: StationItem) {
   const summary = summarizeTrackResults(review.track_results);
   const base =
     summary.outcome === "APPROVED"
-      ? resultStatusMap.APPROVED
+      ? trackResultStatusMap.APPROVED
       : summary.outcome === "REJECTED"
-        ? resultStatusMap.REJECTED
+        ? trackResultStatusMap.REJECTED
         : summary.outcome === "PARTIAL"
           ? {
               label: "부분 통과",
               tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
             }
-          : resultStatusMap[review.status] ?? {
+          : stationResultFallbackMap[review.status] ?? {
               label: "대기",
               tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
             };
@@ -739,7 +750,7 @@ export function HomeReviewPanel({
             <div className="hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid">
               <span>방송국</span>
               <span className="justify-self-center text-center">접수 상태</span>
-              <span className="justify-self-center text-center">통과 여부</span>
+              <span className="justify-self-center text-center">트랙 결과</span>
               <span className="text-right">Updated</span>
             </div>
             {activeStations.length > 0 ? (

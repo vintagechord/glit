@@ -572,14 +572,7 @@ export async function updateStationReviewAction(
   const statusRequested = parsed.data.status;
   const trackSummary = hasTrackResultsInput ? summarizeTrackResults(trackResultsInput) : null;
   const normalizedTrackResults = hasTrackResultsInput ? trackSummary?.results ?? [] : [];
-  const derivedStatus =
-    trackSummary?.outcome === "APPROVED"
-      ? "APPROVED"
-      : trackSummary?.outcome === "REJECTED"
-        ? "REJECTED"
-        : trackSummary?.outcome === "PARTIAL"
-          ? "NEEDS_FIX"
-          : null;
+  const derivedStatus = null;
 
   const basePayload: Record<string, unknown> = {
     id: parsed.data.reviewId,
@@ -720,12 +713,15 @@ export async function updateStationReviewAction(
     };
 
     const updateWithPayload = async (payload: Record<string, unknown>) => {
-      const { data, error } = await supabase
-        .from("station_reviews")
-        .update(payload)
-        .eq("submission_id", submissionId)
-        .eq("station_id", stationId)
-        .select("id, submission_id, station_id, status, result_note, updated_at");
+      let query = supabase.from("station_reviews").update(payload);
+      if (parsed.data.reviewId) {
+        query = query.eq("id", parsed.data.reviewId);
+      } else {
+        query = query.eq("submission_id", submissionId).eq("station_id", stationId);
+      }
+      const { data, error } = await query.select(
+        "id, submission_id, station_id, status, result_note, updated_at",
+      );
       return { data: (data as TrackUpdateRow[] | null) ?? null, error };
     };
 
@@ -813,8 +809,7 @@ export async function updateStationReviewAction(
     .maybeSingle();
 
   const effectiveRow = (fetchedRowRaw ?? updatedRow) as AdminActionState["row"] | null;
-  const expectedStatus =
-    trackUpdateSucceeded && derivedStatus ? derivedStatus : statusRequested;
+  const expectedStatus = statusRequested;
   const statusMatches = effectiveRow?.status === expectedStatus;
   const tracksMatch =
     !trackUpdateSucceeded ||
@@ -877,12 +872,23 @@ export async function updateStationReviewAction(
 export async function updateStationReviewFormAction(
   formData: FormData,
 ): Promise<void> {
-  const submissionId = String(formData.get("submission_id") ?? "").trim();
-  const stationId = String(formData.get("station_id") ?? "").trim();
-  const reviewId = String(formData.get("review_id") ?? "").trim();
-  const statusRaw = String(formData.get("station_status") ?? "").trim().toUpperCase();
-  const resultNote = String(formData.get("station_memo") ?? "").trim();
-  const trackResultsJson = String(formData.get("track_results_json") ?? "").trim();
+  const getFormValue = (key: string) => {
+    const direct = formData.get(key);
+    if (direct !== null) return direct;
+    for (const [name, value] of formData.entries()) {
+      if (name === key || name.endsWith(`_${key}`)) {
+        return value;
+      }
+    }
+    return null;
+  };
+
+  const submissionId = String(getFormValue("submission_id") ?? "").trim();
+  const stationId = String(getFormValue("station_id") ?? "").trim();
+  const reviewId = String(getFormValue("review_id") ?? "").trim();
+  const statusRaw = String(getFormValue("station_status") ?? "").trim().toUpperCase();
+  const resultNote = String(getFormValue("station_memo") ?? "").trim();
+  const trackResultsJson = String(getFormValue("track_results_json") ?? "").trim();
   const hasTrackResultsInput = trackResultsJson.length > 0;
 
   console.info("[station_review][form][parse][start]", {

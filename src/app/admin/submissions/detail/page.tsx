@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies, headers } from "next/headers";
 
 import {
+  normalizeStationReviewStatus,
   paymentStatusLabelMap,
   paymentStatusOptions,
   resultStatusLabelMap,
@@ -944,7 +945,7 @@ export default async function AdminSubmissionDetailPage({
                   stationId={review.station_id ?? null}
                   stationCode={stationInfo?.code ?? undefined}
                   stationName={stationInfo?.name ?? undefined}
-                  initialStatus={review.status}
+                  initialStatus={normalizeStationReviewStatus(review.status)}
                   initialMemo={review.result_note ?? ""}
                   trackResults={trackResults}
                   statusOptions={stationReviewStatusOptions}
