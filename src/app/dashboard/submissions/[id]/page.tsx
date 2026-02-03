@@ -369,6 +369,20 @@ export default async function SubmissionDetailPage({
     }));
   }
 
+  type StationReviewRow = {
+    id: string;
+    submission_id: string;
+    station_id: string | null;
+    status: string;
+    result_note: string | null;
+    track_results?: unknown;
+    updated_at: string;
+    station?:
+      | { id?: string | null; name?: string | null; code?: string | null }
+      | Array<{ id?: string | null; name?: string | null; code?: string | null }>
+      | null;
+  };
+
   const { data: stationReviewsData, error: stationReviewsError } = await admin
     .from("station_reviews")
     .select(
@@ -376,7 +390,7 @@ export default async function SubmissionDetailPage({
     )
     .eq("submission_id", submissionId)
     .order("updated_at", { ascending: false });
-  let resolvedStationReviews = stationReviewsData ?? null;
+  let resolvedStationReviews = (stationReviewsData ?? null) as StationReviewRow[] | null;
   if (stationReviewsError) {
     console.error("[Dashboard SubmissionDetail] station_reviews join error", stationReviewsError);
     const missingTrackColumn =
@@ -399,26 +413,12 @@ export default async function SubmissionDetailPage({
           )
           .eq("submission_id", submissionId)
           .order("updated_at", { ascending: false });
-        resolvedStationReviews = fallback.data ?? null;
+        resolvedStationReviews = (fallback.data ?? null) as StationReviewRow[] | null;
       } else {
-        resolvedStationReviews = legacy.data ?? null;
+        resolvedStationReviews = (legacy.data ?? null) as StationReviewRow[] | null;
       }
     }
   }
-
-  type StationReviewRow = {
-    id: string;
-    submission_id: string;
-    station_id: string | null;
-    status: string;
-    result_note: string | null;
-    track_results?: unknown;
-    updated_at: string;
-    station?:
-      | { id?: string | null; name?: string | null; code?: string | null }
-      | Array<{ id?: string | null; name?: string | null; code?: string | null }>
-      | null;
-  };
 
   const reviewMap = new Map<string, StationReviewRow>();
   (resolvedStationReviews ?? []).forEach((review: StationReviewRow) => {
