@@ -42,6 +42,9 @@ type UploadResult = {
   originalName: string;
   mime?: string;
   size: number;
+  checksum?: string;
+  durationSeconds?: number;
+  accessUrl?: string;
 };
 
 const steps = [
@@ -63,14 +66,10 @@ const uploadMaxLabel =
     ? `${Math.round(uploadMaxMb / 1024)}GB`
     : `${uploadMaxMb}MB`;
 
-const mapFileKind = (file: File): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
-  const mime = (file.type || "").toLowerCase();
-  const name = file.name.toLowerCase();
-  if (mime.startsWith("video/")) return "VIDEO";
-  if (mime.startsWith("audio/")) return "AUDIO";
-  if (name.endsWith(".lrc") || name.endsWith(".txt")) return "LYRICS";
-  return "ETC";
-};
+const multipartThresholdMb = Number(
+  process.env.NEXT_PUBLIC_UPLOAD_MULTIPART_THRESHOLD_MB ?? "200",
+);
+const multipartThresholdBytes = multipartThresholdMb * 1024 * 1024;
 
 const baseOnlinePrice = 30000;
 const stationPriceMap: Record<string, number> = {
@@ -585,50 +584,158 @@ export function MvWizard({
     addFiles(dropped);
   };
 
-  const uploadWithProgress = async (
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const isMobileDevice = () => {
+    if (typeof navigator === "undefined") return false;
+    return /iphone|ipad|ipod|android|mobile/i.test(navigator.userAgent);
+  };
+
+  const getMultipartConcurrency = () => {
+    if (isMobileDevice()) return 3;
+    const cores = typeof navigator !== "undefined" ? navigator.hardwareConcurrency ?? 8 : 8;
+    if (cores >= 12) return 8;
+    if (cores >= 8) return 7;
+    return 6;
+  };
+
+  const getVideoDuration = (file: File) =>
+    new Promise<number | null>((resolve) => {
+      if (typeof window === "undefined") {
+        resolve(null);
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        const duration =
+          Number.isFinite(video.duration) && video.duration > 0
+            ? video.duration
+            : null;
+        URL.revokeObjectURL(url);
+        resolve(duration);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      video.src = url;
+    });
+
+  const putBlobWithProgress = async (
+    url: string,
+    blob: Blob,
+    onProgress: (loaded: number, total: number) => void,
+    options?: { contentType?: string },
+  ) =>
+    new Promise<string | null>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        onProgress(event.loaded, event.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const etag = xhr.getResponseHeader("ETag");
+          resolve(etag);
+        } else {
+          reject(new Error(`Upload failed (status ${xhr.status})`));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Upload failed (network/CORS)"));
+      xhr.open("PUT", url);
+      if (options?.contentType) {
+        xhr.setRequestHeader("Content-Type", options.contentType);
+      }
+      xhr.send(blob);
+    });
+
+  type MultipartResumeState = {
+    uploadId: string;
+    key: string;
+    partSize: number;
+    parts: Record<number, string>;
+    createdAt: number;
+  };
+
+  const buildResumeKey = (submissionId: string, file: File) =>
+    `mv-multipart:${submissionId}:${file.name}:${file.size}:${file.lastModified}`;
+
+  const loadResumeState = (resumeKey: string): MultipartResumeState | null => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(resumeKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as MultipartResumeState;
+      if (!parsed.uploadId || !parsed.key || !parsed.partSize) return null;
+      const age = Date.now() - (parsed.createdAt ?? 0);
+      if (age > 1000 * 60 * 60 * 24) {
+        window.localStorage.removeItem(resumeKey);
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  const saveResumeState = (resumeKey: string, state: MultipartResumeState) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(resumeKey, JSON.stringify(state));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const clearResumeState = (resumeKey: string) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(resumeKey);
+  };
+
+  const presignMultipartParts = async (params: {
+    submissionId: string;
+    key: string;
+    uploadId: string;
+    partNumbers: number[];
+  }) => {
+    const chunkSize = 100;
+    const urlMap = new Map<number, string>();
+    for (let i = 0; i < params.partNumbers.length; i += chunkSize) {
+      const chunk = params.partNumbers.slice(i, i + chunkSize);
+      const res = await fetch("/api/uploads/multipart/presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId: params.submissionId,
+          key: params.key,
+          uploadId: params.uploadId,
+          partNumbers: chunk,
+          guestToken: isGuest ? guestToken : undefined,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        urls?: Array<{ partNumber: number; url: string }>;
+        error?: string;
+      };
+      if (!res.ok || !json.urls) {
+        throw new Error(json.error || "업로드 URL을 생성할 수 없습니다.");
+      }
+      json.urls.forEach((item) => {
+        urlMap.set(item.partNumber, item.url);
+      });
+    }
+    return urlMap;
+  };
+
+  const uploadSingleFile = async (
     file: File,
     onProgress: (percent: number) => void,
+    durationSeconds?: number | null,
   ) => {
     const submissionId = requireSubmissionId();
-    const directUploadFallback = () =>
-      new Promise<{ objectKey: string }>((resolve, reject) => {
-        const formData = new FormData();
-        formData.append("submissionId", submissionId);
-        formData.append("filename", file.name);
-        formData.append("mimeType", file.type || "application/octet-stream");
-        formData.append("sizeBytes", String(file.size));
-        formData.append("kind", "video");
-        if (isGuest && guestToken) formData.append("guestToken", guestToken);
-        if (title.trim()) formData.append("title", title.trim());
-        formData.append("file", file);
-
-        const xhr = new XMLHttpRequest();
-        xhr.upload.onprogress = (event) => {
-          if (!event.lengthComputable) return;
-          const percent = Math.round((event.loaded / event.total) * 100);
-          onProgress(percent);
-        };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const json = JSON.parse(xhr.responseText) as { objectKey?: string; error?: string };
-              if (json.objectKey) {
-                resolve({ objectKey: json.objectKey });
-                return;
-              }
-              reject(new Error(json.error || "Upload failed"));
-            } catch {
-              reject(new Error("Upload failed (응답 해석 실패)"));
-            }
-          } else {
-            reject(new Error(`Upload failed (status ${xhr.status})`));
-          }
-        };
-        xhr.onerror = () => reject(new Error("Upload failed (network/CORS)"));
-        xhr.open("POST", "/api/uploads/direct");
-        xhr.send(formData);
-      });
-
     const initRes = await fetch("/api/uploads/init", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -650,70 +757,24 @@ export function MvWizard({
       error?: string;
     };
     if (!initRes.ok || !initJson.key || !initJson.uploadUrl) {
-      console.warn("[Upload][mv] init failed, fallback to direct", {
-        status: initRes.status,
-        error: initJson.error,
-      });
-      const fallback = await directUploadFallback();
-      await fetch("/api/uploads/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId,
-          kind: "VIDEO",
-          key: fallback.objectKey,
-          filename: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-          guestToken: isGuest ? guestToken : undefined,
-        }),
-      }).catch(() => null);
-      return { objectKey: fallback.objectKey };
+      throw new Error(initJson.error || "업로드 URL을 생성할 수 없습니다.");
     }
 
     const { key, uploadUrl, headers } = initJson;
-    const contentType = headers?.["Content-Type"] || file.type || "application/octet-stream";
+    const contentType =
+      headers?.["Content-Type"] || file.type || "application/octet-stream";
 
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.onprogress = (event) => {
-          if (!event.lengthComputable) return;
-          const percent = Math.round((event.loaded / event.total) * 100);
-          onProgress(percent);
-        };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`Upload failed (status ${xhr.status})`));
-          }
-        };
-        xhr.onerror = () => reject(new Error("Upload failed (network/CORS)"));
-        xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", contentType);
-        xhr.send(file);
-      });
-    } catch (error) {
-      console.warn("[Upload][mv] presigned PUT failed, fallback to direct", error);
-      const fallback = await directUploadFallback();
-      await fetch("/api/uploads/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId,
-          kind: "video",
-          key: fallback.objectKey,
-          filename: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-          guestToken: isGuest ? guestToken : undefined,
-        }),
-      }).catch(() => null);
-      return { objectKey: fallback.objectKey };
-    }
+    await putBlobWithProgress(
+      uploadUrl,
+      file,
+      (loaded, total) => {
+        const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
+        onProgress(percent);
+      },
+      { contentType },
+    );
 
-    await fetch("/api/uploads/complete", {
+    const completeRes = await fetch("/api/uploads/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -723,11 +784,245 @@ export function MvWizard({
         filename: file.name,
         mimeType: file.type || "application/octet-stream",
         sizeBytes: file.size,
+        durationSeconds: durationSeconds ?? undefined,
         guestToken: isGuest ? guestToken : undefined,
       }),
-    }).catch(() => null);
+    });
+    const completeJson = (await completeRes.json().catch(() => ({}))) as {
+      key?: string;
+      accessUrl?: string | null;
+      error?: string;
+    };
+    if (!completeRes.ok || !completeJson.key) {
+      throw new Error(completeJson.error || "업로드 확인에 실패했습니다.");
+    }
 
-    return { objectKey: key };
+    return {
+      objectKey: completeJson.key,
+      accessUrl: completeJson.accessUrl ?? undefined,
+      durationSeconds: durationSeconds ?? undefined,
+    };
+  };
+
+  const uploadMultipartFile = async (
+    file: File,
+    onProgress: (percent: number) => void,
+    durationSeconds?: number | null,
+  ) => {
+    const submissionId = requireSubmissionId();
+    const resumeKey = buildResumeKey(submissionId, file);
+    const resumeState = loadResumeState(resumeKey);
+
+    let uploadId = resumeState?.uploadId ?? null;
+    let key = resumeState?.key ?? null;
+    let partSize = resumeState?.partSize ?? null;
+
+    if (!uploadId || !key || !partSize) {
+      const initRes = await fetch("/api/uploads/multipart/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId,
+          kind: "video",
+          filename: file.name,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          guestToken: isGuest ? guestToken : undefined,
+          title: title.trim() || undefined,
+        }),
+      });
+      const initJson = (await initRes.json().catch(() => ({}))) as {
+        key?: string;
+        uploadId?: string;
+        partSize?: number;
+        error?: string;
+      };
+      if (!initRes.ok || !initJson.key || !initJson.uploadId || !initJson.partSize) {
+        throw new Error(initJson.error || "멀티파트 업로드를 시작할 수 없습니다.");
+      }
+      uploadId = initJson.uploadId;
+      key = initJson.key;
+      partSize = initJson.partSize;
+      saveResumeState(resumeKey, {
+        uploadId,
+        key,
+        partSize,
+        parts: {},
+        createdAt: Date.now(),
+      });
+    }
+
+    const totalSize = file.size;
+    const partCount = Math.ceil(totalSize / partSize);
+    const existingParts: Record<number, string> = resumeState?.parts ?? {};
+    const uploadedParts: Record<number, string> = { ...existingParts };
+    const partsToUpload: number[] = [];
+    for (let partNumber = 1; partNumber <= partCount; partNumber += 1) {
+      if (!uploadedParts[partNumber]) {
+        partsToUpload.push(partNumber);
+      }
+    }
+
+    let totalLoaded = 0;
+    if (Object.keys(uploadedParts).length > 0) {
+      for (let partNumber = 1; partNumber <= partCount; partNumber += 1) {
+        if (!uploadedParts[partNumber]) continue;
+        const start = (partNumber - 1) * partSize;
+        const end = Math.min(start + partSize, totalSize);
+        totalLoaded += end - start;
+      }
+      const initialPercent = Math.min(
+        100,
+        Math.round((totalLoaded / totalSize) * 100),
+      );
+      onProgress(initialPercent);
+    }
+
+    const urlMap =
+      partsToUpload.length > 0
+        ? await presignMultipartParts({
+            submissionId,
+            key: key!,
+            uploadId: uploadId!,
+            partNumbers: partsToUpload,
+          })
+        : new Map<number, string>();
+
+    const partProgress = new Map<number, number>();
+    const updateProgress = (partNumber: number, loaded: number) => {
+      const prev = partProgress.get(partNumber) ?? 0;
+      partProgress.set(partNumber, loaded);
+      totalLoaded += loaded - prev;
+      const percent = Math.min(
+        100,
+        Math.round((totalLoaded / totalSize) * 100),
+      );
+      onProgress(percent);
+    };
+
+    const partsResult: Array<{ partNumber: number; etag: string } | null> =
+      Array.from({ length: partCount }, () => null);
+    Object.entries(uploadedParts).forEach(([partNumber, etag]) => {
+      const index = Number(partNumber) - 1;
+      if (index >= 0 && index < partsResult.length) {
+        partsResult[index] = { partNumber: Number(partNumber), etag };
+      }
+    });
+
+    const maxRetries = 5;
+    const concurrency = getMultipartConcurrency();
+    let cursor = 0;
+
+    const uploadPart = async (partNumber: number) => {
+      const start = (partNumber - 1) * partSize!;
+      const end = Math.min(start + partSize!, totalSize);
+      const blob = file.slice(start, end);
+
+      for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        let url = urlMap.get(partNumber);
+        if (!url) {
+          const refreshed = await presignMultipartParts({
+            submissionId,
+            key: key!,
+            uploadId: uploadId!,
+            partNumbers: [partNumber],
+          });
+          url = refreshed.get(partNumber);
+          if (url) {
+            urlMap.set(partNumber, url);
+          }
+        }
+        if (!url) {
+          throw new Error("업로드 URL을 생성할 수 없습니다.");
+        }
+        try {
+          const etagRaw = await putBlobWithProgress(url, blob, (loaded, total) => {
+            updateProgress(partNumber, Math.min(loaded, total));
+          });
+          const etag = etagRaw?.replace(/\"/g, "") ?? "";
+          if (!etag) {
+            throw new Error("ETag를 확인할 수 없습니다. CORS 설정을 확인해주세요.");
+          }
+          uploadedParts[partNumber] = etag;
+          partsResult[partNumber - 1] = { partNumber, etag };
+          saveResumeState(resumeKey, {
+            uploadId: uploadId!,
+            key: key!,
+            partSize: partSize!,
+            parts: uploadedParts,
+            createdAt: Date.now(),
+          });
+          return;
+        } catch (error) {
+          if (attempt >= maxRetries) {
+            throw error;
+          }
+          const backoff = Math.min(2000, 400 * 2 ** attempt);
+          await sleep(backoff);
+        }
+      }
+    };
+
+    if (partsToUpload.length > 0) {
+      const workers = Array.from({ length: concurrency }, async () => {
+        while (cursor < partsToUpload.length) {
+          const partNumber = partsToUpload[cursor];
+          cursor += 1;
+          await uploadPart(partNumber);
+        }
+      });
+
+      await Promise.all(workers);
+    }
+
+    const finalParts = partsResult.filter(
+      (part): part is { partNumber: number; etag: string } => Boolean(part),
+    );
+
+    const completeRes = await fetch("/api/uploads/multipart/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        submissionId,
+        key,
+        uploadId,
+        parts: finalParts,
+        filename: file.name,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+        kind: "VIDEO",
+        durationSeconds: durationSeconds ?? undefined,
+        guestToken: isGuest ? guestToken : undefined,
+      }),
+    });
+    const completeJson = (await completeRes.json().catch(() => ({}))) as {
+      key?: string;
+      accessUrl?: string | null;
+      error?: string;
+    };
+    if (!completeRes.ok || !completeJson.key) {
+      throw new Error(completeJson.error || "업로드 확인에 실패했습니다.");
+    }
+
+    clearResumeState(resumeKey);
+
+    return {
+      objectKey: completeJson.key,
+      accessUrl: completeJson.accessUrl ?? undefined,
+      durationSeconds: durationSeconds ?? undefined,
+    };
+  };
+
+  const uploadWithProgress = async (
+    file: File,
+    onProgress: (percent: number) => void,
+  ) => {
+    const durationPromise = getVideoDuration(file);
+    const durationSeconds = await durationPromise.catch(() => null);
+    if (file.size >= multipartThresholdBytes) {
+      return uploadMultipartFile(file, onProgress, durationSeconds);
+    }
+    return uploadSingleFile(file, onProgress, durationSeconds);
   };
 
   const toggleTvStation = (code: string) => {
@@ -802,6 +1097,8 @@ export function MvWizard({
       setUploads([...nextUploads]);
 
       let path: string;
+      let accessUrl: string | undefined;
+      let durationSeconds: number | undefined;
       try {
         const uploadResult = await uploadWithProgress(file, (progress) => {
           nextUploads[index] = {
@@ -811,6 +1108,8 @@ export function MvWizard({
           setUploads([...nextUploads]);
         });
         path = uploadResult.objectKey;
+        accessUrl = uploadResult.accessUrl;
+        durationSeconds = uploadResult.durationSeconds;
       } catch (error) {
         nextUploads[index] = {
           ...nextUploads[index],
@@ -826,19 +1125,6 @@ export function MvWizard({
         throw new Error(message);
       }
 
-      await fetch("/api/uploads/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          key: path,
-          submissionId,
-          filename: file.name,
-          kind: mapFileKind(file),
-          sizeBytes: file.size,
-          mimeType: file.type || "application/octet-stream",
-        }),
-      }).catch(() => null);
-
       nextUploads[index] = {
         ...nextUploads[index],
         status: "done",
@@ -852,6 +1138,8 @@ export function MvWizard({
         originalName: file.name,
         mime: file.type || undefined,
         size: file.size,
+        accessUrl,
+        durationSeconds,
       });
     }
 

@@ -2,6 +2,10 @@ import { randomUUID } from "crypto";
 import {
   S3Client,
   type S3ClientConfig,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -134,6 +138,77 @@ export async function presignPutUrl(params: {
     expiresIn: signExpiry,
   });
   return url;
+}
+
+export async function createMultipartUpload(params: {
+  objectKey: string;
+  contentType?: string;
+}) {
+  const { client, bucket } = getB2Config();
+  const command = new CreateMultipartUploadCommand({
+    Bucket: bucket,
+    Key: params.objectKey,
+    ContentType: params.contentType,
+  });
+  const response = await client.send(command);
+  if (!response.UploadId) {
+    throw new Error("multipart uploadId 생성에 실패했습니다.");
+  }
+  return response.UploadId;
+}
+
+export async function presignUploadPart(params: {
+  objectKey: string;
+  uploadId: string;
+  partNumber: number;
+  expiresInSeconds?: number;
+}) {
+  const { client, bucket, signExpiry } = getB2Config();
+  const command = new UploadPartCommand({
+    Bucket: bucket,
+    Key: params.objectKey,
+    UploadId: params.uploadId,
+    PartNumber: params.partNumber,
+  });
+  return getSignedUrl(client, command, {
+    expiresIn: params.expiresInSeconds ?? signExpiry,
+  });
+}
+
+export async function completeMultipartUpload(params: {
+  objectKey: string;
+  uploadId: string;
+  parts: Array<{ partNumber: number; etag: string }>;
+}) {
+  const { client, bucket } = getB2Config();
+  const command = new CompleteMultipartUploadCommand({
+    Bucket: bucket,
+    Key: params.objectKey,
+    UploadId: params.uploadId,
+    MultipartUpload: {
+      Parts: params.parts
+        .filter((part) => part.partNumber && part.etag)
+        .sort((a, b) => a.partNumber - b.partNumber)
+        .map((part) => ({
+          PartNumber: part.partNumber,
+          ETag: part.etag,
+        })),
+    },
+  });
+  return client.send(command);
+}
+
+export async function abortMultipartUpload(params: {
+  objectKey: string;
+  uploadId: string;
+}) {
+  const { client, bucket } = getB2Config();
+  const command = new AbortMultipartUploadCommand({
+    Bucket: bucket,
+    Key: params.objectKey,
+    UploadId: params.uploadId,
+  });
+  return client.send(command);
 }
 
 export async function presignGetUrl(objectKey: string, expiresIn?: number) {

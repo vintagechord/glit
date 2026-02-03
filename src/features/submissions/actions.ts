@@ -327,6 +327,9 @@ const fileSchema = z.object({
   originalName: z.string().min(1),
   mime: z.string().optional(),
   size: z.number().int().nonnegative(),
+  checksum: z.string().optional(),
+  durationSeconds: z.number().optional(),
+  accessUrl: z.string().optional(),
 });
 
 const albumSubmissionSchema = z.object({
@@ -765,6 +768,9 @@ export async function saveAlbumSubmissionAction(
         original_name: file.originalName,
         mime: file.mime || null,
         size: file.size,
+        checksum: file.checksum ?? null,
+        duration_seconds: file.durationSeconds ?? null,
+        access_url: file.accessUrl ?? null,
       })) ?? [];
 
     if (fileRows.length > 0) {
@@ -1106,6 +1112,9 @@ export async function saveMvSubmissionAction(
         original_name: file.originalName,
         mime: file.mime || null,
         size: file.size,
+        checksum: file.checksum ?? null,
+        duration_seconds: file.durationSeconds ?? null,
+        access_url: file.accessUrl ?? null,
       })) ?? [];
 
     if (fileRows.length > 0) {

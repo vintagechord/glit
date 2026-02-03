@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { HeadObjectCommand } from "@aws-sdk/client-s3";
 import { z } from "zod";
 
-import { B2ConfigError, getB2Config, presignGetUrl } from "@/lib/b2";
+import {
+  B2ConfigError,
+  completeMultipartUpload,
+  getB2Config,
+  presignGetUrl,
+} from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -10,29 +15,26 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const schema = z
-  .object({
-    submissionId: z.string().uuid(),
-    key: z.string().min(1).optional(),
-    objectKey: z.string().min(1).optional(),
-    filename: z.string().min(1).optional(),
-    kind: z.string().optional(),
-    mimeType: z.string().optional(),
-    sizeBytes: z.number().int().positive(),
-    checksum: z.string().min(8).optional(),
-    durationSeconds: z.number().nonnegative().optional(),
-    accessUrl: z.string().url().optional(),
-    guestToken: z.string().min(8).optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (!data.key && !data.objectKey) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["key"],
-        message: "key 또는 objectKey가 필요합니다.",
-      });
-    }
-  });
+const schema = z.object({
+  submissionId: z.string().uuid(),
+  key: z.string().min(1),
+  uploadId: z.string().min(1),
+  parts: z
+    .array(
+      z.object({
+        partNumber: z.number().int().positive(),
+        etag: z.string().min(1),
+      }),
+    )
+    .min(1),
+  filename: z.string().min(1),
+  mimeType: z.string().min(1),
+  sizeBytes: z.number().int().positive(),
+  kind: z.string().optional(),
+  checksum: z.string().min(8).optional(),
+  durationSeconds: z.number().nonnegative().optional(),
+  guestToken: z.string().min(8).optional(),
+});
 
 const mapKind = (kind: string): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
   const upper = kind.toUpperCase();
@@ -45,7 +47,7 @@ const mapKind = (kind: string): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
   return "ETC";
 };
 
-const inferKind = (filename: string | undefined, mimeType: string | undefined): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
+const inferKind = (filename: string, mimeType: string): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
   const mime = (mimeType || "").toLowerCase();
   const name = (filename || "").toLowerCase();
   if (mime.startsWith("audio/")) return "AUDIO";
@@ -55,6 +57,9 @@ const inferKind = (filename: string | undefined, mimeType: string | undefined): 
   if (name.match(/\.(mp4|mov|mkv|webm)$/)) return "VIDEO";
   return "ETC";
 };
+
+const keyMatchesSubmission = (key: string, submissionId: string) =>
+  key.includes(`/${submissionId}/`);
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -68,34 +73,27 @@ export async function POST(request: Request) {
     );
   }
 
-  const { submissionId, guestToken, sizeBytes } = parsed.data;
-  const rawKey = parsed.data.key ?? parsed.data.objectKey ?? "";
-  const normalizedKey = rawKey;
-  const normalizedFilename =
-    parsed.data.filename ||
-    (() => {
-      const parts = normalizedKey.split("/");
-      return parts[parts.length - 1] || normalizedKey;
-    })();
-  const normalizedMime = parsed.data.mimeType || "application/octet-stream";
-  const normalizedKind = parsed.data.kind
-    ? mapKind(parsed.data.kind)
-    : inferKind(normalizedFilename, normalizedMime);
-  const providedAccessUrl = parsed.data.accessUrl;
-
-  if (!normalizedKey) {
-    return NextResponse.json({ error: "업로드 정보를 확인해주세요." }, { status: 400 });
-  }
-
-  console.info("[Upload][complete] normalized", {
+  const {
     submissionId,
-    hadKey: Boolean(parsed.data.key),
-    hadObjectKey: Boolean(parsed.data.objectKey),
-    inferredKind: !parsed.data.kind,
-  });
+    key,
+    uploadId,
+    parts,
+    filename,
+    mimeType,
+    sizeBytes,
+    kind,
+    checksum,
+    durationSeconds,
+    guestToken,
+  } = parsed.data;
+
+  const normalizedKind = kind ? mapKind(kind) : inferKind(filename, mimeType);
 
   try {
-    const { user, submission, error } = await ensureSubmissionOwner(submissionId, guestToken);
+    const { user, submission, error } = await ensureSubmissionOwner(
+      submissionId,
+      guestToken,
+    );
     if (error === "NOT_FOUND") {
       return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
     }
@@ -105,12 +103,24 @@ export async function POST(request: Request) {
     if (error === "FORBIDDEN") {
       return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
     }
+    if (!keyMatchesSubmission(key, submissionId)) {
+      return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
+    }
+
+    await completeMultipartUpload({
+      objectKey: key,
+      uploadId,
+      parts: parts.map((part) => ({
+        partNumber: part.partNumber,
+        etag: part.etag,
+      })),
+    });
 
     const { client, bucket } = getB2Config();
     const head = await client.send(
       new HeadObjectCommand({
         Bucket: bucket,
-        Key: normalizedKey,
+        Key: key,
       }),
     );
 
@@ -127,21 +137,20 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
-    let accessUrl: string | null = providedAccessUrl ?? null;
-    if (!accessUrl) {
-      const expires = Number(process.env.B2_ACCESS_URL_EXPIRES_SECONDS ?? "86400");
-      accessUrl = await presignGetUrl(normalizedKey, expires).catch(() => null);
-    }
+    const accessUrl = await presignGetUrl(
+      key,
+      Number(process.env.B2_ACCESS_URL_EXPIRES_SECONDS ?? "86400"),
+    ).catch(() => null);
     const payload = {
       submission_id: submissionId,
       kind: normalizedKind,
-      file_path: normalizedKey,
-      object_key: normalizedKey,
-      original_name: normalizedFilename,
-      mime: normalizedMime,
+      file_path: key,
+      object_key: key,
+      original_name: filename,
+      mime: mimeType,
       size: sizeBytes,
-      checksum: parsed.data.checksum ?? null,
-      duration_seconds: parsed.data.durationSeconds ?? null,
+      checksum: checksum ?? null,
+      duration_seconds: durationSeconds ?? null,
       access_url: accessUrl,
       storage_provider: "b2",
       status: "UPLOADED",
@@ -183,17 +192,16 @@ export async function POST(request: Request) {
       }
       attachmentId = inserted?.id ?? null;
     } catch (error) {
-      console.error("[Upload][complete] failed to record file", {
+      console.error("[Upload][multipart][complete] failed to record file", {
         submissionId,
-        key: normalizedKey,
+        key,
         message: error instanceof Error ? error.message : String(error),
       });
     }
 
-    console.info("[Upload][complete] ok", {
+    console.info("[Upload][multipart][complete] ok", {
       submissionId,
-      kind: normalizedKind,
-      key: normalizedKey,
+      key,
       sizeBytes,
       etag: head.ETag,
       user: user?.id ?? null,
@@ -207,7 +215,7 @@ export async function POST(request: Request) {
       etag: head.ETag,
       contentLength,
       attachmentId,
-      key: normalizedKey,
+      key,
       submissionId,
       accessUrl,
     });
@@ -217,11 +225,10 @@ export async function POST(request: Request) {
         ? error.message
         : error instanceof Error
           ? error.message
-          : "업로드 확인 중 오류가 발생했습니다.";
-    console.error("[Upload][complete] error", {
+          : "업로드 완료 처리 중 오류가 발생했습니다.";
+    console.error("[Upload][multipart][complete] error", {
       submissionId,
-      kind: normalizedKind,
-      key: normalizedKey,
+      key,
       message,
     });
     return NextResponse.json({ error: message }, { status: 500 });
