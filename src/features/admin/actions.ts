@@ -619,13 +619,25 @@ export async function updateStationReviewAction(
       trackResultsSample: normalizedTrackResults.slice(0, 2),
     });
 
-    const updateWithColumn = async (column: string, select: string) =>
-      supabase
+    type TrackUpdateRow = {
+      id?: string | null;
+      submission_id?: string | null;
+      station_id?: string | null;
+      status?: string | null;
+      result_note?: string | null;
+      track_results?: unknown;
+      updated_at?: string | null;
+    };
+
+    const updateWithColumn = async (column: string, select: string) => {
+      const { data, error } = await supabase
         .from("station_reviews")
         .update(buildTrackPayload(column))
         .eq("submission_id", submissionId)
         .eq("station_id", stationId)
         .select(`id, submission_id, station_id, status, result_note, ${select}, updated_at`);
+      return { data: (data as TrackUpdateRow[] | null) ?? null, error };
+    };
 
     let { data: trackUpdated, error: trackError } = await updateWithColumn(
       STATION_REVIEW_TRACK_RESULTS_COLUMN,
@@ -671,7 +683,7 @@ export async function updateStationReviewAction(
       return { error: warning };
     } else {
       trackUpdateSucceeded = true;
-      updatedRow = trackUpdated?.[0] ?? updatedRow;
+      updatedRow = (trackUpdated?.[0] as typeof updatedRow) ?? updatedRow;
       if (trackResultsColumnUsed === LEGACY_TRACK_RESULTS_COLUMN) {
         warning =
           warning ??
