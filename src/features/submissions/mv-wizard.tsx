@@ -71,7 +71,7 @@ const stationPriceMap: Record<string, number> = {
   KBS: 30000,
   MBC: 30000,
   SBS: 30000,
-  ETN: 1000,
+  ETN: 30000,
   MNET: 30000,
 };
 const tvStationCodes = ["KBS", "MBC", "SBS", "ETN"];
