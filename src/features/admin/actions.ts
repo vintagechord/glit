@@ -589,6 +589,13 @@ export async function updateStationReviewAction(
     result_note: parsed.data.resultNote || null,
     updated_at: new Date().toISOString(),
   };
+  const baseUpdatePayload: Record<string, unknown> = {
+    submission_id: submissionId,
+    station_id: stationId,
+    status: statusRequested,
+    result_note: parsed.data.resultNote || null,
+    updated_at: basePayload.updated_at,
+  };
 
   console.info("[station_review][save][base][upsert][start]", {
     ...logContext,
@@ -596,13 +603,47 @@ export async function updateStationReviewAction(
     derivedStatus,
   });
 
-  const runBaseUpsert = async (client: SupabaseClient) =>
-    client
-      .from("station_reviews")
-      .upsert(basePayload, { onConflict: "submission_id,station_id" })
-      .select("id, submission_id, station_id, status, result_note, updated_at");
+  const runBaseSave = async (client: SupabaseClient) => {
+    if (parsed.data.reviewId) {
+      const { data, error } = await client
+        .from("station_reviews")
+        .update(baseUpdatePayload)
+        .eq("id", parsed.data.reviewId)
+        .select("id, submission_id, station_id, status, result_note, updated_at");
+      if (!error && (!data || data.length === 0)) {
+        const insertResult = await client
+          .from("station_reviews")
+          .insert(basePayload)
+          .select("id, submission_id, station_id, status, result_note, updated_at");
+        return insertResult;
+      }
+      return { data, error };
+    }
 
-  let { data: upserted, error: baseError } = await runBaseUpsert(supabase);
+    if (stationId) {
+      const { data, error } = await client
+        .from("station_reviews")
+        .update(baseUpdatePayload)
+        .eq("submission_id", submissionId)
+        .eq("station_id", stationId)
+        .select("id, submission_id, station_id, status, result_note, updated_at");
+      if (!error && (!data || data.length === 0)) {
+        const insertResult = await client
+          .from("station_reviews")
+          .insert(basePayload)
+          .select("id, submission_id, station_id, status, result_note, updated_at");
+        return insertResult;
+      }
+      return { data, error };
+    }
+
+    return {
+      data: null,
+      error: { message: "station_id missing" } as { message: string },
+    };
+  };
+
+  let { data: upserted, error: baseError } = await runBaseSave(supabase);
 
   if (baseError && shouldRetryWithUserSession(baseError)) {
     console.warn("[station_review][save][base][upsert][retry-user-session]", {
@@ -611,7 +652,7 @@ export async function updateStationReviewAction(
       errorMessage: baseError.message,
     });
     const userClient = await createServerSupabase();
-    const retry = await runBaseUpsert(userClient as SupabaseClient);
+    const retry = await runBaseSave(userClient as SupabaseClient);
     upserted = retry.data;
     baseError = retry.error;
   }
@@ -1870,14 +1911,18 @@ export async function saveSubmissionAdminFormAction(
             result_note: payload.result_note,
             station_id: payload.station_id,
           };
-      const base = {
-        id: reviewId,
-        submission_id: submissionId,
-      };
       const { data, error } = await supabase
         .from("station_reviews")
-        .upsert({ ...base, ...upsertPayload }, { onConflict: "submission_id,station_id" })
+        .update(upsertPayload)
+        .eq("id", reviewId)
         .select(`id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, station_id`);
+      if (!error && (!data || data.length === 0)) {
+        const insertResult = await supabase
+          .from("station_reviews")
+          .insert({ id: reviewId, submission_id: submissionId, ...upsertPayload })
+          .select(`id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, station_id`);
+        return insertResult;
+      }
       return { data, error };
     };
 
@@ -1895,10 +1940,20 @@ export async function saveSubmissionAdminFormAction(
       };
       const fallback = await supabase
         .from("station_reviews")
-        .upsert({ id: reviewId, submission_id: submissionId, ...fallbackPayload }, { onConflict: "submission_id,station_id" })
+        .update(fallbackPayload)
+        .eq("id", reviewId)
         .select(`id, status, result_note, ${LEGACY_TRACK_RESULTS_SELECT}, station_id`);
-      data = fallback.data;
-      error = fallback.error;
+      if (!fallback.error && (!fallback.data || fallback.data.length === 0)) {
+        const inserted = await supabase
+          .from("station_reviews")
+          .insert({ id: reviewId, submission_id: submissionId, ...fallbackPayload })
+          .select(`id, status, result_note, ${LEGACY_TRACK_RESULTS_SELECT}, station_id`);
+        data = inserted.data;
+        error = inserted.error;
+      } else {
+        data = fallback.data;
+        error = fallback.error;
+      }
     }
 
     console.info(`${logPrefix} update result`, {
