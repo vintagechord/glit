@@ -546,7 +546,7 @@ export default async function Home() {
           reviewResult.error.message?.toLowerCase().includes("track_results") ||
           reviewResult.error.code === "42703");
 
-      let reviewRows = reviewResult.data ?? [];
+      let reviewRows = (reviewResult.data ?? []) as ReviewRow[];
       if (missingTrackColumn) {
         const legacy = await admin
           .from("station_reviews")
@@ -561,9 +561,9 @@ export default async function Home() {
                 .select(withoutTracks)
                 .in("submission_id", allIds)
                 .order("updated_at", { ascending: false })
-            ).data ?? [];
+            ).data ?? [] as ReviewRow[];
         } else {
-          reviewRows = legacy.data ?? [];
+          reviewRows = (legacy.data ?? []) as ReviewRow[];
         }
       }
 
@@ -581,7 +581,7 @@ export default async function Home() {
         if (fallback.error) {
           console.error("[home] station_reviews fallback join error", fallback.error);
         }
-        reviewRows = fallback.data ?? reviewRows;
+        reviewRows = (fallback.data ?? reviewRows) as ReviewRow[];
       }
 
       type ReviewRow = {
