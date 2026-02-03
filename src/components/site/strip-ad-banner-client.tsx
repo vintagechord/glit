@@ -212,7 +212,7 @@ function BannerContent({ banner }: { banner: AdBanner }) {
               <p>Brand</p>
             </div>
           </div>
-          <span className="shrink-0 rounded-full border border-border/70 bg-background/40 px-3 py-1.5 text-[10px] font-semibold tracking-[0.18em] text-foreground transition duration-300 group-hover/banner:-translate-y-0.5 group-hover/banner:border-white/70 group-hover/banner:bg-white/80 group-hover/banner:text-black dark:group-hover/banner:bg-white/20 dark:group-hover/banner:text-white sm:px-4 sm:py-2 sm:text-xs">
+          <span className="shrink-0 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1.5 text-[10px] font-semibold tracking-[0.18em] text-white shadow-sm transition duration-300 group-hover/banner:-translate-y-0.5 group-hover/banner:border-[#f3c63a] group-hover/banner:bg-[#f3c63a] sm:px-4 sm:py-2 sm:text-xs">
             {banner.title}
           </span>
         </div>
