@@ -394,6 +394,7 @@ const mvSubmissionSchema = z.object({
   arranger: z.string().optional(),
   songMemo: z.string().optional(),
   lyrics: z.string().optional(),
+  artistNameOfficial: z.string().optional(),
   releaseDate: z.string().optional(),
   genre: z.string().optional(),
   mvType: z.enum(["MV_DISTRIBUTION", "MV_BROADCAST"]),
@@ -959,6 +960,12 @@ export async function saveMvSubmissionAction(
   ) {
     return { error: "입금자명을 입력해주세요." };
   }
+  if (isSubmitted && !parsed.data.artistNameOfficial?.trim()) {
+    return { error: "아티스트명 공식 표기를 입력해주세요." };
+  }
+  if (isSubmitted && !parsed.data.lyrics?.trim()) {
+    return { error: "가사를 입력해주세요." };
+  }
 
   const shouldRequestPayment =
     isSubmitted &&
@@ -972,6 +979,7 @@ export async function saveMvSubmissionAction(
     type: parsed.data.mvType,
     title: parsed.data.title,
     artist_name: parsed.data.artistName,
+    artist_name_kr: parsed.data.artistNameOfficial || null,
     artist_id: artistId,
     release_date: parsed.data.releaseDate || null,
     genre: parsed.data.genre || null,

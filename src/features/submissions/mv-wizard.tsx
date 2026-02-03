@@ -166,6 +166,7 @@ export function MvWizard({
   const [onlineBaseSelected, setOnlineBaseSelected] = React.useState(false);
   const [title, setTitle] = React.useState("");
   const [artistName, setArtistName] = React.useState("");
+  const [artistNameOfficial, setArtistNameOfficial] = React.useState("");
   const [director, setDirector] = React.useState("");
   const [leadActor, setLeadActor] = React.useState("");
   const [storyline, setStoryline] = React.useState("");
@@ -839,6 +840,10 @@ export function MvWizard({
       setNotice({ error: "제목과 아티스트명을 입력해주세요." });
       return;
     }
+    if (status === "SUBMITTED" && !artistNameOfficial.trim()) {
+      setNotice({ error: "아티스트명 공식 표기를 입력해주세요." });
+      return;
+    }
     if (
       status === "SUBMITTED" &&
       (!director.trim() || !leadActor.trim() || !storyline.trim())
@@ -866,6 +871,10 @@ export function MvWizard({
       (!songTitleKrValue || !songTitleEnValue)
     ) {
       setNotice({ error: "곡명(한글/영문)을 모두 입력해주세요." });
+      return;
+    }
+    if (status === "SUBMITTED" && !lyrics.trim()) {
+      setNotice({ error: "가사를 입력해주세요." });
       return;
     }
     if (status === "SUBMITTED" && !songTitleOfficial) {
@@ -932,6 +941,7 @@ export function MvWizard({
         arranger: arranger.trim() || undefined,
         songMemo: songMemo.trim() || undefined,
         lyrics: lyrics.trim() || undefined,
+        artistNameOfficial: artistNameOfficial.trim() || undefined,
         releaseDate: releaseDate || undefined,
         genre: genre || undefined,
         mvType,
@@ -1304,6 +1314,20 @@ export function MvWizard({
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  아티스트명 공식 표기 *
+                </label>
+                <input
+                  value={artistNameOfficial}
+                  onChange={(event) => setArtistNameOfficial(event.target.value)}
+                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                />
+                <p className="text-[11px] text-muted-foreground whitespace-pre-line">
+                  실제 음원사이트 표기법을 적용한 공식 표기를 적어주세요.
+                  {"\n"}예) SOLE (쏠), 윤하 (YOUNHA), Bakehour, 김장훈
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   영상 공개일자
                 </label>
                 <input
@@ -1579,7 +1603,7 @@ export function MvWizard({
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              가사
+              가사 *
             </p>
             <textarea
               value={lyrics}
