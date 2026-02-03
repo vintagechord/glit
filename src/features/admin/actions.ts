@@ -661,12 +661,15 @@ export async function updateStationReviewAction(
   }
 
   if (baseError) {
+    const baseErrorMeta = {
+      errorCode: "code" in baseError ? baseError.code : undefined,
+      errorMessage: baseError.message,
+      errorDetails: "details" in baseError ? baseError.details : undefined,
+      errorHint: "hint" in baseError ? baseError.hint : undefined,
+    };
     console.error("[station_review][save][base][upsert][error]", {
       ...logContext,
-      errorCode: baseError.code,
-      errorMessage: baseError.message,
-      errorDetails: baseError.details,
-      errorHint: baseError.hint,
+      ...baseErrorMeta,
       errorStack: (baseError as Error)?.stack,
       error: baseError,
     });
