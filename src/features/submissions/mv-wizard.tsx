@@ -66,9 +66,12 @@ const uploadMaxLabel =
     ? `${Math.round(uploadMaxMb / 1024)}GB`
     : `${uploadMaxMb}MB`;
 
-const multipartThresholdMb = Number(
+const multipartThresholdMbRaw = Number(
   process.env.NEXT_PUBLIC_UPLOAD_MULTIPART_THRESHOLD_MB ?? "200",
 );
+const multipartThresholdMb = Number.isFinite(multipartThresholdMbRaw)
+  ? multipartThresholdMbRaw
+  : 200;
 const multipartThresholdBytes = multipartThresholdMb * 1024 * 1024;
 
 const baseOnlinePrice = 30000;

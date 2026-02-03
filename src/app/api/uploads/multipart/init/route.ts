@@ -23,9 +23,12 @@ const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MIN_PART_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_PARTS = 10000;
 
-const DEFAULT_PART_SIZE_MB = Number(
+const DEFAULT_PART_SIZE_MB_RAW = Number(
   process.env.B2_MULTIPART_PART_SIZE_MB ?? "16",
 );
+const DEFAULT_PART_SIZE_MB = Number.isFinite(DEFAULT_PART_SIZE_MB_RAW)
+  ? Math.max(5, DEFAULT_PART_SIZE_MB_RAW)
+  : 16;
 
 const PRESIGN_EXPIRES_SECONDS = Number(
   process.env.B2_MULTIPART_PRESIGN_EXPIRES_SECONDS ??
