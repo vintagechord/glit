@@ -546,7 +546,7 @@ export async function updateStationReviewAction(
 
   const statusRequested = parsed.data.status;
   const trackSummary = hasTrackResultsInput ? summarizeTrackResults(trackResultsInput) : null;
-  const normalizedTrackResults = hasTrackResultsInput ? trackSummary?.results ?? [] : undefined;
+  const normalizedTrackResults = hasTrackResultsInput ? trackSummary?.results ?? [] : [];
   const derivedStatus =
     trackSummary?.outcome === "APPROVED"
       ? "APPROVED"
