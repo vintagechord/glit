@@ -728,6 +728,33 @@ export async function updateStationReviewAction(
       return { data: (data as TrackUpdateRow[] | null) ?? null, error };
     };
 
+    const buildStringTrackPayload = (columns: string[]) => {
+      const payload: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      const serialized = JSON.stringify(normalizedTrackResults);
+      columns.forEach((column) => {
+        payload[column] = serialized;
+      });
+      if (derivedStatus) {
+        payload.status = derivedStatus;
+      }
+      return payload;
+    };
+
+    const isTrackResultsTypeError = (error?: { code?: string; message?: string | null }) => {
+      if (!error) return false;
+      const msg = error.message?.toLowerCase() ?? "";
+      return (
+        error.code === "22P02" ||
+        error.code === "42804" ||
+        msg.includes("invalid input syntax for type json") ||
+        (msg.includes("json") && msg.includes("text")) ||
+        msg.includes("cannot cast") ||
+        msg.includes("type json")
+      );
+    };
+
     let { data: trackUpdated, error: trackError } = await updateWithPayload(
       supabase,
       buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN, LEGACY_TRACK_RESULTS_COLUMN]),
@@ -804,6 +831,43 @@ export async function updateStationReviewAction(
               : [STATION_REVIEW_TRACK_RESULTS_COLUMN],
         ),
       ));
+    }
+
+    if (trackError && isTrackResultsTypeError(trackError)) {
+      console.warn("[station_review][save][track_results][update][retry-stringify]", {
+        ...logContext,
+        errorCode: trackError.code,
+        errorMessage: trackError.message,
+        columnHint: trackResultsColumnUsed,
+      });
+      const columns =
+        trackResultsColumnUsed === LEGACY_TRACK_RESULTS_COLUMN
+          ? [LEGACY_TRACK_RESULTS_COLUMN]
+          : trackResultsColumnUsed === STATION_REVIEW_TRACK_RESULTS_COLUMN
+            ? [STATION_REVIEW_TRACK_RESULTS_COLUMN]
+            : [STATION_REVIEW_TRACK_RESULTS_COLUMN, LEGACY_TRACK_RESULTS_COLUMN];
+      ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+        supabase,
+        buildStringTrackPayload(columns),
+      ));
+      if (trackError && isMissingTrackResultsColumn(trackError)) {
+        const message = trackError.message?.toLowerCase() ?? "";
+        const missingJson = message.includes("track_results_json");
+        const missingLegacy = message.includes("track_results");
+        if (missingJson && !missingLegacy) {
+          ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+            supabase,
+            buildStringTrackPayload([LEGACY_TRACK_RESULTS_COLUMN]),
+          ));
+          trackResultsColumnUsed = LEGACY_TRACK_RESULTS_COLUMN;
+        } else if (missingLegacy && !missingJson) {
+          ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+            supabase,
+            buildStringTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN]),
+          ));
+          trackResultsColumnUsed = STATION_REVIEW_TRACK_RESULTS_COLUMN;
+        }
+      }
     }
 
     if (trackError) {
