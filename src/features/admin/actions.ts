@@ -742,7 +742,7 @@ export async function updateStationReviewAction(
   console.info("[station_review][save][success]", {
     ...logContext,
     savedId: effectiveRow?.id,
-    refetched: Boolean(fetchedRow),
+    refetched: Boolean(fetchedRowRaw),
     trackUpdateAttempted,
     trackUpdateSucceeded,
     warning,
