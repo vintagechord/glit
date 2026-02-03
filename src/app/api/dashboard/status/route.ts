@@ -260,7 +260,7 @@ export async function GET() {
 
   if (allSubmissionIds.length) {
     const withTracksSelect =
-      "id, submission_id, station_id, status, result_note, updated_at, track_results, station:stations!station_reviews_station_id_fkey ( id, name, code )";
+      "id, submission_id, station_id, status, result_note, updated_at, track_results:track_results_json, station:stations!station_reviews_station_id_fkey ( id, name, code )";
     const noTracksSelect =
       "id, submission_id, station_id, status, result_note, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )";
 
@@ -275,6 +275,7 @@ export async function GET() {
       console.error("[dashboard status] station_reviews join error", stationReviewsError);
       const missingTrackColumn =
         stationReviewsError.code === "42703" ||
+        stationReviewsError.message?.toLowerCase().includes("track_results_json") ||
         stationReviewsError.message?.toLowerCase().includes("track_results");
       const fallback = await admin
         .from("station_reviews")

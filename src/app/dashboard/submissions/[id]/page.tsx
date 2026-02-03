@@ -372,7 +372,7 @@ export default async function SubmissionDetailPage({
   const { data: stationReviewsData, error: stationReviewsError } = await admin
     .from("station_reviews")
     .select(
-      "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )",
+      "id, submission_id, station_id, status, result_note, track_results:track_results_json, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )",
     )
     .eq("submission_id", submissionId)
     .order("updated_at", { ascending: false });

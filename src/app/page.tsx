@@ -533,14 +533,15 @@ export default async function Home() {
       const reviewResult = await admin
         .from("station_reviews")
         .select(
-          "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code, region )",
+          "id, submission_id, station_id, status, result_note, track_results:track_results_json, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code, region )",
         )
         .in("submission_id", allIds)
         .order("updated_at", { ascending: false });
 
       let reviewRows =
         reviewResult.error &&
-        (reviewResult.error.message?.toLowerCase().includes("track_results") ||
+        (reviewResult.error.message?.toLowerCase().includes("track_results_json") ||
+          reviewResult.error.message?.toLowerCase().includes("track_results") ||
           reviewResult.error.code === "42703")
           ? (
               await admin
@@ -556,7 +557,7 @@ export default async function Home() {
         const fallback = await admin
           .from("station_reviews")
           .select(
-            "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations ( id, name, code, region )",
+            "id, submission_id, station_id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code, region )",
           )
           .in("submission_id", allIds)
           .order("updated_at", { ascending: false });

@@ -272,13 +272,25 @@ export async function ensureAlbumStationReviews(
     status: "NOT_SENT",
   }));
 
+  console.info("[station_reviews][backfill][start]", {
+    submissionId,
+    expectedCount: stationIds.length,
+    existingCount: existingSet.size,
+    insertCount: upsertRows.length,
+  });
+
   const { error: insertError } = await client
     .from("station_reviews")
-    .upsert(upsertRows, { onConflict: "submission_id,station_id" });
+    .upsert(upsertRows, { onConflict: "submission_id,station_id", ignoreDuplicates: true });
 
   if (insertError) {
     const suppressed = shouldSuppressError(insertError.message);
     console.warn("Failed to backfill station reviews", insertError);
     if (suppressed) return;
+  } else {
+    console.info("[station_reviews][backfill][success]", {
+      submissionId,
+      insertCount: upsertRows.length,
+    });
   }
 }

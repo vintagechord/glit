@@ -115,7 +115,7 @@ export default async function TrackDetailPage({
     .order("created_at", { ascending: false });
 
   const stationSelectWithTracks =
-    "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
+    "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code )";
   const stationSelectNoTracks =
     "id, status, result_note, updated_at, station:stations ( id, name, code )";
 
@@ -139,6 +139,7 @@ export default async function TrackDetailPage({
   if (
     stationResult.error &&
     (stationResult.error.code === "42703" ||
+      stationResult.error.message?.toLowerCase().includes("track_results_json") ||
       stationResult.error.message?.toLowerCase().includes("track_results"))
   ) {
     const fallback = await admin

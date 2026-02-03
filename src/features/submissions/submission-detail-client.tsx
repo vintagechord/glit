@@ -496,9 +496,9 @@ export function SubmissionDetailClient({
     }
 
     const stationSelectWithLogo =
-      "id, status, result_note, track_results, updated_at, station:stations ( id, name, code, logo_url )";
+      "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code, logo_url )";
     const stationSelectBasic =
-      "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
+      "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code )";
 
     const runStationFetch = (select: string) =>
       supabase

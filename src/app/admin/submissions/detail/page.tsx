@@ -144,7 +144,12 @@ export default async function AdminSubmissionDetailPage({
   searchParams,
   params,
 }: {
-  searchParams?: { id?: string | string[]; saved?: string; savedError?: string };
+  searchParams?: {
+    id?: string | string[];
+    saved?: string;
+    savedError?: string;
+    savedWarning?: string;
+  };
   params?: { id?: string };
 }) {
   const paramId = params?.id;
@@ -155,6 +160,9 @@ export default async function AdminSubmissionDetailPage({
   const savedErrorParam = Array.isArray(searchParams?.savedError)
     ? searchParams?.savedError[0]
     : searchParams?.savedError;
+  const savedWarningParam = Array.isArray(searchParams?.savedWarning)
+    ? searchParams?.savedWarning[0]
+    : searchParams?.savedWarning;
   const urlId = Array.isArray(searchId)
     ? searchId.find((v) => typeof v === "string" && uuidPattern.test(v)) ?? ""
     : typeof searchId === "string"
@@ -190,6 +198,8 @@ export default async function AdminSubmissionDetailPage({
         ? "트랙을 삭제했습니다."
         : savedFlag === "station"
           ? "방송국 진행 상태를 저장했습니다."
+          : savedFlag === "station_warning"
+            ? "방송국 진행 상태를 저장했습니다."
           : savedFlag === "station_error"
             ? "방송국 상태 저장 중 오류가 발생했습니다."
           : savedFlag === "error"
@@ -198,11 +208,19 @@ export default async function AdminSubmissionDetailPage({
     : "";
   const isSaveError =
     savedFlag === "error" || savedFlag === "station_error" || Boolean(savedErrorParam);
+  const isSaveWarning =
+    savedFlag === "station_warning" || Boolean(savedWarningParam);
   const errorMessage =
     typeof savedErrorParam === "string" && savedErrorParam.length > 0
-      ? savedErrorParam
+      ? `저장 실패: ${savedErrorParam} (상세 로그는 서버 콘솔)`
       : isSaveError
         ? "저장 중 문제가 발생했습니다."
+        : "";
+  const warningMessage =
+    typeof savedWarningParam === "string" && savedWarningParam.length > 0
+      ? savedWarningParam
+      : isSaveWarning
+        ? "트랙 결과 저장에 실패했습니다."
         : "";
 
   if (!rawSubmissionId) {
@@ -424,7 +442,7 @@ export default async function AdminSubmissionDetailPage({
   }
 
   const stationSelectWithTracks =
-    "id, status, result_note, track_results, updated_at, station_id, station:stations ( id, name, code )";
+    "id, status, result_note, track_results:track_results_json, updated_at, station_id, station:stations ( id, name, code )";
   const stationSelectNoTracks =
     "id, status, result_note, updated_at, station_id, station:stations ( id, name, code )";
 
@@ -450,6 +468,7 @@ export default async function AdminSubmissionDetailPage({
   if (
     stationResult.error &&
     (stationResult.error.code === "42703" ||
+      stationResult.error.message?.toLowerCase().includes("track_results_json") ||
       stationResult.error.message?.toLowerCase().includes("track_results"))
   ) {
     const fallback = await supabase
@@ -497,7 +516,12 @@ export default async function AdminSubmissionDetailPage({
       {!isSaveError && saveMessage ? <AdminSaveToast message={saveMessage} /> : null}
       {isSaveError && errorMessage ? (
         <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
-          저장 오류: {errorMessage}
+          {errorMessage}
+        </div>
+      ) : null}
+      {isSaveWarning && warningMessage ? (
+        <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          저장 경고: {warningMessage}
         </div>
       ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">

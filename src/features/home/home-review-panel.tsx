@@ -424,7 +424,7 @@ export function HomeReviewPanel({
         async () => {
           const { data } = await supabase
             .from("station_reviews")
-            .select("id, status, track_results, updated_at, station:stations ( name )")
+            .select("id, status, track_results:track_results_json, updated_at, station:stations ( name )")
             .eq("submission_id", activeSubmissionId)
             .order("updated_at", { ascending: false });
           if (!data) return;
