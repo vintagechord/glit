@@ -39,6 +39,11 @@ type DashboardStatusResponse = {
   error?: string;
 };
 
+type TrackResultModalState = {
+  stationName: string;
+  summary: ReturnType<typeof summarizeTrackResults>;
+};
+
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
     label: "접수대기",
@@ -557,6 +562,8 @@ export function HomeReviewPanel({
   const [isDragging, setIsDragging] = React.useState(false);
   const dragStartY = React.useRef<number | null>(null);
   const dragCurrentY = React.useRef(0);
+  const [trackResultModal, setTrackResultModal] =
+    React.useState<TrackResultModalState | null>(null);
   const maxPage = Math.max(0, Math.ceil(activeStations.length / rowsPerPage) - 1);
 
   React.useEffect(() => {
@@ -829,6 +836,10 @@ export function HomeReviewPanel({
                       {activeStations.map((station, index) => {
                         const reception = getReceptionStatus(station.status);
                         const result = getResultStatus(station);
+                        const summary = summarizeTrackResults(
+                          station.track_results,
+                        );
+                        const canOpenTracks = summary.counts.total > 0;
                         return (
                           <div
                             key={`${station.id}-${index}`}
@@ -844,11 +855,27 @@ export function HomeReviewPanel({
                               {reception.label}
                             </span>
                             <div className="flex flex-col items-center justify-center gap-1 justify-self-center">
-                              <span
-                                className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
-                              >
-                                {result.label}
-                              </span>
+                              {canOpenTracks ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setTrackResultModal({
+                                      stationName:
+                                        station.station?.name ?? "-",
+                                      summary,
+                                    })
+                                  }
+                                  className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold transition hover:opacity-90 ${result.tone}`}
+                                >
+                                  {result.label}
+                                </button>
+                              ) : (
+                                <span
+                                  className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                                >
+                                  {result.label}
+                                </span>
+                              )}
                               {result.summaryText ? (
                                 <span className="text-[9px] leading-tight text-muted-foreground text-center">
                                   {result.summaryText}
@@ -869,6 +896,10 @@ export function HomeReviewPanel({
                   {activeStations.map((station, index) => {
                     const reception = getReceptionStatus(station.status);
                     const result = getResultStatus(station);
+                    const summary = summarizeTrackResults(
+                      station.track_results,
+                    );
+                    const canOpenTracks = summary.counts.total > 0;
                     return (
                       <div
                         key={`${station.id}-mobile-${index}`}
@@ -889,11 +920,26 @@ export function HomeReviewPanel({
                           >
                             {reception.label}
                           </span>
-                          <span
-                            className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
-                          >
-                            {result.label}
-                          </span>
+                          {canOpenTracks ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTrackResultModal({
+                                  stationName: station.station?.name ?? "-",
+                                  summary,
+                                })
+                              }
+                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold transition hover:opacity-90 ${result.tone}`}
+                            >
+                              {result.label}
+                            </button>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                            >
+                              {result.label}
+                            </span>
+                          )}
                         </div>
                         {result.summaryText ? (
                           <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
@@ -924,6 +970,78 @@ export function HomeReviewPanel({
         </div>
 
       </div>
+
+      {trackResultModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              트랙별 결과
+            </p>
+            <h3 className="mt-2 text-lg font-semibold text-foreground">
+              {trackResultModal.stationName}
+            </h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {trackResultModal.summary.counts.approved}곡 통과 ·{" "}
+              {trackResultModal.summary.counts.rejected}곡 불통과
+              {trackResultModal.summary.counts.pending > 0
+                ? ` · ${trackResultModal.summary.counts.pending}곡 대기`
+                : ""}
+            </p>
+            <div className="mt-4 max-h-80 space-y-2 overflow-auto">
+              {trackResultModal.summary.results.map((track, index) => {
+                const status =
+                  track.status === "APPROVED"
+                    ? {
+                        label: "통과",
+                        tone:
+                          "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+                      }
+                    : track.status === "REJECTED"
+                      ? {
+                          label: "불통과",
+                          tone:
+                            "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+                        }
+                      : {
+                          label: "대기",
+                          tone:
+                            "bg-slate-500/10 text-slate-600 dark:text-slate-300",
+                        };
+                const trackLabel =
+                  track.title ||
+                  (typeof track.track_no === "number"
+                    ? `트랙 ${track.track_no}`
+                    : "트랙");
+                return (
+                  <div
+                    key={`${track.track_id ?? index}-${track.track_no ?? index}`}
+                    className="flex items-center justify-between rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-foreground">
+                        {track.track_no ? `${track.track_no}. ` : ""}
+                        {trackLabel}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-semibold ${status.tone}`}
+                    >
+                      {status.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => setTrackResultModal(null)}
+              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
