@@ -699,14 +699,14 @@ export async function updateStationReviewAction(
         ? `id, submission_id, station_id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, updated_at`
         : "id, submission_id, station_id, status, result_note, updated_at";
 
-  const { data: fetchedRow, error: refetchError } = await supabase
+  const { data: fetchedRowRaw, error: refetchError } = await supabase
     .from("station_reviews")
     .select(refetchSelect)
     .eq("submission_id", submissionId)
     .eq("station_id", stationId)
     .maybeSingle();
 
-  const effectiveRow = fetchedRow ?? updatedRow;
+  const effectiveRow = (fetchedRowRaw ?? updatedRow) as AdminActionState["row"] | null;
   const expectedStatus =
     trackUpdateSucceeded && derivedStatus ? derivedStatus : statusRequested;
   const statusMatches = effectiveRow?.status === expectedStatus;
