@@ -148,6 +148,71 @@ const mvOptionToneClasses = [
   "border-[#e49adf] bg-[#f3a7f2] text-slate-900",
 ];
 
+type BroadcastSpecFields = {
+  format?: string[];
+  codec?: string[];
+  resolution?: string;
+  fps?: string;
+  maxSize?: string;
+  duration?: string;
+  note?: string;
+};
+
+type BroadcastSpec = {
+  id: string;
+  title: string;
+  summaryBadges: string[];
+  fields: BroadcastSpecFields;
+};
+
+const broadcastSpecs: BroadcastSpec[] = [
+  {
+    id: "KBS",
+    title: "KBS",
+    summaryBadges: ["MOV", "≤1.5GB", "30초 편집본", "ProRes LT/422"],
+    fields: {
+      format: ["MOV"],
+      codec: ["Apple ProRes (ProRes LT / 422)"],
+      maxSize: "1.5GB 이하",
+      duration: "30초 편집본 제출",
+    },
+  },
+  {
+    id: "MBC",
+    title: "MBC",
+    summaryBadges: ["MOV", "1920×1080", "29.97fps", "≤4GB"],
+    fields: {
+      format: ["MOV"],
+      resolution: "1920×1080",
+      fps: "29.97fps",
+      maxSize: "4GB 이하",
+    },
+  },
+  {
+    id: "SBS",
+    title: "SBS",
+    summaryBadges: ["MOV/MP4/WMV", "1920×1080", "29.97fps"],
+    fields: {
+      format: ["MOV", "MP4", "WMV"],
+      resolution: "1920×1080",
+      fps: "29.97fps",
+    },
+  },
+];
+
+const broadcastFieldLabels: Array<{
+  key: keyof BroadcastSpecFields;
+  label: string;
+}> = [
+  { key: "format", label: "파일 형식(컨테이너)" },
+  { key: "codec", label: "코덱/프로파일" },
+  { key: "resolution", label: "해상도" },
+  { key: "fps", label: "프레임레이트" },
+  { key: "maxSize", label: "최대 용량" },
+  { key: "duration", label: "길이 제한" },
+  { key: "note", label: "비고/추가 조건" },
+];
+
 export function MvWizard({
   stations,
   userId,
@@ -209,6 +274,9 @@ export function MvWizard({
   const [isSaving, setIsSaving] = React.useState(false);
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
+  const [openBroadcastSpec, setOpenBroadcastSpec] = React.useState<string | null>(
+    () => broadcastSpecs[0]?.id ?? null,
+  );
 
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [confirmModal, setConfirmModal] = React.useState<{
@@ -349,32 +417,7 @@ export function MvWizard({
       }
       return chips;
     }
-
-    if (tvStations.includes("KBS")) {
-      chips.push(
-        "KBS: 용량 1.5GB 이하",
-        "KBS: 1분 30초 편집본 제출",
-        "KBS: MOV",
-        "KBS: Apple ProRes (ProRes LT / 422)",
-      );
-    }
-    if (tvStations.includes("MBC")) {
-      chips.push(
-        "MBC: MOV",
-        "MBC: 해상도 1920x1080",
-        "MBC: 프레임 29.97",
-        "MBC: 4GB 이하",
-      );
-    }
-    if (tvStations.includes("SBS")) {
-      chips.push(
-        "SBS: MOV / MP4 / WMV",
-        "SBS: 해상도 1920x1080",
-        "SBS: 프레임 29.97",
-      );
-    }
-
-    return chips;
+    return [];
   }, [mvType, onlineOptions, tvStations]);
 
   const paymentItems = React.useMemo(() => {
@@ -1017,6 +1060,79 @@ export function MvWizard({
     mvType === "MV_BROADCAST"
       ? tvStations.length > 0
       : onlineBaseSelected || onlineOptions.length > 0;
+
+  const renderBroadcastSpecs = () => {
+    if (broadcastSpecs.length === 0) return null;
+    return (
+      <div className="broadcast-specs mt-3 space-y-3">
+        {broadcastSpecs.map((spec) => {
+          const isOpen = openBroadcastSpec === spec.id;
+          const panelId = `broadcast-spec-${spec.id}`;
+          return (
+            <div
+              key={spec.id}
+              className="broadcast-card rounded-2xl border border-border/60 bg-background/70"
+            >
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                aria-controls={panelId}
+                onClick={() =>
+                  setOpenBroadcastSpec((prev) => (prev === spec.id ? null : spec.id))
+                }
+                className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left transition hover:bg-foreground/5"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {spec.title}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                    {spec.summaryBadges.map((badge) => (
+                      <span
+                        key={`${spec.id}-${badge}`}
+                        className="rounded-full border border-border/60 bg-background/80 px-2.5 py-0.5"
+                      >
+                        {badge}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <span className="mt-1 text-xs font-semibold text-muted-foreground">
+                  {isOpen ? "닫기" : "열기"}
+                </span>
+              </button>
+              {isOpen ? (
+                <div
+                  id={panelId}
+                  className="border-t border-border/60 px-4 py-4 text-sm text-foreground"
+                >
+                  <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+                    {broadcastFieldLabels.map(({ key, label }) => {
+                      const value = spec.fields[key];
+                      if (!value || (Array.isArray(value) && value.length === 0)) {
+                        return null;
+                      }
+                      const rendered = Array.isArray(value) ? value.join(" / ") : value;
+                      return (
+                        <div key={`${spec.id}-${key}`} className="grid gap-1">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            {label}
+                          </p>
+                          <p className="text-sm font-medium text-foreground">
+                            {rendered}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
@@ -1674,18 +1790,24 @@ export function MvWizard({
               {uploadHintTitle}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              최대 {uploadMaxLabel}까지 업로드할 수 있습니다.
+              {mvType === "MV_BROADCAST"
+                ? `시스템 업로드 한도: 최대 ${uploadMaxLabel}까지 업로드할 수 있습니다.`
+                : `최대 ${uploadMaxLabel}까지 업로드할 수 있습니다.`}
             </p>
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-              {uploadChips.map((chip) => (
-                <span
-                  key={chip}
-                  className="rounded-full border border-border/60 bg-background/70 px-3 py-1"
-                >
-                  {chip}
-                </span>
-              ))}
-            </div>
+            {mvType === "MV_BROADCAST" ? (
+              renderBroadcastSpecs()
+            ) : (
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                {uploadChips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded-full border border-border/60 bg-background/70 px-3 py-1"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="mt-4">
               <label
                 className="relative block"
