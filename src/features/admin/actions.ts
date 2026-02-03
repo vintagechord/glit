@@ -646,10 +646,13 @@ export async function updateStationReviewAction(
   let { data: upserted, error: baseError } = await runBaseSave(supabase);
 
   if (baseError && shouldRetryWithUserSession(baseError)) {
+    const retryMeta = {
+      errorCode: "code" in baseError ? baseError.code : undefined,
+      errorMessage: baseError.message,
+    };
     console.warn("[station_review][save][base][upsert][retry-user-session]", {
       ...logContext,
-      errorCode: baseError.code,
-      errorMessage: baseError.message,
+      ...retryMeta,
     });
     const userClient = await createServerSupabase();
     const retry = await runBaseSave(userClient as SupabaseClient);
