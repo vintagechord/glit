@@ -4,7 +4,6 @@ import { z } from "zod";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { PostgrestError } from "@supabase/supabase-js";
 
 import {
   paymentStatusEnum,
@@ -77,6 +76,8 @@ const stationReviewPayloadSchema = z.object({
 
 const STATION_REVIEW_TRACK_RESULTS_COLUMN = "track_results_json";
 const STATION_REVIEW_TRACK_RESULTS_SELECT = `track_results:${STATION_REVIEW_TRACK_RESULTS_COLUMN}`;
+const LEGACY_TRACK_RESULTS_COLUMN = "track_results";
+const LEGACY_TRACK_RESULTS_SELECT = "track_results";
 
 const isMissingTrackResultsColumn = (error?: { code?: string; message?: string | null }) => {
   if (!error) return false;
@@ -481,7 +482,7 @@ export async function updateStationReviewAction(
   const { data: existing } = parsed.data.reviewId
     ? await supabase
         .from("station_reviews")
-        .select(`id, submission_id, station_id, status, ${STATION_REVIEW_TRACK_RESULTS_SELECT}`)
+        .select("id, submission_id, station_id, status")
         .eq("id", parsed.data.reviewId)
         .maybeSingle()
     : { data: null };
@@ -574,9 +575,7 @@ export async function updateStationReviewAction(
   const { data: upserted, error: baseError } = await supabase
     .from("station_reviews")
     .upsert(basePayload, { onConflict: "submission_id,station_id" })
-    .select(
-      `id, submission_id, station_id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, updated_at`,
-    );
+    .select("id, submission_id, station_id, status, result_note, updated_at");
 
   if (baseError) {
     console.error("[station_review][save][base][upsert][error]", {
@@ -598,16 +597,20 @@ export async function updateStationReviewAction(
   let trackUpdateAttempted = false;
   let trackUpdateSucceeded = false;
   let updatedRow = upserted?.[0];
+  let trackResultsColumnUsed: "track_results_json" | "track_results" | null = null;
 
   if (hasTrackResultsInput && normalizedTrackResults.length > 0) {
     trackUpdateAttempted = true;
-    const trackUpdatePayload: Record<string, unknown> = {
-      [STATION_REVIEW_TRACK_RESULTS_COLUMN]: normalizedTrackResults,
-      updated_at: new Date().toISOString(),
+    const buildTrackPayload = (column: string) => {
+      const payload: Record<string, unknown> = {
+        [column]: normalizedTrackResults,
+        updated_at: new Date().toISOString(),
+      };
+      if (derivedStatus) {
+        payload.status = derivedStatus;
+      }
+      return payload;
     };
-    if (derivedStatus) {
-      trackUpdatePayload.status = derivedStatus;
-    }
 
     console.info("[station_review][save][track_results][update][start]", {
       ...logContext,
@@ -616,14 +619,37 @@ export async function updateStationReviewAction(
       trackResultsSample: normalizedTrackResults.slice(0, 2),
     });
 
-    const { data: trackUpdated, error: trackError } = await supabase
-      .from("station_reviews")
-      .update(trackUpdatePayload)
-      .eq("submission_id", submissionId)
-      .eq("station_id", stationId)
-      .select(
-        `id, submission_id, station_id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, updated_at`,
-      );
+    const updateWithColumn = async (column: string, select: string) =>
+      supabase
+        .from("station_reviews")
+        .update(buildTrackPayload(column))
+        .eq("submission_id", submissionId)
+        .eq("station_id", stationId)
+        .select(`id, submission_id, station_id, status, result_note, ${select}, updated_at`);
+
+    let { data: trackUpdated, error: trackError } = await updateWithColumn(
+      STATION_REVIEW_TRACK_RESULTS_COLUMN,
+      STATION_REVIEW_TRACK_RESULTS_SELECT,
+    );
+    trackResultsColumnUsed = STATION_REVIEW_TRACK_RESULTS_COLUMN;
+
+    const missingJsonColumn =
+      trackError?.code === "42703" ||
+      trackError?.message?.toLowerCase().includes("track_results_json");
+
+    if (trackError && missingJsonColumn) {
+      console.warn("[station_review][save][track_results][update][fallback]", {
+        ...logContext,
+        fallbackColumn: LEGACY_TRACK_RESULTS_COLUMN,
+        errorCode: trackError.code,
+        errorMessage: trackError.message,
+      });
+      ({ data: trackUpdated, error: trackError } = await updateWithColumn(
+        LEGACY_TRACK_RESULTS_COLUMN,
+        LEGACY_TRACK_RESULTS_SELECT,
+      ));
+      trackResultsColumnUsed = LEGACY_TRACK_RESULTS_COLUMN;
+    }
 
     if (trackError) {
       const fallbackMessage = trackError.message ?? "track_results_json update error";
@@ -646,14 +672,24 @@ export async function updateStationReviewAction(
     } else {
       trackUpdateSucceeded = true;
       updatedRow = trackUpdated?.[0] ?? updatedRow;
+      if (trackResultsColumnUsed === LEGACY_TRACK_RESULTS_COLUMN) {
+        warning =
+          warning ??
+          "TRACK_RESULTS_LEGACY_COLUMN_USED: station_reviews.track_results 컬럼을 사용 중입니다. 최신 DB 마이그레이션을 적용하세요.";
+      }
     }
   }
 
+  const refetchSelect =
+    trackUpdateSucceeded && trackResultsColumnUsed === LEGACY_TRACK_RESULTS_COLUMN
+      ? `id, submission_id, station_id, status, result_note, ${LEGACY_TRACK_RESULTS_SELECT}, updated_at`
+      : trackUpdateSucceeded
+        ? `id, submission_id, station_id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, updated_at`
+        : "id, submission_id, station_id, status, result_note, updated_at";
+
   const { data: fetchedRow, error: refetchError } = await supabase
     .from("station_reviews")
-    .select(
-      `id, submission_id, station_id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, updated_at`,
-    )
+    .select(refetchSelect)
     .eq("submission_id", submissionId)
     .eq("station_id", stationId)
     .maybeSingle();
@@ -953,10 +989,22 @@ export async function deleteTrackForSubmissionAction(
     console.error("deleteTrack delete error", deleteError);
   }
 
-  const { data: stationReviews } = await admin
+  const { data: stationReviewsData, error: stationReviewsError } = await admin
     .from("station_reviews")
     .select(`id, ${STATION_REVIEW_TRACK_RESULTS_SELECT}`)
     .eq("submission_id", parsed.data.submissionId);
+  let stationReviews = stationReviewsData ?? null;
+
+  const missingJsonColumn =
+    stationReviewsError?.code === "42703" ||
+    stationReviewsError?.message?.toLowerCase().includes("track_results_json");
+  if (stationReviewsError && missingJsonColumn) {
+    const fallback = await admin
+      .from("station_reviews")
+      .select(`id, ${LEGACY_TRACK_RESULTS_SELECT}`)
+      .eq("submission_id", parsed.data.submissionId);
+    stationReviews = fallback.data ?? stationReviews;
+  }
 
   if (stationReviews && stationReviews.length > 0) {
     type TrackResultEntry = {
@@ -982,14 +1030,28 @@ export async function deleteTrackForSubmissionAction(
       });
 
       if (filtered.length !== rawResults.length) {
-        const { error: updateError } = await admin
+        const payload = {
+          [STATION_REVIEW_TRACK_RESULTS_COLUMN]: filtered.length > 0 ? filtered : null,
+        };
+        let { error: updateError } = await admin
           .from("station_reviews")
-          .update({
-            [STATION_REVIEW_TRACK_RESULTS_COLUMN]: filtered.length > 0 ? filtered : null,
-          })
+          .update(payload)
           .eq("id", review.id);
         if (updateError) {
-          console.error("deleteTrack track_results_json update error", updateError);
+          const fallbackMissing =
+            updateError.code === "42703" ||
+            updateError.message?.toLowerCase().includes("track_results_json");
+          if (fallbackMissing) {
+            ({ error: updateError } = await admin
+              .from("station_reviews")
+              .update({
+                [LEGACY_TRACK_RESULTS_COLUMN]: filtered.length > 0 ? filtered : null,
+              })
+              .eq("id", review.id));
+          }
+        }
+        if (updateError) {
+          console.error("deleteTrack track_results update error", updateError);
         }
       }
     }
@@ -1630,12 +1692,25 @@ export async function saveSubmissionAdminFormAction(
   }
 
   const supabase = await createAdminClient();
-  const { data: existingReviews } = await supabase
+  const { data: existingReviewsData, error: existingReviewsError } = await supabase
     .from("station_reviews")
     .select(
       `id, status, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, station_id, station:stations ( code )`,
     )
     .eq("submission_id", submissionId);
+  let existingReviews = existingReviewsData ?? [];
+
+  const missingJsonColumn =
+    existingReviewsError?.code === "42703" ||
+    existingReviewsError?.message?.toLowerCase().includes("track_results_json");
+  if (existingReviewsError && missingJsonColumn) {
+    const fallback = await supabase
+      .from("station_reviews")
+      .select(`id, status, ${LEGACY_TRACK_RESULTS_SELECT}, station_id, station:stations ( code )`)
+      .eq("submission_id", submissionId);
+    existingReviews = fallback.data ?? existingReviews;
+  }
+
   const reviewMap = new Map(
     (existingReviews ?? []).map((review) => [review.id, review]),
   );
@@ -1725,14 +1800,21 @@ export async function saveSubmissionAdminFormAction(
     let columnMissing = false;
     let { data, error } = await attempt(true);
     if (error && isMissingTrackResultsColumn(error)) {
-      console.warn(
-        `${logPrefix} track_results_json column missing, retrying without track_results`,
-        {
-        error,
-        },
-      );
+      console.warn(`${logPrefix} track_results_json column missing`, { error });
       columnMissing = true;
-      ({ data, error } = await attempt(false));
+
+      const fallbackPayload = {
+        status: payload.status,
+        result_note: payload.result_note,
+        station_id: payload.station_id,
+        [LEGACY_TRACK_RESULTS_COLUMN]: payload.track_results,
+      };
+      const fallback = await supabase
+        .from("station_reviews")
+        .upsert({ id: reviewId, submission_id: submissionId, ...fallbackPayload }, { onConflict: "submission_id,station_id" })
+        .select(`id, status, result_note, ${LEGACY_TRACK_RESULTS_SELECT}, station_id`);
+      data = fallback.data;
+      error = fallback.error;
     }
 
     console.info(`${logPrefix} update result`, {
@@ -1745,7 +1827,9 @@ export async function saveSubmissionAdminFormAction(
       const refreshed = await supabase
         .from("station_reviews")
         .select(
-          `id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, station_id`,
+          columnMissing
+            ? `id, status, result_note, ${LEGACY_TRACK_RESULTS_SELECT}, station_id`
+            : `id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, station_id`,
         )
         .eq("id", reviewId)
         .maybeSingle();
@@ -1753,14 +1837,10 @@ export async function saveSubmissionAdminFormAction(
     }
 
     if (columnMissing && !error) {
-      error = {
-        code: "42703",
+      console.warn(`${logPrefix} legacy track_results column used`, {
         message:
-          "TRACK_RESULTS_COLUMN_MISSING: station_reviews.track_results_json 컬럼이 없어 트랙 결과를 저장하지 못했습니다. 최신 DB 마이그레이션을 적용하세요.",
-        details: "",
-        hint: "",
-        name: "PostgrestError",
-      } as PostgrestError;
+          "TRACK_RESULTS_LEGACY_COLUMN_USED: station_reviews.track_results 컬럼을 사용 중입니다. 최신 DB 마이그레이션을 적용하세요.",
+      });
     }
 
     return { data, error };

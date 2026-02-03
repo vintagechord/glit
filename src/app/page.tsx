@@ -529,6 +529,8 @@ export default async function Home() {
     if (allIds.length) {
       const withoutTracks =
         "id, submission_id, station_id, status, result_note, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code, region )";
+      const withLegacyTracks =
+        "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code, region )";
 
       const reviewResult = await admin
         .from("station_reviews")
@@ -538,26 +540,41 @@ export default async function Home() {
         .in("submission_id", allIds)
         .order("updated_at", { ascending: false });
 
-      let reviewRows =
+      const missingTrackColumn =
         reviewResult.error &&
         (reviewResult.error.message?.toLowerCase().includes("track_results_json") ||
           reviewResult.error.message?.toLowerCase().includes("track_results") ||
-          reviewResult.error.code === "42703")
-          ? (
+          reviewResult.error.code === "42703");
+
+      let reviewRows = reviewResult.data ?? [];
+      if (missingTrackColumn) {
+        const legacy = await admin
+          .from("station_reviews")
+          .select(withLegacyTracks)
+          .in("submission_id", allIds)
+          .order("updated_at", { ascending: false });
+        if (legacy.error) {
+          reviewRows =
+            (
               await admin
                 .from("station_reviews")
                 .select(withoutTracks)
                 .in("submission_id", allIds)
                 .order("updated_at", { ascending: false })
-            ).data ?? []
-          : reviewResult.data ?? [];
+            ).data ?? [];
+        } else {
+          reviewRows = legacy.data ?? [];
+        }
+      }
 
       if (reviewResult.error && !reviewRows.length) {
         console.error("[home] station_reviews join error", reviewResult.error);
         const fallback = await admin
           .from("station_reviews")
           .select(
-            "id, submission_id, station_id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code, region )",
+            missingTrackColumn
+              ? "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations ( id, name, code, region )"
+              : "id, submission_id, station_id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code, region )",
           )
           .in("submission_id", allIds)
           .order("updated_at", { ascending: false });

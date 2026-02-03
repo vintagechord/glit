@@ -43,7 +43,18 @@ export function normalizeTrackResults(
   raw: unknown,
   albumTracks?: AlbumTrackMeta[] | null,
 ): TrackReviewResult[] {
-  const items = Array.isArray(raw) ? raw : [];
+  const items = (() => {
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  })();
   type TrackInput =
     | {
         track_id?: string | null;

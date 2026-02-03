@@ -497,8 +497,12 @@ export function SubmissionDetailClient({
 
     const stationSelectWithLogo =
       "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code, logo_url )";
+    const stationSelectWithLogoLegacy =
+      "id, status, result_note, track_results, updated_at, station:stations ( id, name, code, logo_url )";
     const stationSelectBasic =
       "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code )";
+    const stationSelectBasicLegacy =
+      "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
 
     const runStationFetch = (select: string) =>
       supabase
@@ -511,14 +515,28 @@ export function SubmissionDetailClient({
     let stationData = stationResult.data ?? null;
     let stationError = stationResult.error ?? null;
 
-    if (
-      stationError &&
-      (stationError.code === "42703" ||
-        stationError.message?.toLowerCase().includes("logo_url"))
-    ) {
-      const fallback = await runStationFetch(stationSelectBasic);
-      stationData = fallback.data ?? null;
-      stationError = fallback.error ?? null;
+    if (stationError) {
+      const message = stationError.message?.toLowerCase() ?? "";
+      const missingTrackJson = message.includes("track_results_json");
+      const missingLogo = message.includes("logo_url");
+
+      if (missingTrackJson) {
+        const legacy = await runStationFetch(
+          missingLogo ? stationSelectBasicLegacy : stationSelectWithLogoLegacy,
+        );
+        stationData = legacy.data ?? null;
+        stationError = legacy.error ?? null;
+
+        if (stationError && missingLogo) {
+          const fallbackLegacy = await runStationFetch(stationSelectBasicLegacy);
+          stationData = fallbackLegacy.data ?? null;
+          stationError = fallbackLegacy.error ?? null;
+        }
+      } else if (missingLogo || stationError.code === "42703") {
+        const fallback = await runStationFetch(stationSelectBasic);
+        stationData = fallback.data ?? null;
+        stationError = fallback.error ?? null;
+      }
     }
 
     if (stationData) {

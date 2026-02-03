@@ -376,8 +376,34 @@ export default async function SubmissionDetailPage({
     )
     .eq("submission_id", submissionId)
     .order("updated_at", { ascending: false });
+  let resolvedStationReviews = stationReviewsData ?? null;
   if (stationReviewsError) {
     console.error("[Dashboard SubmissionDetail] station_reviews join error", stationReviewsError);
+    const missingTrackColumn =
+      stationReviewsError.code === "42703" ||
+      stationReviewsError.message?.toLowerCase().includes("track_results_json") ||
+      stationReviewsError.message?.toLowerCase().includes("track_results");
+    if (missingTrackColumn) {
+      const legacy = await admin
+        .from("station_reviews")
+        .select(
+          "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )",
+        )
+        .eq("submission_id", submissionId)
+        .order("updated_at", { ascending: false });
+      if (legacy.error) {
+        const fallback = await admin
+          .from("station_reviews")
+          .select(
+            "id, submission_id, station_id, status, result_note, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )",
+          )
+          .eq("submission_id", submissionId)
+          .order("updated_at", { ascending: false });
+        resolvedStationReviews = fallback.data ?? null;
+      } else {
+        resolvedStationReviews = legacy.data ?? null;
+      }
+    }
   }
 
   type StationReviewRow = {
@@ -395,7 +421,7 @@ export default async function SubmissionDetailPage({
   };
 
   const reviewMap = new Map<string, StationReviewRow>();
-  (stationReviewsData ?? []).forEach((review: StationReviewRow) => {
+  (resolvedStationReviews ?? []).forEach((review: StationReviewRow) => {
     const stationId =
       review.station_id ||
       (Array.isArray(review.station) ? review.station[0]?.id : review.station?.id);

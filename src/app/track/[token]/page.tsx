@@ -116,6 +116,8 @@ export default async function TrackDetailPage({
 
   const stationSelectWithTracks =
     "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code )";
+  const stationSelectLegacyTracks =
+    "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
   const stationSelectNoTracks =
     "id, status, result_note, updated_at, station:stations ( id, name, code )";
 
@@ -142,12 +144,21 @@ export default async function TrackDetailPage({
       stationResult.error.message?.toLowerCase().includes("track_results_json") ||
       stationResult.error.message?.toLowerCase().includes("track_results"))
   ) {
-    const fallback = await admin
+    const legacy = await admin
       .from("station_reviews")
-      .select(stationSelectNoTracks)
+      .select(stationSelectLegacyTracks)
       .eq("submission_id", submission.id)
       .order("updated_at", { ascending: false });
-    stationReviews = (fallback.data as typeof stationReviews) ?? stationReviews;
+    if (legacy.error) {
+      const fallback = await admin
+        .from("station_reviews")
+        .select(stationSelectNoTracks)
+        .eq("submission_id", submission.id)
+        .order("updated_at", { ascending: false });
+      stationReviews = (fallback.data as typeof stationReviews) ?? stationReviews;
+    } else {
+      stationReviews = (legacy.data as typeof stationReviews) ?? stationReviews;
+    }
   }
   if (stationResult.error && !stationReviews) {
     console.error("[TrackDetail] station_reviews query error", stationResult.error);

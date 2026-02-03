@@ -427,13 +427,22 @@ export function HomeReviewPanel({
             .select("id, status, track_results:track_results_json, updated_at, station:stations ( name )")
             .eq("submission_id", activeSubmissionId)
             .order("updated_at", { ascending: false });
-          if (!data) return;
+          let resolvedData = data;
+          if (!resolvedData) {
+            const fallback = await supabase
+              .from("station_reviews")
+              .select("id, status, track_results, updated_at, station:stations ( name )")
+              .eq("submission_id", activeSubmissionId)
+              .order("updated_at", { ascending: false });
+            resolvedData = fallback.data ?? resolvedData;
+          }
+          if (!resolvedData) return;
           if (tab === "album") {
             setAlbumState((prev) => ({
               ...prev,
               stationsById: {
                 ...prev.stationsById,
-                [activeSubmissionId]: normalizeStations(data as StationItem[]),
+                [activeSubmissionId]: normalizeStations(resolvedData as StationItem[]),
               },
             }));
           } else {
@@ -441,7 +450,7 @@ export function HomeReviewPanel({
               ...prev,
               stationsById: {
                 ...prev.stationsById,
-                [activeSubmissionId]: normalizeStations(data as StationItem[]),
+                [activeSubmissionId]: normalizeStations(resolvedData as StationItem[]),
               },
             }));
           }

@@ -443,6 +443,8 @@ export default async function AdminSubmissionDetailPage({
 
   const stationSelectWithTracks =
     "id, status, result_note, track_results:track_results_json, updated_at, station_id, station:stations ( id, name, code )";
+  const stationSelectLegacyTracks =
+    "id, status, result_note, track_results, updated_at, station_id, station:stations ( id, name, code )";
   const stationSelectNoTracks =
     "id, status, result_note, updated_at, station_id, station:stations ( id, name, code )";
 
@@ -471,12 +473,21 @@ export default async function AdminSubmissionDetailPage({
       stationResult.error.message?.toLowerCase().includes("track_results_json") ||
       stationResult.error.message?.toLowerCase().includes("track_results"))
   ) {
-    const fallback = await supabase
+    const legacy = await supabase
       .from("station_reviews")
-      .select(stationSelectNoTracks)
+      .select(stationSelectLegacyTracks)
       .eq("submission_id", submissionId)
       .order("station_id", { ascending: true });
-    stationReviews = (fallback.data as typeof stationReviews) ?? stationReviews;
+    if (legacy.error) {
+      const fallback = await supabase
+        .from("station_reviews")
+        .select(stationSelectNoTracks)
+        .eq("submission_id", submissionId)
+        .order("station_id", { ascending: true });
+      stationReviews = (fallback.data as typeof stationReviews) ?? stationReviews;
+    } else {
+      stationReviews = (legacy.data as typeof stationReviews) ?? stationReviews;
+    }
   }
 
   if ((!stationReviews || stationReviews.length === 0) && submission.type?.startsWith("MV_")) {

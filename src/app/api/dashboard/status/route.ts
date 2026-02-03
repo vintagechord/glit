@@ -261,6 +261,8 @@ export async function GET() {
   if (allSubmissionIds.length) {
     const withTracksSelect =
       "id, submission_id, station_id, status, result_note, updated_at, track_results:track_results_json, station:stations!station_reviews_station_id_fkey ( id, name, code )";
+    const legacyTracksSelect =
+      "id, submission_id, station_id, status, result_note, updated_at, track_results, station:stations!station_reviews_station_id_fkey ( id, name, code )";
     const noTracksSelect =
       "id, submission_id, station_id, status, result_note, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )";
 
@@ -277,15 +279,36 @@ export async function GET() {
         stationReviewsError.code === "42703" ||
         stationReviewsError.message?.toLowerCase().includes("track_results_json") ||
         stationReviewsError.message?.toLowerCase().includes("track_results");
-      const fallback = await admin
-        .from("station_reviews")
-        .select(missingTrackColumn ? noTracksSelect : withTracksSelect)
-        .in("submission_id", allSubmissionIds)
-        .order("updated_at", { ascending: false });
-      data = (fallback.data as StationReviewRow[] | null) ?? null;
-      if (fallback.error) {
-        console.error("[dashboard status] station_reviews fallback join error", fallback.error);
-        data = null;
+      if (missingTrackColumn) {
+        const legacy = await admin
+          .from("station_reviews")
+          .select(legacyTracksSelect)
+          .in("submission_id", allSubmissionIds)
+          .order("updated_at", { ascending: false });
+        data = (legacy.data as StationReviewRow[] | null) ?? null;
+        if (legacy.error) {
+          const fallback = await admin
+            .from("station_reviews")
+            .select(noTracksSelect)
+            .in("submission_id", allSubmissionIds)
+            .order("updated_at", { ascending: false });
+          data = (fallback.data as StationReviewRow[] | null) ?? null;
+          if (fallback.error) {
+            console.error("[dashboard status] station_reviews fallback join error", fallback.error);
+            data = null;
+          }
+        }
+      } else {
+        const fallback = await admin
+          .from("station_reviews")
+          .select(withTracksSelect)
+          .in("submission_id", allSubmissionIds)
+          .order("updated_at", { ascending: false });
+        data = (fallback.data as StationReviewRow[] | null) ?? null;
+        if (fallback.error) {
+          console.error("[dashboard status] station_reviews fallback join error", fallback.error);
+          data = null;
+        }
       }
     }
 
