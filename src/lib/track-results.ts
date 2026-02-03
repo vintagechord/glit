@@ -113,6 +113,50 @@ export function normalizeTrackResults(
   });
 }
 
+const buildComparableTrackResults = (
+  raw: unknown,
+  albumTracks?: AlbumTrackMeta[] | null,
+) => {
+  const normalized = normalizeTrackResults(raw, albumTracks);
+  const comparable = normalized.map((item, index) => {
+    const trackId = item.track_id ?? null;
+    const trackNo =
+      typeof item.track_no === "number" && Number.isFinite(item.track_no)
+        ? item.track_no
+        : null;
+    const key = trackId
+      ? `id:${trackId}`
+      : trackNo !== null
+        ? `no:${trackNo}`
+        : `idx:${index}`;
+    return {
+      track_id: trackId,
+      track_no: trackNo,
+      status: toTrackStatus(typeof item.status === "string" ? item.status : null),
+      _key: key,
+      _index: index,
+    };
+  });
+
+  comparable.sort((a, b) => {
+    if (a._key < b._key) return -1;
+    if (a._key > b._key) return 1;
+    return a._index - b._index;
+  });
+
+  return comparable.map(({ _key, _index, ...rest }) => rest);
+};
+
+export function areTrackResultsEquivalent(
+  left: unknown,
+  right: unknown,
+  albumTracks?: AlbumTrackMeta[] | null,
+): boolean {
+  const normalizedLeft = buildComparableTrackResults(left, albumTracks);
+  const normalizedRight = buildComparableTrackResults(right, albumTracks);
+  return JSON.stringify(normalizedLeft) === JSON.stringify(normalizedRight);
+}
+
 export type TrackOutcome = "APPROVED" | "REJECTED" | "PARTIAL" | "PENDING" | null;
 
 export function summarizeTrackResults(

@@ -13,7 +13,11 @@ import {
   stationReviewStatusEnum,
   stationReviewStatusValues,
 } from "@/constants/review-status";
-import { summarizeTrackResults } from "@/lib/track-results";
+import {
+  areTrackResultsEquivalent,
+  normalizeTrackResults,
+  summarizeTrackResults,
+} from "@/lib/track-results";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRatingCode } from "@/lib/mv-assets";
@@ -597,15 +601,18 @@ export async function updateStationReviewAction(
   let trackUpdateAttempted = false;
   let trackUpdateSucceeded = false;
   let updatedRow = upserted?.[0];
-  let trackResultsColumnUsed: "track_results_json" | "track_results" | null = null;
+  let trackResultsColumnUsed: "dual" | "track_results_json" | "track_results" | null =
+    null;
 
   if (hasTrackResultsInput && normalizedTrackResults.length > 0) {
     trackUpdateAttempted = true;
-    const buildTrackPayload = (column: string) => {
+    const buildTrackPayload = (columns: string[]) => {
       const payload: Record<string, unknown> = {
-        [column]: normalizedTrackResults,
         updated_at: new Date().toISOString(),
       };
+      columns.forEach((column) => {
+        payload[column] = normalizedTrackResults;
+      });
       if (derivedStatus) {
         payload.status = derivedStatus;
       }
@@ -625,42 +632,57 @@ export async function updateStationReviewAction(
       station_id?: string | null;
       status?: string | null;
       result_note?: string | null;
-      track_results?: unknown;
       updated_at?: string | null;
     };
 
-    const updateWithColumn = async (column: string, select: string) => {
+    const updateWithPayload = async (payload: Record<string, unknown>) => {
       const { data, error } = await supabase
         .from("station_reviews")
-        .update(buildTrackPayload(column))
+        .update(payload)
         .eq("submission_id", submissionId)
         .eq("station_id", stationId)
-        .select(`id, submission_id, station_id, status, result_note, ${select}, updated_at`);
+        .select("id, submission_id, station_id, status, result_note, updated_at");
       return { data: (data as TrackUpdateRow[] | null) ?? null, error };
     };
 
-    let { data: trackUpdated, error: trackError } = await updateWithColumn(
-      STATION_REVIEW_TRACK_RESULTS_COLUMN,
-      STATION_REVIEW_TRACK_RESULTS_SELECT,
+    let { data: trackUpdated, error: trackError } = await updateWithPayload(
+      buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN, LEGACY_TRACK_RESULTS_COLUMN]),
     );
-    trackResultsColumnUsed = STATION_REVIEW_TRACK_RESULTS_COLUMN;
+    trackResultsColumnUsed = "dual";
 
-    const missingJsonColumn =
-      trackError?.code === "42703" ||
-      trackError?.message?.toLowerCase().includes("track_results_json");
+    if (trackError && isMissingTrackResultsColumn(trackError)) {
+      const message = trackError.message?.toLowerCase() ?? "";
+      const missingJson = message.includes("track_results_json");
+      const missingLegacy = message.includes("track_results");
 
-    if (trackError && missingJsonColumn) {
       console.warn("[station_review][save][track_results][update][fallback]", {
         ...logContext,
-        fallbackColumn: LEGACY_TRACK_RESULTS_COLUMN,
         errorCode: trackError.code,
         errorMessage: trackError.message,
       });
-      ({ data: trackUpdated, error: trackError } = await updateWithColumn(
-        LEGACY_TRACK_RESULTS_COLUMN,
-        LEGACY_TRACK_RESULTS_SELECT,
-      ));
-      trackResultsColumnUsed = LEGACY_TRACK_RESULTS_COLUMN;
+
+      if (missingJson && !missingLegacy) {
+        ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+          buildTrackPayload([LEGACY_TRACK_RESULTS_COLUMN]),
+        ));
+        trackResultsColumnUsed = LEGACY_TRACK_RESULTS_COLUMN;
+      } else if (missingLegacy && !missingJson) {
+        ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+          buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN]),
+        ));
+        trackResultsColumnUsed = STATION_REVIEW_TRACK_RESULTS_COLUMN;
+      } else {
+        ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+          buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN]),
+        ));
+        trackResultsColumnUsed = STATION_REVIEW_TRACK_RESULTS_COLUMN;
+        if (trackError && isMissingTrackResultsColumn(trackError)) {
+          ({ data: trackUpdated, error: trackError } = await updateWithPayload(
+            buildTrackPayload([LEGACY_TRACK_RESULTS_COLUMN]),
+          ));
+          trackResultsColumnUsed = LEGACY_TRACK_RESULTS_COLUMN;
+        }
+      }
     }
 
     if (trackError) {
@@ -712,10 +734,20 @@ export async function updateStationReviewAction(
   const statusMatches = effectiveRow?.status === expectedStatus;
   const tracksMatch =
     !trackUpdateSucceeded ||
-    JSON.stringify(effectiveRow?.track_results ?? []) ===
-      JSON.stringify(normalizedTrackResults ?? []);
+    areTrackResultsEquivalent(effectiveRow?.track_results, normalizedTrackResults);
 
   if (!statusMatches || !tracksMatch) {
+    const effectiveTrackResults = effectiveRow?.track_results;
+    const effectiveTrackType = Array.isArray(effectiveTrackResults)
+      ? "array"
+      : effectiveTrackResults === null
+        ? "null"
+        : typeof effectiveTrackResults;
+    const normalizedEffectiveSample = normalizeTrackResults(effectiveTrackResults).slice(
+      0,
+      2,
+    );
+    const normalizedInputSample = normalizeTrackResults(normalizedTrackResults).slice(0, 2);
     console.error("[station_review][save][mismatch]", {
       ...logContext,
       savedRow: effectiveRow,
@@ -723,6 +755,9 @@ export async function updateStationReviewAction(
       expectedTracksLen: trackUpdateSucceeded ? normalizedTrackResults?.length ?? 0 : 0,
       trackUpdateAttempted,
       trackUpdateSucceeded,
+      effectiveTrackType,
+      normalizedEffectiveSample,
+      normalizedInputSample,
       refetchError,
     });
     if (!statusMatches) {
