@@ -369,6 +369,7 @@ export function HomeReviewPanel({
   const [remoteStatus, setRemoteStatus] = React.useState<
     "idle" | "loading" | "loaded" | "error"
   >("idle");
+  const hasRequestedRemote = React.useRef(false);
 
   const availableTabs = React.useMemo<TabKey[]>(() => {
     if (!hideEmptyTabs) return ["album", "mv"];
@@ -386,7 +387,8 @@ export function HomeReviewPanel({
 
   React.useEffect(() => {
     if (!enableRemoteSync || !isLoggedIn) return;
-    if (remoteStatus !== "idle") return;
+    if (hasRequestedRemote.current) return;
+    hasRequestedRemote.current = true;
     let cancelled = false;
     setRemoteStatus("loading");
     const fetchRemote = async () => {
@@ -424,7 +426,7 @@ export function HomeReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [enableRemoteSync, isLoggedIn, normalizeStations, remoteStatus]);
+  }, [enableRemoteSync, isLoggedIn, normalizeStations]);
 
   const activeList = tab === "album" ? albumState.submissions : mvState.submissions;
   const activeIndex = tab === "album" ? albumState.index : mvState.index;
