@@ -7,6 +7,9 @@ import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-rev
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const RECENT_RESULT_CUTOFF = new Date(
   Date.now() - 30 * 24 * 60 * 60 * 1000,
 ).toISOString();
@@ -128,7 +131,7 @@ const featureHighlights = [
   {
     title: "파일 업로드",
     description:
-      "온사이드는 자체 스토리지를 운영하고 있습니다.\n안전하게 온사이드에 음원과 영상을 업로드하세요.",
+      "온사이드는 자체 스토리지 운영으로 안전하게 음원과 영상을 관리합니다.",
     card:
       "bg-white text-[#2d3444] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
     visual: "from-[#e7fff2] via-white to-[#eaf7ff]",
@@ -354,7 +357,7 @@ export default async function Home() {
       );
 
     const buildAlbumBase = () =>
-      supabase
+      admin
         .from("submissions")
         .select(
           "id, title, artist_name, status, updated_at, payment_status, package_id, package:packages ( name, station_count )",
@@ -364,7 +367,7 @@ export default async function Home() {
         .not("status", "eq", "DRAFT");
 
     const buildMvBase = () =>
-      supabase
+      admin
         .from("submissions")
         .select("id, title, artist_name, status, updated_at, payment_status, type, package_id, package:packages ( name, station_count )")
         .eq("user_id", user.id)
