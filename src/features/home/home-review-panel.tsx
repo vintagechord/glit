@@ -535,16 +535,11 @@ export function HomeReviewPanel({
   const completedCount = activeStations.filter((review) =>
     isStationCompleted(review),
   ).length;
-  const isFinalized =
-    activeSubmission &&
-    ["RESULT_READY", "COMPLETED"].includes(activeSubmission.status);
-  const effectiveCompletedCount =
-    isFinalized && totalCount > 0 ? totalCount : completedCount;
   const progressPercent =
-    totalCount > 0 ? Math.round((effectiveCompletedCount / totalCount) * 100) : 0;
+    totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   const progressText =
     totalCount > 0
-      ? `진행률 : 총 ${totalCount}곳 중 ${effectiveCompletedCount}곳 완료`
+      ? `진행률 : 총 ${totalCount}곳 중 ${completedCount}곳 완료`
       : "진행률 : 방송국 결과가 등록되면 진행률이 표시됩니다.";
   const currentSubmissionStatus =
     activeSubmission && totalCount > 0 && completedCount === totalCount
