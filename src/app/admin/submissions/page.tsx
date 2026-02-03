@@ -85,6 +85,8 @@ export default async function AdminSubmissionsPage({
 
     if (searchParams.status) {
       query = query.eq("status", searchParams.status);
+    } else {
+      query = query.neq("status", "DRAFT");
     }
     if (searchParams.payment) {
       query = query.eq("payment_status", searchParams.payment);
@@ -138,6 +140,24 @@ export default async function AdminSubmissionsPage({
   const totalPages =
     totalCount > 0 ? Math.max(1, Math.ceil(totalCount / PAGE_SIZE)) : 1;
 
+  const buildStatusHref = (status?: string) => {
+    const params = new URLSearchParams(
+      Object.entries(searchParams).filter(
+        ([, value]) => typeof value === "string" && value.length > 0,
+      ) as Array<[string, string]>,
+    );
+    params.delete("page");
+    if (status) {
+      params.set("status", status);
+    } else {
+      params.delete("status");
+    }
+    const query = params.toString();
+    return query ? `/admin/submissions?${query}` : "/admin/submissions";
+  };
+
+  const isDraftView = searchParams.status === "DRAFT";
+
   const buildPageHref = (targetPage: number) => {
     const params = new URLSearchParams(
       Object.entries(searchParams).filter(
@@ -158,14 +178,20 @@ export default async function AdminSubmissionsPage({
           <h1 className="font-display mt-2 text-3xl text-foreground">
             접수 관리
           </h1>
-        </div>
-        <Link
-          href="/admin/config"
-          className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
-        >
-          패키지/방송국 설정
-        </Link>
       </div>
+      <Link
+        href="/admin/config"
+        className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+      >
+        패키지/방송국 설정
+      </Link>
+      <Link
+        href={buildStatusHref(isDraftView ? undefined : "DRAFT")}
+        className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+      >
+        {isDraftView ? "제출된 항목 보기" : "임시 저장 보기"}
+      </Link>
+    </div>
 
       <form className="mt-6 grid gap-4 rounded-[28px] border border-border/60 bg-card/80 p-6 md:grid-cols-[1fr_repeat(5,auto)_auto]">
         <input
