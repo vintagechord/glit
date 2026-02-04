@@ -10,6 +10,7 @@ type StationItem = {
   status: string;
   updated_at: string;
   track_results?: unknown;
+  result_note?: string | null;
   station?: {
     name?: string | null;
   } | null;

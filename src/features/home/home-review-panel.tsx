@@ -12,6 +12,7 @@ type StationItem = {
   status: string;
   updated_at: string;
   track_results?: unknown;
+  result_note?: string | null;
   station?: {
     id?: string | null;
     name?: string | null;
@@ -497,14 +498,18 @@ export function HomeReviewPanel({
         async () => {
           const { data } = await supabase
             .from("station_reviews")
-            .select("id, status, track_results:track_results_json, updated_at, station:stations ( name )")
+            .select(
+              "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( name )",
+            )
             .eq("submission_id", activeSubmissionId)
             .order("updated_at", { ascending: false });
           let resolvedData = data;
           if (!resolvedData) {
             const fallback = await supabase
               .from("station_reviews")
-              .select("id, status, track_results, updated_at, station:stations ( name )")
+              .select(
+                "id, status, result_note, track_results, updated_at, station:stations ( name )",
+              )
               .eq("submission_id", activeSubmissionId)
               .order("updated_at", { ascending: false });
             resolvedData = fallback.data ?? resolvedData;
@@ -564,6 +569,10 @@ export function HomeReviewPanel({
   const dragCurrentY = React.useRef(0);
   const [trackResultModal, setTrackResultModal] =
     React.useState<TrackResultModalState | null>(null);
+  const [activeResultNote, setActiveResultNote] = React.useState<{
+    stationName: string;
+    note: string;
+  } | null>(null);
   const maxPage = Math.max(0, Math.ceil(activeStations.length / rowsPerPage) - 1);
 
   React.useEffect(() => {
@@ -840,6 +849,11 @@ export function HomeReviewPanel({
                           station.track_results,
                         );
                         const canOpenTracks = summary.counts.total > 0;
+                        const note = station.result_note?.trim() ?? "";
+                        const hasRejection = summary.counts.rejected > 0;
+                        const showNote = note.length > 0 && hasRejection;
+                        const notePreview =
+                          note.length > 28 ? `${note.slice(0, 28)}…` : note;
                         return (
                           <div
                             key={`${station.id}-${index}`}
@@ -881,6 +895,23 @@ export function HomeReviewPanel({
                                   {result.summaryText}
                                 </span>
                               ) : null}
+                              {showNote ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveResultNote({
+                                      stationName:
+                                        station.station?.name ?? "-",
+                                      note,
+                                    })
+                                  }
+                                  className="rounded-full border border-border/60 px-2 py-0.5 text-[9px] font-semibold text-muted-foreground transition hover:text-foreground"
+                                >
+                                  <span className="block max-w-[120px] truncate">
+                                    {notePreview || "사유 보기"}
+                                  </span>
+                                </button>
+                              ) : null}
                             </div>
                             <span className="text-right text-[10px] text-muted-foreground">
                               {formatDate(station.updated_at)}
@@ -900,6 +931,11 @@ export function HomeReviewPanel({
                       station.track_results,
                     );
                     const canOpenTracks = summary.counts.total > 0;
+                    const note = station.result_note?.trim() ?? "";
+                    const hasRejection = summary.counts.rejected > 0;
+                    const showNote = note.length > 0 && hasRejection;
+                    const notePreview =
+                      note.length > 28 ? `${note.slice(0, 28)}…` : note;
                     return (
                       <div
                         key={`${station.id}-mobile-${index}`}
@@ -946,6 +982,22 @@ export function HomeReviewPanel({
                             {result.summaryText}
                           </p>
                         ) : null}
+                        {showNote ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveResultNote({
+                                stationName: station.station?.name ?? "-",
+                                note,
+                              })
+                            }
+                            className="mt-1 inline-flex rounded-full border border-border/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:text-foreground"
+                          >
+                            <span className="block max-w-[160px] truncate">
+                              {notePreview || "사유 보기"}
+                            </span>
+                          </button>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -970,6 +1022,31 @@ export function HomeReviewPanel({
         </div>
 
       </div>
+
+      {activeResultNote ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+            <p className="text-sm font-semibold text-foreground">불통과 사유</p>
+            {activeResultNote.stationName ? (
+              <p className="mt-2 text-xs font-semibold text-foreground">
+                {activeResultNote.stationName}
+              </p>
+            ) : null}
+            <textarea
+              readOnly
+              value={activeResultNote.note}
+              className="mt-3 h-40 w-full resize-none rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
+            />
+            <button
+              type="button"
+              onClick={() => setActiveResultNote(null)}
+              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {trackResultModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
