@@ -218,16 +218,29 @@ export const createExternalProvider = (endpoint?: string, sharedSecret?: string)
       return { suggestions: [], confidence: 0, warnings: ["service_error"], raw: payload };
     }
     const suggestions = Array.isArray(payload?.suggestions)
-      ? payload.suggestions.map((item: any) => ({
-          start: typeof item?.start === "number" ? item.start : Number(item?.start ?? -1),
-          end: typeof item?.end === "number" ? item.end : Number(item?.end ?? -1),
-          before: typeof item?.before === "string" ? item.before : String(item?.before ?? ""),
-          after: typeof item?.after === "string" ? item.after : String(item?.after ?? ""),
-          reason: typeof item?.reason === "string" ? item.reason : "external",
-          confidence: clampConfidence(item?.confidence, 0.7),
-          type: item?.type ?? classifyByReason(item?.reason ?? "external"),
-          source: "external_api",
-        }))
+      ? payload.suggestions.map((item: unknown) => {
+          const data =
+            typeof item === "object" && item !== null
+              ? (item as Record<string, unknown>)
+              : {};
+          const start = data.start;
+          const end = data.end;
+          const before = data.before;
+          const after = data.after;
+          const reason = data.reason;
+          const confidence = data.confidence;
+          const type = data.type;
+          return {
+            start: typeof start === "number" ? start : Number(start ?? -1),
+            end: typeof end === "number" ? end : Number(end ?? -1),
+            before: typeof before === "string" ? before : String(before ?? ""),
+            after: typeof after === "string" ? after : String(after ?? ""),
+            reason: typeof reason === "string" ? reason : "external",
+            confidence: clampConfidence(confidence, 0.7),
+            type: type ?? classifyByReason(reason ?? "external"),
+            source: "external_api",
+          };
+        })
       : [];
     return {
       suggestions: suggestions.filter((s: ProviderSuggestion) => s.start >= 0 && s.end >= s.start),

@@ -36,8 +36,16 @@ export const spellcheckText = async (text: string, options: Options = {}): Promi
         : typeof payload?.original === "string"
           ? payload.original
           : text;
-    const warnings = Array.isArray(payload?.meta?.providers)
-      ? payload.meta.providers.flatMap((p: any) => p?.warnings ?? [])
+    const providers = Array.isArray(payload?.meta?.providers)
+      ? (payload.meta.providers as unknown[])
+      : [];
+    const warnings = providers.length
+      ? providers.flatMap((provider) => {
+          if (typeof provider !== "object" || provider === null) return [];
+          const record = provider as Record<string, unknown>;
+          const warningsValue = record.warnings;
+          return Array.isArray(warningsValue) ? warningsValue : [];
+        })
       : Array.isArray(payload?.warnings)
         ? payload.warnings
         : [];
