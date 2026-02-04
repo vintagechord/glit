@@ -126,6 +126,20 @@ const getResultStatus = (status: string) =>
     tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
   };
 
+const buildTrackSummaryText = (
+  counts: { approved: number; rejected: number; pending: number },
+  separator: string,
+) => {
+  const parts = [`${counts.approved}곡 통과`];
+  if (counts.rejected > 0) {
+    parts.push(`${counts.rejected}곡 불통과`);
+  }
+  if (counts.pending > 0) {
+    parts.push(`${counts.pending}곡 대기`);
+  }
+  return parts.join(separator);
+};
+
 const resolveResultStatus = (review: StationReview) => {
   const summary = summarizeTrackResults(review.track_results);
   const base =
@@ -143,9 +157,7 @@ const resolveResultStatus = (review: StationReview) => {
   const total = summary.counts.total;
   const summaryText =
     total > 1
-      ? `${summary.counts.approved}곡 통과 / ${summary.counts.rejected}곡 불통과${
-          summary.counts.pending > 0 ? ` / ${summary.counts.pending}곡 대기` : ""
-        }`
+      ? buildTrackSummaryText(summary.counts, " / ")
       : null;
 
   return { ...base, summaryText };
@@ -456,11 +468,7 @@ export function SubmissionStatusList({
               {trackResultModal.stationName}
             </h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              {trackResultModal.summary.counts.approved}곡 통과 ·{" "}
-              {trackResultModal.summary.counts.rejected}곡 불통과
-              {trackResultModal.summary.counts.pending > 0
-                ? ` · ${trackResultModal.summary.counts.pending}곡 대기`
-                : ""}
+              {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
             </p>
             <div className="mt-4 max-h-80 space-y-2 overflow-auto">
               {trackResultModal.summary.results.map((track, index) => {

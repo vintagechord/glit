@@ -131,6 +131,20 @@ function getReceptionStatus(status: string) {
   );
 }
 
+function buildTrackSummaryText(
+  counts: { approved: number; rejected: number; pending: number },
+  separator: string,
+) {
+  const parts = [`${counts.approved}곡 통과`];
+  if (counts.rejected > 0) {
+    parts.push(`${counts.rejected}곡 불통과`);
+  }
+  if (counts.pending > 0) {
+    parts.push(`${counts.pending}곡 대기`);
+  }
+  return parts.join(separator);
+}
+
 function getResultStatus(review: StationItem) {
   const summary = summarizeTrackResults(review.track_results);
   const base =
@@ -150,9 +164,7 @@ function getResultStatus(review: StationItem) {
 
   const summaryText =
     summary.counts.total > 1
-      ? `${summary.counts.approved}곡 통과 / ${summary.counts.rejected}곡 불통과${
-          summary.counts.pending > 0 ? ` / ${summary.counts.pending}곡 대기` : ""
-        }`
+      ? buildTrackSummaryText(summary.counts, " / ")
       : null;
 
   return { ...base, summaryText };
@@ -593,6 +605,8 @@ export function HomeReviewPanel({
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (activeStations.length <= rowsPerPage) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button, a, input, select, textarea")) return;
     dragStartY.current = event.clientY;
     dragCurrentY.current = event.clientY;
     setIsDragging(true);
@@ -1004,11 +1018,7 @@ export function HomeReviewPanel({
               {trackResultModal.stationName}
             </h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              {trackResultModal.summary.counts.approved}곡 통과 ·{" "}
-              {trackResultModal.summary.counts.rejected}곡 불통과
-              {trackResultModal.summary.counts.pending > 0
-                ? ` · ${trackResultModal.summary.counts.pending}곡 대기`
-                : ""}
+              {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
             </p>
             <div className="mt-4 max-h-80 space-y-2 overflow-auto">
               {trackResultModal.summary.results.map((track, index) => {

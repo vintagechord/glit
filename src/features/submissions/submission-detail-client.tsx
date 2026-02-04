@@ -119,6 +119,20 @@ type StationReview = {
 
 const fallbackStationLogo = "/station-logos/default.svg";
 
+const buildTrackSummaryText = (
+  counts: { approved: number; rejected: number; pending: number },
+  separator: string,
+) => {
+  const parts = [`${counts.approved}곡 통과`];
+  if (counts.rejected > 0) {
+    parts.push(`${counts.rejected}곡 불통과`);
+  }
+  if (counts.pending > 0) {
+    parts.push(`${counts.pending}곡 대기`);
+  }
+  return parts.join(separator);
+};
+
 function StationLogoWithFallback({
   station,
 }: {
@@ -1252,6 +1266,11 @@ export function SubmissionDetailClient({
                       );
                       const pendingCount = trackInfo.counts.pending + pendingGap;
                       const hasTrackDetails = totalTracksForDisplay > 0;
+                      const summaryCounts = {
+                        approved: trackInfo.counts.approved,
+                        rejected: trackInfo.counts.rejected,
+                        pending: pendingCount,
+                      };
                       const resultTone =
                         isReviewComplete && submission.mv_desired_rating
                           ? {
@@ -1277,9 +1296,7 @@ export function SubmissionDetailClient({
                                   : getReviewResult(review.status);
                       const trackSummaryLine =
                         totalTracksForDisplay > 1
-                          ? `${trackInfo.counts.approved}곡 통과 · ${trackInfo.counts.rejected}곡 불통과${
-                              pendingCount > 0 ? ` · ${pendingCount}곡 대기` : ""
-                            }`
+                          ? buildTrackSummaryText(summaryCounts, " · ")
                           : null;
 
                       const handleResultClick = () => {
@@ -1461,11 +1478,7 @@ export function SubmissionDetailClient({
               {trackResultModal.stationName ?? "-"}
             </h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              {trackResultModal.summary.counts.approved}곡 통과 ·{" "}
-              {trackResultModal.summary.counts.rejected}곡 불통과
-              {trackResultModal.summary.counts.pending > 0
-                ? ` · ${trackResultModal.summary.counts.pending}곡 대기`
-                : ""}
+              {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
             </p>
             <div className="mt-4 max-h-80 space-y-2 overflow-auto">
               {trackResultModal.summary.results.map((track, index) => {
