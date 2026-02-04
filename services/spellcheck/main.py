@@ -7,7 +7,10 @@ from typing import List, Tuple
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from hanspell import spell_checker
+try:
+    from hanspell import spell_checker
+except ModuleNotFoundError:  # pragma: no cover - fallback for py-hanspell-aideer
+    from py_hanspell_aideer import spell_checker
 
 logging.basicConfig(
     level=logging.INFO,

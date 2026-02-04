@@ -1,3 +1,3 @@
 fastapi
 uvicorn[standard]
-py-hanspell
+py-hanspell-aideer==1.2.3
