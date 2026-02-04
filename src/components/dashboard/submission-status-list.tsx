@@ -170,10 +170,7 @@ export function SubmissionStatusList({
   const [trackResultModal, setTrackResultModal] = React.useState<{
     stationName: string;
     summary: ReturnType<typeof summarizeTrackResults>;
-  } | null>(null);
-  const [activeResultNote, setActiveResultNote] = React.useState<{
-    stationName: string;
-    note: string;
+    resultNote: string | null;
   } | null>(null);
 
   if (submissions.length === 0) {
@@ -311,7 +308,6 @@ export function SubmissionStatusList({
           onClick={() => {
             setActiveSubmission(null);
             setTrackResultModal(null);
-            setActiveResultNote(null);
           }}
         >
           <div
@@ -335,7 +331,6 @@ export function SubmissionStatusList({
                 onClick={() => {
                   setActiveSubmission(null);
                   setTrackResultModal(null);
-                  setActiveResultNote(null);
                 }}
                 className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-foreground"
               >
@@ -392,12 +387,7 @@ export function SubmissionStatusList({
                     const reception = getReceptionStatus(station.status);
                     const result = resolveResultStatus(station);
                     const summary = summarizeTrackResults(station.track_results);
-                    const canOpenTracks = summary.counts.total > 0;
-                    const note = station.result_note?.trim() ?? "";
-                    const hasRejection = summary.counts.rejected > 0;
-                    const showNote = note.length > 0 && hasRejection;
-                    const notePreview =
-                      note.length > 28 ? `${note.slice(0, 28)}…` : note;
+                    const canOpenTracks = summary.counts.rejected > 0;
                     return (
                       <div
                         key={`${station.id}-${index}`}
@@ -419,6 +409,7 @@ export function SubmissionStatusList({
                                 setTrackResultModal({
                                   stationName: station.station?.name ?? "-",
                                   summary,
+                                  resultNote: station.result_note?.trim() || null,
                                 })
                               }
                               className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold transition hover:opacity-90 ${result.tone}`}
@@ -437,22 +428,6 @@ export function SubmissionStatusList({
                               {result.summaryText}
                             </span>
                           ) : null}
-                          {showNote ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setActiveResultNote({
-                                  stationName: station.station?.name ?? "-",
-                                  note,
-                                })
-                              }
-                              className="rounded-full border border-border/60 px-2 py-0.5 text-[9px] font-semibold text-muted-foreground transition hover:text-foreground"
-                            >
-                              <span className="block max-w-[120px] truncate">
-                                {notePreview || "사유 보기"}
-                              </span>
-                            </button>
-                          ) : null}
                         </div>
                         <span className="text-right text-[10px] text-muted-foreground">
                           {formatDate(station.updated_at)}
@@ -470,31 +445,6 @@ export function SubmissionStatusList({
           </div>
         </div>
       )}
-
-      {activeResultNote ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-            <p className="text-sm font-semibold text-foreground">불통과 사유</p>
-            {activeResultNote.stationName ? (
-              <p className="mt-2 text-xs font-semibold text-foreground">
-                {activeResultNote.stationName}
-              </p>
-            ) : null}
-            <textarea
-              readOnly
-              value={activeResultNote.note}
-              className="mt-3 h-40 w-full resize-none rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
-            />
-            <button
-              type="button"
-              onClick={() => setActiveResultNote(null)}
-              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
-            >
-              닫기
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {trackResultModal ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
@@ -547,6 +497,12 @@ export function SubmissionStatusList({
                         {track.track_no ? `${track.track_no}. ` : ""}
                         {trackLabel}
                       </p>
+                      {track.status === "REJECTED" &&
+                      trackResultModal.resultNote ? (
+                        <p className="mt-1 break-words text-[11px] text-rose-600/80 dark:text-rose-200/80">
+                          사유: {trackResultModal.resultNote}
+                        </p>
+                      ) : null}
                     </div>
                     <span
                       className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-semibold ${status.tone}`}
