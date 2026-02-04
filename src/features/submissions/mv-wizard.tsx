@@ -2638,7 +2638,7 @@ export function MvWizard({
             <p className="mt-3 text-xs text-muted-foreground">
               파일 첨부가 실패하는 경우 이메일로 영상 파일만 보내주세요.
               <br />
-              help@vhouse.co.kr
+              onside17@daum.net
             </p>
             <div className="mt-4 space-y-3">
               {uploads.map((upload, index) => (

@@ -46,7 +46,7 @@ export const APP_CONFIG = {
     PUBLIC_LOGO_LIGHT ??
     PUBLIC_LOGO_FALLBACK ??
     "",
-  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "help@vhouse.co.kr",
+  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "onside17@daum.net",
   supportPhone: process.env.NEXT_PUBLIC_SUPPORT_PHONE ?? "010-8436-9035",
   supportHours:
     process.env.NEXT_PUBLIC_SUPPORT_HOURS ?? "10:00 ~ 18:00 (주말/공휴일 휴무)",

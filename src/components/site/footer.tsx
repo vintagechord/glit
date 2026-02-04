@@ -325,7 +325,7 @@ ${APP_CONFIG.supportEmail}`;
 
 export function SiteFooter() {
   const contactPhone = "010-8436-9035";
-  const contactEmail = "help@vhouse.co.kr";
+  const contactEmail = "onside17@daum.net";
   const bankName = "케이뱅크";
   const bankAccount = "1003-0026-3141";
   const bankHolder = "정준영(영포에버)";
