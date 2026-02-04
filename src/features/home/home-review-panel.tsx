@@ -873,22 +873,29 @@ export function HomeReviewPanel({
                                         station.result_note?.trim() || null,
                                     })
                                   }
-                                  className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold transition hover:opacity-90 ${result.tone}`}
+                                  className={`inline-flex min-h-[34px] flex-col items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold transition hover:opacity-90 ${result.tone}`}
                                 >
-                                  {result.label}
+                                  <span>{result.label}</span>
+                                  {result.summaryText ? (
+                                    <span className="mt-0.5 text-[9px] font-normal leading-tight text-current/80">
+                                      {result.summaryText}
+                                    </span>
+                                  ) : null}
                                 </button>
                               ) : (
-                                <span
-                                  className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
-                                >
-                                  {result.label}
-                                </span>
+                                <div className="flex flex-col items-center gap-1">
+                                  <span
+                                    className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                                  >
+                                    {result.label}
+                                  </span>
+                                  {result.summaryText ? (
+                                    <span className="text-[9px] leading-tight text-muted-foreground text-center">
+                                      {result.summaryText}
+                                    </span>
+                                  ) : null}
+                                </div>
                               )}
-                              {result.summaryText ? (
-                                <span className="text-[9px] leading-tight text-muted-foreground text-center">
-                                  {result.summaryText}
-                                </span>
-                              ) : null}
                             </div>
                             <span className="text-right text-[10px] text-muted-foreground">
                               {formatDate(station.updated_at)}
@@ -938,23 +945,30 @@ export function HomeReviewPanel({
                                   resultNote: station.result_note?.trim() || null,
                                 })
                               }
-                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold transition hover:opacity-90 ${result.tone}`}
+                              className={`inline-flex min-h-[32px] flex-col items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold transition hover:opacity-90 ${result.tone}`}
                             >
-                              {result.label}
+                              <span>{result.label}</span>
+                              {result.summaryText ? (
+                                <span className="mt-0.5 text-[9px] font-normal leading-tight text-current/80">
+                                  {result.summaryText}
+                                </span>
+                              ) : null}
                             </button>
                           ) : (
-                            <span
-                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
-                            >
-                              {result.label}
-                            </span>
+                            <div className="flex flex-col items-center gap-1">
+                              <span
+                                className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                              >
+                                {result.label}
+                              </span>
+                              {result.summaryText ? (
+                                <span className="text-[9px] leading-tight text-muted-foreground text-center">
+                                  {result.summaryText}
+                                </span>
+                              ) : null}
+                            </div>
                           )}
                         </div>
-                        {result.summaryText ? (
-                          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                            {result.summaryText}
-                          </p>
-                        ) : null}
                       </div>
                     );
                   })}

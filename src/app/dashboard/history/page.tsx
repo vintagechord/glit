@@ -153,7 +153,9 @@ export async function HistoryPageView(config?: ShellConfig) {
       }
       map.get(key)?.submissions.push(s);
     }
-    return Array.from(map.values());
+    return Array.from(map.values()).sort((a, b) =>
+      a.artistName.localeCompare(b.artistName, "ko", { sensitivity: "base" }),
+    );
   };
 
   const albumGroups = groupByArtist(["ALBUM"]);

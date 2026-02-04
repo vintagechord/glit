@@ -331,6 +331,7 @@ export function SubmissionDetailClient({
   } | null>(null);
   const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
   const showAdminTools = isAdmin === true && !guestToken;
+  const showApplicantInfo = isAdmin === true || Boolean(guestToken);
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
@@ -979,24 +980,28 @@ export function SubmissionDetailClient({
             {submission.artist_name_en ? ` / ${submission.artist_name_en}` : ""}
           </p>
         </div>
-        <div>
-          <p className="text-sm text-muted-foreground">신청자</p>
-          <p className="mt-1 font-semibold">
-            {submission.applicant_name || "-"}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">신청자 연락처</p>
-          <p className="mt-1 font-semibold">
-            {submission.applicant_phone || "-"}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">신청자 이메일</p>
-          <p className="mt-1 font-semibold">
-            {submission.applicant_email || "-"}
-          </p>
-        </div>
+        {showApplicantInfo ? (
+          <>
+            <div>
+              <p className="text-sm text-muted-foreground">신청자</p>
+              <p className="mt-1 font-semibold">
+                {submission.applicant_name || "-"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">신청자 연락처</p>
+              <p className="mt-1 font-semibold">
+                {submission.applicant_phone || "-"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">신청자 이메일</p>
+              <p className="mt-1 font-semibold">
+                {submission.applicant_email || "-"}
+              </p>
+            </div>
+          </>
+        ) : null}
         <div>
           <p className="text-sm text-muted-foreground">유통사</p>
           <p className="mt-1 font-semibold">
