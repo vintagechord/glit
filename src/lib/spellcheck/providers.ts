@@ -229,15 +229,26 @@ export const createExternalProvider = (endpoint?: string, sharedSecret?: string)
           const after = data.after;
           const reason = data.reason;
           const confidence = data.confidence;
+          const confidenceValue =
+            typeof confidence === "number"
+              ? confidence
+              : typeof confidence === "string"
+                ? Number(confidence)
+                : undefined;
           const type = data.type;
+          const reasonValue = typeof reason === "string" ? reason : "external";
+          const typeValue = typeof type === "string" ? type : undefined;
           return {
             start: typeof start === "number" ? start : Number(start ?? -1),
             end: typeof end === "number" ? end : Number(end ?? -1),
             before: typeof before === "string" ? before : String(before ?? ""),
             after: typeof after === "string" ? after : String(after ?? ""),
-            reason: typeof reason === "string" ? reason : "external",
-            confidence: clampConfidence(confidence, 0.7),
-            type: type ?? classifyByReason(reason ?? "external"),
+            reason: reasonValue,
+            confidence: clampConfidence(
+              Number.isFinite(confidenceValue) ? confidenceValue : undefined,
+              0.7,
+            ),
+            type: typeValue ?? classifyByReason(reasonValue),
             source: "external_api",
           };
         })
