@@ -878,6 +878,7 @@ export function HomeReviewPanel({
                               {canOpenTracks ? (
                                 <button
                                   type="button"
+                                  onPointerDown={(event) => event.stopPropagation()}
                                   onClick={() =>
                                     setTrackResultModal({
                                       stationName:
@@ -952,6 +953,7 @@ export function HomeReviewPanel({
                           {canOpenTracks ? (
                             <button
                               type="button"
+                              onPointerDown={(event) => event.stopPropagation()}
                               onClick={() =>
                                 setTrackResultModal({
                                   stationName: station.station?.name ?? "-",

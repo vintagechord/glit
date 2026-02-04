@@ -345,7 +345,7 @@ export function SubmissionDetailClient({
   } | null>(null);
   const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
   const showAdminTools = isAdmin === true && !guestToken;
-  const showApplicantInfo = isAdmin === true || Boolean(guestToken);
+  const showApplicantInfo = Boolean(guestToken);
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
