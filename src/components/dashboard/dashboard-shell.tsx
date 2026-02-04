@@ -11,7 +11,6 @@ export const defaultDashboardTabs: DashboardTab[] = [
 ];
 
 export const statusDashboardTabs: DashboardTab[] = [
-  { key: "status", label: "접수현황", href: "/dashboard" },
   { key: "history", label: "나의 심의 내역", href: "/dashboard/history" },
 ];
 
@@ -33,6 +32,7 @@ export function DashboardShell({
   contextLabel?: string;
 }) {
   const tabList = tabs ?? defaultDashboardTabs;
+  const shouldRenderTabs = tabList.length > 1;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -55,21 +55,23 @@ export function DashboardShell({
         {action ? <div className="flex items-center gap-3">{action}</div> : null}
       </div>
 
-      <nav className="mt-6 inline-flex flex-wrap items-center gap-2 rounded-full bg-muted/60 p-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-        {tabList.map((tab) => (
-          <Link
-            key={tab.key}
-            href={tab.href}
-            className={`rounded-full px-4 py-2 transition ${
-              activeTab === tab.key
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
+      {shouldRenderTabs ? (
+        <nav className="mt-6 inline-flex flex-wrap items-center gap-2 rounded-full bg-muted/60 p-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          {tabList.map((tab) => (
+            <Link
+              key={tab.key}
+              href={tab.href}
+              className={`rounded-full px-4 py-2 transition ${
+                activeTab === tab.key
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
 
       <div className="mt-8">{children}</div>
     </div>

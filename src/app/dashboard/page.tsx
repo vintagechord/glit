@@ -4,6 +4,7 @@ import {
   statusDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
+import { HistoryPageView } from "@/app/dashboard/history/page";
 import { DashboardStatusClient } from "@/features/home/dashboard-status-client";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -38,5 +39,5 @@ export async function StatusPageView(config?: ShellConfig) {
 }
 
 export default async function DashboardPage() {
-  return StatusPageView();
+  return HistoryPageView({ tabs: statusDashboardTabs, contextLabel: "진행상황" });
 }
