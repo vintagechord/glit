@@ -344,6 +344,9 @@ export function SubmissionDetailClient({
     summary: ReturnType<typeof summarizeTrackResults>;
   } | null>(null);
   const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
+  const [isReceptionInfoOpen, setIsReceptionInfoOpen] = React.useState(false);
+  const [isSubmissionFormOpen, setIsSubmissionFormOpen] = React.useState(false);
+  const [isAttachmentsOpen, setIsAttachmentsOpen] = React.useState(false);
   const showAdminTools = isAdmin === true && !guestToken;
   const showApplicantInfo = Boolean(guestToken);
   const packageInfo = Array.isArray(submission.package)
@@ -796,79 +799,91 @@ export function SubmissionDetailClient({
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               접수 정보
             </p>
-            <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
-              {isMvSubmission ? (
-                <>
-                  <div>
-                    <p className="text-sm text-muted-foreground">신청 옵션</p>
-                    <p className="mt-1 font-semibold">
-                      {mvOptions && mvOptions.length > 0
-                        ? mvOptions.join(", ")
+            {isReceptionInfoOpen ? (
+              <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
+                {isMvSubmission ? (
+                  <>
+                    <div>
+                      <p className="text-sm text-muted-foreground">신청 옵션</p>
+                      <p className="mt-1 font-semibold">
+                        {mvOptions && mvOptions.length > 0
+                          ? mvOptions.join(", ")
+                          : "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">옵션 수</p>
+                      <p className="mt-1 font-semibold">
+                        {mvOptions && mvOptions.length > 0
+                          ? `${mvOptions.length}곳`
+                          : "-"}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-sm text-muted-foreground">패키지</p>
+                      <p className="mt-1 font-semibold">
+                        {packageInfo?.name ?? "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">방송국 수</p>
+                      <p className="mt-1 font-semibold">
+                        {packageInfo?.station_count ?? "-"}곳
+                      </p>
+                    </div>
+                  </>
+                )}
+                <div>
+                  <p className="text-sm text-muted-foreground">금액</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.amount_krw
+                      ? `${formatCurrency(submission.amount_krw)}원`
+                      : packageInfo?.price_krw
+                        ? `${formatCurrency(packageInfo.price_krw)}원`
                         : "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">옵션 수</p>
-                    <p className="mt-1 font-semibold">
-                      {mvOptions && mvOptions.length > 0
-                        ? `${mvOptions.length}곳`
-                        : "-"}
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <p className="text-sm text-muted-foreground">패키지</p>
-                    <p className="mt-1 font-semibold">
-                      {packageInfo?.name ?? "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">방송국 수</p>
-                    <p className="mt-1 font-semibold">
-                      {packageInfo?.station_count ?? "-"}곳
-                    </p>
-                  </div>
-                </>
-              )}
-              <div>
-                <p className="text-sm text-muted-foreground">금액</p>
-                <p className="mt-1 font-semibold">
-                  {submission.amount_krw
-                    ? `${formatCurrency(submission.amount_krw)}원`
-                    : packageInfo?.price_krw
-                      ? `${formatCurrency(packageInfo.price_krw)}원`
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">결제 상태</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.payment_status}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">결제 방식</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.payment_method
+                      ? paymentMethodLabels[submission.payment_method] ??
+                        submission.payment_method
                       : "-"}
-                </p>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">접수 일시</p>
+                  <p className="mt-1 font-semibold">
+                    {formatDateTime(submission.created_at)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">최근 업데이트</p>
+                  <p className="mt-1 font-semibold">
+                    {formatDateTime(submission.updated_at)}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">결제 상태</p>
-                <p className="mt-1 font-semibold">
-                  {submission.payment_status}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">결제 방식</p>
-                <p className="mt-1 font-semibold">
-                  {submission.payment_method
-                    ? paymentMethodLabels[submission.payment_method] ??
-                      submission.payment_method
-                    : "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">접수 일시</p>
-                <p className="mt-1 font-semibold">
-                  {formatDateTime(submission.created_at)}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">최근 업데이트</p>
-                <p className="mt-1 font-semibold">
-                  {formatDateTime(submission.updated_at)}
-                </p>
-              </div>
+            ) : null}
+            <div className="mt-4 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setIsReceptionInfoOpen((prev) => !prev)}
+                aria-label={isReceptionInfoOpen ? "접수 정보 닫기" : "접수 정보 열기"}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+              >
+                {isReceptionInfoOpen ? "▲" : "▼"}
+              </button>
             </div>
           </div>
         </div>
@@ -880,13 +895,13 @@ export function SubmissionDetailClient({
             <div className="mt-4 space-y-4">
               <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-4">
                 {flowSteps.map((label, index) => {
-                  const isActive = index <= flowIndex;
+                  const isActive = index === flowIndex;
                   return (
                     <div
                       key={label}
                       className={`rounded-2xl border px-3 py-3 text-center font-semibold ${
                         isActive
-                          ? "border-foreground bg-foreground text-background"
+                          ? "border-amber-300 bg-amber-300 text-slate-900"
                           : "border-border/70 bg-background text-muted-foreground"
                       }`}
                     >
@@ -979,7 +994,9 @@ export function SubmissionDetailClient({
       <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
         작성 신청서
       </p>
-      <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
+      {isSubmissionFormOpen ? (
+        <>
+          <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
         <div>
           <p className="text-sm text-muted-foreground">
             {submission.type === "ALBUM" ? "앨범 제목" : "영상 제목"}
@@ -1200,19 +1217,43 @@ export function SubmissionDetailClient({
           </div>
         </div>
       ) : null}
+        </>
+      ) : null}
+      <div className="mt-4 flex justify-center">
+        <button
+          type="button"
+          onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
+          aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+        >
+          {isSubmissionFormOpen ? "▲" : "▼"}
+        </button>
+      </div>
     </div>
 
     <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
         첨부 파일
       </p>
-      <div className="mt-4">
-        <SubmissionFilesPanel
-          submissionId={submissionId}
-          files={files}
-          guestToken={guestToken}
-          canDownload={false}
-        />
+      {isAttachmentsOpen ? (
+        <div className="mt-4">
+          <SubmissionFilesPanel
+            submissionId={submissionId}
+            files={files}
+            guestToken={guestToken}
+            canDownload={false}
+          />
+        </div>
+      ) : null}
+      <div className="mt-4 flex justify-center">
+        <button
+          type="button"
+          onClick={() => setIsAttachmentsOpen((prev) => !prev)}
+          aria-label={isAttachmentsOpen ? "첨부 파일 닫기" : "첨부 파일 열기"}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+        >
+          {isAttachmentsOpen ? "▲" : "▼"}
+        </button>
       </div>
     </div>
 
@@ -1233,7 +1274,9 @@ export function SubmissionDetailClient({
                   <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     <span>방송국</span>
                     <span className="text-center">접수 상태</span>
-                    <span className="text-center">트랙 결과</span>
+                    <span className="text-center">
+                      {isMvSubmission ? "등급 분류" : "트랙 결과"}
+                    </span>
                     <span className="text-right">접수 날짜</span>
                     <span className="text-center">사유</span>
                   </div>

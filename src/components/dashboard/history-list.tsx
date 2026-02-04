@@ -513,7 +513,11 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               <div className="grid grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 <span>방송국</span>
                 <span className="justify-self-center text-center">접수 상태</span>
-                <span className="justify-self-center text-center">트랙 결과</span>
+                <span className="justify-self-center text-center">
+                  {activeSubmission.type?.startsWith("MV")
+                    ? "등급 분류"
+                    : "트랙 결과"}
+                </span>
                 <span className="text-right">접수 날짜</span>
               </div>
               {activeSubmission.stationReviews.length > 0 ? (

@@ -10,6 +10,7 @@ type SubmissionItem = {
   id: string;
   title: string | null;
   status: string;
+  payment_status?: string | null;
   created_at: string;
   updated_at: string | null;
   type: string;
@@ -22,21 +23,31 @@ type ArtistGroup = {
   submissions: SubmissionItem[];
 };
 
-const statusTone: Record<string, string> = {
-  DRAFT: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
-  SUBMITTED: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
-  PRE_REVIEW: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
-  WAITING_PAYMENT: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
-  IN_PROGRESS: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
-  RESULT_READY: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
-  COMPLETED: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+const stageTone: Record<string, string> = {
+  "접수 완료": "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+  "결제 확인": "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+  "심의 진행": "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
+  "결과 확인": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
 };
 
-function StatusChip({ value }: { value: string }) {
-  const tone = statusTone[value] ?? "bg-border/60 text-foreground";
+const getStageLabel = (item: SubmissionItem) => {
+  if (["RESULT_READY", "COMPLETED"].includes(item.status)) {
+    return "결과 확인";
+  }
+  if (item.status === "IN_PROGRESS") {
+    return "심의 진행";
+  }
+  if (item.payment_status === "PAID") {
+    return "결제 확인";
+  }
+  return "접수 완료";
+};
+
+function StatusChip({ label }: { label: string }) {
+  const tone = stageTone[label] ?? "bg-border/60 text-foreground";
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.2em] ${tone}`}>
-      {value}
+      {label}
     </span>
   );
 }
@@ -107,7 +118,7 @@ function ArtistCard({ group }: { group: ArtistGroup }) {
                     접수일 {formatDate(item.created_at)}
                   </p>
                 </div>
-                <StatusChip value={item.status} />
+                <StatusChip label={getStageLabel(item)} />
               </Link>
             ) : (
               <div
