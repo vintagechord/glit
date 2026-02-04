@@ -4293,7 +4293,7 @@ export function AlbumWizard({
               보내실 주소
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              경기도 김포시 사우중로74번길 29 시그마프라자 7층 빈티지하우스
+              {APP_CONFIG.businessAddress}
             </p>
             <p className="mt-4 text-xs font-semibold text-foreground">
               보내실 CD 장수

@@ -58,11 +58,11 @@ export const APP_CONFIG = {
   businessRep: process.env.NEXT_PUBLIC_BUSINESS_REP ?? "정준영",
   businessAddress:
     process.env.NEXT_PUBLIC_BUSINESS_ADDRESS ??
-    "경기도 김포시 사우중로74번길 29 시그마프라자 7층 빈티지하우스",
+    "서울특별시 은평구 진흥로 37-6",
   businessRegNo:
-    process.env.NEXT_PUBLIC_BUSINESS_REG_NO ?? "748-88-01472",
+    process.env.NEXT_PUBLIC_BUSINESS_REG_NO ?? "110-21-24454",
   businessMailOrderNo:
-    process.env.NEXT_PUBLIC_BUSINESS_MAIL_ORDER_NO ?? "2023-경기김포-1524",
+    process.env.NEXT_PUBLIC_BUSINESS_MAIL_ORDER_NO ?? "2015-서울은평-0095",
   privacyOfficer: process.env.NEXT_PUBLIC_PRIVACY_OFFICER ?? "정준영",
   hostingProvider:
     process.env.NEXT_PUBLIC_HOSTING_PROVIDER ?? "(주)가비아인터넷서비스",
