@@ -170,12 +170,7 @@ const overlaps = (a: ProtectedSpan, start: number, end: number) =>
 
 const shouldSkipForProtected = (suggestion: ProviderSuggestion, spans: ProtectedSpan[]) => {
   if (!spans.length) return false;
-  const overlap = spans.some((span) => overlaps(span, suggestion.start, suggestion.end));
-  if (!overlap) return false;
-  if (suggestion.type === "spacing" || suggestion.type === "punctuation") {
-    return false;
-  }
-  return true;
+  return spans.some((span) => overlaps(span, suggestion.start, suggestion.end));
 };
 
 const mapCustomRules = (rules: SpellcheckRule[]) =>

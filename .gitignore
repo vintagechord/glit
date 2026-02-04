@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local spellcheck artifacts
+services/spellcheck/.venv/
+services/spellcheck/__pycache__/

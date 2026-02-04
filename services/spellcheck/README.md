@@ -1,6 +1,6 @@
 # Onside Spellcheck Microservice
 
-FastAPI wrapper around `py-hanspell` that chunks long text and returns a simple correction payload.
+FastAPI wrapper around `py-hanspell-aideer` (Hanspell-compatible) that chunks long text and returns a simple correction payload. If `hanspell` is installed, the service will use that first and fall back to `py-hanspell-aideer`.
 
 ## Local development
 
