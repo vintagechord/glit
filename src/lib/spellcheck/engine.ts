@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildCustomRules, MAX_TEXT_LENGTH, type SpellcheckRule } from "@/lib/spellcheck";
+import { buildProtectedTermPatterns, dictionaryRules } from "./lexicon";
 import {
   createCoreRuleProvider,
   createExternalProvider,
@@ -95,6 +96,12 @@ const buildProtectedSpans = (text: string, domain: SpellcheckDomain): ProtectedS
 
   const hashTags = /[#@][A-Za-z0-9_]+/g;
   while ((m = hashTags.exec(text))) addMatch(m, "tag");
+
+  const protectedTerms = buildProtectedTermPatterns();
+  protectedTerms.forEach(({ pattern }) => {
+    let termMatch: RegExpExecArray | null;
+    while ((termMatch = pattern.exec(text))) addMatch(termMatch, "protected_term");
+  });
 
   if (domain === "music") {
     const terms = [
@@ -340,6 +347,7 @@ const buildProviders = async () => {
   const customRules = mapCustomRules(await fetchCustomRules());
   const providers: SpellcheckProvider[] = [
     createNormalizationProvider(),
+    createRuleProvider("dictionary_rules", dictionaryRules),
     createRuleProvider("custom_rules", customRules),
     createCoreRuleProvider(),
     createHybridProvider(),

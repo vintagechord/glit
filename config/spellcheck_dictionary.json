@@ -1,0 +1,64 @@
+{
+  "protected": [
+    "온사이드",
+    "Onside",
+    "GLIT",
+    "Glit",
+    "Vintage House",
+    "빈티지하우스",
+    "영포에버",
+    "케이뱅크",
+    "K-POP",
+    "KPOP",
+    "K팝",
+    "MV",
+    "EP",
+    "LP",
+    "OST",
+    "BPM",
+    "Hi-Res",
+    "Remaster",
+    "Remastered",
+    "Dolby",
+    "Atmos",
+    "Dolby Atmos",
+    "FLAC",
+    "WAV",
+    "MP3",
+    "AAC",
+    "AIFF",
+    "MIDI"
+  ],
+  "replacements": [
+    {
+      "from": "안되 겠",
+      "to": "안되겠",
+      "reason": "띄어쓰기: 안되겠",
+      "confidence": 0.9
+    },
+    {
+      "from": "안돼 겠",
+      "to": "안 되겠",
+      "reason": "띄어쓰기: 안 되겠",
+      "confidence": 0.9
+    },
+    {
+      "from": "어쩔수",
+      "to": "어쩔 수",
+      "reason": "띄어쓰기: 어쩔 수",
+      "confidence": 0.9
+    },
+    {
+      "from": "할수밖에",
+      "to": "할 수밖에",
+      "reason": "띄어쓰기: 할 수밖에",
+      "confidence": 0.9
+    },
+    {
+      "from": "할수있는",
+      "to": "할 수 있는",
+      "reason": "띄어쓰기: 할 수 있는",
+      "confidence": 0.9
+    }
+  ]
+}
