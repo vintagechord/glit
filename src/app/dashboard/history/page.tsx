@@ -142,7 +142,7 @@ export async function HistoryPageView(config?: ShellConfig) {
       }
       const artistNameRaw = s.artist_name?.trim() || s.artist?.name?.trim() || "";
       const displayArtistName = artistNameRaw || "아티스트 미입력";
-      const key = s.artist?.id ?? s.artist_id ?? artistNameRaw || s.id;
+      const key = (s.artist?.id ?? s.artist_id ?? artistNameRaw) || s.id;
       if (!map.has(key)) {
         map.set(key, {
           artistId: s.artist?.id ?? s.artist_id ?? null,
