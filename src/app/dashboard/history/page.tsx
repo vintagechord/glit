@@ -140,11 +140,13 @@ export async function HistoryPageView(config?: ShellConfig) {
         console.warn("[HistoryPage] submission without id skipped", s);
         continue;
       }
-      const key = s.artist?.id ?? s.artist_id ?? s.artist_name ?? s.id;
+      const artistNameRaw = s.artist_name?.trim() || s.artist?.name?.trim() || "";
+      const displayArtistName = artistNameRaw || "아티스트 미입력";
+      const key = s.artist?.id ?? s.artist_id ?? artistNameRaw || s.id;
       if (!map.has(key)) {
         map.set(key, {
           artistId: s.artist?.id ?? s.artist_id ?? null,
-          artistName: s.artist?.name || s.artist_name || "아티스트 미입력",
+          artistName: displayArtistName,
           thumbnail: s.artist?.thumbnail_url ?? null,
           submissions: [],
         });

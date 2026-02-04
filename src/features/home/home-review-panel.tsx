@@ -845,7 +845,7 @@ export function HomeReviewPanel({
                         const summary = summarizeTrackResults(
                           station.track_results,
                         );
-                        const canOpenTracks = summary.counts.rejected > 0;
+                        const canOpenTracks = summary.counts.total > 0;
                         return (
                           <div
                             key={`${station.id}-${index}`}
@@ -907,7 +907,7 @@ export function HomeReviewPanel({
                     const summary = summarizeTrackResults(
                       station.track_results,
                     );
-                    const canOpenTracks = summary.counts.rejected > 0;
+                    const canOpenTracks = summary.counts.total > 0;
                     return (
                       <div
                         key={`${station.id}-mobile-${index}`}
