@@ -50,9 +50,9 @@ export const APP_CONFIG = {
   supportPhone: process.env.NEXT_PUBLIC_SUPPORT_PHONE ?? "010-8436-9035",
   supportHours:
     process.env.NEXT_PUBLIC_SUPPORT_HOURS ?? "10:00 ~ 18:00 (주말/공휴일 휴무)",
-  bankName: process.env.NEXT_PUBLIC_BANK_NAME ?? "국민은행",
-  bankAccount: process.env.NEXT_PUBLIC_BANK_ACCOUNT ?? "073001-04-276967",
-  bankHolder: process.env.NEXT_PUBLIC_BANK_HOLDER ?? "주식회사 빈티지하우스",
+  bankName: process.env.NEXT_PUBLIC_BANK_NAME ?? "케이뱅크",
+  bankAccount: process.env.NEXT_PUBLIC_BANK_ACCOUNT ?? "1003-0026-3141",
+  bankHolder: process.env.NEXT_PUBLIC_BANK_HOLDER ?? "정준영(영포에버)",
   bankLink: process.env.NEXT_PUBLIC_BANK_LINK ?? "",
   businessName: process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "빈티지하우스(Vintage House)",
   businessRep: process.env.NEXT_PUBLIC_BUSINESS_REP ?? "정준영",

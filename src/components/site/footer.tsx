@@ -326,9 +326,9 @@ ${APP_CONFIG.supportEmail}`;
 export function SiteFooter() {
   const contactPhone = "010-8436-9035";
   const contactEmail = "help@vhouse.co.kr";
-  const bankName = "국민은행";
-  const bankAccount = "073001-04-276967";
-  const bankHolder = "주식회사 빈티지하우스";
+  const bankName = "케이뱅크";
+  const bankAccount = "1003-0026-3141";
+  const bankHolder = "정준영(영포에버)";
 
   const [activeModal, setActiveModal] = React.useState<
     "terms" | "privacy" | "partnership" | null
