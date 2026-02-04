@@ -11,7 +11,7 @@ const ZERO_WIDTH = /[\u200B-\u200D\uFEFF]/g;
 const CURLY_QUOTES = /[“”]/g;
 const CURLY_SINGLE_QUOTES = /[’‘]/g;
 const DASHES = /[\u2012\u2013\u2014\u2015\u2212]/g;
-const ELLIPSIS = /…/g;
+const ELLIPSIS = /[…⋯]/g;
 const MULTI_SPACE = /[ \t]{2,}/g;
 
 export const normalizeText = (text: string): NormalizeResult => {

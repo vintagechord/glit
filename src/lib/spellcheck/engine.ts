@@ -41,7 +41,7 @@ type ProviderState = {
 type ProtectedSpan = { start: number; end: number; reason: string };
 
 const MODE_THRESHOLD: Record<SpellcheckMode, number> = {
-  strict: 0.45,
+  strict: 0.35,
   balanced: 0.6,
   fast: 0.75,
 };
@@ -50,7 +50,7 @@ const PROVIDER_TIMEOUT_MS = 2500;
 const CACHE_TTL_MS = 1000 * 60 * 5;
 const CIRCUIT_FAIL_THRESHOLD = 3;
 const CIRCUIT_OPEN_MS = 30_000;
-const MAX_SUGGESTIONS = 600;
+const MAX_SUGGESTIONS = 900;
 
 const cache = new Map<string, { value: SpellcheckResponse; expiresAt: number }>();
 const inflight = new Map<string, Promise<SpellcheckResponse>>();
@@ -93,6 +93,15 @@ const buildProtectedSpans = (text: string, domain: SpellcheckDomain): ProtectedS
 
   const acronyms = /\b[A-Z0-9]{2,}\b/g;
   while ((m = acronyms.exec(text))) addMatch(m, "acronym");
+
+  const urls = /\bhttps?:\/\/[^\s]+/gi;
+  while ((m = urls.exec(text))) addMatch(m, "url");
+
+  const wwwUrls = /\bwww\.[^\s]+/gi;
+  while ((m = wwwUrls.exec(text))) addMatch(m, "url");
+
+  const emails = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+  while ((m = emails.exec(text))) addMatch(m, "email");
 
   const hashTags = /[#@][A-Za-z0-9_]+/g;
   while ((m = hashTags.exec(text))) addMatch(m, "tag");

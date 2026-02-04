@@ -14,13 +14,19 @@ type Suggestion = {
 type RulesModule = { default?: unknown; KO_SPELLCHECK_RULES?: unknown };
 const moduleValue = mod as RulesModule;
 const defaultExport = moduleValue.default as RulesModule | Rule[] | undefined;
-const resolveRules = (value: unknown): Rule[] => (Array.isArray(value) ? (value as Rule[]) : []);
+const resolveRules = (value: unknown): Rule[] | null =>
+  Array.isArray(value) && value.length > 0 ? (value as Rule[]) : null;
 const RULES: Rule[] =
-  resolveRules(defaultExport && "KO_SPELLCHECK_RULES" in (defaultExport as object) ? (defaultExport as RulesModule).KO_SPELLCHECK_RULES : null) ||
-  resolveRules(moduleValue.KO_SPELLCHECK_RULES) ||
-  resolveRules(defaultExport);
+  resolveRules(
+    defaultExport && "KO_SPELLCHECK_RULES" in (defaultExport as object)
+      ? (defaultExport as RulesModule).KO_SPELLCHECK_RULES
+      : null,
+  ) ??
+  resolveRules(moduleValue.KO_SPELLCHECK_RULES) ??
+  resolveRules(defaultExport) ??
+  [];
 
-const SHORT_BEFORE_ALLOW = new Set(["됬", "됫", "됐", "됏", "되야", "그낭"]);
+const SHORT_BEFORE_ALLOW = new Set(["됬", "됫", "됐", "됏", "되야", "그낭", "쫌", "구지", "할려"]);
 
 function applyReplacementOnce(before: string, rule: Rule): string | null {
   const flags = rule.pattern.flags.replace("g", "");
@@ -201,6 +207,11 @@ const cases: Case[] = [
     name: "typo-short",
     text: "그낭 걸엇어.",
     min: 2,
+  },
+  {
+    name: "informal-typos",
+    text: "쫌 구지 할려면 될려고 하지마.",
+    min: 3,
   },
 ];
 

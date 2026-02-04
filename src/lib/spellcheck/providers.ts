@@ -122,8 +122,12 @@ export const createRuleProvider = (name: string, rules: RuleEntry[]): Spellcheck
 export const createHybridProvider = (): SpellcheckProvider => ({
   name: "hybrid_rules",
   supports: (lang) => lang === "ko",
-  check: async (text) => {
-    const { changes } = runHybridSpellcheck(text, { maxIterations: 4 });
+  check: async (text, context) => {
+    const mode = context.mode ?? "balanced";
+    const { changes } = runHybridSpellcheck(text, {
+      maxIterations: mode === "strict" ? 6 : mode === "fast" ? 3 : 4,
+      confidenceThreshold: mode === "strict" ? 0.5 : mode === "fast" ? 0.7 : 0.6,
+    });
     const suggestions: ProviderSuggestion[] = changes.map((change) => {
       const baseReason = change.rule.split("#")[0];
       const type: SuggestionType =
