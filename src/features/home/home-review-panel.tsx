@@ -163,8 +163,8 @@ function getResultStatus(review: StationItem) {
             };
 
   const summaryText =
-    summary.counts.total > 1
-      ? buildTrackSummaryText(summary.counts, " / ")
+    summary.outcome === "PARTIAL"
+      ? `${summary.counts.approved}곡 통과 / ${summary.counts.rejected}곡 불통과`
       : null;
 
   return { ...base, summaryText };
