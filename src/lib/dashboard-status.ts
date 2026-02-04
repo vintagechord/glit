@@ -7,6 +7,11 @@ type DashboardSubmission =
       id: string;
       title: string | null;
       artist_name?: string | null;
+      artist?:
+        | { id?: string | null; name?: string | null }
+        | Array<{ id?: string | null; name?: string | null }>
+        | null;
+      artist_id?: string | null;
       status: string;
       updated_at: string;
       payment_status?: string | null;
@@ -17,6 +22,11 @@ type DashboardSubmission =
       id: string;
       title: string | null;
       artist_name?: string | null;
+      artist?:
+        | { id?: string | null; name?: string | null }
+        | Array<{ id?: string | null; name?: string | null }>
+        | null;
+      artist_id?: string | null;
       status: string;
       updated_at: string;
       payment_status?: string | null;
@@ -70,7 +80,7 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
     admin
       .from("submissions")
       .select(
-        "id, title, artist_name, status, updated_at, payment_status, package_id, package:packages ( name, station_count )",
+        "id, title, artist_name, artist_id, artist:artists ( id, name ), status, updated_at, payment_status, package_id, package:packages ( name, station_count )",
       )
       .eq("user_id", userId)
       .eq("type", "ALBUM")
@@ -79,7 +89,7 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
   const buildMvBase = () =>
     admin
       .from("submissions")
-      .select("id, title, artist_name, status, updated_at, payment_status, type, package_id, package:packages ( name, station_count )")
+      .select("id, title, artist_name, artist_id, artist:artists ( id, name ), status, updated_at, payment_status, type, package_id, package:packages ( name, station_count )")
       .eq("user_id", userId)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
       .not("status", "eq", "DRAFT");
@@ -121,8 +131,25 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
     return { error: "MV_QUERY_FAILED" };
   }
 
-  const albumSubmissions = (albumResult.data ?? []) as DashboardSubmission[];
-  const mvSubmissions = (mvResult.data ?? []) as DashboardSubmission[];
+  const resolveArtistName = (submission: DashboardSubmission) => {
+    const artist = submission.artist;
+    const artistName = Array.isArray(artist) ? artist[0]?.name : artist?.name;
+    const trimmed = artistName?.trim() || submission.artist_name?.trim() || null;
+    return trimmed || null;
+  };
+
+  const albumSubmissions = ((albumResult.data ?? []) as DashboardSubmission[]).map(
+    (row) => ({
+      ...row,
+      artist_name: resolveArtistName(row),
+    }),
+  );
+  const mvSubmissions = ((mvResult.data ?? []) as DashboardSubmission[]).map(
+    (row) => ({
+      ...row,
+      artist_name: resolveArtistName(row),
+    }),
+  );
 
   const allSubmissionIds = [...albumSubmissions, ...mvSubmissions]
     .map((item) => item.id)
