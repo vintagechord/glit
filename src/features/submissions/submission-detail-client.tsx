@@ -178,16 +178,6 @@ function StationLogoWithFallback({
   );
 }
 
-const statusLabels: Record<string, string> = {
-  DRAFT: "임시 저장",
-  SUBMITTED: "접수 완료",
-  PRE_REVIEW: "사전 검토",
-  WAITING_PAYMENT: "결제 확인 중",
-  IN_PROGRESS: "심의 진행",
-  RESULT_READY: "결과 확인",
-  COMPLETED: "완료",
-};
-
 const paymentMethodLabels: Record<string, string> = {
   BANK: "무통장",
   CARD: "카드",
@@ -265,13 +255,11 @@ const stationResultFallbackMap: Record<string, { label: string; tone: string }> 
   },
 };
 
-const rejectedReviewStatuses = new Set(["REJECTED", "NEEDS_FIX"]);
-
 const flowSteps = [
   "접수 완료",
   "결제 확인",
   "심의 진행",
-  "결과 확인",
+  "결과 전달",
 ];
 
 const radioSubmissionLinks: Array<{ name: string; url: string }> = [
@@ -683,15 +671,12 @@ export function SubmissionDetailClient({
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             Submission Detail
           </p>
-          <h1 className="font-display mt-2 text-3xl text-foreground">
+          <h1 className="font-display mt-2 text-2xl font-semibold text-slate-900 dark:text-amber-300">
             {submission.title || "제목 미입력"}
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-1 text-xl font-medium text-slate-900 dark:text-amber-300">
             {submission.artist_name || "아티스트 미입력"}
           </p>
-        </div>
-        <div className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground">
-          {statusLabels[submission.status] ?? submission.status}
         </div>
       </div>
       {showAdminTools && isPaymentPending ? (
@@ -880,9 +865,10 @@ export function SubmissionDetailClient({
                 type="button"
                 onClick={() => setIsReceptionInfoOpen((prev) => !prev)}
                 aria-label={isReceptionInfoOpen ? "접수 정보 닫기" : "접수 정보 열기"}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+                className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-200 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
               >
-                {isReceptionInfoOpen ? "▲" : "▼"}
+                <span>{isReceptionInfoOpen ? "▲" : "▼"}</span>
+                <span>{isReceptionInfoOpen ? "접기" : "펼치기"}</span>
               </button>
             </div>
           </div>
@@ -901,7 +887,7 @@ export function SubmissionDetailClient({
                       key={label}
                       className={`rounded-2xl border px-3 py-3 text-center font-semibold ${
                         isActive
-                          ? "border-amber-300 bg-amber-300 text-slate-900"
+                          ? "border-slate-900 bg-slate-900 text-white dark:border-amber-300 dark:bg-amber-300 dark:text-slate-900"
                           : "border-border/70 bg-background text-muted-foreground"
                       }`}
                     >
@@ -913,9 +899,11 @@ export function SubmissionDetailClient({
               <div className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-xs text-muted-foreground">
                 {isReviewComplete
                   ? "모든 심의 절차가 완료되었습니다."
-                  : isPaymentDone
-                    ? "결제가 확인되었고 심의 절차가 진행됩니다."
-                    : "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다."}
+                  : flowIndex === 3
+                    ? "심의 접수가 모두 완료되어 방송국별 결과를 전달합니다."
+                    : isPaymentDone
+                      ? "결제가 확인되었고 심의 절차가 진행됩니다."
+                      : "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다."}
               </div>
             </div>
           </div>
@@ -1224,9 +1212,10 @@ export function SubmissionDetailClient({
           type="button"
           onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
           aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-200 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
         >
-          {isSubmissionFormOpen ? "▲" : "▼"}
+          <span>{isSubmissionFormOpen ? "▲" : "▼"}</span>
+          <span>{isSubmissionFormOpen ? "접기" : "펼치기"}</span>
         </button>
       </div>
     </div>
@@ -1250,9 +1239,10 @@ export function SubmissionDetailClient({
           type="button"
           onClick={() => setIsAttachmentsOpen((prev) => !prev)}
           aria-label={isAttachmentsOpen ? "첨부 파일 닫기" : "첨부 파일 열기"}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-200 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
         >
-          {isAttachmentsOpen ? "▲" : "▼"}
+          <span>{isAttachmentsOpen ? "▲" : "▼"}</span>
+          <span>{isAttachmentsOpen ? "접기" : "펼치기"}</span>
         </button>
       </div>
     </div>

@@ -55,7 +55,7 @@ const submissionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
   },
   RESULT_READY: {
-    label: "결과 확인",
+    label: "결과 전달",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   COMPLETED: {

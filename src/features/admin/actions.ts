@@ -113,6 +113,18 @@ const formatSupabaseError = (error?: { code?: string; message?: string | null })
   return `${code} ${message}`.trim();
 };
 
+const revalidateUserDashboards = (submissionId?: string) => {
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/history");
+  revalidatePath("/dashboard/status");
+  revalidatePath("/mypage");
+  revalidatePath("/mypage/history");
+  if (submissionId) {
+    revalidatePath(`/dashboard/submissions/${submissionId}`);
+    revalidatePath(`/mypage/submissions/${submissionId}`);
+  }
+};
+
 const packageSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().min(1),
@@ -291,6 +303,7 @@ export async function updateSubmissionStatusFormAction(
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
+    revalidateUserDashboards(submissionId);
     redirect(`/admin/submissions/${submissionId}?saved=status`);
   }
 }
@@ -338,6 +351,7 @@ export async function updateSubmissionMvRatingFormAction(
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
+    revalidateUserDashboards(submissionId);
     redirect(`/admin/submissions/${submissionId}?saved=rating`);
   }
 }
@@ -403,8 +417,7 @@ export async function updateSubmissionBasicInfoFormAction(
 
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${submissionId}`);
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/history");
+  revalidateUserDashboards(submissionId);
   redirect(`/admin/submissions/${submissionId}?saved=basic`);
 }
 
@@ -469,6 +482,9 @@ export async function updatePaymentStatusFormAction(
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${String(formData.get("submissionId") ?? "")}`);
   const submissionId = String(formData.get("submissionId") ?? "");
+  if (submissionId) {
+    revalidateUserDashboards(submissionId);
+  }
   if (submissionId) {
     redirect(`/admin/submissions/${submissionId}?saved=payment`);
   }
@@ -1124,6 +1140,7 @@ export async function updateStationReviewFormAction(
   revalidatePath("/admin/submissions");
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
+    revalidateUserDashboards(submissionId);
     const warningMessages = [...trackResultsWarnings, result.warning].filter(Boolean);
     if (warningMessages.length > 0) {
       redirect(
@@ -1355,6 +1372,7 @@ export async function updateSubmissionResultFormAction(
   const submissionId = String(formData.get("submissionId") ?? "");
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
+    revalidateUserDashboards(submissionId);
     redirect(`/admin/submissions/${submissionId}`);
   }
 }
@@ -1379,6 +1397,8 @@ export async function updateArtistAction(formData: FormData): Promise<void> {
     .eq("id", artistId);
   revalidatePath("/admin/artists");
   revalidatePath(`/admin/artists/${artistId}`);
+  revalidatePath(`/dashboard/artists/${artistId}`);
+  revalidateUserDashboards();
 }
 
 export async function upsertPackageAction(

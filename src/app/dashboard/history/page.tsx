@@ -140,7 +140,7 @@ export async function HistoryPageView(config?: ShellConfig) {
         console.warn("[HistoryPage] submission without id skipped", s);
         continue;
       }
-      const artistNameRaw = s.artist_name?.trim() || s.artist?.name?.trim() || "";
+      const artistNameRaw = s.artist?.name?.trim() || s.artist_name?.trim() || "";
       const displayArtistName = artistNameRaw || "아티스트 미입력";
       const key = (s.artist?.id ?? s.artist_id ?? artistNameRaw) || s.id;
       if (!map.has(key)) {

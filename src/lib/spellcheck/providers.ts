@@ -217,42 +217,73 @@ export const createExternalProvider = (endpoint?: string, sharedSecret?: string)
     if (!res.ok || payload?.ok === false) {
       return { suggestions: [], confidence: 0, warnings: ["service_error"], raw: payload };
     }
-    const suggestions = Array.isArray(payload?.suggestions)
-      ? payload.suggestions.map((item: unknown) => {
-          const data =
-            typeof item === "object" && item !== null
-              ? (item as Record<string, unknown>)
-              : {};
-          const start = data.start;
-          const end = data.end;
-          const before = data.before;
-          const after = data.after;
-          const reason = data.reason;
-          const confidence = data.confidence;
-          const confidenceValue =
-            typeof confidence === "number"
-              ? confidence
-              : typeof confidence === "string"
-                ? Number(confidence)
-                : undefined;
-          const type = data.type;
-          const reasonValue = typeof reason === "string" ? reason : "external";
-          const typeValue = typeof type === "string" ? type : undefined;
-          return {
-            start: typeof start === "number" ? start : Number(start ?? -1),
-            end: typeof end === "number" ? end : Number(end ?? -1),
-            before: typeof before === "string" ? before : String(before ?? ""),
-            after: typeof after === "string" ? after : String(after ?? ""),
-            reason: reasonValue,
-            confidence: clampConfidence(
-              Number.isFinite(confidenceValue) ? confidenceValue : undefined,
-              0.7,
-            ),
-            type: typeValue ?? classifyByReason(reasonValue),
-            source: "external_api",
-          };
-        })
-      : [];
+    const correctedText =
+      typeof payload?.correctedText === "string"
+        ? payload.correctedText
+        : typeof payload?.corrected === "string"
+          ? payload.corrected
+          : typeof payload?.checked === "string"
+            ? payload.checked
+            : null;
+    const diffSuggestions =
+      typeof correctedText === "string" && correctedText !== text
+        ? diffText(text, correctedText)
+            .filter((diff) => diff.op !== "equal")
+            .map((diff) => {
+              const before = diff.a ?? "";
+              const after = diff.b ?? "";
+              const start = diff.indexA ?? 0;
+              return {
+                start,
+                end: start + before.length,
+                before,
+                after,
+                reason: "external_diff",
+                confidence: clampConfidence(0.92, 0.7),
+                type: classifyByReason("external"),
+                source: "external_api",
+              };
+            })
+            .filter((s) => s.before.length > 0 || s.after.length > 0)
+        : [];
+    const suggestions = diffSuggestions.length
+      ? diffSuggestions
+      : Array.isArray(payload?.suggestions)
+        ? payload.suggestions.map((item: unknown) => {
+            const data =
+              typeof item === "object" && item !== null
+                ? (item as Record<string, unknown>)
+                : {};
+            const start = data.start;
+            const end = data.end;
+            const before = data.before;
+            const after = data.after;
+            const reason = data.reason;
+            const confidence = data.confidence;
+            const confidenceValue =
+              typeof confidence === "number"
+                ? confidence
+                : typeof confidence === "string"
+                  ? Number(confidence)
+                  : undefined;
+            const type = data.type;
+            const reasonValue = typeof reason === "string" ? reason : "external";
+            const typeValue = typeof type === "string" ? type : undefined;
+            return {
+              start: typeof start === "number" ? start : Number(start ?? -1),
+              end: typeof end === "number" ? end : Number(end ?? -1),
+              before: typeof before === "string" ? before : String(before ?? ""),
+              after: typeof after === "string" ? after : String(after ?? ""),
+              reason: reasonValue,
+              confidence: clampConfidence(
+                Number.isFinite(confidenceValue) ? confidenceValue : undefined,
+                0.7,
+              ),
+              type: typeValue ?? classifyByReason(reasonValue),
+              source: "external_api",
+            };
+          })
+        : [];
     return {
       suggestions: suggestions.filter((s: ProviderSuggestion) => s.start >= 0 && s.end >= s.start),
       confidence: 0.85,

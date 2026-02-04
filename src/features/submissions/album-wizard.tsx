@@ -962,7 +962,7 @@ export function AlbumWizard({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: lyrics, mode: "balanced", domain: "music" }),
+        body: JSON.stringify({ text: lyrics, mode: "strict", domain: "music" }),
       });
       const payload = await response.json().catch(() => null);
       console.info("[Spellcheck][request][done]", {

@@ -239,8 +239,13 @@ const applySuggestions = (
     const end = Math.max(start, suggestion.end);
     const before = suggestion.original ?? "";
     const after = suggestion.replacement ?? "";
-    if (!before) {
+    if (!before && !after) {
       skipped.push(suggestion);
+      return;
+    }
+    if (!before && after) {
+      output = output.slice(0, start) + after + output.slice(start);
+      applied.push({ ...suggestion, start, end: start });
       return;
     }
     const slice = output.slice(start, end);
@@ -497,7 +502,7 @@ export const runSpellcheckPipeline = async (
         stats.filteredInvalid += 1;
         return false;
       }
-      if (!s.before) {
+      if (!s.before && !s.after) {
         stats.filteredInvalid += 1;
         return false;
       }

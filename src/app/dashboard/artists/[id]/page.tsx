@@ -29,7 +29,7 @@ const statusLabels: Record<string, string> = {
   PRE_REVIEW: "사전 검토",
   WAITING_PAYMENT: "결제대기",
   IN_PROGRESS: "심의 진행",
-  RESULT_READY: "결과 확인",
+  RESULT_READY: "결과 전달",
   COMPLETED: "완료",
 };
 
