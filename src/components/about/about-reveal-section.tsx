@@ -85,11 +85,11 @@ export function AboutRevealSection() {
             </p>
             <div className="space-y-3 text-base leading-relaxed text-white/80">
               <p>
-                온사이드는 뮤직 비즈니스 전문기업 (주)빈티지하우스가 운영하는 심의 전문
+                온사이드는 개인 사업자 영포에버가 운영하는 심의 전문
                 브랜드입니다.
               </p>
               <p>
-                빈티지하우스는 음원 거래 플랫폼{" "}
+                영포에버는 음원 거래 플랫폼{" "}
                 <a
                   href="https://www.iamwatermelon.com"
                   className="font-semibold underline decoration-white/60 underline-offset-4"

@@ -54,7 +54,7 @@ export const APP_CONFIG = {
   bankAccount: process.env.NEXT_PUBLIC_BANK_ACCOUNT ?? "1003-0026-3141",
   bankHolder: process.env.NEXT_PUBLIC_BANK_HOLDER ?? "정준영(영포에버)",
   bankLink: process.env.NEXT_PUBLIC_BANK_LINK ?? "",
-  businessName: process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "빈티지하우스(Vintage House)",
+  businessName: process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "영포에버",
   businessRep: process.env.NEXT_PUBLIC_BUSINESS_REP ?? "정준영",
   businessAddress:
     process.env.NEXT_PUBLIC_BUSINESS_ADDRESS ??

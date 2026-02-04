@@ -36,7 +36,7 @@ export default function AboutPage() {
                 온사이드(onside)
               </h1>
               <p className="mt-3 text-base leading-relaxed text-[var(--about-ink)]/80 md:text-lg">
-                빈티지하우스가 운영하는 온사이드는 음반·뮤직비디오 심의를 온라인으로
+                영포에버가 운영하는 온사이드는 음반·뮤직비디오 심의를 온라인으로
                 연결해 “방송 가능” 상태까지 빠르고 안전하게 만들어줍니다. 심의
                 진행, 승인, 기록 아카이브를 한 곳에서 관리하세요.
               </p>
