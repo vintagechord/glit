@@ -36,6 +36,7 @@ const statusLabels: Record<string, string> = {
 type SubmissionRow = {
   id: string;
   title: string | null;
+  artist_name?: string | null;
   status: string;
   type: string;
   payment_status?: string | null;
@@ -130,17 +131,21 @@ export default async function DashboardArtistDetailPage({
   const { data: submissions } = await supabase
     .from("submissions")
     .select(
-      "id, title, status, type, payment_status, created_at, updated_at, package:packages ( name, station_count )",
+      "id, title, artist_name, status, type, payment_status, created_at, updated_at, package:packages ( name, station_count )",
     )
     .eq("user_id", user.id)
     .eq("artist_id", artistId)
     .order("created_at", { ascending: false });
 
   const list = (submissions ?? []) as SubmissionRow[];
+  const displayArtistName =
+    list.find((item) => item.artist_name?.trim())?.artist_name?.trim() ||
+    artist.name ||
+    "아티스트 미입력";
 
   return (
     <DashboardShell
-      title={artist.name}
+      title={displayArtistName}
       description="해당 아티스트의 접수 내역을 확인합니다."
       activeTab="history"
       tabs={statusDashboardTabs}
@@ -164,7 +169,7 @@ export default async function DashboardArtistDetailPage({
             </div>
           )}
           <div className="text-sm text-muted-foreground">
-            <p className="text-base font-semibold text-foreground">{artist.name}</p>
+            <p className="text-base font-semibold text-foreground">{displayArtistName}</p>
             <p>생성: {formatDateTime(artist.created_at)}</p>
             <p>수정: {formatDateTime(artist.updated_at ?? artist.created_at)}</p>
           </div>
