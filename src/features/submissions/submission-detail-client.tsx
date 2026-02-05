@@ -667,7 +667,7 @@ export function SubmissionDetailClient({
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="flex-1 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             Submission Detail
           </p>
