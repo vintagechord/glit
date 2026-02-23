@@ -26,11 +26,6 @@ export default async function AdminArtistDetailPage({
     : searchParams?.id ?? "";
   const artistId = paramId || searchId;
 
-  console.log("[Admin ArtistDetail] incoming", {
-    paramId,
-    searchId,
-  });
-
   if (!artistId) {
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
@@ -60,9 +55,7 @@ export default async function AdminArtistDetailPage({
   const admin = createAdminClient();
   const { data: artist, error } = await admin
     .from("artists")
-    .select(
-      "id, name, thumbnail_url, created_at, updated_at, submissions:submissions ( id, title, status, type, artist_name, user_id, created_at, updated_at )",
-    )
+    .select("id, name, thumbnail_url, created_at, updated_at")
     .eq("id", artistId)
     .maybeSingle();
 
@@ -91,7 +84,40 @@ export default async function AdminArtistDetailPage({
     );
   }
 
-  const submissions = artist.submissions ?? [];
+  let submissions = [] as Array<{
+    id: string;
+    title: string | null;
+    status: string | null;
+    type: string | null;
+    artist_name: string | null;
+    user_id: string | null;
+    created_at: string;
+    updated_at: string | null;
+  }>;
+  let submissionsError: string | null = null;
+
+  const byArtistId = await admin
+    .from("submissions")
+    .select("id, title, status, type, artist_name, user_id, created_at, updated_at")
+    .eq("artist_id", artistId)
+    .order("updated_at", { ascending: false });
+
+  if (!byArtistId.error) {
+    submissions = byArtistId.data ?? [];
+  } else if (byArtistId.error.code === "42703") {
+    const fallback = await admin
+      .from("submissions")
+      .select("id, title, status, type, artist_name, user_id, created_at, updated_at")
+      .eq("artist_name", artist.name)
+      .order("updated_at", { ascending: false });
+    if (fallback.error) {
+      submissionsError = fallback.error.message;
+    } else {
+      submissions = fallback.data ?? [];
+    }
+  } else {
+    submissionsError = byArtistId.error.message;
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12 space-y-6">
@@ -180,6 +206,11 @@ export default async function AdminArtistDetailPage({
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           연관 심의 목록
         </p>
+        {submissionsError ? (
+          <p className="mt-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
+            연관 심의 조회에 실패했습니다. ({submissionsError})
+          </p>
+        ) : null}
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-[700px] w-full rounded-[24px] border border-border/60 bg-background/80 text-left text-sm">
             <thead className="border-b border-border/60 bg-muted/40 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">

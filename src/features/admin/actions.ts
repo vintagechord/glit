@@ -177,6 +177,10 @@ const deleteArtistSchema = z.object({
   id: z.string().uuid(),
 });
 
+const deleteArtistsSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1),
+});
+
 const bannerBucket = "banners";
 const bannerFolder = "strip";
 
@@ -1920,6 +1924,15 @@ export async function deleteArtistAction(
   }
 
   const admin = createAdminClient();
+  const { error: unlinkError } = await admin
+    .from("submissions")
+    .update({ artist_id: null })
+    .eq("artist_id", parsed.data.id);
+  if (unlinkError && unlinkError.code !== "42703") {
+    console.error("admin unlink artist from submissions error", unlinkError);
+    return { error: "아티스트 삭제 전 참조 정리에 실패했습니다." };
+  }
+
   const { error } = await admin.from("artists").delete().eq("id", parsed.data.id);
   if (error) {
     console.error("admin delete artist error", error);
@@ -1934,10 +1947,63 @@ export async function deleteArtistAction(
   return { message: "아티스트를 삭제했습니다." };
 }
 
+export async function deleteArtistsAction(
+  payload: z.infer<typeof deleteArtistsSchema>,
+): Promise<AdminActionState> {
+  const parsed = deleteArtistsSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { error: "삭제할 아티스트 ID를 확인해주세요." };
+  }
+
+  const admin = createAdminClient();
+  const ids = parsed.data.ids;
+
+  const { error: unlinkError } = await admin
+    .from("submissions")
+    .update({ artist_id: null })
+    .in("artist_id", ids);
+  if (unlinkError && unlinkError.code !== "42703") {
+    console.error("admin bulk unlink artists from submissions error", unlinkError);
+    return { error: "아티스트 삭제 전 참조 정리에 실패했습니다." };
+  }
+
+  const { error } = await admin.from("artists").delete().in("id", ids);
+  if (error) {
+    console.error("admin bulk delete artists error", error);
+    return { error: "선택한 아티스트 삭제에 실패했습니다." };
+  }
+
+  revalidatePath("/admin/artists");
+  revalidatePath("/admin/submissions");
+  revalidatePath("/dashboard/status");
+  revalidatePath("/dashboard/history");
+  ids.forEach((id) => {
+    revalidatePath(`/admin/artists/${id}`);
+    revalidatePath(`/dashboard/artists/${id}`);
+  });
+  return { message: `${ids.length}명의 아티스트를 삭제했습니다.` };
+}
+
 export async function deleteArtistFormAction(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");
   const redirectTo = String(formData.get("redirectTo") ?? "/admin/artists");
   const result = await deleteArtistAction({ id });
+  if (result.error) {
+    console.error(result.error);
+    return;
+  }
+  redirect(redirectTo);
+}
+
+export async function deleteArtistsFormAction(formData: FormData): Promise<void> {
+  const redirectTo = String(formData.get("redirectTo") ?? "/admin/artists");
+  const ids = formData
+    .getAll("ids")
+    .map((value) => String(value))
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const result = await deleteArtistsAction({ ids });
   if (result.error) {
     console.error(result.error);
     return;
