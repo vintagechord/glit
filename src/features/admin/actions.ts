@@ -381,7 +381,7 @@ export async function updateSubmissionBasicInfoAction(
     updatePayload.artist_name = artistName;
   }
 
-  const supabase = await createServerSupabase();
+  const supabase = createAdminClient();
   const { error } = await supabase
     .from("submissions")
     .update(updatePayload)
@@ -1212,6 +1212,7 @@ export async function createTrackForSubmissionAction(
 
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${parsed.data.submissionId}`);
+  revalidateUserDashboards(parsed.data.submissionId);
   redirect(`/admin/submissions/${parsed.data.submissionId}?saved=track`);
 }
 
@@ -1319,8 +1320,7 @@ export async function deleteTrackForSubmissionAction(
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${parsed.data.submissionId}`);
   revalidatePath(`/admin/submissions/detail?id=${parsed.data.submissionId}`);
-  revalidatePath("/dashboard/status");
-  revalidatePath("/dashboard/history");
+  revalidateUserDashboards(parsed.data.submissionId);
   revalidatePath("/");
   redirect(`/admin/submissions/${parsed.data.submissionId}?saved=track_deleted`);
 }

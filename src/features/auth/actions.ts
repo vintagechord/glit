@@ -19,6 +19,7 @@ export type ActionState = {
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
+  next: z.string().optional(),
 });
 
 const signupSchema = z.object({
@@ -54,9 +55,11 @@ export async function loginAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const nextRaw = (formData.get("next") || "").toString().trim();
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
+    next: nextRaw || undefined,
   });
 
   if (!parsed.success) {
@@ -77,7 +80,15 @@ export async function loginAction(
     return { error: message };
   }
 
-  redirect("/dashboard");
+  const safeNext =
+    parsed.data.next &&
+    parsed.data.next.startsWith("/") &&
+    !parsed.data.next.startsWith("//") &&
+    !parsed.data.next.startsWith("/login")
+      ? parsed.data.next
+      : null;
+
+  redirect(safeNext ?? "/mypage");
 }
 
 export async function signupAction(

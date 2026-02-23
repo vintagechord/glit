@@ -21,8 +21,9 @@ const navLinks = [
 export async function SiteHeader() {
   const supabase = await createServerSupabase();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur">

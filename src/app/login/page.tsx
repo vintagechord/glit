@@ -3,7 +3,21 @@ export const metadata = {
   title: "로그인",
 };
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams?: { next?: string | string[] };
+};
+
+export default function LoginPage({ searchParams }: LoginPageProps) {
+  const nextRaw = Array.isArray(searchParams?.next)
+    ? searchParams?.next[0]
+    : searchParams?.next;
+  const nextPath =
+    typeof nextRaw === "string" &&
+    nextRaw.startsWith("/") &&
+    !nextRaw.startsWith("//")
+      ? nextRaw
+      : null;
+
   return (
     <div className="relative mx-auto flex w-full max-w-5xl flex-1 items-center justify-center px-6 py-16">
       <div className="absolute left-8 top-10 h-40 w-40 rounded-full bg-emerald-400/20 blur-[100px] dark:bg-emerald-500/20" />
@@ -18,7 +32,7 @@ export default function LoginPage() {
             온사이드에 아카이빙하세요.
           </p>
         </div>
-        <LoginForm />
+        <LoginForm nextPath={nextPath} />
       </div>
     </div>
   );

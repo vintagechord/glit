@@ -1,5 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-reviews";
+import {
+  ensureAlbumStationReviewsBatch,
+  getPackageStations,
+} from "@/lib/station-reviews";
 import { normalizeTrackResults } from "@/lib/track-results";
 
 type DashboardSubmission =
@@ -97,19 +100,25 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
   const recentWindowOr =
     `and(updated_at.gte.${recentResultCutoff},or(result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}))`;
 
-  const maxRows = 4999;
+  const configuredMaxRows = Number(
+    process.env.DASHBOARD_STATUS_MAX_ROWS ?? "400",
+  );
+  const maxRows = Number.isFinite(configuredMaxRows)
+    ? Math.min(Math.max(Math.trunc(configuredMaxRows), 50), 2000)
+    : 400;
+  const queryEnd = maxRows - 1;
 
   let albumResult = await buildAlbumBase()
     .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .range(0, maxRows);
+    .range(0, queryEnd);
 
   if (albumResult.error && isResultNotifiedMissing(albumResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
     albumResult = await buildAlbumBase()
       .gte("updated_at", recentResultCutoff)
       .order("updated_at", { ascending: false })
-      .range(0, 1999);
+      .range(0, queryEnd);
   } else if (albumResult.error) {
     console.error("[dashboard status] album query error", albumResult.error);
     return { error: "ALBUM_QUERY_FAILED" };
@@ -118,14 +127,14 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
   let mvResult = await buildMvBase()
     .or(recentWindowOr)
     .order("updated_at", { ascending: false })
-    .range(0, maxRows);
+    .range(0, queryEnd);
 
   if (mvResult.error && isResultNotifiedMissing(mvResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);
     mvResult = await buildMvBase()
       .gte("updated_at", recentResultCutoff)
       .order("updated_at", { ascending: false })
-      .range(0, 1999);
+      .range(0, queryEnd);
   } else if (mvResult.error) {
     console.error("[dashboard status] mv query error", mvResult.error);
     return { error: "MV_QUERY_FAILED" };
@@ -227,22 +236,20 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
     });
   }
 
-  await Promise.all(
-    albumSubmissions.map(async (submission) => {
-      const pkg = Array.isArray(submission.package) ? submission.package[0] : submission.package;
-      const fallbackPkg = submission.package_id ? packageMap.get(submission.package_id) : null;
-      const resolvedName = pkg?.name ?? fallbackPkg?.name ?? null;
-      const resolvedCount = pkg?.station_count ?? fallbackPkg?.station_count ?? null;
-      await ensureAlbumStationReviews(admin, submission.id, resolvedCount, resolvedName);
-    }),
-  );
-  await Promise.all(
-    mvSubmissions.map(async (submission) => {
-      const pkg = Array.isArray(submission.package) ? submission.package[0] : submission.package;
-      const fallbackPkg = submission.package_id ? packageMap.get(submission.package_id) : null;
-      const resolvedName = pkg?.name ?? fallbackPkg?.name ?? null;
-      const resolvedCount = pkg?.station_count ?? fallbackPkg?.station_count ?? null;
-      await ensureAlbumStationReviews(admin, submission.id, resolvedCount, resolvedName);
+  await ensureAlbumStationReviewsBatch(
+    admin,
+    [...albumSubmissions, ...mvSubmissions].map((submission) => {
+      const pkg = Array.isArray(submission.package)
+        ? submission.package[0]
+        : submission.package;
+      const fallbackPkg = submission.package_id
+        ? packageMap.get(submission.package_id)
+        : null;
+      return {
+        submissionId: submission.id,
+        stationCount: pkg?.station_count ?? fallbackPkg?.station_count ?? null,
+        packageName: pkg?.name ?? fallbackPkg?.name ?? null,
+      };
     }),
   );
 

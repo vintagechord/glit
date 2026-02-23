@@ -10,7 +10,7 @@ import { loginAction, type ActionState } from "./actions";
 
 const initialState: ActionState = {};
 
-export function LoginForm() {
+export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
   const [state, formAction] = useActionState(loginAction, initialState);
   const [emailValue, setEmailValue] = useState("");
 
@@ -37,6 +37,7 @@ export function LoginForm() {
   return (
     <div className="space-y-5">
       <form action={formAction} className="space-y-5">
+        {nextPath ? <input type="hidden" name="next" value={nextPath} /> : null}
         <div className="space-y-2">
           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
             이메일

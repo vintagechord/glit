@@ -17,37 +17,26 @@ type SubmissionRow = {
   title: string | null;
   artist_name: string | null;
   artist_id: string | null;
-  artist?: { id: string; name: string; thumbnail_url: string | null } | null;
+  artist?:
+    | { id?: string | null; name?: string | null; thumbnail_url?: string | null }
+    | Array<{ id?: string | null; name?: string | null; thumbnail_url?: string | null }>
+    | null;
   status: string;
   payment_status?: string | null;
-  payment_method?: string | null;
   created_at: string;
   updated_at: string | null;
   type: string;
-  amount_krw: number | null;
-  is_oneclick: boolean | null;
-  package?:
-    | Array<{ name?: string | null; station_count?: number | null }>
-    | { name?: string | null; station_count?: number | null }
-    | null;
-  album_tracks?: Array<{
-    id: string;
-    track_no: number;
-    track_title: string | null;
-  }> | null;
-  station_reviews?: Array<{
-    id: string;
-    status: string;
-    track_results?: unknown;
-    updated_at: string | null;
-    station?: { name?: string | null } | Array<{ name?: string | null }>;
-  }> | null;
 };
 
 type ShellConfig = {
   contextLabel?: string;
   tabs?: DashboardTab[];
 };
+
+const PRIMARY_SELECT =
+  "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type";
+const FALLBACK_SELECT =
+  "id, title, artist_name, artist_id, status, payment_status, created_at, updated_at, type";
 
 export async function HistoryPageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
@@ -59,101 +48,67 @@ export async function HistoryPageView(config?: ShellConfig) {
     redirect("/login");
   }
 
-  const fullSelect =
-    "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title ), station_reviews ( id, status, updated_at, station:stations ( name ) )";
-  const fallbackSelect =
-    "id, title, artist_name, artist_id, status, created_at, updated_at, type, amount_krw, is_oneclick, station_reviews ( id, status, updated_at, station:stations ( name ) )";
-  const fullSelectWithoutTracks =
-    "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, payment_method, created_at, updated_at, type, amount_krw, is_oneclick, package:packages ( name, station_count ), album_tracks ( id, track_no, track_title )";
-  const fallbackSelectWithoutTracks =
-    "id, title, artist_name, artist_id, status, created_at, updated_at, type, amount_krw, is_oneclick";
   const paymentStatuses = ["PAYMENT_PENDING", "PAID"];
-
-  // 1) 기본 쿼리: artist join 포함
   const runSelect = (select: string) =>
     supabase
       .from("submissions")
       .select(select)
-      .order("updated_at", { ascending: false })
       .eq("user_id", user.id)
-      .in("payment_status", paymentStatuses);
+      .in("payment_status", paymentStatuses)
+      .order("updated_at", { ascending: false });
 
-  const { data: initialData, error: submissionError } = await runSelect(fullSelect);
+  const { data: primaryData, error: primaryError } = await runSelect(PRIMARY_SELECT);
+  let submissions: SubmissionRow[] = ((primaryData ?? []) as unknown[]).map(
+    (row) => row as SubmissionRow,
+  );
 
-  let submissions = (initialData ?? null) as SubmissionRow[] | null;
-
-  // 2) 에러 발생 시 컬럼 축소한 fallback
-  if (submissionError) {
-    console.error("history full select error", submissionError);
-    const { data: fallbackData, error: fallbackError } = await runSelect(fallbackSelect);
-
+  if (primaryError) {
+    console.error("[HistoryPage] primary query failed", primaryError);
+    const { data: fallbackData, error: fallbackError } = await runSelect(
+      FALLBACK_SELECT,
+    );
     if (fallbackError) {
-      console.error("history fallback select error", fallbackError);
+      console.error("[HistoryPage] fallback query failed", fallbackError);
       submissions = [];
     } else {
-      submissions =
-        (fallbackData?.map((row) => {
-          const safeRow =
-            typeof row === "object" && row !== null
-              ? (row as SubmissionRow)
-              : ({} as SubmissionRow);
-          return {
-            ...safeRow,
-            payment_status: null,
-            payment_method: null,
-            package: null,
-            album_tracks: [],
-          };
-        }) as SubmissionRow[]) ?? [];
+      submissions = ((fallbackData ?? []) as unknown[]).map((row) => ({
+        ...(row as SubmissionRow),
+        artist: null,
+      }));
     }
   }
 
-  // 3) track_results 컬럼이 없는 스키마 대응
-  if (!submissions || submissions.length === 0) {
-    const { data: noTrackData, error: noTrackError } = await runSelect(
-      fullSelectWithoutTracks,
-    );
-    if (noTrackError) {
-      console.error("history select without track_results error", noTrackError);
-      const { data: fallbackNoTrack } = await runSelect(
-        fallbackSelectWithoutTracks,
-      );
-      submissions = ((fallbackNoTrack ?? []) as unknown[]).map((row) =>
-        (typeof row === "object" && row !== null ? row : {}) as SubmissionRow,
-      );
-    } else {
-      submissions = ((noTrackData ?? []) as unknown[]).map((row) =>
-        (typeof row === "object" && row !== null ? row : {}) as SubmissionRow,
-      );
-    }
-  }
-
-  // 그룹핑: 타입별 -> 아티스트별
   const groupByArtist = (typeFilter: string[]) => {
-    const filtered = submissions?.filter((s) => typeFilter.includes(s.type)) ?? [];
-    const map = new Map<
+    const filtered = submissions.filter((item) => typeFilter.includes(item.type));
+    const grouped = new Map<
       string,
-      { artistId: string | null; artistName: string; thumbnail: string | null; submissions: SubmissionRow[] }
-    >();
-    for (const s of filtered) {
-      if (!s.id) {
-        console.warn("[HistoryPage] submission without id skipped", s);
-        continue;
+      {
+        artistId: string | null;
+        artistName: string;
+        thumbnail: string | null;
+        submissions: SubmissionRow[];
       }
-      const artistNameRaw = s.artist?.name?.trim() || s.artist_name?.trim() || "";
-      const displayArtistName = artistNameRaw || "아티스트 미입력";
-      const key = (s.artist?.id ?? s.artist_id ?? artistNameRaw) || s.id;
-      if (!map.has(key)) {
-        map.set(key, {
-          artistId: s.artist?.id ?? s.artist_id ?? null,
+    >();
+
+    for (const item of filtered) {
+      const artist = Array.isArray(item.artist) ? item.artist[0] : item.artist;
+      const name = artist?.name?.trim() || item.artist_name?.trim() || "";
+      const displayArtistName = name || "아티스트 미입력";
+      const key = artist?.id ?? item.artist_id ?? (name || item.id);
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          artistId: artist?.id ?? item.artist_id ?? null,
           artistName: displayArtistName,
-          thumbnail: s.artist?.thumbnail_url ?? null,
+          thumbnail: artist?.thumbnail_url ?? null,
           submissions: [],
         });
       }
-      map.get(key)?.submissions.push(s);
+
+      grouped.get(key)?.submissions.push(item);
     }
-    return Array.from(map.values()).sort((a, b) =>
+
+    return Array.from(grouped.values()).sort((a, b) =>
       a.artistName.localeCompare(b.artistName, "ko", { sensitivity: "base" }),
     );
   };

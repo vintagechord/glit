@@ -101,6 +101,12 @@ export function getPackageStations(
   return codes.map((code) => ({ code, name: stationNameByCode[code] ?? code }));
 }
 
+type EnsureStationReviewItem = {
+  submissionId: string;
+  stationCount?: number | null;
+  packageName?: string | null;
+};
+
 export async function syncAlbumStationCatalog(client: SupabaseClient) {
   const stationRows = Object.entries(stationNameByCode).map(([code, name]) => ({
     code,
@@ -196,26 +202,48 @@ export async function ensureAlbumStationReviews(
   stationCount?: number | null,
   packageName?: string | null,
 ) {
-  const expectedCodes = getPackageStationCodes(stationCount, packageName);
-  if (!expectedCodes || expectedCodes.length === 0) return;
+  await ensureAlbumStationReviewsBatch(client, [
+    { submissionId, stationCount, packageName },
+  ]);
+}
 
-  const { data: stations, error: stationError } = await client
-    .from("stations")
-    .select("id, code")
-    .in("code", expectedCodes);
+export async function ensureAlbumStationReviewsBatch(
+  client: SupabaseClient,
+  items: EnsureStationReviewItem[],
+) {
+  const normalizedItems = items
+    .map((item) => ({
+      submissionId: item.submissionId,
+      expectedCodes: getPackageStationCodes(item.stationCount, item.packageName),
+    }))
+    .filter((item) => item.submissionId && item.expectedCodes.length > 0);
 
-  if (stationError) {
-    if (!shouldSuppressError(stationError.message)) {
-      console.warn("Failed to load stations", stationError);
+  if (normalizedItems.length === 0) return;
+
+  const allCodes = Array.from(
+    new Set(normalizedItems.flatMap((item) => item.expectedCodes)),
+  );
+
+  const loadStations = async () => {
+    const { data, error } = await client
+      .from("stations")
+      .select("id, code")
+      .in("code", allCodes);
+    return { data: data ?? [], error };
+  };
+
+  let stationResult = await loadStations();
+  if (stationResult.error) {
+    if (!shouldSuppressError(stationResult.error.message)) {
+      console.warn("Failed to load stations", stationResult.error);
     }
     return;
   }
 
-  let stationRows = stations ?? [];
   let stationMap = new Map(
-    stationRows.map((station) => [station.code, station.id]),
+    stationResult.data.map((station) => [station.code, station.id]),
   );
-  const missingCodes = expectedCodes.filter((code) => !stationMap.has(code));
+  const missingCodes = allCodes.filter((code) => !stationMap.has(code));
 
   if (missingCodes.length > 0) {
     const { error: upsertError } = await client.from("stations").upsert(
@@ -227,70 +255,99 @@ export async function ensureAlbumStationReviews(
       { onConflict: "code" },
     );
 
-    if (!upsertError) {
-      const { data: refreshed } = await client
-        .from("stations")
-        .select("id, code")
-        .in("code", expectedCodes);
-      stationRows = refreshed ?? stationRows;
-      stationMap = new Map(
-        stationRows.map((station) => [station.code, station.id]),
-      );
+    if (upsertError) {
+      if (!shouldSuppressError(upsertError.message)) {
+        console.warn("Failed to upsert stations", upsertError);
+      }
+      return;
     }
+
+    stationResult = await loadStations();
+    if (stationResult.error) {
+      if (!shouldSuppressError(stationResult.error.message)) {
+        console.warn("Failed to reload stations", stationResult.error);
+      }
+      return;
+    }
+    stationMap = new Map(
+      stationResult.data.map((station) => [station.code, station.id]),
+    );
   }
 
-  const stationIds = expectedCodes
-    .map((code) => stationMap.get(code))
-    .filter((id): id is string => Boolean(id));
-
-  if (stationIds.length === 0) return;
-
-  const { data: existingReviews, error: existingError } = await client
-    .from("station_reviews")
-    .select("station_id")
-    .eq("submission_id", submissionId);
-
-  if (existingError) {
-    if (!shouldSuppressError(existingError.message)) {
-      console.warn("Failed to load station reviews", existingError);
-    }
-    return;
-  }
-
-  const existingSet = new Set(
-    (existingReviews ?? [])
-      .map((review) => review.station_id)
-      .filter((id): id is string => Boolean(id)),
+  const expectedPairs = normalizedItems.flatMap((item) =>
+    item.expectedCodes
+      .map((code) => stationMap.get(code))
+      .filter((stationId): stationId is string => Boolean(stationId))
+      .map((stationId) => ({
+        submission_id: item.submissionId,
+        station_id: stationId,
+      })),
   );
-  const missingIds = stationIds.filter((id) => !existingSet.has(id));
 
-  if (missingIds.length === 0) return;
+  if (expectedPairs.length === 0) return;
 
-  const upsertRows = missingIds.map((stationId) => ({
-    submission_id: submissionId,
-    station_id: stationId,
-    status: "NOT_SENT",
-  }));
+  const submissionIds = Array.from(
+    new Set(normalizedItems.map((item) => item.submissionId)),
+  );
+  const chunkSize = 200;
+  const existingKeys = new Set<string>();
 
-  console.info("[station_reviews][backfill][start]", {
-    submissionId,
-    expectedCount: stationIds.length,
-    existingCount: existingSet.size,
+  for (let index = 0; index < submissionIds.length; index += chunkSize) {
+    const batchIds = submissionIds.slice(index, index + chunkSize);
+    const { data: existingRows, error: existingError } = await client
+      .from("station_reviews")
+      .select("submission_id, station_id")
+      .in("submission_id", batchIds);
+
+    if (existingError) {
+      if (!shouldSuppressError(existingError.message)) {
+        console.warn("Failed to load station reviews", existingError);
+      }
+      return;
+    }
+
+    (existingRows ?? []).forEach((row) => {
+      if (!row.submission_id || !row.station_id) return;
+      existingKeys.add(`${row.submission_id}:${row.station_id}`);
+    });
+  }
+
+  const upsertRows = expectedPairs
+    .filter(
+      (row) => !existingKeys.has(`${row.submission_id}:${row.station_id}`),
+    )
+    .map((row) => ({
+      ...row,
+      status: "NOT_SENT",
+    }));
+
+  if (upsertRows.length === 0) return;
+
+  console.info("[station_reviews][backfill][batch][start]", {
+    submissionCount: submissionIds.length,
     insertCount: upsertRows.length,
   });
 
-  const { error: insertError } = await client
-    .from("station_reviews")
-    .upsert(upsertRows, { onConflict: "submission_id,station_id", ignoreDuplicates: true });
+  const insertChunkSize = 500;
+  for (let index = 0; index < upsertRows.length; index += insertChunkSize) {
+    const chunk = upsertRows.slice(index, index + insertChunkSize);
+    const { error: insertError } = await client
+      .from("station_reviews")
+      .upsert(chunk, {
+        onConflict: "submission_id,station_id",
+        ignoreDuplicates: true,
+      });
 
-  if (insertError) {
-    const suppressed = shouldSuppressError(insertError.message);
-    console.warn("Failed to backfill station reviews", insertError);
-    if (suppressed) return;
-  } else {
-    console.info("[station_reviews][backfill][success]", {
-      submissionId,
-      insertCount: upsertRows.length,
-    });
+    if (insertError) {
+      if (!shouldSuppressError(insertError.message)) {
+        console.warn("Failed to backfill station reviews", insertError);
+      }
+      return;
+    }
   }
+
+  console.info("[station_reviews][backfill][batch][success]", {
+    submissionCount: submissionIds.length,
+    insertCount: upsertRows.length,
+  });
 }
