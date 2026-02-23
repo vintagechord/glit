@@ -224,9 +224,21 @@ export async function POST(request: Request) {
   });
 
   const filesBySubmission = new Map<string, Array<Record<string, unknown>>>();
+  const seenFileKeysBySubmission = new Map<string, Set<string>>();
   fileRows.forEach((row) => {
     const submissionId = String(row.submission_id ?? "");
     if (!submissionId) return;
+    const dedupeKey = [
+      String(row.object_key ?? row.file_path ?? ""),
+      String(row.original_name ?? ""),
+      String(row.size ?? ""),
+    ].join("|");
+    const seen = seenFileKeysBySubmission.get(submissionId) ?? new Set<string>();
+    if (seen.has(dedupeKey)) {
+      return;
+    }
+    seen.add(dedupeKey);
+    seenFileKeysBySubmission.set(submissionId, seen);
     const list = filesBySubmission.get(submissionId) ?? [];
     list.push(row);
     filesBySubmission.set(submissionId, list);

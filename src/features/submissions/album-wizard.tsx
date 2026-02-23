@@ -1471,30 +1471,46 @@ export function AlbumWizard({
       "application/zip",
       "application/x-zip-compressed",
     ]);
+    let invalidNotice: string | null = null;
     const filtered = selected.filter((file) => {
       if (file.size > uploadMaxBytes) {
-        setNotice({ error: `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.` });
+        invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
         return false;
       }
       if (file.type && !allowedTypes.has(file.type)) {
-        setNotice({ error: "WAV 또는 ZIP 파일만 업로드할 수 있습니다." });
+        invalidNotice = "WAV 또는 ZIP 파일만 업로드할 수 있습니다.";
         return false;
       }
       if (!file.type) {
         const lowerName = file.name.toLowerCase();
         if (!lowerName.endsWith(".wav") && !lowerName.endsWith(".zip")) {
-          setNotice({ error: "WAV 또는 ZIP 파일만 업로드할 수 있습니다." });
+          invalidNotice = "WAV 또는 ZIP 파일만 업로드할 수 있습니다.";
           return false;
         }
       }
       return true;
     });
-    const combinedFiles = [...files, ...filtered];
+    if (filtered.length === 0) {
+      if (invalidNotice) {
+        setNotice({ error: invalidNotice });
+      }
+      return;
+    }
+
+    const nextFileEntries: File[] = [];
+    const seenFileKeys = new Set<string>();
+    [...files, ...filtered].forEach((file) => {
+      const key = `${file.name}-${file.size}-${file.lastModified}`;
+      if (seenFileKeys.has(key)) return;
+      seenFileKeys.add(key);
+      nextFileEntries.push(file);
+    });
+
     const existingMap = new Map<string, UploadItem>();
     uploads.forEach((item) => {
       existingMap.set(`${item.name}-${item.size}`, item);
     });
-    const nextUploads = combinedFiles.map((file) => {
+    const nextUploads = nextFileEntries.map((file) => {
       const key = `${file.name}-${file.size}`;
       return (
         existingMap.get(key) ?? {
@@ -1507,7 +1523,7 @@ export function AlbumWizard({
       );
     });
     setNotice({});
-    setFiles(combinedFiles);
+    setFiles(nextFileEntries);
     setUploads(nextUploads);
     setFileDigest("");
     setEmailSubmitConfirmed(false);
@@ -1519,16 +1535,14 @@ export function AlbumWizard({
           : draft,
       );
     });
-    if (filtered.length > 0) {
-      void uploadFiles(combinedFiles, nextUploads).catch((error: unknown) => {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : "파일 업로드 중 오류가 발생했습니다.";
-        console.error("[AlbumUpload] upload failed", error);
-        setNotice({ error: message });
-      });
-    }
+    void uploadFiles(nextFileEntries, nextUploads).catch((error: unknown) => {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "파일 업로드 중 오류가 발생했습니다.";
+      console.error("[AlbumUpload] upload failed", error);
+      setNotice({ error: message });
+    });
   };
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1693,7 +1707,6 @@ export function AlbumWizard({
     targetFiles: File[] = files,
     initialUploads: UploadItem[] = uploads,
   ) => {
-    const submissionId = requireSubmissionId();
     if (targetFiles.length === 0) {
       return uploadedFiles;
     }
@@ -1755,20 +1768,6 @@ export function AlbumWizard({
         setNotice({ error: message });
         throw new Error(message);
       }
-
-      await fetch("/api/uploads/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId,
-          key: path,
-          filename: file.name,
-          kind: "AUDIO",
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-          guestToken: isGuest ? currentGuestToken : undefined,
-        }),
-      }).catch(() => null);
 
       nextUploads[index] = {
         ...nextUploads[index],
@@ -2575,15 +2574,29 @@ export function AlbumWizard({
       setNotice({ error: "입금자명을 입력해주세요." });
       return;
     }
-    const draftsForSubmit =
-      status === "SUBMITTED" && uploadDrafts?.length
-        ? uploadDrafts
-        : [
-            await buildAlbumDraft({
-              includeUpload: status === "SUBMITTED",
-            }),
-            ...albumDrafts,
-          ];
+    let draftsForSubmit: AlbumDraft[];
+    if (status === "SUBMITTED" && uploadDrafts?.length) {
+      const resolvedDrafts = resolveUploadDrafts();
+      if (!resolvedDrafts) return;
+      draftsForSubmit = resolvedDrafts;
+    } else {
+      try {
+        const currentDraft = await buildAlbumDraft({
+          includeUpload: status === "SUBMITTED",
+        });
+        draftsForSubmit = [currentDraft, ...albumDrafts];
+      } catch (error) {
+        setNotice({
+          error:
+            draftError ||
+            (error instanceof Error
+              ? error.message
+              : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
+        });
+        void createDraft();
+        return;
+      }
+    }
     if (status === "SUBMITTED" && !validateUploadStep(draftsForSubmit)) {
       return;
     }

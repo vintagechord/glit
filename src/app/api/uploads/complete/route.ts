@@ -149,39 +149,84 @@ export async function POST(request: Request) {
     };
     let attachmentId: string | null = null;
     try {
-      let insertPayload = { ...payload } as Record<string, unknown>;
-      let inserted:
-        | { id?: string | null }
-        | null
-        | undefined;
-      let insertError: { code?: string; message?: string } | null = null;
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        const result = await admin
-          .from("submission_files")
-          .insert(insertPayload)
-          .select("id")
-          .maybeSingle();
-        inserted = result.data as { id?: string | null } | null;
-        insertError = result.error as { code?: string; message?: string } | null;
-        if (!insertError) {
+      let existingId: string | null = null;
+      const existingResult = await admin
+        .from("submission_files")
+        .select("id")
+        .eq("submission_id", submissionId)
+        .eq("kind", normalizedKind)
+        .eq("file_path", normalizedKey)
+        .order("uploaded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!existingResult.error && existingResult.data?.id) {
+        existingId = existingResult.data.id;
+      }
+
+      if (existingId) {
+        let updatePayload = { ...payload } as Record<string, unknown>;
+        let updateError: { code?: string; message?: string } | null = null;
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const result = await admin
+            .from("submission_files")
+            .update(updatePayload)
+            .eq("id", existingId);
+          updateError = result.error as { code?: string; message?: string } | null;
+          if (!updateError) {
+            break;
+          }
+          if (updateError.code === "PGRST204") {
+            const match = updateError.message?.match(/column \"(.+?)\"/);
+            const missing = match?.[1];
+            if (missing && missing in updatePayload) {
+              const nextPayload = { ...updatePayload };
+              delete nextPayload[missing];
+              updatePayload = nextPayload;
+              continue;
+            }
+          }
           break;
         }
-        if (insertError.code === "PGRST204") {
-          const match = insertError.message?.match(/column \"(.+?)\"/);
-          const missing = match?.[1];
-          if (missing && missing in insertPayload) {
-            const nextPayload = { ...insertPayload };
-            delete nextPayload[missing];
-            insertPayload = nextPayload;
-            continue;
-          }
+        if (updateError) {
+          throw new Error(updateError.message || "파일 정보를 갱신할 수 없습니다.");
         }
-        break;
+        attachmentId = existingId;
+      } else {
+        let insertPayload = { ...payload } as Record<string, unknown>;
+        let inserted:
+          | { id?: string | null }
+          | null
+          | undefined;
+        let insertError: { code?: string; message?: string } | null = null;
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const result = await admin
+            .from("submission_files")
+            .insert(insertPayload)
+            .select("id")
+            .maybeSingle();
+          inserted = result.data as { id?: string | null } | null;
+          insertError = result.error as { code?: string; message?: string } | null;
+          if (!insertError) {
+            break;
+          }
+          if (insertError.code === "PGRST204") {
+            const match = insertError.message?.match(/column \"(.+?)\"/);
+            const missing = match?.[1];
+            if (missing && missing in insertPayload) {
+              const nextPayload = { ...insertPayload };
+              delete nextPayload[missing];
+              insertPayload = nextPayload;
+              continue;
+            }
+          }
+          break;
+        }
+        if (insertError) {
+          throw new Error(insertError.message || "파일 정보를 저장할 수 없습니다.");
+        }
+        attachmentId = inserted?.id ?? null;
       }
-      if (insertError) {
-        throw new Error(insertError.message || "파일 정보를 저장할 수 없습니다.");
-      }
-      attachmentId = inserted?.id ?? null;
     } catch (error) {
       console.error("[Upload][complete] failed to record file", {
         submissionId,

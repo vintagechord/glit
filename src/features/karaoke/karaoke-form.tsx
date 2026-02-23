@@ -21,15 +21,6 @@ type UploadState = {
 
 const uploadMaxBytes = APP_CONFIG.uploadMaxMb * 1024 * 1024;
 
-const mapFileKind = (file: File): "AUDIO" | "VIDEO" | "LYRICS" | "ETC" => {
-  const mime = (file.type || "").toLowerCase();
-  const name = file.name.toLowerCase();
-  if (mime.startsWith("audio/")) return "AUDIO";
-  if (mime.startsWith("video/")) return "VIDEO";
-  if (name.endsWith(".lrc") || name.endsWith(".txt")) return "LYRICS";
-  return "ETC";
-};
-
 export function KaraokeForm({ userId }: { userId?: string | null }) {
   const isGuest = !userId;
   const [title, setTitle] = React.useState("");
@@ -127,6 +118,7 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
         mimeType: selected.type,
         sizeBytes: selected.size,
         guestToken: isGuest ? guestTokenRef.current ?? undefined : undefined,
+        scope: "karaoke_request",
         title,
       }),
     });
@@ -190,19 +182,6 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
 
         await uploadWithProgress(signedUrl, file);
         setUpload((prev) => ({ ...prev, status: "done", progress: 100 }));
-        await fetch("/api/uploads/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            key: path,
-            submissionId: uploadIdRef.current,
-            sizeBytes: file.size,
-            filename: file.name,
-            kind: mapFileKind(file),
-            mimeType: file.type || "application/octet-stream",
-            guestToken: isGuest ? guestTokenRef.current ?? undefined : undefined,
-          }),
-        }).catch(() => null);
         filePath = path;
       }
 

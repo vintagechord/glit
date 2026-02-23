@@ -314,21 +314,34 @@ export async function requestBillingPayment(payload: BillingRequest): Promise<{
     data,
   };
 
-  const res = await fetchWithTimeout(`${config.apiUrl}/v2/pg/billing`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
+  try {
+    const res = await fetchWithTimeout(`${config.apiUrl}/v2/pg/billing`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
 
-  const dataResponse = await readJsonBody(res);
-  const resultCode =
-    dataResponse?.resultCode != null ? String(dataResponse.resultCode) : "";
-  const ok = res.ok && (resultCode === "00" || resultCode === "01");
+    const dataResponse = await readJsonBody(res);
+    const resultCode =
+      dataResponse?.resultCode != null ? String(dataResponse.resultCode) : "";
+    const ok = res.ok && (resultCode === "00" || resultCode === "01");
 
-  return { ok, data: dataResponse };
+    return { ok, data: dataResponse };
+  } catch (error) {
+    return {
+      ok: false,
+      data: {
+        resultCode: "NETWORK_ERROR",
+        resultMsg:
+          error instanceof Error
+            ? `빌링 결제 요청 중 네트워크 오류: ${error.message}`
+            : "빌링 결제 요청 중 네트워크 오류가 발생했습니다.",
+      },
+    };
+  }
 }
 
 export async function requestRefund(payload: RefundRequest): Promise<{
@@ -378,18 +391,31 @@ export async function requestRefund(payload: RefundRequest): Promise<{
     data,
   };
 
-  const res = await fetchWithTimeout(`${config.apiUrl}/v2/pg/refund`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
+  try {
+    const res = await fetchWithTimeout(`${config.apiUrl}/v2/pg/refund`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
 
-  const dataResponse = await readJsonBody(res);
-  const resultCode =
-    dataResponse?.resultCode != null ? String(dataResponse.resultCode) : "";
-  const ok = res.ok && resultCode === "00";
-  return { ok, data: dataResponse };
+    const dataResponse = await readJsonBody(res);
+    const resultCode =
+      dataResponse?.resultCode != null ? String(dataResponse.resultCode) : "";
+    const ok = res.ok && resultCode === "00";
+    return { ok, data: dataResponse };
+  } catch (error) {
+    return {
+      ok: false,
+      data: {
+        resultCode: "NETWORK_ERROR",
+        resultMsg:
+          error instanceof Error
+            ? `환불 요청 중 네트워크 오류: ${error.message}`
+            : "환불 요청 중 네트워크 오류가 발생했습니다.",
+      },
+    };
+  }
 }

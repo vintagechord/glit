@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const uploadSchema = z.object({
   submissionId: z.string().uuid(),
-  guestToken: z.string().min(8),
+  guestToken: z.string().min(8).optional(),
   kind: z.enum([
     "audio",
     "video",
@@ -36,7 +37,25 @@ export async function POST(request: Request) {
   }
 
   const safeName = sanitizeFileName(parsed.data.fileName);
-  const path = `guest/${parsed.data.guestToken}/${parsed.data.submissionId}/${parsed.data.kind}/${Date.now()}-${safeName}`;
+  const { user, submission, error: ownershipError } = await ensureSubmissionOwner(
+    parsed.data.submissionId,
+    parsed.data.guestToken,
+  );
+  if (ownershipError === "NOT_FOUND") {
+    return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
+  }
+  if (ownershipError === "UNAUTHORIZED") {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+  if (ownershipError === "FORBIDDEN") {
+    return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
+  }
+
+  const ownerSegment =
+    submission?.user_id ??
+    user?.id ??
+    `guest-${parsed.data.guestToken ?? submission?.guest_token ?? "unknown"}`;
+  const path = `${ownerSegment}/${parsed.data.submissionId}/${parsed.data.kind}/${Date.now()}-${safeName}`;
 
   const admin = createAdminClient();
   const { data, error } = await admin.storage

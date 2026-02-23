@@ -670,36 +670,48 @@ export function MvWizard({
       "video/mpeg",
     ]);
     const allowedExtensions = [".mp4", ".mov", ".wmv", ".mpg", ".mpeg"];
+    let invalidNotice: string | null = null;
     const filtered = selected.filter((file) => {
       if (file.size > uploadMaxBytes) {
-        setNotice({ error: `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.` });
+        invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
         return false;
       }
       if (!allowAllExtensions) {
         if (file.type && !allowedTypes.has(file.type)) {
-          setNotice({
-            error: "MP4/MOV/WMV/MPG 파일만 업로드할 수 있습니다.",
-          });
+          invalidNotice = "MP4/MOV/WMV/MPG 파일만 업로드할 수 있습니다.";
           return false;
         }
         if (!file.type) {
           const lowerName = file.name.toLowerCase();
           if (!allowedExtensions.some((ext) => lowerName.endsWith(ext))) {
-            setNotice({
-              error: "MP4/MOV/WMV/MPG 파일만 업로드할 수 있습니다.",
-            });
+            invalidNotice = "MP4/MOV/WMV/MPG 파일만 업로드할 수 있습니다.";
             return false;
           }
         }
       }
       return true;
     });
-    const combinedFiles = [...files, ...filtered];
+    if (filtered.length === 0) {
+      if (invalidNotice) {
+        setNotice({ error: invalidNotice });
+      }
+      return;
+    }
+
+    const nextFileEntries: File[] = [];
+    const seenFileKeys = new Set<string>();
+    [...files, ...filtered].forEach((file) => {
+      const key = `${file.name}-${file.size}-${file.lastModified}`;
+      if (seenFileKeys.has(key)) return;
+      seenFileKeys.add(key);
+      nextFileEntries.push(file);
+    });
+
     const existingMap = new Map<string, UploadItem>();
     uploads.forEach((item) => {
       existingMap.set(`${item.name}-${item.size}`, item);
     });
-    const nextUploads = combinedFiles.map((file) => {
+    const nextUploads = nextFileEntries.map((file) => {
       const key = `${file.name}-${file.size}`;
       return (
         existingMap.get(key) ?? {
@@ -712,18 +724,18 @@ export function MvWizard({
       );
     });
     setNotice({});
-    setFiles(combinedFiles);
+    setFiles(nextFileEntries);
     setUploads(nextUploads);
-    if (filtered.length > 0) {
-      void uploadFiles(combinedFiles, nextUploads).catch((error: unknown) => {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : "파일 업로드 중 오류가 발생했습니다.";
-        console.error("[MvUpload] upload failed", error);
-        setNotice({ error: message });
-      });
-    }
+    setFileDigest("");
+    setEmailSubmitConfirmed(false);
+    void uploadFiles(nextFileEntries, nextUploads).catch((error: unknown) => {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "파일 업로드 중 오류가 발생했습니다.";
+      console.error("[MvUpload] upload failed", error);
+      setNotice({ error: message });
+    });
   };
 
   const onDropFiles = (event: React.DragEvent<HTMLLabelElement>) => {
@@ -1565,8 +1577,15 @@ export function MvWizard({
   const validateMvForm = (options?: { requirePayment?: boolean }) => {
     const { songTitleKrValue, songTitleEnValue } = resolveSongTitleValues();
     const requirePayment = options?.requirePayment ?? false;
+    const titleValue = title.trim();
+    const artistNameValue = artistName.trim();
+    const guestNameValue = guestName.trim();
+    const guestEmailValue = guestEmail.trim();
+    const guestPhoneValue = guestPhone.trim();
+    const isValidEmail = (value: string) =>
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-    if (!title || !artistName) {
+    if (!titleValue || !artistNameValue) {
       setNotice({ error: "제목과 아티스트명을 입력해주세요." });
       return false;
     }
@@ -1620,8 +1639,12 @@ export function MvWizard({
       setNotice({ error: "온라인 심의 옵션을 선택해주세요." });
       return false;
     }
-    if (isGuest && (!guestName || !guestEmail || !guestPhone)) {
+    if (isGuest && (!guestNameValue || !guestEmailValue || !guestPhoneValue)) {
       setNotice({ error: "비회원 담당자 정보(이름/연락처/이메일)를 입력해주세요." });
+      return false;
+    }
+    if (isGuest && guestEmailValue && !isValidEmail(guestEmailValue)) {
+      setNotice({ error: "비회원 이메일 형식을 확인해주세요." });
       return false;
     }
     if (
@@ -1655,6 +1678,13 @@ export function MvWizard({
   const saveMvDraft = async (options: { includeFiles: boolean }) => {
     const { songTitleKrValue, songTitleEnValue, songTitleOfficialValue } =
       resolveSongTitleValues();
+    const titleValue = title.trim();
+    const artistNameValue = artistName.trim();
+    const artistNameOfficialValue = artistNameOfficial.trim();
+    const guestNameValue = guestName.trim();
+    const guestCompanyValue = guestCompany.trim();
+    const guestEmailValue = guestEmail.trim();
+    const guestPhoneValue = guestPhone.trim();
     let submissionId: string;
     try {
       submissionId = requireSubmissionId();
@@ -1678,8 +1708,8 @@ export function MvWizard({
         submissionId,
         amountKrw: totalAmount,
         selectedStationIds,
-        title,
-        artistName,
+        title: titleValue || undefined,
+        artistName: artistNameValue || undefined,
         director: director.trim() || undefined,
         leadActor: leadActor.trim() || undefined,
         storyline: storyline.trim() || undefined,
@@ -1701,7 +1731,7 @@ export function MvWizard({
         arranger: arranger.trim() || undefined,
         songMemo: songMemo.trim() || undefined,
         lyrics: lyrics.trim() || undefined,
-        artistNameOfficial: artistNameOfficial.trim() || undefined,
+        artistNameOfficial: artistNameOfficialValue || undefined,
         releaseDate: releaseDate || undefined,
         genre: genre || undefined,
         mvType,
@@ -1710,10 +1740,10 @@ export function MvWizard({
         mvBaseSelected:
           mvType === "MV_DISTRIBUTION" ? onlineBaseSelected : false,
         guestToken: isGuest ? guestToken : undefined,
-        guestName: isGuest ? guestName : undefined,
-        guestCompany: isGuest ? guestCompany : undefined,
-        guestEmail: isGuest ? guestEmail : undefined,
-        guestPhone: isGuest ? guestPhone : undefined,
+        guestName: isGuest ? guestNameValue || undefined : undefined,
+        guestCompany: isGuest ? guestCompanyValue || undefined : undefined,
+        guestEmail: isGuest ? guestEmailValue || undefined : undefined,
+        guestPhone: isGuest ? guestPhoneValue || undefined : undefined,
         paymentMethod,
         status: "DRAFT",
         files: uploaded,
@@ -1749,6 +1779,13 @@ export function MvWizard({
 
     const { songTitleKrValue, songTitleEnValue, songTitleOfficialValue } =
       resolveSongTitleValues();
+    const titleValue = title.trim();
+    const artistNameValue = artistName.trim();
+    const artistNameOfficialValue = artistNameOfficial.trim();
+    const guestNameValue = guestName.trim();
+    const guestCompanyValue = guestCompany.trim();
+    const guestEmailValue = guestEmail.trim();
+    const guestPhoneValue = guestPhone.trim();
 
     let submissionId: string;
     try {
@@ -1768,13 +1805,13 @@ export function MvWizard({
     setIsSaving(true);
     setNotice({});
     try {
-    const uploaded = uploads.length > 0 ? await uploadFiles() : [];
+      const uploaded = uploads.length > 0 ? await uploadFiles() : [];
       const result = await saveMvSubmissionAction({
         submissionId,
         amountKrw: totalAmount,
         selectedStationIds,
-        title,
-        artistName,
+        title: titleValue || undefined,
+        artistName: artistNameValue || undefined,
         director: director.trim() || undefined,
         leadActor: leadActor.trim() || undefined,
         storyline: storyline.trim() || undefined,
@@ -1796,7 +1833,7 @@ export function MvWizard({
         arranger: arranger.trim() || undefined,
         songMemo: songMemo.trim() || undefined,
         lyrics: lyrics.trim() || undefined,
-        artistNameOfficial: artistNameOfficial.trim() || undefined,
+        artistNameOfficial: artistNameOfficialValue || undefined,
         releaseDate: releaseDate || undefined,
         genre: genre || undefined,
         mvType,
@@ -1805,10 +1842,10 @@ export function MvWizard({
         mvBaseSelected:
           mvType === "MV_DISTRIBUTION" ? onlineBaseSelected : false,
         guestToken: isGuest ? guestToken : undefined,
-        guestName: isGuest ? guestName : undefined,
-        guestCompany: isGuest ? guestCompany : undefined,
-        guestEmail: isGuest ? guestEmail : undefined,
-        guestPhone: isGuest ? guestPhone : undefined,
+        guestName: isGuest ? guestNameValue || undefined : undefined,
+        guestCompany: isGuest ? guestCompanyValue || undefined : undefined,
+        guestEmail: isGuest ? guestEmailValue || undefined : undefined,
+        guestPhone: isGuest ? guestPhoneValue || undefined : undefined,
         paymentMethod,
         bankDepositorName:
           paymentMethod === "BANK" ? bankDepositorName.trim() : undefined,

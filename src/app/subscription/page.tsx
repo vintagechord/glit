@@ -26,6 +26,13 @@ const resolveBaseUrl = async () => {
   return `${proto}://${host}`.replace(/\/+$/, "");
 };
 
+const maskMid = (mid: string) => {
+  if (!mid) return "";
+  return mid.length <= 4
+    ? `${mid.slice(0, 2)}**`
+    : `${mid.slice(0, 2)}***${mid.slice(-2)}`;
+};
+
 export default async function SubscriptionPage() {
   const supabase = await createServerSupabase();
   const {
@@ -38,8 +45,6 @@ export default async function SubscriptionPage() {
 
   const { subscription } = await getActiveSubscription(user.id);
   const amountKrw = resolveSubscriptionPrice();
-  const config = getStdPayConfig();
-  const baseUrl = await resolveBaseUrl();
 
   if (!amountKrw || amountKrw <= 0) {
     return (
@@ -57,6 +62,34 @@ export default async function SubscriptionPage() {
     );
   }
 
+  let config: ReturnType<typeof getStdPayConfig> | null = null;
+  let configError: string | null = null;
+  try {
+    config = getStdPayConfig();
+  } catch (error) {
+    configError =
+      error instanceof Error
+        ? error.message
+        : "이니시스 설정을 불러올 수 없습니다.";
+  }
+
+  if (!config || configError) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-6 py-12">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          Subscription
+        </p>
+        <h1 className="font-display mt-2 text-2xl text-foreground">
+          결제 설정을 확인할 수 없습니다.
+        </h1>
+        <p className="mt-4 text-sm text-muted-foreground">
+          {configError ?? "이니시스 결제 설정을 다시 확인해주세요."}
+        </p>
+      </div>
+    );
+  }
+
+  const baseUrl = await resolveBaseUrl();
   const productName = "온사이드 정기 구독";
 
   let stdParams:
@@ -155,7 +188,7 @@ export default async function SubscriptionPage() {
       ) : null}
 
       <div className="mt-6 text-xs text-muted-foreground">
-        <p>테스트 MID: {config.mid}</p>
+        <p>테스트 MID: {maskMid(config.mid)}</p>
         <p>콜백 URL: {returnUrl}</p>
         <p>모바일 콜백 URL: {mobileReturnUrl}</p>
       </div>
