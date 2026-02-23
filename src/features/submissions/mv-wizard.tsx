@@ -65,6 +65,7 @@ const uploadMaxLabel =
   uploadMaxMb >= 1024
     ? `${Math.round(uploadMaxMb / 1024)}GB`
     : `${uploadMaxMb}MB`;
+const draftDeleteTimeoutMs = 8000;
 
 const multipartThresholdMbRaw = Number(
   process.env.NEXT_PUBLIC_UPLOAD_MULTIPART_THRESHOLD_MB ?? "200",
@@ -297,6 +298,7 @@ export function MvWizard({
     storedGuestToken?: string | null;
   } | null>(null);
   const [isClearingResumeDrafts, setIsClearingResumeDrafts] = React.useState(false);
+  const resumePromptHandledRef = React.useRef(false);
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [openBroadcastSpec, setOpenBroadcastSpec] = React.useState<string | null>(
@@ -406,14 +408,31 @@ export function MvWizard({
       if (guestToken) payload.guestToken = guestToken;
     }
 
-    const res = await fetch("/api/submissions/drafts", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const json = (await res.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(json?.error || "임시저장 삭제에 실패했습니다.");
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, draftDeleteTimeoutMs);
+
+    try {
+      const res = await fetch("/api/submissions/drafts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(json?.error || "임시저장 삭제에 실패했습니다.");
+      }
+    } catch (error) {
+      const isAbortError =
+        error instanceof DOMException && error.name === "AbortError";
+      if (isAbortError) {
+        throw new Error("임시저장 삭제 요청이 지연되어 중단되었습니다.");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }, [isGuest]);
 
@@ -1429,6 +1448,7 @@ export function MvWizard({
 
   const handleResumeDraftConfirm = React.useCallback(() => {
     if (!resumePrompt) return;
+    resumePromptHandledRef.current = true;
     applyStoredDraft(resumePrompt.draft, resumePrompt.stored ?? null);
     const draftId = String(resumePrompt.draft.id ?? "");
     if (draftId) {
@@ -1455,6 +1475,7 @@ export function MvWizard({
 
   const handleResumeDraftCancel = React.useCallback(async () => {
     if (!resumePrompt || isClearingResumeDrafts) return;
+    resumePromptHandledRef.current = true;
     setIsClearingResumeDrafts(true);
     const guestToken = resumePrompt.storedGuestToken ?? guestTokenRef.current;
     clearDraftStorage();
@@ -1477,10 +1498,12 @@ export function MvWizard({
   React.useEffect(() => {
     if (resumeChecked) return;
     if (resumePrompt) return;
+    if (resumePromptHandledRef.current) return;
     if (typeof window === "undefined") {
       setResumeChecked(true);
       return;
     }
+    let cancelled = false;
     const run = async () => {
       const stored = readDraftStorage();
       const storedGuestToken =
@@ -1498,6 +1521,7 @@ export function MvWizard({
         const json = (await res.json().catch(() => null)) as {
           drafts?: Array<Record<string, unknown>>;
         } | null;
+        if (cancelled || resumePromptHandledRef.current) return;
         const drafts = Array.isArray(json?.drafts) ? json!.drafts : [];
         if (drafts.length === 0) {
           setResumeChecked(true);
@@ -1509,11 +1533,15 @@ export function MvWizard({
           storedGuestToken: storedGuestToken ?? null,
         });
       } catch (error) {
+        if (cancelled) return;
         console.warn("[MvDraft][resume] failed", error);
         setResumeChecked(true);
       }
     };
     void run();
+    return () => {
+      cancelled = true;
+    };
   }, [
     applyStoredDraft,
     isGuest,
