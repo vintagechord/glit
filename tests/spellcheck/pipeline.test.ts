@@ -51,6 +51,19 @@ test("spellcheck returns reason when empty", async () => {
   assert.ok(result.meta.reasonIfEmpty, "reasonIfEmpty should be set");
 });
 
+test("spellcheck fixes 들어가/갔다 계열 복합 오타", async () => {
+  const text = "나는 가방에 드러갓어.";
+  const result = await runSpellcheckPipeline({
+    text,
+    mode: "balanced",
+    domain: "general",
+  });
+
+  assert.equal(result.correctedText, "나는 가방에 들어갔어.");
+  assert.ok(result.suggestions.length > 0, "expected suggestions");
+  assert.equal(result.meta.reasonIfEmpty, undefined);
+});
+
 test("diffs can reconstruct corrected text", async () => {
   const text = "그낭 걸엇어. 오늘은 정말로 햇다.";
   const result = await runSpellcheckPipeline({

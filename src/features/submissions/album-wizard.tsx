@@ -2322,15 +2322,6 @@ export function AlbumWizard({
     drafts: AlbumDraft[],
     options: { includeFiles: boolean },
   ) => {
-    if (!selectedPackage) {
-      setNotice({ error: "패키지를 선택해주세요." });
-      return false;
-    }
-    if (basePriceKrw <= 0) {
-      setNotice({ error: "결제 금액 정보를 확인할 수 없습니다." });
-      return false;
-    }
-
     const applicantNameValue = applicantName.trim();
     const applicantEmailValue = applicantEmail.trim();
     const applicantPhoneValue = applicantPhone.trim();
@@ -2341,17 +2332,16 @@ export function AlbumWizard({
     try {
       for (let index = 0; index < drafts.length; index += 1) {
         const draft = drafts[index];
-        const albumPrice = index === 0 ? basePriceKrw : additionalPriceKrw;
-        const safeTitle =
-          draft.title.trim() || (isOneClick ? "원클릭 접수" : "");
-        const safeArtist =
-          draft.artistName.trim() || (isOneClick ? "원클릭 접수" : "");
+        const albumPrice =
+          basePriceKrw > 0 ? (index === 0 ? basePriceKrw : additionalPriceKrw) : 0;
+        const titleValue = draft.title.trim();
+        const artistValue = draft.artistName.trim();
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
-          packageId: selectedPackage.id,
+          packageId: selectedPackage?.id,
           amountKrw: albumPrice,
-          title: safeTitle,
-          artistName: safeArtist,
+          title: titleValue || undefined,
+          artistName: artistValue || undefined,
           artistNameKr: draft.artistNameKr.trim(),
           artistNameEn: draft.artistNameEn.trim(),
           releaseDate: draft.releaseDate || undefined,
@@ -2546,7 +2536,7 @@ export function AlbumWizard({
       setNotice({ error: "수정 중인 앨범을 저장한 뒤 진행해주세요." });
       return;
     }
-    if (!validateFormStep()) {
+    if (status === "SUBMITTED" && !validateFormStep()) {
       return;
     }
     if (
@@ -2573,11 +2563,11 @@ export function AlbumWizard({
     setIsSaving(true);
     setNotice({});
     try {
-      if (!selectedPackage) {
+      if (status === "SUBMITTED" && !selectedPackage) {
         setNotice({ error: "패키지를 선택해주세요." });
         return;
       }
-      if (basePriceKrw <= 0) {
+      if (status === "SUBMITTED" && basePriceKrw <= 0) {
         setNotice({ error: "결제 금액 정보를 확인할 수 없습니다." });
         return;
       }
@@ -2590,17 +2580,24 @@ export function AlbumWizard({
 
       for (let index = 0; index < draftsForSubmit.length; index += 1) {
         const draft = draftsForSubmit[index];
-        const albumPrice = index === 0 ? basePriceKrw : additionalPriceKrw;
-        const safeTitle =
-          draft.title.trim() || (isOneClick ? "원클릭 접수" : "");
-        const safeArtist =
-          draft.artistName.trim() || (isOneClick ? "원클릭 접수" : "");
+        const albumPrice =
+          status === "SUBMITTED"
+            ? index === 0
+              ? basePriceKrw
+              : additionalPriceKrw
+            : basePriceKrw > 0
+              ? index === 0
+                ? basePriceKrw
+                : additionalPriceKrw
+              : 0;
+        const titleValue = draft.title.trim();
+        const artistValue = draft.artistName.trim();
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
-          packageId: selectedPackage.id,
+          packageId: selectedPackage?.id,
           amountKrw: albumPrice,
-          title: safeTitle,
-          artistName: safeArtist,
+          title: titleValue || undefined,
+          artistName: artistValue || undefined,
           artistNameKr: draft.artistNameKr.trim(),
           artistNameEn: draft.artistNameEn.trim(),
           releaseDate: draft.releaseDate || undefined,
@@ -2643,7 +2640,7 @@ export function AlbumWizard({
         if (result.guestToken) {
           guestTokens.push({
             token: result.guestToken,
-            title: draft.title || safeTitle,
+            title: draft.title.trim() || "제목 미입력",
           });
         }
         if (result.emailWarning && !emailWarning) {
@@ -3769,7 +3766,6 @@ export function AlbumWizard({
                     });
                     return;
                   }
-                  if (!validateFormStep()) return;
                   let draftsForSave: AlbumDraft[];
                   try {
                     draftsForSave = [captureCurrentDraft(), ...albumDrafts];

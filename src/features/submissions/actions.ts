@@ -306,13 +306,16 @@ const isMissingSessionError = (error: SupabaseError | null | undefined) => {
   return message.includes("auth session missing");
 };
 
+const isValidEmailFormat = (value: string) =>
+  z.string().email().safeParse(value).success;
+
 const trackSchema = z.object({
-  trackTitle: z.string().min(1),
+  trackTitle: z.string().optional(),
   trackTitleKr: z.string().optional(),
   trackTitleEn: z.string().optional(),
   trackTitleOfficial: z.enum(["KR", "EN"]).optional(),
   featuring: z.string().optional(),
-  composer: z.string().min(1),
+  composer: z.string().optional(),
   lyricist: z.string().optional(),
   arranger: z.string().optional(),
   lyrics: z.string().optional(),
@@ -337,8 +340,8 @@ const albumSubmissionSchema = z.object({
   packageId: z.string().uuid().optional(),
   amountKrw: z.number().int().nonnegative().optional(),
   selectedStationIds: z.array(z.string().uuid()).optional(),
-  title: z.string().min(1),
-  artistName: z.string().min(1),
+  title: z.string().optional(),
+  artistName: z.string().optional(),
   artistNameKr: z.string().optional(),
   artistNameEn: z.string().optional(),
   releaseDate: z.string().optional(),
@@ -346,7 +349,7 @@ const albumSubmissionSchema = z.object({
   distributor: z.string().optional(),
   productionCompany: z.string().optional(),
   applicantName: z.string().optional(),
-  applicantEmail: z.string().email().optional(),
+  applicantEmail: z.string().optional(),
   applicantPhone: z.string().optional(),
   previousRelease: z.string().optional(),
   artistType: z.string().optional(),
@@ -355,10 +358,10 @@ const albumSubmissionSchema = z.object({
   isOneClick: z.boolean().optional(),
   melonUrl: z.string().optional(),
   guestToken: z.string().min(8).optional(),
-  guestName: z.string().min(1).optional(),
+  guestName: z.string().optional(),
   guestCompany: z.string().optional(),
-  guestEmail: z.string().email().optional(),
-  guestPhone: z.string().min(3).optional(),
+  guestEmail: z.string().optional(),
+  guestPhone: z.string().optional(),
   preReviewRequested: z.boolean().optional(),
   karaokeRequested: z.boolean().optional(),
   paymentMethod: z.enum(["CARD", "BANK"]).optional(),
@@ -371,11 +374,11 @@ const albumSubmissionSchema = z.object({
 const mvSubmissionSchema = z.object({
   submissionId: z.string().uuid(),
   packageId: z.string().uuid().optional(),
-  amountKrw: z.number().int().nonnegative(),
+  amountKrw: z.number().int().nonnegative().optional(),
   selectedStationIds: z.array(z.string().uuid()).optional(),
-  title: z.string().min(1),
-  artistName: z.string().min(1),
-  applicantEmail: z.string().email().optional(),
+  title: z.string().optional(),
+  artistName: z.string().optional(),
+  applicantEmail: z.string().optional(),
   director: z.string().optional(),
   leadActor: z.string().optional(),
   storyline: z.string().optional(),
@@ -405,10 +408,10 @@ const mvSubmissionSchema = z.object({
   format: z.string().optional(),
   mvBaseSelected: z.boolean().optional(),
   guestToken: z.string().min(8).optional(),
-  guestName: z.string().min(1).optional(),
+  guestName: z.string().optional(),
   guestCompany: z.string().optional(),
-  guestEmail: z.string().email().optional(),
-  guestPhone: z.string().min(3).optional(),
+  guestEmail: z.string().optional(),
+  guestPhone: z.string().optional(),
   preReviewRequested: z.boolean().optional(),
   karaokeRequested: z.boolean().optional(),
   paymentMethod: z.enum(["CARD", "BANK"]).optional(),
@@ -553,14 +556,34 @@ export async function saveAlbumSubmissionAction(
   }
 
   const isGuest = !user;
+  const isSubmitted = parsed.data.status === "SUBMITTED";
+  const isOneClick = parsed.data.isOneClick ?? false;
+  const titleValue = parsed.data.title?.trim() ?? "";
+  const artistNameValue = parsed.data.artistName?.trim() ?? "";
+  const guestNameValue = parsed.data.guestName?.trim() ?? "";
+  const guestEmailValue = parsed.data.guestEmail?.trim() ?? "";
+  const guestPhoneValue = parsed.data.guestPhone?.trim() ?? "";
+  const applicantEmailValue = parsed.data.applicantEmail?.trim() ?? "";
+  const bankDepositorNameValue = parsed.data.bankDepositorName?.trim() ?? "";
+
+  if (isGuest && !parsed.data.guestToken) {
+    return { error: "로그인 정보를 확인할 수 없습니다." };
+  }
   if (
+    isSubmitted &&
     isGuest &&
-    (!parsed.data.guestToken ||
-      !parsed.data.guestName ||
-      !parsed.data.guestEmail ||
-      !parsed.data.guestPhone)
+    (!guestNameValue || !guestEmailValue || !guestPhoneValue)
   ) {
     return { error: "비회원 정보(담당자, 연락처, 이메일)를 입력해주세요." };
+  }
+  if (isSubmitted && isGuest && !isValidEmailFormat(guestEmailValue)) {
+    return { error: "비회원 이메일 형식을 확인해주세요." };
+  }
+  if (isSubmitted && !artistNameValue) {
+    return { error: "아티스트명을 입력해주세요. (원클릭 포함)" };
+  }
+  if (isSubmitted && !isOneClick && !titleValue) {
+    return { error: "앨범 제목을 입력해주세요." };
   }
 
   const adminDb = createAdminClient();
@@ -568,10 +591,6 @@ export async function saveAlbumSubmissionAction(
 
   const hasPackage = Boolean(parsed.data.packageId);
   let amountKrw = parsed.data.amountKrw ?? 0;
-  const isOneClick = parsed.data.isOneClick ?? false;
-  if (!parsed.data.artistName || !parsed.data.artistName.trim()) {
-    return { error: "아티스트명을 입력해주세요. (원클릭 포함)" };
-  }
   let packageStationCount: number | null = null;
   let packageName: string | null = null;
 
@@ -592,59 +611,58 @@ export async function saveAlbumSubmissionAction(
     }
   }
 
-  if (amountKrw <= 0) {
+  if (isSubmitted && amountKrw <= 0) {
     return { error: "결제 금액 정보를 확인할 수 없습니다." };
   }
+  amountKrw = Math.max(0, amountKrw);
 
   const paymentMethod = parsed.data.paymentMethod ?? "BANK";
-  const isSubmitted = parsed.data.status === "SUBMITTED";
   if (
     isSubmitted &&
     paymentMethod === "BANK" &&
-    !parsed.data.bankDepositorName?.trim()
+    !bankDepositorNameValue
   ) {
     return { error: "입금자명을 입력해주세요." };
   }
   const shouldRequestPayment =
     isSubmitted &&
-    (paymentMethod === "CARD" ||
-      Boolean(parsed.data.bankDepositorName?.trim()));
-  const artistId = await ensureArtistByName(parsed.data.artistName);
+    (paymentMethod === "CARD" || Boolean(bankDepositorNameValue));
+  const artistId = await ensureArtistByName(artistNameValue);
 
   const submissionPayload = {
     id: parsed.data.submissionId,
     user_id: user?.id ?? null,
     type: "ALBUM",
-    title: parsed.data.title,
-    artist_name: parsed.data.artistName,
+    title: titleValue || null,
+    artist_name: artistNameValue || null,
     artist_id: artistId,
-    artist_name_kr: parsed.data.artistNameKr || null,
-    artist_name_en: parsed.data.artistNameEn || null,
+    artist_name_kr: parsed.data.artistNameKr?.trim() || null,
+    artist_name_en: parsed.data.artistNameEn?.trim() || null,
     release_date: parsed.data.releaseDate || null,
-    genre: parsed.data.genre || null,
-    distributor: parsed.data.distributor || null,
-    production_company: parsed.data.productionCompany || null,
-    applicant_name: parsed.data.applicantName || null,
-    applicant_email: parsed.data.applicantEmail || null,
-    applicant_phone: parsed.data.applicantPhone || null,
-    previous_release: parsed.data.previousRelease || null,
-    artist_type: parsed.data.artistType || null,
-    artist_gender: parsed.data.artistGender || null,
-    artist_members: parsed.data.artistMembers || null,
+    genre: parsed.data.genre?.trim() || null,
+    distributor: parsed.data.distributor?.trim() || null,
+    production_company: parsed.data.productionCompany?.trim() || null,
+    applicant_name: parsed.data.applicantName?.trim() || null,
+    applicant_email: applicantEmailValue || null,
+    applicant_phone: parsed.data.applicantPhone?.trim() || null,
+    previous_release: parsed.data.previousRelease?.trim() || null,
+    artist_type: parsed.data.artistType?.trim() || null,
+    artist_gender: parsed.data.artistGender?.trim() || null,
+    artist_members: parsed.data.artistMembers?.trim() || null,
     is_oneclick: isOneClick,
-    melon_url: parsed.data.melonUrl || null,
-    package_id: parsed.data.packageId,
+    melon_url: parsed.data.melonUrl?.trim() || null,
+    package_id: parsed.data.packageId ?? null,
     amount_krw: amountKrw,
-    guest_name: isGuest ? parsed.data.guestName : null,
-    guest_company: isGuest ? parsed.data.guestCompany ?? null : null,
-    guest_email: isGuest ? parsed.data.guestEmail : null,
-    guest_phone: isGuest ? parsed.data.guestPhone : null,
+    guest_name: isGuest ? guestNameValue || null : null,
+    guest_company: isGuest ? parsed.data.guestCompany?.trim() || null : null,
+    guest_email: isGuest ? guestEmailValue || null : null,
+    guest_phone: isGuest ? guestPhoneValue || null : null,
     guest_token: isGuest ? parsed.data.guestToken : null,
     pre_review_requested: parsed.data.preReviewRequested ?? false,
     karaoke_requested: parsed.data.karaokeRequested ?? false,
     payment_method: paymentMethod,
     bank_depositor_name:
-      paymentMethod === "BANK" ? parsed.data.bankDepositorName || null : null,
+      paymentMethod === "BANK" ? bankDepositorNameValue || null : null,
     status:
       parsed.data.status === "SUBMITTED" && shouldRequestPayment
         ? "WAITING_PAYMENT"
@@ -719,20 +737,32 @@ export async function saveAlbumSubmissionAction(
     parsed.data.tracks?.map((track, index) => ({
       submission_id: parsed.data.submissionId,
       track_no: index + 1,
-      track_title: track.trackTitle,
-      track_title_kr: track.trackTitleKr || null,
-      track_title_en: track.trackTitleEn || null,
+      track_title: track.trackTitle?.trim() || null,
+      track_title_kr: track.trackTitleKr?.trim() || null,
+      track_title_en: track.trackTitleEn?.trim() || null,
       track_title_official: track.trackTitleOfficial || null,
-      featuring: track.featuring || null,
-      composer: track.composer || null,
-      lyricist: track.lyricist || null,
-      arranger: track.arranger || null,
-      lyrics: track.lyrics || null,
+      featuring: track.featuring?.trim() || null,
+      composer: track.composer?.trim() || null,
+      lyricist: track.lyricist?.trim() || null,
+      arranger: track.arranger?.trim() || null,
+      lyrics: track.lyrics?.trim() || null,
       notes: track.notes || null,
       is_title: Boolean(track.isTitle),
       title_role: track.titleRole || null,
       broadcast_selected: Boolean(track.broadcastSelected),
     })) ?? [];
+
+  if (isSubmitted && !isOneClick) {
+    if (trackRows.length === 0) {
+      return { error: "트랙 정보를 입력해주세요." };
+    }
+    if (trackRows.some((track) => !track.track_title)) {
+      return { error: "모든 트랙의 곡명을 입력해주세요." };
+    }
+    if (trackRows.some((track) => !track.composer)) {
+      return { error: "모든 트랙의 작곡 정보를 입력해주세요." };
+    }
+  }
 
   if (trackRows.length > 0) {
     const trackResult = await insertWithColumnFallback(
@@ -745,8 +775,6 @@ export async function saveAlbumSubmissionAction(
     if (trackError) {
       return { error: "트랙 정보를 저장할 수 없습니다." };
     }
-  } else if (!isOneClick) {
-    return { error: "트랙 정보를 입력해주세요." };
   }
 
   if (parsed.data.files !== undefined) {
@@ -874,10 +902,7 @@ export async function saveAlbumSubmissionAction(
   let emailWarning: string | undefined;
   if (parsed.data.status === "SUBMITTED") {
     const recipientEmail =
-      parsed.data.applicantEmail ??
-      parsed.data.guestEmail ??
-      user?.email ??
-      null;
+      applicantEmailValue || guestEmailValue || user?.email || null;
     if (recipientEmail) {
       const link =
         parsed.data.guestToken && parsed.data.guestToken.length >= 8
@@ -885,7 +910,7 @@ export async function saveAlbumSubmissionAction(
           : undefined;
       const emailResult = await sendSubmissionReceiptEmail({
         email: recipientEmail,
-        title: parsed.data.title,
+        title: titleValue || "제목 미입력",
         kind: "ALBUM",
         isGuest: isGuest,
         guestToken: parsed.data.guestToken ?? undefined,
@@ -931,23 +956,43 @@ export async function saveMvSubmissionAction(
   }
 
   const isGuest = !user;
+  const isSubmitted = parsed.data.status === "SUBMITTED";
+  const titleValue = parsed.data.title?.trim() ?? "";
+  const artistNameValue = parsed.data.artistName?.trim() ?? "";
+  const guestNameValue = parsed.data.guestName?.trim() ?? "";
+  const guestEmailValue = parsed.data.guestEmail?.trim() ?? "";
+  const guestPhoneValue = parsed.data.guestPhone?.trim() ?? "";
+  const applicantEmailValue = parsed.data.applicantEmail?.trim() ?? "";
+  const bankDepositorNameValue = parsed.data.bankDepositorName?.trim() ?? "";
+
+  if (isGuest && !parsed.data.guestToken) {
+    return { error: "로그인 정보를 확인할 수 없습니다." };
+  }
   if (
+    isSubmitted &&
     isGuest &&
-    (!parsed.data.guestToken ||
-      !parsed.data.guestName ||
-      !parsed.data.guestEmail ||
-      !parsed.data.guestPhone)
+    (!guestNameValue || !guestEmailValue || !guestPhoneValue)
   ) {
     return { error: "비회원 정보(담당자, 연락처, 이메일)를 입력해주세요." };
+  }
+  if (isSubmitted && isGuest && !isValidEmailFormat(guestEmailValue)) {
+    return { error: "비회원 이메일 형식을 확인해주세요." };
+  }
+  if (isSubmitted && !titleValue) {
+    return { error: "제목을 입력해주세요." };
+  }
+  if (isSubmitted && !artistNameValue) {
+    return { error: "아티스트명을 입력해주세요." };
   }
 
   const adminDb = createAdminClient();
   let db = isGuest ? adminDb : supabase;
 
-  const amountKrw = parsed.data.amountKrw ?? 0;
-  if (amountKrw <= 0) {
+  let amountKrw = parsed.data.amountKrw ?? 0;
+  if (isSubmitted && amountKrw <= 0) {
     return { error: "결제 금액 정보를 확인할 수 없습니다." };
   }
+  amountKrw = Math.max(0, amountKrw);
   const songTitleValue =
     parsed.data.songTitle ||
     (parsed.data.songTitleOfficial === "KR"
@@ -960,11 +1005,10 @@ export async function saveMvSubmissionAction(
   const songTitleEnValue = parsed.data.songTitleEn || null;
 
   const paymentMethod = parsed.data.paymentMethod ?? "BANK";
-  const isSubmitted = parsed.data.status === "SUBMITTED";
   if (
     isSubmitted &&
     paymentMethod === "BANK" &&
-    !parsed.data.bankDepositorName?.trim()
+    !bankDepositorNameValue
   ) {
     return { error: "입금자명을 입력해주세요." };
   }
@@ -977,57 +1021,56 @@ export async function saveMvSubmissionAction(
 
   const shouldRequestPayment =
     isSubmitted &&
-    (paymentMethod === "CARD" ||
-      Boolean(parsed.data.bankDepositorName?.trim()));
-  const artistId = await ensureArtistByName(parsed.data.artistName);
+    (paymentMethod === "CARD" || Boolean(bankDepositorNameValue));
+  const artistId = await ensureArtistByName(artistNameValue);
 
   const submissionPayload = {
     id: parsed.data.submissionId,
     user_id: user?.id ?? null,
     type: parsed.data.mvType,
-    title: parsed.data.title,
-    artist_name: parsed.data.artistName,
+    title: titleValue || null,
+    artist_name: artistNameValue || null,
     artist_name_kr: parsed.data.artistNameOfficial || null,
     artist_id: artistId,
     release_date: parsed.data.releaseDate || null,
-    genre: parsed.data.genre || null,
-    mv_runtime: parsed.data.runtime || null,
-    mv_format: parsed.data.format || null,
-    mv_director: parsed.data.director || null,
-    mv_lead_actor: parsed.data.leadActor || null,
-    mv_storyline: parsed.data.storyline || null,
-    mv_production_company: parsed.data.productionCompany || null,
-    mv_agency: parsed.data.agency || null,
-    mv_album_title: parsed.data.albumTitle || null,
+    genre: parsed.data.genre?.trim() || null,
+    mv_runtime: parsed.data.runtime?.trim() || null,
+    mv_format: parsed.data.format?.trim() || null,
+    mv_director: parsed.data.director?.trim() || null,
+    mv_lead_actor: parsed.data.leadActor?.trim() || null,
+    mv_storyline: parsed.data.storyline?.trim() || null,
+    mv_production_company: parsed.data.productionCompany?.trim() || null,
+    mv_agency: parsed.data.agency?.trim() || null,
+    mv_album_title: parsed.data.albumTitle?.trim() || null,
     mv_production_date: parsed.data.productionDate || null,
-    mv_distribution_company: parsed.data.distributionCompany || null,
-    mv_business_reg_no: parsed.data.businessRegNo || null,
-    mv_usage: parsed.data.usage || null,
-    mv_desired_rating: parsed.data.desiredRating || null,
-    mv_memo: parsed.data.memo || null,
+    mv_distribution_company: parsed.data.distributionCompany?.trim() || null,
+    mv_business_reg_no: parsed.data.businessRegNo?.trim() || null,
+    mv_usage: parsed.data.usage?.trim() || null,
+    mv_desired_rating: parsed.data.desiredRating?.trim() || null,
+    mv_memo: parsed.data.memo?.trim() || null,
     mv_song_title: songTitleValue,
     mv_song_title_kr: songTitleKrValue,
     mv_song_title_en: songTitleEnValue,
     mv_song_title_official: parsed.data.songTitleOfficial || null,
-    mv_composer: parsed.data.composer || null,
-    mv_lyricist: parsed.data.lyricist || null,
-    mv_arranger: parsed.data.arranger || null,
-    mv_song_memo: parsed.data.songMemo || null,
-    mv_lyrics: parsed.data.lyrics || null,
+    mv_composer: parsed.data.composer?.trim() || null,
+    mv_lyricist: parsed.data.lyricist?.trim() || null,
+    mv_arranger: parsed.data.arranger?.trim() || null,
+    mv_song_memo: parsed.data.songMemo?.trim() || null,
+    mv_lyrics: parsed.data.lyrics?.trim() || null,
     package_id: parsed.data.packageId ?? null,
     amount_krw: amountKrw,
-    applicant_email: parsed.data.applicantEmail || null,
+    applicant_email: applicantEmailValue || null,
     mv_base_selected: parsed.data.mvBaseSelected ?? true,
-    guest_name: isGuest ? parsed.data.guestName : null,
-    guest_company: isGuest ? parsed.data.guestCompany ?? null : null,
-    guest_email: isGuest ? parsed.data.guestEmail : null,
-    guest_phone: isGuest ? parsed.data.guestPhone : null,
+    guest_name: isGuest ? guestNameValue || null : null,
+    guest_company: isGuest ? parsed.data.guestCompany?.trim() || null : null,
+    guest_email: isGuest ? guestEmailValue || null : null,
+    guest_phone: isGuest ? guestPhoneValue || null : null,
     guest_token: isGuest ? parsed.data.guestToken : null,
     pre_review_requested: parsed.data.preReviewRequested ?? false,
     karaoke_requested: parsed.data.karaokeRequested ?? false,
     payment_method: paymentMethod,
     bank_depositor_name:
-      paymentMethod === "BANK" ? parsed.data.bankDepositorName || null : null,
+      paymentMethod === "BANK" ? bankDepositorNameValue || null : null,
     status:
       parsed.data.status === "SUBMITTED" && shouldRequestPayment
         ? "WAITING_PAYMENT"
@@ -1180,10 +1223,7 @@ export async function saveMvSubmissionAction(
   let emailWarning: string | undefined;
   if (parsed.data.status === "SUBMITTED") {
     const recipientEmail =
-      parsed.data.applicantEmail ??
-      parsed.data.guestEmail ??
-      user?.email ??
-      null;
+      applicantEmailValue || guestEmailValue || user?.email || null;
     if (recipientEmail) {
       const link =
         parsed.data.guestToken && parsed.data.guestToken.length >= 8
@@ -1191,7 +1231,7 @@ export async function saveMvSubmissionAction(
           : undefined;
       const emailResult = await sendSubmissionReceiptEmail({
         email: recipientEmail,
-        title: parsed.data.title,
+        title: titleValue || "제목 미입력",
         kind: "MV",
         isGuest: isGuest,
         guestToken: parsed.data.guestToken ?? undefined,

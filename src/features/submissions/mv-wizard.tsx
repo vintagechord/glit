@@ -2645,7 +2645,6 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={async () => {
-                  if (!validateMvForm()) return;
                   await saveMvDraft({ includeFiles: false });
                 }}
                 disabled={isSaving}
