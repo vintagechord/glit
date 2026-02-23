@@ -144,7 +144,11 @@ const buildComparableTrackResults = (
     return a._index - b._index;
   });
 
-  return comparable.map(({ _key, _index, ...rest }) => rest);
+  return comparable.map((item) => ({
+    track_id: item.track_id,
+    track_no: item.track_no,
+    status: item.status,
+  }));
 };
 
 export function areTrackResultsEquivalent(

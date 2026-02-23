@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
@@ -94,12 +96,21 @@ export const createSubmissionPaymentOrder = async (
   if (error || !submission) {
     return { error: "접수를 찾을 수 없습니다." };
   }
-  const amountKrw = submission.amount_krw ?? 0;
-  if (amountKrw <= 0) {
+  if (submission.payment_status === "PAID") {
+    return { error: "이미 결제가 완료된 접수입니다." };
+  }
+  if (submission.status === "DRAFT") {
+    return { error: "임시저장 상태에서는 결제를 시작할 수 없습니다." };
+  }
+  if (submission.payment_method === "BANK") {
+    return { error: "무통장 입금 접수는 카드 결제를 시작할 수 없습니다." };
+  }
+  const amountKrw = Math.round(Number(submission.amount_krw ?? 0));
+  if (!Number.isFinite(amountKrw) || amountKrw <= 0) {
     return { error: "결제 금액이 유효하지 않습니다." };
   }
   const orderTimestamp = Date.now().toString();
-  const orderId = `SUBP-${orderTimestamp}-${submission.id.slice(0, 8)}`;
+  const orderId = `SUBP-${orderTimestamp}-${submission.id.slice(0, 8)}-${randomUUID().slice(0, 8)}`;
   const config = getStdPayConfig();
   const packageName = Array.isArray(submission.package)
     ? (submission.package as Array<{ name?: string }>)[0]?.name
@@ -157,6 +168,9 @@ export const createSubmissionPaymentOrder = async (
   });
 
   if (insertError) {
+    if (insertError.code === "23505") {
+      return { error: "이미 생성된 결제 요청이 있습니다. 잠시 후 다시 시도해주세요." };
+    }
     return { error: "결제 요청을 저장하지 못했습니다." };
   }
 
@@ -223,16 +237,22 @@ export const markPaymentSuccess = async (
     .maybeSingle();
 
   if (updated?.submission_id) {
-    await admin
+    const { error: submissionError } = await admin
       .from("submissions")
       .update({ payment_status: "PAID", payment_method: "CARD" })
       .eq("id", updated.submission_id);
+    if (submissionError) {
+      return { ok: false, error: submissionError, submissionId: updated.submission_id };
+    }
 
-    await admin.from("submission_events").insert({
+    const { error: eventError } = await admin.from("submission_events").insert({
       submission_id: updated.submission_id,
       event_type: "PAYMENT",
       message: "KG이니시스 카드 결제 완료",
     });
+    if (eventError) {
+      return { ok: false, error: eventError, submissionId: updated.submission_id };
+    }
   }
 
   return { ok: !error, error, submissionId: updated?.submission_id ?? null };

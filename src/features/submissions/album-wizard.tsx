@@ -347,6 +347,11 @@ export function AlbumWizard({
   const [isSaving, setIsSaving] = React.useState(false);
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [resumeChecked, setResumeChecked] = React.useState(false);
+  const [resumePrompt, setResumePrompt] = React.useState<{
+    drafts: Array<Record<string, unknown>>;
+    storedGuestToken?: string;
+  } | null>(null);
+  const [isClearingResumeDrafts, setIsClearingResumeDrafts] = React.useState(false);
 
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
   const [completionId, setCompletionId] = React.useState<string | null>(null);
@@ -490,6 +495,37 @@ export function AlbumWizard({
       // ignore
     }
   }, [draftStorageKey]);
+
+  const clearServerDrafts = React.useCallback(async (options: {
+    ids?: string[];
+    guestToken?: string | null;
+  }) => {
+    const ids = (options.ids ?? []).filter(Boolean);
+    const payload: {
+      type: "ALBUM";
+      ids?: string[];
+      guestToken?: string;
+    } = {
+      type: "ALBUM",
+    };
+    if (ids.length > 0) {
+      payload.ids = ids;
+    }
+    if (isGuest) {
+      const guestToken = options.guestToken ?? currentGuestToken;
+      if (guestToken) payload.guestToken = guestToken;
+    }
+
+    const res = await fetch("/api/submissions/drafts", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const json = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(json?.error || "임시저장 삭제에 실패했습니다.");
+    }
+  }, [currentGuestToken, isGuest]);
 
   const createDraft = React.useCallback(async () => {
     if (isPreparingDraft) return;
@@ -1765,15 +1801,18 @@ export function AlbumWizard({
     setCurrentGuestToken(safeRandomUUID());
   };
 
-  const buildUploadsFromFiles = (fileList: UploadResult[]) =>
-    fileList.map((file) => ({
-      name: file.originalName,
-      size: file.size,
-      progress: 100,
-      status: "done" as const,
-      path: file.path,
-      mime: file.mime,
-    }));
+  const buildUploadsFromFiles = React.useCallback(
+    (fileList: UploadResult[]) =>
+      fileList.map((file) => ({
+        name: file.originalName,
+        size: file.size,
+        progress: 100,
+        status: "done" as const,
+        path: file.path,
+        mime: file.mime,
+      })),
+    [],
+  );
 
   const normalizeDateValue = React.useCallback((value: unknown) => {
     if (!value) return "";
@@ -1843,7 +1882,7 @@ export function AlbumWizard({
     emailSubmitConfirmed,
   });
 
-  const applyDraftToForm = (
+  const applyDraftToForm = React.useCallback((
     draft: AlbumDraft,
     options?: { emailSubmitConfirmed?: boolean },
   ) => {
@@ -1877,7 +1916,7 @@ export function AlbumWizard({
     setNotice({});
     setCurrentSubmissionId(draft.submissionId);
     setCurrentGuestToken(draft.guestToken);
-  };
+  }, [buildUploadsFromFiles]);
 
   const applyStoredDrafts = React.useCallback((
     draftRows: Array<Record<string, unknown>>,
@@ -1950,8 +1989,52 @@ export function AlbumWizard({
     setStep(2);
   }, [applyDraftToForm, mapDraftFiles, mapDraftTracks, normalizeDateValue, packages]);
 
+  const handleResumeDraftConfirm = React.useCallback(() => {
+    if (!resumePrompt) return;
+    const fallbackGuestToken =
+      resumePrompt.storedGuestToken ?? currentGuestToken ?? safeRandomUUID();
+    applyStoredDrafts(resumePrompt.drafts, fallbackGuestToken);
+    writeDraftStorage({
+      ids: resumePrompt.drafts
+        .map((draft) => String(draft.id ?? ""))
+        .filter(Boolean),
+      guestToken: isGuest ? fallbackGuestToken : null,
+    });
+    setResumePrompt(null);
+    setResumeChecked(true);
+  }, [
+    applyStoredDrafts,
+    currentGuestToken,
+    isGuest,
+    resumePrompt,
+    writeDraftStorage,
+  ]);
+
+  const handleResumeDraftCancel = React.useCallback(async () => {
+    if (!resumePrompt || isClearingResumeDrafts) return;
+    setIsClearingResumeDrafts(true);
+    const guestToken = resumePrompt.storedGuestToken ?? currentGuestToken;
+    clearDraftStorage();
+    try {
+      await clearServerDrafts({ guestToken });
+    } catch (error) {
+      console.warn("[AlbumDraft][resume-clear] failed", error);
+    } finally {
+      setIsClearingResumeDrafts(false);
+      setResumePrompt(null);
+      setResumeChecked(true);
+    }
+  }, [
+    clearDraftStorage,
+    clearServerDrafts,
+    currentGuestToken,
+    isClearingResumeDrafts,
+    resumePrompt,
+  ]);
+
   React.useEffect(() => {
     if (resumeChecked) return;
+    if (resumePrompt) return;
     if (typeof window === "undefined") {
       setResumeChecked(true);
       return;
@@ -1981,40 +2064,22 @@ export function AlbumWizard({
           setResumeChecked(true);
           return;
         }
-        const shouldResume =
-          typeof window !== "undefined" &&
-          window.confirm(
-            "임시저장된 신청서가 있습니다. 불러오시겠습니까?",
-          );
-        if (!shouldResume) {
-          clearDraftStorage();
-          setResumeChecked(true);
-          return;
-        }
-        const fallbackGuestToken =
-          storedGuestToken ?? currentGuestToken ?? safeRandomUUID();
-        applyStoredDrafts(drafts, fallbackGuestToken);
-        writeDraftStorage({
-          ids: drafts
-            .map((draft) => String(draft.id ?? ""))
-            .filter(Boolean),
-          guestToken: isGuest ? fallbackGuestToken : null,
+        setResumePrompt({
+          drafts,
+          storedGuestToken: storedGuestToken ?? undefined,
         });
       } catch (error) {
         console.warn("[AlbumDraft][resume] failed", error);
-      } finally {
         setResumeChecked(true);
       }
     };
     void run();
   }, [
-    applyStoredDrafts,
-    clearDraftStorage,
     currentGuestToken,
     isGuest,
     readDraftStorage,
+    resumePrompt,
     resumeChecked,
-    writeDraftStorage,
   ]);
 
   React.useEffect(() => {
@@ -2641,6 +2706,43 @@ export function AlbumWizard({
         show={isSaving || isAddingAlbum}
         label="심의 저장/결제 처리 중..."
       />
+      {resumePrompt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md rounded-[28px] border border-border/60 bg-background p-6 text-foreground shadow-xl"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              임시저장 알림
+            </p>
+            <h3 className="mt-2 text-lg font-semibold">
+              임시저장된 신청서가 있습니다.
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              불러오시겠습니까?
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => void handleResumeDraftCancel()}
+                disabled={isClearingResumeDrafts}
+                className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isClearingResumeDrafts ? "삭제 중..." : "취소"}
+              </button>
+              <button
+                type="button"
+                onClick={handleResumeDraftConfirm}
+                disabled={isClearingResumeDrafts}
+                className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                불러오기
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {spellcheckModalOpen && spellcheckPendingTrack === activeTrackIndex ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
           <button

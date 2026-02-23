@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const submissionId = String(body.submissionId ?? "").trim();
-    const guestToken = body.guestToken ? String(body.guestToken) : undefined;
+    const guestToken = body.guestToken ? String(body.guestToken).trim() : undefined;
     const context = parseInicisContext(body.context);
 
     if (!context) {
@@ -49,7 +49,11 @@ export async function POST(req: NextRequest) {
         baseUrl,
         error,
       });
-      return NextResponse.json({ error: error ?? "결제 요청 생성 실패" }, { status: 400 });
+      const status =
+        error?.includes("이미 결제가 완료") || error?.includes("시작할 수 없습니다")
+          ? 409
+          : 400;
+      return NextResponse.json({ error: error ?? "결제 요청 생성 실패" }, { status });
     }
 
     return NextResponse.json(result);

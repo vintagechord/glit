@@ -377,7 +377,6 @@ const runProvider = async (
   provider: SpellcheckProvider,
   text: string,
   context: ProviderContext,
-  traceId: string,
 ) => {
   const state = providerState.get(provider.name);
   if (state && state.openUntil > Date.now()) {
@@ -480,7 +479,7 @@ export const runSpellcheckPipeline = async (
 
     const providerRuns = await Promise.all(
       providers.map((provider) =>
-        runProvider(provider, workingText, { mode, domain }, traceId),
+        runProvider(provider, workingText, { mode, domain }),
       ),
     );
 

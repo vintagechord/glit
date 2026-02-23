@@ -812,7 +812,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handlePrev}
                 disabled={page <= 0}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-foreground/5 text-xs text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-bold text-slate-900 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-300 hover:shadow-[0_8px_18px_rgba(15,23,42,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-amber-300/70 dark:bg-amber-300 dark:text-slate-900 dark:hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="이전 심의 진행 상태"
               >
                 ↑
@@ -821,7 +821,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handleNext}
                 disabled={page >= maxPage}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-foreground/5 text-xs text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-bold text-slate-900 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-300 hover:shadow-[0_8px_18px_rgba(15,23,42,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-amber-300/70 dark:bg-amber-300 dark:text-slate-900 dark:hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="다음 심의 진행 상태"
               >
                 ↓

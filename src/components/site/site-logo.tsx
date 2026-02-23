@@ -17,16 +17,24 @@ export function SiteLogo({
   href = "/",
   className,
   alt = "온사이드",
-  height = 32,
-  width = 118,
+  height,
+  width,
   showSrLabel = true,
 }: SiteLogoProps) {
+  const sizeStyle =
+    typeof width === "number" || typeof height === "number"
+      ? {
+          width: typeof width === "number" ? `${width}px` : undefined,
+          height: typeof height === "number" ? `${height}px` : undefined,
+        }
+      : undefined;
   const textLogo = (
     <span
       className={cn(
-        "text-lg font-semibold tracking-[0.32em] text-black dark:text-white",
+        "inline-flex items-center text-lg font-semibold tracking-[0.32em] text-black dark:text-white",
         className,
       )}
+      style={sizeStyle}
       aria-hidden={showSrLabel ? "true" : undefined}
     >
       ONSIDE

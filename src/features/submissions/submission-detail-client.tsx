@@ -313,10 +313,6 @@ export function SubmissionDetailClient({
     initialFiles ?? [],
   );
   const [isRatingDownloading, setIsRatingDownloading] = React.useState(false);
-  const [activeResultNote, setActiveResultNote] = React.useState<{
-    stationName?: string | null;
-    note: string;
-  } | null>(null);
   const [radioLinksModal, setRadioLinksModal] = React.useState<{
     stationName?: string;
     links: RadioBoardLink[];
@@ -324,6 +320,7 @@ export function SubmissionDetailClient({
   const [trackResultModal, setTrackResultModal] = React.useState<{
     stationName?: string;
     stationCode?: string | null;
+    resultNote?: string | null;
     summary: ReturnType<typeof summarizeTrackResults>;
   } | null>(null);
   const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
@@ -1262,14 +1259,13 @@ export function SubmissionDetailClient({
               <div className="rounded-2xl border border-border/60 bg-background/70">
                 <div className="overflow-x-auto">
                   <div className="min-w-[640px]">
-                    <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <div className="grid grid-cols-[1.2fr_0.95fr_1fr_1fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       <span className="justify-self-center text-center">방송국</span>
                       <span className="justify-self-center text-center">접수 상태</span>
                       <span className="justify-self-center text-center">
                         {isMvSubmission ? "등급 분류" : "트랙 결과"}
                       </span>
                       <span className="justify-self-center text-center">최근 업데이트</span>
-                      <span className="justify-self-center text-center">사유</span>
                     </div>
                     <div className="divide-y divide-border/60">
                       {renderStationReviews.map((review) => {
@@ -1277,15 +1273,7 @@ export function SubmissionDetailClient({
                           ? { label: "결과 통보", tone: "bg-emerald-500/15 text-emerald-800" }
                           : getReviewReception(review.status);
                         const trackInfo = buildTrackSummary(review.track_results);
-                        const note = review.result_note?.trim();
-                        const hasRejection = trackInfo.counts.rejected > 0;
-                        const showNote = Boolean(note) && hasRejection;
-                        const notePreview =
-                          showNote && note
-                            ? note.length > 28
-                              ? `${note.slice(0, 28)}…`
-                              : note
-                            : null;
+                        const note = review.result_note?.trim() || null;
                         const hasApprovedTrack = trackInfo.counts.approved > 0;
                         const canOpenRadioLinks =
                           hasApprovedTrack || review.status === "APPROVED";
@@ -1338,12 +1326,22 @@ export function SubmissionDetailClient({
                           totalTracksForDisplay > 1
                             ? buildTrackSummaryText(summaryCounts, " · ")
                             : null;
+                        const hasRejectedOutcome =
+                          trackInfo.counts.rejected > 0 ||
+                          review.status === "REJECTED" ||
+                          review.status === "NEEDS_FIX";
+                        const resolvedResultNote = hasRejectedOutcome
+                          ? note ?? ratingReason ?? null
+                          : null;
+                        const shouldOpenResultModal =
+                          hasTrackDetails || Boolean(resolvedResultNote);
 
                         const handleResultClick = () => {
-                          if (hasTrackDetails) {
+                          if (shouldOpenResultModal) {
                             setTrackResultModal({
                               stationName: review.station?.name ?? "-",
                               stationCode,
+                              resultNote: resolvedResultNote,
                               summary: trackInfo,
                             });
                             return;
@@ -1359,7 +1357,7 @@ export function SubmissionDetailClient({
                         return (
                           <div
                             key={review.id}
-                            className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 px-4 py-3 text-sm"
+                            className="grid grid-cols-[1.2fr_0.95fr_1fr_1fr] items-center gap-3 px-4 py-3 text-sm"
                           >
                             <div className="min-w-0 flex items-center justify-center gap-2 text-center">
                               <StationLogoWithFallback station={review.station} />
@@ -1385,7 +1383,7 @@ export function SubmissionDetailClient({
                               className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${
                                 resultTone.tone
                               } ${
-                                hasTrackDetails
+                                shouldOpenResultModal
                                   ? "transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100"
                                   : "transition"
                               }`}
@@ -1400,39 +1398,6 @@ export function SubmissionDetailClient({
                             <span className="justify-self-center text-center text-xs text-muted-foreground">
                               {formatDateTime(review.updated_at)}
                             </span>
-                            {ratingReason ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setActiveResultNote({
-                                    stationName: review.station?.name ?? "-",
-                                    note: ratingReason,
-                                  })
-                                }
-                                className="justify-self-center rounded-full border border-border/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:text-foreground"
-                              >
-                                사유 보기
-                              </button>
-                            ) : showNote ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setActiveResultNote({
-                                    stationName: review.station?.name ?? "-",
-                                    note: note ?? "",
-                                  })
-                                }
-                                className="justify-self-center max-w-[140px] rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
-                              >
-                                <span className="block truncate">
-                                  {notePreview ?? "사유 보기"}
-                                </span>
-                              </button>
-                            ) : (
-                              <span className="text-center text-xs text-muted-foreground">
-                                -
-                              </span>
-                            )}
                           </div>
                         );
                       })}
@@ -1492,31 +1457,6 @@ export function SubmissionDetailClient({
         )}
       </div>
 
-      {activeResultNote && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-            <p className="text-sm font-semibold text-foreground">불통과 사유</p>
-            {activeResultNote.stationName ? (
-              <p className="mt-2 text-sm font-semibold text-foreground">
-                {activeResultNote.stationName}
-              </p>
-            ) : null}
-            <textarea
-              readOnly
-              value={activeResultNote.note}
-              className="mt-3 h-40 w-full resize-none rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
-            />
-            <button
-              type="button"
-              onClick={() => setActiveResultNote(null)}
-              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
-            >
-              닫기
-            </button>
-          </div>
-        </div>
-      )}
-
       {trackResultModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
@@ -1526,46 +1466,64 @@ export function SubmissionDetailClient({
             <h3 className="mt-2 text-lg font-semibold text-foreground">
               {trackResultModal.stationName ?? "-"}
             </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
-            </p>
-            <div className="mt-4 max-h-80 space-y-2 overflow-auto">
-              {trackResultModal.summary.results.map((track, index) => {
-                const status =
-                  track.status === "APPROVED"
-                    ? { label: "통과", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200" }
-                    : track.status === "REJECTED"
-                      ? { label: "불통과", tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200" }
-                      : { label: "대기", tone: "bg-slate-500/10 text-slate-600 dark:text-slate-300" };
-                const trackLabel =
-                  track.title ||
-                  albumTracks.find(
-                    (base) =>
-                      (track.track_id && base.id === track.track_id) ||
-                      (typeof track.track_no === "number" &&
-                        base.track_no === track.track_no),
-                  )?.track_title ||
-                  "트랙";
-                return (
-                  <div
-                    key={`${track.track_id ?? index}-${track.track_no ?? index}`}
-                    className="flex items-center justify-between rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-foreground">
-                        {track.track_no ? `${track.track_no}. ` : ""}
-                        {trackLabel}
-                      </p>
-                    </div>
-                    <span
-                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${status.tone}`}
+            {trackResultModal.summary.counts.total > 0 ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">
+                방송국 결과가 등록되면 트랙 상세가 표시됩니다.
+              </p>
+            )}
+            {trackResultModal.summary.results.length > 0 ? (
+              <div className="mt-4 max-h-80 space-y-2 overflow-auto">
+                {trackResultModal.summary.results.map((track, index) => {
+                  const status =
+                    track.status === "APPROVED"
+                      ? { label: "통과", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200" }
+                      : track.status === "REJECTED"
+                        ? { label: "불통과", tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200" }
+                        : { label: "대기", tone: "bg-slate-500/10 text-slate-600 dark:text-slate-300" };
+                  const trackLabel =
+                    track.title ||
+                    albumTracks.find(
+                      (base) =>
+                        (track.track_id && base.id === track.track_id) ||
+                        (typeof track.track_no === "number" &&
+                          base.track_no === track.track_no),
+                    )?.track_title ||
+                    "트랙";
+                  return (
+                    <div
+                      key={`${track.track_id ?? index}-${track.track_no ?? index}`}
+                      className="flex items-center justify-between rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-sm"
                     >
-                      {status.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-foreground">
+                          {track.track_no ? `${track.track_no}. ` : ""}
+                          {trackLabel}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${status.tone}`}
+                      >
+                        {status.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+            {trackResultModal.resultNote ? (
+              <div className="mt-4 rounded-2xl border border-rose-200/70 bg-rose-50/70 p-4 dark:border-rose-300/30 dark:bg-rose-500/10">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-700 dark:text-rose-200">
+                  불통과 사유
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-rose-700 dark:text-rose-100">
+                  {trackResultModal.resultNote}
+                </p>
+              </div>
+            ) : null}
             <div className="mt-5 flex items-center justify-between gap-3">
               {trackResultModal.summary.counts.approved > 0 ? (
                 <button

@@ -282,6 +282,21 @@ export function MvWizard({
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [resumeChecked, setResumeChecked] = React.useState(false);
+  const [resumePrompt, setResumePrompt] = React.useState<{
+    draft: Record<string, unknown>;
+    stored: {
+      id?: string;
+      updatedAt?: number;
+      guestToken?: string;
+      mvType?: string;
+      tvStations?: string[];
+      onlineOptions?: string[];
+      onlineBaseSelected?: boolean;
+      emailSubmitConfirmed?: boolean;
+    } | null;
+    storedGuestToken?: string | null;
+  } | null>(null);
+  const [isClearingResumeDrafts, setIsClearingResumeDrafts] = React.useState(false);
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [openBroadcastSpec, setOpenBroadcastSpec] = React.useState<string | null>(
@@ -370,6 +385,37 @@ export function MvWizard({
       // ignore
     }
   }, [draftStorageKey]);
+
+  const clearServerDrafts = React.useCallback(async (options: {
+    ids?: string[];
+    guestToken?: string | null;
+  }) => {
+    const ids = (options.ids ?? []).filter(Boolean);
+    const payload: {
+      type: "MV";
+      ids?: string[];
+      guestToken?: string;
+    } = {
+      type: "MV",
+    };
+    if (ids.length > 0) {
+      payload.ids = ids;
+    }
+    if (isGuest) {
+      const guestToken = options.guestToken ?? guestTokenRef.current;
+      if (guestToken) payload.guestToken = guestToken;
+    }
+
+    const res = await fetch("/api/submissions/drafts", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const json = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(json?.error || "임시저장 삭제에 실패했습니다.");
+    }
+  }, [isGuest]);
 
   React.useEffect(() => {
     if (!isGuest || typeof window === "undefined") return;
@@ -463,7 +509,6 @@ export function MvWizard({
     void createDraft();
   }, [createDraft, isPreparingDraft, resumeChecked]);
 
-  const submissionId = submissionIdRef.current;
   const guestToken = guestTokenRef.current;
   const shouldShowGuestLookup = isGuest || Boolean(completionGuestToken);
   const guestLookupCode = completionGuestToken ?? guestToken ?? completionId;
@@ -509,7 +554,7 @@ export function MvWizard({
       return chips;
     }
     return [];
-  }, [mvType, onlineOptions, tvStations]);
+  }, [mvType, onlineOptions]);
 
   const paymentItems = React.useMemo(() => {
     const items: Array<{ title: string; amount: number }> = [];
@@ -1382,8 +1427,56 @@ export function MvWizard({
     setStep(2);
   }, [buildUploadsFromFiles, isGuest, mapDraftFiles, normalizeDateValue]);
 
+  const handleResumeDraftConfirm = React.useCallback(() => {
+    if (!resumePrompt) return;
+    applyStoredDraft(resumePrompt.draft, resumePrompt.stored ?? null);
+    const draftId = String(resumePrompt.draft.id ?? "");
+    if (draftId) {
+      writeDraftStorage({
+        id: draftId,
+        guestToken: isGuest ? (resumePrompt.storedGuestToken ?? null) : null,
+        mvType:
+          resumePrompt.draft.type === "MV_BROADCAST"
+            ? "MV_BROADCAST"
+            : "MV_DISTRIBUTION",
+        tvStations: Array.isArray(resumePrompt.stored?.tvStations)
+          ? resumePrompt.stored.tvStations
+          : [],
+        onlineOptions: Array.isArray(resumePrompt.stored?.onlineOptions)
+          ? resumePrompt.stored.onlineOptions
+          : [],
+        onlineBaseSelected: resumePrompt.stored?.onlineBaseSelected ?? false,
+        emailSubmitConfirmed: resumePrompt.stored?.emailSubmitConfirmed ?? false,
+      });
+    }
+    setResumePrompt(null);
+    setResumeChecked(true);
+  }, [applyStoredDraft, isGuest, resumePrompt, writeDraftStorage]);
+
+  const handleResumeDraftCancel = React.useCallback(async () => {
+    if (!resumePrompt || isClearingResumeDrafts) return;
+    setIsClearingResumeDrafts(true);
+    const guestToken = resumePrompt.storedGuestToken ?? guestTokenRef.current;
+    clearDraftStorage();
+    try {
+      await clearServerDrafts({ guestToken });
+    } catch (error) {
+      console.warn("[MvDraft][resume-clear] failed", error);
+    } finally {
+      setIsClearingResumeDrafts(false);
+      setResumePrompt(null);
+      setResumeChecked(true);
+    }
+  }, [
+    clearDraftStorage,
+    clearServerDrafts,
+    isClearingResumeDrafts,
+    resumePrompt,
+  ]);
+
   React.useEffect(() => {
     if (resumeChecked) return;
+    if (resumePrompt) return;
     if (typeof window === "undefined") {
       setResumeChecked(true);
       return;
@@ -1410,46 +1503,23 @@ export function MvWizard({
           setResumeChecked(true);
           return;
         }
-        const shouldResume =
-          typeof window !== "undefined" &&
-          window.confirm(
-            "임시저장된 신청서가 있습니다. 불러오시겠습니까?",
-          );
-        if (!shouldResume) {
-          clearDraftStorage();
-          setResumeChecked(true);
-          return;
-        }
-        applyStoredDraft(drafts[0], stored ?? null);
-        const draftId = String(drafts[0].id ?? "");
-        if (draftId) {
-          writeDraftStorage({
-            id: draftId,
-            guestToken: isGuest ? (storedGuestToken ?? null) : null,
-            mvType:
-              drafts[0].type === "MV_BROADCAST"
-                ? "MV_BROADCAST"
-                : "MV_DISTRIBUTION",
-            tvStations: Array.isArray(stored?.tvStations) ? stored!.tvStations : [],
-            onlineOptions: Array.isArray(stored?.onlineOptions) ? stored!.onlineOptions : [],
-            onlineBaseSelected: stored?.onlineBaseSelected ?? false,
-            emailSubmitConfirmed: stored?.emailSubmitConfirmed ?? false,
-          });
-        }
+        setResumePrompt({
+          draft: drafts[0],
+          stored: stored ?? null,
+          storedGuestToken: storedGuestToken ?? null,
+        });
       } catch (error) {
         console.warn("[MvDraft][resume] failed", error);
-      } finally {
         setResumeChecked(true);
       }
     };
     void run();
   }, [
     applyStoredDraft,
-    clearDraftStorage,
     isGuest,
     readDraftStorage,
+    resumePrompt,
     resumeChecked,
-    writeDraftStorage,
   ]);
 
   const resolveSongTitleValues = () => {
@@ -1876,6 +1946,43 @@ export function MvWizard({
       {isDraggingOver && (
         <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
       )}
+      {resumePrompt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md rounded-[28px] border border-border/60 bg-background p-6 text-foreground shadow-xl"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              임시저장 알림
+            </p>
+            <h3 className="mt-2 text-lg font-semibold">
+              임시저장된 신청서가 있습니다.
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              불러오시겠습니까?
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => void handleResumeDraftCancel()}
+                disabled={isClearingResumeDrafts}
+                className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isClearingResumeDrafts ? "삭제 중..." : "취소"}
+              </button>
+              <button
+                type="button"
+                onClick={handleResumeDraftConfirm}
+                disabled={isClearingResumeDrafts}
+                className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                불러오기
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {confirmModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"

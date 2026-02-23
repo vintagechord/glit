@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
 import { getInicisMode, getStdPayConfig } from "@/lib/inicis/config";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -80,13 +82,19 @@ export const createKaraokePaymentOrder = async (
   if (error || !request) {
     return { error: "요청을 찾을 수 없습니다." };
   }
-  const amountKrw = Number(request.amount_krw ?? 0);
+  if (request.payment_status === "PAID") {
+    return { error: "이미 결제가 완료된 요청입니다." };
+  }
+  if (request.payment_method === "BANK") {
+    return { error: "무통장 입금 요청은 카드 결제를 시작할 수 없습니다." };
+  }
+  const amountKrw = Math.round(Number(request.amount_krw ?? 0));
   if (!Number.isFinite(amountKrw) || amountKrw <= 0) {
     return { error: "결제 금액이 유효하지 않습니다." };
   }
 
   const orderTimestamp = Date.now().toString();
-  const orderId = `KRP-${orderTimestamp}-${request.id.slice(0, 8)}`;
+  const orderId = `KRP-${orderTimestamp}-${request.id.slice(0, 8)}-${randomUUID().slice(0, 8)}`;
   const config = getStdPayConfig();
 
   const productName = request.title ?? "노래방 등록 대행";
@@ -129,10 +137,13 @@ export const createKaraokePaymentOrder = async (
     status: "REQUESTED",
   });
   if (insertError) {
+    if (insertError.code === "23505") {
+      return { error: "이미 생성된 결제 요청이 있습니다. 잠시 후 다시 시도해주세요." };
+    }
     return { error: "결제 요청을 저장하지 못했습니다." };
   }
 
-  await admin
+  const { error: requestUpdateError } = await admin
     .from("karaoke_requests")
     .update({
       payment_method: "CARD",
@@ -140,6 +151,9 @@ export const createKaraokePaymentOrder = async (
       order_id: orderId,
     })
     .eq("id", request.id);
+  if (requestUpdateError) {
+    return { error: "결제 요청 상태를 저장하지 못했습니다." };
+  }
 
   return { result: { orderId, stdParams, stdJsUrl: config.stdJsUrl, amount: amountKrw } };
 };
@@ -175,7 +189,7 @@ export const markKaraokePaymentFailure = async (
     })
     .eq("order_id", orderId);
 
-  await admin
+  const { error: requestUpdateError } = await admin
     .from("karaoke_requests")
     .update({
       payment_status: "UNPAID",
@@ -185,7 +199,8 @@ export const markKaraokePaymentFailure = async (
     })
     .eq("order_id", orderId);
 
-  return { ok: !error, error };
+  const finalError = error ?? requestUpdateError ?? null;
+  return { ok: !finalError, error: finalError };
 };
 
 export const markKaraokePaymentSuccess = async (
@@ -213,7 +228,7 @@ export const markKaraokePaymentSuccess = async (
     .maybeSingle();
 
   if (updated?.request_id) {
-    await admin
+    const { error: requestUpdateError } = await admin
       .from("karaoke_requests")
       .update({
         payment_status: "PAID",
@@ -225,6 +240,9 @@ export const markKaraokePaymentSuccess = async (
         payment_raw_response: payload.raw_response ?? null,
       })
       .eq("id", updated.request_id);
+    if (requestUpdateError) {
+      return { ok: false, error: requestUpdateError, requestId: updated.request_id };
+    }
   }
 
   return { ok: !error, error, requestId: updated?.request_id ?? null };

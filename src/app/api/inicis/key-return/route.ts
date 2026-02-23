@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getBillingConfig, getStdPayConfig } from "@/lib/inicis/config";
-import { requestBillingPayment, requestStdPayApproval } from "@/lib/inicis/api";
+import {
+  isInicisSuccessCode,
+  requestBillingPayment,
+  requestStdPayApproval,
+} from "@/lib/inicis/api";
 import {
   activateSubscription,
   getHistoryByOrderId,
@@ -26,31 +30,75 @@ const failureResponse = (
     { status: statusCode },
   );
 
+const normalizeAmount = (value: string | number | null | undefined) => {
+  if (value == null) return 0;
+  const text = String(value).replace(/,/g, "").trim();
+  if (!text) return 0;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : NaN;
+};
+
+const isTrustedInicisUrl = (value: string | null | undefined) => {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    return (
+      parsed.protocol === "https:" &&
+      (host === "inicis.com" || host.endsWith(".inicis.com"))
+    );
+  } catch {
+    return false;
+  }
+};
+
+const toCode = (value: string | number | null | undefined, fallback: string) =>
+  value == null ? fallback : String(value);
+
+const toStrOrNull = (value: string | number | null | undefined) =>
+  value == null ? null : String(value);
+
 export async function POST(req: NextRequest) {
   const baseUrl = getBaseUrl(req);
-  const form = await req.formData();
+  const form = await req.formData().catch(() => {
+    const fallback = new FormData();
+    req.nextUrl.searchParams.forEach((value, key) => {
+      fallback.append(key, value);
+    });
+    return fallback;
+  });
+  const callbackPayload = Object.fromEntries(form.entries());
   const authToken =
-    (form.get("authToken") as string | null) ??
-    (form.get("auth_token") as string | null) ??
-    "";
-  const authUrl = (form.get("authUrl") as string | null) ?? "";
-  const netCancelUrl = (form.get("netCancelUrl") as string | null) ?? "";
+    (
+      (form.get("authToken") as string | null) ??
+      (form.get("auth_token") as string | null) ??
+      ""
+    ).trim();
+  const authUrl = ((form.get("authUrl") as string | null) ?? "").trim();
+  const netCancelUrl = ((form.get("netCancelUrl") as string | null) ?? "").trim();
   const orderId =
-    (form.get("oid") as string | null) ??
-    (form.get("orderNumber") as string | null) ??
-    "";
-  const mid = (form.get("mid") as string | null) ?? "";
+    (
+      (form.get("oid") as string | null) ??
+      (form.get("orderNumber") as string | null) ??
+      ""
+    ).trim();
+  const mid = ((form.get("mid") as string | null) ?? "").trim();
   const timestamp =
-    (form.get("timestamp") as string | null) ??
-    (form.get("tstamp") as string | null) ??
-    Date.now().toString();
-  const tid = (form.get("tid") as string | null) ?? "";
+    (
+      (form.get("timestamp") as string | null) ??
+      (form.get("tstamp") as string | null) ??
+      Date.now().toString()
+    ).trim();
+  const tid = ((form.get("tid") as string | null) ?? "").trim();
 
   if (!authToken || !authUrl || !orderId) {
     return NextResponse.json(
       { error: "Invalid Inicis callback payload" },
       { status: 400 },
     );
+  }
+  if (!isTrustedInicisUrl(authUrl)) {
+    return failureResponse(baseUrl, orderId, "승인 URL이 유효하지 않습니다.", 400);
   }
 
   const stdConfig = getStdPayConfig();
@@ -63,11 +111,17 @@ export async function POST(req: NextRequest) {
   if (historyError || !history) {
     return failureResponse(baseUrl, orderId, "Unknown order id", 404);
   }
+  if (!history.user_id) {
+    return failureResponse(baseUrl, orderId, "구독 사용자 정보를 찾을 수 없습니다.", 400);
+  }
 
-  const historyPrice = Number(history.amount_krw ?? 0);
+  const historyPrice = normalizeAmount(history.amount_krw ?? 0);
+  if (!Number.isFinite(historyPrice) || historyPrice <= 0) {
+    return failureResponse(baseUrl, orderId, "결제 금액이 유효하지 않습니다.", 400);
+  }
   await updateHistory(orderId, {
     result_message: "Auth callback received",
-    raw_response: Object.fromEntries(form.entries()),
+    raw_response: { callback: callbackPayload },
   });
 
   const approval = await requestStdPayApproval({
@@ -90,6 +144,7 @@ export async function POST(req: NextRequest) {
       status: "FAILED",
       result_code: resultCodeStr,
       result_message: resultMsgStr,
+      raw_response: { callback: callbackPayload, approval: approval.data ?? null },
     });
     return failureResponse(
       baseUrl,
@@ -100,26 +155,52 @@ export async function POST(req: NextRequest) {
   }
 
   const authData = approval.data as Record<string, string | number | null | undefined>;
+  const authResultCode = toCode(authData.resultCode, "AUTH_FAIL");
+  const authResultMsg = authData.resultMsg != null ? String(authData.resultMsg) : "승인 실패";
+  if (!isInicisSuccessCode(authResultCode)) {
+    await updateHistory(orderId, {
+      status: "FAILED",
+      result_code: authResultCode,
+      result_message: authResultMsg,
+      raw_response: { callback: callbackPayload, approval: authData },
+    });
+    return failureResponse(baseUrl, orderId, authResultMsg, 400);
+  }
+
+  if (approval.secureSignatureMatches === false) {
+    const authSignature =
+      authData.authSignature != null
+        ? String(authData.authSignature)
+        : authData.AuthSignature != null
+          ? String(authData.AuthSignature)
+          : "";
+    if (authSignature) {
+      await updateHistory(orderId, {
+        status: "FAILED",
+        result_code: "SIGNATURE_MISMATCH",
+        result_message: "승인 서명 검증에 실패했습니다.",
+        raw_response: { callback: callbackPayload, approval: authData },
+      });
+      return failureResponse(baseUrl, orderId, "결제 서명 검증에 실패했습니다.", 400);
+    }
+  }
+
   const billKey =
     authData.CARD_BillKey ??
     authData.billKey ??
     authData.BillKey ??
     authData.P_BILLKEY ??
     null;
-  const billKeyStr = billKey != null ? String(billKey) : null;
+  const billKeyStr = billKey != null ? String(billKey).trim() : null;
 
-  const totPrice = Number(authData.TotPrice ?? authData.price ?? 0);
-  const toCode = (value: string | number | null | undefined, fallback: string) =>
-    value == null ? fallback : String(value);
-  const toStrOrNull = (value: string | number | null | undefined) =>
-    value == null ? null : String(value);
+  const totPrice = normalizeAmount(authData.TotPrice ?? authData.price ?? 0);
 
   if (!billKeyStr) {
     await updateHistory(orderId, {
       status: "FAILED",
-      result_code: toCode(authData.resultCode, "NO_BILLKEY"),
+      result_code: toCode(authResultCode, "NO_BILLKEY"),
       result_message: "빌링키를 발급받지 못했습니다.",
-      raw_response: { auth: authData },
+      raw_response: { callback: callbackPayload, auth: authData },
     });
     return failureResponse(baseUrl, orderId, "빌링키 발급 실패", 400);
   }
@@ -129,15 +210,33 @@ export async function POST(req: NextRequest) {
       status: "FAILED",
       result_code: "PRICE_MISMATCH",
       result_message: `가격 불일치 (${totPrice} != ${historyPrice})`,
-      raw_response: { auth: authData },
+      raw_response: { callback: callbackPayload, auth: authData },
     });
     return failureResponse(baseUrl, orderId, "결제 금액이 일치하지 않습니다.", 400);
+  }
+
+  const authTid =
+    toStrOrNull(
+      authData.P_TID ??
+        authData.tid ??
+        authData.TID ??
+        tid ??
+        null,
+    )?.trim() ?? null;
+  if (!authTid) {
+    await updateHistory(orderId, {
+      status: "FAILED",
+      result_code: "NO_TID",
+      result_message: "승인 거래번호(TID)를 수신하지 못했습니다.",
+      raw_response: { callback: callbackPayload, auth: authData },
+    });
+    return failureResponse(baseUrl, orderId, "승인 거래번호를 확인할 수 없습니다.", 400);
   }
 
   const { billing, error: billingError } = await storeBillingKey({
     userId: history.user_id,
     billKey: billKeyStr,
-    pgTid: toStrOrNull(authData.tid ?? tid ?? null),
+    pgTid: authTid,
     pgMid: billingConfig.mid,
     cardCode: toStrOrNull(authData.CARD_Code ?? authData.cardCode ?? null),
     cardName: toStrOrNull(authData.CARD_Name ?? authData.cardName ?? null),
@@ -152,7 +251,7 @@ export async function POST(req: NextRequest) {
       status: "FAILED",
       result_code: "BILLING_STORE_FAIL",
       result_message: "빌링키 저장 실패",
-      raw_response: { auth: authData, billingError },
+      raw_response: { callback: callbackPayload, auth: authData, billingError },
     });
     return failureResponse(baseUrl, orderId, "빌링키 저장에 실패했습니다.", 500);
   }
@@ -160,10 +259,10 @@ export async function POST(req: NextRequest) {
   await updateHistory(orderId, {
     status: "BILLKEY_ISSUED",
     billing_id: billing.id,
-    result_code: toCode(authData.resultCode, "0000"),
+    result_code: toCode(authResultCode, "0000"),
     result_message:
       authData.resultMsg != null ? String(authData.resultMsg) : "빌링키 발급 완료",
-    raw_response: { auth: authData },
+    raw_response: { callback: callbackPayload, auth: authData },
   });
 
   const billKeyForBilling = billKeyStr ?? "";
@@ -188,7 +287,11 @@ export async function POST(req: NextRequest) {
         billingResult.data?.resultMsg != null
           ? String(billingResult.data.resultMsg)
           : "정기결제(빌링) 요청 실패",
-      raw_response: { auth: authData, billing: billingResult.data },
+      raw_response: {
+        callback: callbackPayload,
+        auth: authData,
+        billing: billingResult.data,
+      },
     });
     return failureResponse(
       baseUrl,
@@ -203,14 +306,41 @@ export async function POST(req: NextRequest) {
   const billingData = billingResult.data as Record<string, string | number | null | undefined>;
   const tidPaid =
     billingData.tid ?? billingData.TID ?? billingData.P_TID ?? billingData.tid;
-  const tidPaidStr = tidPaid != null ? String(tidPaid) : null;
+  const tidPaidStr = tidPaid != null ? String(tidPaid).trim() : null;
+  if (!tidPaidStr) {
+    await updateHistory(orderId, {
+      status: "FAILED",
+      result_code: "NO_TID",
+      result_message: "빌링 결제 거래번호(TID)를 수신하지 못했습니다.",
+      raw_response: {
+        callback: callbackPayload,
+        auth: authData,
+        billing: billingData,
+      },
+    });
+    return failureResponse(baseUrl, orderId, "빌링 결제 거래번호를 확인할 수 없습니다.", 400);
+  }
 
-  const { subscription } = await activateSubscription({
+  const { subscription, error: subscriptionError } = await activateSubscription({
     userId: history.user_id,
     billingId: billing.id,
     amountKrw: historyPrice,
     productName: history.product_name ?? "Subscription",
   });
+  if (subscriptionError || !subscription) {
+    await updateHistory(orderId, {
+      status: "FAILED",
+      result_code: "SUBSCRIPTION_ACTIVATE_FAIL",
+      result_message: "구독 활성화에 실패했습니다.",
+      raw_response: {
+        callback: callbackPayload,
+        auth: authData,
+        billing: billingData,
+        subscriptionError,
+      },
+    });
+    return failureResponse(baseUrl, orderId, "구독 활성화에 실패했습니다.", 500);
+  }
 
   await updateHistory(orderId, {
     status: "APPROVED",
@@ -218,9 +348,9 @@ export async function POST(req: NextRequest) {
     result_code: toCode(billingData.resultCode, "00"),
     result_message:
       billingData.resultMsg != null ? String(billingData.resultMsg) : "결제 완료",
-    raw_response: { auth: authData, billing: billingData },
+    raw_response: { callback: callbackPayload, auth: authData, billing: billingData },
     billing_id: billing.id,
-    subscription_id: subscription?.id ?? null,
+    subscription_id: subscription.id,
     paid_at: new Date().toISOString(),
   });
 

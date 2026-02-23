@@ -50,6 +50,28 @@ const mask = (value: string | null | undefined, visible = 2) => {
   return `${head}${"*".repeat(Math.max(1, value.length - visible * 2))}${tail}`;
 };
 
+const normalizeAmount = (value: string | number | null | undefined) => {
+  if (value == null) return 0;
+  const text = String(value).replace(/,/g, "").trim();
+  if (!text) return 0;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : NaN;
+};
+
+const isTrustedInicisUrl = (value: string | null | undefined) => {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    return (
+      parsed.protocol === "https:" &&
+      (host === "inicis.com" || host.endsWith(".inicis.com"))
+    );
+  } catch {
+    return false;
+  }
+};
+
 const scrubParams = (params: Record<string, string>) => {
   const sanitized = { ...params };
   [
@@ -134,38 +156,45 @@ export async function handleInicisReturn(req: NextRequest) {
     parsed = await parseParams(req);
     const { baseUrl, contentType, method, params, keys } = parsed;
 
-    const orderId =
-      params.orderNumber ?? params.oid ?? params.orderid ?? params.MOID ?? "";
-    const mid = params.mid ?? "";
+    const orderId = (
+      params.orderNumber ?? params.oid ?? params.orderid ?? params.MOID ?? ""
+    ).trim();
+    const mid = (params.mid ?? "").trim();
     const authToken =
-      params.authToken ?? params.auth_token ?? params.authtoken ?? "";
+      (
+        params.authToken ?? params.auth_token ?? params.authtoken ?? ""
+      ).trim();
     const authUrlFromReturn =
-      params.authUrl ?? params.auth_url ?? params.authurl ?? "";
-    const checkAckUrl = params.checkAckUrl ?? params.checkAckURL ?? "";
+      (params.authUrl ?? params.auth_url ?? params.authurl ?? "").trim();
+    const checkAckUrl = (params.checkAckUrl ?? params.checkAckURL ?? "").trim();
     const approvalUrl =
       authUrlFromReturn ||
       checkAckUrl ||
       "";
     // FIX: use authUrl instead of checkAckUrl for approval (2026-01-21)
-    const netCancelUrl =
+    const netCancelUrl = (
       params.netCancelUrl ??
       params.netCancelURL ??
       params.netcancelurl ??
       params.NetCancelURL ??
-      "";
-    const resultCode =
-      params.resultCode ?? params.resultcode ?? params.P_STATUS ?? "";
-    const resultMsg =
-      params.resultMsg ?? params.resultmsg ?? params.P_RMESG1 ?? "";
+      ""
+    ).trim();
+    const resultCode = (
+      params.resultCode ?? params.resultcode ?? params.P_STATUS ?? ""
+    ).trim();
+    const resultMsg = (
+      params.resultMsg ?? params.resultmsg ?? params.P_RMESG1 ?? ""
+    ).trim();
     const cancelFlag = params.cancel === "1" || params.cancel === "true";
-    const tidFromReturn =
+    const tidFromReturn = (
       params.tid ??
       params.TID ??
       params.P_TID ??
       params.PG_TID ??
       params.CARD_TID ??
-      "";
-    const amountFromReturn = Number(
+      ""
+    ).trim();
+    const amountFromReturn = normalizeAmount(
       params.price ?? params.TotPrice ?? params.P_AMT ?? 0,
     );
     const orderTimestampFromId = (() => {
@@ -241,6 +270,25 @@ export async function handleInicisReturn(req: NextRequest) {
             karaokePayment?.request?.amount_krw ??
             NaN,
         );
+    const alreadyApproved =
+      submissionPayment?.status === "APPROVED" ||
+      karaokePayment?.status === "APPROVED";
+    if (alreadyApproved && (!resultCode || isInicisSuccessCode(resultCode))) {
+      return buildBridgeRedirect(baseUrl, {
+        status: "SUCCESS",
+        orderId,
+        submissionId,
+        guestToken,
+        requestId: karaokeRequestId,
+        tid: tidFromReturn || null,
+        amount:
+          Number.isFinite(amountFromReturn) && amountFromReturn > 0
+            ? amountFromReturn
+            : null,
+        resultCode: resultCode || "0000",
+        message: "이미 승인 처리된 결제입니다.",
+      });
+    }
 
     const saveFailure = async (code: string, message: string, raw?: Record<string, unknown>) => {
       const scrubbed = raw ?? scrubParams(params);
@@ -259,6 +307,92 @@ export async function handleInicisReturn(req: NextRequest) {
         });
       }
     };
+
+    if ((!submissionPayment && !karaokePayment) || paymentError) {
+      console.info("[INICIS][final]", {
+        orderId,
+        status: "FAILED",
+        reason: "payment_not_found_before_approval",
+      });
+      return buildBridgeRedirect(baseUrl, {
+        status: "FAIL",
+        orderId,
+        submissionId,
+        guestToken,
+        requestId: karaokeRequestId,
+        message: "결제 내역을 찾을 수 없습니다.",
+        resultCode: "ORDER_NOT_FOUND",
+      });
+    }
+
+    if (
+      Number.isFinite(paymentAmount) &&
+      paymentAmount > 0 &&
+      Number.isFinite(amountFromReturn) &&
+      amountFromReturn > 0 &&
+      paymentAmount !== amountFromReturn
+    ) {
+      await saveFailure(
+        "PRICE_MISMATCH",
+        `금액 불일치 (${amountFromReturn} != ${paymentAmount})`,
+        {
+          returnParams: scrubParams(params),
+          phase: "pre_auth",
+          expected: paymentAmount,
+          received: amountFromReturn,
+        },
+      );
+      console.info("[INICIS][final]", {
+        orderId,
+        status: "FAILED",
+        reason: "price_mismatch_before_approval",
+        expected: paymentAmount,
+        received: amountFromReturn,
+      });
+      return buildBridgeRedirect(baseUrl, {
+        status: "FAIL",
+        orderId,
+        submissionId,
+        guestToken,
+        requestId: karaokeRequestId,
+        message: "결제 금액이 일치하지 않습니다.",
+        resultCode: "PRICE_MISMATCH",
+      });
+    }
+
+    if (!approvalUrl || !isTrustedInicisUrl(approvalUrl)) {
+      await saveFailure(
+        "INVALID_AUTH_URL",
+        "승인 URL을 검증할 수 없습니다.",
+        { returnParams: scrubParams(params), approvalUrl },
+      );
+      return buildBridgeRedirect(baseUrl, {
+        status: "FAIL",
+        orderId,
+        submissionId,
+        guestToken,
+        requestId: karaokeRequestId,
+        message: "결제 승인 경로가 유효하지 않습니다.",
+        resultCode: "INVALID_AUTH_URL",
+      });
+    }
+
+    if (netCancelUrl && !isTrustedInicisUrl(netCancelUrl)) {
+      await saveFailure(
+        "INVALID_NETCANCEL_URL",
+        "망취소 URL을 검증할 수 없습니다.",
+        { returnParams: scrubParams(params), netCancelUrl },
+      );
+      return buildBridgeRedirect(baseUrl, {
+        status: "FAIL",
+        orderId,
+        submissionId,
+        guestToken,
+        requestId: karaokeRequestId,
+        message: "결제 취소 경로가 유효하지 않습니다.",
+        resultCode: "INVALID_NETCANCEL_URL",
+      });
+    }
 
     if (mid && mid !== config.mid) {
       await saveFailure("MID_MISMATCH", "MID 불일치");
@@ -307,16 +441,7 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    if (!authToken || !approvalUrl) {
-      if (!approvalUrl) {
-        console.error("[INICIS][error] missing approvalUrl", {
-          orderId,
-          hasAuthToken: Boolean(authToken),
-          hasAuthUrl: Boolean(authUrlFromReturn),
-          hasCheckAckUrl: Boolean(checkAckUrl),
-          parsedKeys: keys,
-        });
-      }
+    if (!authToken) {
       await saveFailure(resultCode || "AUTH_MISSING", resultMsg || "인증 토큰을 받지 못했습니다.");
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
@@ -477,6 +602,28 @@ export async function handleInicisReturn(req: NextRequest) {
       verifyStatus,
     });
 
+    if (hasSigInputs && localSigMatch === false) {
+      await saveFailure("SIGNATURE_MISMATCH", "서명 검증에 실패했습니다.", {
+        returnParams: scrubParams(params),
+        approval: authData,
+        signature: {
+          verifyStatus,
+          sigMismatchReason,
+          authSignature: maskSig(authSignature),
+          ourSecureSignature: maskSig(ourSecureSignature),
+        },
+      });
+      return buildBridgeRedirect(baseUrl, {
+        status: "FAIL",
+        orderId,
+        submissionId,
+        guestToken,
+        requestId: karaokeRequestId,
+        message: "결제 서명 검증에 실패했습니다.",
+        resultCode: "SIGNATURE_MISMATCH",
+      });
+    }
+
     const authSuccess = isInicisSuccessCode(authResultCode);
     const tid =
       toStrOrNull(
@@ -615,13 +762,36 @@ export async function handleInicisReturn(req: NextRequest) {
       },
     };
 
-    if (submissionId) {
-      await markPaymentSuccess(orderId, successPayload);
-    }
-
+    const submissionSuccess = submissionId
+      ? await markPaymentSuccess(orderId, successPayload)
+      : { ok: true, error: null, submissionId: null };
     const karaokeSuccess = karaokeRequestId
       ? await markKaraokePaymentSuccess(orderId, successPayload)
-      : { requestId: null };
+      : { ok: true, error: null, requestId: null };
+
+    const persistFailed =
+      (submissionId && !submissionSuccess.ok) ||
+      (karaokeRequestId && !karaokeSuccess.ok);
+    if (persistFailed) {
+      console.error("[INICIS][persist][error]", {
+        orderId,
+        submissionId,
+        karaokeRequestId,
+        submissionError: submissionSuccess.error ?? null,
+        karaokeError: karaokeSuccess.error ?? null,
+      });
+      return buildBridgeRedirect(baseUrl, {
+        status: "FAIL",
+        orderId,
+        submissionId,
+        guestToken,
+        requestId: karaokeRequestId,
+        tid,
+        amount: totPrice,
+        resultCode: "PERSIST_FAIL",
+        message: "결제 승인 후 저장 처리에 실패했습니다. 고객센터로 문의해주세요.",
+      });
+    }
 
     console.info("[INICIS][final]", {
       orderId,

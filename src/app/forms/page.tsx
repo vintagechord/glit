@@ -63,9 +63,9 @@ export default function FormsPage() {
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <Link
-          href="http://youngforever.firstmall.kr"
+          href="https://onside17.com/"
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
         >
           구버전 사이트에서 접수

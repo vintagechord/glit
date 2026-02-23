@@ -240,3 +240,50 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, drafts: payload });
 }
+
+export async function DELETE(request: Request) {
+  const body = await request.json().catch(() => null);
+  const parsed = schema.safeParse(body ?? {});
+  if (!parsed.success) {
+    return NextResponse.json({ error: "요청 정보를 확인해주세요." }, { status: 400 });
+  }
+
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const isGuest = !user;
+  if (isGuest && !parsed.data.guestToken) {
+    return NextResponse.json({ error: "로그인 또는 게스트 토큰이 필요합니다." }, { status: 401 });
+  }
+
+  const admin = createAdminClient();
+  const deleteQuery = admin
+    .from("submissions")
+    .delete()
+    .eq("status", "DRAFT");
+
+  if (parsed.data.type === "ALBUM") {
+    deleteQuery.eq("type", "ALBUM");
+  } else {
+    deleteQuery.in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
+  }
+
+  if (parsed.data.ids && parsed.data.ids.length > 0) {
+    deleteQuery.in("id", parsed.data.ids);
+  }
+
+  if (user?.id) {
+    deleteQuery.eq("user_id", user.id);
+  } else {
+    deleteQuery.eq("guest_token", parsed.data.guestToken as string);
+  }
+
+  const { error } = await deleteQuery;
+  if (error) {
+    return NextResponse.json({ error: "임시저장 삭제에 실패했습니다." }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

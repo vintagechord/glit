@@ -18,9 +18,23 @@ type CancelPayload = {
 };
 
 const parsePayload = async (req: NextRequest): Promise<CancelPayload> => {
+  if (req.method === "GET") {
+    const params = req.nextUrl.searchParams;
+    return {
+      orderId: params.get("orderId")?.trim() || undefined,
+      tid: params.get("tid")?.trim() || undefined,
+      reason: params.get("reason")?.trim() || undefined,
+    };
+  }
+
   if (req.headers.get("content-type")?.includes("application/json")) {
     try {
-      return (await req.json()) as CancelPayload;
+      const parsed = (await req.json()) as CancelPayload;
+      return {
+        orderId: parsed.orderId?.trim() || undefined,
+        tid: parsed.tid?.trim() || undefined,
+        reason: parsed.reason?.trim() || undefined,
+      };
     } catch {
       return {};
     }
@@ -28,9 +42,9 @@ const parsePayload = async (req: NextRequest): Promise<CancelPayload> => {
 
   const form = await req.formData();
   return {
-    orderId: (form.get("orderId") as string | null) ?? undefined,
-    tid: (form.get("tid") as string | null) ?? undefined,
-    reason: (form.get("reason") as string | null) ?? undefined,
+    orderId: ((form.get("orderId") as string | null) ?? "").trim() || undefined,
+    tid: ((form.get("tid") as string | null) ?? "").trim() || undefined,
+    reason: ((form.get("reason") as string | null) ?? "").trim() || undefined,
   };
 };
 
@@ -76,6 +90,9 @@ const handleCancel = async (req: NextRequest, requireAdmin = false) => {
       { status: 404 },
     );
   }
+  if (history.status === "CANCELED") {
+    return NextResponse.json({ ok: true, alreadyCanceled: true });
+  }
 
   const adminAllowed = requireAdmin ? await isAdminUser() : false;
   const isOwner = history.user_id === user?.id;
@@ -84,6 +101,12 @@ const handleCancel = async (req: NextRequest, requireAdmin = false) => {
   }
   if (!requireAdmin && !isOwner) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (history.status !== "APPROVED" && history.status !== "CANCELED") {
+    return NextResponse.json(
+      { error: "환불 가능한 결제 상태가 아닙니다." },
+      { status: 409 },
+    );
   }
 
   const targetTid = payload.tid ?? history.pg_tid;
@@ -119,13 +142,6 @@ const handleCancel = async (req: NextRequest, requireAdmin = false) => {
     raw_response: refund.data ?? null,
   });
 
-  if (history.subscription_id) {
-    await cancelSubscription(history.subscription_id, payload.reason);
-  }
-  if (history.billing_id) {
-    await deactivateBilling(history.billing_id);
-  }
-
   if (!refund.ok) {
     return NextResponse.json(
       {
@@ -134,6 +150,13 @@ const handleCancel = async (req: NextRequest, requireAdmin = false) => {
       },
       { status: 400 },
     );
+  }
+
+  if (history.subscription_id) {
+    await cancelSubscription(history.subscription_id, payload.reason);
+  }
+  if (history.billing_id) {
+    await deactivateBilling(history.billing_id);
   }
 
   return NextResponse.json({
