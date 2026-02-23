@@ -1,5 +1,6 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 import { StripAdBannerClient } from "@/components/site/strip-ad-banner-client";
+import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
 
 type AdBanner = {
   id: string;
@@ -17,12 +18,24 @@ function isBannerActive(banner: AdBanner, now: Date) {
 }
 
 export async function StripAdBanner() {
-  const supabase = await createServerSupabase();
-  const { data } = await supabase
-    .from("ad_banners")
-    .select("id, title, image_url, link_url, starts_at, ends_at")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
+  let data: AdBanner[] | null = null;
+  try {
+    const supabase = await createServerSupabase();
+    const { data: queryData, error } = await supabase
+      .from("ad_banners")
+      .select("id, title, image_url, link_url, starts_at, ends_at")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("[StripAdBanner] Failed to fetch banners:", error.message);
+    }
+    data = queryData;
+  } catch (error) {
+    if (isDynamicServerUsageError(error)) {
+      throw error;
+    }
+    console.error("[StripAdBanner] Failed to initialize banner query:", error);
+  }
 
   const now = new Date();
   const activeBanners = data?.filter((item) => isBannerActive(item, now)) ?? [];

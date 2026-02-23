@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { ThemeToggle } from "./theme-toggle";
@@ -19,11 +20,23 @@ const navLinks = [
 ];
 
 export async function SiteHeader() {
-  const supabase = await createServerSupabase();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
+  let isLoggedIn = false;
+  try {
+    const supabase = await createServerSupabase();
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    if (error) {
+      console.error("[SiteHeader] Failed to read session:", error.message);
+    }
+    isLoggedIn = Boolean(session?.user);
+  } catch (error) {
+    if (isDynamicServerUsageError(error)) {
+      throw error;
+    }
+    console.error("[SiteHeader] Failed to initialize auth session:", error);
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur-md dark:border-white/10 dark:bg-[#0f1727]/78">
@@ -61,7 +74,7 @@ export async function SiteHeader() {
         </div>
         <div className="flex items-center gap-3 flex-nowrap overflow-x-auto">
           <ThemeToggle />
-          {user ? (
+          {isLoggedIn ? (
             <>
               <form action="/logout" method="post">
                 <button

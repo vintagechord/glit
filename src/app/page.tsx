@@ -3,6 +3,7 @@ import Link from "next/link";
 import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { HomeReviewPanel } from "@/features/home/home-review-panel";
+import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -296,12 +297,23 @@ const sampleStations: StationSnapshot[] = [
 ];
 
 export default async function Home() {
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const isLoggedIn = Boolean(user);
+  let isLoggedIn = false;
+  try {
+    const supabase = await createServerSupabase();
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    if (error) {
+      console.error("[Home] Failed to read session:", error.message);
+    }
+    isLoggedIn = Boolean(session?.user);
+  } catch (error) {
+    if (isDynamicServerUsageError(error)) {
+      throw error;
+    }
+    console.error("[Home] Failed to initialize auth session:", error);
+  }
   const heroVideoDesktop =
     process.env.NEXT_PUBLIC_HERO_VIDEO_DESKTOP ??
     "/media/hero/glit-hero-desktop.mp4";
