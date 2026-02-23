@@ -17,6 +17,14 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    const isSubmissionContext =
+      context === "music" || context === "mv" || context === "oneclick";
+    if (!isSubmissionContext) {
+      return NextResponse.json(
+        { error: "submission 결제에서 지원하지 않는 context입니다." },
+        { status: 400 },
+      );
+    }
     if (!submissionId) {
       return NextResponse.json({ error: "submissionId가 필요합니다." }, { status: 400 });
     }

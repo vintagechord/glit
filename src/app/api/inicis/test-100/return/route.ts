@@ -81,7 +81,7 @@ async function handler(req: NextRequest) {
 
   if (resultCode && !isInicisSuccessCode(resultCode)) {
     return buildBridgeRedirect(baseUrl, {
-      status: "FAILED",
+      status: "FAIL",
       orderId,
       resultCode,
       resultMsg,
@@ -92,7 +92,7 @@ async function handler(req: NextRequest) {
 
   if (!authToken || !authUrl || !orderId) {
     return buildBridgeRedirect(baseUrl, {
-      status: "FAILED",
+      status: "FAIL",
       orderId,
       message: "인증 토큰을 받지 못했습니다.",
       resultCode: resultCode || "AUTH_MISSING",
@@ -107,7 +107,7 @@ async function handler(req: NextRequest) {
       expected: maskMid(config.mid),
     });
     return buildBridgeRedirect(baseUrl, {
-      status: "FAILED",
+      status: "FAIL",
       orderId,
       message: "MID 불일치",
       resultCode: "MID_MISMATCH",
@@ -165,7 +165,7 @@ async function handler(req: NextRequest) {
       hasNetCancelUrl: Boolean(netCancelUrl),
     });
     return buildBridgeRedirect(baseUrl, {
-      status: "FAILED",
+      status: "FAIL",
       orderId,
       resultCode: approvalResultCode,
       resultMsg: approvalResultMsg ?? "승인에 실패했습니다.",

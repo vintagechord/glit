@@ -517,6 +517,7 @@ export async function handleInicisReturn(req: NextRequest) {
         orderId,
         submissionId,
         guestToken,
+        requestId: karaokeRequestId,
         message: failMessage,
         resultCode: authResultCode,
       });
@@ -540,6 +541,7 @@ export async function handleInicisReturn(req: NextRequest) {
         status: "FAIL",
         orderId,
         submissionId,
+        guestToken,
         requestId: karaokeRequestId,
         message: "결제 내역을 찾을 수 없습니다.",
         resultCode: "ORDER_NOT_FOUND",
