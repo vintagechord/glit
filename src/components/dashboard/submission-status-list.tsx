@@ -249,7 +249,7 @@ export function SubmissionStatusList({
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                     {typeLabel}
                   </p>
                   <h2 className="mt-2 text-xl font-semibold text-foreground">
@@ -258,20 +258,20 @@ export function SubmissionStatusList({
                   <p className="mt-2 text-sm text-muted-foreground">
                     {submission.artist_name || "아티스트 미입력"}
                   </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     접수일 {formatDateTime(submission.created_at)} · 최근
                     업데이트 {formatDateTime(submission.updated_at)}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${statusInfo.tone}`}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusInfo.tone}`}
                   >
                     {statusInfo.label}
                   </span>
                   {shouldShowPaymentChip && (
                     <span
-                      className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${paymentInfo.tone}`}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${paymentInfo.tone}`}
                     >
                       {paymentInfo.label}
                     </span>
@@ -280,7 +280,7 @@ export function SubmissionStatusList({
                     <button
                       type="button"
                       onClick={() => router.push(`/dashboard/pay/${submission.id}`)}
-                      className="rounded-full border border-amber-500/50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700 transition hover:border-amber-600 hover:text-amber-800"
+                      className="rounded-full border border-amber-500/50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700 transition hover:border-amber-600 hover:text-amber-800"
                     >
                       결제하기
                     </button>
@@ -288,7 +288,7 @@ export function SubmissionStatusList({
                   <button
                     type="button"
                     onClick={() => setActiveSubmission(submission)}
-                    className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+                    className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
                   >
                     상세 보기
                   </button>
@@ -328,7 +328,7 @@ export function SubmissionStatusList({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   심의 진행 상황
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold text-foreground">
@@ -344,7 +344,7 @@ export function SubmissionStatusList({
                   setActiveSubmission(null);
                   setTrackResultModal(null);
                 }}
-                className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-foreground"
+                className="rounded-full border border-border/70 px-3 py-1 text-sm font-semibold uppercase tracking-[0.2em] text-foreground"
               >
                 닫기
               </button>
@@ -358,9 +358,9 @@ export function SubmissionStatusList({
               </div>
             )}
 
-            <div className="mt-4 grid gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 text-xs text-muted-foreground md:grid-cols-2">
+            <div className="mt-4 grid gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 text-sm text-muted-foreground md:grid-cols-2">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.2em]">
+                <p className="text-xs uppercase tracking-[0.2em]">
                   유형
                 </p>
                 <p className="mt-1 text-sm font-semibold text-foreground">
@@ -369,7 +369,7 @@ export function SubmissionStatusList({
                 </p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.2em]">
+                <p className="text-xs uppercase tracking-[0.2em]">
                   결제 금액
                 </p>
                 <p className="mt-1 text-sm font-semibold text-foreground">
@@ -381,7 +381,7 @@ export function SubmissionStatusList({
             </div>
 
             <div className="mt-5 overflow-hidden rounded-2xl border border-border/60 bg-background/80">
-              <div className="grid grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="grid grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 <span>방송국</span>
                 <span className="justify-self-center text-center">접수 상태</span>
                 <span className="justify-self-center text-center">
@@ -392,7 +392,7 @@ export function SubmissionStatusList({
                 <span className="text-right">접수 날짜</span>
               </div>
               {activeSubmission.station_reviews.length > 0 ? (
-                <div className="space-y-2 px-3 py-3 text-xs">
+                <div className="space-y-2 px-3 py-3 text-sm">
                   {[...activeSubmission.station_reviews]
                     .sort(
                       (a, b) =>
@@ -407,13 +407,13 @@ export function SubmissionStatusList({
                     return (
                       <div
                         key={`${station.id}-${index}`}
-                        className="grid grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-[11px]"
+                        className="grid grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-sm"
                       >
                         <span className="truncate font-semibold text-foreground">
                           {station.station?.name ?? "-"}
                         </span>
                         <span
-                          className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
+                          className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
                         >
                           {reception.label}
                         </span>
@@ -428,24 +428,24 @@ export function SubmissionStatusList({
                                   resultNote: station.result_note?.trim() || null,
                                 })
                               }
-                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold transition hover:opacity-90 ${result.tone}`}
+                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition hover:opacity-90 ${result.tone}`}
                             >
                               {result.label}
                             </button>
                           ) : (
                             <span
-                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
                             >
                               {result.label}
                             </span>
                           )}
                           {result.summaryText ? (
-                            <span className="text-[9px] leading-tight text-muted-foreground text-center">
+                            <span className="text-[11px] leading-tight text-muted-foreground text-center">
                               {result.summaryText}
                             </span>
                           ) : null}
                         </div>
-                        <span className="text-right text-[10px] text-muted-foreground">
+                        <span className="text-right text-xs text-muted-foreground">
                           {formatDate(station.updated_at)}
                         </span>
                       </div>
@@ -465,13 +465,13 @@ export function SubmissionStatusList({
       {trackResultModal ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               트랙별 결과
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
               {trackResultModal.stationName}
             </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
             </p>
             <div className="mt-4 max-h-80 space-y-2 overflow-auto">
@@ -511,13 +511,13 @@ export function SubmissionStatusList({
                       </p>
                       {track.status === "REJECTED" &&
                       trackResultModal.resultNote ? (
-                        <p className="mt-1 break-words text-[11px] text-rose-600/80 dark:text-rose-200/80">
+                        <p className="mt-1 break-words text-xs text-rose-600/80 dark:text-rose-200/80">
                           사유: {trackResultModal.resultNote}
                         </p>
                       ) : null}
                     </div>
                     <span
-                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-semibold ${status.tone}`}
+                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${status.tone}`}
                     >
                       {status.label}
                     </span>
@@ -528,7 +528,7 @@ export function SubmissionStatusList({
             <button
               type="button"
               onClick={() => setTrackResultModal(null)}
-              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
             >
               닫기
             </button>

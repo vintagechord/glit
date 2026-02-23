@@ -650,7 +650,7 @@ export function HomeReviewPanel({
 
   return (
     <div className="min-w-0 w-full rounded-[28px] border border-amber-200/60 bg-gradient-to-br from-[#fff2d6]/90 via-white/80 to-[#ffe3a3]/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:border-white/10 dark:from-[#1a1a1a]/70 dark:via-[#111111]/80 dark:to-[#1e1a12]/80 lg:min-h-[520px]">
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground">
+      <div className="flex items-center justify-between text-sm uppercase tracking-[0.2em] text-muted-foreground">
         <span>
           {activeSubmission
             ? `${submissionLabels.summary} 심의`
@@ -670,7 +670,7 @@ export function HomeReviewPanel({
         </span>
       </div>
 
-      <div className="mt-5 flex items-center gap-2 rounded-full bg-muted/60 p-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+      <div className="mt-5 flex items-center gap-2 rounded-full bg-muted/60 p-1 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
         {availableTabs.includes("album") ? (
           <button
             type="button"
@@ -699,7 +699,7 @@ export function HomeReviewPanel({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+      <div className="mt-3 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
         <span>
           {activeList.length > 0
             ? `${activeIndex + 1}/${activeList.length}`
@@ -781,7 +781,7 @@ export function HomeReviewPanel({
                 ) : null}
               </div>
               <div className="rounded-xl border border-border/60 bg-background/80 p-3">
-                <div className="flex items-center justify-between gap-3 text-xs font-semibold text-foreground">
+                <div className="flex items-center justify-between gap-3 text-sm font-semibold text-foreground">
                   <span className="truncate">{progressText}</span>
                   {totalCount > 0 ? <span>{progressPercent}%</span> : null}
                 </div>
@@ -829,7 +829,7 @@ export function HomeReviewPanel({
             </div>
           </div>
           <div className="mt-3 overflow-hidden rounded-2xl border border-border/60 bg-background/70">
-            <div className="hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid">
+            <div className="hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid">
               <span>방송국</span>
               <span className="justify-self-center text-center">접수 상태</span>
               <span className="justify-self-center text-center">{trackResultLabel}</span>
@@ -837,7 +837,7 @@ export function HomeReviewPanel({
             </div>
             {activeStations.length > 0 ? (
               <>
-                <div className="hidden text-xs sm:block">
+                <div className="hidden text-sm sm:block">
                   <div
                     className="relative cursor-grab touch-none active:cursor-grabbing"
                     style={{ height: `${pageHeight}px` }}
@@ -864,14 +864,14 @@ export function HomeReviewPanel({
                         return (
                           <div
                             key={`${station.id}-${index}`}
-                            className="grid min-h-[52px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-[11px]"
+                            className="grid min-h-[52px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-sm"
                           >
                             <span className="flex items-center gap-2 truncate font-semibold text-foreground">
                               <StationLogo station={station.station ?? undefined} hideOnMobile />
                               <span className="truncate">{station.station?.name ?? "-"}</span>
                             </span>
                             <span
-                              className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
+                              className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
                             >
                               {reception.label}
                             </span>
@@ -889,11 +889,11 @@ export function HomeReviewPanel({
                                         station.result_note?.trim() || null,
                                     })
                                   }
-                                  className={`inline-flex min-h-[34px] flex-col items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold transition hover:opacity-90 ${result.tone}`}
+                                  className={`inline-flex min-h-[34px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition hover:opacity-90 ${result.tone}`}
                                 >
                                   <span>{result.label}</span>
                                   {result.summaryText ? (
-                                    <span className="mt-0.5 text-[9px] font-normal leading-tight text-current/80">
+                                    <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
                                       {result.summaryText}
                                     </span>
                                   ) : null}
@@ -901,19 +901,19 @@ export function HomeReviewPanel({
                               ) : (
                                 <div className="flex flex-col items-center gap-1">
                                   <span
-                                    className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                                    className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
                                   >
                                     {result.label}
                                   </span>
                                   {result.summaryText ? (
-                                    <span className="text-[9px] leading-tight text-muted-foreground text-center">
+                                    <span className="text-[11px] leading-tight text-muted-foreground text-center">
                                       {result.summaryText}
                                     </span>
                                   ) : null}
                                 </div>
                               )}
                             </div>
-                            <span className="text-right text-[10px] text-muted-foreground">
+                            <span className="text-right text-xs text-muted-foreground">
                               {formatDate(station.updated_at)}
                             </span>
                           </div>
@@ -934,20 +934,20 @@ export function HomeReviewPanel({
                     return (
                       <div
                         key={`${station.id}-mobile-${index}`}
-                        className="rounded-xl border border-border/50 bg-background/80 p-3 text-[12px] shadow-sm"
+                        className="rounded-xl border border-border/50 bg-background/80 p-3 text-sm shadow-sm"
                       >
                         <div className="flex min-w-0 items-center justify-between gap-2">
                           <span className="flex items-center gap-2 truncate font-semibold text-foreground">
                             <StationLogo station={station.station ?? undefined} />
                             <span className="truncate text-sm">{station.station?.name ?? "-"}</span>
                           </span>
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             {formatDate(station.updated_at)}
                           </span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <span
-                            className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
+                            className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
                           >
                             {reception.label}
                           </span>
@@ -962,11 +962,11 @@ export function HomeReviewPanel({
                                   resultNote: station.result_note?.trim() || null,
                                 })
                               }
-                              className={`inline-flex min-h-[32px] flex-col items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold transition hover:opacity-90 ${result.tone}`}
+                              className={`inline-flex min-h-[32px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition hover:opacity-90 ${result.tone}`}
                             >
                               <span>{result.label}</span>
                               {result.summaryText ? (
-                                <span className="mt-0.5 text-[9px] font-normal leading-tight text-current/80">
+                                <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
                                   {result.summaryText}
                                 </span>
                               ) : null}
@@ -974,12 +974,12 @@ export function HomeReviewPanel({
                           ) : (
                             <div className="flex flex-col items-center gap-1">
                               <span
-                                className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                                className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
                               >
                                 {result.label}
                               </span>
                               {result.summaryText ? (
-                                <span className="text-[9px] leading-tight text-muted-foreground text-center">
+                                <span className="text-[11px] leading-tight text-muted-foreground text-center">
                                   {result.summaryText}
                                 </span>
                               ) : null}
@@ -1001,7 +1001,7 @@ export function HomeReviewPanel({
             <div className="mt-4 flex justify-center">
               <Link
                 href={`/dashboard/submissions/${activeSubmission.id}`}
-                className="rounded-full border border-border/70 bg-black/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:border-foreground hover:bg-black/10 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                className="rounded-full border border-border/70 bg-black/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:border-foreground hover:bg-black/10 dark:bg-white dark:text-black dark:hover:bg-white/90"
               >
                 자세히 보기
               </Link>
@@ -1014,13 +1014,13 @@ export function HomeReviewPanel({
       {trackResultModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               트랙별 결과
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
               {trackResultModal.stationName}
             </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
             </p>
             <div className="mt-4 max-h-80 space-y-2 overflow-auto">
@@ -1060,13 +1060,13 @@ export function HomeReviewPanel({
                       </p>
                       {track.status === "REJECTED" &&
                       trackResultModal.resultNote ? (
-                        <p className="mt-1 break-words text-[11px] text-rose-600/80 dark:text-rose-200/80">
+                        <p className="mt-1 break-words text-xs text-rose-600/80 dark:text-rose-200/80">
                           사유: {trackResultModal.resultNote}
                         </p>
                       ) : null}
                     </div>
                     <span
-                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-semibold ${status.tone}`}
+                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${status.tone}`}
                     >
                       {status.label}
                     </span>

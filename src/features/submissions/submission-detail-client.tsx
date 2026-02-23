@@ -1249,10 +1249,10 @@ export function SubmissionDetailClient({
 
     <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           방송국별 진행표
           </p>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             업데이트: {formatDateTime(submission.updated_at)}
           </span>
         </div>
@@ -1261,7 +1261,7 @@ export function SubmissionDetailClient({
             <div className="rounded-2xl border border-border/60 bg-background/70">
               <div className="overflow-x-auto">
                 <div className="min-w-[640px]">
-                  <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     <span>방송국</span>
                     <span className="text-center">접수 상태</span>
                     <span className="text-center">
@@ -1348,7 +1348,7 @@ export function SubmissionDetailClient({
                       return (
                         <div
                           key={review.id}
-                          className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 px-4 py-3 text-xs"
+                          className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 px-4 py-3 text-sm"
                         >
                           <div className="min-w-0 flex items-center gap-2">
                             <StationLogoWithFallback station={review.station} />
@@ -1357,32 +1357,32 @@ export function SubmissionDetailClient({
                                 {review.station?.name ?? "-"}
                               </p>
                               {review.station && "code" in review.station ? (
-                                <p className="text-[10px] text-muted-foreground">
+                                <p className="text-xs text-muted-foreground">
                                   {review.station.code ?? ""}
                                 </p>
                               ) : null}
                             </div>
                           </div>
                           <span
-                            className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
+                            className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
                           >
                             {reception.label}
                           </span>
                           <button
                             type="button"
                             onClick={handleResultClick}
-                            className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold transition ${
+                            className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold transition ${
                               resultTone.tone
                             } ${hasTrackDetails ? "hover:opacity-90" : ""}`}
                           >
                             <span>{resultTone.label}</span>
                             {trackSummaryLine ? (
-                              <span className="mt-0.5 text-[9px] font-normal leading-tight text-current/80">
+                              <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
                                 {trackSummaryLine}
                               </span>
                             ) : null}
                           </button>
-                          <span className="text-right text-[11px] text-muted-foreground">
+                          <span className="text-right text-xs text-muted-foreground">
                             {formatDateTime(review.updated_at)}
                           </span>
                           {ratingReason ? (
@@ -1394,7 +1394,7 @@ export function SubmissionDetailClient({
                                   note: ratingReason,
                                 })
                               }
-                              className="justify-self-center rounded-full border border-border/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:text-foreground"
+                              className="justify-self-center rounded-full border border-border/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:text-foreground"
                             >
                               사유 보기
                             </button>
@@ -1407,14 +1407,14 @@ export function SubmissionDetailClient({
                                   note: note ?? "",
                                 })
                               }
-                              className="justify-self-center max-w-[140px] rounded-full border border-border/60 px-3 py-1 text-[10px] font-semibold text-muted-foreground transition hover:text-foreground"
+                              className="justify-self-center max-w-[140px] rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
                             >
                               <span className="block truncate">
                                 {notePreview ?? "사유 보기"}
                               </span>
                             </button>
                           ) : (
-                            <span className="text-center text-[10px] text-muted-foreground">
+                            <span className="text-center text-xs text-muted-foreground">
                               -
                             </span>
                           )}
@@ -1426,7 +1426,7 @@ export function SubmissionDetailClient({
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
+            <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
               아직 방송국 진행 정보가 없습니다. 접수 제출 후 자동 생성됩니다.
             </div>
           )}
@@ -1435,13 +1435,13 @@ export function SubmissionDetailClient({
 
       <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             타임라인
           </p>
           <button
             type="button"
             onClick={() => setIsTimelineOpen((prev) => !prev)}
-            className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+            className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
             {isTimelineOpen ? "접기" : "펼치기"}
           </button>
@@ -1452,7 +1452,7 @@ export function SubmissionDetailClient({
               events.map((event) => (
                 <div
                   key={event.id}
-                  className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-xs"
+                  className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-sm"
                 >
                   <div className="flex items-center justify-between text-foreground">
                     <span className="font-semibold">{event.event_type}</span>
@@ -1464,13 +1464,13 @@ export function SubmissionDetailClient({
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
+              <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
                 아직 등록된 이벤트가 없습니다.
               </div>
             )}
           </div>
         ) : (
-          <p className="mt-3 text-xs text-muted-foreground">
+          <p className="mt-3 text-sm text-muted-foreground">
             심의 진행 중 발생한 이벤트를 확인하려면 펼치기를 눌러주세요.
           </p>
         )}
@@ -1481,7 +1481,7 @@ export function SubmissionDetailClient({
           <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
             <p className="text-sm font-semibold text-foreground">불통과 사유</p>
             {activeResultNote.stationName ? (
-              <p className="mt-2 text-xs font-semibold text-foreground">
+              <p className="mt-2 text-sm font-semibold text-foreground">
                 {activeResultNote.stationName}
               </p>
             ) : null}
@@ -1493,7 +1493,7 @@ export function SubmissionDetailClient({
             <button
               type="button"
               onClick={() => setActiveResultNote(null)}
-              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
             >
               닫기
             </button>
@@ -1504,13 +1504,13 @@ export function SubmissionDetailClient({
       {trackResultModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               트랙별 결과
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
               {trackResultModal.stationName ?? "-"}
             </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
             </p>
             <div className="mt-4 max-h-80 space-y-2 overflow-auto">
@@ -1542,7 +1542,7 @@ export function SubmissionDetailClient({
                       </p>
                     </div>
                     <span
-                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-[11px] font-semibold ${status.tone}`}
+                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${status.tone}`}
                     >
                       {status.label}
                     </span>
@@ -1558,7 +1558,7 @@ export function SubmissionDetailClient({
                     openRadioLinks(trackResultModal.stationName);
                     setTrackResultModal(null);
                   }}
-                  className="rounded-full border border-border/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+                  className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
                 >
                   라디오 신청 링크
                 </button>
@@ -1568,7 +1568,7 @@ export function SubmissionDetailClient({
               <button
                 type="button"
                 onClick={() => setTrackResultModal(null)}
-                className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+                className="rounded-full bg-foreground px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
               >
                 닫기
               </button>
@@ -1580,7 +1580,7 @@ export function SubmissionDetailClient({
       {radioLinksModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               라디오 신청 링크
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
@@ -1588,7 +1588,7 @@ export function SubmissionDetailClient({
                 ? `${radioLinksModal.stationName} 적격 · 라디오 신청곡 올리기`
                 : "적격 · 라디오 신청곡 올리기"}
             </h3>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-sm text-muted-foreground">
               방송사별 라디오 신청곡/사연 접수 페이지로 이동합니다.
             </p>
             <ul className="mt-4 space-y-2">
@@ -1601,7 +1601,7 @@ export function SubmissionDetailClient({
                     className="flex items-center justify-between rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-foreground"
                   >
                     <span>{link.name}</span>
-                    <span className="text-xs text-muted-foreground">새 창에서 열기 ↗</span>
+                    <span className="text-sm text-muted-foreground">새 창에서 열기 ↗</span>
                   </a>
                 </li>
               ))}
@@ -1610,7 +1610,7 @@ export function SubmissionDetailClient({
               <button
                 type="button"
                 onClick={closeRadioLinks}
-                className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+                className="rounded-full bg-foreground px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
               >
                 닫기
               </button>
