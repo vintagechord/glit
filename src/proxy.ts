@@ -20,14 +20,6 @@ function withCookies(target: NextResponse, source: NextResponse) {
 }
 
 export default async function proxy(request: NextRequest) {
-  const session = await updateSession(request);
-  const response =
-    session instanceof NextResponse ? session : (session?.response as NextResponse | undefined);
-  const user = session instanceof NextResponse ? null : session?.user ?? null;
-  const supabase = session instanceof NextResponse ? null : session?.supabase ?? null;
-  if (!response) {
-    return NextResponse.next();
-  }
   const { pathname } = request.nextUrl;
   const isDev = process.env.NODE_ENV !== "production";
   const isDevStdPayPath =
@@ -36,9 +28,28 @@ export default async function proxy(request: NextRequest) {
     pathname.startsWith("/api/dev/inicis/stdpay-return");
   const isAdminRoute = pathname.startsWith("/admin");
   const isDashboardRoute = pathname.startsWith("/dashboard");
+  const isMypageRoute = pathname.startsWith("/mypage");
   const isPublicDashboardRoute = pathname.startsWith("/dashboard/new");
   const isProtected =
-    (isDashboardRoute && !isPublicDashboardRoute) || isAdminRoute;
+    (isDashboardRoute && !isPublicDashboardRoute) || isAdminRoute || isMypageRoute;
+
+  // Skip Supabase auth round-trip on public routes to keep navigation snappy.
+  if (!isProtected) {
+    const passthrough = NextResponse.next();
+    if (isDev && isDevStdPayPath) {
+      passthrough.headers.set("Content-Security-Policy", devStdPayCsp);
+    }
+    return passthrough;
+  }
+
+  const session = await updateSession(request);
+  const response =
+    session instanceof NextResponse ? session : (session?.response as NextResponse | undefined);
+  const user = session instanceof NextResponse ? null : session?.user ?? null;
+  const supabase = session instanceof NextResponse ? null : session?.supabase ?? null;
+  if (!response) {
+    return NextResponse.next();
+  }
 
   // Ensure submission detail carries ?id=<uuid> for downstream usage
   const submissionMatch = pathname.match(

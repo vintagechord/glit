@@ -3,15 +3,10 @@ import Link from "next/link";
 import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { HomeReviewPanel } from "@/features/home/home-review-panel";
-import { getDashboardStatusData } from "@/lib/dashboard-status";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-const RECENT_RESULT_CUTOFF = new Date(
-  Date.now() - 30 * 24 * 60 * 60 * 1000,
-).toISOString();
 
 const heroCtas = [
   {
@@ -335,26 +330,14 @@ export default async function Home() {
     updated_at: new Date().toISOString(),
   };
 
-  let albumSubmissions: SubmissionSnapshot[] = isLoggedIn ? [] : [sampleAlbum];
-  let mvSubmissions: SubmissionSnapshot[] = isLoggedIn ? [] : [sampleMv];
-  let albumStationsMap: Record<string, StationSnapshot[]> = isLoggedIn
+  const albumSubmissions: SubmissionSnapshot[] = isLoggedIn ? [] : [sampleAlbum];
+  const mvSubmissions: SubmissionSnapshot[] = isLoggedIn ? [] : [sampleMv];
+  const albumStationsMap: Record<string, StationSnapshot[]> = isLoggedIn
     ? {}
     : { [sampleAlbum.id]: sampleStations };
-  let mvStationsMap: Record<string, StationSnapshot[]> = isLoggedIn
+  const mvStationsMap: Record<string, StationSnapshot[]> = isLoggedIn
     ? {}
     : { [sampleMv.id]: sampleStations };
-
-  if (user) {
-    const statusResult = await getDashboardStatusData(user.id);
-    if (statusResult.data) {
-      albumSubmissions = statusResult.data.albumSubmissions as SubmissionSnapshot[];
-      mvSubmissions = statusResult.data.mvSubmissions as SubmissionSnapshot[];
-      albumStationsMap = statusResult.data.albumStationsMap as Record<string, StationSnapshot[]>;
-      mvStationsMap = statusResult.data.mvStationsMap as Record<string, StationSnapshot[]>;
-    } else if (statusResult.error) {
-      console.error("[home] dashboard status load failed", statusResult.error);
-    }
-  }
 
   return (
     <div className="relative overflow-hidden">
@@ -465,6 +448,7 @@ export default async function Home() {
               mvSubmissions={mvSubmissions}
               albumStationsMap={albumStationsMap}
               mvStationsMap={mvStationsMap}
+              enableRemoteSync={isLoggedIn}
             />
           </div>
         </div>

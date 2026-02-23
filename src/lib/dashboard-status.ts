@@ -1,6 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  ensureAlbumStationReviewsBatch,
   getPackageStations,
 } from "@/lib/station-reviews";
 import { normalizeTrackResults } from "@/lib/track-results";
@@ -64,7 +63,23 @@ export type DashboardStatusResult = {
   error?: string;
 };
 
+const configuredStatusCacheMs = Number(process.env.DASHBOARD_STATUS_CACHE_MS ?? "8000");
+const dashboardStatusCacheTtlMs = Number.isFinite(configuredStatusCacheMs)
+  ? Math.max(0, Math.trunc(configuredStatusCacheMs))
+  : 8000;
+const dashboardStatusCache = new Map<
+  string,
+  { expiresAt: number; data: DashboardStatusData }
+>();
+
 export const getDashboardStatusData = async (userId: string): Promise<DashboardStatusResult> => {
+  if (dashboardStatusCacheTtlMs > 0) {
+    const cached = dashboardStatusCache.get(userId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return { data: cached.data };
+    }
+  }
+
   const recentResultCutoff = new Date(
     Date.now() - 30 * 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -190,10 +205,18 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
   };
 
   if (packageIds.length) {
-    const { data: packages, error: packageError } = await admin
-      .from("packages")
-      .select("id, name, station_count")
-      .in("id", packageIds);
+    const [{ data: packages, error: packageError }, { data: packageStations, error: packageStationsError }] =
+      await Promise.all([
+        admin
+          .from("packages")
+          .select("id, name, station_count")
+          .in("id", packageIds),
+        admin
+          .from("package_stations")
+          .select("package_id, station:stations ( id, code, name )")
+          .in("package_id", packageIds),
+      ]);
+
     if (packageError) {
       console.error("[dashboard status] package fallback query error", packageError);
     }
@@ -204,11 +227,6 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
         station_count: pkg.station_count ?? null,
       });
     });
-
-    const { data: packageStations, error: packageStationsError } = await admin
-      .from("package_stations")
-      .select("package_id, station:stations ( id, code, name )")
-      .in("package_id", packageIds);
 
     if (packageStationsError) {
       console.error("[dashboard status] package_stations query error", packageStationsError);
@@ -235,23 +253,6 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
       packageStationsMap.set(pkgId, merged);
     });
   }
-
-  await ensureAlbumStationReviewsBatch(
-    admin,
-    [...albumSubmissions, ...mvSubmissions].map((submission) => {
-      const pkg = Array.isArray(submission.package)
-        ? submission.package[0]
-        : submission.package;
-      const fallbackPkg = submission.package_id
-        ? packageMap.get(submission.package_id)
-        : null;
-      return {
-        submissionId: submission.id,
-        stationCount: pkg?.station_count ?? fallbackPkg?.station_count ?? null,
-        packageName: pkg?.name ?? fallbackPkg?.name ?? null,
-      };
-    }),
-  );
 
   const albumStationsMap: Record<string, StationReviewRow[]> = {};
   const mvStationsMap: Record<string, StationReviewRow[]> = {};
@@ -459,12 +460,19 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
     mvSubmissions.forEach((submission) => buildRows(submission, mvStationsMap));
   }
 
-  return {
-    data: {
-      albumSubmissions,
-      mvSubmissions,
-      albumStationsMap,
-      mvStationsMap,
-    },
+  const data = {
+    albumSubmissions,
+    mvSubmissions,
+    albumStationsMap,
+    mvStationsMap,
   };
+
+  if (dashboardStatusCacheTtlMs > 0) {
+    dashboardStatusCache.set(userId, {
+      expiresAt: Date.now() + dashboardStatusCacheTtlMs,
+      data,
+    });
+  }
+
+  return { data };
 };

@@ -36,9 +36,12 @@ export async function middleware(req: NextRequest) {
     },
   });
 
+  // `getUser` always calls Auth server; use `getSession` in middleware to
+  // avoid extra network latency on each navigation.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   if (process.env.NODE_ENV === "development" && pathname === "/dev/inicis-stdpay") {
     res.headers.set("Content-Security-Policy", devStdPayCsp);
