@@ -92,7 +92,7 @@ const featureHighlights = [
     description:
       "방송국별 심의 진행 상황을 실시간으로 확인하세요.\n회원/비회원 누구나",
     card:
-      "bg-[#f7f8fb] text-[#2d3444] border-white/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
+      "bg-[#f7f8fb] text-[#2d3444] border-white/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#1b2537] dark:text-[#e7eeff] dark:border-white/10 dark:shadow-[0_16px_36px_rgba(2,6,23,0.42)]",
     visual: "from-[#d7ecff] via-white to-[#eef6ff]",
     icon: (
       <svg
@@ -132,7 +132,7 @@ const featureHighlights = [
     description:
       "온사이드는 자체 스토리지 운영으로 안전하게 음원과 영상을 관리합니다.",
     card:
-      "bg-white text-[#2d3444] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
+      "bg-white text-[#2d3444] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#18283d] dark:text-[#e7eeff] dark:border-white/10 dark:shadow-[0_16px_36px_rgba(2,6,23,0.42)]",
     visual: "from-[#e7fff2] via-white to-[#eaf7ff]",
     icon: (
       <svg
@@ -167,7 +167,7 @@ const featureHighlights = [
     description:
       "접수 시 1차 체크, 방송국 전달 전 2차 검수로 빈틈 없이",
     card:
-      "bg-[#eef2ff] text-[#2d3444] border-[#dbe5ff] shadow-[0_16px_40px_rgba(15,23,42,0.08)]",
+      "bg-[#eef2ff] text-[#2d3444] border-[#dbe5ff] shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#232341] dark:text-[#ebe8ff] dark:border-white/10 dark:shadow-[0_16px_36px_rgba(2,6,23,0.42)]",
     visual: "from-[#fff4d6] via-white to-[#ffe9d6]",
     icon: (
       <svg
@@ -227,9 +227,9 @@ const processStepTones = [
 ];
 
 const serviceCardTones = [
-  "bg-[#8fe38f] text-[#111111] border-transparent",
-  "bg-[#e6e35b] text-[#111111] border-transparent",
-  "oneclick-card text-[#111111] border-transparent",
+  "bg-[#8fe38f] text-[#111111] border-transparent dark:bg-[#224435] dark:text-[#ecfff4] dark:border-[#325846]",
+  "bg-[#e6e35b] text-[#111111] border-transparent dark:bg-[#4a4522] dark:text-[#fff7c5] dark:border-[#6b6032]",
+  "oneclick-card text-[#111111] border-transparent dark:text-[#ecf2ff] dark:border-[#4f60d6]/70",
 ];
 
 type StationSnapshot = {
@@ -444,12 +444,12 @@ export default async function Home() {
                           <div className="absolute -left-6 bottom-[-14px] h-10 w-10 rounded-full bg-white/60 blur-md" />
                           {feature.icon}
                         </div>
-                        <p className="text-base font-semibold text-[#1f2733]">
+                        <p className="text-base font-semibold text-[#1f2733] dark:text-[#e7eeff]">
                           {feature.title}
                         </p>
                       </div>
                       <div className="absolute inset-0 z-10 flex items-center justify-center px-5 text-center opacity-0 transition-opacity duration-300 [transform:rotateY(180deg)] group-hover:opacity-100">
-                        <p className="text-sm font-semibold text-[#1f2733] whitespace-pre-line">
+                        <p className="text-sm font-semibold text-[#1f2733] whitespace-pre-line dark:text-[#dfe8fb]">
                           {feature.description}
                         </p>
                       </div>
@@ -510,7 +510,7 @@ export default async function Home() {
                 <span className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
                   바로가기
                 </span>
-                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-black/40 bg-black/10 text-lg text-black transition group-hover:bg-black/20">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-black/40 bg-black/10 text-lg text-black transition group-hover:bg-black/20 dark:border-white/35 dark:bg-white/10 dark:text-white dark:group-hover:bg-white/20">
                   →
                 </span>
               </div>

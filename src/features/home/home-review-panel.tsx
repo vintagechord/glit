@@ -889,7 +889,7 @@ export function HomeReviewPanel({
                                         station.result_note?.trim() || null,
                                     })
                                   }
-                                  className={`inline-flex min-h-[34px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition hover:opacity-90 ${result.tone}`}
+                                  className={`inline-flex min-h-[34px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
                                 >
                                   <span>{result.label}</span>
                                   {result.summaryText ? (
@@ -962,7 +962,7 @@ export function HomeReviewPanel({
                                   resultNote: station.result_note?.trim() || null,
                                 })
                               }
-                              className={`inline-flex min-h-[32px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition hover:opacity-90 ${result.tone}`}
+                              className={`inline-flex min-h-[32px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
                             >
                               <span>{result.label}</span>
                               {result.summaryText ? (

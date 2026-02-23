@@ -11,6 +11,10 @@ import {
   summarizeTrackResults,
   type TrackReviewResult,
 } from "@/lib/track-results";
+import {
+  resolveRadioBoardLinks,
+  type RadioBoardLink,
+} from "@/lib/radio-board-links";
 import { createClient } from "@/lib/supabase/client";
 import { APP_CONFIG } from "@/lib/config";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
@@ -262,17 +266,6 @@ const flowSteps = [
   "결과 전달",
 ];
 
-const radioSubmissionLinks: Array<{ name: string; url: string }> = [
-  { name: "KBS Cool FM 신청곡/사연 접수", url: "https://program.kbs.co.kr/pc/fm" },
-  { name: "MBC 라디오 미니(사연/신청곡)", url: "https://mini.imbc.com/" },
-  {
-    name: "SBS 파워FM 청취자 게시판",
-    url: "https://programs.sbs.co.kr/radio",
-  },
-  { name: "TBS FM 신청곡/사연", url: "https://tbs.seoul.kr/" },
-  { name: "CBS 음악FM 신청곡", url: "https://www.cbs.co.kr/radio" },
-];
-
 const getReviewReception = (status: string) =>
   reviewReceptionMap[status] ?? {
     label: "접수",
@@ -326,9 +319,11 @@ export function SubmissionDetailClient({
   } | null>(null);
   const [radioLinksModal, setRadioLinksModal] = React.useState<{
     stationName?: string;
+    links: RadioBoardLink[];
   } | null>(null);
   const [trackResultModal, setTrackResultModal] = React.useState<{
     stationName?: string;
+    stationCode?: string | null;
     summary: ReturnType<typeof summarizeTrackResults>;
   } | null>(null);
   const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
@@ -471,8 +466,12 @@ export function SubmissionDetailClient({
     [albumTracks],
   );
 
-  const openRadioLinks = (stationName?: string) => {
-    setRadioLinksModal({ stationName });
+  const openRadioLinks = (station?: { name?: string | null; code?: string | null }) => {
+    const links = resolveRadioBoardLinks({
+      stationCode: station?.code,
+      stationName: station?.name,
+    });
+    setRadioLinksModal({ stationName: station?.name ?? undefined, links });
   };
 
   const closeRadioLinks = () => setRadioLinksModal(null);
@@ -778,10 +777,10 @@ export function SubmissionDetailClient({
       {/* 관리자용 등급/필증 편집 UI는 관리자 페이지에서만 제공 */}
       {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-6">
+      <div className="mt-8 flex flex-col gap-6">
+        <div className="order-2">
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               접수 정보
             </p>
             {isReceptionInfoOpen ? (
@@ -873,19 +872,24 @@ export function SubmissionDetailClient({
             </div>
           </div>
         </div>
-        <div className="space-y-6">
-          <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              심의 진행 상태
-            </p>
-            <div className="mt-4 space-y-4">
-              <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-4">
+        <div className="order-1">
+          <div className="rounded-[28px] border border-border/60 bg-gradient-to-r from-card/95 via-card/85 to-amber-100/20 p-6 dark:to-amber-300/10">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                심의 진행 상태
+              </p>
+              <span className="inline-flex items-center rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs font-semibold text-foreground">
+                현재 단계: {flowSteps[flowIndex]}
+              </span>
+            </div>
+            <div className="mt-4 space-y-3">
+              <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-4">
                 {flowSteps.map((label, index) => {
                   const isActive = index === flowIndex;
                   return (
                     <div
                       key={label}
-                      className={`rounded-2xl border px-3 py-3 text-center font-semibold ${
+                      className={`rounded-xl border px-3 py-2.5 text-center text-sm font-semibold ${
                         isActive
                           ? "border-slate-900 bg-slate-900 text-white dark:border-amber-300 dark:bg-amber-300 dark:text-slate-900"
                           : "border-border/70 bg-background text-muted-foreground"
@@ -896,7 +900,7 @@ export function SubmissionDetailClient({
                   );
                 })}
               </div>
-              <div className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-xs text-muted-foreground">
+              <div className="rounded-xl border border-border/60 bg-card/80 px-4 py-3 text-sm text-muted-foreground">
                 {isReviewComplete
                   ? "모든 심의 절차가 완료되었습니다."
                   : flowIndex === 3
@@ -907,11 +911,281 @@ export function SubmissionDetailClient({
               </div>
             </div>
           </div>
-          {isMvSubmission ? (
-            <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                심의 등급 / 가이드 / 필증
-              </p>
+        </div>
+        <div className="order-4 rounded-[28px] border border-border/60 bg-card/80 p-6">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            작성 신청서
+          </p>
+          {isSubmissionFormOpen ? (
+            <>
+              <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    {submission.type === "ALBUM" ? "앨범 제목" : "영상 제목"}
+                  </p>
+                  <p className="mt-1 font-semibold">{submission.title || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">아티스트명</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.artist_name || "-"}
+                    {submission.artist_name_kr ? ` / ${submission.artist_name_kr}` : ""}
+                    {submission.artist_name_en ? ` / ${submission.artist_name_en}` : ""}
+                  </p>
+                </div>
+                {showApplicantInfo ? (
+                  <>
+                    <div>
+                      <p className="text-sm text-muted-foreground">신청자</p>
+                      <p className="mt-1 font-semibold">
+                        {submission.applicant_name || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">신청자 연락처</p>
+                      <p className="mt-1 font-semibold">
+                        {submission.applicant_phone || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">신청자 이메일</p>
+                      <p className="mt-1 font-semibold">
+                        {submission.applicant_email || "-"}
+                      </p>
+                    </div>
+                  </>
+                ) : null}
+                <div>
+                  <p className="text-sm text-muted-foreground">유통사</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.distributor || "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">제작사</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.production_company || "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">발매일</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.release_date ? formatDateTime(submission.release_date) : "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">장르</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.genre || "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">이전 발매</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.previous_release || "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">그룹/솔로</p>
+                  <p className="mt-1 font-semibold">{artistTypeLabel}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">성별</p>
+                  <p className="mt-1 font-semibold">{artistGenderLabel}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">멤버</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.artist_members || "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">멜론 링크</p>
+                  <p className="mt-1 font-semibold">
+                    {submission.melon_url || "-"}
+                  </p>
+                </div>
+                {isMvSubmission ? (
+                  <>
+                    <div>
+                      <p className="text-xs text-muted-foreground">러닝타임</p>
+                      <p className="mt-1 font-semibold">{submission.mv_runtime || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">포맷</p>
+                      <p className="mt-1 font-semibold">{submission.mv_format || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">감독</p>
+                      <p className="mt-1 font-semibold">{submission.mv_director || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">주연</p>
+                      <p className="mt-1 font-semibold">{submission.mv_lead_actor || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">스토리라인</p>
+                      <p className="mt-1 font-semibold">{submission.mv_storyline || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">제작사</p>
+                      <p className="mt-1 font-semibold">{submission.mv_production_company || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">에이전시</p>
+                      <p className="mt-1 font-semibold">{submission.mv_agency || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">앨범 제목</p>
+                      <p className="mt-1 font-semibold">{submission.mv_album_title || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">제작일</p>
+                      <p className="mt-1 font-semibold">
+                        {submission.mv_production_date ? formatDateTime(submission.mv_production_date) : "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">배급사</p>
+                      <p className="mt-1 font-semibold">{submission.mv_distribution_company || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">사업자등록번호</p>
+                      <p className="mt-1 font-semibold">{submission.mv_business_reg_no || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">용도</p>
+                      <p className="mt-1 font-semibold">{submission.mv_usage || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">희망 등급</p>
+                      <p className="mt-1 font-semibold">{submission.mv_desired_rating || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">곡 제목</p>
+                      <p className="mt-1 font-semibold">
+                        {submission.mv_song_title ||
+                          submission.mv_song_title_kr ||
+                          submission.mv_song_title_en ||
+                          "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">작곡/작사/편곡</p>
+                      <p className="mt-1 font-semibold">
+                        {submission.mv_composer || "-"} / {submission.mv_lyricist || "-"} /{" "}
+                        {submission.mv_arranger || "-"}
+                      </p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <p className="text-xs text-muted-foreground">메모</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+                        {submission.mv_memo || "-"}
+                      </p>
+                    </div>
+                    {submission.mv_lyrics ? (
+                      <div className="md:col-span-2">
+                        <p className="text-xs text-muted-foreground">가사</p>
+                        <div className="mt-2 whitespace-pre-wrap rounded-2xl border border-border/60 bg-background/70 p-3 text-sm text-foreground">
+                          {submission.mv_lyrics}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-xs text-muted-foreground">아티스트 유형</p>
+                      <p className="mt-1 font-semibold">{artistTypeLabel}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">이전 발매</p>
+                      <p className="mt-1 font-semibold">
+                        {submission.previous_release || "-"}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+              {!isMvSubmission && albumTracks.length > 0 ? (
+                <div className="mt-5 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    트랙 리스트
+                  </p>
+                  <div className="rounded-2xl border border-border/60 bg-background/70 p-3 text-sm">
+                    <div className="divide-y divide-border/60">
+                      {albumTracks.map((track, index) => (
+                        <div key={`${track.track_no ?? index}-${track.track_title ?? index}`} className="py-2">
+                          <p className="font-semibold text-foreground">
+                            {track.track_no ?? index + 1}.{" "}
+                            {track.track_title || track.track_title_kr || track.track_title_en || "제목 미입력"}
+                            {track.is_title ? " · 타이틀" : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} / 편곡{" "}
+                            {track.arranger || "-"}
+                          </p>
+                          {track.lyrics ? (
+                            <details className="mt-1 text-xs text-muted-foreground">
+                              <summary className="cursor-pointer">가사 보기</summary>
+                              <div className="mt-1 whitespace-pre-wrap text-foreground">
+                                {track.lyrics}
+                              </div>
+                            </details>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
+              aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
+              className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-200 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+            >
+              <span>{isSubmissionFormOpen ? "▲" : "▼"}</span>
+              <span>{isSubmissionFormOpen ? "접기" : "펼치기"}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="order-5 rounded-[28px] border border-border/60 bg-card/80 p-6">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            첨부 파일
+          </p>
+          {isAttachmentsOpen ? (
+            <div className="mt-4">
+              <SubmissionFilesPanel
+                submissionId={submissionId}
+                files={files}
+                guestToken={guestToken}
+                canDownload={false}
+              />
+            </div>
+          ) : null}
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setIsAttachmentsOpen((prev) => !prev)}
+              aria-label={isAttachmentsOpen ? "첨부 파일 닫기" : "첨부 파일 열기"}
+              className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-200 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+            >
+              <span>{isAttachmentsOpen ? "▲" : "▼"}</span>
+              <span>{isAttachmentsOpen ? "접기" : "펼치기"}</span>
+            </button>
+          </div>
+        </div>
+
+        {isMvSubmission ? (
+          <div className="order-6 rounded-[28px] border border-border/60 bg-card/80 p-6">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              심의 등급 / 가이드 / 필증
+            </p>
             <div className="mt-4 space-y-3 text-sm">
               {submission.mv_desired_rating ? (
                 <div className="rounded-2xl border border-transparent bg-yellow-300 px-4 py-3 text-[13px] font-semibold text-black shadow-sm">
@@ -930,506 +1204,248 @@ export function SubmissionDetailClient({
                   등급
                 </span>
                 <button
-                    type="button"
-                    onClick={handleRatingDownload}
-                    disabled={
-                      !submission.mv_desired_rating || isRatingDownloading
-                    }
-                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {submission.mv_desired_rating
-                      ? `${mvRatingLabel(submission.mv_desired_rating)} 이미지 다운로드`
-                      : "등급 미설정"}
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    표기 가이드
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleGuideDownload}
-                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
-                  >
-                    가이드 PDF 다운로드
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    심의 필증
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleCertificateDownload}
-                    disabled={!submission.certificate_b2_path}
-                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {submission.certificate_original_name
-                      ? submission.certificate_original_name
-                      : "필증 미등록"}
-                  </button>
-                  {!submission.certificate_b2_path ? (
-                    <span className="text-xs text-muted-foreground">업로드 완료 후 다운로드 가능</span>
-                  ) : null}
-                </div>
+                  type="button"
+                  onClick={handleRatingDownload}
+                  disabled={!submission.mv_desired_rating || isRatingDownloading}
+                  className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submission.mv_desired_rating
+                    ? `${mvRatingLabel(submission.mv_desired_rating)} 이미지 다운로드`
+                    : "등급 미설정"}
+                </button>
               </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-    <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
-      <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        작성 신청서
-      </p>
-      {isSubmissionFormOpen ? (
-        <>
-          <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            {submission.type === "ALBUM" ? "앨범 제목" : "영상 제목"}
-          </p>
-          <p className="mt-1 font-semibold">{submission.title || "-"}</p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">아티스트명</p>
-          <p className="mt-1 font-semibold">
-            {submission.artist_name || "-"}
-            {submission.artist_name_kr ? ` / ${submission.artist_name_kr}` : ""}
-            {submission.artist_name_en ? ` / ${submission.artist_name_en}` : ""}
-          </p>
-        </div>
-        {showApplicantInfo ? (
-          <>
-            <div>
-              <p className="text-sm text-muted-foreground">신청자</p>
-              <p className="mt-1 font-semibold">
-                {submission.applicant_name || "-"}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">신청자 연락처</p>
-              <p className="mt-1 font-semibold">
-                {submission.applicant_phone || "-"}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">신청자 이메일</p>
-              <p className="mt-1 font-semibold">
-                {submission.applicant_email || "-"}
-              </p>
-            </div>
-          </>
-        ) : null}
-        <div>
-          <p className="text-sm text-muted-foreground">유통사</p>
-          <p className="mt-1 font-semibold">
-            {submission.distributor || "-"}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">제작사</p>
-          <p className="mt-1 font-semibold">
-            {submission.production_company || "-"}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">발매일</p>
-          <p className="mt-1 font-semibold">
-            {submission.release_date ? formatDateTime(submission.release_date) : "-"}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">장르</p>
-          <p className="mt-1 font-semibold">
-            {submission.genre || "-"}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">이전 발매</p>
-          <p className="mt-1 font-semibold">
-            {submission.previous_release || "-"}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">그룹/솔로</p>
-          <p className="mt-1 font-semibold">{artistTypeLabel}</p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">성별</p>
-          <p className="mt-1 font-semibold">{artistGenderLabel}</p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">멤버</p>
-          <p className="mt-1 font-semibold">
-            {submission.artist_members || "-"}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-muted-foreground">멜론 링크</p>
-          <p className="mt-1 font-semibold">
-            {submission.melon_url || "-"}
-          </p>
-        </div>
-        {isMvSubmission ? (
-          <>
-            <div>
-              <p className="text-xs text-muted-foreground">러닝타임</p>
-              <p className="mt-1 font-semibold">{submission.mv_runtime || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">포맷</p>
-              <p className="mt-1 font-semibold">{submission.mv_format || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">감독</p>
-              <p className="mt-1 font-semibold">{submission.mv_director || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">주연</p>
-              <p className="mt-1 font-semibold">{submission.mv_lead_actor || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">스토리라인</p>
-              <p className="mt-1 font-semibold">{submission.mv_storyline || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">제작사</p>
-              <p className="mt-1 font-semibold">{submission.mv_production_company || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">에이전시</p>
-              <p className="mt-1 font-semibold">{submission.mv_agency || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">앨범 제목</p>
-              <p className="mt-1 font-semibold">{submission.mv_album_title || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">제작일</p>
-              <p className="mt-1 font-semibold">
-                {submission.mv_production_date ? formatDateTime(submission.mv_production_date) : "-"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">배급사</p>
-              <p className="mt-1 font-semibold">{submission.mv_distribution_company || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">사업자등록번호</p>
-              <p className="mt-1 font-semibold">{submission.mv_business_reg_no || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">용도</p>
-              <p className="mt-1 font-semibold">{submission.mv_usage || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">희망 등급</p>
-              <p className="mt-1 font-semibold">{submission.mv_desired_rating || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">곡 제목</p>
-              <p className="mt-1 font-semibold">
-                {submission.mv_song_title ||
-                  submission.mv_song_title_kr ||
-                  submission.mv_song_title_en ||
-                  "-"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">작곡/작사/편곡</p>
-              <p className="mt-1 font-semibold">
-                {submission.mv_composer || "-"} / {submission.mv_lyricist || "-"} /{" "}
-                {submission.mv_arranger || "-"}
-              </p>
-            </div>
-            <div className="md:col-span-2">
-              <p className="text-xs text-muted-foreground">메모</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
-                {submission.mv_memo || "-"}
-              </p>
-            </div>
-            {submission.mv_lyrics ? (
-              <div className="md:col-span-2">
-                <p className="text-xs text-muted-foreground">가사</p>
-                <div className="mt-2 whitespace-pre-wrap rounded-2xl border border-border/60 bg-background/70 p-3 text-sm text-foreground">
-                  {submission.mv_lyrics}
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  표기 가이드
+                </span>
+                <button
+                  type="button"
+                  onClick={handleGuideDownload}
+                  className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
+                >
+                  가이드 PDF 다운로드
+                </button>
               </div>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <div>
-              <p className="text-xs text-muted-foreground">아티스트 유형</p>
-              <p className="mt-1 font-semibold">{artistTypeLabel}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">이전 발매</p>
-              <p className="mt-1 font-semibold">
-                {submission.previous_release || "-"}
-              </p>
-            </div>
-          </>
-        )}
-      </div>
-      {!isMvSubmission && albumTracks.length > 0 ? (
-        <div className="mt-5 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            트랙 리스트
-          </p>
-          <div className="rounded-2xl border border-border/60 bg-background/70 p-3 text-sm">
-            <div className="divide-y divide-border/60">
-              {albumTracks.map((track, index) => (
-                <div key={`${track.track_no ?? index}-${track.track_title ?? index}`} className="py-2">
-                  <p className="font-semibold text-foreground">
-                    {track.track_no ?? index + 1}.{" "}
-                    {track.track_title || track.track_title_kr || track.track_title_en || "제목 미입력"}
-                    {track.is_title ? " · 타이틀" : ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} / 편곡{" "}
-                    {track.arranger || "-"}
-                  </p>
-                  {track.lyrics ? (
-                    <details className="mt-1 text-xs text-muted-foreground">
-                      <summary className="cursor-pointer">가사 보기</summary>
-                      <div className="mt-1 whitespace-pre-wrap text-foreground">
-                        {track.lyrics}
-                      </div>
-                    </details>
-                  ) : null}
-                </div>
-              ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  심의 필증
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCertificateDownload}
+                  disabled={!submission.certificate_b2_path}
+                  className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submission.certificate_original_name
+                    ? submission.certificate_original_name
+                    : "필증 미등록"}
+                </button>
+                {!submission.certificate_b2_path ? (
+                  <span className="text-xs text-muted-foreground">업로드 완료 후 다운로드 가능</span>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
-      ) : null}
-        </>
-      ) : null}
-      <div className="mt-4 flex justify-center">
-        <button
-          type="button"
-          onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
-          aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
-          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-200 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
-        >
-          <span>{isSubmissionFormOpen ? "▲" : "▼"}</span>
-          <span>{isSubmissionFormOpen ? "접기" : "펼치기"}</span>
-        </button>
-      </div>
-    </div>
+        ) : null}
 
-    <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        첨부 파일
-      </p>
-      {isAttachmentsOpen ? (
-        <div className="mt-4">
-          <SubmissionFilesPanel
-            submissionId={submissionId}
-            files={files}
-            guestToken={guestToken}
-            canDownload={false}
-          />
-        </div>
-      ) : null}
-      <div className="mt-4 flex justify-center">
-        <button
-          type="button"
-          onClick={() => setIsAttachmentsOpen((prev) => !prev)}
-          aria-label={isAttachmentsOpen ? "첨부 파일 닫기" : "첨부 파일 열기"}
-          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-200 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
-        >
-          <span>{isAttachmentsOpen ? "▲" : "▼"}</span>
-          <span>{isAttachmentsOpen ? "접기" : "펼치기"}</span>
-        </button>
-      </div>
-    </div>
-
-    <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          방송국별 진행표
-          </p>
-          <span className="text-sm text-muted-foreground">
-            업데이트: {formatDateTime(submission.updated_at)}
-          </span>
-        </div>
-        <div className="mt-5">
-          {renderStationReviews && renderStationReviews.length > 0 ? (
-            <div className="rounded-2xl border border-border/60 bg-background/70">
-              <div className="overflow-x-auto">
-                <div className="min-w-[640px]">
-                  <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    <span>방송국</span>
-                    <span className="text-center">접수 상태</span>
-                    <span className="text-center">
-                      {isMvSubmission ? "등급 분류" : "트랙 결과"}
-                    </span>
-                    <span className="text-right">접수 날짜</span>
-                    <span className="text-center">사유</span>
-                  </div>
-                  <div className="divide-y divide-border/60">
-                    {renderStationReviews.map((review) => {
-                      const reception = isReviewComplete
-                        ? { label: "결과 통보", tone: "bg-emerald-500/15 text-emerald-800" }
-                        : getReviewReception(review.status);
-                      const trackInfo = buildTrackSummary(review.track_results);
-                      const note = review.result_note?.trim();
-                      const hasRejection = trackInfo.counts.rejected > 0;
-                      const showNote = Boolean(note) && hasRejection;
-                      const notePreview =
-                        showNote && note
-                          ? note.length > 28
-                            ? `${note.slice(0, 28)}…`
-                            : note
-                          : null;
-                      const isApproved = review.status === "APPROVED";
-                      const totalTracksForDisplay =
-                        albumTracks.length > 1
-                          ? albumTracks.length
-                          : trackInfo.counts.total;
-                      const pendingGap = Math.max(
-                        totalTracksForDisplay -
-                          (trackInfo.counts.approved +
-                            trackInfo.counts.rejected +
-                            trackInfo.counts.pending),
-                        0,
-                      );
-                      const pendingCount = trackInfo.counts.pending + pendingGap;
-                      const hasTrackDetails = totalTracksForDisplay > 0;
-                      const summaryCounts = {
-                        approved: trackInfo.counts.approved,
-                        rejected: trackInfo.counts.rejected,
-                        pending: pendingCount,
-                      };
-                      const resultTone =
-                        isReviewComplete && submission.mv_desired_rating
-                          ? {
-                              label: mvRatingLabel(submission.mv_desired_rating),
-                              tone: "bg-emerald-500/15 text-emerald-800",
-                            }
-                          : trackInfo.outcome === "APPROVED"
-                            ? reviewResultMap.APPROVED
-                            : trackInfo.outcome === "REJECTED"
-                              ? reviewResultMap.REJECTED
-                              : trackInfo.outcome === "PARTIAL"
-                                ? {
-                                    label: "부분 통과",
-                                    tone:
-                                      "bg-amber-500/15 text-amber-700 dark:text-amber-200",
-                                  }
-                                : hasTrackDetails
+        <div className="order-3 rounded-[28px] border border-border/60 bg-card/80 p-6">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              방송국별 진행표
+            </p>
+            <span className="text-sm text-muted-foreground">
+              업데이트: {formatDateTime(submission.updated_at)}
+            </span>
+          </div>
+          <div className="mt-5">
+            {renderStationReviews && renderStationReviews.length > 0 ? (
+              <div className="rounded-2xl border border-border/60 bg-background/70">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[640px]">
+                    <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <span className="justify-self-center text-center">방송국</span>
+                      <span className="justify-self-center text-center">접수 상태</span>
+                      <span className="justify-self-center text-center">
+                        {isMvSubmission ? "등급 분류" : "트랙 결과"}
+                      </span>
+                      <span className="justify-self-center text-center">최근 업데이트</span>
+                      <span className="justify-self-center text-center">사유</span>
+                    </div>
+                    <div className="divide-y divide-border/60">
+                      {renderStationReviews.map((review) => {
+                        const reception = isReviewComplete
+                          ? { label: "결과 통보", tone: "bg-emerald-500/15 text-emerald-800" }
+                          : getReviewReception(review.status);
+                        const trackInfo = buildTrackSummary(review.track_results);
+                        const note = review.result_note?.trim();
+                        const hasRejection = trackInfo.counts.rejected > 0;
+                        const showNote = Boolean(note) && hasRejection;
+                        const notePreview =
+                          showNote && note
+                            ? note.length > 28
+                              ? `${note.slice(0, 28)}…`
+                              : note
+                            : null;
+                        const hasApprovedTrack = trackInfo.counts.approved > 0;
+                        const canOpenRadioLinks =
+                          hasApprovedTrack || review.status === "APPROVED";
+                        const stationCode =
+                          review.station && "code" in review.station
+                            ? review.station.code
+                            : null;
+                        const totalTracksForDisplay =
+                          albumTracks.length > 1
+                            ? albumTracks.length
+                            : trackInfo.counts.total;
+                        const pendingGap = Math.max(
+                          totalTracksForDisplay -
+                            (trackInfo.counts.approved +
+                              trackInfo.counts.rejected +
+                              trackInfo.counts.pending),
+                          0,
+                        );
+                        const pendingCount = trackInfo.counts.pending + pendingGap;
+                        const hasTrackDetails = totalTracksForDisplay > 0;
+                        const summaryCounts = {
+                          approved: trackInfo.counts.approved,
+                          rejected: trackInfo.counts.rejected,
+                          pending: pendingCount,
+                        };
+                        const resultTone =
+                          isReviewComplete && submission.mv_desired_rating
+                            ? {
+                                label: mvRatingLabel(submission.mv_desired_rating),
+                                tone: "bg-emerald-500/15 text-emerald-800",
+                              }
+                            : trackInfo.outcome === "APPROVED"
+                              ? reviewResultMap.APPROVED
+                              : trackInfo.outcome === "REJECTED"
+                                ? reviewResultMap.REJECTED
+                                : trackInfo.outcome === "PARTIAL"
                                   ? {
-                                      label: "대기",
+                                      label: "부분 통과",
                                       tone:
-                                        "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+                                        "bg-amber-500/15 text-amber-700 dark:text-amber-200",
                                     }
-                                  : getReviewResult(review.status);
-                      const trackSummaryLine =
-                        totalTracksForDisplay > 1
-                          ? buildTrackSummaryText(summaryCounts, " · ")
-                          : null;
+                                  : hasTrackDetails
+                                    ? {
+                                        label: "대기",
+                                        tone:
+                                          "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+                                      }
+                                    : getReviewResult(review.status);
+                        const trackSummaryLine =
+                          totalTracksForDisplay > 1
+                            ? buildTrackSummaryText(summaryCounts, " · ")
+                            : null;
 
-                      const handleResultClick = () => {
-                        if (hasTrackDetails) {
-                          setTrackResultModal({
-                            stationName: review.station?.name ?? "-",
-                            summary: trackInfo,
-                          });
-                          return;
-                        }
-                        if (isApproved) {
-                          openRadioLinks(review.station?.name ?? undefined);
-                        }
-                      };
+                        const handleResultClick = () => {
+                          if (hasTrackDetails) {
+                            setTrackResultModal({
+                              stationName: review.station?.name ?? "-",
+                              stationCode,
+                              summary: trackInfo,
+                            });
+                            return;
+                          }
+                          if (canOpenRadioLinks) {
+                            openRadioLinks({
+                              name: review.station?.name,
+                              code: stationCode,
+                            });
+                          }
+                        };
 
-                      return (
-                        <div
-                          key={review.id}
-                          className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 px-4 py-3 text-sm"
-                        >
-                          <div className="min-w-0 flex items-center gap-2">
-                            <StationLogoWithFallback station={review.station} />
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-foreground">
-                                {review.station?.name ?? "-"}
-                              </p>
-                              {review.station && "code" in review.station ? (
-                                <p className="text-xs text-muted-foreground">
-                                  {review.station.code ?? ""}
+                        return (
+                          <div
+                            key={review.id}
+                            className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_0.6fr] items-center gap-3 px-4 py-3 text-sm"
+                          >
+                            <div className="min-w-0 flex items-center justify-center gap-2 text-center">
+                              <StationLogoWithFallback station={review.station} />
+                              <div className="min-w-0 max-w-[170px]">
+                                <p className="truncate text-center font-semibold text-foreground">
+                                  {review.station?.name ?? "-"}
                                 </p>
-                              ) : null}
+                                {review.station && "code" in review.station ? (
+                                  <p className="text-center text-xs text-muted-foreground">
+                                    {review.station.code ?? ""}
+                                  </p>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                          <span
-                            className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
-                          >
-                            {reception.label}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleResultClick}
-                            className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold transition ${
-                              resultTone.tone
-                            } ${hasTrackDetails ? "hover:opacity-90" : ""}`}
-                          >
-                            <span>{resultTone.label}</span>
-                            {trackSummaryLine ? (
-                              <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                {trackSummaryLine}
-                              </span>
-                            ) : null}
-                          </button>
-                          <span className="text-right text-xs text-muted-foreground">
-                            {formatDateTime(review.updated_at)}
-                          </span>
-                          {ratingReason ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setActiveResultNote({
-                                  stationName: review.station?.name ?? "-",
-                                  note: ratingReason,
-                                })
-                              }
-                              className="justify-self-center rounded-full border border-border/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:text-foreground"
+                            <span
+                              className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
                             >
-                              사유 보기
-                            </button>
-                          ) : showNote ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setActiveResultNote({
-                                  stationName: review.station?.name ?? "-",
-                                  note: note ?? "",
-                                })
-                              }
-                              className="justify-self-center max-w-[140px] rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
-                            >
-                              <span className="block truncate">
-                                {notePreview ?? "사유 보기"}
-                              </span>
-                            </button>
-                          ) : (
-                            <span className="text-center text-xs text-muted-foreground">
-                              -
+                              {reception.label}
                             </span>
-                          )}
-                        </div>
-                      );
-                    })}
+                            <button
+                              type="button"
+                              onClick={handleResultClick}
+                              className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${
+                                resultTone.tone
+                              } ${
+                                hasTrackDetails
+                                  ? "transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100"
+                                  : "transition"
+                              }`}
+                            >
+                              <span>{resultTone.label}</span>
+                              {trackSummaryLine ? (
+                                <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
+                                  {trackSummaryLine}
+                                </span>
+                              ) : null}
+                            </button>
+                            <span className="justify-self-center text-center text-xs text-muted-foreground">
+                              {formatDateTime(review.updated_at)}
+                            </span>
+                            {ratingReason ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActiveResultNote({
+                                    stationName: review.station?.name ?? "-",
+                                    note: ratingReason,
+                                  })
+                                }
+                                className="justify-self-center rounded-full border border-border/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:text-foreground"
+                              >
+                                사유 보기
+                              </button>
+                            ) : showNote ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActiveResultNote({
+                                    stationName: review.station?.name ?? "-",
+                                    note: note ?? "",
+                                  })
+                                }
+                                className="justify-self-center max-w-[140px] rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
+                              >
+                                <span className="block truncate">
+                                  {notePreview ?? "사유 보기"}
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="text-center text-xs text-muted-foreground">
+                                -
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
-              아직 방송국 진행 정보가 없습니다. 접수 제출 후 자동 생성됩니다.
-            </div>
-          )}
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
+                아직 방송국 진행 정보가 없습니다. 접수 제출 후 자동 생성됩니다.
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1551,11 +1567,14 @@ export function SubmissionDetailClient({
               })}
             </div>
             <div className="mt-5 flex items-center justify-between gap-3">
-              {trackResultModal.summary.outcome === "APPROVED" ? (
+              {trackResultModal.summary.counts.approved > 0 ? (
                 <button
                   type="button"
                   onClick={() => {
-                    openRadioLinks(trackResultModal.stationName);
+                    openRadioLinks({
+                      name: trackResultModal.stationName,
+                      code: trackResultModal.stationCode ?? null,
+                    });
                     setTrackResultModal(null);
                   }}
                   className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
@@ -1585,14 +1604,14 @@ export function SubmissionDetailClient({
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
               {radioLinksModal.stationName
-                ? `${radioLinksModal.stationName} 적격 · 라디오 신청곡 올리기`
-                : "적격 · 라디오 신청곡 올리기"}
+                ? `${radioLinksModal.stationName} 통과/부분통과 · 라디오 신청곡 올리기`
+                : "통과/부분통과 · 라디오 신청곡 올리기"}
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
               방송사별 라디오 신청곡/사연 접수 페이지로 이동합니다.
             </p>
             <ul className="mt-4 space-y-2">
-              {radioSubmissionLinks.map((link) => (
+              {radioLinksModal.links.map((link) => (
                 <li key={link.url}>
                   <a
                     href={link.url}

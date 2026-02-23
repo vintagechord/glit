@@ -6,11 +6,11 @@ import { ThemeToggle } from "./theme-toggle";
 import { SiteLogo } from "./site-logo";
 
 const primaryLinkClass =
-  "group flex items-center gap-2 rounded-full bg-foreground/5 px-3 py-1 text-foreground/80 transition hover:bg-foreground hover:text-background dark:bg-transparent dark:text-foreground dark:hover:bg-white dark:hover:text-black";
+  "group flex items-center gap-2 rounded-full border border-transparent bg-foreground/6 px-3.5 py-1.5 text-sm font-semibold text-foreground/80 transition hover:bg-foreground/12 dark:border-white/5 dark:bg-white/5 dark:text-white/85 dark:hover:border-white/15 dark:hover:bg-white/12";
 const mobileLinkClass =
-  "group flex items-center gap-2 whitespace-nowrap rounded-full bg-foreground/5 px-3 py-1 text-foreground/80 transition hover:bg-foreground hover:text-background dark:bg-transparent dark:text-foreground dark:hover:bg-white dark:hover:text-black";
+  "group flex items-center gap-2 whitespace-nowrap rounded-full border border-transparent bg-foreground/6 px-3.5 py-1.5 text-sm font-semibold text-foreground/80 transition hover:bg-foreground/12 dark:border-white/5 dark:bg-white/5 dark:text-white/85 dark:hover:border-white/15 dark:hover:bg-white/12";
 const ghostButtonClass =
-  "rounded-full border border-border/70 bg-foreground/5 px-3 py-1 text-sm font-semibold text-foreground whitespace-nowrap shrink-0 transition hover:bg-foreground hover:text-background dark:bg-transparent dark:text-foreground dark:hover:bg-white dark:hover:text-black";
+  "rounded-full border border-border/70 bg-foreground/5 px-3.5 py-1.5 text-sm font-semibold text-foreground whitespace-nowrap shrink-0 transition hover:bg-foreground/12 dark:border-white/10 dark:bg-white/5 dark:text-white/90 dark:hover:border-white/20 dark:hover:bg-white/12";
 
 const navLinks = [
   { label: "심의 신청", href: "/dashboard/new" },
@@ -26,7 +26,7 @@ export async function SiteHeader() {
   const user = session?.user ?? null;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur-md dark:border-white/10 dark:bg-[#0f1727]/78">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-4">
         <div className="flex items-center gap-4">
           <SiteLogo />

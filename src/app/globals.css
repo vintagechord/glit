@@ -50,6 +50,9 @@
 
 :root {
   --radius: 0.625rem;
+  --app-font-size: 16px;
+  --app-line-height: 1.58;
+  --app-letter-spacing: -0.005em;
   --background: #ffffff;
   --foreground: #111111;
   --card: #ffffff;
@@ -84,37 +87,40 @@
 }
 
 .dark {
-  --background: #060606;
-  --foreground: #f7f7f7;
-  --card: #0f0f0f;
-  --card-foreground: #f7f7f7;
-  --popover: #0f0f0f;
-  --popover-foreground: #f7f7f7;
-  --primary: #f05a28;
+  --app-font-size: 15.5px;
+  --app-line-height: 1.56;
+  --app-letter-spacing: -0.01em;
+  --background: #0b111b;
+  --foreground: #edf3ff;
+  --card: #121b2a;
+  --card-foreground: #edf3ff;
+  --popover: #121b2a;
+  --popover-foreground: #edf3ff;
+  --primary: #f97344;
   --primary-foreground: #0b0b0b;
-  --secondary: #121212;
-  --secondary-foreground: #f7f7f7;
-  --muted: #1a1a1a;
-  --muted-foreground: #c9c9c9;
-  --accent: #f6d64a;
-  --accent-foreground: #0b0b0b;
+  --secondary: #172233;
+  --secondary-foreground: #edf3ff;
+  --muted: #162132;
+  --muted-foreground: #aebbd3;
+  --accent: #4f84ff;
+  --accent-foreground: #eff5ff;
   --destructive: #e45757;
-  --border: #202020;
-  --input: #202020;
-  --ring: #f6d64a;
+  --border: #27354a;
+  --input: #27354a;
+  --ring: #88aefc;
   --chart-1: #f05a28;
-  --chart-2: #f6d64a;
-  --chart-3: #ffffff;
-  --chart-4: #2a2a2a;
-  --chart-5: #1a1a1a;
-  --sidebar: #0f0f0f;
-  --sidebar-foreground: #f7f7f7;
+  --chart-2: #88aefc;
+  --chart-3: #edf3ff;
+  --chart-4: #27354a;
+  --chart-5: #162132;
+  --sidebar: #121b2a;
+  --sidebar-foreground: #edf3ff;
   --sidebar-primary: #f05a28;
   --sidebar-primary-foreground: #0b0b0b;
-  --sidebar-accent: #121212;
-  --sidebar-accent-foreground: #f7f7f7;
-  --sidebar-border: #202020;
-  --sidebar-ring: #f6d64a;
+  --sidebar-accent: #172233;
+  --sidebar-accent-foreground: #edf3ff;
+  --sidebar-border: #27354a;
+  --sidebar-ring: #88aefc;
 }
 
 @layer base {
@@ -123,6 +129,16 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-size: var(--app-font-size);
+    line-height: var(--app-line-height);
+    letter-spacing: var(--app-letter-spacing);
+    min-height: 100vh;
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(900px 340px at 50% -120px, rgba(88, 134, 255, 0.22), transparent 62%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0, rgba(255, 255, 255, 0) 74px);
   }
 }
 
