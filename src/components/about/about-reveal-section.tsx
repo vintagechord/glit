@@ -84,42 +84,14 @@ export function AboutRevealSection() {
               정식 등록 업체
             </p>
             <div className="space-y-3 text-base leading-relaxed text-white/80">
-              <p>
-                온사이드는 개인 사업자 영포에버가 운영하는 심의 전문
-                브랜드입니다.
-              </p>
-              <p>
-                영포에버는 음원 거래 플랫폼{" "}
-                <a
-                  href="https://www.iamwatermelon.com"
-                  className="font-semibold underline decoration-white/60 underline-offset-4"
-                >
-                  워터멜론
-                </a>
-                (Beat 마켓), 음향기기 수리 서비스{" "}
-                <a
-                  href="https://machfix.co.kr"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold underline decoration-white/60 underline-offset-4"
-                >
-                  마하픽스
-                </a>
-                , 레코딩·믹스를 진행하는 뮤직 스튜디오{" "}
-                <a
-                  href="https://naver.me/FMckTrml"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold underline decoration-white/60 underline-offset-4"
-                >
-                  V-House
-                </a>
-                를 함께 운영하고 있습니다.
-              </p>
-              <ul className="list-disc space-y-1 pl-4 text-white/80">
-                <li>통신판매업, 대중문화예술기획업, 음반·음악영상물제작업 등록 업체</li>
-                <li>세금계산서·현금영수증·거래내역서 등 각종 증빙 서류 발급 가능</li>
-              </ul>
+              <p>통신판매업, 대중문화예술기획업, 음반·음악영상물제작업 등록 업체</p>
+              <p>세금계산서·현금영수증·거래내역서 등 각종 증빙 서류 발급 가능</p>
+              <div className="pt-1 space-y-1">
+                <p className="font-semibold text-white/90">연관 업체 :</p>
+                <p>음원 거래 플랫폼 워터멜론(Beat 마켓)</p>
+                <p>음향기기 수리 서비스 마하픽스</p>
+                <p>뮤직 스튜디오 V-House</p>
+              </div>
             </div>
           </div>
         </section>

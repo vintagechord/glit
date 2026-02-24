@@ -223,9 +223,9 @@ const processStepTones = [
 ];
 
 const serviceCardTones = [
-  "bg-[#8fe38f] text-[#111111] border-transparent",
-  "bg-[#e6e35b] text-[#111111] border-transparent",
-  "oneclick-card text-[#111111] border-transparent dark:text-[#ecf2ff] dark:border-[#4f60d6]/70",
+  "bg-[#8fe38f] text-[#111111] border-transparent dark:bg-[#224435] dark:text-[#ecfff4] dark:border-[#325846]",
+  "bg-[#e6e35b] text-[#111111] border-transparent dark:bg-[#4a4522] dark:text-[#fff7c5] dark:border-[#6b6032]",
+  "oneclick-card text-[#ecf2ff] border-[#4f60d6]/70 dark:text-[#ecf2ff] dark:border-[#4f60d6]/70",
 ];
 
 type StationSnapshot = {

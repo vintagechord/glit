@@ -36,15 +36,15 @@ export default function AboutPage() {
                 온사이드(onside)
               </h1>
               <p className="mt-3 text-base leading-relaxed text-[var(--about-ink)]/80 md:text-lg">
-                영포에버가 운영하는 온사이드는 음반·뮤직비디오 심의를 온라인으로
-                연결해 “방송 가능” 상태까지 빠르고 안전하게 만들어줍니다. 심의
-                진행, 승인, 기록 아카이브를 한 곳에서 관리하세요.
+                온사이드는 음반·뮤직비디오 심의를 온라인으로 연결해 “방송 가능”
+                상태까지 빠르고 안전하게 만들어줍니다. 심의 진행, 승인, 기록
+                아카이브를 한 곳에서 관리하세요.
               </p>
               <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--about-ink)]/70">
                 {[
-                  "Album Review",
-                  "MV Review",
-                  "Real-time Update",
+                  "음반 심의",
+                  "뮤비 심의",
+                  "실시간 업데이트",
                 ].map((chip) => (
                   <span
                     key={chip}
@@ -74,9 +74,6 @@ export default function AboutPage() {
                   className="h-6 w-auto"
                   showSrLabel={false}
                 />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--about-ink)]/60">
-                  Ready to Air
-                </p>
               </div>
             </div>
           </div>
