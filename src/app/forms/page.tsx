@@ -92,7 +92,7 @@ export default function FormsPage() {
               <Link
                 key={form.href}
                 href={form.href}
-                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-200 hover:text-slate-900"
+                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-[#f6d64a] hover:bg-[#f6d64a] hover:text-black"
               >
                 {form.label} 다운로드
               </Link>
@@ -115,7 +115,7 @@ export default function FormsPage() {
               <Link
                 key={form.href}
                 href={form.href}
-                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-200 hover:text-slate-900"
+                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-[#f6d64a] hover:bg-[#f6d64a] hover:text-black"
               >
                 {form.label} 다운로드
               </Link>
@@ -124,13 +124,13 @@ export default function FormsPage() {
         </section>
       </div>
 
-      <div className="mt-8 rounded-[28px] border border-amber-200/70 bg-amber-50/80 p-6 text-sm text-slate-700 shadow-[0_18px_50px_rgba(245,158,11,0.15)]">
+      <div className="mt-8 rounded-[28px] border border-[#f6d64a] bg-[#f6d64a] p-6 text-sm text-black shadow-[0_18px_50px_rgba(245,158,11,0.15)]">
         <div className="flex flex-wrap items-start gap-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-300 text-base font-bold text-slate-900 shadow-[0_12px_24px_rgba(245,158,11,0.35)] live-blink">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f6d64a] text-base font-bold text-black shadow-[0_12px_24px_rgba(245,158,11,0.35)] live-blink">
             !
           </div>
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-700">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-black">
               필독
             </p>
             <p className="text-sm font-semibold text-slate-900">

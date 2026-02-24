@@ -25,7 +25,7 @@ type ArtistGroup = {
 
 const stageTone: Record<string, string> = {
   "접수 완료": "bg-sky-500/15 text-sky-700 dark:text-sky-200",
-  "결제 확인": "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+  "결제 확인": "bg-[#f6d64a] text-black dark:text-black",
   "심의 진행": "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
   "결과 전달": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
 };

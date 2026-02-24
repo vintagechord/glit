@@ -167,7 +167,7 @@ export default async function AdminArtistsPage({
         </div>
       )}
       {statsError && (
-        <div className="mt-4 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
+        <div className="mt-4 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-sm text-black">
           {statsError}
         </div>
       )}

@@ -37,7 +37,7 @@ export default async function TrackPage() {
           <div className="mt-6">
             <Link
               href="/dashboard/new"
-              className="inline-flex items-center rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+              className="inline-flex items-center rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
             >
               새 접수 시작 →
             </Link>

@@ -254,7 +254,7 @@ export default function AdminFilesPage() {
         </label>
 
         {notice ? (
-          <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-sm font-semibold text-amber-900">
+          <div className="rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-sm font-semibold text-black">
             {notice}
           </div>
         ) : null}
@@ -272,7 +272,7 @@ export default function AdminFilesPage() {
             type="button"
             onClick={handleUpload}
             disabled={isUploading}
-            className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
+            className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
           >
             업로드
           </button>

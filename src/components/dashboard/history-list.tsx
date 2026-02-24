@@ -44,11 +44,11 @@ const submissionStatusMap: Record<string, { label: string; tone: string }> = {
   },
   PRE_REVIEW: {
     label: "사전 검토",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
   WAITING_PAYMENT: {
     label: "결제대기",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
   IN_PROGRESS: {
     label: "심의 진행",
@@ -71,7 +71,7 @@ const paymentStatusMap: Record<string, { label: string; tone: string }> = {
   },
   PAYMENT_PENDING: {
     label: "결제대기",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
   PAID: {
     label: "결제 완료",
@@ -111,7 +111,7 @@ const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
 };
 
@@ -138,7 +138,7 @@ const resultStatusMap: Record<string, { label: string; tone: string }> = {
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
 };
 
@@ -331,7 +331,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               {submission.order}
             </span>
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-200/70 via-white/40 to-indigo-200/60 text-xs font-semibold text-foreground">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[#f6d64a] via-white/40 to-indigo-200/60 text-xs font-semibold text-foreground">
                 ONS
               </div>
               <div>

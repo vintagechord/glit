@@ -49,7 +49,7 @@ type TrackResultModalState = {
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
     label: "접수대기",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
   SENT: {
     label: "접수완료",
@@ -69,7 +69,7 @@ const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
 };
 
@@ -95,7 +95,7 @@ const stationResultFallbackMap: Record<string, { label: string; tone: string }> 
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
 };
 
@@ -155,7 +155,7 @@ function getResultStatus(review: StationItem) {
         : summary.outcome === "PARTIAL"
           ? {
               label: "부분 통과",
-              tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+              tone: "bg-[#f6d64a] text-black dark:text-black",
             }
           : stationResultFallbackMap[review.status] ?? {
               label: "대기",
@@ -695,7 +695,7 @@ export function HomeReviewPanel({
   );
 
   return (
-    <div className="min-w-0 w-full rounded-[28px] border border-amber-200/60 bg-gradient-to-br from-[#fff2d6]/90 via-white/80 to-[#ffe3a3]/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:border-white/10 dark:from-[#1a1a1a]/70 dark:via-[#111111]/80 dark:to-[#1e1a12]/80 lg:min-h-[520px]">
+    <div className="min-w-0 w-full rounded-[28px] border border-[#f6d64a] bg-[#f6d64a] p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-gradient-to-br dark:from-[#1a1a1a]/70 dark:via-[#111111]/80 dark:to-[#1e1a12]/80 lg:min-h-[520px]">
       <div className="flex items-center justify-between text-sm uppercase tracking-[0.2em] text-muted-foreground">
         <span>
           {activeSubmission
@@ -858,7 +858,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handlePrev}
                 disabled={!canScrollUp}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-bold text-slate-900 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-300 hover:shadow-[0_8px_18px_rgba(15,23,42,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-amber-300/70 dark:bg-amber-300 dark:text-slate-900 dark:hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#f6d64a] bg-[#f6d64a] text-sm font-bold text-black shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:shadow-[0_8px_18px_rgba(15,23,42,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6d64a]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black dark:hover:bg-[#f6d64a] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="이전 심의 진행 상태"
               >
                 ↑
@@ -867,7 +867,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handleNext}
                 disabled={!canScrollDown}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-bold text-slate-900 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-300 hover:shadow-[0_8px_18px_rgba(15,23,42,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-amber-300/70 dark:bg-amber-300 dark:text-slate-900 dark:hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#f6d64a] bg-[#f6d64a] text-sm font-bold text-black shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:shadow-[0_8px_18px_rgba(15,23,42,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6d64a]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black dark:hover:bg-[#f6d64a] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="다음 심의 진행 상태"
               >
                 ↓
@@ -1145,7 +1145,7 @@ export function HomeReviewPanel({
             <button
               type="button"
               onClick={() => setTrackResultModal(null)}
-              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
             >
               닫기
             </button>

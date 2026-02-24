@@ -532,7 +532,7 @@ export default async function AdminSubmissionDetailPage({
         </div>
       ) : null}
       {isSaveWarning && warningMessage ? (
-        <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mb-4 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-sm text-black">
           저장 경고: {warningMessage}
         </div>
       ) : null}

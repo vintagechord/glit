@@ -54,7 +54,7 @@ export default async function PayPage({
             <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
               결제 상태
             </span>
-            <span className="rounded-full bg-amber-500/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700">
+            <span className="rounded-full bg-[#f6d64a] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-black">
               {submission.payment_status || "결제대기"}
             </span>
           </div>
@@ -116,7 +116,7 @@ export default async function PayPage({
           </Link>
           <a
             href="mailto:onside17@daum.net"
-            className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+            className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
           >
             문의하기
           </a>

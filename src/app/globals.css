@@ -165,19 +165,19 @@
 }
 
 .oneclick-card {
-  background: var(--oneclick-card-bg, #5f67f2);
+  background: var(--oneclick-card-bg, #4f56d8);
 }
 
 .oneclick-card:hover {
-  background: var(--oneclick-card-bg-hover, #4f56d8);
+  background: var(--oneclick-card-bg-hover, #434bc6);
 }
 
 .oneclick-card:active {
-  background: var(--oneclick-card-bg-active, #434bc6);
+  background: var(--oneclick-card-bg-active, #3740b5);
 }
 
 .oneclick-card:focus-visible {
-  background: var(--oneclick-card-bg-hover, #4f56d8);
+  background: var(--oneclick-card-bg-hover, #434bc6);
 }
 
 @keyframes live-blink {

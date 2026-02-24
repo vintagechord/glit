@@ -124,7 +124,7 @@ export default function GuidePage() {
         <div className="mt-6">
           <Link
             href="/dashboard/new/album"
-            className="inline-flex items-center rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900"
+            className="inline-flex items-center rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
           >
             음반심의 신청하러 가기
           </Link>
@@ -172,7 +172,7 @@ export default function GuidePage() {
         <div className="mt-6">
           <Link
             href="/dashboard/new/mv"
-            className="inline-flex items-center rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900"
+            className="inline-flex items-center rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
           >
             M/V 심의 신청하러 가기
           </Link>

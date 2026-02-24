@@ -151,10 +151,10 @@ const onlineOptionConfirmNote =
   "위 내용을 확인하셨다면 [확인]을 눌러주세요.";
 
 const mvOptionToneClasses = [
-  "border-[#7ad97a] bg-[#8fe38f] text-slate-900",
-  "border-[#d8d654] bg-[#e6e35b] text-slate-900",
-  "border-[#4f56d8] bg-[#5f67f2] text-slate-900",
-  "border-[#e49adf] bg-[#f3a7f2] text-slate-900",
+  "border-[#7ad97a] bg-[#8fe38f] text-black",
+  "border-[#f6d64a] bg-[#f6d64a] text-black",
+  "border-[#4f56d8] bg-[#4f56d8] text-[#ecf2ff]",
+  "border-[#e49adf] bg-[#f3a7f2] text-black",
 ];
 
 type BroadcastSpecFields = {
@@ -622,7 +622,7 @@ export function MvWizard({
   }, [mvType, onlineBaseSelected, onlineOptions, tvStations]);
 
   const activeStepTone =
-    selectedStepTone ?? "border-amber-200 bg-amber-200 text-slate-900";
+    selectedStepTone ?? "border-[#f6d64a] bg-[#f6d64a] text-black";
 
   const stepLabels = (
     <div className="grid gap-3 md:grid-cols-5">
@@ -2040,7 +2040,7 @@ export function MvWizard({
                 type="button"
                 onClick={handleResumeDraftConfirm}
                 disabled={isClearingResumeDrafts}
-                className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
               >
                 불러오기
               </button>
@@ -2086,7 +2086,7 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={handleConfirmOnlineOption}
-                className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900"
+                className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
               >
                 확인
               </button>
@@ -2279,7 +2279,7 @@ export function MvWizard({
               type="button"
               onClick={() => setStep(2)}
               disabled={!canProceed}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >
               다음 단계
             </button>
@@ -2702,7 +2702,7 @@ export function MvWizard({
               type="button"
               onClick={() => setStep(1)}
               disabled={isSaving}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
             >
               이전 단계
             </button>
@@ -2721,7 +2721,7 @@ export function MvWizard({
             <button
               type="button"
               onClick={handleStep2Next}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900"
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
             >
               다음 단계
             </button>
@@ -2802,7 +2802,7 @@ export function MvWizard({
                   파일 첨부 (드래그 앤 드롭 가능)
                 </span>
                 {isDraggingOver && (
-                  <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-amber-300 bg-black/10 backdrop-blur-[1px]" />
+                  <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-[#f6d64a] bg-black/10 backdrop-blur-[1px]" />
                 )}
               </label>
             </div>
@@ -2901,7 +2901,7 @@ export function MvWizard({
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
             </button>
@@ -2924,7 +2924,7 @@ export function MvWizard({
               type="button"
               onClick={handleStep3Next}
               disabled={isSaving}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >
               다음 단계
             </button>
@@ -3068,7 +3068,7 @@ export function MvWizard({
             <button
               type="button"
               onClick={() => setStep(3)}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
             </button>
@@ -3076,7 +3076,7 @@ export function MvWizard({
               type="button"
               onClick={handleSubmit}
               disabled={isSaving}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >
               결제하기
             </button>

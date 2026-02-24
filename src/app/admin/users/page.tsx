@@ -80,7 +80,7 @@ export default async function AdminUsersPage() {
         </div>
       )}
       {emailError && (
-        <div className="mt-4 rounded-2xl border border-amber-400/50 bg-amber-500/10 px-4 py-2 text-xs text-amber-700">
+        <div className="mt-4 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-2 text-xs text-black">
           이메일 정보를 불러오는 데 문제가 있습니다. ({emailError})
         </div>
       )}

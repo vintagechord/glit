@@ -157,7 +157,7 @@ export function ChatbotWidget() {
                 질문을 선택해주세요.
               </div>
             ) : (
-              <div className="mt-4 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-3 py-3 text-sm leading-relaxed text-slate-700 shadow-sm dark:border-amber-400/30 dark:bg-amber-400/15 dark:text-amber-100">
+              <div className="mt-4 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-3 py-3 text-sm leading-relaxed text-black shadow-sm dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
                 {faqItems[activeIndex]?.answer}
               </div>
             )}

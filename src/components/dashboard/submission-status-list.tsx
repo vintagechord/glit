@@ -35,7 +35,7 @@ const statusLabels: Record<string, { label: string; tone: string }> = {
   PRE_REVIEW: { label: "사전검토", tone: "bg-violet-500/10 text-violet-600" },
   WAITING_PAYMENT: {
     label: "결제대기",
-    tone: "bg-amber-500/10 text-amber-700",
+    tone: "bg-[#f6d64a] text-black",
   },
   IN_PROGRESS: { label: "진행중", tone: "bg-indigo-500/10 text-indigo-600" },
   RESULT_READY: { label: "결과", tone: "bg-emerald-500/10 text-emerald-600" },
@@ -46,7 +46,7 @@ const paymentLabels: Record<string, { label: string; tone: string }> = {
   UNPAID: { label: "미결제", tone: "bg-slate-500/10 text-slate-600" },
   PAYMENT_PENDING: {
     label: "결제대기",
-    tone: "bg-amber-500/10 text-amber-700",
+    tone: "bg-[#f6d64a] text-black",
   },
   PAID: { label: "결제완료", tone: "bg-emerald-500/10 text-emerald-600" },
   REFUNDED: { label: "환불", tone: "bg-rose-500/10 text-rose-600" },
@@ -83,7 +83,7 @@ const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
 };
 
@@ -110,7 +110,7 @@ const resultStatusMap: Record<string, { label: string; tone: string }> = {
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
 };
 
@@ -150,7 +150,7 @@ const resolveResultStatus = (review: StationReview) => {
         : summary.outcome === "PARTIAL"
           ? {
               label: "부분 통과",
-              tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+              tone: "bg-[#f6d64a] text-black dark:text-black",
             }
           : getResultStatus(review.status);
 
@@ -280,7 +280,7 @@ export function SubmissionStatusList({
                     <button
                       type="button"
                       onClick={() => router.push(`/dashboard/pay/${submission.id}`)}
-                      className="rounded-full border border-amber-500/50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700 transition hover:border-amber-600 hover:text-amber-800"
+                      className="rounded-full border border-[#f6d64a] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black transition hover:border-[#f6d64a] hover:text-black"
                     >
                       결제하기
                     </button>
@@ -528,7 +528,7 @@ export function SubmissionStatusList({
             <button
               type="button"
               onClick={() => setTrackResultModal(null)}
-              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
             >
               닫기
             </button>

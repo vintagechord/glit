@@ -32,7 +32,7 @@ export default function NewSubmissionPage() {
         </Link>
         <Link
           href="/dashboard/new/mv"
-          className="rounded-[28px] border border-transparent bg-[#e6e35b] p-6 text-[#111111] transition hover:-translate-y-1"
+          className="rounded-[28px] border border-transparent bg-[#f6d64a] p-6 text-[#111111] transition hover:-translate-y-1"
         >
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-black/70">
             M/V Review
@@ -44,13 +44,13 @@ export default function NewSubmissionPage() {
         </Link>
         <Link
           href="/dashboard/new/album?mode=oneclick"
-          className="rounded-[28px] border border-transparent bg-[#5f67f2] p-6 text-[#111111] transition hover:-translate-y-1"
+          className="rounded-[28px] border border-transparent bg-[#4f56d8] p-6 text-[#ecf2ff] transition hover:-translate-y-1"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-black/70">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#ecf2ff]/75">
             One Click
           </p>
           <h2 className="mt-3 text-xl font-semibold">원클릭</h2>
-          <p className="mt-2 text-sm text-black/80">
+          <p className="mt-2 text-sm text-[#ecf2ff]/85">
             멜론 링크와 음원 파일만 제출하는 간편 접수입니다.
           </p>
         </Link>

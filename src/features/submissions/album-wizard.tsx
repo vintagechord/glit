@@ -131,20 +131,20 @@ const formatPackageDescription = (
 
 const packageToneClasses = [
   {
-    card: "border-[#7ad97a] bg-[#8fe38f] text-slate-900",
-    chip: "border-black/30 text-slate-900",
+    card: "border-[#7ad97a] bg-[#8fe38f] text-black",
+    chip: "border-black/30 text-black",
   },
   {
-    card: "border-[#d8d654] bg-[#e6e35b] text-slate-900",
-    chip: "border-black/30 text-slate-900",
+    card: "border-[#f6d64a] bg-[#f6d64a] text-black",
+    chip: "border-black/30 text-black",
   },
   {
-    card: "border-[#4f56d8] bg-[#5f67f2] text-slate-900",
-    chip: "border-black/30 text-slate-900",
+    card: "border-[#4f56d8] bg-[#4f56d8] text-[#ecf2ff]",
+    chip: "border-white/40 text-[#ecf2ff]",
   },
   {
-    card: "border-[#e49adf] bg-[#f3a7f2] text-slate-900",
-    chip: "border-black/30 text-slate-900",
+    card: "border-[#e49adf] bg-[#f3a7f2] text-black",
+    chip: "border-black/30 text-black",
   },
 ];
 
@@ -733,7 +733,7 @@ export function AlbumWizard({
             : label;
         const activeTone = selectedPackageTone
           ? selectedPackageTone.card
-          : "border-amber-200 bg-amber-200 text-slate-900";
+          : "border-[#f6d64a] bg-[#f6d64a] text-black";
         return (
           <div
             key={label}
@@ -2773,7 +2773,7 @@ export function AlbumWizard({
                 type="button"
                 onClick={handleResumeDraftConfirm}
                 disabled={isClearingResumeDrafts}
-                className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
               >
                 불러오기
               </button>
@@ -3024,7 +3024,7 @@ export function AlbumWizard({
               type="button"
               onClick={() => setStep(2)}
               disabled={!selectedPackage}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >
               다음 단계
             </button>
@@ -3219,7 +3219,7 @@ export function AlbumWizard({
               </div>
             ) : (
               <div className="mt-4 space-y-4">
-                <div className="rounded-2xl border border-amber-300/40 bg-amber-100/40 px-4 py-3 text-xs text-amber-700 dark:border-amber-300/30 dark:bg-amber-300/10 dark:text-amber-200">
+                <div className="rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-xs text-black dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em]">
                     원클릭 접수 안내
                   </p>
@@ -3347,8 +3347,8 @@ export function AlbumWizard({
                               className={`rounded-full border px-2 py-1 ${
                                 track.titleRole === "MAIN"
                                   ? active
-                                    ? "border-amber-200 bg-amber-100 text-amber-900 shadow-sm"
-                                    : "border-amber-400 bg-amber-100 text-amber-800 shadow-sm dark:border-amber-400/70 dark:bg-amber-500/20 dark:text-amber-100"
+                                    ? "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm"
+                                    : "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black"
                                   : active
                                     ? "border-border/40 bg-background/90 text-background/80"
                                     : "border-border/60 bg-background/70 text-muted-foreground"
@@ -3394,17 +3394,17 @@ export function AlbumWizard({
                           type="checkbox"
                           checked={activeTrack.isTitle}
                           onChange={() => toggleTitleTrack(activeTrackIndex)}
-                          className="h-4 w-4 rounded border-border accent-amber-500"
+                          className="h-4 w-4 rounded border-border accent-[#f6d64a]"
                         />
                         타이틀
                       </label>
                       {activeTrack.isTitle && (
-                        <label className="flex items-center gap-2 rounded-full border border-amber-400 bg-amber-100/80 px-3 py-1 text-[13px] font-semibold text-amber-900 shadow-sm transition dark:border-amber-400/70 dark:bg-amber-500/20 dark:text-amber-100">
+                        <label className="flex items-center gap-2 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-[13px] font-semibold text-black shadow-sm transition dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
                           <input
                             type="radio"
                             checked={activeTrack.titleRole === "MAIN"}
                             onChange={() => setMainTitleTrack(activeTrackIndex)}
-                            className="h-4 w-4 rounded-full border-border accent-amber-500"
+                            className="h-4 w-4 rounded-full border-border accent-[#f6d64a]"
                           />
                           메인 타이틀
                         </label>
@@ -3434,7 +3434,7 @@ export function AlbumWizard({
                     </div>
                   </div>
                   {requiresBroadcastSelection && (
-                    <div className="mt-3 rounded-2xl border border-amber-300/40 bg-amber-100/40 px-3 py-2 text-xs text-amber-700 dark:border-amber-300/30 dark:bg-amber-300/10 dark:text-amber-200">
+                    <div className="mt-3 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-3 py-2 text-xs text-black dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
                       {broadcastRequirementMessage} (선택 {broadcastCount}/3)
                     </div>
                   )}
@@ -3558,14 +3558,14 @@ export function AlbumWizard({
                                 ? "border-red-200/70 bg-red-50 text-red-700"
                                 : spellcheckNotice.type === "success"
                                   ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
-                                  : "border-amber-200/70 bg-amber-50 text-amber-900"
+                                  : "border-[#f6d64a] bg-[#f6d64a] text-black"
                             }`}
                           >
                             {spellcheckNotice.message}
                           </div>
                         )}
                         {showLyricsToolNotice && (
-                          <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-amber-900 opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-amber-200/70 group-hover/lyrics-tools:bg-amber-50/80 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-amber-200/70 group-focus-within/lyrics-tools:bg-amber-50/80 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100">
+                          <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-black opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-[#f6d64a] group-hover/lyrics-tools:bg-[#f6d64a] group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-[#f6d64a] group-focus-within/lyrics-tools:bg-[#f6d64a] group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100">
                             위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
                             체크해주세요.
                           </div>
@@ -3745,7 +3745,7 @@ export function AlbumWizard({
                     tabIndex={0}
                     className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${
                       editingIndex === index
-                        ? "border-amber-200 bg-amber-200/20"
+                        ? "border-[#f6d64a] bg-[#f6d64a]"
                         : "border-border/60 bg-background/70 hover:border-foreground"
                     }`}
                   >
@@ -3793,7 +3793,7 @@ export function AlbumWizard({
               type="button"
               onClick={() => setStep(1)}
               disabled={isSaving || isAddingAlbum}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
             >
               이전 단계
             </button>
@@ -3824,7 +3824,7 @@ export function AlbumWizard({
                   await saveAlbumDrafts(draftsForSave, { includeFiles: false });
                 }}
                 disabled={isSaving || isAddingAlbum}
-                className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+                className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
               >
                 임시 저장
               </button>
@@ -3833,7 +3833,7 @@ export function AlbumWizard({
               type="button"
               onClick={handleAddAlbum}
               disabled={isSaving || isAddingAlbum}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
             >
               {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 등록"}
             </button>
@@ -3841,7 +3841,7 @@ export function AlbumWizard({
               type="button"
               onClick={handleStep2Next}
               disabled={isSaving || isAddingAlbum || editingIndex !== null}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >
               다음 단계
             </button>
@@ -3882,7 +3882,7 @@ export function AlbumWizard({
                     tabIndex={0}
                     className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${
                       uploadDraftIndex === index
-                        ? "border-amber-200 bg-amber-200/20"
+                        ? "border-[#f6d64a] bg-[#f6d64a]"
                         : "border-border/60 bg-background/70 hover:border-foreground"
                     }`}
                   >
@@ -3960,7 +3960,7 @@ export function AlbumWizard({
                   </span>
                 </div>
                 {isDraggingOver && (
-                  <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-amber-300 bg-black/10 backdrop-blur-[1px]" />
+                  <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-[#f6d64a] bg-black/10 backdrop-blur-[1px]" />
                 )}
               </label>
             </div>
@@ -4076,7 +4076,7 @@ export function AlbumWizard({
               type="button"
               onClick={() => setStep(2)}
               disabled={isSaving || isAddingAlbum}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
             >
               이전 단계
             </button>
@@ -4093,7 +4093,7 @@ export function AlbumWizard({
                   await saveAlbumDrafts(draftsForUpload, { includeFiles });
                 }}
                 disabled={isSaving || isAddingAlbum}
-                className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+                className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
               >
                 임시 저장
               </button>
@@ -4102,7 +4102,7 @@ export function AlbumWizard({
               type="button"
               onClick={handleStep3Next}
               disabled={isSaving || isAddingAlbum}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >
               다음 단계
             </button>
@@ -4270,7 +4270,7 @@ export function AlbumWizard({
             <button
               type="button"
               onClick={() => setStep(3)}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
             </button>
@@ -4278,7 +4278,7 @@ export function AlbumWizard({
               type="button"
               onClick={() => handleSave("SUBMITTED")}
               disabled={isSaving || isAddingAlbum}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >
               결제하기
             </button>
@@ -4374,14 +4374,14 @@ export function AlbumWizard({
               <button
                 type="button"
                 onClick={handleCancelPackage}
-                className="flex-1 rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-foreground"
+                className="flex-1 rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:text-slate-900 dark:hover:text-foreground"
               >
                 아니오
               </button>
               <button
                 type="button"
                 onClick={handleConfirmPackage}
-                className="flex-1 rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+                className="flex-1 rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
               >
                 예
               </button>
@@ -4404,7 +4404,7 @@ export function AlbumWizard({
               onClick={() =>
                 setNotice((prev) => ({ ...prev, error: undefined }))
               }
-              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
             >
               닫기
             </button>
@@ -4445,7 +4445,7 @@ export function AlbumWizard({
             <button
               type="button"
               onClick={() => setShowCdInfo(false)}
-              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
             >
               닫기
             </button>
@@ -4466,14 +4466,14 @@ export function AlbumWizard({
                   setIsOneClick(false);
                   setShowOneclickNotice(false);
                 }}
-                className="flex-1 rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-amber-200 hover:text-slate-900 dark:hover:text-foreground"
+                className="flex-1 rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:text-slate-900 dark:hover:text-foreground"
               >
                 취소
               </button>
               <button
                 type="button"
                 onClick={() => setShowOneclickNotice(false)}
-                className="flex-1 rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+                className="flex-1 rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
               >
                 확인
               </button>

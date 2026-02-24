@@ -194,7 +194,7 @@ export default async function AdminArtistDetailPage({
           <div className="md:col-span-2 flex justify-end">
             <button
               type="submit"
-              className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-amber-200 hover:text-slate-900"
+              className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
             >
               저장
             </button>
@@ -207,7 +207,7 @@ export default async function AdminArtistDetailPage({
           연관 심의 목록
         </p>
         {submissionsError ? (
-          <p className="mt-3 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
+          <p className="mt-3 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-sm text-black">
             연관 심의 조회에 실패했습니다. ({submissionsError})
           </p>
         ) : null}

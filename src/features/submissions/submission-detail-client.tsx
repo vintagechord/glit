@@ -209,7 +209,7 @@ const mvRatingLabel = (code?: string | null) => {
 const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
     label: "접수대기",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
   SENT: {
     label: "접수완료",
@@ -229,7 +229,7 @@ const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
 };
 
@@ -255,7 +255,7 @@ const stationResultFallbackMap: Record<string, { label: string; tone: string }> 
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
   },
 };
 
@@ -861,7 +861,7 @@ export function SubmissionDetailClient({
                 type="button"
                 onClick={() => setIsReceptionInfoOpen((prev) => !prev)}
                 aria-label={isReceptionInfoOpen ? "접수 정보 닫기" : "접수 정보 열기"}
-                className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-200 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+                className="inline-flex items-center gap-1 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-xs font-semibold text-black shadow-sm transition hover:bg-[#f6d64a]"
               >
                 <span>{isReceptionInfoOpen ? "▲" : "▼"}</span>
                 <span>{isReceptionInfoOpen ? "접기" : "펼치기"}</span>
@@ -870,7 +870,7 @@ export function SubmissionDetailClient({
           </div>
         </div>
         <div className="order-1">
-          <div className="rounded-[28px] border border-border/60 bg-gradient-to-r from-card/95 via-card/85 to-amber-100/20 p-6 dark:to-amber-300/10">
+          <div className="rounded-[28px] border border-border/60 bg-gradient-to-r from-card/95 via-card/85 to-[#f6d64a] p-6 dark:to-amber-300/10">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                 심의 진행 상태
@@ -888,7 +888,7 @@ export function SubmissionDetailClient({
                       key={label}
                       className={`rounded-xl border px-3 py-2.5 text-center text-sm font-semibold ${
                         isActive
-                          ? "border-slate-900 bg-slate-900 text-white dark:border-amber-300 dark:bg-amber-300 dark:text-slate-900"
+                          ? "border-slate-900 bg-slate-900 text-white dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black"
                           : "border-border/70 bg-background text-muted-foreground"
                       }`}
                     >
@@ -1143,7 +1143,7 @@ export function SubmissionDetailClient({
               type="button"
               onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
               aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
-              className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-200 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+              className="inline-flex items-center gap-1 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-xs font-semibold text-black shadow-sm transition hover:bg-[#f6d64a]"
             >
               <span>{isSubmissionFormOpen ? "▲" : "▼"}</span>
               <span>{isSubmissionFormOpen ? "접기" : "펼치기"}</span>
@@ -1170,7 +1170,7 @@ export function SubmissionDetailClient({
               type="button"
               onClick={() => setIsAttachmentsOpen((prev) => !prev)}
               aria-label={isAttachmentsOpen ? "첨부 파일 닫기" : "첨부 파일 열기"}
-              className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-200 px-3 py-1 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-amber-300"
+              className="inline-flex items-center gap-1 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-xs font-semibold text-black shadow-sm transition hover:bg-[#f6d64a]"
             >
               <span>{isAttachmentsOpen ? "▲" : "▼"}</span>
               <span>{isAttachmentsOpen ? "접기" : "펼치기"}</span>
@@ -1185,7 +1185,7 @@ export function SubmissionDetailClient({
             </p>
             <div className="mt-4 space-y-3 text-sm">
               {submission.mv_desired_rating ? (
-                <div className="rounded-2xl border border-transparent bg-yellow-300 px-4 py-3 text-[13px] font-semibold text-black shadow-sm">
+                <div className="rounded-2xl border border-transparent bg-[#f6d64a] px-4 py-3 text-[13px] font-semibold text-black shadow-sm">
                   심의 등급: {mvRatingLabel(submission.mv_desired_rating)} (설정 완료)
                   <span className="ml-2 text-xs font-normal text-black/80">
                     아래에서 등급 이미지와 필증 파일을 다운로드하세요.
@@ -1313,7 +1313,7 @@ export function SubmissionDetailClient({
                                   ? {
                                       label: "부분 통과",
                                       tone:
-                                        "bg-amber-500/15 text-amber-700 dark:text-amber-200",
+                                        "bg-[#f6d64a] text-black dark:text-black",
                                     }
                                   : hasTrackDetails
                                     ? {
@@ -1545,7 +1545,7 @@ export function SubmissionDetailClient({
               <button
                 type="button"
                 onClick={() => setTrackResultModal(null)}
-                className="rounded-full bg-foreground px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+                className="rounded-full bg-foreground px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
               >
                 닫기
               </button>
@@ -1587,7 +1587,7 @@ export function SubmissionDetailClient({
               <button
                 type="button"
                 onClick={closeRadioLinks}
-                className="rounded-full bg-foreground px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+                className="rounded-full bg-foreground px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
               >
                 닫기
               </button>

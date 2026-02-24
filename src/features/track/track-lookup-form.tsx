@@ -49,16 +49,16 @@ export function TrackLookupForm({
         onChange={(event) => setToken(event.target.value)}
         placeholder="비회원 조회 코드 입력"
         className={`w-full rounded-2xl border ${
-          error ? "border-amber-400 bg-amber-50/60" : "border-border/70 bg-background"
+          error ? "border-[#f6d64a] bg-[#f6d64a]" : "border-border/70 bg-background"
         } px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground`}
       />
       {error ? (
-        <p className="text-xs text-amber-700">{error}</p>
+        <p className="text-xs text-black">{error}</p>
       ) : null}
       <button
         type="submit"
         disabled={validating}
-        className="w-full rounded-full bg-foreground px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:bg-muted"
+        className="w-full rounded-full bg-foreground px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
       >
         {validating ? "확인 중..." : "진행상황 조회"}
       </button>

@@ -94,7 +94,7 @@ export default async function SubscriptionResult({
         </Link>
         <Link
           href="/dashboard"
-          className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-amber-200 hover:text-slate-900"
+          className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
         >
           대시보드로
         </Link>
