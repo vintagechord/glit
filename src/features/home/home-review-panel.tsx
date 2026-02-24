@@ -145,7 +145,10 @@ function buildTrackSummaryText(
   return parts.join(separator);
 }
 
-function getResultStatus(review: StationItem) {
+function getResultStatus(
+  review: StationItem,
+  showPartialTrackBreakdown: boolean,
+) {
   const summary = summarizeTrackResults(review.track_results);
   const base =
     summary.outcome === "APPROVED"
@@ -154,7 +157,7 @@ function getResultStatus(review: StationItem) {
         ? trackResultStatusMap.REJECTED
         : summary.outcome === "PARTIAL"
           ? {
-              label: "부분 통과",
+              label: "부분통과",
               tone: "bg-[#f6d64a] text-black dark:text-black",
             }
           : stationResultFallbackMap[review.status] ?? {
@@ -163,7 +166,7 @@ function getResultStatus(review: StationItem) {
             };
 
   const summaryText =
-    summary.outcome === "PARTIAL"
+    summary.outcome === "PARTIAL" && showPartialTrackBreakdown
       ? `${summary.counts.approved}곡 통과 / ${summary.counts.rejected}곡 불통과`
       : null;
 
@@ -357,6 +360,7 @@ export function HomeReviewPanel({
   forceLiveBadge = false,
   enableRemoteSync = false,
   stationRowsPerPage = 10,
+  showPartialTrackBreakdown = true,
 }: {
   isLoggedIn: boolean;
   albumSubmissions: SubmissionSummary[];
@@ -367,6 +371,7 @@ export function HomeReviewPanel({
   forceLiveBadge?: boolean;
   enableRemoteSync?: boolean;
   stationRowsPerPage?: number;
+  showPartialTrackBreakdown?: boolean;
 }) {
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
@@ -904,7 +909,10 @@ export function HomeReviewPanel({
                     <div className="grid gap-2">
                       {activeStations.map((station, index) => {
                         const reception = getReceptionStatus(station.status);
-                        const result = getResultStatus(station);
+                        const result = getResultStatus(
+                          station,
+                          showPartialTrackBreakdown,
+                        );
                         const summary = summarizeTrackResults(
                           station.track_results,
                         );
@@ -984,7 +992,10 @@ export function HomeReviewPanel({
                   <div className="space-y-2 sm:hidden">
                     {activeStations.map((station, index) => {
                       const reception = getReceptionStatus(station.status);
-                      const result = getResultStatus(station);
+                      const result = getResultStatus(
+                        station,
+                        showPartialTrackBreakdown,
+                      );
                       const summary = summarizeTrackResults(
                         station.track_results,
                       );

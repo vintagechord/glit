@@ -468,6 +468,7 @@ export default async function Home() {
               mvStationsMap={mvStationsMap}
               enableRemoteSync={isLoggedIn}
               stationRowsPerPage={5}
+              showPartialTrackBreakdown={false}
             />
           </div>
         </div>
