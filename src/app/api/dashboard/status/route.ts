@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { getDashboardStatusData } from "@/lib/dashboard-status";
 
 export const runtime = "nodejs";
@@ -8,9 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerSessionUser(supabase);
 
   if (!user) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
@@ -26,7 +25,7 @@ export async function GET() {
 
   return NextResponse.json(result.data, {
     headers: {
-      "Cache-Control": "private, no-store",
+      "Cache-Control": "private, max-age=30, stale-while-revalidate=30",
     },
   });
 }

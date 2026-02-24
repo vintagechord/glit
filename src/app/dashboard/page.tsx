@@ -6,6 +6,7 @@ import {
 } from "@/components/dashboard/dashboard-shell";
 import { DashboardStatusClient } from "@/features/home/dashboard-status-client";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServerSessionUser } from "@/lib/supabase/server-user";
 
 export const metadata = {
   title: "진행상황",
@@ -18,9 +19,7 @@ type ShellConfig = {
 
 export async function StatusPageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerSessionUser(supabase);
 
   if (!user) {
     redirect("/login");
@@ -28,6 +27,7 @@ export async function StatusPageView(config?: ShellConfig) {
 
   return (
     <DashboardStatusClient
+      viewerId={user.id}
       title="접수 현황"
       description="접수한 심의의 현재 상태를 확인할 수 있습니다."
       activeTab="status"

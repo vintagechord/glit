@@ -7,6 +7,7 @@ import {
 } from "@/components/dashboard/dashboard-shell";
 import { ArtistHistoryTabs } from "@/components/dashboard/artist-history";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServerSessionUser } from "@/lib/supabase/server-user";
 
 export const metadata = {
   title: "나의 심의 내역",
@@ -40,9 +41,7 @@ const FALLBACK_SELECT =
 
 export async function HistoryPageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerSessionUser(supabase);
 
   if (!user) {
     redirect("/login");

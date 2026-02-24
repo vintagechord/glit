@@ -205,6 +205,15 @@ function getSubmissionLabels(submission?: SubmissionSummary | null) {
   };
 }
 
+function getStationName(station?: StationItem["station"] | null) {
+  return station?.name?.trim() || "-";
+}
+
+function getStationCode(station?: StationItem["station"] | null) {
+  const code = station?.code?.trim();
+  return code ? code.toUpperCase() : null;
+}
+
 const stationBadgeMap: Record<
   string,
   { label: string; color: string; bg: string }
@@ -570,83 +579,120 @@ export function HomeReviewPanel({
       ? stageStatusMap.completed
       : getStageStatus(activeSubmission);
 
-  const rowsPerPage = 5;
+  const rowsPerPage = 10;
   const rowHeight = 52;
   const rowGap = 8;
   const listPadding = 12;
-  const pageHeight =
+  const listViewportHeight =
     rowsPerPage * rowHeight + (rowsPerPage - 1) * rowGap + listPadding * 2;
-  const [page, setPage] = React.useState(0);
-  const [dragOffset, setDragOffset] = React.useState(0);
-  const [isDragging, setIsDragging] = React.useState(false);
-  const dragStartY = React.useRef<number | null>(null);
-  const dragCurrentY = React.useRef(0);
+  const stationListRef = React.useRef<HTMLDivElement | null>(null);
+  const mouseDragPointerId = React.useRef<number | null>(null);
+  const mouseDragStartY = React.useRef(0);
+  const mouseDragStartTop = React.useRef(0);
+  const [isMouseDraggingList, setIsMouseDraggingList] = React.useState(false);
+  const [canScrollUp, setCanScrollUp] = React.useState(false);
+  const [canScrollDown, setCanScrollDown] = React.useState(false);
   const [trackResultModal, setTrackResultModal] =
     React.useState<TrackResultModalState | null>(null);
-  const maxPage = Math.max(0, Math.ceil(activeStations.length / rowsPerPage) - 1);
+  const updateScrollButtons = React.useCallback(() => {
+    const list = stationListRef.current;
+    if (!list) {
+      setCanScrollUp(false);
+      setCanScrollDown(false);
+      return;
+    }
+    const maxTop = list.scrollHeight - list.clientHeight;
+    if (maxTop <= 1) {
+      setCanScrollUp(false);
+      setCanScrollDown(false);
+      return;
+    }
+    const top = list.scrollTop;
+    setCanScrollUp(top > 2);
+    setCanScrollDown(maxTop - top > 2);
+  }, []);
 
   React.useEffect(() => {
-    setPage(0);
-    setDragOffset(0);
-    setIsDragging(false);
-  }, [tab, activeStations.length, activeSubmissionId]);
-
-  const clampPage = React.useCallback(
-    (value: number) => Math.min(maxPage, Math.max(0, value)),
-    [maxPage],
-  );
+    const list = stationListRef.current;
+    if (!list) {
+      setCanScrollUp(false);
+      setCanScrollDown(false);
+      return;
+    }
+    list.scrollTop = 0;
+    setIsMouseDraggingList(false);
+    mouseDragPointerId.current = null;
+    requestAnimationFrame(() => {
+      updateScrollButtons();
+    });
+  }, [activeSubmissionId, activeStations.length, tab, updateScrollButtons]);
 
   const handlePrev = React.useCallback(() => {
-    setPage((prev) => clampPage(prev - 1));
-  }, [clampPage]);
+    const list = stationListRef.current;
+    if (!list) return;
+    const step = Math.max(list.clientHeight - rowHeight, rowHeight * 3);
+    list.scrollBy({ top: -step, behavior: "smooth" });
+  }, [rowHeight]);
 
   const handleNext = React.useCallback(() => {
-    setPage((prev) => clampPage(prev + 1));
-  }, [clampPage]);
+    const list = stationListRef.current;
+    if (!list) return;
+    const step = Math.max(list.clientHeight - rowHeight, rowHeight * 3);
+    list.scrollBy({ top: step, behavior: "smooth" });
+  }, [rowHeight]);
 
-  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (activeStations.length <= rowsPerPage) return;
-    const target = event.target as HTMLElement | null;
-    if (target?.closest("button, a, input, select, textarea")) return;
-    dragStartY.current = event.clientY;
-    dragCurrentY.current = event.clientY;
-    setIsDragging(true);
-    setDragOffset(0);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
+  const handleStationListScroll = React.useCallback(() => {
+    updateScrollButtons();
+  }, [updateScrollButtons]);
 
-  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (dragStartY.current === null) return;
-    const delta = event.clientY - dragStartY.current;
-    const limit = pageHeight * 0.6;
-    dragCurrentY.current = event.clientY;
-    setDragOffset(Math.max(-limit, Math.min(limit, delta)));
-  };
+  const handleStationListPointerDown = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType !== "mouse") return;
+      const list = stationListRef.current;
+      if (!list || list.scrollHeight <= list.clientHeight + 1) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("button, a, input, select, textarea")) return;
 
-  const finalizeDrag = React.useCallback(
-    (clientY: number) => {
-      if (dragStartY.current === null) return;
-      const delta = clientY - dragStartY.current;
-      const threshold = Math.min(70, pageHeight / 3);
-      if (Math.abs(delta) > threshold) {
-        setPage((prev) => clampPage(prev + (delta < 0 ? 1 : -1)));
-      }
-      setDragOffset(0);
-      setIsDragging(false);
-      dragStartY.current = null;
+      mouseDragPointerId.current = event.pointerId;
+      mouseDragStartY.current = event.clientY;
+      mouseDragStartTop.current = list.scrollTop;
+      setIsMouseDraggingList(true);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.preventDefault();
     },
-    [clampPage, pageHeight],
+    [],
   );
 
-  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    finalizeDrag(event.clientY);
-  };
+  const handleStationListPointerMove = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (mouseDragPointerId.current !== event.pointerId) return;
+      const list = stationListRef.current;
+      if (!list) return;
+      const delta = event.clientY - mouseDragStartY.current;
+      list.scrollTop = mouseDragStartTop.current - delta;
+    },
+    [],
+  );
 
-  const handlePointerCancel = () => {
-    finalizeDrag(dragCurrentY.current);
-  };
+  const endStationListPointerDrag = React.useCallback((pointerId?: number) => {
+    if (pointerId != null && mouseDragPointerId.current !== pointerId) return;
+    mouseDragPointerId.current = null;
+    setIsMouseDraggingList(false);
+  }, []);
 
-  const translateY = -(page * pageHeight) + dragOffset;
+  const handleStationListPointerUp = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      endStationListPointerDrag(event.pointerId);
+    },
+    [endStationListPointerDrag],
+  );
+
+  const handleStationListPointerCancel = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      endStationListPointerDrag(event.pointerId);
+    },
+    [endStationListPointerDrag],
+  );
 
   return (
     <div className="min-w-0 w-full rounded-[28px] border border-amber-200/60 bg-gradient-to-br from-[#fff2d6]/90 via-white/80 to-[#ffe3a3]/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:border-white/10 dark:from-[#1a1a1a]/70 dark:via-[#111111]/80 dark:to-[#1e1a12]/80 lg:min-h-[520px]">
@@ -811,7 +857,7 @@ export function HomeReviewPanel({
               <button
                 type="button"
                 onClick={handlePrev}
-                disabled={page <= 0}
+                disabled={!canScrollUp}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-bold text-slate-900 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-300 hover:shadow-[0_8px_18px_rgba(15,23,42,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-amber-300/70 dark:bg-amber-300 dark:text-slate-900 dark:hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="이전 심의 진행 상태"
               >
@@ -820,7 +866,7 @@ export function HomeReviewPanel({
               <button
                 type="button"
                 onClick={handleNext}
-                disabled={page >= maxPage}
+                disabled={!canScrollDown}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-200 text-sm font-bold text-slate-900 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-300 hover:shadow-[0_8px_18px_rgba(15,23,42,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-amber-300/70 dark:bg-amber-300 dark:text-slate-900 dark:hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="다음 심의 진행 상태"
               >
@@ -830,30 +876,30 @@ export function HomeReviewPanel({
           </div>
           <div className="mt-3 overflow-hidden rounded-2xl border border-border/60 bg-background/70">
             <div className="hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid">
-              <span>방송국</span>
+              <span className="pl-2 text-left">방송국</span>
               <span className="justify-self-center text-center">접수 상태</span>
               <span className="justify-self-center text-center">{trackResultLabel}</span>
               <span className="text-right">Updated</span>
             </div>
             {activeStations.length > 0 ? (
               <>
-                <div className="hidden text-sm sm:block">
-                  <div
-                    className="relative cursor-grab touch-none active:cursor-grabbing"
-                    style={{ height: `${pageHeight}px` }}
-                    onPointerDown={handlePointerDown}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                    onPointerCancel={handlePointerCancel}
-                    onPointerLeave={handlePointerCancel}
-                  >
-                    <div
-                      className="grid gap-2 py-3"
-                      style={{
-                        transform: `translateY(${translateY}px)`,
-                        transition: isDragging ? "none" : "transform 0.4s ease",
-                      }}
-                    >
+                <div
+                  ref={stationListRef}
+                  className={`overflow-y-auto overscroll-contain px-3 py-3 touch-pan-y ${
+                    isMouseDraggingList
+                      ? "cursor-grabbing select-none"
+                      : "cursor-auto sm:cursor-grab"
+                  }`}
+                  style={{ maxHeight: `${listViewportHeight}px` }}
+                  onScroll={handleStationListScroll}
+                  onPointerDown={handleStationListPointerDown}
+                  onPointerMove={handleStationListPointerMove}
+                  onPointerUp={handleStationListPointerUp}
+                  onPointerCancel={handleStationListPointerCancel}
+                  onPointerLeave={handleStationListPointerCancel}
+                >
+                  <div className="hidden text-sm sm:block">
+                    <div className="grid gap-2">
                       {activeStations.map((station, index) => {
                         const reception = getReceptionStatus(station.status);
                         const result = getResultStatus(station);
@@ -861,14 +907,25 @@ export function HomeReviewPanel({
                           station.track_results,
                         );
                         const canOpenTracks = summary.counts.total > 0;
+                        const stationName = getStationName(station.station);
+                        const stationCode = getStationCode(station.station);
                         return (
                           <div
                             key={`${station.id}-${index}`}
                             className="grid min-h-[52px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-sm"
                           >
-                            <span className="flex items-center gap-2 truncate font-semibold text-foreground">
+                            <span className="flex min-w-0 items-center gap-3 pl-2 text-left">
                               <StationLogo station={station.station ?? undefined} hideOnMobile />
-                              <span className="truncate">{station.station?.name ?? "-"}</span>
+                              <span className="min-w-0">
+                                <span className="block truncate font-semibold text-foreground">
+                                  {stationName}
+                                </span>
+                                {stationCode ? (
+                                  <span className="mt-0.5 block truncate text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+                                    {stationCode}
+                                  </span>
+                                ) : null}
+                              </span>
                             </span>
                             <span
                               className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
@@ -921,74 +978,85 @@ export function HomeReviewPanel({
                       })}
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-2 px-3 py-3 sm:hidden">
-                  {activeStations.map((station, index) => {
-                    const reception = getReceptionStatus(station.status);
-                    const result = getResultStatus(station);
-                    const summary = summarizeTrackResults(
-                      station.track_results,
-                    );
-                    const canOpenTracks = summary.counts.total > 0;
-                    return (
-                      <div
-                        key={`${station.id}-mobile-${index}`}
-                        className="rounded-xl border border-border/50 bg-background/80 p-3 text-sm shadow-sm"
-                      >
-                        <div className="flex min-w-0 items-center justify-between gap-2">
-                          <span className="flex items-center gap-2 truncate font-semibold text-foreground">
-                            <StationLogo station={station.station ?? undefined} />
-                            <span className="truncate text-sm">{station.station?.name ?? "-"}</span>
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDate(station.updated_at)}
-                          </span>
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <span
-                            className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
-                          >
-                            {reception.label}
-                          </span>
-                          {canOpenTracks ? (
-                            <button
-                              type="button"
-                              onPointerDown={(event) => event.stopPropagation()}
-                              onClick={() =>
-                                setTrackResultModal({
-                                  stationName: station.station?.name ?? "-",
-                                  summary,
-                                  resultNote: station.result_note?.trim() || null,
-                                })
-                              }
-                              className={`inline-flex min-h-[32px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
-                            >
-                              <span>{result.label}</span>
-                              {result.summaryText ? (
-                                <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                  {result.summaryText}
+                  <div className="space-y-2 sm:hidden">
+                    {activeStations.map((station, index) => {
+                      const reception = getReceptionStatus(station.status);
+                      const result = getResultStatus(station);
+                      const summary = summarizeTrackResults(
+                        station.track_results,
+                      );
+                      const canOpenTracks = summary.counts.total > 0;
+                      const stationName = getStationName(station.station);
+                      const stationCode = getStationCode(station.station);
+                      return (
+                        <div
+                          key={`${station.id}-mobile-${index}`}
+                          className="rounded-xl border border-border/50 bg-background/80 p-3 text-sm shadow-sm"
+                        >
+                          <div className="flex min-w-0 items-center justify-between gap-2">
+                            <span className="flex min-w-0 items-center gap-3 pl-1 text-left">
+                              <StationLogo station={station.station ?? undefined} />
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold text-foreground">
+                                  {stationName}
                                 </span>
-                              ) : null}
-                            </button>
-                          ) : (
-                            <div className="flex flex-col items-center gap-1">
-                              <span
-                                className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
-                              >
-                                {result.label}
+                                {stationCode ? (
+                                  <span className="mt-0.5 block truncate text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+                                    {stationCode}
+                                  </span>
+                                ) : null}
                               </span>
-                              {result.summaryText ? (
-                                <span className="text-[11px] leading-tight text-muted-foreground text-center">
-                                  {result.summaryText}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDate(station.updated_at)}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <span
+                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
+                            >
+                              {reception.label}
+                            </span>
+                            {canOpenTracks ? (
+                              <button
+                                type="button"
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onClick={() =>
+                                  setTrackResultModal({
+                                    stationName: station.station?.name ?? "-",
+                                    summary,
+                                    resultNote: station.result_note?.trim() || null,
+                                  })
+                                }
+                                className={`inline-flex min-h-[32px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
+                              >
+                                <span>{result.label}</span>
+                                {result.summaryText ? (
+                                  <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
+                                    {result.summaryText}
+                                  </span>
+                                ) : null}
+                              </button>
+                            ) : (
+                              <div className="flex flex-col items-center gap-1">
+                                <span
+                                  className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
+                                >
+                                  {result.label}
                                 </span>
-                              ) : null}
-                            </div>
-                          )}
+                                {result.summaryText ? (
+                                  <span className="text-[11px] leading-tight text-muted-foreground text-center">
+                                    {result.summaryText}
+                                  </span>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </>
             ) : (

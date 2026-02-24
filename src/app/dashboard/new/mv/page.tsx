@@ -1,5 +1,6 @@
 import { MvWizard } from "@/features/submissions/mv-wizard";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServerSessionUser } from "@/lib/supabase/server-user";
 
 export const metadata = {
   title: "MV 심의 접수",
@@ -7,9 +8,7 @@ export const metadata = {
 
 export default async function MvSubmissionPage() {
   const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerSessionUser(supabase);
 
   const { data: stationRows } = await supabase
     .from("stations")

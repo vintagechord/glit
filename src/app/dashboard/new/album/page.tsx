@@ -1,5 +1,6 @@
 import { AlbumWizard } from "@/features/submissions/album-wizard";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServerSessionUser } from "@/lib/supabase/server-user";
 
 export const metadata = {
   title: "음반 심의 접수",
@@ -89,9 +90,7 @@ const normalizeStations = (
 export default async function AlbumSubmissionPage() {
   const supabase = await createServerSupabase();
   const profanityFilterV2Enabled = process.env.PROFANITY_FILTER_V2 === "true";
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerSessionUser(supabase);
 
   const { data: packageRows } = await supabase
     .from("packages")

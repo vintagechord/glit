@@ -5,6 +5,7 @@ import type React from "react";
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-reviews";
 import { normalizeTrackResults } from "@/lib/track-results";
 import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
@@ -142,9 +143,7 @@ export default async function SubmissionDetailPage({
   }
 
   const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerSessionUser(supabase);
   const { data: isAdminRpc } = await supabase.rpc("is_admin");
   const isAdmin = isAdminRpc === true;
 

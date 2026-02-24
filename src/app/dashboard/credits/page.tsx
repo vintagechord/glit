@@ -6,6 +6,7 @@ import {
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServerSessionUser } from "@/lib/supabase/server-user";
 
 export const metadata = {
   title: "크레딧",
@@ -18,9 +19,7 @@ type ShellConfig = {
 
 export async function CreditsPageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerSessionUser(supabase);
 
   if (!user) {
     redirect("/login");

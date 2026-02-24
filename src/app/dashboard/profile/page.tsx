@@ -7,6 +7,7 @@ import {
 } from "@/components/dashboard/dashboard-shell";
 import { ProfileForm } from "@/features/profile/profile-form";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServerSessionUser } from "@/lib/supabase/server-user";
 
 export const metadata = {
   title: "계정 정보",
@@ -19,9 +20,7 @@ type ShellConfig = {
 
 export async function ProfilePageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerSessionUser(supabase);
 
   if (!user) {
     redirect("/login");

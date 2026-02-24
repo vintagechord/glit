@@ -901,7 +901,7 @@ export function SubmissionDetailClient({
                 {isReviewComplete
                   ? "모든 심의 절차가 완료되었습니다."
                   : flowIndex === 3
-                    ? "심의 접수가 모두 완료되어 방송국별 결과를 전달합니다."
+                    ? "심의 접수가 모두 완료되었습니다."
                     : isPaymentDone
                       ? "결제가 확인되었고 심의 절차가 진행됩니다."
                       : "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다."}

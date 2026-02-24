@@ -9,6 +9,7 @@ import {
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getServerSessionUser } from "@/lib/supabase/server-user";
 
 export const metadata = {
   title: "아티스트 상세",
@@ -55,9 +56,7 @@ export default async function DashboardArtistDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerSessionUser(supabase);
 
   if (!user) {
     redirect("/login");

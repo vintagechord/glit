@@ -19,6 +19,27 @@ function withCookies(target: NextResponse, source: NextResponse) {
   return target;
 }
 
+const supabaseAuthCookiePattern = /^sb-[a-z0-9]+-auth-token(?:\.\d+)?$/i;
+const authCheckedCookieName = "glit_auth_checked_at";
+const authCheckBypassTtlMs = 20_000;
+
+function hasSupabaseAuthCookie(request: NextRequest) {
+  return request.cookies
+    .getAll()
+    .some((cookie) => supabaseAuthCookiePattern.test(cookie.name));
+}
+
+function withAuthCheckedCookie(response: NextResponse) {
+  response.cookies.set(authCheckedCookieName, String(Date.now()), {
+    path: "/",
+    maxAge: 60,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  return response;
+}
+
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isDev = process.env.NODE_ENV !== "production";
@@ -30,11 +51,36 @@ export default async function proxy(request: NextRequest) {
   const isDashboardRoute = pathname.startsWith("/dashboard");
   const isMypageRoute = pathname.startsWith("/mypage");
   const isPublicDashboardRoute = pathname.startsWith("/dashboard/new");
-  const isProtected =
-    (isDashboardRoute && !isPublicDashboardRoute) || isAdminRoute || isMypageRoute;
+  const isUserProtectedRoute =
+    (isDashboardRoute && !isPublicDashboardRoute) || isMypageRoute;
+  const requiresSessionCookie =
+    isUserProtectedRoute || isAdminRoute;
 
-  // Skip Supabase auth round-trip on public routes to keep navigation snappy.
-  if (!isProtected) {
+  if (!requiresSessionCookie) {
+    const passthrough = NextResponse.next();
+    if (isDev && isDevStdPayPath) {
+      passthrough.headers.set("Content-Security-Policy", devStdPayCsp);
+    }
+    return passthrough;
+  }
+
+  if (!hasSupabaseAuthCookie(request)) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("next", pathname);
+    const redirectRes = NextResponse.redirect(redirectUrl);
+    if (isDev && isDevStdPayPath) {
+      redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
+    }
+    return redirectRes;
+  }
+
+  const lastCheckedAt = Number(request.cookies.get(authCheckedCookieName)?.value ?? "");
+  const isAuthCheckFresh =
+    Number.isFinite(lastCheckedAt) && Date.now() - lastCheckedAt < authCheckBypassTtlMs;
+
+  // Skip repeated auth round-trips during quick tab/page moves.
+  if (isUserProtectedRoute && isAuthCheckFresh) {
     const passthrough = NextResponse.next();
     if (isDev && isDevStdPayPath) {
       passthrough.headers.set("Content-Security-Policy", devStdPayCsp);
@@ -71,7 +117,7 @@ export default async function proxy(request: NextRequest) {
     });
   }
 
-  if (isProtected && !user) {
+  if (!user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("next", pathname);
@@ -80,6 +126,13 @@ export default async function proxy(request: NextRequest) {
       redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
     }
     return redirectRes;
+  }
+
+  if (!isAdminRoute) {
+    if (isDev && isDevStdPayPath) {
+      response.headers.set("Content-Security-Policy", devStdPayCsp);
+    }
+    return withAuthCheckedCookie(response);
   }
 
   if (isAdminRoute && user) {
@@ -114,7 +167,7 @@ export default async function proxy(request: NextRequest) {
     response.headers.set("Content-Security-Policy", devStdPayCsp);
   }
 
-  return response;
+  return withAuthCheckedCookie(response);
 }
 
 export const config = {

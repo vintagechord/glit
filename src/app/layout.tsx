@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Manrope, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ChatbotWidget } from "@/components/chatbot-widget";
+import { NavigationLatencyLogger } from "@/components/perf/navigation-latency-logger";
 import { SiteFooter } from "@/components/site/footer";
 import { SiteHeader } from "@/components/site/header";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -36,6 +37,7 @@ export default function RootLayout({
         className={`${manrope.variable} ${spaceGrotesk.variable} min-h-screen font-sans antialiased`}
       >
         <ThemeProvider>
+          <NavigationLatencyLogger />
           <div className="flex min-h-screen flex-col bg-background text-foreground">
             <SiteHeader />
 

@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServerSessionUser } from "@/lib/supabase/server-user";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +14,7 @@ export default async function PayPage({
   params: { id: string };
 }) {
   const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerSessionUser(supabase);
 
   if (!user) {
     redirect("/login");
