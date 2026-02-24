@@ -1258,9 +1258,10 @@ export function SubmissionDetailClient({
             {renderStationReviews && renderStationReviews.length > 0 ? (
               <div className="rounded-2xl border border-border/60 bg-background/70">
                 <div className="overflow-x-auto">
-                  <div className="min-w-[640px]">
-                    <div className="grid grid-cols-[1.2fr_0.95fr_1fr_1fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      <span className="justify-self-center text-center">방송국</span>
+                  <div className="min-w-[720px]">
+                    <div className="grid grid-cols-[72px_1.1fr_0.95fr_1fr_1fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <span className="justify-self-center text-center">로고</span>
+                      <span className="text-left">방송국</span>
                       <span className="justify-self-center text-center">접수 상태</span>
                       <span className="justify-self-center text-center">
                         {isMvSubmission ? "등급 분류" : "트랙 결과"}
@@ -1357,20 +1358,20 @@ export function SubmissionDetailClient({
                         return (
                           <div
                             key={review.id}
-                            className="grid grid-cols-[1.2fr_0.95fr_1fr_1fr] items-center gap-3 px-4 py-3 text-sm"
+                            className="grid grid-cols-[72px_1.1fr_0.95fr_1fr_1fr] items-center gap-3 px-4 py-3 text-sm"
                           >
-                            <div className="min-w-0 flex items-center justify-center gap-2 text-center">
+                            <div className="flex items-center justify-center">
                               <StationLogoWithFallback station={review.station} />
-                              <div className="min-w-0 max-w-[170px]">
-                                <p className="truncate text-center font-semibold text-foreground">
-                                  {review.station?.name ?? "-"}
+                            </div>
+                            <div className="min-w-0 pl-1 text-left">
+                              <p className="truncate font-semibold text-foreground">
+                                {review.station?.name ?? "-"}
+                              </p>
+                              {review.station && "code" in review.station ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {review.station.code ?? ""}
                                 </p>
-                                {review.station && "code" in review.station ? (
-                                  <p className="text-center text-xs text-muted-foreground">
-                                    {review.station.code ?? ""}
-                                  </p>
-                                ) : null}
-                              </div>
+                              ) : null}
                             </div>
                             <span
                               className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
