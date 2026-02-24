@@ -893,7 +893,7 @@ export function HomeReviewPanel({
             {activeStations.length > 0 ? (
               <>
                 {mobileStationLayout === "table" ? (
-                  <div className="grid grid-cols-[72px_1fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden">
+                  <div className="grid grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden">
                     <span className="justify-self-center text-center">방송국</span>
                     <span className="justify-self-center text-center">접수 상태</span>
                     <span className="justify-self-center text-center">{trackResultLabel}</span>
@@ -1002,10 +1002,7 @@ export function HomeReviewPanel({
                     <div className="divide-y divide-border/50 sm:hidden">
                       {activeStations.map((station, index) => {
                         const reception = getReceptionStatus(station.status);
-                        const result = getResultStatus(
-                          station,
-                          showPartialTrackBreakdown,
-                        );
+                        const result = getResultStatus(station, false);
                         const summary = summarizeTrackResults(
                           station.track_results,
                         );
@@ -1018,7 +1015,7 @@ export function HomeReviewPanel({
                         return (
                           <div
                             key={`${station.id}-mobile-${index}`}
-                            className="grid min-h-[48px] grid-cols-[72px_1fr_1fr] items-center gap-2 px-2 py-2 text-sm"
+                            className="grid min-h-[48px] grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 px-2 py-2 text-sm"
                           >
                             <div
                               className="flex items-center justify-center"
@@ -1028,7 +1025,7 @@ export function HomeReviewPanel({
                               <span className="sr-only">{stationLabel}</span>
                             </div>
                             <span
-                              className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
+                              className={`inline-flex items-center justify-center justify-self-center whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold ${reception.tone}`}
                             >
                               {reception.label}
                             </span>
@@ -1044,27 +1041,17 @@ export function HomeReviewPanel({
                                       station.result_note?.trim() || null,
                                   })
                                 }
-                                className={`inline-flex min-h-[32px] min-w-[88px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
+                                className={`inline-flex min-h-[32px] min-w-[88px] items-center justify-center justify-self-center whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
                               >
                                 <span>{result.label}</span>
-                                {result.summaryText ? (
-                                  <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                    {result.summaryText}
-                                  </span>
-                                ) : null}
                               </button>
                             ) : (
-                              <div className="flex flex-col items-center gap-1 justify-self-center">
+                              <div className="flex items-center justify-self-center">
                                 <span
-                                  className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
+                                  className={`inline-flex items-center justify-center whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold ${result.tone}`}
                                 >
                                   {result.label}
                                 </span>
-                                {result.summaryText ? (
-                                  <span className="text-[11px] leading-tight text-muted-foreground text-center">
-                                    {result.summaryText}
-                                  </span>
-                                ) : null}
                               </div>
                             )}
                           </div>
