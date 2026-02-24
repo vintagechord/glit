@@ -9,6 +9,24 @@ type Props = {
   currentUploadedAt?: string | null;
 };
 
+const normalizeDisplayFilename = (value?: string | null) => {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  const likelyMojibake =
+    /[\u0080-\u009F]/.test(trimmed) ||
+    /(Ã.|Â.|á.|ì.|í.|ò.|ó.|ô.|õ.|ö.)/.test(trimmed);
+  if (!likelyMojibake) return trimmed;
+
+  try {
+    const bytes = Uint8Array.from(trimmed, (char) => char.charCodeAt(0) & 0xff);
+    const decoded = new TextDecoder("utf-8").decode(bytes).trim();
+    return decoded || trimmed;
+  } catch {
+    return trimmed;
+  }
+};
+
 export function CertificateUploader({ submissionId, currentName, currentUploadedAt }: Props) {
   const [file, setFile] = React.useState<File | null>(null);
   const [isUploading, setIsUploading] = React.useState(false);
@@ -58,7 +76,7 @@ export function CertificateUploader({ submissionId, currentName, currentUploaded
   return (
     <div className="space-y-2">
       <div className="text-xs text-muted-foreground">
-        현재 파일: {currentName ?? "없음"}
+        현재 파일: {normalizeDisplayFilename(currentName) ?? "없음"}
         {currentUploadedAt ? ` · 업로드: ${new Date(currentUploadedAt).toLocaleString()}` : ""}
       </div>
       <div className="flex flex-wrap items-center gap-3 text-sm">

@@ -87,10 +87,41 @@ export function AboutRevealSection() {
               <p>통신판매업, 대중문화예술기획업, 음반·음악영상물제작업 등록 업체</p>
               <p>세금계산서·현금영수증·거래내역서 등 각종 증빙 서류 발급 가능</p>
               <div className="pt-1 space-y-1">
-                <p className="font-semibold text-white/90">연관 업체 :</p>
-                <p>음원 거래 플랫폼 워터멜론(Beat 마켓)</p>
-                <p>음향기기 수리 서비스 마하픽스</p>
-                <p>뮤직 스튜디오 V-House</p>
+                <p className="font-semibold text-white/90">함께하는 브랜드 :</p>
+                <p>
+                  음원 거래 플랫폼{" "}
+                  <a
+                    href="https://www.iamwatermelon.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold underline decoration-white/60 underline-offset-4"
+                  >
+                    워터멜론
+                  </a>
+                  (Beat 마켓)
+                </p>
+                <p>
+                  음향기기 수리 서비스{" "}
+                  <a
+                    href="https://machfix.co.kr"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold underline decoration-white/60 underline-offset-4"
+                  >
+                    마하픽스
+                  </a>
+                </p>
+                <p>
+                  뮤직 스튜디오{" "}
+                  <a
+                    href="https://naver.me/FMckTrml"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold underline decoration-white/60 underline-offset-4"
+                  >
+                    V-House
+                  </a>
+                </p>
               </div>
             </div>
           </div>

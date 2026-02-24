@@ -9,6 +9,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
+  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { z } from "zod";
@@ -226,5 +227,14 @@ export async function presignGetUrl(objectKey: string, expiresIn?: number) {
 export async function headObject(objectKey: string) {
   const { client, bucket } = getB2Config();
   const command = new HeadObjectCommand({ Bucket: bucket, Key: objectKey });
+  return client.send(command);
+}
+
+export async function deleteObject(objectKey: string) {
+  const { client, bucket } = getB2Config();
+  const command = new DeleteObjectCommand({
+    Bucket: bucket,
+    Key: objectKey,
+  });
   return client.send(command);
 }

@@ -26,6 +26,23 @@ type FilePart = {
   sizeBytes?: number;
 };
 
+const normalizeUploadedFilename = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "certificate";
+
+  const likelyMojibake =
+    /[\u0080-\u009F]/.test(trimmed) ||
+    /(Ã.|Â.|á.|ì.|í.|ò.|ó.|ô.|õ.|ö.)/.test(trimmed);
+  if (!likelyMojibake) return trimmed;
+
+  try {
+    const decoded = Buffer.from(trimmed, "latin1").toString("utf8").trim();
+    return decoded || trimmed;
+  } catch {
+    return trimmed;
+  }
+};
+
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -91,7 +108,9 @@ export async function POST(
   }
 
   const part = filePart as FilePart;
-  const filenameRaw = part.filename || fields.filename || "certificate";
+  const filenameCandidate =
+    fields.filename?.trim() || part.filename || "certificate";
+  const filenameRaw = normalizeUploadedFilename(filenameCandidate);
   const mimeType = (part.mimeType || fields.mimeType || "application/octet-stream").toLowerCase();
   const sizeBytes = Number(fields.sizeBytes || part.sizeBytes || 0);
 

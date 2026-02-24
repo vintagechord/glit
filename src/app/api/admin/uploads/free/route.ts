@@ -4,19 +4,63 @@ import { PassThrough, Readable } from "stream";
 import { ReadableStream as NodeReadableStream } from "stream/web";
 import { Upload } from "@aws-sdk/lib-storage";
 
-import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
+import {
+  B2ConfigError,
+  buildObjectKey,
+  deleteObject,
+  getB2Config,
+  presignGetUrl,
+} from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-export async function POST(request: Request) {
+const getObjectKeyFromRequest = (request: Request) => {
+  const url = new URL(request.url);
+  return decodeURIComponent(url.searchParams.get("objectKey")?.trim() ?? "");
+};
+
+const isAllowedAdminFreeKey = (objectKey: string) => {
+  try {
+    const { prefix } = getB2Config();
+    return objectKey.startsWith(`${prefix}admin-free/`);
+  } catch {
+    return false;
+  }
+};
+
+const ensureAdmin = async () => {
   const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: isAdmin } = await supabase.rpc("is_admin");
+  return { user, isAdmin };
+};
+
+export async function GET(request: Request) {
+  const objectKey = getObjectKeyFromRequest(request);
+  if (!objectKey || !isAllowedAdminFreeKey(objectKey)) {
+    return new NextResponse("Not Found", { status: 404 });
+  }
+
+  try {
+    const signedUrl = await presignGetUrl(objectKey, 60 * 10);
+    return NextResponse.redirect(signedUrl, {
+      status: 302,
+      headers: {
+        "Cache-Control": "private, max-age=300, stale-while-revalidate=60",
+      },
+    });
+  } catch {
+    return new NextResponse("Not Found", { status: 404 });
+  }
+}
+
+export async function POST(request: Request) {
+  const { user, isAdmin } = await ensureAdmin();
 
   if (!user || !isAdmin) {
     return NextResponse.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
@@ -115,7 +159,10 @@ export async function POST(request: Request) {
 
     await uploader.done();
 
-    return NextResponse.json({ ok: true, objectKey, bucket });
+    const previewUrl = `/api/admin/uploads/free?objectKey=${encodeURIComponent(
+      objectKey,
+    )}`;
+    return NextResponse.json({ ok: true, objectKey, bucket, previewUrl });
   } catch (error) {
     const message =
       error instanceof B2ConfigError
@@ -123,6 +170,41 @@ export async function POST(request: Request) {
         : error instanceof Error
           ? error.message
           : "업로드 중 오류가 발생했습니다.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const { user, isAdmin } = await ensureAdmin();
+  if (!user || !isAdmin) {
+    return NextResponse.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
+  }
+
+  const body = (await request.json().catch(() => null)) as
+    | { objectKey?: string }
+    | null;
+  const objectKey = decodeURIComponent(body?.objectKey?.trim() ?? "");
+
+  if (!objectKey) {
+    return NextResponse.json({ error: "objectKey가 필요합니다." }, { status: 400 });
+  }
+  if (!isAllowedAdminFreeKey(objectKey)) {
+    return NextResponse.json(
+      { error: "허용되지 않은 objectKey입니다." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    await deleteObject(objectKey);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message =
+      error instanceof B2ConfigError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : "삭제 중 오류가 발생했습니다.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

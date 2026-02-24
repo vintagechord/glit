@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/format";
 import { updateArtistAction } from "@/features/admin/actions";
+import { ArtistThumbnailUploader } from "@/components/admin/artist-thumbnail-uploader";
 
 export const metadata = {
   title: "아티스트 상세",
@@ -179,17 +180,9 @@ export default async function AdminArtistDetailPage({
           </div>
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              썸네일 URL
+              썸네일 이미지
             </label>
-            <input
-              name="thumbnailUrl"
-              defaultValue={artist.thumbnail_url ?? ""}
-              placeholder="https://..."
-              className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              TODO: 스토리지 업로드 컴포넌트로 교체하면 자동 업로드/삭제 가능.
-            </p>
+            <ArtistThumbnailUploader initialUrl={artist.thumbnail_url ?? ""} />
           </div>
           <div className="md:col-span-2 flex justify-end">
             <button
