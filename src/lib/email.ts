@@ -7,9 +7,11 @@ type SubmissionReceiptPayload = {
   email: string;
   title: string;
   kind: "ALBUM" | "MV";
+  submissionId: string;
   isGuest?: boolean;
   guestToken?: string;
   link?: string;
+  siteLink?: string;
 };
 
 type ResultEmailPayload = {
@@ -66,6 +68,23 @@ type EmailSendResult = {
   ok: boolean;
   skipped?: boolean;
   message?: string;
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const normalizeAbsoluteUrl = (value?: string) => {
+  if (!value) return "";
+  try {
+    return new URL(value).toString();
+  } catch {
+    return "";
+  }
 };
 
 export async function sendPasswordResetEmail(
@@ -143,21 +162,53 @@ export async function sendSubmissionReceiptEmail(
     };
   }
 
-  const kindLabel = payload.kind === "MV" ? "뮤직비디오" : "앨범";
-  const lines: string[] = [
-    `${kindLabel} 접수가 완료되었습니다.`,
-    `제목: ${payload.title || "제목 미입력"}`,
-  ];
-  if (payload.isGuest && payload.guestToken) {
-    lines.push(`조회 코드: ${payload.guestToken}`);
-    lines.push(`조회 링크: ${payload.link ?? ""}`);
-  }
+  const kindLabel = payload.kind === "MV" ? "뮤직비디오" : "음반";
+  const safeTitle = escapeHtml(payload.title?.trim() || "제목 미입력");
+  const safeSubmissionId = escapeHtml(payload.submissionId);
+  const safeGuestToken = escapeHtml(payload.guestToken?.trim() ?? "");
+  const siteLink =
+    normalizeAbsoluteUrl(payload.siteLink) ||
+    normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_SITE_URL) ||
+    normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
+    "https://onside17.com/";
+  const progressLink = normalizeAbsoluteUrl(payload.link) || siteLink;
+
+  const guestCodeSection =
+    payload.isGuest && safeGuestToken
+      ? `
+        <div style="margin: 16px 0 0; border-radius: 12px; border: 1px solid #334155; background: #0b1220; padding: 14px 16px;">
+          <p style="margin: 0; font-size: 12px; color: #93c5fd;">비회원 조회 코드</p>
+          <p style="margin: 6px 0 0; font-size: 16px; font-weight: 700; letter-spacing: 0.02em; color: #f8fafc;">${safeGuestToken}</p>
+        </div>
+      `
+      : "";
 
   const html = `
-    <div style="font-family: Arial, sans-serif; color: #0f172a;">
-      <h2 style="margin:0 0 12px 0;">${kindLabel} 접수 완료</h2>
-      ${lines.map((line) => `<p style="margin:4px 0;">${line}</p>`).join("")}
-      <p style="margin:12px 0 0 0;">온사이드가 진행 상황을 실시간으로 업데이트합니다.</p>
+    <div style="margin: 0; padding: 28px 12px; background: #eef2f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #0f172a;">
+      <div style="max-width: 580px; margin: 0 auto; border-radius: 20px; overflow: hidden; border: 1px solid #d5dbe5; background: #ffffff;">
+        <div style="background: linear-gradient(135deg, #0f172a, #1e293b); padding: 24px 24px 20px; color: #f8fafc;">
+          <p style="margin: 0; font-size: 12px; letter-spacing: 0.18em; font-weight: 700; text-transform: uppercase; color: #cbd5e1;">Onside Receipt</p>
+          <h2 style="margin: 10px 0 0; font-size: 24px; line-height: 1.35; font-weight: 800;">${kindLabel} 접수가 완료되었습니다.</h2>
+          <p style="margin: 10px 0 0; font-size: 13px; color: #cbd5e1;">심의 진행, 승인, 기록 아카이브는 온사이드에서 확인할 수 있습니다.</p>
+        </div>
+        <div style="padding: 22px 24px 24px;">
+          <div style="border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; padding: 14px 16px;">
+            <p style="margin: 0; font-size: 12px; color: #475569;">접수 유형</p>
+            <p style="margin: 6px 0 0; font-size: 15px; font-weight: 700; color: #0f172a;">${kindLabel} 심의</p>
+            <p style="margin: 12px 0 0; font-size: 12px; color: #475569;">작품명</p>
+            <p style="margin: 6px 0 0; font-size: 15px; font-weight: 700; color: #0f172a;">${safeTitle}</p>
+            <p style="margin: 12px 0 0; font-size: 12px; color: #475569;">접수 번호</p>
+            <p style="margin: 6px 0 0; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; color: #0f172a;">${safeSubmissionId}</p>
+          </div>
+          ${guestCodeSection}
+          <div style="margin: 18px 0 0; display: flex; flex-wrap: wrap; gap: 10px;">
+            <a href="${progressLink}" style="display: inline-block; border-radius: 999px; background: #f6d64a; color: #111827; text-decoration: none; font-size: 13px; font-weight: 800; padding: 11px 18px;">내 심의 진행상황 조회</a>
+            <a href="${siteLink}" style="display: inline-block; border-radius: 999px; background: #0f172a; color: #f8fafc; text-decoration: none; font-size: 13px; font-weight: 700; padding: 11px 18px;">온사이드 사이트</a>
+          </div>
+          <p style="margin: 14px 0 0; font-size: 12px; color: #64748b; line-height: 1.6;">버튼이 동작하지 않으면 아래 링크를 복사해 브라우저에 붙여넣어 주세요.</p>
+          <p style="margin: 6px 0 0; font-size: 12px; color: #334155; word-break: break-all;">${escapeHtml(progressLink)}</p>
+        </div>
+      </div>
     </div>
   `;
 

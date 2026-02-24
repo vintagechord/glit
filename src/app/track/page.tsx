@@ -31,7 +31,7 @@ export default async function TrackPage() {
         <p className="mt-3 text-sm text-muted-foreground">
           {isLoggedIn
             ? "심의 접수를 진행하면 진행상황을 바로 확인할 수 있습니다."
-            : "접수 시 발급받은 조회 코드를 입력하면 진행상황을 확인할 수 있습니다."}
+            : "접수 시 발급받은 조회 코드를 입력하면 진행상황을 확인할 수 있으며, 코드를 잊어도 이름/이메일로 다시 찾을 수 있습니다."}
         </p>
         {isLoggedIn ? (
           <div className="mt-6">

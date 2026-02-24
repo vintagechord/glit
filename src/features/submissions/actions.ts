@@ -7,6 +7,7 @@ import { sendSubmissionReceiptEmail } from "@/lib/email";
 import { ensureArtistByName } from "@/lib/artist";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { buildUrl, getBaseUrl } from "@/lib/url";
 
 export type SubmissionActionState = {
   error?: string;
@@ -308,6 +309,22 @@ const isMissingSessionError = (error: SupabaseError | null | undefined) => {
 
 const isValidEmailFormat = (value: string) =>
   z.string().email().safeParse(value).success;
+
+const normalizeEmailValue = (value?: string | null) =>
+  value?.trim().toLowerCase() ?? "";
+
+const collectRecipientEmails = (
+  ...values: Array<string | null | undefined>
+) => {
+  const recipients = new Set<string>();
+  for (const value of values) {
+    const normalized = normalizeEmailValue(value);
+    if (normalized) {
+      recipients.add(normalized);
+    }
+  }
+  return Array.from(recipients);
+};
 
 const trackSchema = z.object({
   trackTitle: z.string().optional(),
@@ -901,30 +918,40 @@ export async function saveAlbumSubmissionAction(
 
   let emailWarning: string | undefined;
   if (parsed.data.status === "SUBMITTED") {
-    const recipientEmail =
-      applicantEmailValue || guestEmailValue || user?.email || null;
-    if (recipientEmail) {
+    const recipientEmails = collectRecipientEmails(
+      applicantEmailValue,
+      guestEmailValue,
+      user?.email,
+    );
+    if (recipientEmails.length > 0) {
+      const baseUrl = getBaseUrl();
+      const siteLink = buildUrl("/", baseUrl);
       const link =
-        parsed.data.guestToken && parsed.data.guestToken.length >= 8
-          ? `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/track/${parsed.data.guestToken}`
-          : undefined;
-      const emailResult = await sendSubmissionReceiptEmail({
-        email: recipientEmail,
-        title: titleValue || "제목 미입력",
-        kind: "ALBUM",
-        isGuest: isGuest,
-        guestToken: parsed.data.guestToken ?? undefined,
-        link,
-      });
-      if (emailResult.skipped) {
-        console.warn("[Email][receipt] skipped (config missing)", {
-          submissionId: parsed.data.submissionId,
+        isGuest && parsed.data.guestToken && parsed.data.guestToken.length >= 8
+          ? buildUrl(`/track/${encodeURIComponent(parsed.data.guestToken)}`, baseUrl)
+          : buildUrl(`/dashboard/submissions/${parsed.data.submissionId}`, baseUrl);
+
+      for (const recipientEmail of recipientEmails) {
+        const emailResult = await sendSubmissionReceiptEmail({
           email: recipientEmail,
+          title: titleValue || "제목 미입력",
+          kind: "ALBUM",
+          submissionId: parsed.data.submissionId,
+          isGuest,
+          guestToken: parsed.data.guestToken ?? undefined,
+          link,
+          siteLink,
         });
-      } else if (!emailResult.ok) {
-        emailWarning =
-          emailResult.message ??
-          "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+        if (emailResult.skipped) {
+          console.warn("[Email][receipt] skipped (config missing)", {
+            submissionId: parsed.data.submissionId,
+            email: recipientEmail,
+          });
+        } else if (!emailResult.ok && !emailWarning) {
+          emailWarning =
+            emailResult.message ??
+            "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+        }
       }
     }
   }
@@ -1222,30 +1249,40 @@ export async function saveMvSubmissionAction(
 
   let emailWarning: string | undefined;
   if (parsed.data.status === "SUBMITTED") {
-    const recipientEmail =
-      applicantEmailValue || guestEmailValue || user?.email || null;
-    if (recipientEmail) {
+    const recipientEmails = collectRecipientEmails(
+      applicantEmailValue,
+      guestEmailValue,
+      user?.email,
+    );
+    if (recipientEmails.length > 0) {
+      const baseUrl = getBaseUrl();
+      const siteLink = buildUrl("/", baseUrl);
       const link =
-        parsed.data.guestToken && parsed.data.guestToken.length >= 8
-          ? `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/track/${parsed.data.guestToken}`
-          : undefined;
-      const emailResult = await sendSubmissionReceiptEmail({
-        email: recipientEmail,
-        title: titleValue || "제목 미입력",
-        kind: "MV",
-        isGuest: isGuest,
-        guestToken: parsed.data.guestToken ?? undefined,
-        link,
-      });
-      if (emailResult.skipped) {
-        console.warn("[Email][receipt] skipped (config missing)", {
-          submissionId: parsed.data.submissionId,
+        isGuest && parsed.data.guestToken && parsed.data.guestToken.length >= 8
+          ? buildUrl(`/track/${encodeURIComponent(parsed.data.guestToken)}`, baseUrl)
+          : buildUrl(`/dashboard/submissions/${parsed.data.submissionId}`, baseUrl);
+
+      for (const recipientEmail of recipientEmails) {
+        const emailResult = await sendSubmissionReceiptEmail({
           email: recipientEmail,
+          title: titleValue || "제목 미입력",
+          kind: "MV",
+          submissionId: parsed.data.submissionId,
+          isGuest,
+          guestToken: parsed.data.guestToken ?? undefined,
+          link,
+          siteLink,
         });
-      } else if (!emailResult.ok) {
-        emailWarning =
-          emailResult.message ??
-          "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+        if (emailResult.skipped) {
+          console.warn("[Email][receipt] skipped (config missing)", {
+            submissionId: parsed.data.submissionId,
+            email: recipientEmail,
+          });
+        } else if (!emailResult.ok && !emailWarning) {
+          emailWarning =
+            emailResult.message ??
+            "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+        }
       }
     }
   }

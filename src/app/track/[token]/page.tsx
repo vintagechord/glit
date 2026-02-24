@@ -14,9 +14,10 @@ type SubmissionDetailClientProps = React.ComponentProps<typeof SubmissionDetailC
 export default async function TrackDetailPage({
   params,
 }: {
-  params: { token: string };
+  params: { token: string } | Promise<{ token: string }>;
 }) {
-  const token = decodeURIComponent(params.token ?? "");
+  const resolvedParams = await params;
+  const token = decodeURIComponent(resolvedParams.token ?? "");
 
   if (!token || token.length < 8 || token.length > 120) {
     notFound();

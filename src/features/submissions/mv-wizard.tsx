@@ -2642,14 +2642,18 @@ export function MvWizard({
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 신청자 정보
               </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                이름과 이메일은 심의 조회시에 사용됩니다.
+              </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    담당자명
+                    담당자명 *
                   </label>
                   <input
                     value={guestName}
                     onChange={(event) => setGuestName(event.target.value)}
+                    required
                     className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                   />
                 </div>
@@ -2665,22 +2669,24 @@ export function MvWizard({
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    이메일
+                    이메일 *
                   </label>
                   <input
                     type="email"
                     value={guestEmail}
                     onChange={(event) => setGuestEmail(event.target.value)}
+                    required
                     className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    연락처
+                    연락처 *
                   </label>
                   <input
                     value={guestPhone}
                     onChange={(event) => setGuestPhone(event.target.value)}
+                    required
                     className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                   />
                 </div>

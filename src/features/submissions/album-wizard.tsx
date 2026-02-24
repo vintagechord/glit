@@ -3270,6 +3270,11 @@ export function AlbumWizard({
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 접수자 정보
               </p>
+              {isGuest && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  이름과 이메일은 심의 조회시에 사용됩니다.
+                </p>
+              )}
               <div className="mt-3 grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -3278,6 +3283,7 @@ export function AlbumWizard({
                   <input
                     value={applicantName}
                     onChange={(event) => setApplicantName(event.target.value)}
+                    required
                     className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                   />
                 </div>
@@ -3289,6 +3295,7 @@ export function AlbumWizard({
                     type="email"
                     value={applicantEmail}
                     onChange={(event) => setApplicantEmail(event.target.value)}
+                    required
                     className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                   />
                 </div>
@@ -3299,6 +3306,7 @@ export function AlbumWizard({
                   <input
                     value={applicantPhone}
                     onChange={(event) => setApplicantPhone(event.target.value)}
+                    required
                     className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                   />
                 </div>

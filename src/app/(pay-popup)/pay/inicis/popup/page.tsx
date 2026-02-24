@@ -14,9 +14,12 @@ export const metadata = {
 };
 
 type Props = {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams:
+    | Record<string, string | string[] | undefined>
+    | Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default function InicisPopupPage({ searchParams }: Props) {
-  return <InicisPopupClientPage searchParams={searchParams} />;
+export default async function InicisPopupPage({ searchParams }: Props) {
+  const resolvedSearchParams = await searchParams;
+  return <InicisPopupClientPage searchParams={resolvedSearchParams} />;
 }
