@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { useSearchParams } from "next/navigation";
 
 import { parseInicisContext, type InicisPaymentContext } from "@/lib/inicis/context";
 
@@ -109,16 +108,18 @@ type Props = {
   searchParams: Record<string, string | string[] | undefined>;
 };
 
+const firstParam = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
+
 export default function InicisPopupClientPage({ searchParams }: Props) {
   usePopupChromeStyles();
 
-  const runtimeSearchParams = useSearchParams();
-  const ctxValue = runtimeSearchParams.get("context") ?? (Array.isArray(searchParams.context) ? searchParams.context[0] : searchParams.context);
-  const modeValue = runtimeSearchParams.get("mode") ?? (Array.isArray(searchParams.mode) ? searchParams.mode[0] : searchParams.mode);
-  const submissionId = runtimeSearchParams.get("submissionId") ?? (Array.isArray(searchParams.submissionId) ? searchParams.submissionId[0] : searchParams.submissionId);
-  const requestId = runtimeSearchParams.get("requestId") ?? (Array.isArray(searchParams.requestId) ? searchParams.requestId[0] : searchParams.requestId);
-  const guestToken = runtimeSearchParams.get("guestToken") ?? (Array.isArray(searchParams.guestToken) ? searchParams.guestToken[0] : searchParams.guestToken);
-  const debug = runtimeSearchParams.get("debug") === "1";
+  const ctxValue = firstParam(searchParams.context);
+  const modeValue = firstParam(searchParams.mode);
+  const submissionId = firstParam(searchParams.submissionId);
+  const requestId = firstParam(searchParams.requestId);
+  const guestToken = firstParam(searchParams.guestToken);
+  const debug = firstParam(searchParams.debug) === "1";
 
   const context: InicisPaymentContext | null = parseInicisContext(ctxValue);
   const isKaraoke = context === "karaoke";
@@ -155,7 +156,9 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
     setError(null);
 
     if (!context) {
-      const rawParams = Object.fromEntries(runtimeSearchParams.entries());
+      const rawParams = Object.fromEntries(
+        Object.entries(searchParams).map(([key, value]) => [key, firstParam(value)]),
+      );
       console.error("[Inicis][STDPay][popup] invalid context", { ctxValue, rawParams });
       setError("알 수 없는 결제 컨텍스트입니다.");
       setLoadingBarVisible(false);
@@ -223,7 +226,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [context, submissionId, requestId, guestToken, runtimeSearchParams, ctxValue, isKaraoke]);
+  }, [context, submissionId, requestId, guestToken, searchParams, ctxValue, isKaraoke]);
 
   React.useEffect(() => {
     if (error) setLoadingBarVisible(false);
@@ -319,7 +322,17 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
       {debug ? (
         <div className="p-3 text-[11px] text-muted-foreground">
           <pre className="whitespace-pre-wrap break-words rounded-md bg-muted/40 p-2">
-            raw searchParams: {JSON.stringify(Object.fromEntries(runtimeSearchParams.entries()), null, 2)}
+            raw searchParams:{" "}
+            {JSON.stringify(
+              Object.fromEntries(
+                Object.entries(searchParams).map(([key, value]) => [
+                  key,
+                  firstParam(value),
+                ]),
+              ),
+              null,
+              2,
+            )}
           </pre>
           <p className="mt-1">context: {context ?? "unknown"} · mode: {modeValue ?? "unknown"}</p>
         </div>

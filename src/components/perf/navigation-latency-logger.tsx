@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 type PendingNavigation = {
   id: string;
@@ -117,11 +117,6 @@ function buildPath(url: URL) {
 
 export function NavigationLatencyLogger() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const currentPath = React.useMemo(() => {
-    const query = searchParams?.toString();
-    return `${pathname}${query ? `?${query}` : ""}`;
-  }, [pathname, searchParams]);
 
   React.useEffect(() => {
     if (!navPerfLoggingEnabled) return;
@@ -204,7 +199,10 @@ export function NavigationLatencyLogger() {
           id: pending.id,
           from: pending.fromPath,
           to: pending.toPath,
-          landedPath: currentPath,
+          landedPath:
+            typeof window === "undefined"
+              ? pathname
+              : `${window.location.pathname}${window.location.search}`,
           routeReadyMs: roundToTwo(routeReadyMs),
           paintReadyMs: roundToTwo(paintReadyMs),
           at: new Date().toISOString(),
@@ -212,7 +210,7 @@ export function NavigationLatencyLogger() {
         clearPendingNavigation();
       });
     });
-  }, [currentPath, pathname]);
+  }, [pathname]);
 
   return null;
 }
