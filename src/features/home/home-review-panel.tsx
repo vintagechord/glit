@@ -356,6 +356,7 @@ export function HomeReviewPanel({
   hideEmptyTabs = false,
   forceLiveBadge = false,
   enableRemoteSync = false,
+  stationRowsPerPage = 10,
 }: {
   isLoggedIn: boolean;
   albumSubmissions: SubmissionSummary[];
@@ -365,6 +366,7 @@ export function HomeReviewPanel({
   hideEmptyTabs?: boolean;
   forceLiveBadge?: boolean;
   enableRemoteSync?: boolean;
+  stationRowsPerPage?: number;
 }) {
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
@@ -579,7 +581,7 @@ export function HomeReviewPanel({
       ? stageStatusMap.completed
       : getStageStatus(activeSubmission);
 
-  const rowsPerPage = 10;
+  const rowsPerPage = Math.max(1, Math.floor(stationRowsPerPage));
   const rowHeight = 52;
   const rowGap = 8;
   const listPadding = 12;
@@ -695,8 +697,8 @@ export function HomeReviewPanel({
   );
 
   return (
-    <div className="min-w-0 w-full rounded-[28px] border border-[#f6d64a] bg-[#f6d64a] p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-gradient-to-br dark:from-[#1a1a1a]/70 dark:via-[#111111]/80 dark:to-[#1e1a12]/80 lg:min-h-[520px]">
-      <div className="flex items-center justify-between text-sm uppercase tracking-[0.2em] text-muted-foreground">
+    <div className="min-w-0 w-full rounded-[24px] border border-[#f6d64a] bg-[#f6d64a] p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:rounded-[28px] sm:p-6 dark:border-white/10 dark:bg-gradient-to-br dark:from-[#1a1a1a]/70 dark:via-[#111111]/80 dark:to-[#1e1a12]/80 lg:min-h-[520px]">
+      <div className="flex items-center justify-between text-xs uppercase tracking-[0.16em] text-muted-foreground sm:text-sm sm:tracking-[0.2em]">
         <span>
           {activeSubmission
             ? `${submissionLabels.summary} 심의`
@@ -716,7 +718,7 @@ export function HomeReviewPanel({
         </span>
       </div>
 
-      <div className="mt-5 flex items-center gap-2 rounded-full bg-muted/60 p-1 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+      <div className="mt-4 flex items-center gap-2 rounded-full bg-muted/60 p-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground sm:mt-5 sm:text-sm sm:tracking-[0.2em]">
         {availableTabs.includes("album") ? (
           <button
             type="button"
@@ -745,7 +747,7 @@ export function HomeReviewPanel({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+      <div className="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground sm:text-xs sm:tracking-[0.2em]">
         <span>
           {activeList.length > 0
             ? `${activeIndex + 1}/${activeList.length}`
@@ -809,7 +811,7 @@ export function HomeReviewPanel({
         </div>
       </div>
 
-      <div className="mt-6 space-y-5">
+      <div className="mt-5 space-y-4 sm:mt-6 sm:space-y-5">
         <div className="rounded-2xl border border-dashed border-border/80 bg-background/70 p-4">
           <p className="sr-only">접수 현황</p>
           {activeSubmission ? (
@@ -885,7 +887,7 @@ export function HomeReviewPanel({
               <>
                 <div
                   ref={stationListRef}
-                  className={`overflow-y-auto overscroll-contain px-3 py-3 touch-pan-y ${
+                  className={`overflow-y-auto overscroll-contain px-2.5 py-2.5 touch-pan-y sm:px-3 sm:py-3 ${
                     isMouseDraggingList
                       ? "cursor-grabbing select-none"
                       : "cursor-auto sm:cursor-grab"
@@ -992,7 +994,7 @@ export function HomeReviewPanel({
                       return (
                         <div
                           key={`${station.id}-mobile-${index}`}
-                          className="rounded-xl border border-border/50 bg-background/80 p-3 text-sm shadow-sm"
+                          className="rounded-xl border border-border/50 bg-background/80 p-2.5 text-sm shadow-sm"
                         >
                           <div className="flex min-w-0 items-center justify-between gap-2">
                             <span className="flex min-w-0 items-center gap-3 pl-1 text-left">
@@ -1081,7 +1083,7 @@ export function HomeReviewPanel({
 
       {trackResultModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-4 shadow-xl sm:p-6">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               트랙별 결과
             </p>

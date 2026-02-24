@@ -11,7 +11,7 @@ export const metadata = {
 
 export default function AboutPage() {
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <div
         className="space-y-10"
         style={
@@ -32,7 +32,7 @@ export default function AboutPage() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.5em] text-[var(--about-ink)]">
                 Since 2017
               </p>
-              <h1 className="font-display mt-3 text-3xl leading-tight text-[var(--about-ink)] md:text-4xl">
+              <h1 className="font-display mt-3 text-2xl leading-tight text-[var(--about-ink)] sm:text-3xl md:text-4xl">
                 온사이드(onside)
               </h1>
               <p className="mt-3 text-base leading-relaxed text-[var(--about-ink)]/80 md:text-lg">

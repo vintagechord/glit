@@ -158,6 +158,21 @@
     flex-direction: column;
     justify-content: center;
   }
+
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-centered {
+    min-height: calc(100svh - 180px);
+  }
 }
 
 .font-display {

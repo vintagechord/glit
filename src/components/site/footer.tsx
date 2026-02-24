@@ -355,13 +355,13 @@ export function SiteFooter() {
 
   return (
     <footer className="border-t border-black bg-[#f05a28] text-black">
-      <div className="mx-auto w-full max-w-6xl px-6 py-10">
+      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         <div className="grid gap-6 border-b border-black/30 pb-6 md:grid-cols-2">
           <div className="space-y-3">
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-black">
               CS CENTER
             </p>
-            <p className="text-2xl font-semibold text-black">
+            <p className="text-xl font-semibold text-black sm:text-2xl">
               {contactPhone}
             </p>
             <p className="text-base font-medium text-black">
@@ -452,7 +452,7 @@ export function SiteFooter() {
             className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.25)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-black/10 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-black/10 px-4 py-3 sm:px-6 sm:py-4">
               <div className="flex items-center gap-3">
                 <span className="rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black">
                   {modalTitle}
@@ -469,7 +469,7 @@ export function SiteFooter() {
                 닫기
               </button>
             </div>
-            <div className="max-h-[70vh] overflow-y-auto px-6 py-5 text-xs leading-relaxed text-black/80 whitespace-pre-line">
+            <div className="max-h-[70vh] overflow-y-auto px-4 py-4 text-xs leading-relaxed text-black/80 whitespace-pre-line sm:px-6 sm:py-5">
               {modalContent}
             </div>
           </div>

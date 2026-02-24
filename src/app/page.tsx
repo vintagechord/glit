@@ -17,7 +17,7 @@ const heroCtas = [
     icon: (
       <svg
         viewBox="0 0 160 120"
-        className="h-24 w-24 drop-shadow-[0_14px_30px_rgba(59,130,246,0.35)]"
+        className="h-20 w-20 drop-shadow-[0_14px_30px_rgba(59,130,246,0.35)] sm:h-24 sm:w-24"
         aria-hidden="true"
       >
         <defs>
@@ -60,7 +60,7 @@ const heroCtas = [
     icon: (
       <svg
         viewBox="0 0 160 120"
-        className="h-24 w-24 drop-shadow-[0_14px_30px_rgba(99,102,241,0.35)]"
+        className="h-20 w-20 drop-shadow-[0_14px_30px_rgba(99,102,241,0.35)] sm:h-24 sm:w-24"
         aria-hidden="true"
       >
         <defs>
@@ -199,19 +199,31 @@ const scrollRevealBaseClass =
 
 const serviceCards = [
   {
+    label: "Album Review",
     title: "음반 심의",
     description: "트랙 정보 입력과 음원 파일 업로드까지 한 번에.",
     href: "/dashboard/new/album",
+    cardClass: "bg-[#8fe38f] text-[#111111]",
+    labelClass: "text-black/70",
+    descriptionClass: "text-black/80",
   },
   {
+    label: "M/V Review",
     title: "M/V 심의",
     description: "TV 송출/온라인 업로드 심의를 분리해 효율적으로.",
     href: "/dashboard/new/mv",
+    cardClass: "bg-[#f6d64a] text-[#111111]",
+    labelClass: "text-black/70",
+    descriptionClass: "text-black/80",
   },
   {
+    label: "One Click",
     title: "원클릭 접수",
     description: "멜론 링크와 음원 파일만 제출하는 음반 전용 간편 접수.",
     href: "/dashboard/new/album?mode=oneclick",
+    cardClass: "bg-[#4f56d8] text-[#ecf2ff]",
+    labelClass: "text-[#ecf2ff]/75",
+    descriptionClass: "text-[#ecf2ff]/85",
   },
 ];
 
@@ -220,12 +232,6 @@ const processStepTones = [
   "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
   "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
   "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
-];
-
-const serviceCardTones = [
-  "bg-[#8fe38f] text-[#111111] border-transparent dark:bg-[#224435] dark:text-[#ecfff4] dark:border-[#325846]",
-  "bg-[#f6d64a] text-[#111111] border-transparent dark:bg-[#4a4522] dark:text-[#fff7c5] dark:border-[#6b6032]",
-  "oneclick-card text-[#ecf2ff] border-[#4f60d6]/70 dark:text-[#ecf2ff] dark:border-[#4f60d6]/70",
 ];
 
 type StationSnapshot = {
@@ -358,7 +364,7 @@ export default async function Home() {
       <div className="pointer-events-none absolute right-[-15%] top-[10%] h-[380px] w-[380px] rounded-full bg-[#c6a631]/20 blur-[180px] dark:bg-[#f6d64a]/20" />
       <div className="pointer-events-none absolute bottom-[-10%] left-[20%] h-[320px] w-[320px] rounded-full bg-[#a8792c]/25 blur-[180px] dark:bg-[#f6d64a]/15" />
 
-      <section className="w-full pb-10 pt-[1.75rem]">
+      <section className="w-full pb-8 pt-4 sm:pb-10 sm:pt-[1.75rem]">
         <div className="relative w-full overflow-hidden border-y border-border/60 bg-[radial-gradient(circle_at_top,_rgba(245,245,245,0.98),_rgba(231,223,213,0.92),_rgba(210,198,185,0.88))] shadow-[0_24px_80px_rgba(31,41,55,0.15)] dark:bg-[radial-gradient(circle_at_top,_rgba(11,11,11,0.95),_rgba(24,18,14,0.95),_rgba(14,14,14,0.95))]">
           <div className="absolute inset-0">
             {hasHeroVideo ? (
@@ -392,24 +398,24 @@ export default async function Home() {
             <div className="absolute inset-0 bg-gradient-to-r from-black/35 via-black/15 to-black/5 dark:from-background/80 dark:via-background/40" />
           </div>
 
-          <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-10 px-6 py-10 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 lg:min-h-[520px] lg:h-full">
+          <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-700 sm:gap-6 lg:min-h-[520px] lg:h-full">
               <span className="inline-flex w-fit items-center rounded-full border border-white/60 bg-black/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/90 backdrop-blur-sm">
                 OFFICIAL MUSIC & VIDEO CLEARANCE
               </span>
-              <h1 className="font-display text-3xl leading-tight text-white sm:text-4xl">
+              <h1 className="font-display text-2xl leading-tight text-white sm:text-4xl">
                 음반 · M/V 심의를 쉽고 빠르게!
               </h1>
-              <p className="max-w-xl text-base text-white/85 sm:text-lg whitespace-pre-line">
+              <p className="max-w-xl text-sm text-white/85 whitespace-pre-line sm:text-lg">
                 온사이드에서 방송사별 심의 진행을 실시간으로 받아보세요.
                 {"\n"}나의 모든 심의 기록은 온사이드에서 모아 관리할 수 있습니다.
               </p>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 sm:gap-4">
                 {heroCtas.map((cta) => (
                   <Link
                     key={cta.title}
                     href={cta.href}
-                    className="group overflow-hidden rounded-[28px] border border-white/60 bg-white/10 backdrop-blur-sm shadow-[0_18px_50px_rgba(0,0,0,0.28)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(0,0,0,0.35)]"
+                    className="group overflow-hidden rounded-[24px] border border-white/60 bg-white/10 backdrop-blur-sm shadow-[0_14px_40px_rgba(0,0,0,0.24)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(0,0,0,0.35)] sm:rounded-[28px]"
                   >
                     <div
                       className={`relative flex h-28 items-center justify-center overflow-hidden bg-gradient-to-br sm:h-32 ${cta.visual}`}
@@ -461,12 +467,13 @@ export default async function Home() {
               albumStationsMap={albumStationsMap}
               mvStationsMap={mvStationsMap}
               enableRemoteSync={isLoggedIn}
+              stationRowsPerPage={5}
             />
           </div>
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-6xl px-6 pb-12 pt-4">
+      <section className="mx-auto w-full max-w-6xl px-4 pb-12 pt-4 sm:px-6">
         <div className="mb-14">
           {/* Center strip banner only */}
           <StripAdBanner />
@@ -495,28 +502,24 @@ export default async function Home() {
               data-scroll-reveal
               data-reveal-state="hidden"
               style={{ transitionDelay: `${120 + index * 120}ms` }}
-              className={`group relative flex min-h-[190px] flex-col justify-between rounded-[28px] border p-6 shadow-[0_18px_45px_rgba(0,0,0,0.25)] transition hover:-translate-y-1 ${scrollRevealBaseClass} ${serviceCardTones[index] ?? "bg-white text-[#111111] border-border/60"
-                }`}
+              className={`rounded-[24px] border border-transparent p-5 transition hover:-translate-y-1 sm:rounded-[28px] sm:p-6 ${scrollRevealBaseClass} ${card.cardClass}`}
             >
-              <div className="space-y-3">
-                <h3 className="text-2xl font-semibold leading-snug">{card.title}</h3>
-                <p className="text-sm opacity-80">{card.description}</p>
-              </div>
-              <div className="mt-6 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  바로가기
-                </span>
-                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-black/40 bg-black/10 text-lg text-black transition group-hover:bg-black/20 dark:border-white/35 dark:bg-white/10 dark:text-white dark:group-hover:bg-white/20">
-                  →
-                </span>
+              <div>
+                <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${card.labelClass}`}>
+                  {card.label}
+                </p>
+                <h3 className="mt-3 text-xl font-semibold">{card.title}</h3>
+                <p className={`mt-2 text-sm ${card.descriptionClass}`}>
+                  {card.description}
+                </p>
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-6xl px-6 py-12">
-        <div className="rounded-[32px] border border-border/60 bg-background/80 px-8 py-10">
+      <section className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+        <div className="rounded-[28px] border border-border/60 bg-background/80 px-5 py-8 sm:rounded-[32px] sm:px-8 sm:py-10">
           <div
             data-scroll-reveal
             data-reveal-state="hidden"
@@ -527,7 +530,7 @@ export default async function Home() {
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 접수 프로세스
               </p>
-              <h2 className="font-display mt-3 text-3xl text-foreground">
+              <h2 className="font-display mt-3 text-2xl text-foreground sm:text-3xl">
                 심의는 4단계로 진행됩니다
               </h2>
               <p className="mt-3 max-w-xl text-sm text-muted-foreground">

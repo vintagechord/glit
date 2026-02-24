@@ -6,11 +6,11 @@ export const metadata = {
 
 export default function NewSubmissionPage() {
   return (
-    <div className="page-centered mx-auto w-full max-w-5xl px-6 py-12">
+    <div className="page-centered mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
         New Submission
       </p>
-      <h1 className="font-display mt-2 text-3xl text-foreground">
+      <h1 className="font-display mt-2 text-2xl text-foreground sm:text-3xl">
         접수 유형을 선택하세요.
       </h1>
       <p className="mt-3 text-sm text-muted-foreground">
