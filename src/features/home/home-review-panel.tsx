@@ -361,6 +361,7 @@ export function HomeReviewPanel({
   enableRemoteSync = false,
   stationRowsPerPage = 10,
   showPartialTrackBreakdown = true,
+  mobileStationLayout = "cards",
 }: {
   isLoggedIn: boolean;
   albumSubmissions: SubmissionSummary[];
@@ -372,6 +373,7 @@ export function HomeReviewPanel({
   enableRemoteSync?: boolean;
   stationRowsPerPage?: number;
   showPartialTrackBreakdown?: boolean;
+  mobileStationLayout?: "cards" | "table";
 }) {
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
@@ -890,6 +892,13 @@ export function HomeReviewPanel({
             </div>
             {activeStations.length > 0 ? (
               <>
+                {mobileStationLayout === "table" ? (
+                  <div className="grid grid-cols-[72px_1fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden">
+                    <span className="justify-self-center text-center">방송국</span>
+                    <span className="justify-self-center text-center">접수 상태</span>
+                    <span className="justify-self-center text-center">{trackResultLabel}</span>
+                  </div>
+                ) : null}
                 <div
                   ref={stationListRef}
                   className={`overflow-y-auto overscroll-contain px-2.5 py-2.5 touch-pan-y sm:px-3 sm:py-3 ${
@@ -989,45 +998,37 @@ export function HomeReviewPanel({
                     </div>
                   </div>
 
-                  <div className="space-y-2 sm:hidden">
-                    {activeStations.map((station, index) => {
-                      const reception = getReceptionStatus(station.status);
-                      const result = getResultStatus(
-                        station,
-                        showPartialTrackBreakdown,
-                      );
-                      const summary = summarizeTrackResults(
-                        station.track_results,
-                      );
-                      const canOpenTracks = summary.counts.total > 0;
-                      const stationName = getStationName(station.station);
-                      const stationCode = getStationCode(station.station);
-                      return (
-                        <div
-                          key={`${station.id}-mobile-${index}`}
-                          className="rounded-xl border border-border/50 bg-background/80 p-2.5 text-sm shadow-sm"
-                        >
-                          <div className="flex min-w-0 items-center justify-between gap-2">
-                            <span className="flex min-w-0 items-center gap-3 pl-1 text-left">
+                  {mobileStationLayout === "table" ? (
+                    <div className="divide-y divide-border/50 sm:hidden">
+                      {activeStations.map((station, index) => {
+                        const reception = getReceptionStatus(station.status);
+                        const result = getResultStatus(
+                          station,
+                          showPartialTrackBreakdown,
+                        );
+                        const summary = summarizeTrackResults(
+                          station.track_results,
+                        );
+                        const canOpenTracks = summary.counts.total > 0;
+                        const stationName = getStationName(station.station);
+                        const stationCode = getStationCode(station.station);
+                        const stationLabel = stationCode
+                          ? `${stationName} (${stationCode})`
+                          : stationName;
+                        return (
+                          <div
+                            key={`${station.id}-mobile-${index}`}
+                            className="grid min-h-[48px] grid-cols-[72px_1fr_1fr] items-center gap-2 px-2 py-2 text-sm"
+                          >
+                            <div
+                              className="flex items-center justify-center"
+                              title={stationLabel}
+                            >
                               <StationLogo station={station.station ?? undefined} />
-                              <span className="min-w-0">
-                                <span className="block truncate text-sm font-semibold text-foreground">
-                                  {stationName}
-                                </span>
-                                {stationCode ? (
-                                  <span className="mt-0.5 block truncate text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-                                    {stationCode}
-                                  </span>
-                                ) : null}
-                              </span>
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {formatDate(station.updated_at)}
-                            </span>
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-2">
+                              <span className="sr-only">{stationLabel}</span>
+                            </div>
                             <span
-                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
+                              className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
                             >
                               {reception.label}
                             </span>
@@ -1039,10 +1040,11 @@ export function HomeReviewPanel({
                                   setTrackResultModal({
                                     stationName: station.station?.name ?? "-",
                                     summary,
-                                    resultNote: station.result_note?.trim() || null,
+                                    resultNote:
+                                      station.result_note?.trim() || null,
                                   })
                                 }
-                                className={`inline-flex min-h-[32px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
+                                className={`inline-flex min-h-[32px] min-w-[88px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
                               >
                                 <span>{result.label}</span>
                                 {result.summaryText ? (
@@ -1052,7 +1054,7 @@ export function HomeReviewPanel({
                                 ) : null}
                               </button>
                             ) : (
-                              <div className="flex flex-col items-center gap-1">
+                              <div className="flex flex-col items-center gap-1 justify-self-center">
                                 <span
                                   className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
                                 >
@@ -1066,10 +1068,92 @@ export function HomeReviewPanel({
                               </div>
                             )}
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="space-y-2 sm:hidden">
+                      {activeStations.map((station, index) => {
+                        const reception = getReceptionStatus(station.status);
+                        const result = getResultStatus(
+                          station,
+                          showPartialTrackBreakdown,
+                        );
+                        const summary = summarizeTrackResults(
+                          station.track_results,
+                        );
+                        const canOpenTracks = summary.counts.total > 0;
+                        const stationName = getStationName(station.station);
+                        const stationCode = getStationCode(station.station);
+                        return (
+                          <div
+                            key={`${station.id}-mobile-${index}`}
+                            className="rounded-xl border border-border/50 bg-background/80 p-2.5 text-sm shadow-sm"
+                          >
+                            <div className="flex min-w-0 items-center justify-between gap-2">
+                              <span className="flex min-w-0 items-center gap-3 pl-1 text-left">
+                                <StationLogo station={station.station ?? undefined} />
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-semibold text-foreground">
+                                    {stationName}
+                                  </span>
+                                  {stationCode ? (
+                                    <span className="mt-0.5 block truncate text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+                                      {stationCode}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {formatDate(station.updated_at)}
+                              </span>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <span
+                                className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
+                              >
+                                {reception.label}
+                              </span>
+                              {canOpenTracks ? (
+                                <button
+                                  type="button"
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={() =>
+                                    setTrackResultModal({
+                                      stationName: station.station?.name ?? "-",
+                                      summary,
+                                      resultNote: station.result_note?.trim() || null,
+                                    })
+                                  }
+                                  className={`inline-flex min-h-[32px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
+                                >
+                                  <span>{result.label}</span>
+                                  {result.summaryText ? (
+                                    <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
+                                      {result.summaryText}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              ) : (
+                                <div className="flex flex-col items-center gap-1">
+                                  <span
+                                    className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
+                                  >
+                                    {result.label}
+                                  </span>
+                                  {result.summaryText ? (
+                                    <span className="text-[11px] leading-tight text-muted-foreground text-center">
+                                      {result.summaryText}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

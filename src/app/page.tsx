@@ -469,6 +469,7 @@ export default async function Home() {
               enableRemoteSync={isLoggedIn}
               stationRowsPerPage={5}
               showPartialTrackBreakdown={false}
+              mobileStationLayout="table"
             />
           </div>
         </div>
