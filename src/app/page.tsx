@@ -410,7 +410,7 @@ export default async function Home() {
                 온사이드에서 방송사별 심의 진행을 실시간으로 받아보세요.
                 {"\n"}나의 모든 심의 기록은 온사이드에서 모아 관리할 수 있습니다.
               </p>
-              <div className="grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 sm:gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {heroCtas.map((cta) => (
                   <Link
                     key={cta.title}
