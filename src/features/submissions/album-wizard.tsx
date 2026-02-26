@@ -923,7 +923,15 @@ export function AlbumWizard({
       const end = Math.max(start, expectedEnd);
       const before = suggestion.before ?? "";
       const after = suggestion.after ?? "";
-      if (!before) return;
+      if (!before && !after) return;
+      if (!before && after) {
+        nextLyrics =
+          nextLyrics.slice(0, start) +
+          after +
+          nextLyrics.slice(start);
+        applied.push({ ...suggestion, start, end: start });
+        return;
+      }
       const slice = nextLyrics.slice(start, end);
       if (slice === before) {
         nextLyrics =
@@ -1162,8 +1170,8 @@ export function AlbumWizard({
           Number.isFinite(item.start) &&
           Number.isFinite(item.end) &&
           typeof item.before === "string" &&
-          item.before.length > 0 &&
           typeof item.after === "string" &&
+          (item.before.length > 0 || item.after.length > 0) &&
           item.start >= 0 &&
           item.end >= item.start,
       );
@@ -3086,7 +3094,7 @@ export function AlbumWizard({
               {spellcheckSuggestions.length > 0 ? (
                 spellcheckSuggestions.map((suggestion, index) => (
                   <div
-                    key={`${suggestion.before}-${suggestion.start}-${index}`}
+                    key={`${suggestion.before}-${suggestion.after}-${suggestion.start}-${index}`}
                     className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 text-sm"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3107,13 +3115,17 @@ export function AlbumWizard({
                         <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-rose-500">
                           Before
                         </span>
-                        <span className="font-semibold">{suggestion.before}</span>
+                        <span className="font-semibold">
+                          {suggestion.before || "(삽입)"}
+                        </span>
                       </div>
                       <div className="inline-flex items-start gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-100">
                         <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-emerald-600">
                           After
                         </span>
-                        <span className="font-semibold">{suggestion.after}</span>
+                        <span className="font-semibold">
+                          {suggestion.after || "(삭제)"}
+                        </span>
                       </div>
                     </div>
                   </div>

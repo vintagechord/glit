@@ -177,8 +177,18 @@ const splitSentences = (text: string) => {
 const overlaps = (a: ProtectedSpan, start: number, end: number) =>
   start < a.end && end > a.start;
 
+const isWhitespaceOnlyChange = (before: string, after: string) =>
+  before.replace(/\s+/g, "") === after.replace(/\s+/g, "");
+
 const shouldSkipForProtected = (suggestion: ProviderSuggestion, spans: ProtectedSpan[]) => {
   if (!spans.length) return false;
+  // 영어/약어 보호 구간이라도 공백 보정만 수행하는 제안은 허용한다.
+  if (
+    suggestion.type === "spacing" &&
+    isWhitespaceOnlyChange(suggestion.before ?? "", suggestion.after ?? "")
+  ) {
+    return false;
+  }
   return spans.some((span) => overlaps(span, suggestion.start, suggestion.end));
 };
 
@@ -333,6 +343,15 @@ const dedupeAndResolve = (
       return;
     }
     const existing = accepted[existingIndex];
+    const canCoexistSpacingAdjustment =
+      candidate.type === "spacing" &&
+      existing.type === "spacing" &&
+      isWhitespaceOnlyChange(candidate.before ?? "", candidate.after ?? "") &&
+      isWhitespaceOnlyChange(existing.before ?? "", existing.after ?? "");
+    if (canCoexistSpacingAdjustment) {
+      accepted.push(candidate);
+      return;
+    }
     const candPriority = priorityMap.get(candidate.source) ?? 50;
     const existingPriority = priorityMap.get(existing.source) ?? 50;
     if (candPriority < existingPriority && candidate.confidence >= existing.confidence - 0.1) {

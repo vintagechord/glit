@@ -64,6 +64,20 @@ test("spellcheck fixes 들어가/갔다 계열 복합 오타", async () => {
   assert.equal(result.meta.reasonIfEmpty, undefined);
 });
 
+test("spellcheck handles mixed Korean and English without dropping spacing suggestions", async () => {
+  const text = "니나는지금fine김시혜너는 toy was";
+  const result = await runSpellcheckPipeline({
+    text,
+    mode: "strict",
+    domain: "music",
+  });
+
+  assert.ok(result.suggestions.length >= 2, "expected mixed-language spacing suggestions");
+  assert.ok(result.correctedText.includes("fine 김"), "expected latin-hangul boundary spacing");
+  assert.ok(result.correctedText.includes("지금 fine"), "expected hangul-latin boundary spacing");
+  assert.equal(result.meta.reasonIfEmpty, undefined);
+});
+
 test("diffs can reconstruct corrected text", async () => {
   const text = "그낭 걸엇어. 오늘은 정말로 햇다.";
   const result = await runSpellcheckPipeline({

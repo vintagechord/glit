@@ -62,6 +62,37 @@ const spellingRules: Rule[] = [
 ];
 
 const spacingRules: Rule[] = [
+  {
+    id: "space_hangul_latin",
+    pattern: /([가-힣])([A-Za-z])/g,
+    replace: "$1 $2",
+    confidence: 0.9,
+  },
+  {
+    id: "space_latin_hangul",
+    pattern: /([A-Za-z])([가-힣])/g,
+    replace: "$1 $2",
+    confidence: 0.9,
+  },
+  {
+    id: "space_hangul_digit",
+    pattern: /([가-힣])([0-9])/g,
+    replace: "$1 $2",
+    confidence: 0.88,
+  },
+  {
+    id: "space_digit_hangul",
+    pattern: /([0-9])([가-힣])/g,
+    replace: "$1 $2",
+    confidence: 0.88,
+  },
+  {
+    id: "space_pronoun_timeword",
+    pattern:
+      /(나는|너는|우리는|저는|그는|그녀는|네가|내가|니는|니가)(지금|오늘|내일|어제|아직|이미|다시|정말|너무|바로|계속)/g,
+    replace: "$1 $2",
+    confidence: 0.72,
+  },
   { id: "space_비가오", pattern: /비가[ \t]?오/g, replace: "비가 오", confidence: 0.8 },
   { id: "space_안가지고", pattern: /안가지고/g, replace: "안 가지고", confidence: 0.8 },
   { id: "space_왜그랬는지", pattern: /왜그랬는지/g, replace: "왜 그랬는지", confidence: 0.8 },
