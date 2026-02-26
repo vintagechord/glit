@@ -387,27 +387,23 @@ export function SubmissionDetailClient({
   const flowStatusNotice = (() => {
     if (isReviewComplete) {
       return {
-        title: "완료 안내",
         message: "모든 심의 절차가 완료되었습니다.",
         dotTone: "bg-emerald-300",
       };
     }
     if (flowIndex === 3) {
       return {
-        title: "결과 전달 안내",
         message: "심의 결과 통보가 진행 중입니다.",
         dotTone: "bg-[#f6d64a]",
       };
     }
     if (isPaymentDone) {
       return {
-        title: "진행 안내",
         message: "결제가 확인되었고 심의 절차가 진행됩니다.",
         dotTone: "bg-sky-300",
       };
     }
     return {
-      title: "결제 안내",
       message: "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다.",
       dotTone: "bg-rose-300",
     };
@@ -910,15 +906,18 @@ export function SubmissionDetailClient({
         </div>
         <div className="order-1">
           <div className="rounded-[28px] border border-black bg-black p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-white/80">
                 심의 진행 상태
               </p>
-              <span className="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-semibold text-white">
-                현재 단계: {flowSteps[flowIndex]}
-              </span>
+              <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-white/85 sm:text-sm">
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10">
+                  <span className={`inline-block h-2.5 w-2.5 rounded-full ${flowStatusNotice.dotTone}`} />
+                </span>
+                <span className="truncate">{flowStatusNotice.message}</span>
+              </div>
             </div>
-            <div className="mt-4 space-y-3">
+            <div className="mt-4">
               <div className="grid gap-2 text-sm text-white/75 sm:grid-cols-4">
                 {flowSteps.map((label, index) => {
                   const isActive = index === flowIndex;
@@ -935,24 +934,6 @@ export function SubmissionDetailClient({
                     </div>
                   );
                 })}
-              </div>
-              <div className="flex justify-center">
-                <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-white/[0.04] px-4 py-3">
-                  <div className="grid grid-cols-[auto_1fr] items-start gap-3">
-                    <span
-                      className={`mt-1 inline-block h-2.5 w-2.5 rounded-full ${flowStatusNotice.dotTone}`}
-                      aria-hidden="true"
-                    />
-                    <div className="text-left">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">
-                        {flowStatusNotice.title}
-                      </p>
-                      <p className="mt-1 text-sm leading-relaxed text-white/85">
-                        {flowStatusNotice.message}
-                      </p>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
