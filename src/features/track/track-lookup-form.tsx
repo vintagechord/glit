@@ -8,6 +8,7 @@ export function TrackLookupForm({
 }: {
   onSuccess?: () => void;
 }) {
+  const noMatchLookupError = "일치하는 접수 내역이 없습니다. 입력값을 다시 확인해주세요.";
   const router = useRouter();
   const [token, setToken] = React.useState("");
   const [error, setError] = React.useState("");
@@ -15,6 +16,7 @@ export function TrackLookupForm({
   const [lookupName, setLookupName] = React.useState("");
   const [lookupEmail, setLookupEmail] = React.useState("");
   const [lookupError, setLookupError] = React.useState("");
+  const [noMatchAttemptCount, setNoMatchAttemptCount] = React.useState(0);
   const [lookupBusy, setLookupBusy] = React.useState(false);
   const [lookupResults, setLookupResults] = React.useState<
     Array<{
@@ -67,6 +69,7 @@ export function TrackLookupForm({
     const email = lookupEmail.trim();
     if (!name || !email) {
       setLookupError("이름과 이메일을 입력해주세요.");
+      setNoMatchAttemptCount(0);
       return;
     }
 
@@ -93,6 +96,7 @@ export function TrackLookupForm({
 
       if (!response.ok || !payload?.ok) {
         setLookupResults([]);
+        setNoMatchAttemptCount(0);
         setLookupError(
           payload?.error ??
             "조회 코드를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.",
@@ -112,12 +116,15 @@ export function TrackLookupForm({
 
       setLookupResults(rows);
       if (rows.length === 0) {
-        setLookupError("일치하는 접수 내역이 없습니다. 입력값을 다시 확인해주세요.");
+        setLookupError(noMatchLookupError);
+        setNoMatchAttemptCount((prev) => prev + 1);
       } else {
         setLookupError("");
+        setNoMatchAttemptCount(0);
       }
     } catch {
       setLookupResults([]);
+      setNoMatchAttemptCount(0);
       setLookupError("조회 코드를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
       setLookupBusy(false);
@@ -184,7 +191,14 @@ export function TrackLookupForm({
           </button>
         </form>
         {lookupError ? (
-          <p className="mt-3 text-xs text-red-500">{lookupError}</p>
+          <div className="mt-3 space-y-1">
+            <p className="text-xs text-red-500">{lookupError}</p>
+            {lookupError === noMatchLookupError && noMatchAttemptCount >= 2 ? (
+              <p className="text-xs text-muted-foreground">
+                접수 정보를 잊었다면, 관리자에게 문의해주세요.
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         {lookupResults.length > 0 ? (
