@@ -47,6 +47,12 @@ type UploadResult = {
   accessUrl?: string;
 };
 
+type PaymentDocumentType = "" | "CASH_RECEIPT" | "TAX_INVOICE";
+type CashReceiptPurpose =
+  | ""
+  | "PERSONAL_INCOME_DEDUCTION"
+  | "BUSINESS_EXPENSE_PROOF";
+
 const steps = [
   "목적 선택",
   "신청서 작성",
@@ -66,6 +72,7 @@ const uploadMaxLabel =
     ? `${Math.round(uploadMaxMb / 1024)}GB`
     : `${uploadMaxMb}MB`;
 const draftDeleteTimeoutMs = 8000;
+const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
 
 const multipartThresholdMbRaw = Number(
   process.env.NEXT_PUBLIC_UPLOAD_MULTIPART_THRESHOLD_MB ?? "200",
@@ -277,6 +284,15 @@ export function MvWizard({
     "BANK",
   );
   const [bankDepositorName, setBankDepositorName] = React.useState("");
+  const [paymentDocumentType, setPaymentDocumentType] =
+    React.useState<PaymentDocumentType>("");
+  const [cashReceiptPurpose, setCashReceiptPurpose] =
+    React.useState<CashReceiptPurpose>("");
+  const [cashReceiptPhone, setCashReceiptPhone] = React.useState("");
+  const [cashReceiptBusinessNumber, setCashReceiptBusinessNumber] =
+    React.useState("");
+  const [taxInvoiceBusinessNumber, setTaxInvoiceBusinessNumber] =
+    React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
   const [uploads, setUploads] = React.useState<UploadItem[]>([]);
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadResult[]>([]);
@@ -1415,6 +1431,21 @@ export function MvWizard({
       setPaymentMethod(draft.payment_method);
     }
     setBankDepositorName(String(draft.bank_depositor_name ?? ""));
+    setPaymentDocumentType(
+      draft.payment_document_type === "CASH_RECEIPT" ||
+        draft.payment_document_type === "TAX_INVOICE"
+        ? draft.payment_document_type
+        : "",
+    );
+    setCashReceiptPurpose(
+      draft.cash_receipt_purpose === "PERSONAL_INCOME_DEDUCTION" ||
+        draft.cash_receipt_purpose === "BUSINESS_EXPENSE_PROOF"
+        ? draft.cash_receipt_purpose
+        : "",
+    );
+    setCashReceiptPhone(String(draft.cash_receipt_phone ?? ""));
+    setCashReceiptBusinessNumber(String(draft.cash_receipt_business_number ?? ""));
+    setTaxInvoiceBusinessNumber(String(draft.tax_invoice_business_number ?? ""));
 
     if (isGuest) {
       setGuestName(String(draft.guest_name ?? ""));
@@ -1576,6 +1607,53 @@ export function MvWizard({
     return { songTitleKrValue, songTitleEnValue, songTitleOfficialValue };
   };
 
+  const validatePaymentDocument = () => {
+    if (paymentMethod !== "BANK") return true;
+    if (paymentDocumentType === "CASH_RECEIPT") {
+      if (!cashReceiptPurpose) {
+        setNotice({ error: "현금 영수증 발급 용도를 선택해주세요." });
+        return false;
+      }
+      if (cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION") {
+        const phone = digitsOnly(cashReceiptPhone);
+        if (!phone) {
+          setNotice({
+            error: "현금 영수증(개인소득공제용) 휴대폰 번호를 입력해주세요.",
+          });
+          return false;
+        }
+        if (phone.length < 9 || phone.length > 11) {
+          setNotice({ error: "현금 영수증 휴대폰 번호 형식을 확인해주세요." });
+          return false;
+        }
+      } else if (cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF") {
+        const businessNo = digitsOnly(cashReceiptBusinessNumber);
+        if (!businessNo) {
+          setNotice({
+            error: "현금 영수증(사업자지출증빙용) 사업자번호를 입력해주세요.",
+          });
+          return false;
+        }
+        if (businessNo.length !== 10) {
+          setNotice({ error: "사업자번호는 숫자 10자리로 입력해주세요." });
+          return false;
+        }
+      }
+    }
+    if (paymentDocumentType === "TAX_INVOICE") {
+      const businessNo = digitsOnly(taxInvoiceBusinessNumber);
+      if (!businessNo) {
+        setNotice({ error: "세금계산서 발급용 사업자번호를 입력해주세요." });
+        return false;
+      }
+      if (businessNo.length !== 10) {
+        setNotice({ error: "사업자번호는 숫자 10자리로 입력해주세요." });
+        return false;
+      }
+    }
+    return true;
+  };
+
   const validateMvForm = (options?: { requirePayment?: boolean }) => {
     const { songTitleKrValue, songTitleEnValue } = resolveSongTitleValues();
     const requirePayment = options?.requirePayment ?? false;
@@ -1655,6 +1733,9 @@ export function MvWizard({
       !bankDepositorName.trim()
     ) {
       setNotice({ error: "입금자명을 입력해주세요." });
+      return false;
+    }
+    if (requirePayment && paymentMethod === "BANK" && !validatePaymentDocument()) {
       return false;
     }
     return true;
@@ -1747,6 +1828,27 @@ export function MvWizard({
         guestEmail: isGuest ? guestEmailValue || undefined : undefined,
         guestPhone: isGuest ? guestPhoneValue || undefined : undefined,
         paymentMethod,
+        bankDepositorName:
+          paymentMethod === "BANK" ? bankDepositorName.trim() || undefined : undefined,
+        paymentDocumentType: paymentDocumentType || undefined,
+        cashReceiptPurpose:
+          paymentDocumentType === "CASH_RECEIPT"
+            ? cashReceiptPurpose || undefined
+            : undefined,
+        cashReceiptPhone:
+          paymentDocumentType === "CASH_RECEIPT" &&
+          cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+            ? cashReceiptPhone.trim() || undefined
+            : undefined,
+        cashReceiptBusinessNumber:
+          paymentDocumentType === "CASH_RECEIPT" &&
+          cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+            ? cashReceiptBusinessNumber.trim() || undefined
+            : undefined,
+        taxInvoiceBusinessNumber:
+          paymentDocumentType === "TAX_INVOICE"
+            ? taxInvoiceBusinessNumber.trim() || undefined
+            : undefined,
         status: "DRAFT",
         files: uploaded,
       });
@@ -1851,6 +1953,25 @@ export function MvWizard({
         paymentMethod,
         bankDepositorName:
           paymentMethod === "BANK" ? bankDepositorName.trim() : undefined,
+        paymentDocumentType: paymentDocumentType || undefined,
+        cashReceiptPurpose:
+          paymentDocumentType === "CASH_RECEIPT"
+            ? cashReceiptPurpose || undefined
+            : undefined,
+        cashReceiptPhone:
+          paymentDocumentType === "CASH_RECEIPT" &&
+          cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+            ? cashReceiptPhone.trim() || undefined
+            : undefined,
+        cashReceiptBusinessNumber:
+          paymentDocumentType === "CASH_RECEIPT" &&
+          cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+            ? cashReceiptBusinessNumber.trim() || undefined
+            : undefined,
+        taxInvoiceBusinessNumber:
+          paymentDocumentType === "TAX_INVOICE"
+            ? taxInvoiceBusinessNumber.trim() || undefined
+            : undefined,
         status: "SUBMITTED",
         files: uploaded,
       });
@@ -2270,7 +2391,7 @@ export function MvWizard({
               </div>
             </div>
             <p className="mt-2 text-xs text-muted-foreground text-right">
-              카드 결제 또는 무통장 입금 모두 가능합니다.
+              무통장 입금 또는 카드 결제 모두 가능합니다.
             </p>
             <p className="mt-1 text-xs text-muted-foreground text-right">
               비회원 결제 가능
@@ -2830,15 +2951,19 @@ export function MvWizard({
                       {upload.name}
                     </span>
                     <div className="flex items-center gap-3">
-                      <span className="text-muted-foreground">
-                        {upload.status === "done"
-                          ? "첨부 완료"
-                          : upload.status === "uploading"
+                      {upload.status === "done" ? (
+                        <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                          첨부 완료
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {upload.status === "uploading"
                             ? `업로드 중 · ${upload.progress}%`
                             : upload.status === "error"
                               ? "실패"
                               : "대기"}
-                      </span>
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -2951,7 +3076,7 @@ export function MvWizard({
                 결제하기
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                카드 결제 또는 무통장 입금을 선택할 수 있습니다.
+                무통장 입금 또는 카드 결제를 선택할 수 있습니다.
               </p>
             </div>
           </div>
@@ -2992,23 +3117,6 @@ export function MvWizard({
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <button
                 type="button"
-                onClick={() => setPaymentMethod("CARD")}
-                className={`rounded-2xl border p-4 text-left transition ${
-                  paymentMethod === "CARD"
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border/60 bg-background text-foreground hover:border-foreground"
-                }`}
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  Card
-                </p>
-                <p className="mt-2 text-sm font-semibold">카드 결제</p>
-                <p className="mt-2 text-xs opacity-80">
-                  KG이니시스 카드 결제 · 결제 팝업에서 즉시 진행
-                </p>
-              </button>
-              <button
-                type="button"
                 onClick={() => setPaymentMethod("BANK")}
                 className={`rounded-2xl border p-4 text-left transition ${
                   paymentMethod === "BANK"
@@ -3022,6 +3130,23 @@ export function MvWizard({
                 <p className="mt-2 text-sm font-semibold">무통장 입금</p>
                 <p className="mt-2 text-xs opacity-80">
                   입금 확인 후 진행이 시작됩니다.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("CARD")}
+                className={`rounded-2xl border p-4 text-left transition ${
+                  paymentMethod === "CARD"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                }`}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
+                  Card
+                </p>
+                <p className="mt-2 text-sm font-semibold">카드 결제</p>
+                <p className="mt-2 text-xs opacity-80">
+                  KG이니시스 카드 결제 · 결제 팝업에서 즉시 진행
                 </p>
               </button>
             </div>
@@ -3056,6 +3181,149 @@ export function MvWizard({
                   placeholder="입금자명을 입력해주세요."
                   className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                 />
+              </div>
+              <div className="mt-5 rounded-2xl border border-border/60 bg-background/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  결제 서류 옵션
+                </p>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <label
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                      paymentDocumentType === "CASH_RECEIPT"
+                        ? "border-foreground bg-foreground/5 text-foreground"
+                        : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="mv-payment-document"
+                      checked={paymentDocumentType === "CASH_RECEIPT"}
+                      onChange={() => {
+                        setPaymentDocumentType("CASH_RECEIPT");
+                        setTaxInvoiceBusinessNumber("");
+                      }}
+                      className="h-4 w-4 accent-foreground"
+                    />
+                    현금 영수증 발급
+                  </label>
+                  <label
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                      paymentDocumentType === "TAX_INVOICE"
+                        ? "border-foreground bg-foreground/5 text-foreground"
+                        : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="mv-payment-document"
+                      checked={paymentDocumentType === "TAX_INVOICE"}
+                      onChange={() => {
+                        setPaymentDocumentType("TAX_INVOICE");
+                        setCashReceiptPurpose("");
+                        setCashReceiptPhone("");
+                        setCashReceiptBusinessNumber("");
+                      }}
+                      className="h-4 w-4 accent-foreground"
+                    />
+                    세금계산서 발급
+                  </label>
+                </div>
+                <p className="mt-3 text-[11px] text-muted-foreground">
+                  * 결제 연관 서류는 기재해주신 이메일로 전송됩니다.
+                </p>
+                {paymentDocumentType === "CASH_RECEIPT" && (
+                  <div className="mt-4 space-y-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                          cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+                            ? "border-foreground bg-foreground/5 text-foreground"
+                            : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="mv-cash-receipt-purpose"
+                          checked={
+                            cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+                          }
+                          onChange={() => {
+                            setCashReceiptPurpose("PERSONAL_INCOME_DEDUCTION");
+                            setCashReceiptBusinessNumber("");
+                          }}
+                          className="h-4 w-4 accent-foreground"
+                        />
+                        개인소득공제용
+                      </label>
+                      <label
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                          cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+                            ? "border-foreground bg-foreground/5 text-foreground"
+                            : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="mv-cash-receipt-purpose"
+                          checked={
+                            cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+                          }
+                          onChange={() => {
+                            setCashReceiptPurpose("BUSINESS_EXPENSE_PROOF");
+                            setCashReceiptPhone("");
+                          }}
+                          className="h-4 w-4 accent-foreground"
+                        />
+                        사업자지출증빙용
+                      </label>
+                    </div>
+                    {cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION" && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          휴대폰 번호
+                        </label>
+                        <input
+                          value={cashReceiptPhone}
+                          onChange={(event) =>
+                            setCashReceiptPhone(event.target.value)
+                          }
+                          placeholder="휴대폰 번호를 입력해주세요."
+                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        />
+                      </div>
+                    )}
+                    {cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF" && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          사업자번호
+                        </label>
+                        <input
+                          value={cashReceiptBusinessNumber}
+                          onChange={(event) =>
+                            setCashReceiptBusinessNumber(event.target.value)
+                          }
+                          placeholder="사업자번호 10자리를 입력해주세요."
+                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {paymentDocumentType === "TAX_INVOICE" && (
+                  <div className="mt-4 space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      사업자번호
+                    </label>
+                    <input
+                      value={taxInvoiceBusinessNumber}
+                      onChange={(event) =>
+                        setTaxInvoiceBusinessNumber(event.target.value)
+                      }
+                      placeholder="사업자번호 10자리를 입력해주세요."
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           ) : (

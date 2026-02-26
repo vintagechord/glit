@@ -40,6 +40,11 @@ const selectAlbumColumns = [
   "melon_url",
   "payment_method",
   "bank_depositor_name",
+  "payment_document_type",
+  "cash_receipt_purpose",
+  "cash_receipt_phone",
+  "cash_receipt_business_number",
+  "tax_invoice_business_number",
   "created_at",
   "updated_at",
 ].join(",");
@@ -88,6 +93,11 @@ const selectMvColumns = [
   "mv_base_selected",
   "payment_method",
   "bank_depositor_name",
+  "payment_document_type",
+  "cash_receipt_purpose",
+  "cash_receipt_phone",
+  "cash_receipt_business_number",
+  "tax_invoice_business_number",
   "created_at",
   "updated_at",
 ].join(",");
@@ -101,6 +111,7 @@ const selectTrackColumns = [
   "lyricist",
   "arranger",
   "lyrics",
+  "translated_lyrics",
   "notes",
   "is_title",
   "title_role",
@@ -120,6 +131,23 @@ const selectFileColumns = [
   "duration_seconds",
 ].join(",");
 
+const draftStatuses = ["DRAFT", "PRE_REVIEW"] as const;
+
+const extractMissingColumn = (error: { message?: string; code?: string } | null) => {
+  const message = error?.message ?? "";
+  const match =
+    message.match(/'([^']+)' column/i) ||
+    message.match(/column \"([^\"]+)\"/i);
+  return match?.[1] ?? null;
+};
+
+const dropColumnFromSelect = (selectClause: string, column: string) =>
+  selectClause
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => !item.includes(column))
+    .join(",");
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body ?? {});
@@ -138,30 +166,59 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
-  const submissionQuery = admin
-    .from("submissions")
-    .select(parsed.data.type === "ALBUM" ? selectAlbumColumns : selectMvColumns)
-    .eq("status", "DRAFT");
+  let selectClause =
+    parsed.data.type === "ALBUM" ? selectAlbumColumns : selectMvColumns;
+  let submissionResult: {
+    data: unknown;
+    error: { message?: string; code?: string } | null;
+  } | null = null;
 
-  if (parsed.data.type === "ALBUM") {
-    submissionQuery.eq("type", "ALBUM");
-  } else {
-    submissionQuery.in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
+  const maxAttempts = Math.max(6, selectClause.split(",").length);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const submissionQuery = admin
+      .from("submissions")
+      .select(selectClause)
+      .in("status", [...draftStatuses]);
+
+    if (parsed.data.type === "ALBUM") {
+      submissionQuery.eq("type", "ALBUM");
+    } else {
+      submissionQuery.in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
+    }
+
+    if (parsed.data.ids && parsed.data.ids.length > 0) {
+      submissionQuery.in("id", parsed.data.ids);
+    }
+
+    if (user?.id) {
+      submissionQuery.eq("user_id", user.id);
+    } else if (parsed.data.guestToken) {
+      submissionQuery.eq("guest_token", parsed.data.guestToken);
+    }
+
+    submissionQuery.order("updated_at", { ascending: false }).limit(10);
+    submissionResult = await submissionQuery;
+    if (!submissionResult.error) {
+      break;
+    }
+
+    const missing = extractMissingColumn(submissionResult.error);
+    if (!missing) {
+      break;
+    }
+    const next = dropColumnFromSelect(selectClause, missing);
+    if (next === selectClause) {
+      break;
+    }
+    selectClause = next;
   }
 
-  if (parsed.data.ids && parsed.data.ids.length > 0) {
-    submissionQuery.in("id", parsed.data.ids);
+  if (!submissionResult) {
+    return NextResponse.json(
+      { error: "임시 저장 정보를 불러올 수 없습니다." },
+      { status: 500 },
+    );
   }
-
-  if (user?.id) {
-    submissionQuery.eq("user_id", user.id);
-  } else if (parsed.data.guestToken) {
-    submissionQuery.eq("guest_token", parsed.data.guestToken);
-  }
-
-  submissionQuery.order("updated_at", { ascending: false }).limit(10);
-
-  const submissionResult = await submissionQuery;
 
   if (submissionResult.error) {
     return NextResponse.json({ error: "임시 저장 정보를 불러올 수 없습니다." }, { status: 500 });
@@ -181,14 +238,30 @@ export async function POST(request: Request) {
 
   let trackRows: Array<Record<string, unknown>> = [];
   if (parsed.data.type === "ALBUM") {
-    const tracksResult = await admin
-      .from("album_tracks")
-      .select(selectTrackColumns)
-      .in("submission_id", submissionIds)
-      .order("track_no", { ascending: true });
-    trackRows = (tracksResult.data ?? []) as unknown as Array<
-      Record<string, unknown>
-    >;
+    let trackSelectClause = selectTrackColumns;
+    const maxTrackAttempts = Math.max(6, trackSelectClause.split(",").length);
+    for (let attempt = 0; attempt < maxTrackAttempts; attempt += 1) {
+      const tracksResult = await admin
+        .from("album_tracks")
+        .select(trackSelectClause)
+        .in("submission_id", submissionIds)
+        .order("track_no", { ascending: true });
+      if (!tracksResult.error) {
+        trackRows = (tracksResult.data ?? []) as unknown as Array<
+          Record<string, unknown>
+        >;
+        break;
+      }
+      const missing = extractMissingColumn(tracksResult.error);
+      if (!missing) {
+        break;
+      }
+      const next = dropColumnFromSelect(trackSelectClause, missing);
+      if (next === trackSelectClause) {
+        break;
+      }
+      trackSelectClause = next;
+    }
   }
 
   const fileKind = parsed.data.type === "ALBUM" ? "AUDIO" : "VIDEO";
@@ -274,7 +347,7 @@ export async function DELETE(request: Request) {
   const deleteQuery = admin
     .from("submissions")
     .delete()
-    .eq("status", "DRAFT");
+    .in("status", [...draftStatuses]);
 
   if (parsed.data.type === "ALBUM") {
     deleteQuery.eq("type", "ALBUM");

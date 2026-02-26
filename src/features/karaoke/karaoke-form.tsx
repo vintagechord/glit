@@ -429,15 +429,19 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
                     {upload.name}
                   </span>
                   <div className="flex items-center gap-3">
-                    <span className="text-muted-foreground">
-                      {upload.status === "done"
-                        ? "첨부 완료"
-                        : upload.status === "uploading"
+                    {upload.status === "done" ? (
+                      <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                        첨부 완료
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {upload.status === "uploading"
                           ? `업로드 중 · ${upload.progress}%`
                           : upload.status === "error"
                             ? "실패"
                             : "대기"}
-                    </span>
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -469,6 +473,23 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <button
               type="button"
+              onClick={() => setPaymentMethod("BANK")}
+              className={`rounded-2xl border p-4 text-left transition ${
+                paymentMethod === "BANK"
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border/60 bg-background text-foreground hover:border-foreground"
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
+                Bank
+              </p>
+              <p className="mt-2 text-sm font-semibold">무통장 입금</p>
+              <p className="mt-2 text-xs opacity-80">
+                입금 확인 후 요청이 진행됩니다.
+              </p>
+            </button>
+            <button
+              type="button"
               onClick={() => !isGuest && setPaymentMethod("CARD")}
               disabled={isGuest}
               className={`rounded-2xl border p-4 text-left transition ${
@@ -485,23 +506,6 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
                 {isGuest
                   ? "로그인 후 이용 가능합니다."
                   : "결제 창에서 카드 결제를 완료해주세요."}
-              </p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setPaymentMethod("BANK")}
-              className={`rounded-2xl border p-4 text-left transition ${
-                paymentMethod === "BANK"
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border/60 bg-background text-foreground hover:border-foreground"
-              }`}
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                Bank
-              </p>
-              <p className="mt-2 text-sm font-semibold">무통장 입금</p>
-              <p className="mt-2 text-xs opacity-80">
-                입금 확인 후 요청이 진행됩니다.
               </p>
             </button>
           </div>

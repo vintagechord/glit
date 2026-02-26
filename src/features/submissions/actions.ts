@@ -326,6 +326,79 @@ const collectRecipientEmails = (
   return Array.from(recipients);
 };
 
+const paymentDocumentTypeValues = ["CASH_RECEIPT", "TAX_INVOICE"] as const;
+const cashReceiptPurposeValues = [
+  "PERSONAL_INCOME_DEDUCTION",
+  "BUSINESS_EXPENSE_PROOF",
+] as const;
+
+type PaymentDocumentType = (typeof paymentDocumentTypeValues)[number];
+type CashReceiptPurpose = (typeof cashReceiptPurposeValues)[number];
+
+const normalizeDigits = (value?: string | null) =>
+  (value ?? "").replace(/[^0-9]/g, "");
+
+const koreanLetterPattern = /[ㄱ-ㅎㅏ-ㅣ가-힣]/;
+const unicodeLetterPattern = /\p{L}/u;
+
+const hasNonKoreanLyrics = (value?: string | null) => {
+  for (const char of value ?? "") {
+    if (!unicodeLetterPattern.test(char)) continue;
+    if (!koreanLetterPattern.test(char)) return true;
+  }
+  return false;
+};
+
+const validateBankPaymentDocument = (params: {
+  isSubmitted: boolean;
+  paymentMethod: "BANK" | "CARD";
+  paymentDocumentType?: PaymentDocumentType;
+  cashReceiptPurpose?: CashReceiptPurpose;
+  cashReceiptPhone?: string;
+  cashReceiptBusinessNumber?: string;
+  taxInvoiceBusinessNumber?: string;
+}) => {
+  if (!params.isSubmitted || params.paymentMethod !== "BANK") {
+    return null;
+  }
+  if (!params.paymentDocumentType) {
+    return null;
+  }
+
+  if (params.paymentDocumentType === "CASH_RECEIPT") {
+    if (!params.cashReceiptPurpose) {
+      return "현금 영수증 발급 용도를 선택해주세요.";
+    }
+    if (params.cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION") {
+      const phone = normalizeDigits(params.cashReceiptPhone);
+      if (!phone) {
+        return "현금 영수증(개인소득공제용) 휴대폰 번호를 입력해주세요.";
+      }
+      if (phone.length < 9 || phone.length > 11) {
+        return "현금 영수증 휴대폰 번호 형식을 확인해주세요.";
+      }
+      return null;
+    }
+    const businessNumber = normalizeDigits(params.cashReceiptBusinessNumber);
+    if (!businessNumber) {
+      return "현금 영수증(사업자지출증빙용) 사업자번호를 입력해주세요.";
+    }
+    if (businessNumber.length !== 10) {
+      return "사업자번호는 숫자 10자리로 입력해주세요.";
+    }
+    return null;
+  }
+
+  const taxBusinessNumber = normalizeDigits(params.taxInvoiceBusinessNumber);
+  if (!taxBusinessNumber) {
+    return "세금계산서 발급용 사업자번호를 입력해주세요.";
+  }
+  if (taxBusinessNumber.length !== 10) {
+    return "사업자번호는 숫자 10자리로 입력해주세요.";
+  }
+  return null;
+};
+
 const trackSchema = z.object({
   trackTitle: z.string().optional(),
   trackTitleKr: z.string().optional(),
@@ -336,6 +409,7 @@ const trackSchema = z.object({
   lyricist: z.string().optional(),
   arranger: z.string().optional(),
   lyrics: z.string().optional(),
+  translatedLyrics: z.string().optional(),
   notes: z.string().optional(),
   isTitle: z.boolean().optional(),
   titleRole: z.enum(["MAIN", "SUB"]).optional(),
@@ -383,7 +457,12 @@ const albumSubmissionSchema = z.object({
   karaokeRequested: z.boolean().optional(),
   paymentMethod: z.enum(["CARD", "BANK"]).optional(),
   bankDepositorName: z.string().optional(),
-  status: z.enum(["DRAFT", "SUBMITTED"]),
+  paymentDocumentType: z.enum(paymentDocumentTypeValues).optional(),
+  cashReceiptPurpose: z.enum(cashReceiptPurposeValues).optional(),
+  cashReceiptPhone: z.string().optional(),
+  cashReceiptBusinessNumber: z.string().optional(),
+  taxInvoiceBusinessNumber: z.string().optional(),
+  status: z.enum(["DRAFT", "PRE_REVIEW", "SUBMITTED"]),
   tracks: z.array(trackSchema).optional(),
   files: z.array(fileSchema).optional(),
 });
@@ -433,7 +512,12 @@ const mvSubmissionSchema = z.object({
   karaokeRequested: z.boolean().optional(),
   paymentMethod: z.enum(["CARD", "BANK"]).optional(),
   bankDepositorName: z.string().optional(),
-  status: z.enum(["DRAFT", "SUBMITTED"]),
+  paymentDocumentType: z.enum(paymentDocumentTypeValues).optional(),
+  cashReceiptPurpose: z.enum(cashReceiptPurposeValues).optional(),
+  cashReceiptPhone: z.string().optional(),
+  cashReceiptBusinessNumber: z.string().optional(),
+  taxInvoiceBusinessNumber: z.string().optional(),
+  status: z.enum(["DRAFT", "PRE_REVIEW", "SUBMITTED"]),
   files: z.array(fileSchema).optional(),
 });
 
@@ -582,6 +666,15 @@ export async function saveAlbumSubmissionAction(
   const guestPhoneValue = parsed.data.guestPhone?.trim() ?? "";
   const applicantEmailValue = parsed.data.applicantEmail?.trim() ?? "";
   const bankDepositorNameValue = parsed.data.bankDepositorName?.trim() ?? "";
+  const paymentDocumentType = parsed.data.paymentDocumentType;
+  const cashReceiptPurpose = parsed.data.cashReceiptPurpose;
+  const cashReceiptPhoneValue = parsed.data.cashReceiptPhone?.trim() ?? "";
+  const cashReceiptBusinessNumberDigits = normalizeDigits(
+    parsed.data.cashReceiptBusinessNumber,
+  );
+  const taxInvoiceBusinessNumberDigits = normalizeDigits(
+    parsed.data.taxInvoiceBusinessNumber,
+  );
 
   if (isGuest && !parsed.data.guestToken) {
     return { error: "로그인 정보를 확인할 수 없습니다." };
@@ -641,6 +734,18 @@ export async function saveAlbumSubmissionAction(
   ) {
     return { error: "입금자명을 입력해주세요." };
   }
+  const bankPaymentDocumentError = validateBankPaymentDocument({
+    isSubmitted,
+    paymentMethod,
+    paymentDocumentType,
+    cashReceiptPurpose,
+    cashReceiptPhone: cashReceiptPhoneValue,
+    cashReceiptBusinessNumber: cashReceiptBusinessNumberDigits,
+    taxInvoiceBusinessNumber: taxInvoiceBusinessNumberDigits,
+  });
+  if (bankPaymentDocumentError) {
+    return { error: bankPaymentDocumentError };
+  }
   const shouldRequestPayment =
     isSubmitted &&
     (paymentMethod === "CARD" || Boolean(bankDepositorNameValue));
@@ -680,6 +785,28 @@ export async function saveAlbumSubmissionAction(
     payment_method: paymentMethod,
     bank_depositor_name:
       paymentMethod === "BANK" ? bankDepositorNameValue || null : null,
+    payment_document_type:
+      paymentMethod === "BANK" ? paymentDocumentType ?? null : null,
+    cash_receipt_purpose:
+      paymentMethod === "BANK" && paymentDocumentType === "CASH_RECEIPT"
+        ? cashReceiptPurpose ?? null
+        : null,
+    cash_receipt_phone:
+      paymentMethod === "BANK" &&
+      paymentDocumentType === "CASH_RECEIPT" &&
+      cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+        ? normalizeDigits(cashReceiptPhoneValue) || null
+        : null,
+    cash_receipt_business_number:
+      paymentMethod === "BANK" &&
+      paymentDocumentType === "CASH_RECEIPT" &&
+      cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+        ? cashReceiptBusinessNumberDigits || null
+        : null,
+    tax_invoice_business_number:
+      paymentMethod === "BANK" && paymentDocumentType === "TAX_INVOICE"
+        ? taxInvoiceBusinessNumberDigits || null
+        : null,
     status:
       parsed.data.status === "SUBMITTED" && shouldRequestPayment
         ? "WAITING_PAYMENT"
@@ -763,6 +890,7 @@ export async function saveAlbumSubmissionAction(
       lyricist: track.lyricist?.trim() || null,
       arranger: track.arranger?.trim() || null,
       lyrics: track.lyrics?.trim() || null,
+      translated_lyrics: track.translatedLyrics?.trim() || null,
       notes: track.notes || null,
       is_title: Boolean(track.isTitle),
       title_role: track.titleRole || null,
@@ -778,6 +906,17 @@ export async function saveAlbumSubmissionAction(
     }
     if (trackRows.some((track) => !track.composer)) {
       return { error: "모든 트랙의 작곡 정보를 입력해주세요." };
+    }
+    if (
+      trackRows.some(
+        (track) =>
+          hasNonKoreanLyrics(track.lyrics) &&
+          !String(track.translated_lyrics ?? "").trim(),
+      )
+    ) {
+      return {
+        error: "한국어 외 언어가 포함된 가사는 번역본 가사를 함께 입력해주세요.",
+      };
     }
   }
 
@@ -991,6 +1130,15 @@ export async function saveMvSubmissionAction(
   const guestPhoneValue = parsed.data.guestPhone?.trim() ?? "";
   const applicantEmailValue = parsed.data.applicantEmail?.trim() ?? "";
   const bankDepositorNameValue = parsed.data.bankDepositorName?.trim() ?? "";
+  const paymentDocumentType = parsed.data.paymentDocumentType;
+  const cashReceiptPurpose = parsed.data.cashReceiptPurpose;
+  const cashReceiptPhoneValue = parsed.data.cashReceiptPhone?.trim() ?? "";
+  const cashReceiptBusinessNumberDigits = normalizeDigits(
+    parsed.data.cashReceiptBusinessNumber,
+  );
+  const taxInvoiceBusinessNumberDigits = normalizeDigits(
+    parsed.data.taxInvoiceBusinessNumber,
+  );
 
   if (isGuest && !parsed.data.guestToken) {
     return { error: "로그인 정보를 확인할 수 없습니다." };
@@ -1038,6 +1186,18 @@ export async function saveMvSubmissionAction(
     !bankDepositorNameValue
   ) {
     return { error: "입금자명을 입력해주세요." };
+  }
+  const bankPaymentDocumentError = validateBankPaymentDocument({
+    isSubmitted,
+    paymentMethod,
+    paymentDocumentType,
+    cashReceiptPurpose,
+    cashReceiptPhone: cashReceiptPhoneValue,
+    cashReceiptBusinessNumber: cashReceiptBusinessNumberDigits,
+    taxInvoiceBusinessNumber: taxInvoiceBusinessNumberDigits,
+  });
+  if (bankPaymentDocumentError) {
+    return { error: bankPaymentDocumentError };
   }
   if (isSubmitted && !parsed.data.artistNameOfficial?.trim()) {
     return { error: "아티스트명 공식 표기를 입력해주세요." };
@@ -1098,6 +1258,28 @@ export async function saveMvSubmissionAction(
     payment_method: paymentMethod,
     bank_depositor_name:
       paymentMethod === "BANK" ? bankDepositorNameValue || null : null,
+    payment_document_type:
+      paymentMethod === "BANK" ? paymentDocumentType ?? null : null,
+    cash_receipt_purpose:
+      paymentMethod === "BANK" && paymentDocumentType === "CASH_RECEIPT"
+        ? cashReceiptPurpose ?? null
+        : null,
+    cash_receipt_phone:
+      paymentMethod === "BANK" &&
+      paymentDocumentType === "CASH_RECEIPT" &&
+      cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+        ? normalizeDigits(cashReceiptPhoneValue) || null
+        : null,
+    cash_receipt_business_number:
+      paymentMethod === "BANK" &&
+      paymentDocumentType === "CASH_RECEIPT" &&
+      cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+        ? cashReceiptBusinessNumberDigits || null
+        : null,
+    tax_invoice_business_number:
+      paymentMethod === "BANK" && paymentDocumentType === "TAX_INVOICE"
+        ? taxInvoiceBusinessNumberDigits || null
+        : null,
     status:
       parsed.data.status === "SUBMITTED" && shouldRequestPayment
         ? "WAITING_PAYMENT"

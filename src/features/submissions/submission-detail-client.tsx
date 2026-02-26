@@ -348,6 +348,18 @@ export function SubmissionDetailClient({
     () => submission.album_tracks ?? [],
     [submission.album_tracks],
   );
+  const hasAnyTrackResultDecision = React.useMemo(
+    () =>
+      stationReviews.some((review) => {
+        const summary = summarizeTrackResults(review.track_results, albumTracks);
+        return summary.counts.approved > 0 || summary.counts.rejected > 0;
+      }),
+    [stationReviews, albumTracks],
+  );
+  const hasResultDeliverySignal =
+    submission.status === "RESULT_READY" ||
+    submission.status === "COMPLETED" ||
+    hasAnyTrackResultDecision;
   const artistTypeLabel =
     submission.artist_type === "GROUP"
       ? "그룹"
@@ -363,9 +375,8 @@ export function SubmissionDetailClient({
   const flowIndex = (() => {
     if (submission.status === "DRAFT") return 0;
     if (!isPaymentDone) return 0;
+    if (hasResultDeliverySignal) return 3;
     if (submission.status === "IN_PROGRESS") return 2;
-    if (submission.status === "RESULT_READY" || submission.status === "COMPLETED")
-      return 3;
     return 1;
   })();
   const isReviewComplete =
@@ -870,7 +881,7 @@ export function SubmissionDetailClient({
           </div>
         </div>
         <div className="order-1">
-          <div className="rounded-[28px] border border-border/60 bg-gradient-to-r from-card/95 via-card/85 to-[#f6d64a] p-6 dark:to-amber-300/10">
+          <div className="rounded-[28px] border border-border/60 bg-[#f6d64a] p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                 심의 진행 상태
@@ -901,7 +912,7 @@ export function SubmissionDetailClient({
                 {isReviewComplete
                   ? "모든 심의 절차가 완료되었습니다."
                   : flowIndex === 3
-                    ? "심의 접수가 모두 완료되었습니다."
+                    ? "심의 결과 통보가 진행 중입니다."
                     : isPaymentDone
                       ? "결제가 확인되었고 심의 절차가 진행됩니다."
                       : "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다."}

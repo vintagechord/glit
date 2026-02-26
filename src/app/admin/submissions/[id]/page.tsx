@@ -8,11 +8,32 @@ export const metadata = {
 
 export default function AdminSubmissionDetailById({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: {
+    saved?: string | string[];
+    savedError?: string | string[];
+    savedWarning?: string | string[];
+  };
 }) {
+  const saved = Array.isArray(searchParams?.saved)
+    ? searchParams?.saved[0]
+    : searchParams?.saved;
+  const savedError = Array.isArray(searchParams?.savedError)
+    ? searchParams?.savedError[0]
+    : searchParams?.savedError;
+  const savedWarning = Array.isArray(searchParams?.savedWarning)
+    ? searchParams?.savedWarning[0]
+    : searchParams?.savedWarning;
+
   return AdminSubmissionDetailPage({
     params,
-    searchParams: { id: params.id },
+    searchParams: {
+      id: params.id,
+      saved,
+      savedError,
+      savedWarning,
+    },
   });
 }

@@ -704,7 +704,7 @@ export function HomeReviewPanel({
   );
 
   return (
-    <div className="min-w-0 w-full rounded-[24px] border border-[#f6d64a] bg-[#f6d64a] p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:rounded-[28px] sm:p-6 dark:border-white/10 dark:bg-gradient-to-br dark:from-[#1a1a1a]/70 dark:via-[#111111]/80 dark:to-[#1e1a12]/80 lg:min-h-[520px]">
+    <div className="min-w-0 w-full rounded-[24px] border border-[#f6d64a] bg-[#f6d64a] p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:rounded-[28px] sm:p-6 dark:border-[#f6d64a] dark:bg-[#f6d64a] lg:min-h-[520px]">
       <div className="flex items-center justify-between text-xs uppercase tracking-[0.16em] text-muted-foreground sm:text-sm sm:tracking-[0.2em]">
         <span>
           {activeSubmission

@@ -5,6 +5,7 @@ export type DashboardTab = { key: string; label: string; href: string };
 
 export const defaultDashboardTabs: DashboardTab[] = [
   { key: "status", label: "접수현황", href: "/mypage" },
+  { key: "drafts", label: "작성중 신청서", href: "/mypage/drafts" },
   { key: "history", label: "나의 심의 내역", href: "/mypage/history" },
   { key: "credits", label: "크레딧", href: "/mypage/credits" },
   { key: "profile", label: "계정정보", href: "/mypage/profile" },

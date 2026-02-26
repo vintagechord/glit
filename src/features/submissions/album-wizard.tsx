@@ -50,11 +50,18 @@ type TrackInput = {
   lyricist: string;
   arranger: string;
   lyrics: string;
+  translatedLyrics: string;
   notes: string;
   isTitle: boolean;
   titleRole: "" | "MAIN" | "SUB";
   broadcastSelected: boolean;
 };
+
+type PaymentDocumentType = "" | "CASH_RECEIPT" | "TAX_INVOICE";
+type CashReceiptPurpose =
+  | ""
+  | "PERSONAL_INCOME_DEDUCTION"
+  | "BUSINESS_EXPENSE_PROOF";
 
 type UploadItem = {
   name: string;
@@ -107,6 +114,7 @@ const initialTrack: TrackInput = {
   lyricist: "",
   arranger: "",
   lyrics: "",
+  translatedLyrics: "",
   notes: "",
   isTitle: false,
   titleRole: "",
@@ -159,6 +167,7 @@ const uploadMaxLabel =
     ? `${Math.round(uploadMaxMb / 1024)}GB`
     : `${uploadMaxMb}MB`;
 const draftDeleteTimeoutMs = 8000;
+const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
 
 const genreOptions = [
   "댄스",
@@ -183,42 +192,15 @@ const lyricCautions = [
   "실제 발매 앨범과 동일한 음원·가사·트랙수가 필요합니다. (예: 2트랙 앨범—AR 1곡 + INST 1곡—의 경우 INST까지 제출)",
 ];
 
-const splitEnglishSentences = (value: string) => {
-  const matches = value.match(/[^.!?]+[.!?]*/g);
-  return matches?.map((item) => item.trim()).filter(Boolean) ?? [];
-};
+const koreanLetterPattern = /[ㄱ-ㅎㅏ-ㅣ가-힣]/;
+const unicodeLetterPattern = /\p{L}/u;
 
-
-const englishSegmentRegex = /[A-Za-z][^ㄱ-ㅎㅏ-ㅣ가-힣]*/g;
-
-const extractEnglishSegments = (line: string) => {
-  const matches = Array.from(line.matchAll(englishSegmentRegex));
-  return matches
-    .map((match) => {
-      const raw = match[0];
-      const start = match.index ?? 0;
-      const end = start + raw.length;
-      const trimmed = raw.trim();
-      if (!trimmed || trimmed.includes("번역:")) {
-        return null;
-      }
-      const sentences = splitEnglishSentences(trimmed);
-      if (!sentences.length) return null;
-      return {
-        raw,
-        start,
-        end,
-        sentences,
-      };
-    })
-    .filter(
-      (segment): segment is {
-        raw: string;
-        start: number;
-        end: number;
-        sentences: string[];
-      } => Boolean(segment),
-    );
+const hasNonKoreanLyrics = (value: string) => {
+  for (const char of value) {
+    if (!unicodeLetterPattern.test(char)) continue;
+    if (!koreanLetterPattern.test(char)) return true;
+  }
+  return false;
 };
 
 const broadcastRequirementMessage =
@@ -293,6 +275,15 @@ export function AlbumWizard({
     "BANK",
   );
   const [bankDepositorName, setBankDepositorName] = React.useState("");
+  const [paymentDocumentType, setPaymentDocumentType] =
+    React.useState<PaymentDocumentType>("");
+  const [cashReceiptPurpose, setCashReceiptPurpose] =
+    React.useState<CashReceiptPurpose>("");
+  const [cashReceiptPhone, setCashReceiptPhone] = React.useState("");
+  const [cashReceiptBusinessNumber, setCashReceiptBusinessNumber] =
+    React.useState("");
+  const [taxInvoiceBusinessNumber, setTaxInvoiceBusinessNumber] =
+    React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
   const [uploads, setUploads] = React.useState<UploadItem[]>([]);
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadResult[]>([]);
@@ -340,6 +331,9 @@ export function AlbumWizard({
     React.useState<number | null>(null);
   const [isSpellchecking, setIsSpellchecking] = React.useState(false);
   const [isTranslatingLyrics, setIsTranslatingLyrics] = React.useState(false);
+  const [translationPanelOpenMap, setTranslationPanelOpenMap] = React.useState<
+    Record<number, boolean>
+  >({});
   const [lyricsTab, setLyricsTab] = React.useState<"profanity" | "spellcheck">(
     "profanity",
   );
@@ -412,6 +406,11 @@ export function AlbumWizard({
   const hasSpellcheckChanges = spellcheckChanges.length > 0;
   const spellcheckSuggestions =
     spellcheckSuggestionsByTrack[activeTrackIndex] ?? [];
+  const needsTranslatedLyrics = hasNonKoreanLyrics(activeTrack.lyrics);
+  const showTranslatedLyricsPanel =
+    Boolean(translationPanelOpenMap[activeTrackIndex]) ||
+    Boolean(activeTrack.translatedLyrics.trim()) ||
+    needsTranslatedLyrics;
 
   const handleLyricsScroll = React.useCallback(
     (event: React.UIEvent<HTMLTextAreaElement>) => {
@@ -767,6 +766,13 @@ export function AlbumWizard({
 
   const markLyricsToolApplied = (index: number) => {
     setLyricsToolApplied((prev) => ({ ...prev, [index]: true }));
+  };
+
+  const toggleTranslationPanel = () => {
+    setTranslationPanelOpenMap((prev) => ({
+      ...prev,
+      [activeTrackIndex]: !showTranslatedLyricsPanel,
+    }));
   };
 
   const renderProfanityPreview = (
@@ -1291,11 +1297,10 @@ export function AlbumWizard({
     const lyrics = activeTrack.lyrics.trim();
     if (!lyrics) return;
     const lines = lyrics.split("\n");
-    const segmentMap = lines.map((line) => extractEnglishSegments(line));
-    const sentencesToTranslate = segmentMap.flatMap((segments) =>
-      segments.flatMap((segment) => segment.sentences),
-    );
-    if (!sentencesToTranslate.length) return;
+    const linesToTranslate = lines
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    if (!linesToTranslate.length) return;
     setIsTranslatingLyrics(true);
     try {
       const response = await fetch("/api/translate", {
@@ -1304,8 +1309,8 @@ export function AlbumWizard({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          lines: sentencesToTranslate,
-          source: "en",
+          lines: linesToTranslate,
+          source: "auto",
           target: "ko",
         }),
       });
@@ -1317,36 +1322,18 @@ export function AlbumWizard({
         ? payload.translations
         : [];
       let translationIndex = 0;
-      const nextLines = lines.map((line, index) => {
-        const segments = segmentMap[index];
-        if (!segments.length) return line;
-        let nextLine = line;
-        const segmentsWithReplacement = segments.map((segment) => {
-          const translatedSentences = segment.sentences.map((sentence) => {
-            const translation = translations[translationIndex] ?? "";
-            translationIndex += 1;
-            const translationText = translation.trim() || "번역 실패";
-            return `${sentence} (번역: ${translationText})`;
-          });
-          const leading = segment.raw.match(/^\s*/)?.[0] ?? "";
-          const trailing = segment.raw.match(/\s*$/)?.[0] ?? "";
-          return {
-            start: segment.start,
-            end: segment.end,
-            replacement: `${leading}${translatedSentences.join(" ")}${trailing}`,
-          };
-        });
-        segmentsWithReplacement
-          .sort((a, b) => b.start - a.start)
-          .forEach((segment) => {
-            nextLine =
-              nextLine.slice(0, segment.start) +
-              segment.replacement +
-              nextLine.slice(segment.end);
-          });
-        return nextLine;
+      const translatedLines = lines.map((line) => {
+        if (!line.trim()) return "";
+        const translation = translations[translationIndex] ?? "";
+        translationIndex += 1;
+        const translated = translation.trim();
+        return translated.length > 0 ? translated : line;
       });
-      updateTrack(activeTrackIndex, "lyrics", nextLines.join("\n"));
+      updateTrack(activeTrackIndex, "translatedLyrics", translatedLines.join("\n"));
+      setTranslationPanelOpenMap((prev) => ({
+        ...prev,
+        [activeTrackIndex]: true,
+      }));
       markLyricsToolApplied(activeTrackIndex);
     } catch (error) {
       console.error(error);
@@ -1807,6 +1794,7 @@ export function AlbumWizard({
     setMelonUrl("");
     setTracks([initialTrack]);
     setActiveTrackIndex(0);
+    setTranslationPanelOpenMap({});
     setFiles([]);
     setUploads([]);
     setUploadedFiles([]);
@@ -1870,6 +1858,7 @@ export function AlbumWizard({
         lyricist: String(row.lyricist ?? ""),
         arranger: String(row.arranger ?? ""),
         lyrics: String(row.lyrics ?? ""),
+        translatedLyrics: String(row.translated_lyrics ?? ""),
         notes: String(row.notes ?? ""),
         isTitle: Boolean(row.is_title),
         titleRole:
@@ -1922,6 +1911,7 @@ export function AlbumWizard({
     setMelonUrl(draft.melonUrl);
     setTracks(draft.tracks.map((track) => ({ ...track })));
     setActiveTrackIndex(0);
+    setTranslationPanelOpenMap({});
     setFiles([]);
     setUploads(draft.files.length > 0 ? buildUploadsFromFiles(draft.files) : []);
     setUploadedFiles(draft.files);
@@ -1997,6 +1987,23 @@ export function AlbumWizard({
       setPaymentMethod(baseRow.payment_method);
     }
     setBankDepositorName(String(baseRow.bank_depositor_name ?? ""));
+    setPaymentDocumentType(
+      baseRow.payment_document_type === "CASH_RECEIPT" ||
+        baseRow.payment_document_type === "TAX_INVOICE"
+        ? baseRow.payment_document_type
+        : "",
+    );
+    setCashReceiptPurpose(
+      baseRow.cash_receipt_purpose === "PERSONAL_INCOME_DEDUCTION" ||
+        baseRow.cash_receipt_purpose === "BUSINESS_EXPENSE_PROOF"
+        ? baseRow.cash_receipt_purpose
+        : "",
+    );
+    setCashReceiptPhone(String(baseRow.cash_receipt_phone ?? ""));
+    setCashReceiptBusinessNumber(
+      String(baseRow.cash_receipt_business_number ?? ""),
+    );
+    setTaxInvoiceBusinessNumber(String(baseRow.tax_invoice_business_number ?? ""));
 
     setAlbumDrafts(mappedDrafts.slice(1));
     setUploadDrafts(mappedDrafts);
@@ -2285,6 +2292,24 @@ export function AlbumWizard({
     return true;
   };
 
+  const validateTranslatedLyrics = () => {
+    for (let index = 0; index < tracks.length; index += 1) {
+      const track = tracks[index];
+      if (!hasNonKoreanLyrics(track.lyrics)) continue;
+      if (track.translatedLyrics.trim()) continue;
+      setActiveTrackIndex(index);
+      setTranslationPanelOpenMap((prev) => ({
+        ...prev,
+        [index]: true,
+      }));
+      setNotice({
+        error: `트랙 ${index + 1} 가사에 한국어 외 언어가 포함되어 있습니다. 번역본 가사를 입력해주세요.`,
+      });
+      return false;
+    }
+    return true;
+  };
+
   const validateUploadStep = (drafts: AlbumDraft[]) => {
     if (uploads.some((upload) => upload.status === "error")) {
       setNotice({ error: "업로드에 실패한 파일이 있습니다." });
@@ -2308,6 +2333,53 @@ export function AlbumWizard({
       return false;
     }
 
+    return true;
+  };
+
+  const validatePaymentDocument = () => {
+    if (paymentMethod !== "BANK") return true;
+    if (paymentDocumentType === "CASH_RECEIPT") {
+      if (!cashReceiptPurpose) {
+        setNotice({ error: "현금 영수증 발급 용도를 선택해주세요." });
+        return false;
+      }
+      if (cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION") {
+        const phone = digitsOnly(cashReceiptPhone);
+        if (!phone) {
+          setNotice({
+            error: "현금 영수증(개인소득공제용) 휴대폰 번호를 입력해주세요.",
+          });
+          return false;
+        }
+        if (phone.length < 9 || phone.length > 11) {
+          setNotice({ error: "현금 영수증 휴대폰 번호 형식을 확인해주세요." });
+          return false;
+        }
+      } else if (cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF") {
+        const businessNo = digitsOnly(cashReceiptBusinessNumber);
+        if (!businessNo) {
+          setNotice({
+            error: "현금 영수증(사업자지출증빙용) 사업자번호를 입력해주세요.",
+          });
+          return false;
+        }
+        if (businessNo.length !== 10) {
+          setNotice({ error: "사업자번호는 숫자 10자리로 입력해주세요." });
+          return false;
+        }
+      }
+    }
+    if (paymentDocumentType === "TAX_INVOICE") {
+      const businessNo = digitsOnly(taxInvoiceBusinessNumber);
+      if (!businessNo) {
+        setNotice({ error: "세금계산서 발급용 사업자번호를 입력해주세요." });
+        return false;
+      }
+      if (businessNo.length !== 10) {
+        setNotice({ error: "사업자번호는 숫자 10자리로 입력해주세요." });
+        return false;
+      }
+    }
     return true;
   };
 
@@ -2347,11 +2419,14 @@ export function AlbumWizard({
 
   const saveAlbumDrafts = async (
     drafts: AlbumDraft[],
-    options: { includeFiles: boolean },
+    options: { includeFiles: boolean; status?: "DRAFT" | "PRE_REVIEW" },
   ) => {
     const applicantNameValue = applicantName.trim();
     const applicantEmailValue = applicantEmail.trim();
     const applicantPhoneValue = applicantPhone.trim();
+    const saveStatus =
+      options.status ??
+      (uploadDrafts && uploadDrafts.length > 0 ? "PRE_REVIEW" : "DRAFT");
     const submissionIds: string[] = [];
 
     setIsSaving(true);
@@ -2393,7 +2468,28 @@ export function AlbumWizard({
           guestEmail: applicantEmailValue,
           guestPhone: applicantPhoneValue,
           paymentMethod,
-          status: "DRAFT",
+          bankDepositorName:
+            paymentMethod === "BANK" ? bankDepositorName.trim() || undefined : undefined,
+          paymentDocumentType: paymentDocumentType || undefined,
+          cashReceiptPurpose:
+            paymentDocumentType === "CASH_RECEIPT"
+              ? cashReceiptPurpose || undefined
+              : undefined,
+          cashReceiptPhone:
+            paymentDocumentType === "CASH_RECEIPT" &&
+            cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+              ? cashReceiptPhone.trim() || undefined
+              : undefined,
+          cashReceiptBusinessNumber:
+            paymentDocumentType === "CASH_RECEIPT" &&
+            cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+              ? cashReceiptBusinessNumber.trim() || undefined
+              : undefined,
+          taxInvoiceBusinessNumber:
+            paymentDocumentType === "TAX_INVOICE"
+              ? taxInvoiceBusinessNumber.trim() || undefined
+              : undefined,
+          status: saveStatus,
           tracks: isOneClick ? undefined : mapTracksForSave(draft.tracks),
           files: options.includeFiles ? draft.files : undefined,
         });
@@ -2496,7 +2592,10 @@ export function AlbumWizard({
       return;
     }
     const allDrafts = [currentDraft, ...albumDrafts];
-    const saved = await saveAlbumDrafts(allDrafts, { includeFiles: false });
+    const saved = await saveAlbumDrafts(allDrafts, {
+      includeFiles: false,
+      status: "PRE_REVIEW",
+    });
     if (!saved) return;
     setUploadDrafts(allDrafts);
     setUploadDraftIndex(0);
@@ -2566,6 +2665,9 @@ export function AlbumWizard({
     if (status === "SUBMITTED" && !validateFormStep()) {
       return;
     }
+    if (status === "SUBMITTED" && !isOneClick && !validateTranslatedLyrics()) {
+      return;
+    }
     if (
       status === "SUBMITTED" &&
       paymentMethod === "BANK" &&
@@ -2573,6 +2675,11 @@ export function AlbumWizard({
     ) {
       setNotice({ error: "입금자명을 입력해주세요." });
       return;
+    }
+    if (status === "SUBMITTED" && paymentMethod === "BANK") {
+      if (!validatePaymentDocument()) {
+        return;
+      }
     }
     let draftsForSubmit: AlbumDraft[];
     if (status === "SUBMITTED" && uploadDrafts?.length) {
@@ -2665,6 +2772,28 @@ export function AlbumWizard({
           paymentMethod,
           bankDepositorName:
             status === "SUBMITTED" ? bankDepositorName.trim() : undefined,
+          paymentDocumentType:
+            status === "SUBMITTED" ? paymentDocumentType || undefined : undefined,
+          cashReceiptPurpose:
+            status === "SUBMITTED" && paymentDocumentType === "CASH_RECEIPT"
+              ? cashReceiptPurpose || undefined
+              : undefined,
+          cashReceiptPhone:
+            status === "SUBMITTED" &&
+            paymentDocumentType === "CASH_RECEIPT" &&
+            cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+              ? cashReceiptPhone.trim() || undefined
+              : undefined,
+          cashReceiptBusinessNumber:
+            status === "SUBMITTED" &&
+            paymentDocumentType === "CASH_RECEIPT" &&
+            cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+              ? cashReceiptBusinessNumber.trim() || undefined
+              : undefined,
+          taxInvoiceBusinessNumber:
+            status === "SUBMITTED" && paymentDocumentType === "TAX_INVOICE"
+              ? taxInvoiceBusinessNumber.trim() || undefined
+              : undefined,
           status,
           tracks: isOneClick ? undefined : mapTracksForSave(draft.tracks),
           files: status === "SUBMITTED" ? draft.files : undefined,
@@ -3358,8 +3487,8 @@ export function AlbumWizard({
                                     ? "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm"
                                     : "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black"
                                   : active
-                                    ? "border-border/40 bg-background/90 text-background/80"
-                                    : "border-border/60 bg-background/70 text-muted-foreground"
+                                    ? "border-background/80 bg-background text-foreground shadow-sm"
+                                    : "border-border/60 bg-background/80 text-foreground/80"
                               }`}
                             >
                               {track.titleRole === "MAIN"
@@ -3412,7 +3541,7 @@ export function AlbumWizard({
                             type="radio"
                             checked={activeTrack.titleRole === "MAIN"}
                             onChange={() => setMainTitleTrack(activeTrackIndex)}
-                            className="h-4 w-4 rounded-full border-border accent-[#f6d64a]"
+                            className="h-4 w-4 rounded-full border border-black/60 bg-white accent-black shadow-sm"
                           />
                           메인 타이틀
                         </label>
@@ -3434,9 +3563,9 @@ export function AlbumWizard({
                         <button
                           type="button"
                           onClick={() => removeTrack(activeTrackIndex)}
-                          className="text-red-500"
+                          className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 dark:border-rose-500/70 dark:bg-rose-500/15 dark:text-rose-200 dark:hover:border-rose-400 dark:hover:bg-rose-500/25 dark:hover:text-rose-100"
                         >
-                          삭제
+                          트랙 정보 삭제
                         </button>
                       )}
                     </div>
@@ -3613,6 +3742,50 @@ export function AlbumWizard({
                           }`}
                         />
                       </div>
+                      <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={toggleTranslationPanel}
+                            className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] transition ${
+                              showTranslatedLyricsPanel
+                                ? "border-foreground bg-foreground text-background"
+                                : "border-border/70 text-muted-foreground hover:border-foreground hover:text-foreground"
+                            }`}
+                          >
+                            번역본 가사 탭
+                          </button>
+                          <p className="text-[11px] font-semibold text-muted-foreground">
+                            한국어 외 언어가 일부라도 있는 경우 번역본 제출 필수
+                          </p>
+                        </div>
+                        {needsTranslatedLyrics && !activeTrack.translatedLyrics.trim() && (
+                          <p className="mt-2 text-[11px] font-semibold text-red-600">
+                            한국어 외 언어가 포함된 가사는 번역본을 반드시 입력해야
+                            제출할 수 있습니다.
+                          </p>
+                        )}
+                      </div>
+                      {showTranslatedLyricsPanel && (
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            번역본 가사
+                            {needsTranslatedLyrics ? " *" : ""}
+                          </label>
+                          <textarea
+                            value={activeTrack.translatedLyrics}
+                            onChange={(event) =>
+                              updateTrack(
+                                activeTrackIndex,
+                                "translatedLyrics",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="가사 번역본을 입력해주세요."
+                            className="min-h-[140px] w-full resize-y rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm leading-relaxed text-foreground outline-none transition focus:border-foreground"
+                          />
+                        </div>
+                      )}
                       {showLyricsTabs && (
                         <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-foreground">
                           <div className="flex flex-wrap items-center gap-2">
@@ -3737,8 +3910,6 @@ export function AlbumWizard({
             </div>
           )}
 
-
-
           {albumDrafts.length > 0 && (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -3753,20 +3924,30 @@ export function AlbumWizard({
                     tabIndex={0}
                     className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${
                       editingIndex === index
-                        ? "border-[#f6d64a] bg-[#f6d64a]"
+                        ? "border-[#f6d64a] bg-[#f6d64a] text-black"
                         : "border-border/60 bg-background/70 hover:border-foreground"
                     }`}
                   >
                     <div>
-                      <p className="text-sm font-semibold text-foreground">
+                      <p
+                        className={`text-sm font-semibold ${
+                          editingIndex === index ? "text-black" : "text-foreground"
+                        }`}
+                      >
                         앨범 {index + 1}
                         {editingIndex === index && (
-                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-black/70">
                             수정 중
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p
+                        className={`text-xs ${
+                          editingIndex === index
+                            ? "text-black/80"
+                            : "text-muted-foreground"
+                        }`}
+                      >
                         {(draft.title.trim() ||
                           (isOneClick ? "원클릭 접수" : "제목 미입력")) +
                           " · " +
@@ -3890,15 +4071,27 @@ export function AlbumWizard({
                     tabIndex={0}
                     className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${
                       uploadDraftIndex === index
-                        ? "border-[#f6d64a] bg-[#f6d64a]"
+                        ? "border-[#f6d64a] bg-[#f6d64a] text-black"
                         : "border-border/60 bg-background/70 hover:border-foreground"
                     }`}
                   >
                     <div>
-                      <p className="text-sm font-semibold text-foreground">
+                      <p
+                        className={`text-sm font-semibold ${
+                          uploadDraftIndex === index
+                            ? "text-black"
+                            : "text-foreground"
+                        }`}
+                      >
                         앨범 {index + 1}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p
+                        className={`text-xs ${
+                          uploadDraftIndex === index
+                            ? "text-black/80"
+                            : "text-muted-foreground"
+                        }`}
+                      >
                         {(draft.title.trim() ||
                           (isOneClick ? "원클릭 접수" : "제목 미입력")) +
                           " · " +
@@ -3906,7 +4099,13 @@ export function AlbumWizard({
                             (isOneClick ? "원클릭 접수" : "아티스트 미입력"))}
                       </p>
                     </div>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <span
+                      className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                        uploadDraftIndex === index
+                          ? "text-black/80"
+                          : "text-muted-foreground"
+                      }`}
+                    >
                       {draft.files.length > 0
                         ? "업로드 완료"
                         : draft.emailSubmitConfirmed
@@ -3983,15 +4182,19 @@ export function AlbumWizard({
                       {upload.name}
                     </span>
                     <div className="flex items-center gap-3">
-                      <span className="text-muted-foreground">
-                        {upload.status === "done"
-                          ? "첨부 완료"
-                          : upload.status === "uploading"
+                      {upload.status === "done" ? (
+                        <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                          첨부 완료
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {upload.status === "uploading"
                             ? `업로드 중 · ${upload.progress}%`
                             : upload.status === "error"
                               ? "실패"
                               : "대기"}
-                      </span>
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -4129,7 +4332,7 @@ export function AlbumWizard({
                 결제하기
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                카드 결제 또는 무통장 입금을 선택할 수 있습니다.
+                무통장 입금 또는 카드 결제를 선택할 수 있습니다.
               </p>
             </div>
           </div>
@@ -4201,23 +4404,6 @@ export function AlbumWizard({
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <button
                 type="button"
-                onClick={() => setPaymentMethod("CARD")}
-                className={`rounded-2xl border p-4 text-left transition ${
-                  paymentMethod === "CARD"
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border/60 bg-background text-foreground hover:border-foreground"
-                }`}
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  Card
-                </p>
-                <p className="mt-2 text-sm font-semibold">카드 결제</p>
-                <p className="mt-2 text-xs opacity-80">
-                  KG모빌리언스 연동 예정 · 접수 후 결제 링크 안내
-                </p>
-              </button>
-              <button
-                type="button"
                 onClick={() => setPaymentMethod("BANK")}
                 className={`rounded-2xl border p-4 text-left transition ${
                   paymentMethod === "BANK"
@@ -4233,10 +4419,27 @@ export function AlbumWizard({
                   입금 확인 후 진행이 시작됩니다.
                 </p>
               </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("CARD")}
+                className={`rounded-2xl border p-4 text-left transition ${
+                  paymentMethod === "CARD"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                }`}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
+                  Card
+                </p>
+                <p className="mt-2 text-sm font-semibold">카드 결제</p>
+                <p className="mt-2 text-xs opacity-80">
+                  카드 결제로 진행할 수 있습니다.
+                </p>
+              </button>
             </div>
           </div>
 
-          {paymentMethod === "BANK" ? (
+          {paymentMethod === "BANK" && (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 무통장 입금 안내
@@ -4266,11 +4469,149 @@ export function AlbumWizard({
                   className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                 />
               </div>
-            </div>
-          ) : (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
-              카드 결제는 KG모빌리언스 연동 후 자동화 예정입니다. 현재는 접수
-              완료 후 담당자가 결제 링크를 안내드립니다.
+              <div className="mt-5 rounded-2xl border border-border/60 bg-background/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  결제 서류 옵션
+                </p>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <label
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                      paymentDocumentType === "CASH_RECEIPT"
+                        ? "border-foreground bg-foreground/5 text-foreground"
+                        : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="album-payment-document"
+                      checked={paymentDocumentType === "CASH_RECEIPT"}
+                      onChange={() => {
+                        setPaymentDocumentType("CASH_RECEIPT");
+                        setTaxInvoiceBusinessNumber("");
+                      }}
+                      className="h-4 w-4 accent-foreground"
+                    />
+                    현금 영수증 발급
+                  </label>
+                  <label
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                      paymentDocumentType === "TAX_INVOICE"
+                        ? "border-foreground bg-foreground/5 text-foreground"
+                        : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="album-payment-document"
+                      checked={paymentDocumentType === "TAX_INVOICE"}
+                      onChange={() => {
+                        setPaymentDocumentType("TAX_INVOICE");
+                        setCashReceiptPurpose("");
+                        setCashReceiptPhone("");
+                        setCashReceiptBusinessNumber("");
+                      }}
+                      className="h-4 w-4 accent-foreground"
+                    />
+                    세금계산서 발급
+                  </label>
+                </div>
+                <p className="mt-3 text-[11px] text-muted-foreground">
+                  * 결제 연관 서류는 기재해주신 이메일로 전송됩니다.
+                </p>
+                {paymentDocumentType === "CASH_RECEIPT" && (
+                  <div className="mt-4 space-y-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                          cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+                            ? "border-foreground bg-foreground/5 text-foreground"
+                            : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="album-cash-receipt-purpose"
+                          checked={
+                            cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+                          }
+                          onChange={() => {
+                            setCashReceiptPurpose("PERSONAL_INCOME_DEDUCTION");
+                            setCashReceiptBusinessNumber("");
+                          }}
+                          className="h-4 w-4 accent-foreground"
+                        />
+                        개인소득공제용
+                      </label>
+                      <label
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                          cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+                            ? "border-foreground bg-foreground/5 text-foreground"
+                            : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="album-cash-receipt-purpose"
+                          checked={
+                            cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+                          }
+                          onChange={() => {
+                            setCashReceiptPurpose("BUSINESS_EXPENSE_PROOF");
+                            setCashReceiptPhone("");
+                          }}
+                          className="h-4 w-4 accent-foreground"
+                        />
+                        사업자지출증빙용
+                      </label>
+                    </div>
+                    {cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION" && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          휴대폰 번호
+                        </label>
+                        <input
+                          value={cashReceiptPhone}
+                          onChange={(event) =>
+                            setCashReceiptPhone(event.target.value)
+                          }
+                          placeholder="휴대폰 번호를 입력해주세요."
+                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        />
+                      </div>
+                    )}
+                    {cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF" && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          사업자번호
+                        </label>
+                        <input
+                          value={cashReceiptBusinessNumber}
+                          onChange={(event) =>
+                            setCashReceiptBusinessNumber(event.target.value)
+                          }
+                          placeholder="사업자번호 10자리를 입력해주세요."
+                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {paymentDocumentType === "TAX_INVOICE" && (
+                  <div className="mt-4 space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      사업자번호
+                    </label>
+                    <input
+                      value={taxInvoiceBusinessNumber}
+                      onChange={(event) =>
+                        setTaxInvoiceBusinessNumber(event.target.value)
+                      }
+                      placeholder="사업자번호 10자리를 입력해주세요."
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

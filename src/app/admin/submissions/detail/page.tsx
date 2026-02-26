@@ -136,9 +136,27 @@ type SubmissionRow = {
   guest_phone?: string | null;
 };
 
+type PaymentDocumentRow = {
+  payment_document_type?: string | null;
+  cash_receipt_purpose?: string | null;
+  cash_receipt_phone?: string | null;
+  cash_receipt_business_number?: string | null;
+  tax_invoice_business_number?: string | null;
+};
+
 const paymentMethodLabels: Record<string, string> = {
   BANK: "무통장",
   CARD: "카드",
+};
+
+const paymentDocumentLabels: Record<string, string> = {
+  CASH_RECEIPT: "현금 영수증 발급",
+  TAX_INVOICE: "세금계산서 발급",
+};
+
+const cashReceiptPurposeLabels: Record<string, string> = {
+  PERSONAL_INCOME_DEDUCTION: "개인소득공제용",
+  BUSINESS_EXPENSE_PROOF: "사업자지출증빙용",
 };
 
 export default async function AdminSubmissionDetailPage({
@@ -198,12 +216,12 @@ export default async function AdminSubmissionDetailPage({
       : savedFlag === "track_deleted"
         ? "트랙을 삭제했습니다."
         : savedFlag === "station"
-          ? "방송국 진행 상태를 저장했습니다."
+          ? "저장되었습니다."
           : savedFlag === "station_warning"
-            ? "방송국 진행 상태를 저장했습니다."
-          : savedFlag === "station_error"
-            ? "방송국 상태 저장 중 오류가 발생했습니다."
-          : savedFlag === "error"
+            ? "저장되었습니다."
+            : savedFlag === "station_error"
+              ? "방송국 상태 저장 중 오류가 발생했습니다."
+              : savedFlag === "error"
             ? "저장 중 오류가 발생했습니다. 다시 시도해주세요."
           : "저장이 완료되었습니다."
     : "";
@@ -432,6 +450,34 @@ export default async function AdminSubmissionDetailPage({
   const applicantEmail = submission.applicant_email ?? submission.guest_email ?? null;
   const albumTracks = submission.album_tracks ?? [];
   const isOneclick = submission.is_oneclick === true;
+  const { data: paymentDocumentRaw, error: paymentDocumentError } = await supabase
+    .from("submissions")
+    .select(
+      "payment_document_type, cash_receipt_purpose, cash_receipt_phone, cash_receipt_business_number, tax_invoice_business_number",
+    )
+    .eq("id", submission.id)
+    .maybeSingle();
+  const paymentDocument = paymentDocumentError
+    ? null
+    : (paymentDocumentRaw as PaymentDocumentRow | null);
+  const paymentDocumentTypeLabel = paymentDocument?.payment_document_type
+    ? paymentDocumentLabels[paymentDocument.payment_document_type] ??
+      paymentDocument.payment_document_type
+    : "-";
+  const cashReceiptPurposeLabel = paymentDocument?.cash_receipt_purpose
+    ? cashReceiptPurposeLabels[paymentDocument.cash_receipt_purpose] ??
+      paymentDocument.cash_receipt_purpose
+    : "-";
+  const paymentDocumentTargetValue =
+    paymentDocument?.payment_document_type === "CASH_RECEIPT" &&
+    paymentDocument.cash_receipt_purpose === "PERSONAL_INCOME_DEDUCTION"
+      ? paymentDocument.cash_receipt_phone ?? "-"
+      : paymentDocument?.payment_document_type === "CASH_RECEIPT" &&
+          paymentDocument.cash_receipt_purpose === "BUSINESS_EXPENSE_PROOF"
+        ? paymentDocument.cash_receipt_business_number ?? "-"
+        : paymentDocument?.payment_document_type === "TAX_INVOICE"
+          ? paymentDocument.tax_invoice_business_number ?? "-"
+          : "-";
 
   if (submission.type === "ALBUM") {
     await ensureAlbumStationReviews(
@@ -662,61 +708,6 @@ export default async function AdminSubmissionDetailPage({
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  결제 상태
-                </p>
-                <div className="mt-4 space-y-4">
-                  <div className="grid gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        결제 방식
-                      </label>
-                      <input
-                        value={
-                          submission.payment_method
-                            ? paymentMethodLabels[submission.payment_method] ??
-                              submission.payment_method
-                            : "-"
-                        }
-                        readOnly
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        결제 상태
-                      </label>
-                      <select
-                        name="paymentStatus"
-                        defaultValue={submission.payment_status ?? "UNPAID"}
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                      >
-                        {paymentStatusOptions.map((status) => (
-                          <option key={status.value} value={status.value}>
-                            {status.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        입금자명
-                      </label>
-                      <input
-                        value={
-                          submission.payment_method === "BANK"
-                            ? submission.bank_depositor_name ?? ""
-                            : "카드 결제"
-                        }
-                        readOnly
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {submission.type?.startsWith("MV_") ? (
                 <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -762,18 +753,114 @@ export default async function AdminSubmissionDetailPage({
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   접수 상태 변경
                 </p>
-                <div className="mt-4 space-y-4">
-                  <select
-                    name="status"
-                    defaultValue={submission.status}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                  >
-                    {reviewStatusOptions.map((status) => (
-                      <option key={status.value} value={status.value}>
-                        {status.label}
-                      </option>
-                    ))}
-                  </select>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  접수 상태와 결제 상태를 함께 저장합니다.
+                </p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      결제 방식
+                    </label>
+                    <input
+                      value={
+                        submission.payment_method
+                          ? paymentMethodLabels[submission.payment_method] ??
+                            submission.payment_method
+                          : "-"
+                      }
+                      readOnly
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      입금자명
+                    </label>
+                    <input
+                      value={
+                        submission.payment_method === "BANK"
+                          ? submission.bank_depositor_name ?? "-"
+                          : "카드 결제"
+                      }
+                      readOnly
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                    />
+                  </div>
+                  {submission.payment_method === "BANK" && (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          결제 서류
+                        </label>
+                        <input
+                          value={paymentDocumentTypeLabel}
+                          readOnly
+                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                        />
+                      </div>
+                      {paymentDocument?.payment_document_type === "CASH_RECEIPT" && (
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            현금 영수증 용도
+                          </label>
+                          <input
+                            value={cashReceiptPurposeLabel}
+                            readOnly
+                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          발급 정보
+                        </label>
+                        <input
+                          value={paymentDocumentTargetValue}
+                          readOnly
+                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      접수 상태
+                    </label>
+                    <select
+                      name="status"
+                      defaultValue={submission.status}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                    >
+                      {reviewStatusOptions.map((status) => (
+                        <option key={status.value} value={status.value}>
+                          {status.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      결제 상태
+                    </label>
+                    <select
+                      name="paymentStatus"
+                      defaultValue={submission.payment_status ?? "UNPAID"}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                    >
+                      {paymentStatusOptions.map((status) => (
+                        <option key={status.value} value={status.value}>
+                          {status.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    관리자 메모
+                  </label>
                   <textarea
                     name="adminMemo"
                     defaultValue={submission.admin_memo ?? ""}
