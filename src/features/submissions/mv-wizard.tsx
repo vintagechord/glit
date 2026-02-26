@@ -2208,8 +2208,15 @@ export function MvWizard({
             </h3>
             <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
               {confirmModal.lines.map((line) => (
-                <li key={line} className="list-disc pl-5 leading-relaxed">
-                  {line}
+                <li
+                  key={line}
+                  className="grid grid-cols-[12px_1fr] items-start gap-2 pl-2 leading-relaxed"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="mt-2 inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/80"
+                  />
+                  <span>{line}</span>
                 </li>
               ))}
             </ul>
