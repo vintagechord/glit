@@ -195,7 +195,7 @@ export function TrackLookupForm({
             <p className="text-xs text-red-500">{lookupError}</p>
             {lookupError === noMatchLookupError && noMatchAttemptCount >= 2 ? (
               <p className="text-xs text-muted-foreground">
-                접수 정보를 잊었다면, 관리자에게 문의해주세요.
+                접수 정보를 잊었다면, 관리자(help@vhouse.co.kr)에게 문의해주세요.
               </p>
             ) : null}
           </div>
