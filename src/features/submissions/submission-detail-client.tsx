@@ -881,17 +881,17 @@ export function SubmissionDetailClient({
           </div>
         </div>
         <div className="order-1">
-          <div className="rounded-[28px] border border-border/60 bg-[#f6d64a] p-6">
+          <div className="rounded-[28px] border border-black bg-black p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-white/80">
                 심의 진행 상태
               </p>
-              <span className="inline-flex items-center rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs font-semibold text-foreground">
+              <span className="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-semibold text-white">
                 현재 단계: {flowSteps[flowIndex]}
               </span>
             </div>
             <div className="mt-4 space-y-3">
-              <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-4">
+              <div className="grid gap-2 text-sm text-white/75 sm:grid-cols-4">
                 {flowSteps.map((label, index) => {
                   const isActive = index === flowIndex;
                   return (
@@ -899,8 +899,8 @@ export function SubmissionDetailClient({
                       key={label}
                       className={`rounded-xl border px-3 py-2.5 text-center text-sm font-semibold ${
                         isActive
-                          ? "border-slate-900 bg-slate-900 text-white dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black"
-                          : "border-border/70 bg-background text-muted-foreground"
+                          ? "border-[#f6d64a] bg-[#f6d64a] text-black"
+                          : "border-white/20 bg-white/10 text-white/80"
                       }`}
                     >
                       {label}
@@ -908,7 +908,7 @@ export function SubmissionDetailClient({
                   );
                 })}
               </div>
-              <div className="rounded-xl border border-border/60 bg-card/80 px-4 py-3 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white/80">
                 {isReviewComplete
                   ? "모든 심의 절차가 완료되었습니다."
                   : flowIndex === 3
