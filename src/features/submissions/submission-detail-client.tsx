@@ -918,13 +918,13 @@ export function SubmissionDetailClient({
               </div>
             </div>
             <div className="mt-4">
-              <div className="grid gap-2 text-sm text-white/75 sm:grid-cols-4">
+              <div className="grid w-full max-w-full grid-cols-4 gap-1.5 text-white/75 sm:gap-2">
                 {flowSteps.map((label, index) => {
                   const isActive = index === flowIndex;
                   return (
                     <div
                       key={label}
-                      className={`rounded-xl border px-3 py-2.5 text-center text-sm font-semibold ${
+                      className={`min-w-0 truncate rounded-xl border px-1 py-2 text-center text-[11px] font-semibold leading-tight sm:px-3 sm:py-2.5 sm:text-sm ${
                         isActive
                           ? "border-[#f6d64a] bg-[#f6d64a] text-black"
                           : "border-white/20 bg-white/10 text-white/80"
