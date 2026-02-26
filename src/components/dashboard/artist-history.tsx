@@ -70,7 +70,7 @@ function Thumbnail({ name, src }: { name: string; src: string | null }) {
   }
   return (
     <div className="relative h-14 w-14 overflow-hidden rounded-2xl border border-border/70 bg-background">
-      <Image src={src} alt={name} fill className="object-cover" />
+      <Image src={src} alt={name} fill sizes="56px" unoptimized className="object-cover" />
     </div>
   );
 }

@@ -254,6 +254,7 @@ export default async function AdminArtistsPage({
                           alt={artist.name}
                           fill
                           sizes="48px"
+                          unoptimized
                           className="object-cover"
                         />
                       </div>

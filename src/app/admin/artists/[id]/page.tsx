@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/format";
 import { updateArtistAction } from "@/features/admin/actions";
 import { ArtistThumbnailUploader } from "@/components/admin/artist-thumbnail-uploader";
+import { AdminSaveToast } from "@/components/admin/save-toast";
 
 export const metadata = {
   title: "아티스트 상세",
@@ -17,14 +18,18 @@ export default async function AdminArtistDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: { id?: string | string[] };
+  searchParams?: Promise<{ id?: string | string[]; saved?: string | string[] }>;
 }) {
   // Next 16: params가 Promise로 전달되므로 먼저 언랩한다.
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const paramId = id ?? "";
-  const searchId = Array.isArray(searchParams?.id)
-    ? searchParams?.id?.[0]
-    : searchParams?.id ?? "";
+  const searchId = Array.isArray(resolvedSearchParams?.id)
+    ? resolvedSearchParams?.id?.[0]
+    : resolvedSearchParams?.id ?? "";
+  const savedFlag = Array.isArray(resolvedSearchParams?.saved)
+    ? resolvedSearchParams?.saved[0]
+    : resolvedSearchParams?.saved;
   const artistId = paramId || searchId;
 
   if (!artistId) {
@@ -122,6 +127,7 @@ export default async function AdminArtistDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12 space-y-6">
+      {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           {artist.thumbnail_url ? (
@@ -131,6 +137,7 @@ export default async function AdminArtistDetailPage({
                 alt={artist.name}
                 fill
                 sizes="64px"
+                unoptimized
                 className="object-cover"
               />
             </div>

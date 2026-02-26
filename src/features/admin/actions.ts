@@ -125,6 +125,15 @@ const revalidateUserDashboards = (submissionId?: string) => {
   }
 };
 
+const withSavedQuery = (path: string, savedValue = "1") => {
+  const [baseWithQuery, hash] = path.split("#");
+  const [pathname, query] = baseWithQuery.split("?");
+  const params = new URLSearchParams(query ?? "");
+  params.set("saved", savedValue);
+  const nextPath = `${pathname}?${params.toString()}`;
+  return hash ? `${nextPath}#${hash}` : nextPath;
+};
+
 const packageSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().min(1),
@@ -1377,7 +1386,7 @@ export async function updateSubmissionResultFormAction(
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidateUserDashboards(submissionId);
-    redirect(`/admin/submissions/${submissionId}`);
+    redirect(withSavedQuery(`/admin/submissions/${submissionId}`, "result"));
   }
 }
 
@@ -1395,14 +1404,19 @@ export async function updateArtistAction(formData: FormData): Promise<void> {
     return;
   }
   const admin = createAdminClient();
-  await admin
+  const { error } = await admin
     .from("artists")
     .update({ name, thumbnail_url: thumbnailUrl || null })
     .eq("id", artistId);
+  if (error) {
+    console.error("updateArtistAction failed", error);
+    return;
+  }
   revalidatePath("/admin/artists");
   revalidatePath(`/admin/artists/${artistId}`);
   revalidatePath(`/dashboard/artists/${artistId}`);
   revalidateUserDashboards();
+  redirect(withSavedQuery(`/admin/artists/${artistId}`));
 }
 
 export async function upsertPackageAction(
@@ -1447,6 +1461,7 @@ export async function upsertPackageFormAction(
     return;
   }
   revalidatePath("/admin/config");
+  redirect(withSavedQuery("/admin/config"));
 }
 
 export async function upsertStationAction(
@@ -1487,6 +1502,7 @@ export async function upsertStationFormAction(
     return;
   }
   revalidatePath("/admin/config");
+  redirect(withSavedQuery("/admin/config"));
 }
 
 export async function updatePackageStationsAction(
@@ -1547,6 +1563,7 @@ export async function updatePackageStationsFormAction(
     return;
   }
   revalidatePath("/admin/config");
+  redirect(withSavedQuery("/admin/config"));
 }
 
 export async function deletePackageAction(
@@ -1667,6 +1684,7 @@ export async function upsertAdBannerFormAction(
   }
   revalidatePath("/admin/banners");
   revalidatePath("/");
+  redirect(withSavedQuery("/admin/banners"));
 }
 
 export async function deleteAdBannerAction(
@@ -1748,6 +1766,7 @@ export async function upsertProfanityTermFormAction(
   }
   revalidatePath("/admin/config");
   revalidatePath("/dashboard/new/album");
+  redirect(withSavedQuery("/admin/config"));
 }
 
 export async function deleteProfanityTermAction(
@@ -1827,6 +1846,7 @@ export async function upsertSpellcheckTermFormAction(
   }
   revalidatePath("/admin/config");
   revalidatePath("/dashboard/new/album");
+  redirect(withSavedQuery("/admin/config"));
 }
 
 export async function deleteSpellcheckTermAction(

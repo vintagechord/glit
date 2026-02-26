@@ -9,6 +9,7 @@ import {
   upsertSpellcheckTermFormAction,
   upsertStationFormAction,
 } from "@/features/admin/actions";
+import { AdminSaveToast } from "@/components/admin/save-toast";
 import { syncAlbumStationCatalog } from "@/lib/station-reviews";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -75,7 +76,15 @@ const albumStationCodesByCount: Record<number, string[]> = {
 
 const albumStationCodeSet = new Set(albumStationCodes);
 
-export default async function AdminConfigPage() {
+export default async function AdminConfigPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ saved?: string | string[] }>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const savedFlag = Array.isArray(resolvedSearchParams?.saved)
+    ? resolvedSearchParams?.saved[0]
+    : resolvedSearchParams?.saved;
   const supabase = await createServerSupabase();
   await syncAlbumStationCatalog(supabase);
   const { data: packages } = await supabase
@@ -104,6 +113,7 @@ export default async function AdminConfigPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
+      {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
         관리자 설정
       </p>

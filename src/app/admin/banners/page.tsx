@@ -2,6 +2,7 @@ import {
   deleteAdBannerFormAction,
   upsertAdBannerFormAction,
 } from "@/features/admin/actions";
+import { AdminSaveToast } from "@/components/admin/save-toast";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = {
@@ -10,7 +11,15 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminBannersPage() {
+export default async function AdminBannersPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ saved?: string | string[] }>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const savedFlag = Array.isArray(resolvedSearchParams?.saved)
+    ? resolvedSearchParams?.saved[0]
+    : resolvedSearchParams?.saved;
   const supabase = await createServerSupabase();
   const { data, error: bannersError } = await supabase
     .from("ad_banners")
@@ -29,6 +38,7 @@ export default async function AdminBannersPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
+      {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
         관리자
       </p>

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { APP_CONFIG } from "@/lib/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
 export type KaraokeActionState = {
   error?: string;
@@ -80,6 +81,24 @@ const promotionRecommendationStatusSchema = z.object({
   recommendationId: z.string().uuid(),
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]),
 });
+
+const buildAdminKaraokeSavedPath = (redirectTo?: string | null) => {
+  const fallbackParams = new URLSearchParams();
+  fallbackParams.set("saved", "1");
+  const fallbackPath = `/admin/karaoke?${fallbackParams.toString()}`;
+
+  const raw = redirectTo?.trim();
+  if (!raw || !raw.startsWith("/admin/karaoke")) {
+    return fallbackPath;
+  }
+
+  const [baseWithQuery, hash] = raw.split("#");
+  const [pathname, query] = baseWithQuery.split("?");
+  const params = new URLSearchParams(query ?? "");
+  params.set("saved", "1");
+  const nextPath = `${pathname}?${params.toString()}`;
+  return hash ? `${nextPath}#${hash}` : nextPath;
+};
 
 export async function createKaraokeRequestAction(
   payload: z.infer<typeof karaokeRequestSchema>,
@@ -691,7 +710,9 @@ export async function updateKaraokeStatusFormAction(
   });
   if (result.error) {
     console.error(result.error);
+    return;
   }
+  redirect(buildAdminKaraokeSavedPath(String(formData.get("redirectTo") ?? "")));
 }
 
 export async function updateKaraokeVoteStatusFormAction(
@@ -706,7 +727,9 @@ export async function updateKaraokeVoteStatusFormAction(
   });
   if (result.error) {
     console.error(result.error);
+    return;
   }
+  redirect(buildAdminKaraokeSavedPath(String(formData.get("redirectTo") ?? "")));
 }
 
 export async function updateKaraokePromotionRecommendationStatusFormAction(
@@ -721,5 +744,7 @@ export async function updateKaraokePromotionRecommendationStatusFormAction(
   });
   if (result.error) {
     console.error(result.error);
+    return;
   }
+  redirect(buildAdminKaraokeSavedPath(String(formData.get("redirectTo") ?? "")));
 }

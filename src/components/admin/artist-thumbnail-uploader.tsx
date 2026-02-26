@@ -154,6 +154,7 @@ export function ArtistThumbnailUploader({ initialUrl }: Props) {
               alt="썸네일 미리보기"
               fill
               sizes="64px"
+              unoptimized
               className="object-cover"
             />
           ) : (

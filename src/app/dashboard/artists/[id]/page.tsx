@@ -159,6 +159,7 @@ export default async function DashboardArtistDetailPage({
                 alt={artist.name ?? ""}
                 fill
                 sizes="56px"
+                unoptimized
                 className="object-cover"
               />
             </div>

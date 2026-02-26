@@ -2,6 +2,7 @@ import {
   updateKaraokeStatusFormAction,
   updateKaraokePromotionRecommendationStatusFormAction,
 } from "@/features/karaoke/actions";
+import { AdminSaveToast } from "@/components/admin/save-toast";
 import { KaraokeFileButton } from "@/features/karaoke/karaoke-file-button";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -34,11 +35,32 @@ type KaraokeRequestRow = {
   guest_phone?: string | null;
 };
 
+type KaraokeSearchParamsInput = {
+  status?: string | string[];
+  saved?: string | string[];
+};
+
+const toSingle = (value?: string | string[]) => {
+  if (Array.isArray(value)) return value[0] ?? "";
+  return value ?? "";
+};
+
 export default async function AdminKaraokePage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams?: Promise<KaraokeSearchParamsInput>;
 }) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const statusFilter = toSingle(resolvedSearchParams?.status).trim();
+  const savedFlag = toSingle(resolvedSearchParams?.saved).trim();
+  const currentParams = new URLSearchParams();
+  if (statusFilter) {
+    currentParams.set("status", statusFilter);
+  }
+  const currentPageHref = currentParams.toString()
+    ? `/admin/karaoke?${currentParams.toString()}`
+    : "/admin/karaoke";
+
   const supabase = await createServerSupabase();
   const baseSelect =
     "id, title, artist, contact, notes, file_path, status, created_at, payment_status, payment_method, amount_krw, bank_depositor_name, tj_requested, ky_requested";
@@ -50,8 +72,8 @@ export default async function AdminKaraokePage({
       .select(selectFields)
       .order("created_at", { ascending: false });
 
-    if (searchParams.status) {
-      query = query.eq("status", searchParams.status);
+    if (statusFilter) {
+      query = query.eq("status", statusFilter);
     }
 
     return query;
@@ -84,6 +106,7 @@ export default async function AdminKaraokePage({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
+      {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
         Admin
       </p>
@@ -94,7 +117,7 @@ export default async function AdminKaraokePage({
       <form className="mt-6 flex flex-wrap items-center gap-3 rounded-[28px] border border-border/60 bg-card/80 p-4">
         <select
           name="status"
-          defaultValue={searchParams.status ?? ""}
+          defaultValue={statusFilter}
           className="rounded-2xl border border-border/70 bg-background px-4 py-2 text-sm"
         >
           <option value="">전체 상태</option>
@@ -174,6 +197,7 @@ export default async function AdminKaraokePage({
                 className="mt-4 flex flex-wrap items-center gap-3"
               >
                 <input type="hidden" name="requestId" value={request.id} />
+                <input type="hidden" name="redirectTo" value={currentPageHref} />
                 <select
                   name="status"
                   defaultValue={request.status}
@@ -271,6 +295,7 @@ export default async function AdminKaraokePage({
                     name="recommendationId"
                     value={recommendation.id}
                   />
+                  <input type="hidden" name="redirectTo" value={currentPageHref} />
                   <select
                     name="status"
                     defaultValue={recommendation.status}

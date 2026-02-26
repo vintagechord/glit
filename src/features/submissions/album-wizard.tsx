@@ -3700,7 +3700,7 @@ export function AlbumWizard({
                           onClick={() => removeTrack(activeTrackIndex)}
                           className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 dark:border-rose-500/70 dark:bg-rose-500/15 dark:text-rose-200 dark:hover:border-rose-400 dark:hover:bg-rose-500/25 dark:hover:text-rose-100"
                         >
-                          트랙 정보 삭제
+                          트랙 삭제
                         </button>
                       )}
                     </div>
