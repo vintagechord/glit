@@ -42,6 +42,16 @@ const profileSchema = z.object({
   phone: z.string().min(7),
 });
 
+const passwordUpdateSchema = z
+  .object({
+    newPassword: z.string().min(8, "비밀번호는 8자 이상 입력해주세요."),
+    confirmPassword: z.string().min(8, "비밀번호는 8자 이상 입력해주세요."),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "비밀번호가 일치하지 않습니다.",
+  });
+
 function toFieldErrors(
   errors: Record<string, string[] | undefined>,
 ): Record<string, string> {
@@ -262,6 +272,42 @@ export async function updateProfileAction(
   }
 
   return { message: "프로필이 저장되었습니다." };
+}
+
+export async function updatePasswordAction(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = passwordUpdateSchema.safeParse({
+    newPassword: formData.get("newPassword"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+
+  if (!parsed.success) {
+    return {
+      fieldErrors: toFieldErrors(parsed.error.flatten().fieldErrors),
+    };
+  }
+
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { error: "로그인이 필요합니다." };
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: parsed.data.newPassword,
+  });
+
+  if (error) {
+    return { error: "비밀번호 변경에 실패했습니다. 잠시 후 다시 시도해주세요." };
+  }
+
+  return { message: "비밀번호가 변경되었습니다." };
 }
 
 export async function signOutAction() {
