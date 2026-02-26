@@ -153,7 +153,7 @@ export function DraftSubmissionList({
         // ignore storage errors
       }
     }
-    router.push(getResumePath(draftGroup));
+    router.push(`${getResumePath(draftGroup)}?from=drafts`);
   };
 
   const handleDelete = () => {

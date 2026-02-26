@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 import { APP_CONFIG } from "@/lib/config";
@@ -239,7 +239,9 @@ export function MvWizard({
   userId?: string | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isGuest = !userId;
+  const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
   const [mvType, setMvType] = React.useState<"MV_DISTRIBUTION" | "MV_BROADCAST">(
     "MV_DISTRIBUTION",
@@ -1551,6 +1553,10 @@ export function MvWizard({
     let cancelled = false;
     const run = async () => {
       const stored = readDraftStorage();
+      if (!isFromDraftsTab && !stored?.id) {
+        setResumeChecked(true);
+        return;
+      }
       const storedGuestToken =
         stored?.guestToken ?? (isGuest ? guestTokenRef.current : null);
       try {
@@ -1589,10 +1595,23 @@ export function MvWizard({
     };
   }, [
     applyStoredDraft,
+    isFromDraftsTab,
     isGuest,
     readDraftStorage,
     resumePrompt,
     resumeChecked,
+  ]);
+
+  React.useEffect(() => {
+    if (!isFromDraftsTab) return;
+    if (!resumePrompt) return;
+    if (isClearingResumeDrafts) return;
+    handleResumeDraftConfirm();
+  }, [
+    handleResumeDraftConfirm,
+    isClearingResumeDrafts,
+    isFromDraftsTab,
+    resumePrompt,
   ]);
 
   const resolveSongTitleValues = () => {
@@ -2134,7 +2153,7 @@ export function MvWizard({
       {isDraggingOver && (
         <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
       )}
-      {resumePrompt ? (
+      {resumePrompt && !isFromDraftsTab ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
           <div
             role="dialog"
@@ -2157,7 +2176,7 @@ export function MvWizard({
                 disabled={isClearingResumeDrafts}
                 className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isClearingResumeDrafts ? "삭제 중..." : "취소"}
+                {isClearingResumeDrafts ? "삭제 중..." : "삭제"}
               </button>
               <button
                 type="button"

@@ -248,6 +248,7 @@ export function AlbumWizard({
   const router = useRouter();
   const searchParams = useSearchParams();
   const isGuest = !userId;
+  const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
   const [isOneClick, setIsOneClick] = React.useState(false);
   const [selectedPackage, setSelectedPackage] =
@@ -2070,6 +2071,10 @@ export function AlbumWizard({
     let cancelled = false;
     const run = async () => {
       const stored = readDraftStorage();
+      if (!isFromDraftsTab && (!stored?.ids || stored.ids.length === 0)) {
+        setResumeChecked(true);
+        return;
+      }
       const storedGuestToken =
         stored?.guestToken ??
         (isGuest ? currentGuestToken : null) ??
@@ -2110,10 +2115,23 @@ export function AlbumWizard({
     };
   }, [
     currentGuestToken,
+    isFromDraftsTab,
     isGuest,
     readDraftStorage,
     resumePrompt,
     resumeChecked,
+  ]);
+
+  React.useEffect(() => {
+    if (!isFromDraftsTab) return;
+    if (!resumePrompt) return;
+    if (isClearingResumeDrafts) return;
+    handleResumeDraftConfirm();
+  }, [
+    handleResumeDraftConfirm,
+    isClearingResumeDrafts,
+    isFromDraftsTab,
+    resumePrompt,
   ]);
 
   React.useEffect(() => {
@@ -2873,7 +2891,7 @@ export function AlbumWizard({
         show={isSaving || isAddingAlbum}
         label="심의 저장/결제 처리 중..."
       />
-      {resumePrompt ? (
+      {resumePrompt && !isFromDraftsTab ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
           <div
             role="dialog"
@@ -2896,7 +2914,7 @@ export function AlbumWizard({
                 disabled={isClearingResumeDrafts}
                 className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isClearingResumeDrafts ? "삭제 중..." : "취소"}
+                {isClearingResumeDrafts ? "삭제 중..." : "삭제"}
               </button>
               <button
                 type="button"
