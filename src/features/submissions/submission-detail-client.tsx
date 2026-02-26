@@ -908,7 +908,7 @@ export function SubmissionDetailClient({
                   );
                 })}
               </div>
-              <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white/80">
+              <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-center text-sm text-white/80">
                 {isReviewComplete
                   ? "모든 심의 절차가 완료되었습니다."
                   : flowIndex === 3
