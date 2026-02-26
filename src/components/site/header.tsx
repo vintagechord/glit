@@ -19,6 +19,7 @@ const navLinks = [
 
 export async function SiteHeader() {
   let isLoggedIn = false;
+  let progressHref = "/dashboard";
   try {
     const supabase = await createServerSupabase();
     const {
@@ -29,6 +30,23 @@ export async function SiteHeader() {
       console.error("[SiteHeader] Failed to read session:", error.message);
     }
     isLoggedIn = Boolean(session?.user);
+    if (session?.user?.id) {
+      const { data: latestSubmission, error: latestSubmissionError } = await supabase
+        .from("submissions")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestSubmissionError) {
+        console.error(
+          "[SiteHeader] Failed to read latest submission:",
+          latestSubmissionError.message,
+        );
+      } else if (latestSubmission?.id) {
+        progressHref = `/dashboard/submissions/${latestSubmission.id}`;
+      }
+    }
   } catch (error) {
     if (isDynamicServerUsageError(error)) {
       throw error;
@@ -88,7 +106,7 @@ export async function SiteHeader() {
             <span>{navLinks[0].label}</span>
           </Link>
           <Link
-            href="/dashboard"
+            href={progressHref}
             className={categoryLinkClass}
           >
             <span>진행상황</span>
