@@ -704,7 +704,7 @@ export function HomeReviewPanel({
   );
 
   return (
-    <div className="min-w-0 w-full rounded-[24px] border border-[#f6d64a] bg-[#f6d64a] p-4 shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:rounded-[28px] sm:p-6 dark:border-[#f6d64a] dark:bg-[#f6d64a] lg:min-h-[520px]">
+    <div className="min-w-0 w-full rounded-[24px] border border-black bg-black p-4 shadow-[0_24px_80px_rgba(15,23,42,0.3)] sm:rounded-[28px] sm:p-6 dark:border-black dark:bg-black lg:min-h-[520px]">
       <div className="flex items-center justify-between text-xs uppercase tracking-[0.16em] text-muted-foreground sm:text-sm sm:tracking-[0.2em]">
         <span>
           {activeSubmission
@@ -733,7 +733,7 @@ export function HomeReviewPanel({
             className={`flex-1 rounded-full px-3 py-2 transition ${
               tab === "album"
                 ? "bg-[#f6d64a] text-black shadow-sm"
-                : "hover:text-foreground"
+                : "hover:text-white"
             }`}
           >
             앨범
@@ -746,7 +746,7 @@ export function HomeReviewPanel({
             className={`flex-1 rounded-full px-3 py-2 transition ${
               tab === "mv"
                 ? "bg-[#f6d64a] text-black shadow-sm"
-                : "hover:text-foreground"
+                : "hover:text-white"
             }`}
           >
             뮤직비디오
@@ -783,7 +783,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex <= 0}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-black/5 text-xs font-bold text-black shadow-sm transition hover:border-black hover:bg-black/10 hover:text-black dark:bg-white dark:hover:bg-slate-900 dark:hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/35 bg-white/10 text-xs font-bold text-white shadow-sm transition hover:border-white hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="이전 접수"
           >
             ←
@@ -810,7 +810,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex >= Math.max(0, activeList.length - 1)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-black/5 text-xs font-bold text-black shadow-sm transition hover:border-black hover:bg-black/10 hover:text-black dark:bg-white dark:hover:bg-slate-900 dark:hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/35 bg-white/10 text-xs font-bold text-white shadow-sm transition hover:border-white hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="다음 접수"
           >
             →

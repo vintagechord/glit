@@ -203,6 +203,43 @@ const hasNonKoreanLyrics = (value: string) => {
   return false;
 };
 
+const splitEnglishSentences = (value: string) => {
+  const matches = value.match(/[^.!?]+[.!?]*/g);
+  return matches?.map((item) => item.trim()).filter(Boolean) ?? [];
+};
+
+const englishSegmentRegex = /[A-Za-z][^ㄱ-ㅎㅏ-ㅣ가-힣]*/g;
+
+type EnglishSegment = {
+  raw: string;
+  start: number;
+  end: number;
+  sentences: string[];
+};
+
+const extractEnglishSegments = (line: string): EnglishSegment[] => {
+  const matches = Array.from(line.matchAll(englishSegmentRegex));
+  return matches
+    .map((match) => {
+      const raw = match[0];
+      const start = match.index ?? 0;
+      const end = start + raw.length;
+      const trimmed = raw.trim();
+      if (!trimmed || trimmed.includes("번역:")) {
+        return null;
+      }
+      const sentences = splitEnglishSentences(trimmed);
+      if (!sentences.length) return null;
+      return {
+        raw,
+        start,
+        end,
+        sentences,
+      };
+    })
+    .filter((segment): segment is EnglishSegment => Boolean(segment));
+};
+
 const broadcastRequirementMessage =
   "타이틀곡 지정해 주시고 4곡 이상의 앨범일 경우 원음방송 심의를 위해 3곡 지정 해주세요. (원음방송은 앨범당 3곡만 심의가 가능합니다.)";
 
@@ -1298,10 +1335,11 @@ export function AlbumWizard({
     const lyrics = activeTrack.lyrics.trim();
     if (!lyrics) return;
     const lines = lyrics.split("\n");
-    const linesToTranslate = lines
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-    if (!linesToTranslate.length) return;
+    const segmentMap = lines.map((line) => extractEnglishSegments(line));
+    const sentencesToTranslate = segmentMap.flatMap((segments) =>
+      segments.flatMap((segment) => segment.sentences),
+    );
+    if (!sentencesToTranslate.length) return;
     setIsTranslatingLyrics(true);
     try {
       const response = await fetch("/api/translate", {
@@ -1310,8 +1348,8 @@ export function AlbumWizard({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          lines: linesToTranslate,
-          source: "auto",
+          lines: sentencesToTranslate,
+          source: "en",
           target: "ko",
         }),
       });
@@ -1323,12 +1361,37 @@ export function AlbumWizard({
         ? payload.translations
         : [];
       let translationIndex = 0;
-      const translatedLines = lines.map((line) => {
-        if (!line.trim()) return "";
-        const translation = translations[translationIndex] ?? "";
-        translationIndex += 1;
-        const translated = translation.trim();
-        return translated.length > 0 ? translated : line;
+      const translatedLines = lines.map((line, index) => {
+        const segments = segmentMap[index];
+        if (!segments.length) return line;
+
+        let nextLine = line;
+        const replacements = segments.map((segment) => {
+          const translatedSentences = segment.sentences.map((sentence) => {
+            const translation = translations[translationIndex] ?? "";
+            translationIndex += 1;
+            const translated = translation.trim() || "번역 실패";
+            return `${sentence} (번역: ${translated})`;
+          });
+          const leading = segment.raw.match(/^\s*/)?.[0] ?? "";
+          const trailing = segment.raw.match(/\s*$/)?.[0] ?? "";
+          return {
+            start: segment.start,
+            end: segment.end,
+            replacement: `${leading}${translatedSentences.join(" ")}${trailing}`,
+          };
+        });
+
+        replacements
+          .sort((a, b) => b.start - a.start)
+          .forEach((segment) => {
+            nextLine =
+              nextLine.slice(0, segment.start) +
+              segment.replacement +
+              nextLine.slice(segment.end);
+          });
+
+        return nextLine;
       });
       updateTrack(activeTrackIndex, "translatedLyrics", translatedLines.join("\n"));
       setTranslationPanelOpenMap((prev) => ({
