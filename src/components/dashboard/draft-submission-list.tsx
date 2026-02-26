@@ -117,16 +117,28 @@ export function DraftSubmissionList({
         } else {
           const mvStorageKey = `onside:draft:mv:${userId}`;
           const existingRaw = window.localStorage.getItem(mvStorageKey);
-          const existing = existingRaw
-            ? (JSON.parse(existingRaw) as {
+          let existing: {
+            id?: string;
+            mvType?: string;
+            tvStations?: string[];
+            onlineOptions?: string[];
+            onlineBaseSelected?: boolean;
+            emailSubmitConfirmed?: boolean;
+          } | null = null;
+          if (existingRaw) {
+            try {
+              existing = JSON.parse(existingRaw) as {
                 id?: string;
                 mvType?: string;
                 tvStations?: string[];
                 onlineOptions?: string[];
                 onlineBaseSelected?: boolean;
                 emailSubmitConfirmed?: boolean;
-              })
-            : null;
+              };
+            } catch {
+              existing = null;
+            }
+          }
           const shouldReuseExistingSelection =
             existing != null && existing.id === item.id;
           window.localStorage.setItem(

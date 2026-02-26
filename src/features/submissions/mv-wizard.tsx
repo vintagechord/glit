@@ -83,8 +83,7 @@ const multipartThresholdMb = Number.isFinite(multipartThresholdMbRaw)
 const multipartThresholdBytes = multipartThresholdMb * 1024 * 1024;
 
 const baseOnlinePrice = 30000;
-// TEMP(test): ETN 입고 옵션 결제 모듈 테스트용 금액. 테스트 종료 후 30000으로 복원.
-const etnOptionPrice = 1000;
+const etnOptionPrice = 30000;
 const stationPriceMap: Record<string, number> = {
   KBS: 30000,
   MBC: 30000,

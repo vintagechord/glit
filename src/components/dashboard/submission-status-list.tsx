@@ -230,16 +230,16 @@ export function SubmissionStatusList({
             if (submission.status === "IN_PROGRESS") {
               return "심의 진행중";
             }
+            if (submission.payment_status !== "PAID") {
+              return "결제대기";
+            }
             if (
               submission.status === "SUBMITTED" ||
               submission.status === "PRE_REVIEW"
             ) {
               return "심의 접수완료";
             }
-            if (submission.payment_status === "PAID") {
-              return "결제완료";
-            }
-            return "결제대기";
+            return "결제완료";
           })();
 
           return (
@@ -280,7 +280,7 @@ export function SubmissionStatusList({
                     <button
                       type="button"
                       onClick={() => router.push(`/dashboard/pay/${submission.id}`)}
-                      className="rounded-full border border-[#f6d64a] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black transition hover:border-[#f6d64a] hover:text-black"
+                      className="rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:bg-[#efcc49]"
                     >
                       결제하기
                     </button>

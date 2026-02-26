@@ -72,6 +72,43 @@ const translateLine = async (
   return "";
 };
 
+const translateBatch = async (
+  lines: string[],
+  source: string,
+  target: string,
+) => {
+  const normalizedCache = new Map<string, string>();
+  const uniqueTexts: string[] = [];
+
+  for (const line of lines) {
+    const normalized = line.trim();
+    if (!normalized || normalizedCache.has(normalized)) continue;
+    normalizedCache.set(normalized, "");
+    uniqueTexts.push(normalized);
+  }
+
+  if (uniqueTexts.length > 0) {
+    const queue = [...uniqueTexts];
+    const workerCount = Math.min(4, queue.length);
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        while (queue.length > 0) {
+          const next = queue.shift();
+          if (!next) continue;
+          const translated = await translateLine(next, source, target);
+          normalizedCache.set(next, translated);
+        }
+      }),
+    );
+  }
+
+  return lines.map((line) => {
+    const normalized = line.trim();
+    if (!normalized) return "";
+    return normalizedCache.get(normalized) ?? "";
+  });
+};
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as TranslateRequest;
@@ -80,15 +117,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ translations: [] });
     }
 
-    const source = typeof body.source === "string" ? body.source : "en";
-    const target = typeof body.target === "string" ? body.target : "ko";
+    const source =
+      typeof body.source === "string" && body.source.trim()
+        ? body.source.trim()
+        : "auto";
+    const target =
+      typeof body.target === "string" && body.target.trim()
+        ? body.target.trim()
+        : "ko";
 
-    const translations: string[] = [];
-
-    for (const line of lines) {
-      const translation = await translateLine(line, source, target);
-      translations.push(translation);
-    }
+    const translations = await translateBatch(lines, source, target);
 
     return NextResponse.json({ translations });
   } catch (error) {

@@ -908,14 +908,16 @@ export function SubmissionDetailClient({
                   );
                 })}
               </div>
-              <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-center text-sm text-white/80">
-                {isReviewComplete
-                  ? "모든 심의 절차가 완료되었습니다."
-                  : flowIndex === 3
-                    ? "심의 결과 통보가 진행 중입니다."
-                    : isPaymentDone
-                      ? "결제가 확인되었고 심의 절차가 진행됩니다."
-                      : "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다."}
+              <div className="flex justify-center">
+                <p className="inline-flex max-w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-center text-sm text-white/80">
+                  {isReviewComplete
+                    ? "모든 심의 절차가 완료되었습니다."
+                    : flowIndex === 3
+                      ? "심의 결과 통보가 진행 중입니다."
+                      : isPaymentDone
+                        ? "결제가 확인되었고 심의 절차가 진행됩니다."
+                        : "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다."}
+                </p>
               </div>
             </div>
           </div>

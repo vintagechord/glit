@@ -13,6 +13,10 @@ const schema = z.object({
   guestToken: z.string().min(8).optional(),
 });
 
+const deleteSchema = schema.extend({
+  ids: z.array(z.string().uuid()).min(1),
+});
+
 const selectAlbumColumns = [
   "id",
   "type",
@@ -328,7 +332,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const body = await request.json().catch(() => null);
-  const parsed = schema.safeParse(body ?? {});
+  const parsed = deleteSchema.safeParse(body ?? {});
   if (!parsed.success) {
     return NextResponse.json({ error: "요청 정보를 확인해주세요." }, { status: 400 });
   }
@@ -355,9 +359,7 @@ export async function DELETE(request: Request) {
     deleteQuery.in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
   }
 
-  if (parsed.data.ids && parsed.data.ids.length > 0) {
-    deleteQuery.in("id", parsed.data.ids);
-  }
+  deleteQuery.in("id", parsed.data.ids);
 
   if (user?.id) {
     deleteQuery.eq("user_id", user.id);

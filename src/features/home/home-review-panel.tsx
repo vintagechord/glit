@@ -65,7 +65,7 @@ const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   },
   REJECTED: {
     label: "결과통보",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
   NEEDS_FIX: {
     label: "수정요청",
@@ -91,7 +91,7 @@ const stationResultFallbackMap: Record<string, { label: string; tone: string }> 
   },
   REJECTED: {
     label: "결과통보",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
   NEEDS_FIX: {
     label: "수정요청",
@@ -182,13 +182,13 @@ function getStageStatus(submission?: SubmissionSummary | null) {
   if (status === "IN_PROGRESS") {
     return stageStatusMap.progress;
   }
+  if (submission.payment_status !== "PAID") {
+    return stageStatusMap.payment;
+  }
   if (["SUBMITTED", "PRE_REVIEW"].includes(status)) {
     return stageStatusMap.received;
   }
-  if (submission.payment_status === "PAID") {
-    return stageStatusMap.paid;
-  }
-  return stageStatusMap.payment;
+  return stageStatusMap.paid;
 }
 
 function getSubmissionLabels(submission?: SubmissionSummary | null) {
@@ -1153,7 +1153,7 @@ export function HomeReviewPanel({
             <div className="mt-4 flex justify-center">
               <Link
                 href={`/dashboard/submissions/${activeSubmission.id}`}
-                className="rounded-full border border-border/70 bg-black/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:border-foreground hover:bg-black/10 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                className="rounded-full border border-[#f6d64a] bg-[#f6d64a] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:bg-[#efcc49]"
               >
                 자세히 보기
               </Link>
