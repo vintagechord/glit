@@ -179,6 +179,21 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+
+  /* Yellow surface readability: keep foreground/muted text dark enough for contrast */
+  .bg-\[\#f6d64a\] {
+    color: #111111;
+  }
+
+  .bg-\[\#f6d64a\].text-foreground,
+  .bg-\[\#f6d64a\] .text-foreground {
+    color: #111111;
+  }
+
+  .bg-\[\#f6d64a\].text-muted-foreground,
+  .bg-\[\#f6d64a\] .text-muted-foreground {
+    color: rgba(17, 17, 17, 0.82);
+  }
 }
 
 @media (max-width: 640px) {

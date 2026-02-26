@@ -140,7 +140,7 @@ export default function FormsPage() {
               </span>
               로 보내주시면 접수 안내를 드립니다.
             </p>
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-black/80">
               신청서와 음원/영상 파일을 모두 보내셔야 접수가 가능합니다.
             </p>
           </div>
