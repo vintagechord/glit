@@ -705,7 +705,7 @@ export function HomeReviewPanel({
 
   return (
     <div className="min-w-0 w-full rounded-[24px] border border-black bg-black p-4 shadow-[0_24px_80px_rgba(15,23,42,0.3)] sm:rounded-[28px] sm:p-6 dark:border-black dark:bg-black lg:min-h-[520px]">
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.16em] text-muted-foreground sm:text-sm sm:tracking-[0.2em]">
+      <div className="flex items-center justify-between text-xs uppercase tracking-[0.16em] text-white sm:text-sm sm:tracking-[0.2em]">
         <span>
           {activeSubmission
             ? `${submissionLabels.summary} 심의`
@@ -725,7 +725,7 @@ export function HomeReviewPanel({
         </span>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 rounded-full bg-muted/60 p-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground sm:mt-5 sm:text-sm sm:tracking-[0.2em]">
+      <div className="mt-4 flex items-center gap-2 rounded-full bg-muted/60 p-1 text-xs font-semibold uppercase tracking-[0.16em] text-white sm:mt-5 sm:text-sm sm:tracking-[0.2em]">
         {availableTabs.includes("album") ? (
           <button
             type="button"
@@ -733,7 +733,7 @@ export function HomeReviewPanel({
             className={`flex-1 rounded-full px-3 py-2 transition ${
               tab === "album"
                 ? "bg-[#f6d64a] text-black shadow-sm"
-                : "hover:text-white"
+                : "text-white/85 hover:text-white"
             }`}
           >
             앨범
@@ -746,7 +746,7 @@ export function HomeReviewPanel({
             className={`flex-1 rounded-full px-3 py-2 transition ${
               tab === "mv"
                 ? "bg-[#f6d64a] text-black shadow-sm"
-                : "hover:text-white"
+                : "text-white/85 hover:text-white"
             }`}
           >
             뮤직비디오
@@ -754,7 +754,7 @@ export function HomeReviewPanel({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground sm:text-xs sm:tracking-[0.2em]">
+      <div className="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.16em] text-white sm:text-xs sm:tracking-[0.2em]">
         <span>
           {activeList.length > 0
             ? `${activeIndex + 1}/${activeList.length}`
