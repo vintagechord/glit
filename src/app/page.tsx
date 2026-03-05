@@ -3,6 +3,7 @@ import Link from "next/link";
 import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { HomeReviewPanel } from "@/features/home/home-review-panel";
+import { OscilloscopeCurtainBackground } from "@/features/home/oscilloscope-curtain-background";
 import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -320,17 +321,6 @@ export default async function Home() {
     }
     console.error("[Home] Failed to initialize auth session:", error);
   }
-  const heroVideoDesktop =
-    process.env.NEXT_PUBLIC_HERO_VIDEO_DESKTOP ??
-    "/media/hero/glit-hero-desktop.mp4";
-  const heroVideoMobile =
-    process.env.NEXT_PUBLIC_HERO_VIDEO_MOBILE ??
-    "/media/hero/glit-hero-mobile.mp4";
-  const heroVideoPoster =
-    process.env.NEXT_PUBLIC_HERO_VIDEO_POSTER ??
-    "/media/hero/glit-hero-poster.jpg";
-  const hasHeroVideo = Boolean(heroVideoDesktop || heroVideoMobile);
-
   const sampleAlbum: SubmissionSnapshot = {
     id: "sample-album",
     title: "샘플 앨범 심의",
@@ -358,43 +348,16 @@ export default async function Home() {
     : { [sampleMv.id]: sampleStations };
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-x-hidden">
       <ScrollRevealObserver />
       <div className="pointer-events-none absolute left-[-20%] top-[-10%] h-[420px] w-[420px] rounded-full bg-[#c94821]/20 blur-[180px] dark:bg-[#f05a28]/20" />
       <div className="pointer-events-none absolute right-[-15%] top-[10%] h-[380px] w-[380px] rounded-full bg-[#c6a631]/20 blur-[180px] dark:bg-[#f6d64a]/20" />
       <div className="pointer-events-none absolute bottom-[-10%] left-[20%] h-[320px] w-[320px] rounded-full bg-[#a8792c]/25 blur-[180px] dark:bg-[#f6d64a]/15" />
 
-      <section className="w-full pb-8 pt-4 sm:pb-10 sm:pt-[1.75rem]">
-        <div className="relative w-full overflow-hidden border-y border-border/60 bg-[radial-gradient(circle_at_top,_rgba(245,245,245,0.98),_rgba(231,223,213,0.92),_rgba(210,198,185,0.88))] shadow-[0_24px_80px_rgba(31,41,55,0.15)] dark:bg-[radial-gradient(circle_at_top,_rgba(11,11,11,0.95),_rgba(24,18,14,0.95),_rgba(14,14,14,0.95))]">
+      <section className="w-full -mt-24 pb-8 pt-28 sm:-mt-28 sm:pb-10 sm:pt-36">
+        <div className="relative w-full overflow-hidden border-b border-border/60 bg-[radial-gradient(circle_at_top,_rgba(245,245,245,0.98),_rgba(231,223,213,0.92),_rgba(210,198,185,0.88))] shadow-[0_24px_80px_rgba(31,41,55,0.15)] dark:bg-[radial-gradient(circle_at_top,_rgba(11,11,11,0.95),_rgba(24,18,14,0.95),_rgba(14,14,14,0.95))]">
           <div className="absolute inset-0">
-            {hasHeroVideo ? (
-              <>
-                <video
-                  className="hidden h-full w-full object-cover opacity-100 saturate-[1.02] brightness-[0.6] contrast-[1.1] dark:opacity-80 dark:saturate-[1.3] dark:brightness-[1.12] dark:contrast-[1.12] sm:block"
-                  poster={heroVideoPoster}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  preload="metadata"
-                >
-                  <source src={heroVideoDesktop} type="video/mp4" />
-                </video>
-                <video
-                  className="h-full w-full object-cover object-right opacity-100 saturate-[1.02] brightness-[0.6] contrast-[1.1] dark:opacity-80 dark:saturate-[1.3] dark:brightness-[1.12] dark:contrast-[1.12] sm:hidden"
-                  poster={heroVideoPoster}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  preload="metadata"
-                >
-                  <source src={heroVideoMobile || heroVideoDesktop} type="video/mp4" />
-                </video>
-              </>
-            ) : (
-              <div className="h-full w-full bg-gradient-to-br from-[#d8ecff]/80 via-white/80 to-[#f3eaff]/70 dark:from-amber-300/10 dark:via-white/5 dark:to-indigo-300/10" />
-            )}
+            <OscilloscopeCurtainBackground />
             <div className="absolute inset-0 bg-gradient-to-r from-black/35 via-black/15 to-black/5 dark:from-background/80 dark:via-background/40" />
           </div>
 
