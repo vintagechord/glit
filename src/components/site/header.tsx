@@ -10,10 +10,10 @@ import { ThemeToggle } from "./theme-toggle";
 import { SiteLogo } from "./site-logo";
 
 const navLinks = [
-  { label: "심의 신청", href: "/dashboard/new" },
-  { label: "진행상황", href: "/dashboard" },
-  { label: "노래방 등록", href: "/karaoke-request" },
-  { label: "이메일 접수", href: "/forms", badge: "Legacy" },
+  { label: "심의 신청", href: "/dashboard/new", match: "prefix" as const },
+  { label: "진행상황", href: "/dashboard", match: "exact" as const },
+  { label: "노래방 등록", href: "/karaoke-request", match: "prefix" as const },
+  { label: "이메일 접수", href: "/forms", badge: "Legacy", match: "prefix" as const },
 ];
 
 const authStorageKey = "onside:header-auth-state";
@@ -27,8 +27,15 @@ const subtleButtonClass =
 const primaryButtonClass =
   "inline-flex h-12 shrink-0 items-center justify-center rounded-full bg-primary px-6 text-[15px] font-medium tracking-[-0.01em] text-primary-foreground shadow-[0_18px_40px_rgba(0,113,227,0.18)] transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]";
 
-const isActivePath = (pathname: string, href: string) => {
+const isActivePath = (
+  pathname: string,
+  href: string,
+  match: "exact" | "prefix" = "prefix",
+) => {
   if (href === "/") return pathname === href;
+  if (match === "exact") {
+    return pathname === href;
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 };
 
@@ -59,18 +66,13 @@ export function SiteHeader() {
       // Ignore storage failures.
     }
 
-    const fallbackId = window.setTimeout(() => {
-      persist("unauthenticated");
-    }, 1200);
-
     const syncSession = async () => {
       const {
-        data: { session },
+        data: { user },
         error,
-      } = await supabase.auth.getSession();
+      } = await supabase.auth.getUser();
 
       if (!active) return;
-      window.clearTimeout(fallbackId);
 
       if (error) {
         console.error("[SiteHeader] Failed to read session:", error.message);
@@ -78,7 +80,7 @@ export function SiteHeader() {
         return;
       }
 
-      persist(session?.user ? "authenticated" : "unauthenticated");
+      persist(user ? "authenticated" : "unauthenticated");
     };
 
     void syncSession();
@@ -86,16 +88,14 @@ export function SiteHeader() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      window.clearTimeout(fallbackId);
       persist(session?.user ? "authenticated" : "unauthenticated");
     });
 
     return () => {
       active = false;
-      window.clearTimeout(fallbackId);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [pathname]);
 
   return (
     <header className="sticky top-0 z-40 border-b border-black/6 bg-[rgba(250,250,252,0.82)] backdrop-blur-[24px] dark:border-white/10 dark:bg-[rgba(0,0,0,0.82)]">
@@ -104,7 +104,7 @@ export function SiteHeader() {
 
         <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1.5 lg:flex">
           {navLinks.map((link) => {
-            const activeLink = isActivePath(pathname, link.href);
+            const activeLink = isActivePath(pathname, link.href, link.match);
             return (
               <Link
                 key={link.href}
@@ -155,7 +155,7 @@ export function SiteHeader() {
       <nav className="border-t border-black/6 px-4 py-2.5 lg:hidden dark:border-white/10">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-2 overflow-x-auto scrollbar-none sm:px-2">
           {navLinks.map((link) => {
-            const activeLink = isActivePath(pathname, link.href);
+            const activeLink = isActivePath(pathname, link.href, link.match);
             return (
               <Link
                 key={link.href}

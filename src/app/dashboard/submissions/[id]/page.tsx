@@ -144,8 +144,6 @@ export default async function SubmissionDetailPage({
 
   const supabase = await createServerSupabase();
   const user = await getServerSessionUser(supabase);
-  const { data: isAdminRpc } = await supabase.rpc("is_admin");
-  const isAdmin = isAdminRpc === true;
 
   const extractMissingColumn = (error: PostgrestError | null) => {
     const msg = error?.message ?? "";
@@ -461,7 +459,6 @@ export default async function SubmissionDetailPage({
       initialEvents={[]}
       initialStationReviews={initialStationReviews}
       initialFiles={[]}
-      isAdmin={isAdmin}
     />
   );
 }

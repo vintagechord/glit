@@ -130,11 +130,11 @@ const steps = [
 ];
 
 const stepDescriptions = [
-  "접수 방식과 방송국 패키지를 결정합니다.",
-  "앨범, 접수자, 트랙 정보를 입력합니다.",
-  "심의용 음원 파일을 제출합니다.",
-  "결제 방식과 발급 정보를 확인합니다.",
-  "조회 코드 또는 마이페이지로 결과를 확인합니다.",
+  "방식과 패키지",
+  "신청서 입력",
+  "파일 제출",
+  "결제 정보",
+  "결과 확인",
 ];
 
 const formatPackageName = (count: number, isOneClick = false) =>
@@ -147,20 +147,20 @@ const formatPackageDescription = (
 
 const packageToneClasses = [
   {
-    card: "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.14)] ring-1 ring-[#0071e3]/10",
-    chip: "border-[#0071e3]/16 bg-white/72 text-[#123152]",
+    card: "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
+    chip: "border-white/18 bg-white/12 text-white dark:border-[#00101f]/10 dark:bg-[#00101f]/10 dark:text-[#00101f]",
   },
   {
-    card: "border-[#bfd8f6] bg-[#dcecff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.16)] ring-1 ring-[#0071e3]/12",
-    chip: "border-[#0071e3]/18 bg-white/70 text-[#123152]",
+    card: "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
+    chip: "border-white/18 bg-white/12 text-white dark:border-[#00101f]/10 dark:bg-[#00101f]/10 dark:text-[#00101f]",
   },
   {
-    card: "border-[#a8cbf3] bg-[#cfe3fb] text-[#113050] shadow-[0_18px_40px_rgba(0,113,227,0.18)] ring-1 ring-[#0071e3]/14",
-    chip: "border-[#0071e3]/18 bg-white/68 text-[#113050]",
+    card: "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
+    chip: "border-white/18 bg-white/12 text-white dark:border-[#00101f]/10 dark:bg-[#00101f]/10 dark:text-[#00101f]",
   },
   {
-    card: "border-[#90bdf0] bg-[#b8d5f6] text-[#102d4d] shadow-[0_18px_40px_rgba(0,113,227,0.2)] ring-1 ring-[#0071e3]/16",
-    chip: "border-[#0071e3]/20 bg-white/66 text-[#102d4d]",
+    card: "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
+    chip: "border-white/18 bg-white/12 text-white dark:border-[#00101f]/10 dark:bg-[#00101f]/10 dark:text-[#00101f]",
   },
 ];
 
@@ -524,49 +524,6 @@ export function AlbumWizard({
         priceKrw: basePriceKrw,
       }
     : null;
-  const processGuideCards = [
-    {
-      label: "현재 선택",
-      value: selectedPackageSummary
-        ? `${formatPackageName(selectedPackageSummary.stationCount, isOneClick)}`
-        : "패키지 미선택",
-      description: selectedPackageSummary
-        ? `${selectedPackage?.stations.length ?? 0}개 방송국 · ${formatCurrency(selectedPackageSummary.priceKrw)}원`
-        : "접수 방식을 먼저 선택해주세요.",
-    },
-    {
-      label: "이번 단계 핵심",
-      value:
-        step === 1
-          ? "패키지와 접수 방식 확정"
-          : step === 2
-            ? isOneClick
-              ? "기본 정보와 멜론 링크 입력"
-              : "기본 정보와 트랙 정보 입력"
-            : step === 3
-              ? "파일 업로드 또는 이메일 제출 안내 확인"
-              : step === 4
-                ? "결제 방식과 발급 정보 확인"
-                : "진행 상황 확인 준비 완료",
-      description:
-        step === 2
-          ? isOneClick
-            ? "아티스트명, 접수자 정보, 멜론 링크가 핵심입니다."
-            : `트랙 ${tracks.length}곡 기준으로 필수 항목을 점검하세요.`
-          : step === 5
-            ? isGuest
-              ? "조회 코드로 비회원 결과 조회가 가능합니다."
-              : "마이페이지에서 진행 상태가 자동 저장됩니다."
-            : "현재 단계만 끝내면 다음 단계로 바로 이동합니다.",
-    },
-    {
-      label: "결과 확인",
-      value: isGuest ? "비회원 조회 코드 제공" : "마이페이지 자동 저장",
-      description: isGuest
-        ? "접수 완료 후 발급되는 코드로 방송국별 진행 상태와 결과를 조회합니다."
-        : "접수 완료 후 내역이 마이페이지에 저장되어 이후 결과 확인이 더 편합니다.",
-    },
-  ];
 
   const readDraftStorage = React.useCallback(() => {
     if (typeof window === "undefined") return null;
@@ -818,6 +775,7 @@ export function AlbumWizard({
       const submissionIdFromMsg = (payload.submissionId as string | undefined) || currentSubmissionId;
       const guestTokenFromMsg = payload.guestToken as string | undefined;
       if (status === "SUCCESS") {
+        clearDraftStorage();
         if (submissionIdFromMsg) {
           window.location.href = `/dashboard/submissions/${submissionIdFromMsg}?payment=success`;
         } else if (guestTokenFromMsg) {
@@ -830,12 +788,21 @@ export function AlbumWizard({
           typeof payload.message === "string"
             ? payload.message
             : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
+        const paymentState = status.toLowerCase();
+        if (submissionIdFromMsg) {
+          window.location.href = `/dashboard/submissions/${submissionIdFromMsg}?payment=${paymentState}`;
+          return;
+        }
+        if (guestTokenFromMsg) {
+          window.location.href = `/track/${guestTokenFromMsg}?payment=${paymentState}`;
+          return;
+        }
         setNotice({ error: message });
       }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [currentSubmissionId]);
+  }, [clearDraftStorage, currentSubmissionId]);
 
   const stepLabels = (
     <div className="grid gap-3 md:grid-cols-5">
@@ -849,11 +816,11 @@ export function AlbumWizard({
             : label;
         const activeTone = selectedPackageTone
           ? selectedPackageTone.card
-          : "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152]";
+          : "border-[#0071e3] bg-[#0071e3] text-white dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]";
         return (
           <div
             key={label}
-            className={`rounded-[24px] border px-4 py-4 text-xs ${
+            className={`rounded-[22px] border px-4 py-3 text-xs ${
               isCurrent || isCompleted
                 ? activeTone
                 : "border-border/60 bg-background text-muted-foreground"
@@ -874,10 +841,10 @@ export function AlbumWizard({
                 </span>
               ) : null}
             </div>
-            <p className="mt-3 text-sm font-semibold tracking-[-0.01em]">
+            <p className="mt-2 text-sm font-semibold tracking-[-0.01em]">
               {packageLabel}
             </p>
-            <p className="mt-1 text-[12px] font-medium leading-5 tracking-normal opacity-75">
+            <p className="mt-1 text-[11px] font-medium leading-4 tracking-normal opacity-80">
               {stepDescriptions[index]}
             </p>
           </div>
@@ -2370,7 +2337,7 @@ export function AlbumWizard({
 
   const confirmEmailSubmission = React.useCallback(() => {
     const message =
-      "신청서는 사이트에서 계속 진행하고, 음원 파일만 이메일로 제출하시겠습니까?\n(파일 업로드 없이 다음 단계로 이동합니다)";
+      "음원 파일 첨부가 완료되지 않으면 파일 없이 다음 단계로 진행해 신청서를 먼저 제출하고, 음원 파일만 이메일로 보내주세요.\n이 방식으로 계속하시겠습니까?";
     const confirmed =
       typeof window !== "undefined" ? window.confirm(message) : false;
     if (confirmed) {
@@ -3023,7 +2990,6 @@ export function AlbumWizard({
       }
 
       if (status === "SUBMITTED" && submissionIds.length > 0) {
-        clearDraftStorage();
         if (paymentMethod === "CARD") {
           setNotice(emailWarning ? { emailWarning } : {});
           const { ok, error } = openInicisCardPopup({
@@ -3038,6 +3004,7 @@ export function AlbumWizard({
           }
           return;
         } else if (paymentMethod === "BANK") {
+          clearDraftStorage();
           setNotice(emailWarning ? { emailWarning } : {});
           setCompletionId(submissionIds[0]);
           setCompletionSubmissionIds(submissionIds);
@@ -3210,25 +3177,6 @@ export function AlbumWizard({
 
       {stepLabels}
 
-      <div className="grid gap-3 md:grid-cols-3">
-        {processGuideCards.map((card) => (
-          <div
-            key={card.label}
-            className="rounded-[24px] border border-black/6 bg-white/90 px-5 py-4 shadow-[0_16px_32px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-              {card.label}
-            </p>
-            <p className="mt-3 text-base font-semibold tracking-[-0.02em] text-foreground">
-              {card.value}
-            </p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {card.description}
-            </p>
-          </div>
-        ))}
-      </div>
-
       {step === 1 && (
         <div className="space-y-6">
           <div className="flex items-start justify-between gap-4">
@@ -3259,7 +3207,7 @@ export function AlbumWizard({
                 disabled={selectionLocked}
                 className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-70 ${
                   !isOneClick
-                    ? "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.14)]"
+                    ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
                     : "border-border/60 bg-background text-foreground hover:border-primary/40"
                 }`}
               >
@@ -3271,7 +3219,7 @@ export function AlbumWizard({
                     <p className="mt-2 text-sm font-semibold">일반 접수</p>
                   </div>
                   {!isOneClick ? (
-                    <span className="rounded-full border border-[#0071e3]/14 bg-white/72 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
+                    <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
                       선택됨
                     </span>
                   ) : null}
@@ -3357,7 +3305,7 @@ export function AlbumWizard({
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {isActive ? (
-                        <span className="rounded-full border border-[#0071e3]/14 bg-white/72 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
+                        <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
                           선택됨
                         </span>
                       ) : null}
@@ -4597,7 +4545,7 @@ export function AlbumWizard({
                     아직 선택된 파일이 없습니다.
                   </p>
                   <p className="mt-2 text-[11px] text-muted-foreground">
-                    업로드 없이 진행하려면 이메일 제출을 선택하세요.
+                    파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요.
                   </p>
                   <div className="mt-3 flex items-center justify-center gap-2">
                     <button
@@ -4618,10 +4566,10 @@ export function AlbumWizard({
             </div>
             <div className="mt-4 space-y-1 text-xs text-muted-foreground">
               <p>
-                업로드가 원활하지 않으면 신청서는 사이트에서 계속 진행하고, 음원 파일만 이메일로 보내주세요.
+                음원 파일 업로드 시에 첨부 완료가 되지 않는 경우 파일 첨부 없이 하단 다음 단계 버튼을 눌러 신청서를 제출 후 음원 파일은 이메일로 보내주세요.
               </p>
               {isOneClick && (
-                <p>원클릭 접수는 음원 파일만 제출하면 됩니다.</p>
+                <p>원클릭 접수도 동일하게 신청서를 먼저 제출한 뒤 음원 파일만 이메일로 보내주시면 됩니다.</p>
               )}
               <p className="font-semibold text-foreground">
                 {APP_CONFIG.supportEmail}

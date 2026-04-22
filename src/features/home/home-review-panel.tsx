@@ -104,6 +104,10 @@ const stageStatusMap = {
     label: "결제대기",
     tone: "bg-slate-500/10 text-slate-600 dark:text-slate-200",
   },
+  pending: {
+    label: "입금 예정",
+    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+  },
   paid: {
     label: "결제완료",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
@@ -181,6 +185,9 @@ function getStageStatus(submission?: SubmissionSummary | null) {
   }
   if (status === "IN_PROGRESS") {
     return stageStatusMap.progress;
+  }
+  if (submission.payment_status === "PAYMENT_PENDING") {
+    return stageStatusMap.pending;
   }
   if (submission.payment_status !== "PAID") {
     return stageStatusMap.payment;

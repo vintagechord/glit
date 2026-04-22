@@ -48,7 +48,7 @@ export const paymentStatusOptions: Array<{
   label: string;
 }> = [
   { value: "UNPAID", label: "미결제" },
-  { value: "PAYMENT_PENDING", label: "결제 확인 중" },
+  { value: "PAYMENT_PENDING", label: "입금 예정" },
   { value: "PAID", label: "결제 완료" },
   { value: "REFUNDED", label: "환불" },
 ];

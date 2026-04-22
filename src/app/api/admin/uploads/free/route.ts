@@ -25,7 +25,10 @@ const getObjectKeyFromRequest = (request: Request) => {
 const isAllowedAdminFreeKey = (objectKey: string) => {
   try {
     const { prefix } = getB2Config();
-    return objectKey.startsWith(`${prefix}admin-free/`);
+    return (
+      objectKey.startsWith(`${prefix}admin-free/`) ||
+      objectKey.startsWith(`${prefix}artist-thumbnails/`)
+    );
   } catch {
     return false;
   }
@@ -135,14 +138,16 @@ export async function POST(request: Request) {
   }
 
   const label = fields.label?.trim() || "free-upload";
+  const isArtistThumbnail = label === "artist-thumbnail";
 
   try {
     const { client, bucket } = getB2Config();
     const objectKey = buildObjectKey({
       userId: "admin-free",
       submissionId: undefined,
-      title: label,
+      title: isArtistThumbnail ? "thumbnail" : label,
       filename,
+      folder: isArtistThumbnail ? "artist-thumbnails" : "admin-free",
     });
 
     const uploader = new Upload({

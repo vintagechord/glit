@@ -1,3 +1,5 @@
+import { APP_CONFIG } from "@/lib/config";
+
 type WelcomeEmailPayload = {
   email: string;
   name?: string;
@@ -26,6 +28,28 @@ type ResultEmailPayload = {
 type PasswordResetEmailPayload = {
   email: string;
   link: string;
+};
+
+type SubmissionBankRequestEmailPayload = {
+  email: string;
+  title: string;
+  artist?: string | null;
+  kind: "ALBUM" | "MV";
+  amountKrw: number;
+  bankDepositorName?: string | null;
+  link?: string;
+  siteLink?: string;
+};
+
+type SubmissionUpdateEmailPayload = {
+  email: string;
+  title: string;
+  artist?: string | null;
+  kind: "ALBUM" | "MV";
+  headline: string;
+  summary: string;
+  link?: string;
+  subject?: string;
 };
 
 export async function sendWelcomeEmail(payload: WelcomeEmailPayload) {
@@ -316,6 +340,211 @@ export async function sendResultEmail(
       ok: false,
       skipped: false,
       message: "심의 결과 메일 발송에 실패했습니다.",
+    };
+  }
+}
+
+export async function sendSubmissionBankRequestEmail(
+  payload: SubmissionBankRequestEmailPayload,
+): Promise<EmailSendResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM;
+
+  if (!apiKey || !from) {
+    return {
+      ok: false,
+      skipped: true,
+      message: "이메일 발송 설정이 되어 있지 않아 무통장 안내 메일을 보내지 못했습니다.",
+    };
+  }
+
+  const kindLabel = payload.kind === "MV" ? "뮤직비디오" : "음반";
+  const safeTitle = escapeHtml(payload.title?.trim() || "제목 미입력");
+  const safeArtist = escapeHtml(payload.artist?.trim() || "-");
+  const safeDepositor = escapeHtml(payload.bankDepositorName?.trim() || "-");
+  const safeAmount = `${new Intl.NumberFormat("ko-KR").format(payload.amountKrw)}원`;
+  const safeBankName = escapeHtml(APP_CONFIG.bankName);
+  const safeBankAccount = escapeHtml(APP_CONFIG.bankAccount);
+  const safeBankHolder = escapeHtml(APP_CONFIG.bankHolder);
+  const siteLink =
+    normalizeAbsoluteUrl(payload.siteLink) ||
+    normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_SITE_URL) ||
+    normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
+    "https://onside17.com/";
+  const progressLink = normalizeAbsoluteUrl(payload.link) || siteLink;
+
+  const html = `
+    <div style="margin:0;padding:28px 12px;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#0f172a;">
+      <div style="max-width:580px;margin:0 auto;border-radius:22px;overflow:hidden;border:1px solid #d5dbe5;background:#ffffff;">
+        <div style="background:linear-gradient(135deg,#0f172a,#1f2937);padding:24px 24px 20px;color:#f8fafc;">
+          <p style="margin:0;font-size:12px;letter-spacing:0.18em;font-weight:700;text-transform:uppercase;color:#cbd5e1;">Onside Bank Transfer</p>
+          <h2 style="margin:10px 0 0;font-size:24px;line-height:1.35;font-weight:800;">무통장 입금 안내를 보내드립니다.</h2>
+          <p style="margin:10px 0 0;font-size:13px;color:#cbd5e1;">신청서는 정상 접수되었으며, 아래 계좌로 입금하시면 심의가 이어집니다.</p>
+        </div>
+        <div style="padding:22px 24px 24px;">
+          <div style="display:grid;gap:12px;">
+            <div style="border-radius:14px;border:1px solid #d6e8fb;background:#f4f9ff;padding:14px 16px;">
+              <p style="margin:0;font-size:12px;color:#475569;">접수 구분</p>
+              <p style="margin:6px 0 0;font-size:15px;font-weight:700;color:#0f172a;">${kindLabel} 심의</p>
+              <p style="margin:12px 0 0;font-size:12px;color:#475569;">작품명</p>
+              <p style="margin:6px 0 0;font-size:15px;font-weight:700;color:#0f172a;">${safeTitle}</p>
+              <p style="margin:12px 0 0;font-size:12px;color:#475569;">아티스트</p>
+              <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0f172a;">${safeArtist}</p>
+            </div>
+            <div style="border-radius:14px;border:1px solid #dbe3ec;background:#f8fafc;padding:16px;">
+              <p style="margin:0;font-size:12px;color:#475569;">입금 금액</p>
+              <p style="margin:6px 0 0;font-size:24px;font-weight:800;color:#0071e3;">${safeAmount}</p>
+              <div style="margin-top:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+                <div>
+                  <p style="margin:0;font-size:12px;color:#64748b;">은행명</p>
+                  <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${safeBankName}</p>
+                </div>
+                <div>
+                  <p style="margin:0;font-size:12px;color:#64748b;">예금주</p>
+                  <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${safeBankHolder}</p>
+                </div>
+                <div style="grid-column:1 / -1;">
+                  <p style="margin:0;font-size:12px;color:#64748b;">계좌번호</p>
+                  <p style="margin:6px 0 0;font-size:16px;font-weight:800;color:#0f172a;letter-spacing:0.01em;">${safeBankAccount}</p>
+                </div>
+                <div style="grid-column:1 / -1;">
+                  <p style="margin:0;font-size:12px;color:#64748b;">입금자명</p>
+                  <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${safeDepositor}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="margin:18px 0 0;display:flex;flex-wrap:wrap;gap:10px;">
+            <a href="${progressLink}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">내 진행상황 보기</a>
+            <a href="${siteLink}" style="display:inline-block;border-radius:999px;background:#0f172a;color:#f8fafc;text-decoration:none;font-size:13px;font-weight:700;padding:11px 18px;">온사이드 사이트</a>
+          </div>
+          <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">입금 후 관리자가 확인하면 진행상황이 자동으로 업데이트됩니다.</p>
+          <p style="margin:6px 0 0;font-size:12px;color:#334155;word-break:break-all;">${escapeHtml(progressLink)}</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: payload.email,
+        subject: `[onside] 무통장 입금 안내 — ${kindLabel} 심의`,
+        html,
+      }),
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        skipped: false,
+        message: "무통장 입금 안내 메일 발송에 실패했습니다.",
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    console.error("sendSubmissionBankRequestEmail error", error);
+    return {
+      ok: false,
+      skipped: false,
+      message: "무통장 입금 안내 메일 발송에 실패했습니다.",
+    };
+  }
+}
+
+export async function sendSubmissionUpdateEmail(
+  payload: SubmissionUpdateEmailPayload,
+): Promise<EmailSendResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM;
+
+  if (!apiKey || !from) {
+    return {
+      ok: false,
+      skipped: true,
+      message: "이메일 발송 설정이 되어 있지 않아 업데이트 알림을 보내지 못했습니다.",
+    };
+  }
+
+  const kindLabel = payload.kind === "MV" ? "뮤직비디오" : "음반";
+  const safeTitle = escapeHtml(payload.title?.trim() || "제목 미입력");
+  const safeArtist = escapeHtml(payload.artist?.trim() || "-");
+  const safeHeadline = escapeHtml(payload.headline.trim());
+  const safeSummary = escapeHtml(payload.summary.trim()).replace(/\n/g, "<br />");
+  const progressLink =
+    normalizeAbsoluteUrl(payload.link) ||
+    normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_SITE_URL) ||
+    normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
+    "https://onside17.com/";
+
+  const html = `
+    <div style="margin:0;padding:28px 12px;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#0f172a;">
+      <div style="max-width:580px;margin:0 auto;border-radius:22px;overflow:hidden;border:1px solid #d5dbe5;background:#ffffff;">
+        <div style="background:linear-gradient(135deg,#0f172a,#1f2937);padding:24px 24px 20px;color:#f8fafc;">
+          <p style="margin:0;font-size:12px;letter-spacing:0.18em;font-weight:700;text-transform:uppercase;color:#cbd5e1;">Onside Update</p>
+          <h2 style="margin:10px 0 0;font-size:24px;line-height:1.35;font-weight:800;">${safeHeadline}</h2>
+          <p style="margin:10px 0 0;font-size:13px;color:#cbd5e1;">관리자 업데이트가 반영되어 진행상황을 다시 확인하실 수 있습니다.</p>
+        </div>
+        <div style="padding:22px 24px 24px;">
+          <div style="border-radius:14px;border:1px solid #dbe3ec;background:#f8fafc;padding:16px;">
+            <p style="margin:0;font-size:12px;color:#475569;">접수 구분</p>
+            <p style="margin:6px 0 0;font-size:15px;font-weight:700;color:#0f172a;">${kindLabel} 심의</p>
+            <p style="margin:12px 0 0;font-size:12px;color:#475569;">작품명</p>
+            <p style="margin:6px 0 0;font-size:15px;font-weight:700;color:#0f172a;">${safeTitle}</p>
+            <p style="margin:12px 0 0;font-size:12px;color:#475569;">아티스트</p>
+            <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0f172a;">${safeArtist}</p>
+          </div>
+          <div style="margin-top:16px;border-radius:14px;border:1px solid #d6e8fb;background:#f4f9ff;padding:16px;">
+            <p style="margin:0;font-size:12px;color:#475569;">업데이트 내용</p>
+            <p style="margin:8px 0 0;font-size:14px;line-height:1.7;color:#0f172a;">${safeSummary}</p>
+          </div>
+          <div style="margin:18px 0 0;display:flex;flex-wrap:wrap;gap:10px;">
+            <a href="${progressLink}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">진행상황 바로 보기</a>
+          </div>
+          <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">링크를 클릭하면 로그인 후 해당 접수 상세로 이동합니다.</p>
+          <p style="margin:6px 0 0;font-size:12px;color:#334155;word-break:break-all;">${escapeHtml(progressLink)}</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: payload.email,
+        subject: payload.subject ?? `[onside] 심의 업데이트 안내 — ${kindLabel} 심의`,
+        html,
+      }),
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        skipped: false,
+        message: "업데이트 알림 메일 발송에 실패했습니다.",
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    console.error("sendSubmissionUpdateEmail error", error);
+    return {
+      ok: false,
+      skipped: false,
+      message: "업데이트 알림 메일 발송에 실패했습니다.",
     };
   }
 }

@@ -422,7 +422,7 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
             파일/링크
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            음원 또는 참고 자료를 업로드하세요. (선택)
+            음원 또는 참고 자료를 업로드하세요.
           </p>
           <div className="mt-4">
             <label

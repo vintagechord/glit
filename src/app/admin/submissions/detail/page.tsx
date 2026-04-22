@@ -1095,7 +1095,16 @@ export default async function AdminSubmissionDetailPage({
                 <DetailRow label="배급사" value={submission.mv_distribution_company || "-"} />
                 <DetailRow label="용도" value={submission.mv_usage || "-"} />
                 <DetailRow label="희망등급" value={submission.mv_desired_rating || "-"} />
-                <DetailRow label="곡 제목" value={submission.mv_song_title || "-"} />
+                <DetailRow
+                  label="곡 제목"
+                  value={
+                    submission.mv_song_title_official ||
+                    submission.mv_song_title ||
+                    submission.mv_song_title_kr ||
+                    submission.mv_song_title_en ||
+                    "-"
+                  }
+                />
                 <DetailRow label="작곡" value={submission.mv_composer || "-"} />
                 <DetailRow label="작사" value={submission.mv_lyricist || "-"} />
                 <DetailRow label="편곡" value={submission.mv_arranger || "-"} />

@@ -110,15 +110,19 @@ export function buildObjectKey(opts: {
   submissionId?: string;
   title?: string;
   filename: string;
+  folder?: string;
 }) {
   const { prefix } = getB2Config();
   const safe = sanitizeFileName(opts.filename);
   const titleSegment = sanitizeFileName(opts.title?.trim() || "untitled");
   const submissionPart = opts.submissionId ? `${opts.submissionId}/` : "";
   const uniquePrefix = randomUUID();
+  const folderSegment = opts.folder
+    ? `${sanitizeFileName(opts.folder).replace(/^_+|_+$/g, "") || "uploads"}/`
+    : `${opts.userId}/`;
   // 보안/충돌 방지를 위해 uuid는 앞에 붙이고, 사용자가 올린 원본 파일명은 그대로 유지한다.
-  // 최종 object key: submissions/{userId}/{title}/{submissionId?}/{uuid}-{originalName}
-  return `${prefix}${opts.userId}/${titleSegment}/${submissionPart}${uniquePrefix}-${safe}`;
+  // 최종 object key: submissions/{folder or userId}/{title}/{submissionId?}/{uuid}-{originalName}
+  return `${prefix}${folderSegment}${titleSegment}/${submissionPart}${uniquePrefix}-${safe}`;
 }
 
 export async function presignPutUrl(params: {

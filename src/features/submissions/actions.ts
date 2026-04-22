@@ -3,7 +3,10 @@
 import { z } from "zod";
 
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
-import { sendSubmissionReceiptEmail } from "@/lib/email";
+import {
+  sendSubmissionBankRequestEmail,
+  sendSubmissionReceiptEmail,
+} from "@/lib/email";
 import { ensureArtistByName } from "@/lib/artist";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -491,7 +494,7 @@ const mvSubmissionSchema = z.object({
   songTitle: z.string().optional(),
   songTitleKr: z.string().optional(),
   songTitleEn: z.string().optional(),
-  songTitleOfficial: z.enum(["KR", "EN"]).optional(),
+  songTitleOfficial: z.string().optional(),
   composer: z.string().optional(),
   lyricist: z.string().optional(),
   arranger: z.string().optional(),
@@ -1092,6 +1095,24 @@ export async function saveAlbumSubmissionAction(
             emailResult.message ??
             "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
         }
+
+        if (paymentMethod === "BANK" && amountKrw > 0) {
+          const bankEmailResult = await sendSubmissionBankRequestEmail({
+            email: recipientEmail,
+            title: titleValue || "제목 미입력",
+            artist: artistNameValue || null,
+            kind: "ALBUM",
+            amountKrw,
+            bankDepositorName: bankDepositorNameValue || null,
+            link,
+            siteLink,
+          });
+          if (!bankEmailResult.ok && !bankEmailResult.skipped && !emailWarning) {
+            emailWarning =
+              bankEmailResult.message ??
+              "무통장 입금 안내 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+          }
+        }
       }
     }
   }
@@ -1170,12 +1191,10 @@ export async function saveMvSubmissionAction(
   }
   amountKrw = Math.max(0, amountKrw);
   const songTitleValue =
-    parsed.data.songTitle ||
-    (parsed.data.songTitleOfficial === "KR"
-      ? parsed.data.songTitleKr
-      : parsed.data.songTitleOfficial === "EN"
-        ? parsed.data.songTitleEn
-        : parsed.data.songTitleKr || parsed.data.songTitleEn) ||
+    parsed.data.songTitleOfficial?.trim() ||
+    parsed.data.songTitle?.trim() ||
+    parsed.data.songTitleKr?.trim() ||
+    parsed.data.songTitleEn?.trim() ||
     null;
   const songTitleKrValue = parsed.data.songTitleKr || null;
   const songTitleEnValue = parsed.data.songTitleEn || null;
@@ -1465,6 +1484,24 @@ export async function saveMvSubmissionAction(
           emailWarning =
             emailResult.message ??
             "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+        }
+
+        if (paymentMethod === "BANK" && amountKrw > 0) {
+          const bankEmailResult = await sendSubmissionBankRequestEmail({
+            email: recipientEmail,
+            title: titleValue || "제목 미입력",
+            artist: artistNameValue || null,
+            kind: "MV",
+            amountKrw,
+            bankDepositorName: bankDepositorNameValue || null,
+            link,
+            siteLink,
+          });
+          if (!bankEmailResult.ok && !bankEmailResult.skipped && !emailWarning) {
+            emailWarning =
+              bankEmailResult.message ??
+              "무통장 입금 안내 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+          }
         }
       }
     }

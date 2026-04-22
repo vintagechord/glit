@@ -348,6 +348,7 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
       submission: DashboardSubmission,
       targetMap: Record<string, StationReviewRow[]>,
     ) => {
+      const submissionType = "type" in submission ? submission.type : "ALBUM";
       const pkg = resolvePackage(submission);
       const fallbackPackage = submission.package_id ? packageMap.get(submission.package_id) : null;
       const resolvedCount = pkg?.station_count ?? fallbackPackage?.station_count ?? null;
@@ -436,6 +437,9 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
       }
 
       if (rows.length === 0) {
+        const fallbackStationName = submissionType.startsWith("MV")
+          ? "영상물등급위원회"
+          : "방송국 확인 중";
         rows.push({
           id: `placeholder-${submission.id}`,
           submission_id: submission.id,
@@ -447,7 +451,7 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
           station: {
             id: "",
             code: "",
-            name: pkg?.name ?? "선택 방송국",
+            name: fallbackStationName,
             logo_url: "/station-logos/default.svg",
           },
         });

@@ -1,7 +1,8 @@
 import Link from "next/link";
 
-import { StripAdBannerClient } from "@/components/site/strip-ad-banner-client";
+import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
+import { HomeArtistSpotlight } from "@/features/home/home-artist-spotlight";
 import { HomeSessionPanel } from "@/features/home/home-session-panel";
 import { OscilloscopeCurtainBackground } from "@/features/home/oscilloscope-curtain-background";
 
@@ -233,15 +234,6 @@ const processStepTones = [
   "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
 ];
 
-const homeStripBanners = [
-  {
-    id: "fallback-banner",
-    title: "온사이드 심의 접수 안내",
-    image_url: "/media/hero/glit-hero-poster.jpg",
-    link_url: "/dashboard/new",
-  },
-];
-
 export default function Home() {
   return (
     <div className="relative overflow-x-hidden">
@@ -267,7 +259,7 @@ export default function Home() {
               </h1>
               <p className="max-w-xl text-sm text-foreground/76 whitespace-pre-line sm:text-lg dark:text-white/78">
                 온사이드에서 방송사별 심의 진행을 실시간으로 받아보세요.
-                {"\n"}나의 모든 심의 기록은 온사이드에서 모아 관리할 수 있습니다.
+                {"\n"}나의 모든 심의 기록, 온사이드에서 모아 관리할 수 있습니다.
               </p>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {heroCtas.map((cta) => (
@@ -317,6 +309,8 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+
+              <HomeArtistSpotlight />
             </div>
 
             <HomeSessionPanel />
@@ -325,8 +319,8 @@ export default function Home() {
       </section>
 
       <section className="mx-auto w-full max-w-6xl px-4 pb-12 pt-4 sm:px-6">
-        <div className="mb-14">
-          <StripAdBannerClient banners={homeStripBanners} />
+        <div className="mb-12">
+          <StripAdBanner />
         </div>
 
         <div
@@ -368,7 +362,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+      <section className="mx-auto w-full max-w-6xl px-4 pb-10 pt-8 sm:px-6 sm:pb-12 sm:pt-10">
         <div className="rounded-[28px] border border-border/60 bg-background/80 px-5 py-8 sm:rounded-[32px] sm:px-8 sm:py-10">
           <div
             data-scroll-reveal
@@ -389,20 +383,20 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4">
-            {["패키지 선택", "신청서 업로드", "결제하기", "접수 완료"].map((label, index) => (
+          <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+            {["패키지 선택", "신청서 작성", "결제하기", "접수 완료"].map((label, index) => (
               <div
                 key={label}
                 data-scroll-reveal
                 data-reveal-state="hidden"
                 style={{ transitionDelay: `${120 + index * 120}ms` }}
-                className={`rounded-2xl border p-4 ${scrollRevealBaseClass} ${processStepTones[index] ?? "border-border/60 bg-card/70 text-foreground"
+                className={`rounded-2xl border p-3.5 ${scrollRevealBaseClass} ${processStepTones[index] ?? "border-border/60 bg-card/70 text-foreground"
                   }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">
                   STEP {String(index + 1).padStart(2, "0")}
                 </p>
-                <p className="mt-2 text-sm font-semibold">{label}</p>
+                <p className="mt-1.5 text-sm font-semibold">{label}</p>
               </div>
             ))}
           </div>

@@ -124,9 +124,9 @@ export default function FormsPage() {
         </section>
       </div>
 
-      <div className="mt-8 rounded-[28px] border border-[#f6d64a] bg-[#f6d64a] p-6 text-sm text-black shadow-[0_18px_50px_rgba(245,158,11,0.15)]">
+      <div className="mt-8 rounded-[28px] border border-[#ffd84a] bg-[#fff4be] p-6 text-sm text-black shadow-[0_18px_50px_rgba(245,158,11,0.15)]">
         <div className="flex flex-wrap items-start gap-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f6d64a] text-base font-bold text-black shadow-[0_12px_24px_rgba(245,158,11,0.35)] live-blink">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#ffd84a] text-base font-bold text-black shadow-[0_12px_24px_rgba(245,158,11,0.35)] live-blink">
             !
           </div>
           <div className="space-y-2">

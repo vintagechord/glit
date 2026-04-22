@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import * as React from "react";
 import {
   paymentStatusLabelMap,
@@ -327,7 +328,6 @@ export function SubmissionDetailClient({
   initialStationReviews,
   enableRealtime = true,
   guestToken,
-  isAdmin = false,
 }: {
   submissionId: string;
   initialSubmission: Submission;
@@ -336,7 +336,6 @@ export function SubmissionDetailClient({
   initialStationReviews: StationReview[];
   enableRealtime?: boolean;
   guestToken?: string;
-  isAdmin?: boolean;
 }) {
   const supabase = React.useMemo(
     () => (enableRealtime ? createClient() : null),
@@ -368,7 +367,6 @@ export function SubmissionDetailClient({
   const [isReceptionInfoOpen, setIsReceptionInfoOpen] = React.useState(false);
   const [isSubmissionFormOpen, setIsSubmissionFormOpen] = React.useState(false);
   const [isAttachmentsOpen, setIsAttachmentsOpen] = React.useState(false);
-  const showAdminTools = isAdmin === true && !guestToken;
   const showApplicantInfo = Boolean(guestToken);
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
@@ -541,11 +539,21 @@ export function SubmissionDetailClient({
   const submissionStatusLabel =
     reviewStatusLabelMap[submission.status as keyof typeof reviewStatusLabelMap] ??
     submission.status;
+  const displaySubmissionStatusLabel =
+    submission.payment_method === "BANK" && isPaymentPending
+      ? "입금 예정"
+      : submissionStatusLabel;
   const paymentStatusLabel =
     paymentStatusLabelMap[
       submission.payment_status as keyof typeof paymentStatusLabelMap
     ] ??
     submission.payment_status ??
+    "-";
+  const mvSongTitleDisplay =
+    submission.mv_song_title_official ||
+    submission.mv_song_title ||
+    submission.mv_song_title_kr ||
+    submission.mv_song_title_en ||
     "-";
   const submissionStatusTone =
     submissionStatusToneMap[submission.status] ??
@@ -595,7 +603,7 @@ export function SubmissionDetailClient({
   const summaryCards = [
     {
       label: "접수 상태",
-      value: submissionStatusLabel,
+      value: displaySubmissionStatusLabel,
       tone: submissionStatusTone,
       description: flowStatusNotice.message,
     },
@@ -606,6 +614,14 @@ export function SubmissionDetailClient({
       description: submission.payment_method
         ? `${paymentMethodLabels[submission.payment_method] ?? submission.payment_method} 결제`
         : "결제 방식 미입력",
+      onClick:
+        submission.payment_method === "BANK" && isPaymentPending
+          ? () => setShowPaymentInfo(true)
+          : undefined,
+      actionLabel:
+        submission.payment_method === "BANK" && isPaymentPending
+          ? "입금 안내 보기"
+          : undefined,
     },
     {
       label: "방송국 진행",
@@ -663,6 +679,193 @@ export function SubmissionDetailClient({
       value: formatDateTime(submission.updated_at),
     },
   ];
+  const renderStationReviewSection = () => (
+    <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          방송국별 진행표
+        </p>
+        <span className="text-sm text-muted-foreground">
+          업데이트: {formatDateTime(submission.updated_at)}
+        </span>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
+          전체 {stationSummary.total}곳
+        </span>
+        <span className="rounded-full border border-[#cfe3fb] bg-[#eaf3ff] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]">
+          결과 반영 {stationSummary.delivered}곳
+        </span>
+        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+          통과 반영 {stationSummary.approved}곳
+        </span>
+        <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200">
+          확인 필요 {stationSummary.actionNeeded}곳
+        </span>
+      </div>
+      <div className="mt-5">
+        {renderStationReviews && renderStationReviews.length > 0 ? (
+          <div className="rounded-2xl border border-border/60 bg-background/70">
+            <div className="overflow-x-auto">
+              <div className="min-w-0 sm:min-w-[720px]">
+                <div className="grid grid-cols-[72px_1fr_1fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]">
+                  <span className="justify-self-center text-center sm:hidden">방송국</span>
+                  <span className="hidden justify-self-center text-center sm:block">로고</span>
+                  <span className="hidden text-left sm:block">방송국</span>
+                  <span className="justify-self-center text-center">접수 상태</span>
+                  <span className="justify-self-center text-center">
+                    {isMvSubmission ? "등급 분류" : "트랙 결과"}
+                  </span>
+                  <span className="hidden justify-self-center text-center sm:block">
+                    최근 업데이트
+                  </span>
+                </div>
+                <div className="divide-y divide-border/60">
+                  {renderStationReviews.map((review) => {
+                    const reception = isReviewComplete
+                      ? { label: "결과 통보", tone: "bg-emerald-500/15 text-emerald-800" }
+                      : getReviewReception(review.status);
+                    const trackInfo = buildTrackSummary(review.track_results);
+                    const note = review.result_note?.trim() || null;
+                    const hasApprovedTrack = trackInfo.counts.approved > 0;
+                    const canOpenRadioLinks =
+                      hasApprovedTrack || review.status === "APPROVED";
+                    const stationCode =
+                      review.station && "code" in review.station
+                        ? review.station.code
+                        : null;
+                    const totalTracksForDisplay =
+                      albumTracks.length > 1
+                        ? albumTracks.length
+                        : trackInfo.counts.total;
+                    const pendingGap = Math.max(
+                      totalTracksForDisplay -
+                        (trackInfo.counts.approved +
+                          trackInfo.counts.rejected +
+                          trackInfo.counts.pending),
+                      0,
+                    );
+                    const pendingCount = trackInfo.counts.pending + pendingGap;
+                    const hasTrackDetails = totalTracksForDisplay > 0;
+                    const summaryCounts = {
+                      approved: trackInfo.counts.approved,
+                      rejected: trackInfo.counts.rejected,
+                      pending: pendingCount,
+                    };
+                    const resultTone =
+                      isReviewComplete && submission.mv_desired_rating
+                        ? {
+                            label: mvRatingLabel(submission.mv_desired_rating),
+                            tone: "bg-emerald-500/15 text-emerald-800",
+                          }
+                        : trackInfo.outcome === "APPROVED"
+                          ? reviewResultMap.APPROVED
+                          : trackInfo.outcome === "REJECTED"
+                            ? reviewResultMap.REJECTED
+                            : trackInfo.outcome === "PARTIAL"
+                              ? {
+                                  label: "부분 통과",
+                                  tone:
+                                    "bg-[#f6d64a] text-black dark:text-black",
+                                }
+                              : hasTrackDetails
+                                ? {
+                                    label: "대기",
+                                    tone:
+                                      "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+                                  }
+                                : getReviewResult(review.status);
+                    const trackSummaryLine =
+                      totalTracksForDisplay > 1
+                        ? buildTrackSummaryText(summaryCounts, " · ")
+                        : null;
+                    const hasRejectedOutcome =
+                      trackInfo.counts.rejected > 0 ||
+                      review.status === "REJECTED" ||
+                      review.status === "NEEDS_FIX";
+                    const resolvedResultNote = hasRejectedOutcome
+                      ? note ?? ratingReason ?? null
+                      : null;
+                    const shouldOpenResultModal =
+                      hasTrackDetails || Boolean(resolvedResultNote);
+
+                    const handleResultClick = () => {
+                      if (shouldOpenResultModal) {
+                        setTrackResultModal({
+                          stationName: review.station?.name ?? "-",
+                          stationCode,
+                          resultNote: resolvedResultNote,
+                          summary: trackInfo,
+                        });
+                        return;
+                      }
+                      if (canOpenRadioLinks) {
+                        openRadioLinks({
+                          name: review.station?.name,
+                          code: stationCode,
+                        });
+                      }
+                    };
+
+                    return (
+                      <div
+                        key={review.id}
+                        className="grid grid-cols-[72px_1fr_1fr] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]"
+                      >
+                        <div className="flex items-center justify-center">
+                          <StationLogoWithFallback station={review.station} />
+                        </div>
+                        <div className="hidden min-w-0 pl-1 text-left sm:block">
+                          <p className="truncate font-semibold text-foreground">
+                            {review.station?.name ?? "-"}
+                          </p>
+                          {review.station && "code" in review.station ? (
+                            <p className="text-xs text-muted-foreground">
+                              {review.station.code ?? ""}
+                            </p>
+                          ) : null}
+                        </div>
+                        <span
+                          className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
+                        >
+                          {reception.label}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleResultClick}
+                          className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${
+                            resultTone.tone
+                          } ${
+                            shouldOpenResultModal
+                              ? "transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100"
+                              : "transition"
+                          }`}
+                        >
+                          <span>{resultTone.label}</span>
+                          {trackSummaryLine ? (
+                            <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
+                              {trackSummaryLine}
+                            </span>
+                          ) : null}
+                        </button>
+                        <span className="hidden justify-self-center text-center text-xs text-muted-foreground sm:block">
+                          {formatDateTime(review.updated_at)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
+            아직 방송국 진행 정보가 없습니다. 접수 제출 후 자동 생성됩니다.
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   const openRadioLinks = (station?: { name?: string | null; code?: string | null }) => {
     const links = resolveRadioBoardLinks({
@@ -982,9 +1185,16 @@ export function SubmissionDetailClient({
 
           <div className="grid w-full gap-3 sm:grid-cols-3 lg:w-auto lg:min-w-[520px]">
             {summaryCards.map((card) => (
-              <div
+              <button
                 key={card.label}
-                className={`rounded-[24px] border px-5 py-4 shadow-[0_16px_32px_rgba(0,0,0,0.04)] dark:shadow-none ${card.tone}`}
+                type="button"
+                onClick={card.onClick}
+                disabled={!card.onClick}
+                className={`rounded-[24px] border px-5 py-4 text-left shadow-[0_16px_32px_rgba(0,0,0,0.04)] transition dark:shadow-none ${
+                  card.onClick
+                    ? "cursor-pointer hover:-translate-y-0.5"
+                    : "cursor-default"
+                } ${card.tone}`}
               >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.24em] opacity-75">
                   {card.label}
@@ -995,10 +1205,17 @@ export function SubmissionDetailClient({
                 <p className="mt-2 text-xs leading-5 opacity-80">
                   {card.description}
                 </p>
-              </div>
+                {card.actionLabel ? (
+                  <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] opacity-90">
+                    {card.actionLabel}
+                  </p>
+                ) : null}
+              </button>
             ))}
           </div>
         </div>
+
+        <div className="mt-8">{renderStationReviewSection()}</div>
 
         <div className="mt-8 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="rounded-[28px] border border-black/6 bg-white/90 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
@@ -1077,15 +1294,6 @@ export function SubmissionDetailClient({
                 바로 할 수 있는 작업
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                {showAdminTools && isPaymentPending ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowPaymentInfo(true)}
-                    className="rounded-full bg-[#0071e3] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
-                  >
-                    결제 안내 보기
-                  </button>
-                ) : null}
                 {!isMvSubmission && preferredRadioStation ? (
                   <button
                     type="button"
@@ -1100,39 +1308,12 @@ export function SubmissionDetailClient({
                     라디오 신청 링크
                   </button>
                 ) : null}
-                {isMvSubmission ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleGuideDownload}
-                      className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5"
-                    >
-                      표기 가이드
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCertificateDownload}
-                      disabled={!submission.certificate_b2_path}
-                      className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      심의 필증
-                    </button>
-                  </>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setIsAttachmentsOpen((prev) => !prev)}
+                <Link
+                  href="/karaoke-request"
                   className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5"
                 >
-                  {isAttachmentsOpen ? "첨부 파일 접기" : "첨부 파일 보기"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsTimelineOpen((prev) => !prev)}
-                  className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5"
-                >
-                  {isTimelineOpen ? "타임라인 접기" : "타임라인 보기"}
-                </button>
+                  노래방 등록
+                </Link>
               </div>
             </div>
           </div>
@@ -1228,7 +1409,7 @@ export function SubmissionDetailClient({
                 type="button"
                 onClick={() => setIsReceptionInfoOpen((prev) => !prev)}
                 aria-label={isReceptionInfoOpen ? "접수 정보 닫기" : "접수 정보 열기"}
-                className="inline-flex items-center gap-1 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-xs font-semibold text-black shadow-sm transition hover:bg-[#f6d64a]"
+                className="inline-flex items-center gap-1 rounded-full border border-[#0071e3] bg-[#0071e3] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-[#0077ed] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
               >
                 <span>{isReceptionInfoOpen ? "▲" : "▼"}</span>
                 <span>{isReceptionInfoOpen ? "접기" : "펼치기"}</span>
@@ -1436,12 +1617,7 @@ export function SubmissionDetailClient({
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">곡 제목</p>
-                      <p className="mt-1 font-semibold">
-                        {submission.mv_song_title ||
-                          submission.mv_song_title_kr ||
-                          submission.mv_song_title_en ||
-                          "-"}
-                      </p>
+                      <p className="mt-1 font-semibold">{mvSongTitleDisplay}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">작곡/작사/편곡</p>
@@ -1515,12 +1691,12 @@ export function SubmissionDetailClient({
             </>
           ) : null}
           <div className="mt-4 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
-              aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
-              className="inline-flex items-center gap-1 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-xs font-semibold text-black shadow-sm transition hover:bg-[#f6d64a]"
-            >
+              <button
+                type="button"
+                onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
+                aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
+                className="inline-flex items-center gap-1 rounded-full border border-[#0071e3] bg-[#0071e3] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-[#0077ed] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+              >
               <span>{isSubmissionFormOpen ? "▲" : "▼"}</span>
               <span>{isSubmissionFormOpen ? "접기" : "펼치기"}</span>
             </button>
@@ -1546,7 +1722,7 @@ export function SubmissionDetailClient({
               type="button"
               onClick={() => setIsAttachmentsOpen((prev) => !prev)}
               aria-label={isAttachmentsOpen ? "첨부 파일 닫기" : "첨부 파일 열기"}
-              className="inline-flex items-center gap-1 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-xs font-semibold text-black shadow-sm transition hover:bg-[#f6d64a]"
+              className="inline-flex items-center gap-1 rounded-full border border-[#0071e3] bg-[#0071e3] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-[#0077ed] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
             >
               <span>{isAttachmentsOpen ? "▲" : "▼"}</span>
               <span>{isAttachmentsOpen ? "접기" : "펼치기"}</span>
@@ -1621,7 +1797,7 @@ export function SubmissionDetailClient({
           </div>
         ) : null}
 
-        <div className="order-3 rounded-[28px] border border-border/60 bg-card/80 p-6">
+        <div className="hidden">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               방송국별 진행표

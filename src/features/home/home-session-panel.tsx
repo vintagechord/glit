@@ -87,9 +87,9 @@ export function HomeSessionPanel() {
 
     const syncSession = async () => {
       const {
-        data: { session },
+        data: { user },
         error,
-      } = await supabase.auth.getSession();
+      } = await supabase.auth.getUser();
 
       if (!active) return;
       if (error) {
@@ -97,7 +97,7 @@ export function HomeSessionPanel() {
         setIsLoggedIn(false);
         return;
       }
-      setIsLoggedIn(Boolean(session?.user));
+      setIsLoggedIn(Boolean(user));
     };
 
     void syncSession();

@@ -9,8 +9,8 @@ export const viewport = {
 };
 
 export const metadata = {
-  title: "KG 이니시스 카드 결제",
-  description: "온사이드 이니시스 STDPay 결제 팝업",
+  title: "온사이드 카드 결제",
+  description: "온사이드 카드 결제 창",
 };
 
 type Props = {

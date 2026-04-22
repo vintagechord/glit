@@ -1,4 +1,4 @@
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { StripAdBannerClient } from "@/components/site/strip-ad-banner-client";
 import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
 
@@ -20,7 +20,7 @@ function isBannerActive(banner: AdBanner, now: Date) {
 export async function StripAdBanner() {
   let data: AdBanner[] | null = null;
   try {
-    const supabase = await createServerSupabase();
+    const supabase = createAdminClient();
     const { data: queryData, error } = await supabase
       .from("ad_banners")
       .select("id, title, image_url, link_url, starts_at, ends_at")

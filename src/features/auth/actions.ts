@@ -16,6 +16,50 @@ export type ActionState = {
   fieldErrors?: Record<string, string>;
 };
 
+const isFetchFailedError = (error: unknown) =>
+  error instanceof Error &&
+  error.message.toLowerCase().includes("fetch failed");
+
+const mapSignupError = (error?: { code?: string | number; message?: string | null }) => {
+  const message = error?.message?.toLowerCase() ?? "";
+
+  if (
+    message.includes("already") ||
+    message.includes("registered") ||
+    message.includes("exists") ||
+    message.includes("duplicate") ||
+    message.includes("user_already_exists")
+  ) {
+    return "이미 가입된 이메일입니다. 로그인 또는 비밀번호 재설정을 이용해주세요.";
+  }
+
+  if (
+    message.includes("invalid email") ||
+    (message.includes("email") && message.includes("valid"))
+  ) {
+    return "올바른 이메일 주소를 입력해주세요.";
+  }
+
+  if (
+    message.includes("weak password") ||
+    message.includes("password should") ||
+    message.includes("password must") ||
+    message.includes("password") && message.includes("least")
+  ) {
+    return "비밀번호는 8자 이상으로 입력하고, 너무 단순한 비밀번호는 피해주세요.";
+  }
+
+  if (message.includes("rate limit") || message.includes("too many")) {
+    return "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  if (isFetchFailedError(error)) {
+    return "회원가입 서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  return "회원가입을 완료할 수 없습니다. 입력 내용을 다시 확인해주세요.";
+};
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -136,7 +180,7 @@ export async function signupAction(
     });
 
     if (error || !data.user) {
-      return { error: "회원가입을 완료할 수 없습니다." };
+      return { error: mapSignupError(error) };
     }
 
     const emailResult = await sendWelcomeEmail({
@@ -153,7 +197,11 @@ export async function signupAction(
     };
   } catch (error) {
     console.error("Signup error", error);
-    return { error: "회원가입을 완료할 수 없습니다." };
+    return {
+      error: mapSignupError(
+        error instanceof Error ? { message: error.message } : undefined,
+      ),
+    };
   }
 }
 
@@ -175,51 +223,79 @@ export async function resetPasswordAction(
       process.env.NEXT_PUBLIC_APP_URL ??
       "https://glit-b1yn.onrender.com"
     }/reset-password`;
-    const admin = createAdminClient();
-    const { data, error } = await admin.auth.admin.generateLink({
-      type: "recovery",
-      email: parsed.data,
-      options: { redirectTo },
-    });
-    if (error) {
-      console.error("generateLink error", error);
-      return {
-        error:
-          error.message ??
-          "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.",
-      };
+    let customMailError: string | undefined;
+
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin.auth.admin.generateLink({
+        type: "recovery",
+        email: parsed.data,
+        options: { redirectTo },
+      });
+
+      if (error) {
+        console.error("generateLink error", error);
+        customMailError =
+          error.message?.trim() ||
+          "비밀번호 재설정 링크를 생성하지 못했습니다.";
+      } else {
+        const linkData = data as
+          | {
+              action_link?: string | null;
+              properties?: { action_link?: string | null };
+            }
+          | null;
+        const actionLink =
+          linkData?.action_link ?? linkData?.properties?.action_link ?? null;
+
+        if (!actionLink) {
+          customMailError = "비밀번호 재설정 링크를 생성하지 못했습니다.";
+        } else {
+          const emailResult = await sendPasswordResetEmail({
+            email: parsed.data,
+            link: actionLink,
+          });
+
+          if (emailResult.ok) {
+            return {
+              message: "비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.",
+            };
+          }
+
+          customMailError =
+            emailResult.message ??
+            "비밀번호 재설정 메일 발송에 실패했습니다.";
+        }
+      }
+    } catch (error) {
+      console.error("custom reset mail error", error);
+      customMailError = isFetchFailedError(error)
+        ? "이메일 발송 서버 연결에 실패했습니다."
+        : error instanceof Error
+          ? error.message
+          : "비밀번호 재설정 메일 준비 중 오류가 발생했습니다.";
     }
 
-    const linkData = data as
-      | { action_link?: string | null; properties?: { action_link?: string | null } }
-      | null;
-    const actionLink =
-      linkData?.action_link ?? linkData?.properties?.action_link ?? null;
-    if (!actionLink) {
-      return {
-        error: "비밀번호 재설정 링크를 생성하지 못했습니다. 잠시 후 다시 시도해주세요.",
-      };
-    }
-
-    const emailResult = await sendPasswordResetEmail({
-      email: parsed.data,
-      link: actionLink,
-    });
-
-    if (!emailResult.ok) {
-      const supabase = await createServerSupabase();
-      const { error: fallbackError } =
-        await supabase.auth.resetPasswordForEmail(parsed.data, {
-          redirectTo,
-        });
-      if (fallbackError) {
-        console.error("resetPasswordForEmail fallback error", fallbackError);
+    const supabase = await createServerSupabase();
+    const { error: fallbackError } = await supabase.auth.resetPasswordForEmail(
+      parsed.data,
+      {
+        redirectTo,
+      },
+    );
+    if (fallbackError) {
+      console.error("resetPasswordForEmail fallback error", fallbackError);
+      const fallbackMessage = fallbackError.message?.trim();
+      if (customMailError) {
         return {
-          error:
-            fallbackError.message ??
-            "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.",
+          error: `${customMailError} 기본 재설정 메일 발송도 실패했습니다. ${fallbackMessage ?? ""}`.trim(),
         };
       }
+      return {
+        error:
+          fallbackMessage ||
+          "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.",
+      };
     }
 
     return {
@@ -227,7 +303,11 @@ export async function resetPasswordAction(
     };
   } catch (error) {
     console.error("resetPasswordAction error", error);
-    return { error: "비밀번호 재설정 요청 중 오류가 발생했습니다." };
+    return {
+      error: isFetchFailedError(error)
+        ? "메일 서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요."
+        : "비밀번호 재설정 요청 중 오류가 발생했습니다.",
+    };
   }
 }
 

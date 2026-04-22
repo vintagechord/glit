@@ -159,10 +159,10 @@ const onlineOptionConfirmNote =
   "위 내용을 확인하셨다면 [확인]을 눌러주세요.";
 
 const mvOptionToneClasses = [
-  "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.14)] ring-1 ring-[#0071e3]/10",
-  "border-[#bfd8f6] bg-[#dcecff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.16)] ring-1 ring-[#0071e3]/12",
-  "border-[#a8cbf3] bg-[#cfe3fb] text-[#113050] shadow-[0_18px_40px_rgba(0,113,227,0.18)] ring-1 ring-[#0071e3]/14",
-  "border-[#90bdf0] bg-[#b8d5f6] text-[#102d4d] shadow-[0_18px_40px_rgba(0,113,227,0.2)] ring-1 ring-[#0071e3]/16",
+  "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
+  "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
+  "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
+  "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
 ];
 
 type BroadcastSpecFields = {
@@ -265,9 +265,7 @@ export function MvWizard({
   const [memo, setMemo] = React.useState("");
   const [songTitleKr, setSongTitleKr] = React.useState("");
   const [songTitleEn, setSongTitleEn] = React.useState("");
-  const [songTitleOfficial, setSongTitleOfficial] = React.useState<
-    "" | "KR" | "EN"
-  >("");
+  const [songTitleOfficial, setSongTitleOfficial] = React.useState("");
   const [composer, setComposer] = React.useState("");
   const [lyricist, setLyricist] = React.useState("");
   const [arranger, setArranger] = React.useState("");
@@ -482,24 +480,37 @@ export function MvWizard({
       const status = String(type).replace("INICIS:", "");
       const submissionFromMsg = (payload.submissionId as string | undefined) || submissionIdRef.current;
       const guestTokenFromMsg = payload.guestToken as string | undefined;
-      if (status === "SUCCESS" && submissionFromMsg) {
-        window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=success`;
-        return;
+      if (status === "SUCCESS") {
+        clearDraftStorage();
+        if (submissionFromMsg) {
+          window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=success`;
+          return;
+        }
+        if (guestTokenFromMsg) {
+          window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
+          return;
+        }
       }
       if (status === "FAIL" || status === "CANCEL" || status === "ERROR") {
         const message =
           typeof payload.message === "string"
             ? payload.message
             : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
+        const paymentState = status.toLowerCase();
+        if (submissionFromMsg) {
+          window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=${paymentState}`;
+          return;
+        }
+        if (guestTokenFromMsg) {
+          window.location.href = `/track/${guestTokenFromMsg}?payment=${paymentState}`;
+          return;
+        }
         setNotice({ error: message });
-      }
-      if (status === "SUCCESS" && !submissionFromMsg && guestTokenFromMsg) {
-        window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
       }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, []);
+  }, [clearDraftStorage]);
 
   const requireSubmissionId = React.useCallback(() => {
     if (submissionIdRef.current) return submissionIdRef.current;
@@ -1376,7 +1387,7 @@ export function MvWizard({
 
   const confirmEmailSubmission = React.useCallback(() => {
     const message =
-      "신청서는 사이트에서 계속 진행하고, 영상 파일만 이메일로 제출하시겠습니까?\n(파일 업로드 없이 다음 단계로 이동합니다)";
+      "영상 파일 첨부가 완료되지 않으면 파일 없이 다음 단계로 진행해 신청서를 먼저 제출하고, 영상 파일만 이메일로 보내주세요.\n이 방식으로 계속하시겠습니까?";
     const confirmed =
       typeof window !== "undefined" ? window.confirm(message) : false;
     if (confirmed) {
@@ -1416,11 +1427,7 @@ export function MvWizard({
     setMemo(String(draft.mv_memo ?? ""));
     setSongTitleKr(String(draft.mv_song_title_kr ?? ""));
     setSongTitleEn(String(draft.mv_song_title_en ?? ""));
-    setSongTitleOfficial(
-      draft.mv_song_title_official === "KR" || draft.mv_song_title_official === "EN"
-        ? draft.mv_song_title_official
-        : "",
-    );
+    setSongTitleOfficial(String(draft.mv_song_title_official ?? ""));
     setComposer(String(draft.mv_composer ?? ""));
     setLyricist(String(draft.mv_lyricist ?? ""));
     setArranger(String(draft.mv_arranger ?? ""));
@@ -1620,11 +1627,7 @@ export function MvWizard({
     const songTitleKrValue = songTitleKr.trim();
     const songTitleEnValue = songTitleEn.trim();
     const songTitleOfficialValue =
-      songTitleOfficial === "KR"
-        ? songTitleKrValue
-        : songTitleOfficial === "EN"
-          ? songTitleEnValue
-          : songTitleKrValue || songTitleEnValue;
+      songTitleOfficial.trim() || songTitleKrValue || songTitleEnValue;
     return { songTitleKrValue, songTitleEnValue, songTitleOfficialValue };
   };
 
@@ -1720,8 +1723,8 @@ export function MvWizard({
       setNotice({ error: "가사를 입력해주세요." });
       return false;
     }
-    if (!songTitleOfficial) {
-      setNotice({ error: "곡명의 공식 표기를 선택해주세요." });
+    if (!songTitleOfficial.trim()) {
+      setNotice({ error: "곡 정보 공식 표기를 입력해주세요." });
       return false;
     }
     if (!composer.trim()) {
@@ -1829,7 +1832,7 @@ export function MvWizard({
         songTitle: songTitleOfficialValue || undefined,
         songTitleKr: songTitleKrValue || undefined,
         songTitleEn: songTitleEnValue || undefined,
-        songTitleOfficial: songTitleOfficial || undefined,
+        songTitleOfficial: songTitleOfficial.trim() || undefined,
         composer: composer.trim() || undefined,
         lyricist: lyricist.trim() || undefined,
         arranger: arranger.trim() || undefined,
@@ -1952,7 +1955,7 @@ export function MvWizard({
         songTitle: songTitleOfficialValue || undefined,
         songTitleKr: songTitleKrValue || undefined,
         songTitleEn: songTitleEnValue || undefined,
-        songTitleOfficial: songTitleOfficial || undefined,
+        songTitleOfficial: songTitleOfficial.trim() || undefined,
         composer: composer.trim() || undefined,
         lyricist: lyricist.trim() || undefined,
         arranger: arranger.trim() || undefined,
@@ -2003,7 +2006,6 @@ export function MvWizard({
       }
 
       if (result.submissionId) {
-        clearDraftStorage();
         if (paymentMethod === "CARD") {
           setNotice(result.emailWarning ? { emailWarning: result.emailWarning } : {});
           const { ok, error } = openInicisCardPopup({
@@ -2021,6 +2023,7 @@ export function MvWizard({
           return;
         }
         if (paymentMethod === "BANK") {
+          clearDraftStorage();
           setNotice(result.emailWarning ? { emailWarning: result.emailWarning } : {});
           setCompletionId(result.submissionId);
           if (result.guestToken) {
@@ -2283,7 +2286,7 @@ export function MvWizard({
                   }
                   className={`text-left rounded-[28px] border p-6 transition ${
                     active
-                      ? "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.14)]"
+                      ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
                       : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
                   }`}
                 >
@@ -2605,9 +2608,23 @@ export function MvWizard({
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  소속사 *
-                </label>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    소속사 *
+                  </label>
+                  <div className="group relative">
+                    <button
+                      type="button"
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/70 bg-background text-[11px] font-semibold text-muted-foreground transition hover:border-primary hover:text-primary"
+                      aria-label="소속사 표기 안내"
+                    >
+                      ?
+                    </button>
+                    <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-72 rounded-2xl border border-border/70 bg-background px-4 py-3 text-[11px] font-medium leading-5 text-foreground shadow-[0_18px_40px_rgba(0,0,0,0.14)] group-hover:block group-focus-within:block">
+                      공개되는 뮤직비디오 좌측 하단에 들어갈 소속사/기획사/로고 등과 동일한 명칭을 기입해주세요. 대소문자 및 한/영 표기 모두 동일해야합니다.
+                    </div>
+                  </div>
+                </div>
                 <input
                   value={agency}
                   onChange={(event) => setAgency(event.target.value)}
@@ -2717,29 +2734,18 @@ export function MvWizard({
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  공식 표기 *
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  곡 정보 공식 표기 *
+                </label>
+                <input
+                  value={songTitleOfficial}
+                  onChange={(event) => setSongTitleOfficial(event.target.value)}
+                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                />
+                <p className="text-[11px] text-muted-foreground whitespace-pre-line">
+                  실제 공개되는 곡의 표기법을 적용한 공식 표기를 적어주세요.
+                  {"\n"}예) 바람, 바람(Wish), Wish, Wish(바람), 바람(feat.ABC)
                 </p>
-                <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      checked={songTitleOfficial === "KR"}
-                      onChange={() => setSongTitleOfficial("KR")}
-                      className="h-4 w-4 rounded-full border-border"
-                    />
-                    한글
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      checked={songTitleOfficial === "EN"}
-                      onChange={() => setSongTitleOfficial("EN")}
-                      className="h-4 w-4 rounded-full border-border"
-                    />
-                    영문
-                  </label>
-                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -3006,11 +3012,12 @@ export function MvWizard({
                 )}
               </label>
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              업로드가 원활하지 않으면 신청서는 사이트에서 계속 진행하고, 영상 파일만 이메일로 보내주세요.
-              <br />
-              {APP_CONFIG.supportEmail}
-            </p>
+            <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+              <p>
+                음원/뮤비 파일 업로드 시에 첨부 완료가 되지 않는 경우 파일 첨부 없이 하단 다음 단계 버튼을 눌러 신청서를 제출 후 영상 파일은 이메일로 보내주세요.
+              </p>
+              <p className="font-semibold text-foreground">{APP_CONFIG.supportEmail}</p>
+            </div>
             <div className="mt-4 space-y-3">
               {uploads.map((upload, index) => (
                 <div
@@ -3069,7 +3076,7 @@ export function MvWizard({
                     아직 선택된 파일이 없습니다.
                   </p>
                   <p className="mt-2 text-[11px] text-muted-foreground">
-                    업로드 없이 진행하려면 이메일 제출을 선택하세요.
+                    파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요.
                   </p>
                   <div className="mt-3 flex items-center justify-center gap-2">
                     <button

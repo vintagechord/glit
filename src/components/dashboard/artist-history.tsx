@@ -25,6 +25,7 @@ type ArtistGroup = {
 
 const stageTone: Record<string, string> = {
   "결제대기": "bg-[#f6d64a] text-black dark:text-black",
+  "입금 예정": "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   "접수 완료": "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   "결제 확인": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   "심의 진행": "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
@@ -37,6 +38,9 @@ const getStageLabel = (item: SubmissionItem) => {
   }
   if (item.status === "IN_PROGRESS") {
     return "심의 진행";
+  }
+  if (item.payment_status === "PAYMENT_PENDING") {
+    return "입금 예정";
   }
   if (item.payment_status !== "PAID") {
     return "결제대기";
@@ -79,11 +83,7 @@ function ArtistCard({ group }: { group: ArtistGroup }) {
   const [open, setOpen] = React.useState(false);
   return (
     <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.12)] transition hover:border-foreground/70">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Thumbnail name={group.artistName} src={group.thumbnail} />
           <div>
@@ -102,11 +102,15 @@ function ArtistCard({ group }: { group: ArtistGroup }) {
               아티스트 상세
             </Link>
           ) : null}
-          <span className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground whitespace-nowrap">
+          <button
+            type="button"
+            onClick={() => setOpen((prev) => !prev)}
+            className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground whitespace-nowrap"
+          >
             {open ? "접기" : "보기"}
-          </span>
+          </button>
         </div>
-      </button>
+      </div>
       {open && (
         <div className="mt-3 space-y-2 rounded-2xl border border-border/60 bg-background/70 p-3">
           {group.submissions.map((item) => (
