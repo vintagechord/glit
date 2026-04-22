@@ -4,7 +4,7 @@ export const metadata = {
 };
 
 type LoginPageProps = {
-  searchParams?: { next?: string | string[] };
+  searchParams?: { next?: string | string[]; signup?: string | string[] };
 };
 
 export default function LoginPage({ searchParams }: LoginPageProps) {
@@ -17,12 +17,21 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
     !nextRaw.startsWith("//")
       ? nextRaw
       : null;
+  const signupRaw = Array.isArray(searchParams?.signup)
+    ? searchParams.signup[0]
+    : searchParams?.signup;
+  const showSignupSuccess = signupRaw === "success";
 
   return (
     <div className="relative mx-auto flex w-full max-w-5xl flex-1 items-center justify-center px-4 py-10 sm:px-6 sm:py-16">
       <div className="absolute left-8 top-10 h-40 w-40 rounded-full bg-emerald-400/20 blur-[100px] dark:bg-emerald-500/20" />
       <div className="grid w-full max-w-3xl gap-7 rounded-[28px] border border-border/60 bg-card/80 p-6 shadow-[0_30px_100px_rgba(15,23,42,0.12)] sm:gap-10 sm:rounded-[32px] sm:p-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-3 sm:space-y-4">
+          {showSignupSuccess ? (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+              회원가입이 완료되었습니다. 로그인 후 접수와 결과 확인을 이어서 진행할 수 있습니다.
+            </div>
+          ) : null}
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             Welcome Back
           </p>

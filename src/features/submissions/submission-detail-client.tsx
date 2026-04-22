@@ -225,7 +225,7 @@ const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
   },
   REJECTED: {
     label: "결과통보",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
   NEEDS_FIX: {
     label: "수정요청",
@@ -251,7 +251,7 @@ const stationResultFallbackMap: Record<string, { label: string; tone: string }> 
   },
   REJECTED: {
     label: "결과통보",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
   NEEDS_FIX: {
     label: "수정요청",

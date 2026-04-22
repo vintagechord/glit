@@ -324,11 +324,11 @@ const partnershipContent = `제휴안내
 ${APP_CONFIG.supportEmail}`;
 
 export function SiteFooter() {
-  const contactPhone = "010-8436-9035";
-  const contactEmail = "onside17@daum.net";
-  const bankName = "케이뱅크";
-  const bankAccount = "1003-0026-3141";
-  const bankHolder = "정준영(영포에버)";
+  const contactPhone = APP_CONFIG.supportPhone;
+  const contactEmail = APP_CONFIG.supportEmail;
+  const bankName = APP_CONFIG.bankName;
+  const bankAccount = APP_CONFIG.bankAccount;
+  const bankHolder = APP_CONFIG.bankHolder;
 
   const [activeModal, setActiveModal] = React.useState<
     "terms" | "privacy" | "partnership" | null
@@ -352,6 +352,26 @@ export function SiteFooter() {
     : isPrivacyOpen
       ? privacyContent
       : partnershipContent;
+  const modalTitleId = React.useId();
+
+  React.useEffect(() => {
+    if (!activeModal) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveModal(null);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeModal]);
 
   return (
     <footer className="border-t border-black bg-[#f05a28] text-black">
@@ -362,10 +382,15 @@ export function SiteFooter() {
               CS CENTER
             </p>
             <p className="text-xl font-semibold text-black sm:text-2xl">
-              {contactPhone}
+              <a href={`tel:${contactPhone}`} className="underline-offset-2 hover:underline">
+                {contactPhone}
+              </a>
             </p>
             <p className="text-base font-medium text-black">
-              이메일 {contactEmail}
+              이메일{" "}
+              <a href={`mailto:${contactEmail}`} className="underline-offset-2 hover:underline">
+                {contactEmail}
+              </a>
             </p>
             <p className="text-base font-medium text-black">
               상담시간 {APP_CONFIG.supportHours}
@@ -430,8 +455,24 @@ export function SiteFooter() {
             <p>회사명: {APP_CONFIG.businessName}</p>
             <p>대표자: {APP_CONFIG.businessRep}</p>
             <p className="sm:col-span-2">주소: {APP_CONFIG.businessAddress}</p>
-            <p>전화: {APP_CONFIG.supportPhone}</p>
-            <p>이메일: {APP_CONFIG.supportEmail}</p>
+            <p>
+              전화:{" "}
+              <a
+                href={`tel:${APP_CONFIG.supportPhone}`}
+                className="underline-offset-2 hover:underline"
+              >
+                {APP_CONFIG.supportPhone}
+              </a>
+            </p>
+            <p>
+              이메일:{" "}
+              <a
+                href={`mailto:${APP_CONFIG.supportEmail}`}
+                className="underline-offset-2 hover:underline"
+              >
+                {APP_CONFIG.supportEmail}
+              </a>
+            </p>
             <p>사업자등록번호: {APP_CONFIG.businessRegNo}</p>
             <p>통신판매업신고번호: {APP_CONFIG.businessMailOrderNo}</p>
             <p>개인정보 보호책임자: {APP_CONFIG.privacyOfficer}</p>
@@ -449,12 +490,18 @@ export function SiteFooter() {
           onClick={closeModal}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={modalTitleId}
             className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.25)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-black/10 px-4 py-3 sm:px-6 sm:py-4">
               <div className="flex items-center gap-3">
-                <span className="rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black">
+                <span
+                  id={modalTitleId}
+                  className="rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black"
+                >
                   {modalTitle}
                 </span>
                 <span className="text-xs font-semibold uppercase tracking-[0.2em] text-black/60">

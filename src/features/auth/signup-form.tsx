@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { privacyContent, termsContent } from "@/components/site/footer";
 
@@ -15,6 +16,7 @@ export function SignupForm() {
   const router = useRouter();
   const didRedirect = useRef(false);
   const [activeModal, setActiveModal] = useState<"terms" | "privacy" | null>(null);
+  const modalTitleId = useId();
   const emailRef = useRef<HTMLInputElement | null>(null);
   const passwordRef = useRef<HTMLInputElement | null>(null);
   const confirmRef = useRef<HTMLInputElement | null>(null);
@@ -27,10 +29,10 @@ export function SignupForm() {
   useEffect(() => {
     if (!state.message || didRedirect.current) return;
     didRedirect.current = true;
-    if (typeof window !== "undefined") {
-      window.alert(state.message);
-    }
-    router.push("/login");
+    const timer = window.setTimeout(() => {
+      router.push("/login?signup=success");
+    }, 1200);
+    return () => window.clearTimeout(timer);
   }, [state.message, router]);
 
   useEffect(() => {
@@ -65,6 +67,40 @@ export function SignupForm() {
   }, [state.fieldErrors]);
 
   const closeModal = () => setActiveModal(null);
+  const currentModalTitleId = `${modalTitleId}-${activeModal ?? "closed"}`;
+
+  useEffect(() => {
+    if (!activeModal) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveModal(null);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeModal]);
+
+  const SubmitButton = () => {
+    const { pending } = useFormStatus();
+
+    return (
+      <button
+        type="submit"
+        className="w-full rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-70"
+        disabled={pending}
+      >
+        {pending ? "가입 처리 중..." : "회원가입"}
+      </button>
+    );
+  };
 
   return (
     <form action={formAction} className="space-y-4">
@@ -225,16 +261,14 @@ export function SignupForm() {
         </p>
       )}
       {state.message && (
-        <p className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-600">
-          {state.message}
+        <p
+          aria-live="polite"
+          className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-600"
+        >
+          {state.message} 로그인 페이지로 이동합니다.
         </p>
       )}
-      <button
-        type="submit"
-        className="w-full rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
-      >
-        회원가입
-      </button>
+      <SubmitButton />
       <p className="text-center text-xs text-muted-foreground">
         이미 계정이 있나요?{" "}
         <Link href="/login" className="font-semibold text-foreground">
@@ -247,6 +281,9 @@ export function SignupForm() {
           onClick={closeModal}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={currentModalTitleId}
             className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-border/70 bg-background px-6 py-5 text-sm text-foreground shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
             onClick={(event) => event.stopPropagation()}
           >
@@ -255,7 +292,7 @@ export function SignupForm() {
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   {activeModal === "terms" ? "Terms" : "Privacy"}
                 </p>
-                <h2 className="mt-2 text-xl font-semibold">
+                <h2 id={currentModalTitleId} className="mt-2 text-xl font-semibold">
                   {activeModal === "terms" ? "이용약관" : "개인정보처리방침"}
                 </h2>
               </div>

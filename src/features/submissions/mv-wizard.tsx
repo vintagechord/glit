@@ -2002,6 +2002,7 @@ export function MvWizard({
       if (result.submissionId) {
         clearDraftStorage();
         if (paymentMethod === "CARD") {
+          setNotice(result.emailWarning ? { emailWarning: result.emailWarning } : {});
           const { ok, error } = openInicisCardPopup({
             context: "mv",
             submissionId: result.submissionId,
@@ -2017,12 +2018,7 @@ export function MvWizard({
           return;
         }
         if (paymentMethod === "BANK") {
-          if (typeof window !== "undefined") {
-            window.alert("심의 접수가 완료되었습니다.");
-            if (result.emailWarning) {
-              window.alert(result.emailWarning);
-            }
-          }
+          setNotice(result.emailWarning ? { emailWarning: result.emailWarning } : {});
           setCompletionId(result.submissionId);
           if (result.guestToken) {
             setCompletionGuestToken(result.guestToken);
@@ -2963,7 +2959,7 @@ export function MvWizard({
             <p className="mt-3 text-xs text-muted-foreground">
               파일 첨부가 실패하는 경우 이메일로 영상 파일만 보내주세요.
               <br />
-              onside17@daum.net
+              {APP_CONFIG.supportEmail}
             </p>
             <div className="mt-4 space-y-3">
               {uploads.map((upload, index) => (
@@ -3396,6 +3392,11 @@ export function MvWizard({
           <p className="mt-3 text-sm text-muted-foreground">
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
+          {notice.emailWarning ? (
+            <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+              {notice.emailWarning}
+            </div>
+          ) : null}
           {completionId && !shouldShowGuestLookup && (
             <button
               type="button"

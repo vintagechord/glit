@@ -2,13 +2,8 @@ import Link from "next/link";
 
 import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
-import { HomeReviewPanel } from "@/features/home/home-review-panel";
+import { HomeSessionPanel } from "@/features/home/home-session-panel";
 import { OscilloscopeCurtainBackground } from "@/features/home/oscilloscope-curtain-background";
-import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
-import { createServerSupabase } from "@/lib/supabase/server";
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 const heroCtas = [
   {
@@ -235,118 +230,7 @@ const processStepTones = [
   "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
 ];
 
-type StationSnapshot = {
-  id: string;
-  status: string;
-  updated_at: string;
-  result_note?: string | null;
-  track_results?: unknown;
-  station?: {
-    id?: string | null;
-    name?: string | null;
-    code?: string | null;
-    logo_url?: string | null;
-  } | null;
-};
-
-type SubmissionSnapshot = {
-  id: string;
-  title: string;
-  artist_name?: string | null;
-  status: string;
-  payment_status: string | null;
-  updated_at: string;
-  type?: string;
-  package_id?: string | null;
-  package?:
-  | Array<{ name?: string | null; station_count?: number | null }>
-  | { name?: string | null; station_count?: number | null }
-  | null;
-};
-
-const sampleStations: StationSnapshot[] = [
-  {
-    id: "sample-1",
-    status: "NOT_SENT",
-    updated_at: new Date(Date.now() + 86400000).toISOString(),
-    station: { name: "KBS" },
-  },
-  {
-    id: "sample-2",
-    status: "RECEIVED",
-    updated_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    station: { name: "MBC" },
-  },
-  {
-    id: "sample-3",
-    status: "APPROVED",
-    updated_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-    station: { name: "SBS" },
-  },
-  {
-    id: "sample-4",
-    status: "NEEDS_FIX",
-    updated_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-    station: { name: "YTN" },
-  },
-  {
-    id: "sample-5",
-    status: "NOT_SENT",
-    updated_at: new Date(Date.now() + 86400000 * 2).toISOString(),
-    station: { name: "CBS 기독교방송" },
-  },
-  {
-    id: "sample-6",
-    status: "RECEIVED",
-    updated_at: new Date(Date.now() - 86400000).toISOString(),
-    station: { name: "Arirang 방송" },
-  },
-];
-
-export default async function Home() {
-  let isLoggedIn = false;
-  try {
-    const supabase = await createServerSupabase();
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.getSession();
-    if (error) {
-      console.error("[Home] Failed to read session:", error.message);
-    }
-    isLoggedIn = Boolean(session?.user);
-  } catch (error) {
-    if (isDynamicServerUsageError(error)) {
-      throw error;
-    }
-    console.error("[Home] Failed to initialize auth session:", error);
-  }
-  const sampleAlbum: SubmissionSnapshot = {
-    id: "sample-album",
-    title: "샘플 앨범 심의",
-    artist_name: "온사이드",
-    status: "IN_PROGRESS",
-    payment_status: "PAID",
-    updated_at: new Date().toISOString(),
-  };
-  const sampleMv: SubmissionSnapshot = {
-    id: "sample-mv",
-    title: "샘플 MV 심의",
-    artist_name: "온사이드",
-    status: "WAITING_PAYMENT",
-    payment_status: "PAYMENT_PENDING",
-    updated_at: new Date().toISOString(),
-  };
-
-  const albumSubmissions: SubmissionSnapshot[] = isLoggedIn ? [] : [sampleAlbum];
-  const mvSubmissions: SubmissionSnapshot[] = isLoggedIn ? [] : [sampleMv];
-  const albumStationsMap: Record<string, StationSnapshot[]> = isLoggedIn
-    ? {}
-    : { [sampleAlbum.id]: sampleStations };
-  const mvStationsMap: Record<string, StationSnapshot[]> = isLoggedIn
-    ? {}
-    : { [sampleMv.id]: sampleStations };
-
+export default function Home() {
   return (
     <div className="relative overflow-x-hidden">
       <ScrollRevealObserver />
@@ -423,17 +307,7 @@ export default async function Home() {
               </div>
             </div>
 
-            <HomeReviewPanel
-              isLoggedIn={isLoggedIn}
-              albumSubmissions={albumSubmissions}
-              mvSubmissions={mvSubmissions}
-              albumStationsMap={albumStationsMap}
-              mvStationsMap={mvStationsMap}
-              enableRemoteSync={isLoggedIn}
-              stationRowsPerPage={5}
-              showPartialTrackBreakdown={false}
-              mobileStationLayout="table"
-            />
+            <HomeSessionPanel />
           </div>
         </div>
       </section>

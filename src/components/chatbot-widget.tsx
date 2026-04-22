@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { APP_CONFIG } from "@/lib/config";
+
 const faqItems = [
   {
     question: "[주문결제] 결제는 어떻게 하나요?",
@@ -29,7 +31,7 @@ const faqItems = [
   {
     question: "[심의신청] 국악방송, 국방방송 신청도 가능한가요?",
     answer:
-      "네. 기본 옵션에 포함되지 않아 추가금이 발생합니다. 해당 방송국에 적합한 앨범일 경우 진행 가능하며, 문의는 010-8436-9035 또는 onside17@daum.net 입니다.",
+      `네. 기본 옵션에 포함되지 않아 추가금이 발생합니다. 해당 방송국에 적합한 앨범일 경우 진행 가능하며, 문의는 ${APP_CONFIG.supportPhone} 또는 ${APP_CONFIG.supportEmail} 입니다.`,
   },
   {
     question: "[심의결과] 심의 결과는 어떻게 확인하나요?",
@@ -63,7 +65,7 @@ const faqItems = [
   {
     question: "추가 문의",
     answer:
-      "onside17@daum.net 또는 010-8436-9035 으로 문의주시면 자세한 상담이 가능합니다.",
+      `${APP_CONFIG.supportEmail} 또는 ${APP_CONFIG.supportPhone} 으로 문의주시면 자세한 상담이 가능합니다.`,
   },
 ];
 
@@ -96,6 +98,9 @@ export function ChatbotWidget() {
           onClick={() => setOpen(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="자주 묻는 질문"
             className="absolute bottom-6 right-6 w-[320px] rounded-3xl border border-border/60 bg-card/95 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.2)]"
             onClick={(event) => event.stopPropagation()}
           >

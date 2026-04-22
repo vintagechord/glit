@@ -14,6 +14,26 @@ export function TrackLookupModalTrigger({
   modalTitle?: string;
 }) {
   const [open, setOpen] = React.useState(false);
+  const titleId = React.useId();
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
 
   return (
     <>
@@ -30,17 +50,20 @@ export function TrackLookupModalTrigger({
           onClick={() => setOpen(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={modalTitle ? titleId : undefined}
             className="w-full max-w-md rounded-[28px] border border-border/60 bg-background p-6 shadow-[0_28px_80px_rgba(15,23,42,0.25)]"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              {modalTitle ? (
-                <p className="text-sm font-semibold text-foreground">
-                  {modalTitle}
-                </p>
-              ) : null}
-            </div>
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                {modalTitle ? (
+                  <p id={titleId} className="text-sm font-semibold text-foreground">
+                    {modalTitle}
+                  </p>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}

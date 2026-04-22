@@ -2952,6 +2952,7 @@ export function AlbumWizard({
       if (status === "SUBMITTED" && submissionIds.length > 0) {
         clearDraftStorage();
         if (paymentMethod === "CARD") {
+          setNotice(emailWarning ? { emailWarning } : {});
           const { ok, error } = openInicisCardPopup({
             context: isOneClick ? "oneclick" : "music",
             submissionId: submissionIds[0],
@@ -2964,12 +2965,7 @@ export function AlbumWizard({
           }
           return;
         } else if (paymentMethod === "BANK") {
-          if (typeof window !== "undefined") {
-            window.alert("심의 접수가 완료되었습니다.");
-            if (emailWarning) {
-              window.alert(emailWarning);
-            }
-          }
+          setNotice(emailWarning ? { emailWarning } : {});
           setCompletionId(submissionIds[0]);
           setCompletionSubmissionIds(submissionIds);
           if (guestTokens.length > 0) {
@@ -2982,10 +2978,6 @@ export function AlbumWizard({
           setNotice({ error: "지원하지 않는 결제 수단입니다." });
           return;
         }
-      }
-
-      if (emailWarning && typeof window !== "undefined") {
-        window.alert(emailWarning);
       }
 
       setNotice({
@@ -4781,6 +4773,11 @@ export function AlbumWizard({
           <p className="mt-3 text-sm text-muted-foreground">
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
+          {notice.emailWarning ? (
+            <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+              {notice.emailWarning}
+            </div>
+          ) : null}
           {completionId && !shouldShowGuestLookup && (
             <button
               type="button"

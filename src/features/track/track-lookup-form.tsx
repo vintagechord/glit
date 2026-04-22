@@ -3,6 +3,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
+import { APP_CONFIG } from "@/lib/config";
+
 export function TrackLookupForm({
   onSuccess,
 }: {
@@ -18,6 +20,7 @@ export function TrackLookupForm({
   const [lookupError, setLookupError] = React.useState("");
   const [noMatchAttemptCount, setNoMatchAttemptCount] = React.useState(0);
   const [lookupBusy, setLookupBusy] = React.useState(false);
+  const [copiedToken, setCopiedToken] = React.useState<string | null>(null);
   const [lookupResults, setLookupResults] = React.useState<
     Array<{
       token: string;
@@ -138,19 +141,42 @@ export function TrackLookupForm({
     return date.toLocaleDateString("ko-KR");
   };
 
+  const handleCopyToken = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedToken(value);
+      window.setTimeout(() => {
+        setCopiedToken((current) => (current === value ? null : current));
+      }, 1600);
+    } catch {
+      setLookupError("코드를 복사하지 못했습니다. 직접 선택해 복사해주세요.");
+    }
+  };
+
   return (
     <div className="mt-6 space-y-4">
       <form onSubmit={handleSubmit} className="space-y-3">
+        <label
+          htmlFor="guest-track-token"
+          className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
+        >
+          조회 코드
+        </label>
         <input
+          id="guest-track-token"
           value={token}
           onChange={(event) => setToken(event.target.value)}
           placeholder="비회원 조회 코드 입력"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "guest-track-token-error" : undefined}
           className={`w-full rounded-2xl border ${
             error ? "border-[#f6d64a] bg-[#f6d64a]" : "border-border/70 bg-background"
           } px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground`}
         />
         {error ? (
-          <p className="text-xs text-black">{error}</p>
+          <p id="guest-track-token-error" className="text-xs text-black">
+            {error}
+          </p>
         ) : null}
         <button
           type="submit"
@@ -169,17 +195,33 @@ export function TrackLookupForm({
           조회 코드를 잊은 경우 접수자 이름과 이메일로 조회 코드를 확인할 수 있습니다.
         </p>
         <form onSubmit={handleLookupCode} className="mt-3 space-y-3">
+          <label
+            htmlFor="lookup-name"
+            className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
+          >
+            접수자 이름
+          </label>
           <input
+            id="lookup-name"
             value={lookupName}
             onChange={(event) => setLookupName(event.target.value)}
             placeholder="접수자 이름"
+            aria-invalid={Boolean(lookupError)}
             className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
           />
+          <label
+            htmlFor="lookup-email"
+            className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
+          >
+            접수자 이메일
+          </label>
           <input
+            id="lookup-email"
             type="email"
             value={lookupEmail}
             onChange={(event) => setLookupEmail(event.target.value)}
             placeholder="접수자 이메일"
+            aria-invalid={Boolean(lookupError)}
             className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
           />
           <button
@@ -195,7 +237,14 @@ export function TrackLookupForm({
             <p className="text-xs text-red-500">{lookupError}</p>
             {lookupError === noMatchLookupError && noMatchAttemptCount >= 2 ? (
               <p className="text-xs text-muted-foreground">
-                접수 정보를 잊었다면, 관리자(help@vhouse.co.kr)에게 문의해주세요.
+                접수 정보를 잊었다면{" "}
+                <a
+                  href={`mailto:${APP_CONFIG.supportEmail}`}
+                  className="font-semibold text-foreground underline underline-offset-2"
+                >
+                  {APP_CONFIG.supportEmail}
+                </a>
+                로 문의해주세요.
               </p>
             ) : null}
           </div>
@@ -221,12 +270,10 @@ export function TrackLookupForm({
                   </code>
                   <button
                     type="button"
-                    onClick={() =>
-                      navigator.clipboard.writeText(item.token).catch(() => null)
-                    }
+                    onClick={() => void handleCopyToken(item.token)}
                     className="rounded-full border border-border/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-black hover:bg-black hover:text-white"
                   >
-                    복사
+                    {copiedToken === item.token ? "복사됨" : "복사"}
                   </button>
                   <button
                     type="button"

@@ -115,7 +115,7 @@ export default async function PayPage({
             접수 현황으로
           </Link>
           <a
-            href="mailto:onside17@daum.net"
+            href={`mailto:${APP_CONFIG.supportEmail}`}
             className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
           >
             문의하기

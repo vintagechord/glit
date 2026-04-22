@@ -1,7 +1,9 @@
-import Link from "next/link";
+"use client";
 
-import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
-import { createServerSupabase } from "@/lib/supabase/server";
+import Link from "next/link";
+import * as React from "react";
+
+import { createClient } from "@/lib/supabase/client";
 
 import { ThemeToggle } from "./theme-toggle";
 import { SiteLogo } from "./site-logo";
@@ -17,24 +19,46 @@ const navLinks = [
   { label: "이메일 접수", href: "/forms", badge: "Legacy" },
 ];
 
-export async function SiteHeader() {
-  let isLoggedIn = false;
-  try {
-    const supabase = await createServerSupabase();
+type AuthState = "loading" | "authenticated" | "unauthenticated";
+
+export function SiteHeader() {
+  const [authState, setAuthState] = React.useState<AuthState>("loading");
+
+  React.useEffect(() => {
+    const supabase = createClient();
+    let active = true;
+
+    const syncSession = async () => {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (!active) return;
+
+      if (error) {
+        console.error("[SiteHeader] Failed to read session:", error.message);
+        setAuthState("unauthenticated");
+        return;
+      }
+
+      setAuthState(session?.user ? "authenticated" : "unauthenticated");
+    };
+
+    void syncSession();
+
     const {
-      data: { session },
-      error,
-    } = await supabase.auth.getSession();
-    if (error) {
-      console.error("[SiteHeader] Failed to read session:", error.message);
-    }
-    isLoggedIn = Boolean(session?.user);
-  } catch (error) {
-    if (isDynamicServerUsageError(error)) {
-      throw error;
-    }
-    console.error("[SiteHeader] Failed to initialize auth session:", error);
-  }
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setAuthState(session?.user ? "authenticated" : "unauthenticated");
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur-md dark:border-white/10 dark:bg-[#0f1727]/78">
@@ -44,7 +68,22 @@ export async function SiteHeader() {
         </div>
         <div className="flex min-w-0 items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none sm:gap-3">
           <ThemeToggle />
-          {isLoggedIn ? (
+          {authState === "loading" ? (
+            <>
+              <span
+                aria-hidden="true"
+                className={`${ghostButtonClass} pointer-events-none min-w-[74px] animate-pulse text-transparent`}
+              >
+                로딩
+              </span>
+              <span
+                aria-hidden="true"
+                className={`${ghostButtonClass} pointer-events-none min-w-[92px] animate-pulse text-transparent`}
+              >
+                로딩
+              </span>
+            </>
+          ) : authState === "authenticated" ? (
             <>
               <form action="/logout" method="post">
                 <button
