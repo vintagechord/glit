@@ -159,10 +159,10 @@ const onlineOptionConfirmNote =
   "위 내용을 확인하셨다면 [확인]을 눌러주세요.";
 
 const mvOptionToneClasses = [
-  "border-[#7ad97a] bg-[#8fe38f] text-black",
-  "border-[#f6d64a] bg-[#f6d64a] text-black",
-  "border-[#4f56d8] bg-[#4f56d8] text-[#ecf2ff]",
-  "border-[#e49adf] bg-[#f3a7f2] text-black",
+  "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.14)] ring-1 ring-[#0071e3]/10",
+  "border-[#bfd8f6] bg-[#dcecff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.16)] ring-1 ring-[#0071e3]/12",
+  "border-[#a8cbf3] bg-[#cfe3fb] text-[#113050] shadow-[0_18px_40px_rgba(0,113,227,0.18)] ring-1 ring-[#0071e3]/14",
+  "border-[#90bdf0] bg-[#b8d5f6] text-[#102d4d] shadow-[0_18px_40px_rgba(0,113,227,0.2)] ring-1 ring-[#0071e3]/16",
 ];
 
 type BroadcastSpecFields = {
@@ -644,7 +644,7 @@ export function MvWizard({
   }, [mvType, onlineBaseSelected, onlineOptions, tvStations]);
 
   const activeStepTone =
-    selectedStepTone ?? "border-[#f6d64a] bg-[#f6d64a] text-black";
+    selectedStepTone ?? "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152]";
 
   const stepLabels = (
     <div className="grid gap-3 md:grid-cols-5">
@@ -679,7 +679,7 @@ export function MvWizard({
       setNotice({
         error:
           draftError ||
-          "접수 초안을 준비하는 중입니다. 잠시 후 다시 시도하거나 다시 시도 버튼을 눌러주세요.",
+          "신청 정보를 준비하는 중입니다. 잠시 후 다시 시도해주세요. 업로드가 계속 어려우면 신청서는 이어서 작성하고 파일만 이메일로 보내주세요.",
       });
       void createDraft({ force: true });
       return;
@@ -1376,7 +1376,7 @@ export function MvWizard({
 
   const confirmEmailSubmission = React.useCallback(() => {
     const message =
-      "영상 파일을 이메일로 제출하시겠습니까?\n(파일 업로드 없이 다음 단계로 이동합니다)";
+      "신청서는 사이트에서 계속 진행하고, 영상 파일만 이메일로 제출하시겠습니까?\n(파일 업로드 없이 다음 단계로 이동합니다)";
     const confirmed =
       typeof window !== "undefined" ? window.confirm(message) : false;
     if (confirmed) {
@@ -2283,14 +2283,23 @@ export function MvWizard({
                   }
                   className={`text-left rounded-[28px] border p-6 transition ${
                     active
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border/60 bg-card/80 text-foreground hover:border-foreground"
+                      ? "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.14)]"
+                      : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
                   }`}
                 >
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
-                    MV Purpose
-                  </p>
-                  <h3 className="mt-2 text-lg font-semibold">{item.label}</h3>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
+                        MV Purpose
+                      </p>
+                      <h3 className="mt-2 text-lg font-semibold">{item.label}</h3>
+                    </div>
+                    {active ? (
+                      <span className="rounded-full border border-[#0071e3]/14 bg-white/72 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
+                        선택됨
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="mt-2 text-xs opacity-70">{item.description}</p>
                 </button>
               );
@@ -2320,13 +2329,20 @@ export function MvWizard({
                       className={`text-left rounded-2xl border p-4 transition ${
                         active
                           ? tone
-                          : "border-border/60 bg-background text-foreground hover:border-foreground"
+                          : "border-border/60 bg-background text-foreground hover:border-primary/40"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold">
-                          {details?.title ?? `${stationName} 심의`}
-                        </p>
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold">
+                            {details?.title ?? `${stationName} 심의`}
+                          </p>
+                          {active ? (
+                            <span className="inline-flex rounded-full border border-[#0071e3]/14 bg-white/72 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
+                              선택됨
+                            </span>
+                          ) : null}
+                        </div>
                         <span className="text-xs font-semibold">
                           {formatCurrency(stationPriceMap[code] ?? 0)}원
                         </span>
@@ -2354,11 +2370,18 @@ export function MvWizard({
                   className={`text-left rounded-2xl border p-4 transition ${
                     onlineBaseSelected
                       ? mvOptionToneClasses[0]
-                      : "border-border/60 bg-background text-foreground hover:border-foreground"
+                      : "border-border/60 bg-background text-foreground hover:border-primary/40"
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold">일반 뮤직비디오 심의</p>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold">일반 뮤직비디오 심의</p>
+                      {onlineBaseSelected ? (
+                        <span className="inline-flex rounded-full border border-[#0071e3]/14 bg-white/72 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
+                          선택됨
+                        </span>
+                      ) : null}
+                    </div>
                     <span className="text-xs font-semibold">
                       {formatCurrency(baseOnlinePrice)}원
                     </span>
@@ -2382,13 +2405,20 @@ export function MvWizard({
                       className={`text-left rounded-2xl border p-4 transition ${
                         active
                           ? tone
-                          : "border-border/60 bg-background text-foreground hover:border-foreground"
+                          : "border-border/60 bg-background text-foreground hover:border-primary/40"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold">
-                          {details?.title ?? `${stationName} 입고 옵션`}
-                        </p>
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold">
+                            {details?.title ?? `${stationName} 입고 옵션`}
+                          </p>
+                          {active ? (
+                            <span className="inline-flex rounded-full border border-[#0071e3]/14 bg-white/72 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
+                              선택됨
+                            </span>
+                          ) : null}
+                        </div>
                         <span className="text-xs font-semibold">
                           {formatCurrency(stationPriceMap[code] ?? 0)}원
                         </span>
@@ -2977,7 +3007,7 @@ export function MvWizard({
               </label>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              파일 첨부가 실패하는 경우 이메일로 영상 파일만 보내주세요.
+              업로드가 원활하지 않으면 신청서는 사이트에서 계속 진행하고, 영상 파일만 이메일로 보내주세요.
               <br />
               {APP_CONFIG.supportEmail}
             </p>

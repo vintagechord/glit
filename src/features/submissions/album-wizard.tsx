@@ -129,6 +129,14 @@ const steps = [
   "접수 완료",
 ];
 
+const stepDescriptions = [
+  "접수 방식과 방송국 패키지를 결정합니다.",
+  "앨범, 접수자, 트랙 정보를 입력합니다.",
+  "심의용 음원 파일을 제출합니다.",
+  "결제 방식과 발급 정보를 확인합니다.",
+  "조회 코드 또는 마이페이지로 결과를 확인합니다.",
+];
+
 const formatPackageName = (count: number, isOneClick = false) =>
   `${isOneClick ? "원클릭 " : ""}${count}개 패키지`;
 const formatPackageBroadcastLabel = (count: number) => `${count}개 방송국`;
@@ -139,20 +147,20 @@ const formatPackageDescription = (
 
 const packageToneClasses = [
   {
-    card: "border-[#7ad97a] bg-[#8fe38f] text-black",
-    chip: "border-black/30 text-black",
+    card: "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.14)] ring-1 ring-[#0071e3]/10",
+    chip: "border-[#0071e3]/16 bg-white/72 text-[#123152]",
   },
   {
-    card: "border-[#f6d64a] bg-[#f6d64a] text-black",
-    chip: "border-black/30 text-black",
+    card: "border-[#bfd8f6] bg-[#dcecff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.16)] ring-1 ring-[#0071e3]/12",
+    chip: "border-[#0071e3]/18 bg-white/70 text-[#123152]",
   },
   {
-    card: "border-[#4f56d8] bg-[#4f56d8] text-[#ecf2ff]",
-    chip: "border-white/40 text-[#ecf2ff]",
+    card: "border-[#a8cbf3] bg-[#cfe3fb] text-[#113050] shadow-[0_18px_40px_rgba(0,113,227,0.18)] ring-1 ring-[#0071e3]/14",
+    chip: "border-[#0071e3]/18 bg-white/68 text-[#113050]",
   },
   {
-    card: "border-[#e49adf] bg-[#f3a7f2] text-black",
-    chip: "border-black/30 text-black",
+    card: "border-[#90bdf0] bg-[#b8d5f6] text-[#102d4d] shadow-[0_18px_40px_rgba(0,113,227,0.2)] ring-1 ring-[#0071e3]/16",
+    chip: "border-[#0071e3]/20 bg-white/66 text-[#102d4d]",
   },
 ];
 
@@ -516,6 +524,49 @@ export function AlbumWizard({
         priceKrw: basePriceKrw,
       }
     : null;
+  const processGuideCards = [
+    {
+      label: "현재 선택",
+      value: selectedPackageSummary
+        ? `${formatPackageName(selectedPackageSummary.stationCount, isOneClick)}`
+        : "패키지 미선택",
+      description: selectedPackageSummary
+        ? `${selectedPackage?.stations.length ?? 0}개 방송국 · ${formatCurrency(selectedPackageSummary.priceKrw)}원`
+        : "접수 방식을 먼저 선택해주세요.",
+    },
+    {
+      label: "이번 단계 핵심",
+      value:
+        step === 1
+          ? "패키지와 접수 방식 확정"
+          : step === 2
+            ? isOneClick
+              ? "기본 정보와 멜론 링크 입력"
+              : "기본 정보와 트랙 정보 입력"
+            : step === 3
+              ? "파일 업로드 또는 이메일 제출 안내 확인"
+              : step === 4
+                ? "결제 방식과 발급 정보 확인"
+                : "진행 상황 확인 준비 완료",
+      description:
+        step === 2
+          ? isOneClick
+            ? "아티스트명, 접수자 정보, 멜론 링크가 핵심입니다."
+            : `트랙 ${tracks.length}곡 기준으로 필수 항목을 점검하세요.`
+          : step === 5
+            ? isGuest
+              ? "조회 코드로 비회원 결과 조회가 가능합니다."
+              : "마이페이지에서 진행 상태가 자동 저장됩니다."
+            : "현재 단계만 끝내면 다음 단계로 바로 이동합니다.",
+    },
+    {
+      label: "결과 확인",
+      value: isGuest ? "비회원 조회 코드 제공" : "마이페이지 자동 저장",
+      description: isGuest
+        ? "접수 완료 후 발급되는 코드로 방송국별 진행 상태와 결과를 조회합니다."
+        : "접수 완료 후 내역이 마이페이지에 저장되어 이후 결과 확인이 더 편합니다.",
+    },
+  ];
 
   const readDraftStorage = React.useCallback(() => {
     if (typeof window === "undefined") return null;
@@ -789,7 +840,8 @@ export function AlbumWizard({
   const stepLabels = (
     <div className="grid gap-3 md:grid-cols-5">
       {steps.map((label, index) => {
-        const active = index + 1 <= step;
+        const isCompleted = index + 1 < step;
+        const isCurrent = index + 1 === step;
         const isPackageStep = index === 0;
         const packageLabel =
           isPackageStep && selectedPackage
@@ -797,19 +849,36 @@ export function AlbumWizard({
             : label;
         const activeTone = selectedPackageTone
           ? selectedPackageTone.card
-          : "border-[#f6d64a] bg-[#f6d64a] text-black";
+          : "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152]";
         return (
           <div
             key={label}
-            className={`rounded-2xl border px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] ${
-              active
+            className={`rounded-[24px] border px-4 py-4 text-xs ${
+              isCurrent || isCompleted
                 ? activeTone
                 : "border-border/60 bg-background text-muted-foreground"
             }`}
           >
-            STEP {String(index + 1).padStart(2, "0")}
-            <p className="mt-2 text-[11px] font-medium tracking-normal">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold uppercase tracking-[0.2em]">
+                STEP {String(index + 1).padStart(2, "0")}
+              </span>
+              {isCurrent ? (
+                <span className="rounded-full border border-current/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                  진행 중
+                </span>
+              ) : null}
+              {isCompleted ? (
+                <span className="rounded-full border border-current/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                  완료
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-3 text-sm font-semibold tracking-[-0.01em]">
               {packageLabel}
+            </p>
+            <p className="mt-1 text-[12px] font-medium leading-5 tracking-normal opacity-75">
+              {stepDescriptions[index]}
             </p>
           </div>
         );
@@ -1565,7 +1634,7 @@ export function AlbumWizard({
       setNotice({
         error:
           draftError ||
-          "접수 초안을 준비하는 중입니다. 잠시 후 다시 시도하거나 다시 시도 버튼을 눌러주세요.",
+          "신청 정보를 준비하는 중입니다. 잠시 후 다시 시도해주세요. 업로드가 계속 어려우면 신청서는 이어서 작성하고 파일만 이메일로 보내주세요.",
       });
       void createDraft({ force: true });
       return;
@@ -2301,7 +2370,7 @@ export function AlbumWizard({
 
   const confirmEmailSubmission = React.useCallback(() => {
     const message =
-      "음원을 이메일로 제출하시겠습니까?\n(파일 업로드 없이 다음 단계로 이동합니다)";
+      "신청서는 사이트에서 계속 진행하고, 음원 파일만 이메일로 제출하시겠습니까?\n(파일 업로드 없이 다음 단계로 이동합니다)";
     const confirmed =
       typeof window !== "undefined" ? window.confirm(message) : false;
     if (confirmed) {
@@ -3141,6 +3210,25 @@ export function AlbumWizard({
 
       {stepLabels}
 
+      <div className="grid gap-3 md:grid-cols-3">
+        {processGuideCards.map((card) => (
+          <div
+            key={card.label}
+            className="rounded-[24px] border border-black/6 bg-white/90 px-5 py-4 shadow-[0_16px_32px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+              {card.label}
+            </p>
+            <p className="mt-3 text-base font-semibold tracking-[-0.02em] text-foreground">
+              {card.value}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {card.description}
+            </p>
+          </div>
+        ))}
+      </div>
+
       {step === 1 && (
         <div className="space-y-6">
           <div className="flex items-start justify-between gap-4">
@@ -3171,14 +3259,23 @@ export function AlbumWizard({
                 disabled={selectionLocked}
                 className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-70 ${
                   !isOneClick
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                    ? "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.14)]"
+                    : "border-border/60 bg-background text-foreground hover:border-primary/40"
                 }`}
               >
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  Standard
-                </p>
-                <p className="mt-2 text-sm font-semibold">일반 접수</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
+                      Standard
+                    </p>
+                    <p className="mt-2 text-sm font-semibold">일반 접수</p>
+                  </div>
+                  {!isOneClick ? (
+                    <span className="rounded-full border border-[#0071e3]/14 bg-white/72 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
+                      선택됨
+                    </span>
+                  ) : null}
+                </div>
                 <p className="mt-2 text-xs opacity-80">
                   트랙 정보를 직접 입력하는 기본 심의 접수입니다.
                 </p>
@@ -3193,14 +3290,23 @@ export function AlbumWizard({
                 disabled={selectionLocked}
                 className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-70 ${
                   isOneClick
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                    ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_18px_40px_rgba(0,113,227,0.22)] dark:bg-[#2997ff] dark:text-[#00101f]"
+                    : "border-border/60 bg-background text-foreground hover:border-primary/40"
                 }`}
               >
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  One Click
-                </p>
-                <p className="mt-2 text-sm font-semibold">원클릭 접수</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
+                      One Click
+                    </p>
+                    <p className="mt-2 text-sm font-semibold">원클릭 접수</p>
+                  </div>
+                  {isOneClick ? (
+                    <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
+                      선택됨
+                    </span>
+                  ) : null}
+                </div>
                 <p className="mt-2 text-xs opacity-80">
                   멜론 링크와 음원 파일만 제출하는 간편 접수입니다.
                 </p>
@@ -3237,7 +3343,7 @@ export function AlbumWizard({
                   className={`text-left rounded-[28px] border p-6 transition disabled:cursor-not-allowed disabled:opacity-70 ${
                     isActive
                       ? tone.card
-                      : "border-border/60 bg-card/80 text-foreground hover:border-foreground"
+                      : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -3249,9 +3355,16 @@ export function AlbumWizard({
                         {formatPackageName(pkg.stationCount, isOneClick)}
                       </h3>
                     </div>
-                    <span className="text-sm font-semibold">
-                      {formatCurrency(displayPrice)}원
-                    </span>
+                    <div className="flex flex-col items-end gap-2">
+                      {isActive ? (
+                        <span className="rounded-full border border-[#0071e3]/14 bg-white/72 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
+                          선택됨
+                        </span>
+                      ) : null}
+                      <span className="text-sm font-semibold">
+                        {formatCurrency(displayPrice)}원
+                      </span>
+                    </div>
                   </div>
                   <p className="mt-3 text-xs opacity-70">
                     {formatPackageDescription(pkg.description, pkg.stationCount)}
@@ -3313,6 +3426,81 @@ export function AlbumWizard({
                   ? ` · 추가 앨범 ${albumDrafts.length}건 등록됨`
                   : ""}
               </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="rounded-[28px] border border-black/6 bg-white/92 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                이번 단계에서 입력할 내용
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
+                  <p className="font-semibold">기본 정보</p>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    {isOneClick
+                      ? "아티스트명, 앨범명(선택), 멜론 링크를 입력합니다."
+                      : "앨범명, 아티스트 표기, 발매일, 장르, 유통사, 제작사를 입력합니다."}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
+                  <p className="font-semibold">접수자 정보</p>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    이름, 이메일, 연락처는 접수 확인과 결과 안내에 사용됩니다.
+                  </p>
+                </div>
+                {!isOneClick ? (
+                  <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground sm:col-span-2">
+                    <p className="font-semibold">트랙 정보와 가사</p>
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                      곡 제목, 작곡·작사·편곡, 타이틀 여부, 가사를 실제 발매 내용과
+                      일치하게 입력해주세요. 결과 확인 시 트랙별 통과 여부가
+                      그대로 반영됩니다.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-[#cfe3fb] bg-[#eaf3ff] p-6 text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.1)] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-white dark:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#0071e3] dark:text-[#8bc3ff]">
+                선택 내용 요약
+              </p>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="rounded-2xl border border-white/45 bg-white/70 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-70">
+                    접수 방식
+                  </p>
+                  <p className="mt-1 font-semibold">
+                    {isOneClick ? "원클릭 접수" : "일반 접수"}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/45 bg-white/70 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-70">
+                    선택 패키지
+                  </p>
+                  <p className="mt-1 font-semibold">
+                    {selectedPackageSummary
+                      ? formatPackageName(selectedPackageSummary.stationCount, isOneClick)
+                      : "선택 전"}
+                  </p>
+                  <p className="mt-1 text-xs opacity-80">
+                    {selectedPackageSummary
+                      ? `${formatCurrency(selectedPackageSummary.priceKrw)}원`
+                      : "패키지를 먼저 선택해주세요."}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/45 bg-white/70 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-70">
+                    접수 완료 후
+                  </p>
+                  <p className="mt-1 text-xs leading-5 opacity-85">
+                    {isGuest
+                      ? "조회 코드가 발급되며, 이후 방송국별 진행 상태와 결과를 비회원 조회에서 확인할 수 있습니다."
+                      : "접수 내역이 마이페이지에 저장되어 결과 확인과 재조회가 더 간편합니다."}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -4188,6 +4376,42 @@ export function AlbumWizard({
             </div>
           </div>
 
+          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-[28px] border border-black/6 bg-white/92 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                업로드 안내
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
+                  <p className="font-semibold">업로드 파일</p>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    WAV 또는 ZIP 파일만 업로드할 수 있으며, 업로드 완료 후 다음
+                    단계로 넘어갈 수 있습니다.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
+                  <p className="font-semibold">업로드 기준</p>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    앨범별로 실제 심의 대상 음원이 누락 없이 포함되어야 하며,
+                    트랙 순서와 신청서 내용이 일치해야 합니다.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-[#cfe3fb] bg-[#eaf3ff] p-6 text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.1)] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-white dark:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#0071e3] dark:text-[#8bc3ff]">
+                업로드가 어려운 경우
+              </p>
+              <p className="mt-4 text-sm leading-6">
+                신청서는 사이트에서 계속 진행하시고, 파일만 별도로 이메일로
+                보내주세요. 접수 흐름은 그대로 유지되고 파일 확인만 별도
+                지원합니다.
+              </p>
+              <p className="mt-4 text-sm font-semibold">{APP_CONFIG.supportEmail}</p>
+            </div>
+          </div>
+
           {uploadDrafts && uploadDrafts.length > 0 && (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -4394,7 +4618,7 @@ export function AlbumWizard({
             </div>
             <div className="mt-4 space-y-1 text-xs text-muted-foreground">
               <p>
-                용량이 크거나 첨부가 어려운 경우 이메일로 음원을 꼭 제출해주세요.
+                업로드가 원활하지 않으면 신청서는 사이트에서 계속 진행하고, 음원 파일만 이메일로 보내주세요.
               </p>
               {isOneClick && (
                 <p>원클릭 접수는 음원 파일만 제출하면 됩니다.</p>
@@ -4790,6 +5014,33 @@ export function AlbumWizard({
           <p className="mt-3 text-sm text-muted-foreground">
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
+          <div className="mx-auto mt-6 max-w-3xl rounded-[28px] border border-black/6 bg-white/88 p-6 text-left shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              다음 단계 안내
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
+                <p className="font-semibold">1. 접수 내역 확인</p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  접수 직후 결제 상태와 방송국 진행 상태가 기록됩니다.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
+                <p className="font-semibold">2. 진행 상태 확인</p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  마이페이지 또는 조회 코드로 방송국별 처리 현황과 결과를 다시
+                  확인할 수 있습니다.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
+                <p className="font-semibold">3. 업로드 이슈 대응</p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  파일 제출이 불안정했다면 신청서는 유지한 채 파일만 이메일로
+                  보내주시면 됩니다.
+                </p>
+              </div>
+            </div>
+          </div>
           {notice.emailWarning ? (
             <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
               {notice.emailWarning}

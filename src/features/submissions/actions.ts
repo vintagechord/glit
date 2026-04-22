@@ -29,6 +29,7 @@ type SupabaseError = {
 type SupabaseClient = Awaited<ReturnType<typeof createServerSupabase>>;
 
 const albumStationCodesByCount: Record<number, string[]> = {
+  3: ["KBS", "MBC", "SBS"],
   7: ["KBS", "MBC", "SBS", "CBS", "WBS", "TBS", "YTN"],
   10: ["KBS", "MBC", "SBS", "TBS", "CBS", "PBC", "WBS", "BBS", "YTN", "ARIRANG"],
   13: [

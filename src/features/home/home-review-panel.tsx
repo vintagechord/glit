@@ -704,8 +704,8 @@ export function HomeReviewPanel({
   );
 
   return (
-    <div className="min-w-0 w-full rounded-[24px] border border-black bg-black p-4 shadow-[0_24px_80px_rgba(15,23,42,0.3)] sm:rounded-[28px] sm:p-6 dark:border-black dark:bg-black lg:min-h-[520px]">
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.16em] text-white sm:text-sm sm:tracking-[0.2em]">
+    <div className="min-w-0 w-full rounded-[24px] border border-black/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(245,245,247,0.98))] p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)] sm:rounded-[28px] sm:p-6 dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(29,29,31,0.94),rgba(0,0,0,0.98))] dark:shadow-none lg:min-h-[520px]">
+      <div className="flex items-center justify-between text-xs uppercase tracking-[0.16em] text-foreground/72 sm:text-sm sm:tracking-[0.2em] dark:text-white/82">
         <span>
           {activeSubmission
             ? `${submissionLabels.summary} 심의`
@@ -725,15 +725,15 @@ export function HomeReviewPanel({
         </span>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 rounded-full bg-muted/60 p-1 text-xs font-semibold uppercase tracking-[0.16em] text-white sm:mt-5 sm:text-sm sm:tracking-[0.2em]">
+      <div className="mt-4 flex items-center gap-2 rounded-full bg-black/5 p-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground sm:mt-5 sm:text-sm sm:tracking-[0.2em] dark:bg-white/8 dark:text-white/76">
         {availableTabs.includes("album") ? (
           <button
             type="button"
             onClick={() => setTab("album")}
             className={`flex-1 rounded-full px-3 py-2 transition ${
               tab === "album"
-                ? "bg-[#f6d64a] text-black shadow-sm"
-                : "text-white/85 hover:text-white"
+                ? "bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(0,113,227,0.18)] dark:bg-[#2997ff] dark:text-[#00101f]"
+                : "text-foreground/72 hover:text-foreground dark:text-white/76 dark:hover:text-white"
             }`}
           >
             앨범
@@ -745,8 +745,8 @@ export function HomeReviewPanel({
             onClick={() => setTab("mv")}
             className={`flex-1 rounded-full px-3 py-2 transition ${
               tab === "mv"
-                ? "bg-[#f6d64a] text-black shadow-sm"
-                : "text-white/85 hover:text-white"
+                ? "bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(0,113,227,0.18)] dark:bg-[#2997ff] dark:text-[#00101f]"
+                : "text-foreground/72 hover:text-foreground dark:text-white/76 dark:hover:text-white"
             }`}
           >
             뮤직비디오
@@ -754,7 +754,7 @@ export function HomeReviewPanel({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.16em] text-white sm:text-xs sm:tracking-[0.2em]">
+      <div className="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/68 sm:text-xs sm:tracking-[0.2em] dark:text-white/76">
         <span>
           {activeList.length > 0
             ? `${activeIndex + 1}/${activeList.length}`
@@ -783,7 +783,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex <= 0}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/35 bg-white/10 text-xs font-bold text-white shadow-sm transition hover:border-white hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary/18 bg-white text-xs font-bold text-primary shadow-[0_8px_20px_rgba(0,113,227,0.12)] transition hover:border-primary hover:bg-[#eaf3ff] hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/16 dark:bg-white/8 dark:text-white dark:hover:border-white/24 dark:hover:bg-white/12"
             aria-label="이전 접수"
           >
             ←
@@ -810,7 +810,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex >= Math.max(0, activeList.length - 1)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/35 bg-white/10 text-xs font-bold text-white shadow-sm transition hover:border-white hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary/18 bg-white text-xs font-bold text-primary shadow-[0_8px_20px_rgba(0,113,227,0.12)] transition hover:border-primary hover:bg-[#eaf3ff] hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/16 dark:bg-white/8 dark:text-white dark:hover:border-white/24 dark:hover:bg-white/12"
             aria-label="다음 접수"
           >
             →
@@ -842,7 +842,7 @@ export function HomeReviewPanel({
                 </div>
                 <div className="mt-2 h-2 w-full rounded-full bg-muted">
                   <div
-                    className="h-2 rounded-full bg-foreground transition-all"
+                    className="h-2 rounded-full bg-primary transition-all dark:bg-[#2997ff]"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
@@ -867,7 +867,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handlePrev}
                 disabled={!canScrollUp}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#f6d64a] bg-[#f6d64a] text-sm font-bold text-black shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:shadow-[0_8px_18px_rgba(15,23,42,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6d64a]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black dark:hover:bg-[#f6d64a] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary bg-primary text-sm font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="이전 심의 진행 상태"
               >
                 ↑
@@ -876,7 +876,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handleNext}
                 disabled={!canScrollDown}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#f6d64a] bg-[#f6d64a] text-sm font-bold text-black shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:shadow-[0_8px_18px_rgba(15,23,42,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6d64a]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black dark:hover:bg-[#f6d64a] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary bg-primary text-sm font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="다음 심의 진행 상태"
               >
                 ↓
@@ -1153,7 +1153,7 @@ export function HomeReviewPanel({
             <div className="mt-4 flex justify-center">
               <Link
                 href={`/dashboard/submissions/${activeSubmission.id}`}
-                className="rounded-full border border-[#f6d64a] bg-[#f6d64a] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:bg-[#efcc49]"
+                className="rounded-full border border-primary bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground shadow-[0_12px_28px_rgba(0,113,227,0.18)] transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
               >
                 자세히 보기
               </Link>
@@ -1229,7 +1229,7 @@ export function HomeReviewPanel({
             <button
               type="button"
               onClick={() => setTrackResultModal(null)}
-              className="mt-6 w-full rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
+              className="mt-6 w-full rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
             >
               닫기
             </button>

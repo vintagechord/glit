@@ -23,8 +23,11 @@ const supabaseAuthCookiePattern = /^sb-[a-z0-9]+-auth-token(?:\.\d+)?$/i;
 const authCheckedCookieName = "glit_auth_checked_at";
 const adminCheckedCookieName = "glit_admin_checked_at";
 const adminCheckedUserCookieName = "glit_admin_checked_user";
+const adminRoleCheckedCookieName = "glit_admin_role_checked_at";
+const adminRoleCheckedUserCookieName = "glit_admin_role_checked_user";
 const authCheckBypassTtlMs = 20_000;
 const adminCheckBypassTtlMs = 45_000;
+const adminRoleCheckBypassTtlMs = 300_000;
 
 function hasSupabaseAuthCookie(request: NextRequest) {
   return request.cookies
@@ -61,6 +64,24 @@ function withAdminCheckedCookie(response: NextResponse, userId: string) {
   return response;
 }
 
+function withAdminRoleCheckedCookie(response: NextResponse, userId: string) {
+  response.cookies.set(adminRoleCheckedCookieName, String(Date.now()), {
+    path: "/",
+    maxAge: 300,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  response.cookies.set(adminRoleCheckedUserCookieName, userId, {
+    path: "/",
+    maxAge: 300,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  return response;
+}
+
 function clearAdminCheckedCookies(response: NextResponse) {
   response.cookies.set(adminCheckedCookieName, "", {
     path: "/",
@@ -70,6 +91,20 @@ function clearAdminCheckedCookies(response: NextResponse) {
     secure: process.env.NODE_ENV === "production",
   });
   response.cookies.set(adminCheckedUserCookieName, "", {
+    path: "/",
+    maxAge: 0,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  response.cookies.set(adminRoleCheckedCookieName, "", {
+    path: "/",
+    maxAge: 0,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  response.cookies.set(adminRoleCheckedUserCookieName, "", {
     path: "/",
     maxAge: 0,
     httpOnly: true,
@@ -122,9 +157,17 @@ export default async function proxy(request: NextRequest) {
   );
   const lastAdminCheckedUserId =
     request.cookies.get(adminCheckedUserCookieName)?.value ?? "";
+  const lastAdminRoleCheckedAt = Number(
+    request.cookies.get(adminRoleCheckedCookieName)?.value ?? "",
+  );
+  const lastAdminRoleCheckedUserId =
+    request.cookies.get(adminRoleCheckedUserCookieName)?.value ?? "";
   const isAdminCheckFresh =
     Number.isFinite(lastAdminCheckedAt) &&
     Date.now() - lastAdminCheckedAt < adminCheckBypassTtlMs;
+  const isAdminRoleCheckFresh =
+    Number.isFinite(lastAdminRoleCheckedAt) &&
+    Date.now() - lastAdminRoleCheckedAt < adminRoleCheckBypassTtlMs;
 
   // Skip repeated auth round-trips during quick tab/page moves.
   if (isUserProtectedRoute && isAuthCheckFresh) {
@@ -204,7 +247,20 @@ export default async function proxy(request: NextRequest) {
     if (isDev && isDevStdPayPath) {
       response.headers.set("Content-Security-Policy", devStdPayCsp);
     }
-    return withAdminCheckedCookie(withAuthCheckedCookie(response), user.id);
+    return withAdminRoleCheckedCookie(
+      withAdminCheckedCookie(withAuthCheckedCookie(response), user.id),
+      user.id,
+    );
+  }
+
+  if (isAdminRoute && isAdminRoleCheckFresh && lastAdminRoleCheckedUserId === user.id) {
+    if (isDev && isDevStdPayPath) {
+      response.headers.set("Content-Security-Policy", devStdPayCsp);
+    }
+    return withAdminRoleCheckedCookie(
+      withAdminCheckedCookie(withAuthCheckedCookie(response), user.id),
+      user.id,
+    );
   }
 
   if (isAdminRoute && user) {
@@ -243,7 +299,10 @@ export default async function proxy(request: NextRequest) {
     response.headers.set("Content-Security-Policy", devStdPayCsp);
   }
 
-  return withAdminCheckedCookie(withAuthCheckedCookie(response), user.id);
+  return withAdminRoleCheckedCookie(
+    withAdminCheckedCookie(withAuthCheckedCookie(response), user.id),
+    user.id,
+  );
 }
 
 export const config = {

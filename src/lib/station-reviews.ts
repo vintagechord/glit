@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const albumStationCodesByCount: Record<number, string[]> = {
+  3: ["KBS", "MBC", "SBS"],
   7: ["MBC", "KBS", "SBS", "TBS", "YTN", "CBS", "WBS"],
   10: [
     "MBC",

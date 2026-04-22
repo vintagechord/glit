@@ -3,6 +3,10 @@
 import Image from "next/image";
 import * as React from "react";
 import {
+  paymentStatusLabelMap,
+  reviewStatusLabelMap,
+} from "@/constants/review-status";
+import {
   SubmissionFilesPanel,
   type SubmissionFile,
 } from "@/features/submissions/submission-files-panel";
@@ -187,6 +191,30 @@ const paymentMethodLabels: Record<string, string> = {
   CARD: "카드",
 };
 
+const submissionStatusToneMap: Record<string, string> = {
+  DRAFT: "border-black/8 bg-white text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white",
+  SUBMITTED: "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]",
+  PRE_REVIEW: "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]",
+  WAITING_PAYMENT:
+    "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200",
+  IN_PROGRESS:
+    "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]",
+  RESULT_READY:
+    "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200",
+  COMPLETED:
+    "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200",
+};
+
+const paymentStatusToneMap: Record<string, string> = {
+  UNPAID:
+    "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200",
+  PAYMENT_PENDING:
+    "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]",
+  PAID: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200",
+  REFUNDED:
+    "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-200",
+};
+
 const mvRatingLabel = (code?: string | null) => {
   switch (code) {
     case "ALL":
@@ -277,6 +305,19 @@ const getReviewResult = (status: string) =>
     label: "대기",
     tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
   };
+
+const getSubmissionTypeLabel = (type: string) => {
+  switch (type) {
+    case "ALBUM":
+      return "음반 심의";
+    case "MV_BROADCAST":
+      return "M/V 방송 심의";
+    case "MV_DISTRIBUTION":
+      return "M/V 온라인 심의";
+    default:
+      return type;
+  }
+};
 
 export function SubmissionDetailClient({
   submissionId,
@@ -497,6 +538,131 @@ export function SubmissionDetailClient({
     },
     [albumTracks],
   );
+  const submissionStatusLabel =
+    reviewStatusLabelMap[submission.status as keyof typeof reviewStatusLabelMap] ??
+    submission.status;
+  const paymentStatusLabel =
+    paymentStatusLabelMap[
+      submission.payment_status as keyof typeof paymentStatusLabelMap
+    ] ??
+    submission.payment_status ??
+    "-";
+  const submissionStatusTone =
+    submissionStatusToneMap[submission.status] ??
+    "border-black/8 bg-white text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white";
+  const paymentStatusTone =
+    paymentStatusToneMap[submission.payment_status] ??
+    "border-black/8 bg-white text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white";
+  const submissionTypeLabel = getSubmissionTypeLabel(submission.type);
+  const preferredRadioStation = !isMvSubmission
+    ? renderStationReviews.find((review) => {
+        const summary = buildTrackSummary(review.track_results);
+        return summary.counts.approved > 0 || review.status === "APPROVED";
+      }) ?? null
+    : null;
+  const preferredRadioStationCode =
+    preferredRadioStation?.station &&
+    "code" in preferredRadioStation.station
+      ? preferredRadioStation.station.code
+      : null;
+  const stationSummary = renderStationReviews.reduce(
+    (acc, review) => {
+      const summary = buildTrackSummary(review.track_results);
+      const hasDelivery =
+        review.status === "APPROVED" ||
+        review.status === "REJECTED" ||
+        review.status === "NEEDS_FIX" ||
+        summary.counts.approved > 0 ||
+        summary.counts.rejected > 0;
+      const isProcessing =
+        review.status === "SENT" || review.status === "RECEIVED";
+      const hasActionNeeded =
+        review.status === "NEEDS_FIX" ||
+        review.status === "REJECTED" ||
+        summary.counts.rejected > 0;
+      const hasApproved =
+        review.status === "APPROVED" || summary.counts.approved > 0;
+
+      acc.total += 1;
+      if (hasDelivery) acc.delivered += 1;
+      if (isProcessing) acc.processing += 1;
+      if (hasActionNeeded) acc.actionNeeded += 1;
+      if (hasApproved) acc.approved += 1;
+      return acc;
+    },
+    { total: 0, delivered: 0, processing: 0, actionNeeded: 0, approved: 0 },
+  );
+  const summaryCards = [
+    {
+      label: "접수 상태",
+      value: submissionStatusLabel,
+      tone: submissionStatusTone,
+      description: flowStatusNotice.message,
+    },
+    {
+      label: "결제 상태",
+      value: paymentStatusLabel,
+      tone: paymentStatusTone,
+      description: submission.payment_method
+        ? `${paymentMethodLabels[submission.payment_method] ?? submission.payment_method} 결제`
+        : "결제 방식 미입력",
+    },
+    {
+      label: "방송국 진행",
+      value:
+        stationSummary.total > 0
+          ? `${stationSummary.delivered}/${stationSummary.total} 결과 반영`
+          : "진행 정보 대기",
+      tone:
+        stationSummary.delivered > 0
+          ? "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]"
+          : "border-black/8 bg-white text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white",
+      description:
+        stationSummary.actionNeeded > 0
+          ? `확인 필요 ${stationSummary.actionNeeded}곳`
+          : stationSummary.processing > 0
+            ? `진행 중 ${stationSummary.processing}곳`
+            : "현재 결과 기준",
+    },
+  ];
+  const quickFacts = [
+    {
+      label: "접수 ID",
+      value: submission.id,
+    },
+    {
+      label: isMvSubmission ? "심의 옵션" : "패키지",
+      value: isMvSubmission
+        ? mvOptions && mvOptions.length > 0
+          ? mvOptions.join(", ")
+          : "-"
+        : packageInfo?.name ?? "-",
+    },
+    {
+      label: isMvSubmission ? "희망 등급" : "트랙 수",
+      value: isMvSubmission
+        ? submission.mv_desired_rating
+          ? mvRatingLabel(submission.mv_desired_rating)
+          : "-"
+        : `${albumTracks.length}곡`,
+    },
+    {
+      label: "결제 금액",
+      value: submission.amount_krw
+        ? `${formatCurrency(submission.amount_krw)}원`
+        : packageInfo?.price_krw
+          ? `${formatCurrency(packageInfo.price_krw)}원`
+          : "-",
+    },
+    {
+      label: "접수 일시",
+      value: formatDateTime(submission.created_at),
+    },
+    {
+      label: "최근 업데이트",
+      value: formatDateTime(submission.updated_at),
+    },
+  ];
 
   const openRadioLinks = (station?: { name?: string | null; code?: string | null }) => {
     const links = resolveRadioBoardLinks({
@@ -697,30 +863,6 @@ export function SubmissionDetailClient({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex-1 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            Submission Detail
-          </p>
-          <h1 className="font-display mt-2 text-2xl font-semibold text-slate-900 dark:text-amber-300">
-            {submission.title || "제목 미입력"}
-          </h1>
-          <p className="mt-1 text-xl font-medium text-slate-900 dark:text-amber-300">
-            {submission.artist_name || "아티스트 미입력"}
-          </p>
-        </div>
-      </div>
-      {showAdminTools && isPaymentPending ? (
-        <div className="mt-3 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => setShowPaymentInfo(true)}
-            className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
-          >
-            결제 안내 보기
-          </button>
-        </div>
-      ) : null}
       {showPaymentInfo ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
           <button
@@ -806,6 +948,196 @@ export function SubmissionDetailClient({
           </div>
         </div>
       ) : null}
+      <section className="overflow-hidden rounded-[36px] border border-black/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,245,247,0.98))] p-8 shadow-[0_30px_80px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(29,29,31,0.94),rgba(0,0,0,0.98))] dark:shadow-none">
+        <div className="flex flex-wrap items-start justify-between gap-8">
+          <div className="max-w-3xl flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+              Submission Detail
+            </p>
+            <h1 className="font-display mt-3 text-3xl leading-tight text-foreground sm:text-4xl">
+              {submission.title || "제목 미입력"}
+            </h1>
+            <p className="mt-3 text-lg font-medium text-foreground/82 sm:text-xl">
+              {submission.artist_name || "아티스트 미입력"}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
+              <span className="rounded-full border border-[#0071e3]/12 bg-[#eaf3ff] px-3 py-1.5 text-[#0071e3] dark:border-[#2997ff]/20 dark:bg-[#0b2a46] dark:text-[#8bc3ff]">
+                {submissionTypeLabel}
+              </span>
+              {submission.genre ? (
+                <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1.5 text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
+                  {submission.genre}
+                </span>
+              ) : null}
+              {!isMvSubmission && albumTracks.length > 0 ? (
+                <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1.5 text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
+                  {albumTracks.length}곡
+                </span>
+              ) : null}
+              <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1.5 text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
+                {guestToken ? "비회원 접수" : "회원 접수"}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid w-full gap-3 sm:grid-cols-3 lg:w-auto lg:min-w-[520px]">
+            {summaryCards.map((card) => (
+              <div
+                key={card.label}
+                className={`rounded-[24px] border px-5 py-4 shadow-[0_16px_32px_rgba(0,0,0,0.04)] dark:shadow-none ${card.tone}`}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] opacity-75">
+                  {card.label}
+                </p>
+                <p className="mt-3 text-lg font-semibold tracking-[-0.02em]">
+                  {card.value}
+                </p>
+                <p className="mt-2 text-xs leading-5 opacity-80">
+                  {card.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-8 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-[28px] border border-black/6 bg-white/90 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                한눈에 보기
+              </p>
+              <span className="text-xs text-muted-foreground">
+                최근 업데이트 {formatDateTime(submission.updated_at)}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {quickFacts.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4"
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    {item.label}
+                  </p>
+                  <p className="mt-2 break-all text-sm font-semibold text-foreground">
+                    {item.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {ratingReason ? (
+              <div className="mt-4 rounded-2xl border border-rose-200/70 bg-rose-50/80 p-4 dark:border-rose-300/20 dark:bg-rose-500/10">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700 dark:text-rose-200">
+                  결과 메모
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-rose-700 dark:text-rose-100">
+                  {ratingReason}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-[28px] border border-[#cfe3fb] bg-[#eaf3ff] p-6 text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.1)] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-white dark:shadow-none">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#0071e3] dark:text-[#8bc3ff]">
+                  진행 단계
+                </p>
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current/15 bg-white/45 dark:bg-white/10">
+                    <span className={`inline-block h-2.5 w-2.5 rounded-full ${flowStatusNotice.dotTone}`} />
+                  </span>
+                  <span>{flowStatusNotice.message}</span>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-4 gap-2">
+                {flowSteps.map((label, index) => {
+                  const isActive = index === flowIndex;
+                  const isPassed = index < flowIndex;
+                  return (
+                    <div
+                      key={label}
+                      className={`rounded-2xl border px-3 py-3 text-center text-[11px] font-semibold leading-5 ${
+                        isActive
+                          ? "border-[#0071e3]/12 bg-white text-[#123152] dark:border-white/10 dark:bg-white/10 dark:text-white"
+                          : isPassed
+                            ? "border-white/40 bg-white/60 text-[#123152] dark:border-white/10 dark:bg-white/8 dark:text-white/85"
+                            : "border-white/35 bg-transparent text-[#123152]/70 dark:border-white/10 dark:text-white/65"
+                      }`}
+                    >
+                      {label}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-black/6 bg-white/90 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                바로 할 수 있는 작업
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {showAdminTools && isPaymentPending ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentInfo(true)}
+                    className="rounded-full bg-[#0071e3] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+                  >
+                    결제 안내 보기
+                  </button>
+                ) : null}
+                {!isMvSubmission && preferredRadioStation ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openRadioLinks({
+                        name: preferredRadioStation.station?.name,
+                        code: preferredRadioStationCode,
+                      })
+                    }
+                    className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5"
+                  >
+                    라디오 신청 링크
+                  </button>
+                ) : null}
+                {isMvSubmission ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleGuideDownload}
+                      className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5"
+                    >
+                      표기 가이드
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCertificateDownload}
+                      disabled={!submission.certificate_b2_path}
+                      className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      심의 필증
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setIsAttachmentsOpen((prev) => !prev)}
+                  className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5"
+                >
+                  {isAttachmentsOpen ? "첨부 파일 접기" : "첨부 파일 보기"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsTimelineOpen((prev) => !prev)}
+                  className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5"
+                >
+                  {isTimelineOpen ? "타임라인 접기" : "타임라인 보기"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
       {/* 관리자용 등급/필증 편집 UI는 관리자 페이지에서만 제공 */}
       {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}
 
@@ -905,35 +1237,50 @@ export function SubmissionDetailClient({
           </div>
         </div>
         <div className="order-1">
-          <div className="rounded-[28px] border border-black bg-black p-6">
+          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-white/80">
-                심의 진행 상태
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                진행 현황 요약
               </p>
-              <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-white/85 sm:text-sm">
-                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10">
-                  <span className={`inline-block h-2.5 w-2.5 rounded-full ${flowStatusNotice.dotTone}`} />
-                </span>
-                <span className="truncate">{flowStatusNotice.message}</span>
-              </div>
+              <span className="text-xs text-muted-foreground">
+                방송국 기준 요약
+              </span>
             </div>
-            <div className="mt-4">
-              <div className="grid w-full max-w-full grid-cols-4 gap-1.5 text-white/75 sm:gap-2">
-                {flowSteps.map((label, index) => {
-                  const isActive = index === flowIndex;
-                  return (
-                    <div
-                      key={label}
-                      className={`min-w-0 truncate rounded-xl border px-1 py-2 text-center text-[11px] font-semibold leading-tight sm:px-3 sm:py-2.5 sm:text-sm ${
-                        isActive
-                          ? "border-[#f6d64a] bg-[#f6d64a] text-black"
-                          : "border-white/20 bg-white/10 text-white/80"
-                      }`}
-                    >
-                      {label}
-                    </div>
-                  );
-                })}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-border/60 bg-background/75 px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  전체 방송국
+                </p>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-foreground">
+                  {stationSummary.total}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[#cfe3fb] bg-[#eaf3ff] px-4 py-4 text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-75">
+                  결과 반영
+                </p>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
+                  {stationSummary.delivered}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-75">
+                  통과 반영
+                </p>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
+                  {stationSummary.approved}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-75">
+                  확인 필요
+                </p>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
+                  {stationSummary.actionNeeded}
+                </p>
+                <p className="mt-2 text-xs opacity-80">
+                  진행 중 {stationSummary.processing}곳
+                </p>
               </div>
             </div>
           </div>
@@ -1281,6 +1628,20 @@ export function SubmissionDetailClient({
             </p>
             <span className="text-sm text-muted-foreground">
               업데이트: {formatDateTime(submission.updated_at)}
+            </span>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
+              전체 {stationSummary.total}곳
+            </span>
+            <span className="rounded-full border border-[#cfe3fb] bg-[#eaf3ff] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]">
+              결과 반영 {stationSummary.delivered}곳
+            </span>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+              통과 반영 {stationSummary.approved}곳
+            </span>
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200">
+              확인 필요 {stationSummary.actionNeeded}곳
             </span>
           </div>
           <div className="mt-5">

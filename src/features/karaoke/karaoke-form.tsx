@@ -364,22 +364,54 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
             등록 요청 방송사
           </p>
           <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
-            <label className="flex items-center gap-2 rounded-full border border-border/70 px-4 py-2">
+            <label
+              className={`flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
+                tjRequested
+                  ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_18px_40px_rgba(0,113,227,0.2)] dark:bg-[#2997ff] dark:text-[#00101f]"
+                  : "border-border/70 bg-background text-foreground hover:border-primary/40"
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={tjRequested}
                 onChange={() => setTjRequested((prev) => !prev)}
-                className="h-4 w-4 rounded border-border"
+                className="sr-only"
               />
+              <span
+                aria-hidden="true"
+                className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] ${
+                  tjRequested
+                    ? "border-white/25 bg-white/12 text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]"
+                    : "border-border bg-background text-transparent"
+                }`}
+              >
+                ✓
+              </span>
               태진
             </label>
-            <label className="flex items-center gap-2 rounded-full border border-border/70 px-4 py-2">
+            <label
+              className={`flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
+                kyRequested
+                  ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_18px_40px_rgba(0,113,227,0.2)] dark:bg-[#2997ff] dark:text-[#00101f]"
+                  : "border-border/70 bg-background text-foreground hover:border-primary/40"
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={kyRequested}
                 onChange={() => setKyRequested((prev) => !prev)}
-                className="h-4 w-4 rounded border-border"
+                className="sr-only"
               />
+              <span
+                aria-hidden="true"
+                className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] ${
+                  kyRequested
+                    ? "border-white/25 bg-white/12 text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]"
+                    : "border-border bg-background text-transparent"
+                }`}
+              >
+                ✓
+              </span>
               금영
             </label>
           </div>

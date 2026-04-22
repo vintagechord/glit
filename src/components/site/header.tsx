@@ -21,11 +21,11 @@ const authStorageKey = "onside:header-auth-state";
 type AuthState = "authenticated" | "unauthenticated";
 
 const navLinkClass =
-  "inline-flex h-9 items-center rounded-full px-4 text-[13px] font-medium tracking-[-0.01em] transition";
+  "inline-flex h-12 items-center rounded-full px-6 text-[15px] font-medium tracking-[-0.01em] transition";
 const subtleButtonClass =
-  "inline-flex h-9 shrink-0 items-center justify-center rounded-full border border-black/8 bg-white/72 px-4 text-[13px] font-medium tracking-[-0.01em] text-[#1d1d1f] shadow-[0_10px_30px_rgba(0,0,0,0.05)] backdrop-blur-xl transition hover:border-black/12 hover:bg-white dark:border-white/10 dark:bg-white/6 dark:text-white dark:hover:border-white/16 dark:hover:bg-white/10";
+  "inline-flex h-12 shrink-0 items-center justify-center rounded-full border border-black/8 bg-white/82 px-6 text-[15px] font-medium tracking-[-0.01em] text-[#1d1d1f] shadow-[0_12px_32px_rgba(0,0,0,0.05)] backdrop-blur-xl transition hover:border-black/12 hover:bg-white dark:border-white/10 dark:bg-white/6 dark:text-white dark:hover:border-white/16 dark:hover:bg-white/10";
 const primaryButtonClass =
-  "inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-primary px-4 text-[13px] font-medium tracking-[-0.01em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]";
+  "inline-flex h-12 shrink-0 items-center justify-center rounded-full bg-primary px-6 text-[15px] font-medium tracking-[-0.01em] text-primary-foreground shadow-[0_18px_40px_rgba(0,113,227,0.18)] transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]";
 
 const isActivePath = (pathname: string, href: string) => {
   if (href === "/") return pathname === href;
@@ -98,11 +98,11 @@ export function SiteHeader() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-black/6 bg-[rgba(250,250,252,0.78)] backdrop-blur-[24px] dark:border-white/10 dark:bg-[rgba(0,0,0,0.78)]">
+    <header className="sticky top-0 z-40 border-b border-black/6 bg-[rgba(250,250,252,0.82)] backdrop-blur-[24px] dark:border-white/10 dark:bg-[rgba(0,0,0,0.82)]">
       <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
         <SiteLogo />
 
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex">
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1.5 lg:flex">
           {navLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href);
             return (
@@ -126,7 +126,7 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-3">
           <ThemeToggle />
           {authState === "authenticated" ? (
             <>
@@ -152,7 +152,7 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <nav className="border-t border-black/6 px-4 py-2 lg:hidden dark:border-white/10">
+      <nav className="border-t border-black/6 px-4 py-2.5 lg:hidden dark:border-white/10">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-2 overflow-x-auto scrollbar-none sm:px-2">
           {navLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href);

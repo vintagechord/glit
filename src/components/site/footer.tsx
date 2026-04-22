@@ -374,45 +374,45 @@ export function SiteFooter() {
   }, [activeModal]);
 
   return (
-    <footer className="border-t border-black bg-[#f05a28] text-black">
+    <footer className="border-t border-white/10 bg-[#1d1d1f] text-[#f5f5f7] dark:bg-black">
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-        <div className="grid gap-6 border-b border-black/30 pb-6 md:grid-cols-2">
+        <div className="grid gap-6 border-b border-white/12 pb-6 md:grid-cols-2">
           <div className="space-y-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-black">
+            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-white/58">
               CS CENTER
             </p>
-            <p className="text-xl font-semibold text-black sm:text-2xl">
-              <a href={`tel:${contactPhone}`} className="underline-offset-2 hover:underline">
+            <p className="text-xl font-semibold text-white sm:text-2xl">
+              <a href={`tel:${contactPhone}`} className="underline-offset-2 hover:text-[#2997ff] hover:underline">
                 {contactPhone}
               </a>
             </p>
-            <p className="text-base font-medium text-black">
+            <p className="text-base font-medium text-white/86">
               이메일{" "}
-              <a href={`mailto:${contactEmail}`} className="underline-offset-2 hover:underline">
+              <a href={`mailto:${contactEmail}`} className="underline-offset-2 hover:text-[#2997ff] hover:underline">
                 {contactEmail}
               </a>
             </p>
-            <p className="text-base font-medium text-black">
+            <p className="text-base font-medium text-white/72">
               상담시간 {APP_CONFIG.supportHours}
             </p>
           </div>
           <div className="space-y-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-black">
+            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-white/58">
               BANK INFO
             </p>
-            <p className="text-base font-medium text-black">
+            <p className="text-base font-medium text-white/86">
               {bankName} {bankAccount}
             </p>
-            <p className="text-base font-medium text-black">
+            <p className="text-base font-medium text-white/72">
               예금주:{" "}
-              <span className="font-semibold text-black">
+              <span className="font-semibold text-white">
                 {bankHolder}
               </span>
             </p>
             {APP_CONFIG.bankLink ? (
               <Link
                 href={APP_CONFIG.bankLink}
-                className="inline-flex items-center rounded-full border border-black/40 px-3 py-1 text-sm font-semibold text-black transition hover:border-black"
+                className="inline-flex items-center rounded-full border border-white/16 bg-white/6 px-4 py-2 text-sm font-semibold text-white transition hover:border-[#2997ff] hover:bg-[#2997ff] hover:text-[#00101f]"
               >
                 인터넷뱅킹 바로가기
               </Link>
@@ -420,37 +420,37 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 border-b border-black/30 py-4 text-sm font-semibold text-black">
-          <Link href="/about" className="transition hover:text-black">
+        <div className="flex flex-wrap gap-4 border-b border-white/12 py-4 text-sm font-semibold text-white/76">
+          <Link href="/about" className="transition hover:text-[#2997ff]">
             About Us
           </Link>
-          <Link href="/guide" className="transition hover:text-black">
+          <Link href="/guide" className="transition hover:text-[#2997ff]">
             심의 안내
           </Link>
           <button
             type="button"
             onClick={() => setActiveModal("terms")}
-            className="transition hover:text-black"
+            className="transition hover:text-[#2997ff]"
           >
             이용약관
           </button>
           <button
             type="button"
             onClick={() => setActiveModal("privacy")}
-            className="transition hover:text-black"
+            className="transition hover:text-[#2997ff]"
           >
             개인정보처리방침
           </button>
           <button
             type="button"
             onClick={() => setActiveModal("partnership")}
-            className="transition hover:text-black"
+            className="transition hover:text-[#2997ff]"
           >
             제휴안내
           </button>
         </div>
 
-        <div className="space-y-3 pt-4 text-sm font-medium text-black">
+        <div className="space-y-3 pt-4 text-sm font-medium text-white/72">
           <div className="grid gap-1 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-1">
             <p>회사명: {APP_CONFIG.businessName}</p>
             <p>대표자: {APP_CONFIG.businessRep}</p>
@@ -459,7 +459,7 @@ export function SiteFooter() {
               전화:{" "}
               <a
                 href={`tel:${APP_CONFIG.supportPhone}`}
-                className="underline-offset-2 hover:underline"
+                className="underline-offset-2 hover:text-[#2997ff] hover:underline"
               >
                 {APP_CONFIG.supportPhone}
               </a>
@@ -468,7 +468,7 @@ export function SiteFooter() {
               이메일:{" "}
               <a
                 href={`mailto:${APP_CONFIG.supportEmail}`}
-                className="underline-offset-2 hover:underline"
+                className="underline-offset-2 hover:text-[#2997ff] hover:underline"
               >
                 {APP_CONFIG.supportEmail}
               </a>
@@ -478,7 +478,7 @@ export function SiteFooter() {
             <p>개인정보 보호책임자: {APP_CONFIG.privacyOfficer}</p>
             <p>호스팅 제공자: {APP_CONFIG.hostingProvider}</p>
           </div>
-          <p className="text-black">
+          <p className="text-white/52">
             Copyright © {APP_CONFIG.businessName}. All Rights Reserved.
           </p>
         </div>
