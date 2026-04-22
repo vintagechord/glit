@@ -225,6 +225,15 @@ export async function POST(request: Request) {
   }
 
   if (submissionResult.error) {
+    console.error("[Drafts] failed to load submission drafts", {
+      type: parsed.data.type,
+      isGuest,
+      code: submissionResult.error.code,
+      message: submissionResult.error.message,
+    });
+    if (isGuest) {
+      return NextResponse.json({ ok: true, drafts: [] });
+    }
     return NextResponse.json({ error: "임시 저장 정보를 불러올 수 없습니다." }, { status: 500 });
   }
 

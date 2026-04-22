@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Manrope, Space_Grotesk } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
 import { ChatbotWidget } from "@/components/chatbot-widget";
@@ -7,16 +6,6 @@ import { NavigationLatencyLogger } from "@/components/perf/navigation-latency-lo
 import { SiteFooter } from "@/components/site/footer";
 import { SiteHeader } from "@/components/site/header";
 import { ThemeProvider } from "@/components/theme-provider";
-
-const manrope = Manrope({
-  variable: "--font-manrope",
-  subsets: ["latin"],
-});
-
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: {
@@ -34,9 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" suppressHydrationWarning>
-      <body
-        className={`${manrope.variable} ${spaceGrotesk.variable} min-h-screen font-sans antialiased`}
-      >
+      <body className="min-h-screen font-sans antialiased">
         <ThemeProvider>
           <Suspense fallback={null}>
             <NavigationLatencyLogger />

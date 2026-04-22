@@ -318,6 +318,7 @@ export function MvWizard({
   } | null>(null);
   const [isClearingResumeDrafts, setIsClearingResumeDrafts] = React.useState(false);
   const resumePromptHandledRef = React.useRef(false);
+  const draftInitAttemptedRef = React.useRef(false);
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [openBroadcastSpec, setOpenBroadcastSpec] = React.useState<string | null>(
@@ -505,8 +506,10 @@ export function MvWizard({
     throw new Error("접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.");
   }, []);
 
-  const createDraft = React.useCallback(async () => {
+  const createDraft = React.useCallback(async (options?: { force?: boolean }) => {
     if (isPreparingDraft || submissionIdRef.current) return;
+    if (!options?.force && draftInitAttemptedRef.current) return;
+    draftInitAttemptedRef.current = true;
     setIsPreparingDraft(true);
     setDraftError(null);
     try {
@@ -678,7 +681,7 @@ export function MvWizard({
           draftError ||
           "접수 초안을 준비하는 중입니다. 잠시 후 다시 시도하거나 다시 시도 버튼을 눌러주세요.",
       });
-      void createDraft();
+      void createDraft({ force: true });
       return;
     }
     const allowAllExtensions = mvType === "MV_DISTRIBUTION";
@@ -2949,8 +2952,25 @@ export function MvWizard({
                   className="hidden"
                 />
                 <span className="flex w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
-                  파일 첨부 (드래그 앤 드롭 가능)
+                  {submissionIdRef.current
+                    ? "파일 첨부 (드래그 앤 드롭 가능)"
+                    : isPreparingDraft
+                      ? "접수 ID 준비 중... 잠시 후 첨부 가능"
+                      : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
                 </span>
+                {!submissionIdRef.current && !isPreparingDraft ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void createDraft({ force: true });
+                    }}
+                    className="mt-3 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-[12px] font-semibold tracking-[0.16em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+                  >
+                    다시 시도
+                  </button>
+                ) : null}
                 {isDraggingOver && (
                   <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-[#f6d64a] bg-black/10 backdrop-blur-[1px]" />
                 )}

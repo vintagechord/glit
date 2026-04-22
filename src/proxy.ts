@@ -21,7 +21,10 @@ function withCookies(target: NextResponse, source: NextResponse) {
 
 const supabaseAuthCookiePattern = /^sb-[a-z0-9]+-auth-token(?:\.\d+)?$/i;
 const authCheckedCookieName = "glit_auth_checked_at";
+const adminCheckedCookieName = "glit_admin_checked_at";
+const adminCheckedUserCookieName = "glit_admin_checked_user";
 const authCheckBypassTtlMs = 20_000;
+const adminCheckBypassTtlMs = 45_000;
 
 function hasSupabaseAuthCookie(request: NextRequest) {
   return request.cookies
@@ -33,6 +36,42 @@ function withAuthCheckedCookie(response: NextResponse) {
   response.cookies.set(authCheckedCookieName, String(Date.now()), {
     path: "/",
     maxAge: 60,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  return response;
+}
+
+function withAdminCheckedCookie(response: NextResponse, userId: string) {
+  response.cookies.set(adminCheckedCookieName, String(Date.now()), {
+    path: "/",
+    maxAge: 90,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  response.cookies.set(adminCheckedUserCookieName, userId, {
+    path: "/",
+    maxAge: 90,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  return response;
+}
+
+function clearAdminCheckedCookies(response: NextResponse) {
+  response.cookies.set(adminCheckedCookieName, "", {
+    path: "/",
+    maxAge: 0,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  response.cookies.set(adminCheckedUserCookieName, "", {
+    path: "/",
+    maxAge: 0,
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -78,10 +117,29 @@ export default async function proxy(request: NextRequest) {
   const lastCheckedAt = Number(request.cookies.get(authCheckedCookieName)?.value ?? "");
   const isAuthCheckFresh =
     Number.isFinite(lastCheckedAt) && Date.now() - lastCheckedAt < authCheckBypassTtlMs;
+  const lastAdminCheckedAt = Number(
+    request.cookies.get(adminCheckedCookieName)?.value ?? "",
+  );
+  const lastAdminCheckedUserId =
+    request.cookies.get(adminCheckedUserCookieName)?.value ?? "";
+  const isAdminCheckFresh =
+    Number.isFinite(lastAdminCheckedAt) &&
+    Date.now() - lastAdminCheckedAt < adminCheckBypassTtlMs;
 
   // Skip repeated auth round-trips during quick tab/page moves.
   if (isUserProtectedRoute && isAuthCheckFresh) {
-    const passthrough = NextResponse.next();
+    const passthrough = withAuthCheckedCookie(NextResponse.next());
+    if (isDev && isDevStdPayPath) {
+      passthrough.headers.set("Content-Security-Policy", devStdPayCsp);
+    }
+    return passthrough;
+  }
+
+  if (isAdminRoute && isAuthCheckFresh && isAdminCheckFresh && lastAdminCheckedUserId) {
+    const passthrough = withAdminCheckedCookie(
+      withAuthCheckedCookie(NextResponse.next()),
+      lastAdminCheckedUserId,
+    );
     if (isDev && isDevStdPayPath) {
       passthrough.headers.set("Content-Security-Policy", devStdPayCsp);
     }
@@ -121,7 +179,9 @@ export default async function proxy(request: NextRequest) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("next", pathname);
-    const redirectRes = withCookies(NextResponse.redirect(redirectUrl), response);
+    const redirectRes = clearAdminCheckedCookies(
+      withCookies(NextResponse.redirect(redirectUrl), response),
+    );
     if (isDev && isDevStdPayPath) {
       redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
     }
@@ -135,6 +195,18 @@ export default async function proxy(request: NextRequest) {
     return withAuthCheckedCookie(response);
   }
 
+  if (
+    isAuthCheckFresh &&
+    isAdminCheckFresh &&
+    user &&
+    lastAdminCheckedUserId === user.id
+  ) {
+    if (isDev && isDevStdPayPath) {
+      response.headers.set("Content-Security-Policy", devStdPayCsp);
+    }
+    return withAdminCheckedCookie(withAuthCheckedCookie(response), user.id);
+  }
+
   if (isAdminRoute && user) {
     if (supabase) {
       const { data: profile } = await supabase
@@ -146,7 +218,9 @@ export default async function proxy(request: NextRequest) {
       if (!profile || profile.role !== "admin") {
         const redirectUrl = request.nextUrl.clone();
         redirectUrl.pathname = "/dashboard";
-        const redirectRes = withCookies(NextResponse.redirect(redirectUrl), response);
+        const redirectRes = clearAdminCheckedCookies(
+          withCookies(NextResponse.redirect(redirectUrl), response),
+        );
         if (isDev && isDevStdPayPath) {
           redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
         }
@@ -155,7 +229,9 @@ export default async function proxy(request: NextRequest) {
     } else {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/dashboard";
-      const redirectRes = withCookies(NextResponse.redirect(redirectUrl), response);
+      const redirectRes = clearAdminCheckedCookies(
+        withCookies(NextResponse.redirect(redirectUrl), response),
+      );
       if (isDev && isDevStdPayPath) {
         redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
       }
@@ -167,7 +243,7 @@ export default async function proxy(request: NextRequest) {
     response.headers.set("Content-Security-Policy", devStdPayCsp);
   }
 
-  return withAuthCheckedCookie(response);
+  return withAdminCheckedCookie(withAuthCheckedCookie(response), user.id);
 }
 
 export const config = {

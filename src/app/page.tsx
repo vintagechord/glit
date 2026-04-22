@@ -84,7 +84,7 @@ const featureHighlights = [
     description:
       "방송국별 심의 진행 상황을 실시간으로 확인하세요.\n회원/비회원 누구나",
     card:
-      "bg-[#f7f8fb] text-[#2d3444] border-white/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#1b2537] dark:text-[#e7eeff] dark:border-white/10 dark:shadow-[0_16px_36px_rgba(2,6,23,0.42)]",
+      "bg-[#f7f8fb] text-[#1d1d1f] border-white/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#1d1d1f] dark:text-[#f5f5f7] dark:border-white/10 dark:shadow-none",
     visual: "from-[#d7ecff] via-white to-[#eef6ff]",
     icon: (
       <svg
@@ -124,7 +124,7 @@ const featureHighlights = [
     description:
       "온사이드는 자체 스토리지 운영으로 안전하게 음원과 영상을 관리합니다.",
     card:
-      "bg-white text-[#2d3444] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#18283d] dark:text-[#e7eeff] dark:border-white/10 dark:shadow-[0_16px_36px_rgba(2,6,23,0.42)]",
+      "bg-white text-[#1d1d1f] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#1d1d1f] dark:text-[#f5f5f7] dark:border-white/10 dark:shadow-none",
     visual: "from-[#e7fff2] via-white to-[#eaf7ff]",
     icon: (
       <svg
@@ -159,7 +159,7 @@ const featureHighlights = [
     description:
       "접수 시 1차 체크, 방송국 전달 전 2차 검수로 빈틈 없이",
     card:
-      "bg-[#eef2ff] text-[#2d3444] border-[#dbe5ff] shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#232341] dark:text-[#ebe8ff] dark:border-white/10 dark:shadow-[0_16px_36px_rgba(2,6,23,0.42)]",
+      "bg-[#eef2ff] text-[#1d1d1f] border-[#dbe5ff] shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#1d1d1f] dark:text-[#f5f5f7] dark:border-white/10 dark:shadow-none",
     visual: "from-[#fff4d6] via-white to-[#ffe9d6]",
     icon: (
       <svg
@@ -199,27 +199,30 @@ const serviceCards = [
     title: "음반 심의",
     description: "트랙 정보 입력과 음원 파일 업로드까지 한 번에.",
     href: "/dashboard/new/album",
-    cardClass: "bg-[#8fe38f] text-[#111111]",
-    labelClass: "text-black/70",
-    descriptionClass: "text-black/80",
+    cardClass:
+      "border-black/8 bg-white text-[#1d1d1f] shadow-[0_20px_60px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#1d1d1f] dark:text-[#f5f5f7] dark:shadow-none",
+    labelClass: "text-foreground/60",
+    descriptionClass: "text-foreground/72",
   },
   {
     label: "M/V Review",
     title: "M/V 심의",
     description: "TV 송출/온라인 업로드 심의를 분리해 효율적으로.",
     href: "/dashboard/new/mv",
-    cardClass: "bg-[#f6d64a] text-[#111111]",
-    labelClass: "text-black/70",
-    descriptionClass: "text-black/80",
+    cardClass:
+      "border-[#cfe3fb] bg-[#eaf3ff] text-[#1d1d1f] shadow-[0_20px_60px_rgba(0,113,227,0.12)] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#f5f5f7] dark:shadow-none",
+    labelClass: "text-foreground/60",
+    descriptionClass: "text-foreground/72",
   },
   {
     label: "One Click",
     title: "원클릭 접수",
     description: "멜론 링크와 음원 파일만 제출하는 음반 전용 간편 접수.",
     href: "/dashboard/new/album?mode=oneclick",
-    cardClass: "bg-[#4f56d8] text-[#ecf2ff]",
-    labelClass: "text-[#ecf2ff]/75",
-    descriptionClass: "text-[#ecf2ff]/85",
+    cardClass:
+      "border-transparent bg-[#0071e3] text-white shadow-[0_20px_60px_rgba(0,113,227,0.22)] dark:bg-[#2997ff] dark:text-[#00101f] dark:shadow-none",
+    labelClass: "text-white/70 dark:text-[#00101f]/70",
+    descriptionClass: "text-white/82 dark:text-[#00101f]/78",
   },
 ];
 
@@ -243,26 +246,26 @@ export default function Home() {
   return (
     <div className="relative overflow-x-hidden">
       <ScrollRevealObserver />
-      <div className="pointer-events-none absolute left-[-20%] top-[-10%] h-[420px] w-[420px] rounded-full bg-[#c94821]/20 blur-[180px] dark:bg-[#f05a28]/20" />
-      <div className="pointer-events-none absolute right-[-15%] top-[10%] h-[380px] w-[380px] rounded-full bg-[#c6a631]/20 blur-[180px] dark:bg-[#f6d64a]/20" />
-      <div className="pointer-events-none absolute bottom-[-10%] left-[20%] h-[320px] w-[320px] rounded-full bg-[#a8792c]/25 blur-[180px] dark:bg-[#f6d64a]/15" />
+      <div className="pointer-events-none absolute left-[-20%] top-[-10%] h-[420px] w-[420px] rounded-full bg-[#a8cdf8]/26 blur-[180px] dark:bg-[#0b2a46]/60" />
+      <div className="pointer-events-none absolute right-[-15%] top-[10%] h-[380px] w-[380px] rounded-full bg-white/60 blur-[180px] dark:bg-[#2997ff]/18" />
+      <div className="pointer-events-none absolute bottom-[-10%] left-[20%] h-[320px] w-[320px] rounded-full bg-[#dbe9fb]/45 blur-[180px] dark:bg-white/6" />
 
       <section className="w-full -mt-24 pb-8 pt-28 sm:-mt-28 sm:pb-10 sm:pt-36">
-        <div className="relative w-full overflow-hidden border-b border-border/60 bg-[radial-gradient(circle_at_top,_rgba(245,245,245,0.98),_rgba(231,223,213,0.92),_rgba(210,198,185,0.88))] shadow-[0_24px_80px_rgba(31,41,55,0.15)] dark:bg-[radial-gradient(circle_at_top,_rgba(11,11,11,0.95),_rgba(24,18,14,0.95),_rgba(14,14,14,0.95))]">
+        <div className="relative w-full overflow-hidden border-b border-border/60 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.98),_rgba(245,245,247,0.96),_rgba(232,239,247,0.9))] shadow-[0_24px_80px_rgba(31,41,55,0.12)] dark:bg-[radial-gradient(circle_at_top,_rgba(29,29,31,0.98),_rgba(0,0,0,0.99),_rgba(0,0,0,1))]">
           <div className="absolute inset-0">
             <OscilloscopeCurtainBackground />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/35 via-black/15 to-black/5 dark:from-background/80 dark:via-background/40" />
+            <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/35 to-transparent dark:from-background/72 dark:via-background/30" />
           </div>
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-700 sm:gap-6 lg:min-h-[520px] lg:h-full">
-              <span className="inline-flex w-fit items-center rounded-full border border-white/60 bg-black/35 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/90 backdrop-blur-sm">
+              <span className="inline-flex w-fit items-center rounded-full border border-black/8 bg-white/72 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-foreground/72 shadow-[0_12px_30px_rgba(0,0,0,0.06)] backdrop-blur-sm dark:border-white/10 dark:bg-white/6 dark:text-white/84 dark:shadow-none">
                 OFFICIAL MUSIC & VIDEO CLEARANCE
               </span>
-              <h1 className="font-display text-2xl leading-tight text-white sm:text-4xl">
+              <h1 className="font-display text-2xl leading-tight text-foreground sm:text-4xl">
                 음반 · M/V 심의를 쉽고 빠르게!
               </h1>
-              <p className="max-w-xl text-sm text-white/85 whitespace-pre-line sm:text-lg">
+              <p className="max-w-xl text-sm text-foreground/76 whitespace-pre-line sm:text-lg dark:text-white/78">
                 온사이드에서 방송사별 심의 진행을 실시간으로 받아보세요.
                 {"\n"}나의 모든 심의 기록은 온사이드에서 모아 관리할 수 있습니다.
               </p>
@@ -271,7 +274,7 @@ export default function Home() {
                   <Link
                     key={cta.title}
                     href={cta.href}
-                    className="group overflow-hidden rounded-[24px] border border-white/60 bg-white/10 backdrop-blur-sm shadow-[0_14px_40px_rgba(0,0,0,0.24)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(0,0,0,0.35)] sm:rounded-[28px]"
+                    className="group overflow-hidden rounded-[24px] border border-black/8 bg-white/62 backdrop-blur-md shadow-[0_14px_40px_rgba(0,0,0,0.1)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(0,0,0,0.14)] dark:border-white/10 dark:bg-white/6 dark:shadow-none dark:hover:bg-white/10 sm:rounded-[28px]"
                   >
                     <div
                       className={`relative flex h-28 items-center justify-center overflow-hidden bg-gradient-to-br sm:h-32 ${cta.visual}`}
@@ -281,7 +284,7 @@ export default function Home() {
                       {cta.icon}
                     </div>
                     <div className="px-5 py-4 text-center">
-                      <p className="text-base font-semibold text-white drop-shadow">{cta.title}</p>
+                      <p className="text-base font-semibold text-foreground dark:text-white">{cta.title}</p>
                     </div>
                   </Link>
                 ))}
@@ -301,12 +304,12 @@ export default function Home() {
                           <div className="absolute -left-6 bottom-[-14px] h-10 w-10 rounded-full bg-white/60 blur-md" />
                           {feature.icon}
                         </div>
-                        <p className="text-base font-semibold text-[#1f2733] dark:text-[#e7eeff]">
+                        <p className="text-base font-semibold text-foreground dark:text-[#f5f5f7]">
                           {feature.title}
                         </p>
                       </div>
                       <div className="absolute inset-0 z-10 flex items-center justify-center px-5 text-center opacity-0 transition-opacity duration-300 [transform:rotateY(180deg)] group-hover:opacity-100">
-                        <p className="text-sm font-semibold text-[#1f2733] whitespace-pre-line dark:text-[#dfe8fb]">
+                        <p className="text-sm font-semibold text-foreground whitespace-pre-line dark:text-[#f5f5f7]">
                           {feature.description}
                         </p>
                       </div>

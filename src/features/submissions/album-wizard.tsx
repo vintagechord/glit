@@ -410,6 +410,7 @@ export function AlbumWizard({
   } | null>(null);
   const [isClearingResumeDrafts, setIsClearingResumeDrafts] = React.useState(false);
   const resumePromptHandledRef = React.useRef(false);
+  const draftInitAttemptedRef = React.useRef(false);
 
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
   const [completionId, setCompletionId] = React.useState<string | null>(null);
@@ -607,8 +608,10 @@ export function AlbumWizard({
     }
   }, [currentGuestToken, isGuest]);
 
-  const createDraft = React.useCallback(async () => {
+  const createDraft = React.useCallback(async (options?: { force?: boolean }) => {
     if (isPreparingDraft) return;
+    if (!options?.force && draftInitAttemptedRef.current) return;
+    draftInitAttemptedRef.current = true;
     setIsPreparingDraft(true);
     setDraftError(null);
     try {
@@ -1564,6 +1567,7 @@ export function AlbumWizard({
           draftError ||
           "접수 초안을 준비하는 중입니다. 잠시 후 다시 시도하거나 다시 시도 버튼을 눌러주세요.",
       });
+      void createDraft({ force: true });
       return;
     }
     const allowedTypes = new Set([
@@ -4292,6 +4296,19 @@ export function AlbumWizard({
                   <span className="text-[11px] font-normal text-muted-foreground text-center">
                     * 수록곡이 많은 경우 ZIP으로 압축한 하나의 파일로 업로드해주세요.
                   </span>
+                  {!currentSubmissionId && !isPreparingDraft ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void createDraft({ force: true });
+                      }}
+                      className="inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-[12px] font-semibold tracking-[0.16em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+                    >
+                      다시 시도
+                    </button>
+                  ) : null}
                 </div>
                 {isDraggingOver && (
                   <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-[#f6d64a] bg-black/10 backdrop-blur-[1px]" />
