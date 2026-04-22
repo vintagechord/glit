@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { StripAdBanner } from "@/components/site/strip-ad-banner";
+import { StripAdBannerClient } from "@/components/site/strip-ad-banner-client";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { HomeSessionPanel } from "@/features/home/home-session-panel";
 import { OscilloscopeCurtainBackground } from "@/features/home/oscilloscope-curtain-background";
@@ -230,6 +230,15 @@ const processStepTones = [
   "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
 ];
 
+const homeStripBanners = [
+  {
+    id: "fallback-banner",
+    title: "온사이드 심의 접수 안내",
+    image_url: "/media/hero/glit-hero-poster.jpg",
+    link_url: "/dashboard/new",
+  },
+];
+
 export default function Home() {
   return (
     <div className="relative overflow-x-hidden">
@@ -314,8 +323,7 @@ export default function Home() {
 
       <section className="mx-auto w-full max-w-6xl px-4 pb-12 pt-4 sm:px-6">
         <div className="mb-14">
-          {/* Center strip banner only */}
-          <StripAdBanner />
+          <StripAdBannerClient banners={homeStripBanners} />
         </div>
 
         <div
