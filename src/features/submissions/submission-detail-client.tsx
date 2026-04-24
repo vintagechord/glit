@@ -328,6 +328,7 @@ export function SubmissionDetailClient({
   initialStationReviews,
   enableRealtime = true,
   guestToken,
+  paymentState,
 }: {
   submissionId: string;
   initialSubmission: Submission;
@@ -336,6 +337,7 @@ export function SubmissionDetailClient({
   initialStationReviews: StationReview[];
   enableRealtime?: boolean;
   guestToken?: string;
+  paymentState?: string;
 }) {
   const supabase = React.useMemo(
     () => (enableRealtime ? createClient() : null),
@@ -555,6 +557,31 @@ export function SubmissionDetailClient({
     submission.mv_song_title_kr ||
     submission.mv_song_title_en ||
     "-";
+  const paymentFeedback =
+    paymentState === "success"
+      ? {
+          title: "결제가 완료되었습니다.",
+          description: "접수가 정상적으로 반영되었습니다. 아래 상세 화면에서 진행 상황을 확인할 수 있습니다.",
+          tone:
+            "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100",
+        }
+      : paymentState === "cancel"
+        ? {
+            title: "결제가 취소되었습니다.",
+            description:
+              "현재 접수 내용은 유지되어 있습니다. 필요하면 다시 결제를 진행하거나 무통장 입금으로 접수할 수 있습니다.",
+            tone:
+              "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-100",
+          }
+        : paymentState === "fail" || paymentState === "error"
+          ? {
+              title: "결제가 완료되지 않았습니다.",
+              description:
+                "결제 과정에서 문제가 발생했습니다. 다시 시도하거나 다른 결제 방식을 선택해주세요.",
+              tone:
+                "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-100",
+            }
+          : null;
   const submissionStatusTone =
     submissionStatusToneMap[submission.status] ??
     "border-black/8 bg-white text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white";
@@ -1066,6 +1093,17 @@ export function SubmissionDetailClient({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
+      {paymentFeedback ? (
+        <div
+          className={`mb-6 rounded-[28px] border px-5 py-4 shadow-sm ${paymentFeedback.tone}`}
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] opacity-70">
+            Payment
+          </p>
+          <h2 className="mt-2 text-lg font-semibold">{paymentFeedback.title}</h2>
+          <p className="mt-1 text-sm opacity-90">{paymentFeedback.description}</p>
+        </div>
+      ) : null}
       {showPaymentInfo ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
           <button

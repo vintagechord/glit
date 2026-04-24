@@ -13,11 +13,17 @@ type SubmissionDetailClientProps = React.ComponentProps<typeof SubmissionDetailC
 
 export default async function TrackDetailPage({
   params,
+  searchParams,
 }: {
   params: { token: string } | Promise<{ token: string }>;
+  searchParams?: Promise<{ payment?: string | string[] | undefined }>;
 }) {
   const resolvedParams = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
   const token = decodeURIComponent(resolvedParams.token ?? "");
+  const paymentState = Array.isArray(resolvedSearchParams.payment)
+    ? resolvedSearchParams.payment[0]
+    : resolvedSearchParams.payment;
 
   if (!token || token.length < 8 || token.length > 120) {
     notFound();
@@ -224,6 +230,7 @@ export default async function TrackDetailPage({
         initialFiles={submissionFiles ?? []}
         enableRealtime={false}
         guestToken={token}
+        paymentState={paymentState}
       />
     </>
   );

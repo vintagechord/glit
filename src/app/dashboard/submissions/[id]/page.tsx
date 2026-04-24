@@ -104,12 +104,18 @@ type SubmissionRow = {
 
 export default async function SubmissionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ payment?: string | string[] | undefined }>;
 }) {
   const { id } = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
   const rawId = id?.trim();
   const submissionId = rawId && uuidPattern.test(rawId) ? rawId : "";
+  const paymentState = Array.isArray(resolvedSearchParams.payment)
+    ? resolvedSearchParams.payment[0]
+    : resolvedSearchParams.payment;
 
   // 디버그용: params.id만 검사 (추후 headers/search fallback 복원 가능)
   console.log("[Dashboard SubmissionDetail] incoming", {
@@ -459,6 +465,7 @@ export default async function SubmissionDetailPage({
       initialEvents={[]}
       initialStationReviews={initialStationReviews}
       initialFiles={[]}
+      paymentState={paymentState}
     />
   );
 }

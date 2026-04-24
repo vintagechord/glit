@@ -20,7 +20,9 @@ const isFetchFailedError = (error: unknown) =>
   error instanceof Error &&
   error.message.toLowerCase().includes("fetch failed");
 
-const mapSignupError = (error?: { code?: string | number; message?: string | null }) => {
+const mapSignupError = (
+  error?: { code?: string | number; message?: string | null } | null,
+) => {
   const message = error?.message?.toLowerCase() ?? "";
 
   if (
