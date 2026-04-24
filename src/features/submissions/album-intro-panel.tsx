@@ -26,7 +26,7 @@ export function AlbumIntroPanel({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
           <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-muted-foreground">
-            Album Review
+            Broadcast Review Submission
           </p>
           <h1 className="font-display mt-3 text-3xl leading-tight text-foreground sm:text-4xl">
             음반 심의 접수
@@ -37,14 +37,6 @@ export function AlbumIntroPanel({
           </p>
         </div>
         <div className="flex flex-col items-start gap-3 sm:items-end">
-          <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
-            <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1.5 text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
-              비회원 접수 가능
-            </span>
-            <span className="rounded-full border border-[#0071e3] bg-[#0071e3] px-3 py-1.5 text-white dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]">
-              로그인 시 내역 저장
-            </span>
-          </div>
           <button
             type="button"
             onClick={() => setIsOpen((prev) => !prev)}

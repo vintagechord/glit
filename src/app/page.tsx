@@ -196,12 +196,12 @@ const scrollRevealBaseClass =
 
 const serviceCards = [
   {
-    label: "Album Review",
+    label: "Broadcast Review Submission",
     title: "음반 심의",
     description: "트랙 정보 입력과 음원 파일 업로드까지 한 번에.",
     href: "/dashboard/new/album",
     cardClass:
-      "border-black/8 bg-white text-[#1d1d1f] shadow-[0_20px_60px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#1d1d1f] dark:text-[#f5f5f7] dark:shadow-none",
+      "border-[#d9e6f7] bg-[linear-gradient(180deg,#ffffff,#f3f8ff)] text-[#1d1d1f] shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[#1d1d1f] dark:text-[#f5f5f7] dark:shadow-none",
     labelClass: "text-foreground/60",
     descriptionClass: "text-foreground/72",
   },
@@ -211,7 +211,7 @@ const serviceCards = [
     description: "TV 송출/온라인 업로드 심의를 분리해 효율적으로.",
     href: "/dashboard/new/mv",
     cardClass:
-      "border-[#cfe3fb] bg-[#eaf3ff] text-[#1d1d1f] shadow-[0_20px_60px_rgba(0,113,227,0.12)] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#f5f5f7] dark:shadow-none",
+      "border-[#d9dcff] bg-[linear-gradient(180deg,#f7f6ff,#eef3ff)] text-[#1d1d1f] shadow-[0_20px_60px_rgba(79,70,229,0.08)] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#f5f5f7] dark:shadow-none",
     labelClass: "text-foreground/60",
     descriptionClass: "text-foreground/72",
   },
@@ -221,17 +221,17 @@ const serviceCards = [
     description: "멜론 링크와 음원 파일만 제출하는 음반 전용 간편 접수.",
     href: "/dashboard/new/album?mode=oneclick",
     cardClass:
-      "border-transparent bg-[#0071e3] text-white shadow-[0_20px_60px_rgba(0,113,227,0.22)] dark:bg-[#2997ff] dark:text-[#00101f] dark:shadow-none",
-    labelClass: "text-white/70 dark:text-[#00101f]/70",
-    descriptionClass: "text-white/82 dark:text-[#00101f]/78",
+      "border-[#f0d9a6] bg-[linear-gradient(180deg,#fff9ee,#fff2d9)] text-[#1d1d1f] shadow-[0_20px_60px_rgba(217,119,6,0.08)] dark:border-[#5b4b26] dark:bg-[#2b2314] dark:text-[#f5f5f7] dark:shadow-none",
+    labelClass: "text-foreground/60 dark:text-white/66",
+    descriptionClass: "text-foreground/72 dark:text-white/76",
   },
 ];
 
 const processStepTones = [
-  "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
-  "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
-  "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
-  "border-border/70 bg-card/80 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.08)]",
+  "border-[#d9e6f7] bg-[linear-gradient(180deg,#ffffff,#f4f9ff)] text-[#16324d] shadow-[0_12px_28px_rgba(148,163,184,0.12)] dark:border-[#1f3244] dark:bg-[linear-gradient(180deg,#15202c,#0f1823)] dark:text-[#d6e9ff]",
+  "border-[#cfe2fb] bg-[linear-gradient(180deg,#f7fbff,#edf5ff)] text-[#123152] shadow-[0_12px_28px_rgba(125,176,255,0.16)] dark:border-[#244466] dark:bg-[linear-gradient(180deg,#11263c,#0d1d2f)] dark:text-[#d4e6ff]",
+  "border-[#c9dcff] bg-[linear-gradient(180deg,#eef6ff,#e3efff)] text-[#0f3760] shadow-[0_12px_28px_rgba(96,165,250,0.18)] dark:border-[#29527a] dark:bg-[linear-gradient(180deg,#102a43,#0d2135)] dark:text-[#cfe4ff]",
+  "border-[#bfd7ff] bg-[linear-gradient(180deg,#e7f2ff,#dcecff)] text-[#0b4270] shadow-[0_14px_32px_rgba(0,113,227,0.18)] dark:border-[#316191] dark:bg-[linear-gradient(180deg,#113152,#0d2741)] dark:text-[#c9e1ff]",
 ];
 
 export default function Home() {
@@ -257,10 +257,14 @@ export default function Home() {
               <h1 className="font-display text-2xl leading-tight text-foreground sm:text-4xl">
                 음반 · M/V 심의를 쉽고 빠르게!
               </h1>
-              <p className="max-w-xl text-sm text-foreground/76 whitespace-pre-line sm:text-lg dark:text-white/78">
-                온사이드에서 방송사별 심의 진행을 실시간으로 받아보세요.
-                {"\n"}나의 모든 심의 기록, 온사이드에서 모아 관리할 수 있습니다.
-              </p>
+              <div className="max-w-xl rounded-[24px] border border-black/6 bg-white/58 px-5 py-4 shadow-[0_14px_36px_rgba(15,23,42,0.06)] backdrop-blur-md dark:border-white/10 dark:bg-white/6 dark:shadow-none">
+                <p className="text-[13px] leading-6 text-foreground/78 sm:text-[15px] dark:text-white/80">
+                  온사이드에서 방송사별 심의 진행을 실시간으로 받아보세요.
+                </p>
+                <p className="mt-2 text-[13px] leading-6 text-foreground/68 sm:text-[15px] dark:text-white/72">
+                  나의 모든 심의 기록, 온사이드에서 모아 관리할 수 있습니다.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {heroCtas.map((cta) => (
                   <Link
@@ -286,22 +290,22 @@ export default function Home() {
                 {featureHighlights.map((feature) => (
                   <div key={feature.title} className="group [perspective:1200px]">
                     <div
-                      className={`flip-card relative min-h-[170px] overflow-hidden rounded-[28px] border ${feature.card} transition-transform duration-500 group-hover:[transform:rotateY(180deg)]`}
+                      className={`flip-card relative min-h-[148px] overflow-hidden rounded-[28px] border ${feature.card} transition-transform duration-500 group-hover:[transform:rotateY(180deg)]`}
                     >
-                      <div className="flip-face absolute inset-0 z-0 flex flex-col p-5 text-center transition-opacity duration-300 group-hover:opacity-0">
+                      <div className="flip-face absolute inset-0 z-0 flex flex-col p-4 text-center transition-opacity duration-300 group-hover:opacity-0">
                         <div
-                          className={`relative mb-2 flex h-16 items-center justify-center overflow-hidden rounded-[18px] bg-gradient-to-br ${feature.visual}`}
+                          className={`relative mb-2 flex h-14 items-center justify-center overflow-hidden rounded-[18px] bg-gradient-to-br ${feature.visual}`}
                         >
                           <div className="absolute -right-7 -top-6 h-12 w-12 rounded-full bg-white/70 blur-lg" />
                           <div className="absolute -left-6 bottom-[-14px] h-10 w-10 rounded-full bg-white/60 blur-md" />
                           {feature.icon}
                         </div>
-                        <p className="text-base font-semibold text-foreground dark:text-[#f5f5f7]">
+                        <p className="text-[15px] font-semibold text-foreground dark:text-[#f5f5f7]">
                           {feature.title}
                         </p>
                       </div>
                       <div className="absolute inset-0 z-10 flex items-center justify-center px-5 text-center opacity-0 transition-opacity duration-300 [transform:rotateY(180deg)] group-hover:opacity-100">
-                        <p className="text-sm font-semibold text-foreground whitespace-pre-line dark:text-[#f5f5f7]">
+                        <p className="text-[13px] font-semibold text-foreground whitespace-pre-line dark:text-[#f5f5f7]">
                           {feature.description}
                         </p>
                       </div>
@@ -310,7 +314,7 @@ export default function Home() {
                 ))}
               </div>
 
-              <HomeArtistSpotlight />
+              <HomeArtistSpotlight frameHeight={212} />
             </div>
 
             <HomeSessionPanel />
@@ -346,8 +350,9 @@ export default function Home() {
               data-scroll-reveal
               data-reveal-state="hidden"
               style={{ transitionDelay: `${120 + index * 120}ms` }}
-              className={`rounded-[24px] border border-transparent p-5 transition hover:-translate-y-1 sm:rounded-[28px] sm:p-6 ${scrollRevealBaseClass} ${card.cardClass}`}
+              className={`group relative overflow-hidden rounded-[24px] border p-5 transition duration-200 hover:-translate-y-1 hover:border-[#0071e3]/35 hover:shadow-[0_24px_60px_rgba(0,113,227,0.12)] sm:rounded-[28px] sm:p-6 ${scrollRevealBaseClass} ${card.cardClass}`}
             >
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0071e3] via-[#7db0ff] to-[#f6d64a] opacity-75 transition-opacity duration-200 group-hover:opacity-100" />
               <div>
                 <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${card.labelClass}`}>
                   {card.label}
@@ -357,13 +362,16 @@ export default function Home() {
                   {card.description}
                 </p>
               </div>
+              <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-foreground/72 transition group-hover:translate-x-1 group-hover:text-foreground dark:text-white/74 dark:group-hover:text-white">
+                바로 시작 <span aria-hidden="true">→</span>
+              </div>
             </Link>
           ))}
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-6xl px-4 pb-10 pt-8 sm:px-6 sm:pb-12 sm:pt-10">
-        <div className="rounded-[28px] border border-border/60 bg-background/80 px-5 py-8 sm:rounded-[32px] sm:px-8 sm:py-10">
+      <section className="mx-auto w-full max-w-6xl px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
+        <div className="rounded-[28px] border border-border/60 bg-background/80 px-5 py-6 sm:rounded-[32px] sm:px-8 sm:py-7">
           <div
             data-scroll-reveal
             data-reveal-state="hidden"
@@ -383,22 +391,32 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="relative mt-4">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute left-0 right-0 top-1/2 hidden h-[2px] -translate-y-1/2 bg-[linear-gradient(90deg,rgba(203,213,225,0.35),rgba(125,176,255,0.55),rgba(0,113,227,0.75))] md:block"
+            />
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {["패키지 선택", "신청서 작성", "결제하기", "접수 완료"].map((label, index) => (
               <div
                 key={label}
                 data-scroll-reveal
                 data-reveal-state="hidden"
                 style={{ transitionDelay: `${120 + index * 120}ms` }}
-                className={`rounded-2xl border p-3.5 ${scrollRevealBaseClass} ${processStepTones[index] ?? "border-border/60 bg-card/70 text-foreground"
+                className={`relative overflow-hidden rounded-2xl border p-3.5 backdrop-blur-sm ${scrollRevealBaseClass} ${processStepTones[index] ?? "border-border/60 bg-card/70 text-foreground"
                   }`}
               >
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.35),rgba(0,113,227,0.85))]"
+                />
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">
                   STEP {String(index + 1).padStart(2, "0")}
                 </p>
                 <p className="mt-1.5 text-sm font-semibold">{label}</p>
               </div>
             ))}
+          </div>
           </div>
         </div>
       </section>

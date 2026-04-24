@@ -8,7 +8,7 @@ export const metadata = {
 
 const submissionCards = [
   {
-    eyebrow: "Album Review",
+    eyebrow: "Broadcast Review Submission",
     title: "음반 심의",
     description: "트랙 정보 입력부터 패키지 선택, 음원 제출까지 순서대로 진행합니다.",
     href: "/dashboard/new/album",

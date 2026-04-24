@@ -13,6 +13,19 @@ type SpotlightSubmission = {
   updated_at?: string | null;
 };
 
+type DashboardStatusResponse = {
+  albumSubmissions?: Array<{
+    id: string;
+    title: string | null;
+    artist_name?: string | null;
+    status: string;
+    updated_at: string;
+    payment_status?: string | null;
+  }>;
+  albumStationsMap?: Record<string, Array<{ id: string }>>;
+  error?: string;
+};
+
 const buildYouTubeQuery = (submission: SpotlightSubmission) => {
   const artist = submission.artist_name?.trim() || "artist";
   const title = submission.title?.trim() || "";
@@ -37,9 +50,13 @@ const buildEmbedUrl = (query: string) =>
 const buildSearchUrl = (query: string) =>
   `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 
-export function HomeArtistSpotlight() {
+export function HomeArtistSpotlight({
+  frameHeight = 224,
+}: {
+  frameHeight?: number;
+}) {
   const [submission, setSubmission] = React.useState<SpotlightSubmission | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [shouldRender, setShouldRender] = React.useState(false);
 
   React.useEffect(() => {
     const supabase = createClient();
@@ -54,30 +71,64 @@ export function HomeArtistSpotlight() {
         if (!active) return;
         if (!user) {
           setSubmission(null);
-          setLoading(false);
+          setShouldRender(false);
+          return;
+        }
+
+        const dashboardRes = await fetch("/api/dashboard/status", {
+          cache: "no-store",
+        });
+        const dashboardJson = (await dashboardRes
+          .json()
+          .catch(() => null)) as DashboardStatusResponse | null;
+
+        if (!active) return;
+
+        const primaryAlbum = dashboardJson?.albumSubmissions?.[0] ?? null;
+        const stationCount = primaryAlbum
+          ? (dashboardJson?.albumStationsMap?.[primaryAlbum.id] ?? []).length
+          : 0;
+
+        if (
+          !dashboardRes.ok ||
+          dashboardJson?.error ||
+          !primaryAlbum ||
+          stationCount <= 5
+        ) {
+          setSubmission(null);
+          setShouldRender(false);
           return;
         }
 
         const { data, error } = await supabase
           .from("submissions")
           .select("id, title, artist_name, type, release_date, updated_at")
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false })
-          .limit(1);
+          .eq("id", primaryAlbum.id)
+          .maybeSingle();
 
         if (!active) return;
         if (error) {
           console.error("[HomeArtistSpotlight] failed to load submission", error);
           setSubmission(null);
-          setLoading(false);
+          setShouldRender(false);
           return;
         }
 
-        setSubmission((data?.[0] as SpotlightSubmission | undefined) ?? null);
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+        setSubmission(
+          (data as SpotlightSubmission | null) ?? {
+            id: primaryAlbum.id,
+            title: primaryAlbum.title,
+            artist_name: primaryAlbum.artist_name ?? null,
+            type: "ALBUM",
+            updated_at: primaryAlbum.updated_at,
+          },
+        );
+        setShouldRender(true);
+      } catch (error) {
+        if (!active) return;
+        console.error("[HomeArtistSpotlight] failed to initialize", error);
+        setSubmission(null);
+        setShouldRender(false);
       }
     };
 
@@ -88,34 +139,7 @@ export function HomeArtistSpotlight() {
     };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="mt-5 overflow-hidden rounded-[28px] border border-black/8 bg-white/62 p-5 shadow-[0_16px_40px_rgba(0,0,0,0.08)] backdrop-blur-md dark:border-white/10 dark:bg-white/6 dark:shadow-none">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-          Artist Spotlight
-        </p>
-        <div className="mt-4 h-[260px] animate-pulse rounded-[24px] bg-black/5 dark:bg-white/8" />
-      </div>
-    );
-  }
-
-  if (!submission) {
-    return (
-      <div className="mt-5 overflow-hidden rounded-[28px] border border-black/8 bg-white/62 p-5 shadow-[0_16px_40px_rgba(0,0,0,0.08)] backdrop-blur-md dark:border-white/10 dark:bg-white/6 dark:shadow-none">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-          Artist Spotlight
-        </p>
-        <div className="mt-4 rounded-[24px] border border-dashed border-border/70 bg-background/70 px-5 py-10 text-center">
-          <p className="text-sm font-semibold text-foreground">
-            접수 내역이 생기면 최신 곡 기준으로 유튜브 스포트라이트가 표시됩니다.
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            공개 전 곡은 이전 공개작 기준으로, 공개된 곡은 현재 작품명 기준으로 자동 탐색합니다.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (!shouldRender || !submission) return null;
 
   const query = buildYouTubeQuery(submission);
   const embedUrl = buildEmbedUrl(query);
@@ -123,17 +147,17 @@ export function HomeArtistSpotlight() {
   const typeLabel = submission.type?.startsWith("MV") ? "뮤직비디오" : "음원";
 
   return (
-    <div className="mt-5 overflow-hidden rounded-[28px] border border-black/8 bg-white/62 p-5 shadow-[0_16px_40px_rgba(0,0,0,0.08)] backdrop-blur-md dark:border-white/10 dark:bg-white/6 dark:shadow-none">
+    <div className="mt-4 overflow-hidden rounded-[28px] border border-black/8 bg-white/62 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.08)] backdrop-blur-md dark:border-white/10 dark:bg-white/6 dark:shadow-none">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-            Artist Spotlight
+            YouTube Spotlight
           </p>
-          <h3 className="mt-2 text-lg font-semibold text-foreground">
+          <h3 className="mt-2 text-base font-semibold text-foreground">
             {submission.artist_name || "아티스트"} · {submission.title || "최신 접수곡"}
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            최신 접수 작품 기준 {typeLabel} 유튜브 검색 결과를 바로 확인합니다.
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            우측 진행표가 길어지는 앨범 접수에 맞춰 {typeLabel} 유튜브 검색 결과를 함께 보여줍니다.
           </p>
         </div>
         <a
@@ -147,7 +171,7 @@ export function HomeArtistSpotlight() {
       </div>
 
       <div className="mt-4 overflow-hidden rounded-[24px] border border-border/70 bg-black">
-        <div className="aspect-video w-full">
+        <div className="w-full" style={{ height: `${frameHeight}px` }}>
           <iframe
             title={`${submission.artist_name || "artist"} youtube spotlight`}
             src={embedUrl}

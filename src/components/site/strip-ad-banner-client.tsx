@@ -11,122 +11,85 @@ type AdBanner = {
 };
 
 const ROTATE_MS = 4500;
-const TRANSITION_MS = 700;
 
 export function StripAdBannerClient({ banners }: { banners: AdBanner[] }) {
   const safeBanners = React.useMemo(
     () => (Array.isArray(banners) ? banners.filter(Boolean) : []),
     [banners],
   );
-
-  const items = React.useMemo(() => {
-    if (safeBanners.length <= 1) return safeBanners;
-    return [...safeBanners, safeBanners[0]];
-  }, [safeBanners]);
-
   const [index, setIndex] = React.useState(0);
-  const [enableTransition, setEnableTransition] = React.useState(true);
-  const firstRowRef = React.useRef<HTMLDivElement | null>(null);
-  const [rowHeight, setRowHeight] = React.useState<number>(0);
 
   React.useEffect(() => {
-    const el = firstRowRef.current;
-    if (!el) return;
-    const measure = () => {
-      const h = el.getBoundingClientRect().height;
-      if (h && Math.abs(h - rowHeight) > 0.5) setRowHeight(h);
-    };
-    measure();
-    const ro = new ResizeObserver(() => measure());
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [rowHeight]);
+    setIndex(0);
+  }, [safeBanners.length]);
 
   React.useEffect(() => {
-    if (items.length <= 1) return;
+    if (safeBanners.length <= 1) return;
     const interval = window.setInterval(() => {
-      setEnableTransition(true);
-      setIndex((prev) => prev + 1);
+      setIndex((prev) => (prev + 1) % safeBanners.length);
     }, ROTATE_MS);
     return () => window.clearInterval(interval);
-  }, [items.length]);
+  }, [safeBanners.length]);
 
-  React.useEffect(() => {
-    if (items.length <= 1) return;
-    const lastIndex = items.length - 1;
-    if (index !== lastIndex) return;
-
-    const t = window.setTimeout(() => {
-      setEnableTransition(false);
-      setIndex(0);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setEnableTransition(true));
-      });
-    }, TRANSITION_MS);
-
-    return () => window.clearTimeout(t);
-  }, [index, items.length]);
+  const goTo = React.useCallback(
+    (nextIndex: number) => {
+      if (!safeBanners.length) return;
+      setIndex((nextIndex + safeBanners.length) % safeBanners.length);
+    },
+    [safeBanners.length],
+  );
 
   if (safeBanners.length === 0) return null;
 
-  // 단일 배너
-  if (safeBanners.length === 1) {
-    const banner = safeBanners[0];
-    return (
-      <div className="overflow-hidden rounded-[28px] border border-white/40 bg-white/55 shadow-[0_18px_60px_rgba(15,23,42,0.2)] backdrop-blur-md dark:border-white/10 dark:bg-black/35">
-        <BannerLinkWrap banner={banner}>
-          <BannerContent banner={banner} />
-        </BannerLinkWrap>
-      </div>
-    );
-  }
-
-  // 높이 측정 전
-  if (rowHeight <= 0) {
-    const banner = safeBanners[0];
-    return (
-      <div className="overflow-hidden rounded-[28px] border border-white/40 bg-white/55 shadow-[0_18px_60px_rgba(15,23,42,0.2)] backdrop-blur-md dark:border-white/10 dark:bg-black/35">
-        <div ref={firstRowRef}>
-          <BannerContent banner={banner} />
-        </div>
-      </div>
-    );
-  }
+  const banner = safeBanners[index] ?? safeBanners[0];
 
   return (
     <div className="overflow-hidden rounded-[28px] border border-white/40 bg-white/55 shadow-[0_18px_60px_rgba(15,23,42,0.2)] backdrop-blur-md dark:border-white/10 dark:bg-black/35">
-      <div className="relative overflow-hidden" style={{ height: rowHeight }}>
-        <div
-          className="flex flex-col will-change-transform"
-          style={{
-            transform: `translateY(-${index * rowHeight}px)`,
-            transition: enableTransition
-              ? `transform ${TRANSITION_MS}ms ease`
-              : "none",
-          }}
-        >
-          {items.map((banner, itemIndex) => {
-            const row = (
-              <BannerLinkWrap banner={banner}>
-                <BannerContent banner={banner} />
-              </BannerLinkWrap>
-            );
+      <div className="relative">
+        <BannerLinkWrap banner={banner}>
+          <BannerContent banner={banner} />
+        </BannerLinkWrap>
 
-            if (itemIndex === 0) {
-              return (
-                <div key={`wrap-${banner.id}-${itemIndex}`} ref={firstRowRef}>
-                  {row}
-                </div>
-              );
-            }
-
-            return (
-              <div key={`${banner.id}-${itemIndex}`} className="block">
-                {row}
-              </div>
-            );
-          })}
-        </div>
+        {safeBanners.length > 1 ? (
+          <>
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+              <button
+                type="button"
+                onClick={() => goTo(index - 1)}
+                className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/82 text-sm font-bold text-[#1d1d1f] shadow-[0_10px_24px_rgba(15,23,42,0.16)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white dark:border-white/14 dark:bg-black/46 dark:text-white dark:hover:bg-black/60"
+                aria-label="이전 배너"
+              >
+                ←
+              </button>
+            </div>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+              <button
+                type="button"
+                onClick={() => goTo(index + 1)}
+                className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/82 text-sm font-bold text-[#1d1d1f] shadow-[0_10px_24px_rgba(15,23,42,0.16)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white dark:border-white/14 dark:bg-black/46 dark:text-white dark:hover:bg-black/60"
+                aria-label="다음 배너"
+              >
+                →
+              </button>
+            </div>
+            <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/60 bg-white/70 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.12)] backdrop-blur dark:border-white/12 dark:bg-black/42">
+              {safeBanners.map((item, itemIndex) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => goTo(itemIndex)}
+                  aria-label={`${itemIndex + 1}번 배너로 이동`}
+                  aria-pressed={itemIndex === index}
+                  className={`h-2.5 w-2.5 rounded-full transition ${
+                    itemIndex === index
+                      ? "bg-[#0071e3] shadow-[0_0_0_4px_rgba(0,113,227,0.16)] dark:bg-[#8bc3ff]"
+                      : "bg-black/18 hover:bg-black/35 dark:bg-white/28 dark:hover:bg-white/5"
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
     </div>
   );
@@ -164,9 +127,7 @@ function normalizeHref(input?: string | null): string | null {
 }
 
 function isExternalHref(href: string) {
-  return (
-    /^(https?:\/\/)/i.test(href) || /^(mailto:|tel:|sms:)/i.test(href)
-  );
+  return /^(https?:\/\/)/i.test(href) || /^(mailto:|tel:|sms:)/i.test(href);
 }
 
 function BannerLinkWrap({

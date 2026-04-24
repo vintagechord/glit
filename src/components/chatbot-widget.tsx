@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 import { APP_CONFIG } from "@/lib/config";
 
@@ -70,6 +71,7 @@ const faqItems = [
 ];
 
 export function ChatbotWidget() {
+  const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
   const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
   const [pageIndex, setPageIndex] = React.useState(0);
@@ -90,11 +92,17 @@ export function ChatbotWidget() {
     }
   }, [open]);
 
+  React.useEffect(() => {
+    setOpen(false);
+    setActiveIndex(null);
+  }, [pathname]);
+
   return (
     <>
       {open && (
         <div
-          className="fixed inset-0 z-40"
+          className="fixed inset-x-0 bottom-0 z-40"
+          style={{ top: "var(--site-header-height, 76px)" }}
           onClick={() => setOpen(false)}
         >
           <div

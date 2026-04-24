@@ -41,7 +41,32 @@ const isActivePath = (
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const headerRef = React.useRef<HTMLElement | null>(null);
   const [authState, setAuthState] = React.useState<AuthState>("unauthenticated");
+
+  React.useEffect(() => {
+    const element = headerRef.current;
+    if (!element) return;
+
+    const updateHeight = () => {
+      const nextHeight = Math.ceil(element.getBoundingClientRect().height);
+      document.documentElement.style.setProperty(
+        "--site-header-height",
+        `${nextHeight}px`,
+      );
+    };
+
+    updateHeight();
+
+    const observer = new ResizeObserver(() => updateHeight());
+    observer.observe(element);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [pathname]);
 
   React.useEffect(() => {
     const supabase = createClient();
@@ -98,7 +123,10 @@ export function SiteHeader() {
   }, [pathname]);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-black/6 bg-[rgba(250,250,252,0.82)] backdrop-blur-[24px] dark:border-white/10 dark:bg-[rgba(0,0,0,0.82)]">
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-[90] isolate border-b border-black/6 bg-[rgba(250,250,252,0.82)] backdrop-blur-[24px] dark:border-white/10 dark:bg-[rgba(0,0,0,0.82)]"
+    >
       <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
         <SiteLogo />
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 import { APP_CONFIG } from "@/lib/config";
 
@@ -324,6 +325,7 @@ const partnershipContent = `제휴안내
 ${APP_CONFIG.supportEmail}`;
 
 export function SiteFooter() {
+  const pathname = usePathname();
   const contactPhone = APP_CONFIG.supportPhone;
   const contactEmail = APP_CONFIG.supportEmail;
   const bankName = APP_CONFIG.bankName;
@@ -372,6 +374,10 @@ export function SiteFooter() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [activeModal]);
+
+  React.useEffect(() => {
+    setActiveModal(null);
+  }, [pathname]);
 
   return (
     <footer className="border-t border-white/10 bg-[#1d1d1f] text-[#f5f5f7] dark:bg-black">
@@ -486,7 +492,8 @@ export function SiteFooter() {
 
       {activeModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          style={{ top: "var(--site-header-height, 76px)" }}
           onClick={closeModal}
         >
           <div
