@@ -82,21 +82,34 @@ export async function POST(request: Request) {
     stream: PassThrough;
     filename?: string;
     mimeType?: string;
-    sizeBytes?: number;
   };
 
   const fields: Record<string, string> = {};
   let filePart: FilePart | null = null;
+  let objectKey: string | null = null;
+  let uploadPromise: Promise<unknown> | null = null;
+  let parseErrorStatus: number | null = null;
+  let parseErrorBody: { error: string; detail?: string } | null = null;
 
   const busboy = Busboy({ headers: { "content-type": contentType } });
 
   busboy.on("field", (name, value) => {
     fields[name] = value;
+    tryStartUpload();
   });
 
   const parsePromise = new Promise<void>((resolve, reject) => {
     busboy.on("finish", resolve);
-    busboy.on("error", reject);
+    busboy.on("error", (error) => {
+      if (parseErrorStatus === null) {
+        parseErrorStatus = 400;
+        parseErrorBody = {
+          error: "업로드 데이터를 읽지 못했습니다.",
+          detail: error instanceof Error ? error.message : String(error),
+        };
+      }
+      reject(error);
+    });
   });
 
   busboy.on("file", (_name, file, info) => {
@@ -110,9 +123,58 @@ export async function POST(request: Request) {
       stream: pass,
       filename: info.filename,
       mimeType: info.mimeType,
-      sizeBytes: Number(fields.sizeBytes ?? 0) || undefined,
     };
+    tryStartUpload();
   });
+
+  const tryStartUpload = () => {
+    if (uploadPromise || parseErrorStatus !== null || !filePart) return;
+
+    const filename = filePart.filename || fields.filename || "unnamed";
+    const mimeType = filePart.mimeType || fields.mimeType || "application/octet-stream";
+    const sizeBytes = Number(fields.sizeBytes || 0);
+    const label = fields.label?.trim() || "free-upload";
+    const isArtistThumbnail = label === "artist-thumbnail";
+
+    if (!filename || !sizeBytes || Number.isNaN(sizeBytes)) {
+      return;
+    }
+
+    try {
+      const { client, bucket } = getB2Config();
+      const nextObjectKey = buildObjectKey({
+        userId: "admin-free",
+        submissionId: undefined,
+        title: isArtistThumbnail ? "thumbnail" : label,
+        filename,
+        folder: isArtistThumbnail ? "artist-thumbnails" : "admin-free",
+      });
+
+      objectKey = nextObjectKey;
+      const uploader = new Upload({
+        client,
+        params: {
+          Bucket: bucket,
+          Key: nextObjectKey,
+          Body: filePart.stream,
+          ContentType: mimeType || undefined,
+          ContentLength: sizeBytes,
+        },
+        leavePartsOnError: false,
+      });
+      uploadPromise = uploader.done();
+    } catch (error) {
+      const message =
+        error instanceof B2ConfigError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "업로드 중 오류가 발생했습니다.";
+      parseErrorStatus = 500;
+      parseErrorBody = { error: message };
+      filePart.stream.resume();
+    }
+  };
 
   try {
     const webStream = request.body as unknown as NodeReadableStream;
@@ -125,49 +187,27 @@ export async function POST(request: Request) {
     );
   }
 
+  tryStartUpload();
+
+  if (parseErrorStatus !== null && parseErrorBody) {
+    return NextResponse.json(parseErrorBody, { status: parseErrorStatus });
+  }
+
   if (!filePart) {
     return NextResponse.json({ error: "파일이 포함되어 있지 않습니다." }, { status: 400 });
   }
 
-  const part = filePart as FilePart;
-  const filename = part.filename || fields.filename || "unnamed";
-  const mimeType = part.mimeType || fields.mimeType || "application/octet-stream";
-  const sizeBytes = Number(fields.sizeBytes || part.sizeBytes || 0);
-  if (!sizeBytes || Number.isNaN(sizeBytes)) {
-    return NextResponse.json({ error: "파일 크기를 확인할 수 없습니다." }, { status: 400 });
+  if (!objectKey || !uploadPromise) {
+    return NextResponse.json(
+      { error: "파일 업로드를 시작하지 못했습니다." },
+      { status: 400 },
+    );
   }
 
-  const label = fields.label?.trim() || "free-upload";
-  const isArtistThumbnail = label === "artist-thumbnail";
-
   try {
-    const { client, bucket } = getB2Config();
-    const objectKey = buildObjectKey({
-      userId: "admin-free",
-      submissionId: undefined,
-      title: isArtistThumbnail ? "thumbnail" : label,
-      filename,
-      folder: isArtistThumbnail ? "artist-thumbnails" : "admin-free",
-    });
-
-    const uploader = new Upload({
-      client,
-      params: {
-        Bucket: bucket,
-        Key: objectKey,
-        Body: part.stream,
-        ContentType: mimeType || undefined,
-        ContentLength: sizeBytes,
-      },
-      leavePartsOnError: false,
-    });
-
-    await uploader.done();
-
-    const previewUrl = `/api/admin/uploads/free?objectKey=${encodeURIComponent(
-      objectKey,
-    )}`;
-    return NextResponse.json({ ok: true, objectKey, bucket, previewUrl });
+    await uploadPromise;
+    const previewUrl = `/api/admin/uploads/free?objectKey=${encodeURIComponent(objectKey)}`;
+    return NextResponse.json({ ok: true, objectKey, previewUrl });
   } catch (error) {
     const message =
       error instanceof B2ConfigError
