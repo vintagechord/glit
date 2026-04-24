@@ -203,6 +203,41 @@ export const markKaraokePaymentFailure = async (
   return { ok: !finalError, error: finalError };
 };
 
+export const markKaraokePaymentCanceled = async (
+  orderId: string,
+  payload?: {
+    result_code?: string | null;
+    result_message?: string | null;
+    raw_response?: Record<string, unknown> | null;
+  },
+) => {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("karaoke_payments")
+    .update({
+      status: "CANCELED",
+      result_code: payload?.result_code ?? "CANCELED",
+      result_message: payload?.result_message ?? "사용자 취소",
+      raw_response: payload?.raw_response ?? null,
+    })
+    .eq("order_id", orderId)
+    .neq("status", "APPROVED");
+
+  const { error: requestUpdateError } = await admin
+    .from("karaoke_requests")
+    .update({
+      payment_status: "UNPAID",
+      payment_result_code: payload?.result_code ?? "CANCELED",
+      payment_result_message: payload?.result_message ?? "사용자 취소",
+      payment_raw_response: payload?.raw_response ?? null,
+    })
+    .eq("order_id", orderId)
+    .neq("payment_status", "PAID");
+
+  const finalError = error ?? requestUpdateError ?? null;
+  return { ok: !finalError, error: finalError };
+};
+
 export const markKaraokePaymentSuccess = async (
   orderId: string,
   payload: {

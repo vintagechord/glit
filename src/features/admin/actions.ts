@@ -24,7 +24,7 @@ import {
   normalizeTrackResults,
   summarizeTrackResults,
 } from "@/lib/track-results";
-import { sendSubmissionUpdateEmail } from "@/lib/email";
+import { sendResultEmail, sendSubmissionUpdateEmail } from "@/lib/email";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRatingCode } from "@/lib/mv-assets";
@@ -157,17 +157,25 @@ const collectNotificationEmails = (
   return Array.from(recipients);
 };
 
-const sendSubmissionUpdateNotificationById = async ({
-  submissionId,
-  headline,
-  summary,
-  subject,
-}: {
-  submissionId: string;
-  headline: string;
-  summary: string;
-  subject?: string;
-}) => {
+type SubmissionNotificationContext = {
+  submission: {
+    id: string;
+    title?: string | null;
+    artist_name?: string | null;
+    type?: string | null;
+    user_id?: string | null;
+    guest_token?: string | null;
+    applicant_email?: string | null;
+    guest_email?: string | null;
+  };
+  recipientEmails: string[];
+  link: string;
+  kind: "ALBUM" | "MV";
+};
+
+const loadSubmissionNotificationContext = async (
+  submissionId: string,
+): Promise<SubmissionNotificationContext | null> => {
   const supabase = createAdminClient();
   const { data: submission, error } = await supabase
     .from("submissions")
@@ -179,9 +187,12 @@ const sendSubmissionUpdateNotificationById = async ({
 
   if (error || !submission) {
     if (error) {
-      console.warn("[Email][update] submission load failed", { submissionId, error });
+      console.warn("[Email][update] submission load failed", {
+        submissionId,
+        error,
+      });
     }
-    return;
+    return null;
   }
 
   let memberEmail: string | null = null;
@@ -206,8 +217,6 @@ const sendSubmissionUpdateNotificationById = async ({
     memberEmail,
   );
 
-  if (!recipientEmails.length) return;
-
   const baseUrl = getBaseUrl();
   const link =
     submission.guest_token && submission.guest_token.length >= 8
@@ -215,15 +224,62 @@ const sendSubmissionUpdateNotificationById = async ({
       : buildUrl(`/dashboard/submissions/${submission.id}`, baseUrl);
   const kind = submission.type?.startsWith("MV") ? "MV" : "ALBUM";
 
-  for (const recipientEmail of recipientEmails) {
+  return {
+    submission,
+    recipientEmails,
+    link,
+    kind,
+  };
+};
+
+const markSubmissionResultNotified = async (submissionId: string) => {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("submissions")
+    .update({
+      result_notified_at: new Date().toISOString(),
+    })
+    .eq("id", submissionId);
+
+  if (!error) return true;
+
+  if (error.code === "42703") {
+    console.warn("[Email][result] result_notified_at column missing", {
+      submissionId,
+    });
+    return false;
+  }
+
+  console.warn("[Email][result] failed to persist notified timestamp", {
+    submissionId,
+    error,
+  });
+  return false;
+};
+
+const sendSubmissionUpdateNotificationById = async ({
+  submissionId,
+  headline,
+  summary,
+  subject,
+}: {
+  submissionId: string;
+  headline: string;
+  summary: string;
+  subject?: string;
+}) => {
+  const context = await loadSubmissionNotificationContext(submissionId);
+  if (!context || !context.recipientEmails.length) return;
+
+  for (const recipientEmail of context.recipientEmails) {
     const result = await sendSubmissionUpdateEmail({
       email: recipientEmail,
-      title: submission.title ?? "제목 미입력",
-      artist: submission.artist_name ?? null,
-      kind,
+      title: context.submission.title ?? "제목 미입력",
+      artist: context.submission.artist_name ?? null,
+      kind: context.kind,
       headline,
       summary,
-      link,
+      link: context.link,
       subject,
     });
     if (!result.ok && !result.skipped) {
@@ -234,6 +290,90 @@ const sendSubmissionUpdateNotificationById = async ({
       });
     }
   }
+};
+
+const sendSubmissionResultNotificationById = async ({
+  submissionId,
+  resultStatus,
+  resultMemo,
+}: {
+  submissionId: string;
+  resultStatus: z.infer<typeof resultStatusEnum>;
+  resultMemo?: string;
+}) => {
+  const context = await loadSubmissionNotificationContext(submissionId);
+  if (!context) {
+    return {
+      deliveredCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      recipientCount: 0,
+      warning: "접수 정보를 찾지 못해 결과 메일을 보내지 못했습니다.",
+    };
+  }
+
+  if (!context.recipientEmails.length) {
+    return {
+      deliveredCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      recipientCount: 0,
+      warning: "수신 이메일이 없어 결과 메일을 보내지 못했습니다.",
+    };
+  }
+
+  let deliveredCount = 0;
+  let skippedCount = 0;
+  let failedCount = 0;
+
+  for (const recipientEmail of context.recipientEmails) {
+    const result = await sendResultEmail({
+      email: recipientEmail,
+      title: context.submission.title ?? "제목 미입력",
+      artist: context.submission.artist_name ?? null,
+      resultStatus,
+      resultMemo: resultMemo ?? null,
+      link: context.link,
+    });
+
+    if (result.ok) {
+      deliveredCount += 1;
+      continue;
+    }
+
+    if (result.skipped) {
+      skippedCount += 1;
+      continue;
+    }
+
+    failedCount += 1;
+    console.warn("[Email][result] send failed", {
+      submissionId,
+      email: recipientEmail,
+      message: result.message,
+    });
+  }
+
+  if (deliveredCount > 0) {
+    await markSubmissionResultNotified(submissionId);
+  }
+
+  const warning =
+    deliveredCount === 0
+      ? skippedCount > 0
+        ? "이메일 발송 설정이 없어 결과 메일을 보내지 못했습니다."
+        : "결과 메일 발송에 실패했습니다."
+      : failedCount > 0 || skippedCount > 0
+        ? "일부 수신자에게만 결과 메일이 발송되었습니다."
+        : undefined;
+
+  return {
+    deliveredCount,
+    skippedCount,
+    failedCount,
+    recipientCount: context.recipientEmails.length,
+    warning,
+  };
 };
 
 const packageSchema = z.object({
@@ -1476,18 +1616,32 @@ export async function updateSubmissionResultAction(
     .update({
       result_status: parsed.data.resultStatus,
       result_memo: parsed.data.resultMemo || null,
-      result_notified_at: new Date().toISOString(),
+      result_notified_at: null,
     })
     .eq("id", parsed.data.submissionId);
 
   if (error?.code === "42703") {
-    const fallback = await supabase
+    const missingNotifiedAt = error.message?.toLowerCase().includes("result_notified_at");
+    if (missingNotifiedAt) {
+      const retryWithoutNotifiedAt = await supabase
+        .from("submissions")
+        .update({
+          result_status: parsed.data.resultStatus,
+          result_memo: parsed.data.resultMemo || null,
+        })
+        .eq("id", parsed.data.submissionId);
+      error = retryWithoutNotifiedAt.error;
+    }
+  }
+
+  if (error?.code === "42703") {
+    const fallbackMemoOnly = await supabase
       .from("submissions")
       .update({
         result_memo: parsed.data.resultMemo || null,
       })
       .eq("id", parsed.data.submissionId);
-    error = fallback.error;
+    error = fallbackMemoOnly.error;
   }
 
   if (error) {
@@ -1519,22 +1673,32 @@ export async function updateSubmissionResultFormAction(
   });
   if (result.error) {
     console.error(result.error);
+    if (submissionId) {
+      redirect(
+        `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
+          result.error,
+        )}`,
+      );
+    }
+    return;
   }
 
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidateUserDashboards(submissionId);
-    await sendSubmissionUpdateNotificationById({
+    revalidatePath("/");
+    const mailResult = await sendSubmissionResultNotificationById({
       submissionId,
-      headline: "심의 결과 메모가 업데이트되었습니다.",
-      summary: [
-        `결과 상태: ${resultStatusLabelMap[resultStatus] ?? resultStatus}`,
-        resultMemo ? `메모: ${resultMemo}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      subject: "[onside] 심의 결과 업데이트 안내",
+      resultStatus,
+      resultMemo,
     });
+    if (mailResult.warning) {
+      redirect(
+        `/admin/submissions/${submissionId}?saved=result_warning&savedWarning=${encodeURIComponent(
+          mailResult.warning,
+        )}`,
+      );
+    }
     redirect(withSavedQuery(`/admin/submissions/${submissionId}`, "result"));
   }
 }

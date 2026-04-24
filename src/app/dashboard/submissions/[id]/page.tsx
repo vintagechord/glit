@@ -42,6 +42,9 @@ type SubmissionRow = {
   certificate_mime?: string | null;
   certificate_size?: number | null;
   certificate_uploaded_at?: string | null;
+  result_status?: string | null;
+  result_memo?: string | null;
+  result_notified_at?: string | null;
   created_at: string;
   updated_at: string;
   release_date?: string | null;

@@ -5,6 +5,7 @@ import Link from "next/link";
 import * as React from "react";
 import {
   paymentStatusLabelMap,
+  resultStatusLabelMap,
   reviewStatusLabelMap,
 } from "@/constants/review-status";
 import {
@@ -71,6 +72,7 @@ type Submission = {
   mv_usage?: string | null;
   mv_desired_rating?: string | null;
   mv_memo?: string | null;
+  result_status?: string | null;
   result_memo?: string | null;
   mv_song_title?: string | null;
   mv_song_title_kr?: string | null;
@@ -450,6 +452,12 @@ export function SubmissionDetailClient({
     };
   })();
   const ratingReason = submission.result_memo?.trim() || null;
+  const resultStatusLabel =
+    submission.result_status
+      ? resultStatusLabelMap[
+          submission.result_status as keyof typeof resultStatusLabelMap
+        ] ?? submission.result_status
+      : "-";
 
 
   const stationNames = React.useMemo(() => {
@@ -680,6 +688,10 @@ export function SubmissionDetailClient({
           ? mvOptions.join(", ")
           : "-"
         : packageInfo?.name ?? "-",
+    },
+    {
+      label: "심의 결과",
+      value: resultStatusLabel,
     },
     {
       label: isMvSubmission ? "희망 등급" : "트랙 수",

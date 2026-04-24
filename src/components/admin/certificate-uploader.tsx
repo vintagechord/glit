@@ -50,10 +50,10 @@ export function CertificateUploader({ submissionId, currentName, currentUploaded
     setIsUploading(true);
     try {
       const form = new FormData();
-      form.append("file", file);
       form.append("filename", file.name);
       form.append("mimeType", file.type || "application/octet-stream");
       form.append("sizeBytes", String(file.size));
+      form.append("file", file);
 
       const res = await fetch(`/api/admin/submissions/${submissionId}/certificate`, {
         method: "POST",

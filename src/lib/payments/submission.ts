@@ -200,7 +200,7 @@ export const markPaymentFailure = async (
   },
 ) => {
   const admin = createAdminClient();
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from("submission_payments")
     .update({
       status: "FAILED",
@@ -208,7 +208,76 @@ export const markPaymentFailure = async (
       result_message: payload.result_message ?? null,
       raw_response: payload.raw_response ?? null,
     })
-    .eq("order_id", orderId);
+    .eq("order_id", orderId)
+    .neq("status", "APPROVED")
+    .select("submission_id")
+    .maybeSingle();
+
+  if (updated?.submission_id) {
+    const { data: approvedPayments } = await admin
+      .from("submission_payments")
+      .select("id")
+      .eq("submission_id", updated.submission_id)
+      .eq("status", "APPROVED")
+      .limit(1);
+
+    if (!approvedPayments?.length) {
+      const { error: submissionError } = await admin
+        .from("submissions")
+        .update({ payment_status: "UNPAID" })
+        .eq("id", updated.submission_id)
+        .neq("payment_status", "PAID");
+      if (submissionError) {
+        return { ok: false, error: submissionError };
+      }
+    }
+  }
+
+  return { ok: !error, error };
+};
+
+export const markPaymentCanceled = async (
+  orderId: string,
+  payload?: {
+    result_code?: string | null;
+    result_message?: string | null;
+    raw_response?: Record<string, unknown> | null;
+  },
+) => {
+  const admin = createAdminClient();
+  const { data: updated, error } = await admin
+    .from("submission_payments")
+    .update({
+      status: "CANCELED",
+      result_code: payload?.result_code ?? "CANCELED",
+      result_message: payload?.result_message ?? "사용자 취소",
+      raw_response: payload?.raw_response ?? null,
+    })
+    .eq("order_id", orderId)
+    .neq("status", "APPROVED")
+    .select("submission_id")
+    .maybeSingle();
+
+  if (updated?.submission_id) {
+    const { data: approvedPayments } = await admin
+      .from("submission_payments")
+      .select("id")
+      .eq("submission_id", updated.submission_id)
+      .eq("status", "APPROVED")
+      .limit(1);
+
+    if (!approvedPayments?.length) {
+      const { error: submissionError } = await admin
+        .from("submissions")
+        .update({ payment_status: "UNPAID" })
+        .eq("id", updated.submission_id)
+        .neq("payment_status", "PAID");
+      if (submissionError) {
+        return { ok: false, error: submissionError };
+      }
+    }
+  }
+
   return { ok: !error, error };
 };
 
@@ -237,9 +306,25 @@ export const markPaymentSuccess = async (
     .maybeSingle();
 
   if (updated?.submission_id) {
+    const { data: submission } = await admin
+      .from("submissions")
+      .select("status")
+      .eq("id", updated.submission_id)
+      .maybeSingle();
+    const nextSubmissionUpdate: Record<string, unknown> = {
+      payment_status: "PAID",
+      payment_method: "CARD",
+    };
+    if (
+      submission?.status === "WAITING_PAYMENT" ||
+      submission?.status === "SUBMITTED"
+    ) {
+      nextSubmissionUpdate.status = "IN_PROGRESS";
+    }
+
     const { error: submissionError } = await admin
       .from("submissions")
-      .update({ payment_status: "PAID", payment_method: "CARD" })
+      .update(nextSubmissionUpdate)
       .eq("id", updated.submission_id);
     if (submissionError) {
       return { ok: false, error: submissionError, submissionId: updated.submission_id };

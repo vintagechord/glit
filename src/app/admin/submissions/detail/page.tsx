@@ -6,6 +6,7 @@ import {
   paymentStatusLabelMap,
   paymentStatusOptions,
   resultStatusLabelMap,
+  resultStatusOptions,
   reviewStatusLabelMap,
   reviewStatusOptions,
   stationReviewStatusOptions,
@@ -17,6 +18,7 @@ import {
   createTrackForSubmissionAction,
   deleteTrackForSubmissionAction,
   saveSubmissionAdminFormAction,
+  updateSubmissionResultFormAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
@@ -210,25 +212,33 @@ export default async function AdminSubmissionDetailPage({
   const cookieUuid = uuidPattern.test(cookieId) ? cookieId : "";
 
   const rawSubmissionId = urlId || refererId || cookieUuid;
-  const saveMessage = savedFlag
-    ? savedFlag === "track"
-      ? "트랙이 추가되었습니다."
-      : savedFlag === "track_deleted"
-        ? "트랙을 삭제했습니다."
-        : savedFlag === "station"
-          ? "저장되었습니다."
-          : savedFlag === "station_warning"
-            ? "저장되었습니다."
-            : savedFlag === "station_error"
-              ? "방송국 상태 저장 중 오류가 발생했습니다."
-              : savedFlag === "error"
-            ? "저장 중 오류가 발생했습니다. 다시 시도해주세요."
-          : "저장이 완료되었습니다."
-    : "";
+  const saveMessage = (() => {
+    if (!savedFlag) return "";
+    switch (savedFlag) {
+      case "track":
+        return "트랙이 추가되었습니다.";
+      case "track_deleted":
+        return "트랙을 삭제했습니다.";
+      case "station":
+      case "station_warning":
+        return "저장되었습니다.";
+      case "station_error":
+        return "방송국 상태 저장 중 오류가 발생했습니다.";
+      case "result":
+      case "result_warning":
+        return "심의 결과가 저장되었습니다.";
+      case "error":
+        return "저장 중 오류가 발생했습니다. 다시 시도해주세요.";
+      default:
+        return "저장이 완료되었습니다.";
+    }
+  })();
   const isSaveError =
     savedFlag === "error" || savedFlag === "station_error" || Boolean(savedErrorParam);
   const isSaveWarning =
-    savedFlag === "station_warning" || Boolean(savedWarningParam);
+    savedFlag === "station_warning" ||
+    savedFlag === "result_warning" ||
+    Boolean(savedWarningParam);
   const errorMessage =
     typeof savedErrorParam === "string" && savedErrorParam.length > 0
       ? `저장 실패: ${savedErrorParam} (상세 로그는 서버 콘솔)`
@@ -239,7 +249,7 @@ export default async function AdminSubmissionDetailPage({
     typeof savedWarningParam === "string" && savedWarningParam.length > 0
       ? savedWarningParam
       : isSaveWarning
-        ? "트랙 결과 저장에 실패했습니다."
+        ? "일부 후속 처리가 완료되지 않았습니다."
         : "";
 
   if (!rawSubmissionId) {
@@ -666,6 +676,76 @@ export default async function AdminSubmissionDetailPage({
               </div>
             </div>
           </div>
+
+          <ConfirmForm
+            action={updateSubmissionResultFormAction}
+            method="post"
+            className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm"
+            message="심의 결과를 저장하고 사용자에게 안내 메일을 보내시겠습니까?"
+          >
+            <input type="hidden" name="submissionId" value={submission.id} />
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              심의 결과 안내
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              저장한 결과 상태와 메모는 사용자 상세 화면에 반영되고, 수신 가능한 이메일로 결과 안내가 발송됩니다.
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  결과 상태
+                </label>
+                <select
+                  name="resultStatus"
+                  required
+                  defaultValue={submission.result_status ?? ""}
+                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                >
+                  <option value="" disabled>
+                    결과 선택
+                  </option>
+                  {resultStatusOptions.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  최근 안내
+                </label>
+                <input
+                  readOnly
+                  value={
+                    submission.result_notified_at
+                      ? formatDateTime(submission.result_notified_at)
+                      : "아직 발송 기록 없음"
+                  }
+                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  결과 메모
+                </label>
+                <textarea
+                  name="resultMemo"
+                  defaultValue={submission.result_memo ?? ""}
+                  className="h-28 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                  placeholder="사용자에게 안내할 결과 메모를 입력하세요."
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="submit"
+                className="rounded-full bg-foreground px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-background"
+              >
+                결과 저장 및 안내
+              </button>
+            </div>
+          </ConfirmForm>
           <form
             action={saveSubmissionAdminFormAction}
             method="post"
