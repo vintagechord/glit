@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import * as React from "react";
 
 type AdBanner = {
@@ -52,46 +53,52 @@ export function StripAdBannerClient({ banners }: { banners: AdBanner[] }) {
 
         {safeBanners.length > 1 ? (
           <>
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-              <button
-                type="button"
-                onClick={() => goTo(index - 1)}
-                className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/82 text-sm font-bold text-[#1d1d1f] shadow-[0_10px_24px_rgba(15,23,42,0.16)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white dark:border-white/14 dark:bg-black/46 dark:text-white dark:hover:bg-black/60"
-                aria-label="이전 배너"
-              >
-                ←
-              </button>
-            </div>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-              <button
-                type="button"
-                onClick={() => goTo(index + 1)}
-                className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/82 text-sm font-bold text-[#1d1d1f] shadow-[0_10px_24px_rgba(15,23,42,0.16)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white dark:border-white/14 dark:bg-black/46 dark:text-white dark:hover:bg-black/60"
-                aria-label="다음 배너"
-              >
-                →
-              </button>
-            </div>
-            <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/60 bg-white/70 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.12)] backdrop-blur dark:border-white/12 dark:bg-black/42">
-              {safeBanners.map((item, itemIndex) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => goTo(itemIndex)}
-                  aria-label={`${itemIndex + 1}번 배너로 이동`}
-                  aria-pressed={itemIndex === index}
-                  className={`h-2.5 w-2.5 rounded-full transition ${
-                    itemIndex === index
-                      ? "bg-[#0071e3] shadow-[0_0_0_4px_rgba(0,113,227,0.16)] dark:bg-[#8bc3ff]"
-                      : "bg-black/18 hover:bg-black/35 dark:bg-white/28 dark:hover:bg-white/5"
-                  }`}
-                />
-              ))}
-            </div>
+            <BannerNavButton
+              direction="previous"
+              onClick={() => goTo(index - 1)}
+            />
+            <BannerNavButton
+              direction="next"
+              onClick={() => goTo(index + 1)}
+            />
           </>
         ) : null}
       </div>
     </div>
+  );
+}
+
+function BannerNavButton({
+  direction,
+  onClick,
+}: {
+  direction: "previous" | "next";
+  onClick: () => void;
+}) {
+  const isPrevious = direction === "previous";
+  const Icon = isPrevious ? ChevronLeft : ChevronRight;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={isPrevious ? "이전 배너" : "다음 배너"}
+      className={`group/control absolute top-1/2 z-20 inline-flex h-14 w-8 -translate-y-1/2 items-center justify-center border border-white/65 bg-white/78 text-[#1d1d1f] shadow-[0_12px_28px_rgba(15,23,42,0.16)] backdrop-blur-md transition-[width,background-color,border-color,box-shadow] duration-200 hover:w-10 hover:border-white/85 hover:bg-white/92 hover:shadow-[0_16px_36px_rgba(15,23,42,0.22)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0071e3]/65 dark:border-white/12 dark:bg-black/48 dark:text-white dark:hover:border-white/20 dark:hover:bg-black/68 sm:h-16 sm:w-9 sm:hover:w-11 ${
+        isPrevious
+          ? "left-0 rounded-r-full border-l-0 pl-0.5"
+          : "right-0 rounded-l-full border-r-0 pr-0.5"
+      }`}
+    >
+      <Icon
+        aria-hidden="true"
+        className={`h-5 w-5 transition-transform duration-200 sm:h-[22px] sm:w-[22px] ${
+          isPrevious
+            ? "group-hover/control:-translate-x-0.5"
+            : "group-hover/control:translate-x-0.5"
+        }`}
+        strokeWidth={2.2}
+      />
+    </button>
   );
 }
 
