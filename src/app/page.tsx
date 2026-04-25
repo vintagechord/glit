@@ -1,4 +1,12 @@
 import Link from "next/link";
+import {
+  CheckCircle2,
+  Clapperboard,
+  Disc3,
+  FileText,
+  MousePointerClick,
+  Play,
+} from "lucide-react";
 
 import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
@@ -237,36 +245,41 @@ const processStepTones = [
   "border-[#bfd7ff] bg-[linear-gradient(180deg,#e7f2ff,#dcecff)] text-[#0b4270] shadow-[0_14px_32px_rgba(0,113,227,0.18)] dark:border-[#316191] dark:bg-[linear-gradient(180deg,#113152,#0d2741)] dark:text-[#c9e1ff]",
 ];
 
-function ServiceCardMotif({ tone }: { tone: string }) {
+function ServiceCardVisual({ tone }: { tone: string }) {
   if (tone === "album") {
     return (
-      <>
-        <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full border-[18px] border-[#111111]" />
-        <div className="absolute right-8 top-10 h-16 w-16 bg-[#1556a4]" />
-        <div className="absolute right-24 top-24 h-3 w-24 rotate-[-28deg] bg-[#d9362c]" />
-        <div className="absolute bottom-0 left-0 h-14 w-20 bg-white" />
-      </>
+      <div className="absolute right-4 top-5 flex h-24 w-24 items-center justify-center rounded-[12px] border-2 border-[#111111] bg-white shadow-[5px_5px_0_#111111] sm:right-5 sm:top-6 sm:h-28 sm:w-28">
+        <div className="absolute -left-5 top-5 h-16 w-16 rounded-full border-[10px] border-[#1556a4] bg-[#111111] sm:-left-6 sm:h-20 sm:w-20">
+          <div className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
+        </div>
+        <Disc3 className="relative z-10 h-12 w-12 text-[#111111] sm:h-14 sm:w-14" strokeWidth={2.3} />
+      </div>
     );
   }
 
   if (tone === "mv") {
     return (
-      <>
-        <div className="absolute -right-7 top-8 h-24 w-24 rounded-full bg-[#f2cf27]" />
-        <div className="absolute right-20 top-6 h-16 w-16 bg-[#d9362c]" />
-        <div className="absolute right-12 top-24 h-0 w-0 border-y-[22px] border-l-[38px] border-y-transparent border-l-white" />
-        <div className="absolute bottom-0 left-0 h-16 w-28 bg-[#111111]" />
-      </>
+      <div className="absolute right-4 top-5 flex h-24 w-28 flex-col overflow-hidden rounded-[12px] border-2 border-white/95 bg-[#111111] shadow-[5px_5px_0_rgba(17,17,17,0.75)] sm:right-5 sm:top-6 sm:h-28 sm:w-32">
+        <div className="flex h-8 items-center gap-1 border-b-2 border-white/90 bg-white px-2 text-[#111111]">
+          <Clapperboard className="h-4 w-4" strokeWidth={2.4} />
+          <span className="text-[9px] font-black uppercase tracking-normal">Preview</span>
+        </div>
+        <div className="relative flex flex-1 items-center justify-center bg-[linear-gradient(135deg,#111111,#243b5a)]">
+          <div className="absolute bottom-2 left-2 h-2 w-10 rounded-full bg-white/30" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#f2cf27] text-[#111111]">
+            <Play className="ml-0.5 h-5 w-5 fill-current" strokeWidth={2.4} />
+          </div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <>
-      <div className="absolute -right-6 top-7 h-28 w-28 rounded-full bg-[#f2cf27]" />
-      <div className="absolute right-24 top-8 h-24 w-10 rotate-45 bg-[#111111]" />
-      <div className="absolute right-8 bottom-8 h-16 w-28 bg-[#1556a4]" />
-      <div className="absolute bottom-0 left-0 h-16 w-16 rounded-tr-full bg-white" />
-    </>
+    <div className="absolute right-4 top-5 flex h-24 w-24 items-center justify-center rounded-[12px] border-2 border-white/95 bg-white text-[#111111] shadow-[5px_5px_0_#111111] sm:right-5 sm:top-6 sm:h-28 sm:w-28">
+      <FileText className="absolute left-4 top-4 h-10 w-10 text-[#1556a4] sm:h-12 sm:w-12" strokeWidth={2.2} />
+      <CheckCircle2 className="absolute right-4 top-4 h-8 w-8 text-[#d9362c] sm:h-9 sm:w-9" strokeWidth={2.5} />
+      <MousePointerClick className="absolute bottom-4 right-5 h-11 w-11 text-[#111111] sm:h-12 sm:w-12" strokeWidth={2.3} />
+    </div>
   );
 }
 
@@ -389,7 +402,7 @@ export default function Home() {
               className={`group relative min-h-[258px] overflow-hidden rounded-[10px] border-2 p-5 tracking-normal shadow-[8px_8px_0_#111111] transition duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0_#111111] focus-visible:ring-2 focus-visible:ring-[#111111]/60 dark:shadow-[8px_8px_0_#f2cf27] dark:hover:shadow-[12px_12px_0_#f2cf27] sm:min-h-[282px] sm:p-6 ${scrollRevealBaseClass} ${card.cardClass}`}
             >
               <div className="pointer-events-none absolute inset-0 opacity-95 transition-transform duration-300 group-hover:scale-[1.03]">
-                <ServiceCardMotif tone={card.tone} />
+                <ServiceCardVisual tone={card.tone} />
               </div>
               <div className="relative z-10 flex min-h-[218px] flex-col sm:min-h-[234px]">
                 <p className={`max-w-[11rem] text-[11px] font-black uppercase leading-4 tracking-normal ${card.labelClass}`}>
