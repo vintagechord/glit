@@ -200,30 +200,33 @@ const serviceCards = [
     title: "음반 심의",
     description: "트랙 정보 입력과 음원 파일 업로드까지 한 번에.",
     href: "/dashboard/new/album",
-    cardClass:
-      "border-[#d9e6f7] bg-[linear-gradient(180deg,#ffffff,#f3f8ff)] text-[#1d1d1f] shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[#1d1d1f] dark:text-[#f5f5f7] dark:shadow-none",
-    labelClass: "text-foreground/60",
-    descriptionClass: "text-foreground/72",
+    tone: "album",
+    cardClass: "border-[#111111] bg-[#f2cf27] text-[#111111]",
+    labelClass: "text-[#111111]/72",
+    descriptionClass: "text-[#111111]/78",
+    actionClass: "bg-white text-[#111111]",
   },
   {
     label: "M/V Review",
     title: "M/V 심의",
     description: "TV 송출/온라인 업로드 심의를 분리해 효율적으로.",
     href: "/dashboard/new/mv",
-    cardClass:
-      "border-[#d9dcff] bg-[linear-gradient(180deg,#f7f6ff,#eef3ff)] text-[#1d1d1f] shadow-[0_20px_60px_rgba(79,70,229,0.08)] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#f5f5f7] dark:shadow-none",
-    labelClass: "text-foreground/60",
-    descriptionClass: "text-foreground/72",
+    tone: "mv",
+    cardClass: "border-[#111111] bg-[#1556a4] text-white",
+    labelClass: "text-white/74",
+    descriptionClass: "text-white/82",
+    actionClass: "bg-[#111111] text-white",
   },
   {
     label: "One Click",
     title: "원클릭 접수",
     description: "멜론 링크와 음원 파일만 제출하는 음반 전용 간편 접수.",
     href: "/dashboard/new/album?mode=oneclick",
-    cardClass:
-      "border-[#f0d9a6] bg-[linear-gradient(180deg,#fff9ee,#fff2d9)] text-[#1d1d1f] shadow-[0_20px_60px_rgba(217,119,6,0.08)] dark:border-[#5b4b26] dark:bg-[#2b2314] dark:text-[#f5f5f7] dark:shadow-none",
-    labelClass: "text-foreground/60 dark:text-white/66",
-    descriptionClass: "text-foreground/72 dark:text-white/76",
+    tone: "oneclick",
+    cardClass: "border-[#111111] bg-[#d9362c] text-white",
+    labelClass: "text-white/74",
+    descriptionClass: "text-white/82",
+    actionClass: "bg-white text-[#111111]",
   },
 ];
 
@@ -233,6 +236,39 @@ const processStepTones = [
   "border-[#c9dcff] bg-[linear-gradient(180deg,#eef6ff,#e3efff)] text-[#0f3760] shadow-[0_12px_28px_rgba(96,165,250,0.18)] dark:border-[#29527a] dark:bg-[linear-gradient(180deg,#102a43,#0d2135)] dark:text-[#cfe4ff]",
   "border-[#bfd7ff] bg-[linear-gradient(180deg,#e7f2ff,#dcecff)] text-[#0b4270] shadow-[0_14px_32px_rgba(0,113,227,0.18)] dark:border-[#316191] dark:bg-[linear-gradient(180deg,#113152,#0d2741)] dark:text-[#c9e1ff]",
 ];
+
+function ServiceCardMotif({ tone }: { tone: string }) {
+  if (tone === "album") {
+    return (
+      <>
+        <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full border-[18px] border-[#111111]" />
+        <div className="absolute right-8 top-10 h-16 w-16 bg-[#1556a4]" />
+        <div className="absolute right-24 top-24 h-3 w-24 rotate-[-28deg] bg-[#d9362c]" />
+        <div className="absolute bottom-0 left-0 h-14 w-20 bg-white" />
+      </>
+    );
+  }
+
+  if (tone === "mv") {
+    return (
+      <>
+        <div className="absolute -right-7 top-8 h-24 w-24 rounded-full bg-[#f2cf27]" />
+        <div className="absolute right-20 top-6 h-16 w-16 bg-[#d9362c]" />
+        <div className="absolute right-12 top-24 h-0 w-0 border-y-[22px] border-l-[38px] border-y-transparent border-l-white" />
+        <div className="absolute bottom-0 left-0 h-16 w-28 bg-[#111111]" />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="absolute -right-6 top-7 h-28 w-28 rounded-full bg-[#f2cf27]" />
+      <div className="absolute right-24 top-8 h-24 w-10 rotate-45 bg-[#111111]" />
+      <div className="absolute right-8 bottom-8 h-16 w-28 bg-[#1556a4]" />
+      <div className="absolute bottom-0 left-0 h-16 w-16 rounded-tr-full bg-white" />
+    </>
+  );
+}
 
 export default function Home() {
   return (
@@ -350,20 +386,24 @@ export default function Home() {
               data-scroll-reveal
               data-reveal-state="hidden"
               style={{ transitionDelay: `${120 + index * 120}ms` }}
-              className={`group relative overflow-hidden rounded-[24px] border p-5 transition duration-200 hover:-translate-y-1 hover:border-[#0071e3]/35 hover:shadow-[0_24px_60px_rgba(0,113,227,0.12)] sm:rounded-[28px] sm:p-6 ${scrollRevealBaseClass} ${card.cardClass}`}
+              className={`group relative min-h-[258px] overflow-hidden rounded-[10px] border-2 p-5 tracking-normal shadow-[8px_8px_0_#111111] transition duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0_#111111] focus-visible:ring-2 focus-visible:ring-[#111111]/60 dark:shadow-[8px_8px_0_#f2cf27] dark:hover:shadow-[12px_12px_0_#f2cf27] sm:min-h-[282px] sm:p-6 ${scrollRevealBaseClass} ${card.cardClass}`}
             >
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0071e3] via-[#7db0ff] to-[#f6d64a] opacity-75 transition-opacity duration-200 group-hover:opacity-100" />
-              <div>
-                <p className={`text-xs font-semibold uppercase tracking-[0.3em] ${card.labelClass}`}>
+              <div className="pointer-events-none absolute inset-0 opacity-95 transition-transform duration-300 group-hover:scale-[1.03]">
+                <ServiceCardMotif tone={card.tone} />
+              </div>
+              <div className="relative z-10 flex min-h-[218px] flex-col sm:min-h-[234px]">
+                <p className={`max-w-[11rem] text-[11px] font-black uppercase leading-4 tracking-normal ${card.labelClass}`}>
                   {card.label}
                 </p>
-                <h3 className="mt-3 text-xl font-semibold">{card.title}</h3>
-                <p className={`mt-2 text-sm ${card.descriptionClass}`}>
+                <h3 className="mt-7 max-w-[13rem] text-3xl font-black leading-none tracking-normal sm:text-4xl">
+                  {card.title}
+                </h3>
+                <p className={`mt-4 max-w-[12rem] text-sm font-semibold leading-6 tracking-normal ${card.descriptionClass}`}>
                   {card.description}
                 </p>
-              </div>
-              <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-foreground/72 transition group-hover:translate-x-1 group-hover:text-foreground dark:text-white/74 dark:group-hover:text-white">
-                바로 시작 <span aria-hidden="true">→</span>
+                <div className={`mt-auto inline-flex w-fit items-center gap-2 px-4 py-3 text-sm font-black tracking-normal transition group-hover:translate-x-1 ${card.actionClass}`}>
+                  바로 시작 <span aria-hidden="true">→</span>
+                </div>
               </div>
             </Link>
           ))}

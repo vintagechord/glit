@@ -122,24 +122,15 @@ const initialTrack: TrackInput = {
 };
 
 const steps = [
-  "패키지 선택",
+  "방송국 패키지 선택",
   "신청서 작성",
   "파일 업로드",
-  "결제하기",
+  "결제",
   "접수 완료",
-];
-
-const stepDescriptions = [
-  "방식과 패키지",
-  "신청서 입력",
-  "파일 제출",
-  "결제 정보",
-  "결과 확인",
 ];
 
 const formatPackageName = (count: number, isOneClick = false) =>
   `${isOneClick ? "원클릭 " : ""}${count}개 패키지`;
-const formatPackageBroadcastLabel = (count: number) => `${count}개 방송국`;
 const formatPackageDescription = (
   description: string | null | undefined,
   count: number,
@@ -809,43 +800,35 @@ export function AlbumWizard({
       {steps.map((label, index) => {
         const isCompleted = index + 1 < step;
         const isCurrent = index + 1 === step;
-        const isPackageStep = index === 0;
-        const packageLabel =
-          isPackageStep && selectedPackage
-            ? formatPackageBroadcastLabel(selectedPackage.stationCount)
-            : label;
         const activeTone = selectedPackageTone
           ? selectedPackageTone.card
           : "border-[#0071e3] bg-[#0071e3] text-white dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]";
         return (
           <div
             key={label}
-            className={`rounded-[22px] border px-4 py-3 text-xs ${
+            className={`rounded-[18px] border px-3.5 py-2.5 text-xs ${
               isCurrent || isCompleted
                 ? activeTone
                 : "border-border/60 bg-background text-muted-foreground"
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-1.5">
               <span className="font-semibold uppercase tracking-[0.2em]">
                 STEP {String(index + 1).padStart(2, "0")}
               </span>
               {isCurrent ? (
-                <span className="rounded-full border border-current/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                <span className="rounded-full border border-current/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
                   진행 중
                 </span>
               ) : null}
               {isCompleted ? (
-                <span className="rounded-full border border-current/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                <span className="rounded-full border border-current/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
                   완료
                 </span>
               ) : null}
             </div>
-            <p className="mt-2 text-sm font-semibold tracking-[-0.01em]">
-              {packageLabel}
-            </p>
-            <p className="mt-1 text-[11px] font-medium leading-4 tracking-normal opacity-80">
-              {stepDescriptions[index]}
+            <p className="mt-1.5 text-sm font-semibold tracking-[-0.01em]">
+              {label}
             </p>
           </div>
         );
