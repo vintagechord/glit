@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   CheckCircle2,
   Clapperboard,
+  CreditCard,
   Disc3,
   FileText,
   MousePointerClick,
@@ -238,11 +239,27 @@ const serviceCards = [
   },
 ];
 
-const processStepTones = [
-  "border-[#d9e6f7] bg-[linear-gradient(180deg,#ffffff,#f4f9ff)] text-[#16324d] shadow-[0_12px_28px_rgba(148,163,184,0.12)] dark:border-[#1f3244] dark:bg-[linear-gradient(180deg,#15202c,#0f1823)] dark:text-[#d6e9ff]",
-  "border-[#cfe2fb] bg-[linear-gradient(180deg,#f7fbff,#edf5ff)] text-[#123152] shadow-[0_12px_28px_rgba(125,176,255,0.16)] dark:border-[#244466] dark:bg-[linear-gradient(180deg,#11263c,#0d1d2f)] dark:text-[#d4e6ff]",
-  "border-[#c9dcff] bg-[linear-gradient(180deg,#eef6ff,#e3efff)] text-[#0f3760] shadow-[0_12px_28px_rgba(96,165,250,0.18)] dark:border-[#29527a] dark:bg-[linear-gradient(180deg,#102a43,#0d2135)] dark:text-[#cfe4ff]",
-  "border-[#bfd7ff] bg-[linear-gradient(180deg,#e7f2ff,#dcecff)] text-[#0b4270] shadow-[0_14px_32px_rgba(0,113,227,0.18)] dark:border-[#316191] dark:bg-[linear-gradient(180deg,#113152,#0d2741)] dark:text-[#c9e1ff]",
+const processSteps = [
+  {
+    label: "패키지 선택",
+    tone: "bg-[#f2cf27] text-[#111111]",
+    icon: Disc3,
+  },
+  {
+    label: "신청서 작성",
+    tone: "bg-white text-[#111111]",
+    icon: FileText,
+  },
+  {
+    label: "결제하기",
+    tone: "bg-[#1556a4] text-white",
+    icon: CreditCard,
+  },
+  {
+    label: "접수 완료",
+    tone: "bg-[#d9362c] text-white",
+    icon: CheckCircle2,
+  },
 ];
 
 function ServiceCardVisual({ tone }: { tone: string }) {
@@ -424,52 +441,62 @@ export default function Home() {
       </section>
 
       <section className="mx-auto w-full max-w-6xl px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
-        <div className="rounded-[28px] border border-border/60 bg-background/80 px-5 py-6 sm:rounded-[32px] sm:px-8 sm:py-7">
+        <div className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white px-5 py-6 tracking-normal shadow-[8px_8px_0_#111111] dark:bg-[#111111] dark:text-white dark:shadow-[8px_8px_0_#f2cf27] sm:px-8 sm:py-7">
+          <div aria-hidden="true" className="absolute right-0 top-0 hidden h-16 w-16 bg-[#f2cf27] sm:block" />
+          <div aria-hidden="true" className="absolute right-12 top-12 hidden h-8 w-24 bg-[#1556a4] sm:block" />
+          <div aria-hidden="true" className="absolute bottom-0 left-0 h-5 w-full bg-[#111111] dark:bg-[#f2cf27]" />
           <div
             data-scroll-reveal
             data-reveal-state="hidden"
-            className={`flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between ${scrollRevealBaseClass}`}
+            className={`relative z-10 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between ${scrollRevealBaseClass}`}
             style={{ transitionDelay: "0ms" }}
           >
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            <div className="max-w-2xl">
+              <p className="w-fit border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-[11px] font-black uppercase tracking-normal text-[#111111] dark:border-white">
                 접수 프로세스
               </p>
-              <h2 className="font-display mt-3 text-2xl text-foreground sm:text-3xl">
+              <h2 className="mt-4 text-2xl font-black leading-tight text-[#111111] dark:text-white sm:text-3xl">
                 심의는 4단계로 진행됩니다
               </h2>
-              <p className="mt-3 max-w-xl text-sm text-muted-foreground">
+              <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-[#111111]/68 dark:text-white/72">
                 상품/방송국 패키지 선택부터 결제 확인까지 흐름을 간단하게 설계했습니다.
               </p>
             </div>
+            <div className="hidden border-2 border-[#111111] bg-[#d9362c] px-4 py-3 text-sm font-black text-white shadow-[4px_4px_0_#111111] dark:border-white lg:block">
+              4 STEP FLOW
+            </div>
           </div>
 
-          <div className="relative mt-4">
+          <div className="relative z-10 mt-6">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute left-0 right-0 top-1/2 hidden h-[2px] -translate-y-1/2 bg-[linear-gradient(90deg,rgba(203,213,225,0.35),rgba(125,176,255,0.55),rgba(0,113,227,0.75))] md:block"
+              className="pointer-events-none absolute left-3 right-3 top-1/2 hidden h-[3px] -translate-y-1/2 bg-[#111111] dark:bg-white md:block"
             />
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {["패키지 선택", "신청서 작성", "결제하기", "접수 완료"].map((label, index) => (
-              <div
-                key={label}
-                data-scroll-reveal
-                data-reveal-state="hidden"
-                style={{ transitionDelay: `${120 + index * 120}ms` }}
-                className={`relative overflow-hidden rounded-2xl border p-3.5 backdrop-blur-sm ${scrollRevealBaseClass} ${processStepTones[index] ?? "border-border/60 bg-card/70 text-foreground"
-                  }`}
-              >
+              {processSteps.map(({ label, tone, icon: Icon }, index) => (
                 <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.35),rgba(0,113,227,0.85))]"
-                />
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">
-                  STEP {String(index + 1).padStart(2, "0")}
-                </p>
-                <p className="mt-1.5 text-sm font-semibold">{label}</p>
-              </div>
-            ))}
-          </div>
+                  key={label}
+                  data-scroll-reveal
+                  data-reveal-state="hidden"
+                  style={{ transitionDelay: `${120 + index * 120}ms` }}
+                  className={`relative min-h-[118px] overflow-hidden rounded-[8px] border-2 border-[#111111] p-4 shadow-[4px_4px_0_#111111] ${scrollRevealBaseClass} ${tone}`}
+                >
+                  <div className="relative min-h-[78px] pr-11">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-normal opacity-75">
+                        STEP {String(index + 1).padStart(2, "0")}
+                      </p>
+                      <p className="mt-3 text-[15px] font-black leading-tight sm:text-base">
+                        {label}
+                      </p>
+                    </div>
+                    <div className="absolute right-0 top-0 flex h-9 w-9 items-center justify-center rounded-[8px] border-2 border-current bg-white/18 sm:h-10 sm:w-10">
+                      <Icon className="h-5 w-5" strokeWidth={2.4} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
