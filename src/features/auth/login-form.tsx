@@ -19,7 +19,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
     return (
       <button
         type="submit"
-        className="w-full rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-70"
+        className="bauhaus-button w-full px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
         disabled={pending}
       >
         {pending ? (
@@ -51,7 +51,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
           onChange={(event) => {
             setEmailValue(event.target.value);
           }}
-            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.email && (
             <p className="text-xs text-red-500">{state.fieldErrors.email}</p>
@@ -66,24 +66,24 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
             type="password"
             autoComplete="current-password"
             required
-            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.password && (
             <p className="text-xs text-red-500">{state.fieldErrors.password}</p>
           )}
         </div>
         {state.error && (
-          <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-600">
+          <p className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
             {state.error}
           </p>
         )}
         <SubmitButton />
       </form>
-      <div className="space-y-2 rounded-2xl border border-border/60 bg-background/60 px-4 py-3">
+      <div className="space-y-2 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3">
         <div className="flex justify-center">
           <Link
             href="/forgot-password"
-            className="inline-flex w-full justify-center rounded-full border border-border/70 px-4 py-2 text-xs font-semibold text-foreground transition hover:bg-foreground hover:text-background sm:w-auto"
+            className="inline-flex w-full justify-center rounded-[8px] border-2 border-border px-4 py-2 text-xs font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white sm:w-auto dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
           >
             비밀번호 찾기
           </Link>
@@ -94,7 +94,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
         <TrackLookupModalTrigger
           label="코드입력"
           modalTitle="비회원 코드 입력"
-          className="inline-flex items-center rounded-full border border-foreground/40 px-3 py-1 text-xs font-semibold text-foreground transition hover:bg-foreground hover:text-background"
+          className="inline-flex items-center rounded-[8px] border-2 border-foreground/60 px-3 py-1 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         />
         <span> 으로 확인 가능합니다.</span>
       </div>

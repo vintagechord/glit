@@ -94,7 +94,7 @@ export function SignupForm() {
     return (
       <button
         type="submit"
-        className="w-full rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-70"
+        className="bauhaus-button w-full px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
         disabled={pending}
       >
         {pending ? "가입 처리 중..." : "회원가입"}
@@ -115,7 +115,7 @@ export function SignupForm() {
           autoComplete="email"
           required
           ref={emailRef}
-          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+          className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
         />
         {state.fieldErrors?.email && (
           <p className="text-xs text-red-500">{state.fieldErrors.email}</p>
@@ -133,7 +133,7 @@ export function SignupForm() {
             autoComplete="new-password"
             required
             ref={passwordRef}
-            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.password && (
             <p className="text-xs text-red-500">{state.fieldErrors.password}</p>
@@ -150,7 +150,7 @@ export function SignupForm() {
             autoComplete="new-password"
             required
             ref={confirmRef}
-            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.confirmPassword && (
             <p className="text-xs text-red-500">{state.fieldErrors.confirmPassword}</p>
@@ -167,7 +167,7 @@ export function SignupForm() {
             name="name"
             type="text"
             ref={nameRef}
-            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.name && (
             <p className="text-xs text-red-500">{state.fieldErrors.name}</p>
@@ -182,7 +182,7 @@ export function SignupForm() {
             type="tel"
             autoComplete="tel"
             ref={phoneRef}
-            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.phone && (
             <p className="text-xs text-red-500">{state.fieldErrors.phone}</p>
@@ -197,11 +197,11 @@ export function SignupForm() {
           name="company"
           type="text"
           ref={companyRef}
-          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+          className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
         />
       </div>
 
-      <div className="space-y-3 rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-foreground">
+      <div className="space-y-3 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3 text-sm text-foreground">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
             약관 동의
@@ -210,14 +210,14 @@ export function SignupForm() {
             <button
               type="button"
               onClick={() => setActiveModal("terms")}
-              className="rounded-full border border-border/70 px-3 py-1 text-foreground transition hover:bg-foreground hover:text-background"
+              className="rounded-[8px] border-2 border-border px-3 py-1 font-black text-foreground transition hover:bg-foreground hover:text-background"
             >
               이용약관 보기
             </button>
             <button
               type="button"
               onClick={() => setActiveModal("privacy")}
-              className="rounded-full border border-border/70 px-3 py-1 text-foreground transition hover:bg-foreground hover:text-background"
+              className="rounded-[8px] border-2 border-border px-3 py-1 font-black text-foreground transition hover:bg-foreground hover:text-background"
             >
               개인정보처리방침 보기
             </button>
@@ -256,14 +256,14 @@ export function SignupForm() {
         )}
       </div>
       {state.error && (
-        <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-600">
+        <p className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
           {state.error}
         </p>
       )}
       {state.message && (
         <p
           aria-live="polite"
-          className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-600"
+          className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]"
         >
           {state.message} 로그인 페이지로 이동합니다.
         </p>
@@ -284,7 +284,7 @@ export function SignupForm() {
             role="dialog"
             aria-modal="true"
             aria-labelledby={currentModalTitleId}
-            className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-border/70 bg-background px-6 py-5 text-sm text-foreground shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+            className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background px-6 py-5 text-sm text-foreground shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
@@ -299,7 +299,7 @@ export function SignupForm() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-foreground transition hover:bg-foreground hover:text-background"
+                className="rounded-[8px] border-2 border-border px-3 py-1 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
               >
                 닫기
               </button>

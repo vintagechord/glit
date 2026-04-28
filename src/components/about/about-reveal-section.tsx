@@ -43,26 +43,26 @@ export function AboutRevealSection() {
       <div
         data-reveal
         data-reveal-state="hidden"
-        className={`rounded-[28px] border border-black/20 bg-[linear-gradient(145deg,#ffffff_0%,#f3f3f3_100%)] p-6 text-neutral-900 shadow-[0_18px_36px_rgba(0,0,0,0.12)] ${revealBaseClass}`}
+        className={`rounded-[10px] border-2 border-[#111111] bg-card p-6 text-foreground shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] ${revealBaseClass}`}
         style={{ transitionDelay: "80ms" }}
       >
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-900/70">
+        <p className="bauhaus-kicker">
           핵심 서비스
         </p>
         <div className="mt-5 grid gap-3">
           {services.map((item, index) => {
             const tones = [
-              "border-black/10 bg-white shadow-[0_10px_20px_rgba(0,0,0,0.08)]",
-              "border-black/10 bg-[#f4f4f4] shadow-[0_8px_16px_rgba(0,0,0,0.07)]",
-              "border-black/10 bg-white shadow-[0_10px_20px_rgba(0,0,0,0.08)]",
-              "border-black/10 bg-[#f4f4f4] shadow-[0_8px_16px_rgba(0,0,0,0.07)]",
+              "border-[#111111] bg-white dark:bg-[#171717]",
+              "border-[#111111] bg-[#f2cf27] text-[#111111]",
+              "border-[#111111] bg-white dark:bg-[#171717]",
+              "border-[#111111] bg-[#1556a4] text-white",
             ];
             return (
               <div
                 key={item}
-                className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm text-neutral-900/80 ${tones[index % tones.length]}`}
+                className={`flex items-start gap-3 rounded-[8px] border-2 px-4 py-3 text-sm font-semibold ${tones[index % tones.length]}`}
               >
-                <span className="text-xs font-semibold text-neutral-900/70">
+                <span className="text-xs font-black opacity-75">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <span>{item}</span>
@@ -76,14 +76,14 @@ export function AboutRevealSection() {
         <section
           data-reveal
           data-reveal-state="hidden"
-          className={`flex min-h-[200px] items-center rounded-[28px] border border-black/70 bg-[linear-gradient(145deg,#0b0b0b_0%,#1f1f1f_100%)] p-6 text-white shadow-[0_20px_40px_rgba(0,0,0,0.35)] ${revealBaseClass}`}
+          className={`flex min-h-[200px] items-center rounded-[10px] border-2 border-[#111111] bg-[#111111] p-6 text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] ${revealBaseClass}`}
           style={{ transitionDelay: "160ms" }}
         >
           <div className="space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
+            <p className="w-fit bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-[#111111]">
               정식 등록 업체
             </p>
-            <div className="space-y-3 text-base leading-relaxed text-white/80">
+            <div className="space-y-3 text-base font-semibold leading-relaxed text-white/80">
               <p>통신판매업, 대중문화예술기획업, 음반·음악영상물제작업 등록 업체</p>
               <p>세금계산서·현금영수증·거래내역서 등 각종 증빙 서류 발급 가능</p>
               <div className="pt-1 space-y-1">
@@ -130,21 +130,21 @@ export function AboutRevealSection() {
         <section
           data-reveal
           data-reveal-state="hidden"
-          className={`flex min-h-[200px] items-center rounded-[28px] border border-black/20 bg-[linear-gradient(145deg,#ffffff_0%,#ededed_100%)] p-6 text-neutral-900 shadow-[0_18px_36px_rgba(0,0,0,0.12)] ${revealBaseClass}`}
+          className={`flex min-h-[200px] items-center rounded-[10px] border-2 border-[#111111] bg-card p-6 text-foreground shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] ${revealBaseClass}`}
           style={{ transitionDelay: "240ms" }}
         >
           <div className="space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-900/70">
+            <p className="bauhaus-kicker">
               문의
             </p>
-            <div className="space-y-2 text-base text-neutral-900/80">
+            <div className="space-y-2 text-base font-semibold text-foreground/80">
               <p>
                 전화: <span className="font-semibold">{APP_CONFIG.supportPhone}</span>
               </p>
               <p>
                 이메일: <span className="font-semibold">{APP_CONFIG.supportEmail}</span>
               </p>
-              <p className="text-sm text-neutral-900/70">
+              <p className="text-sm text-muted-foreground">
                 운영시간: {APP_CONFIG.supportHours}
               </p>
             </div>

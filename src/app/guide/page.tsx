@@ -68,16 +68,17 @@ const mvSteps = [
 export default function GuidePage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+      <p className="bauhaus-kicker">
         Review Guide
       </p>
-      <h1 className="font-display mt-2 text-3xl text-foreground">심의 안내</h1>
-      <p className="mt-3 text-sm text-muted-foreground">
+      <h1 className="font-display mt-4 text-3xl font-black text-foreground">심의 안내</h1>
+      <p className="mt-3 text-sm font-semibold text-muted-foreground">
         음반과 뮤직비디오 심의 진행 방식과 준비사항을 한눈에 정리했습니다.
       </p>
 
-      <section className="mt-10 rounded-[32px] border border-border/60 bg-card/80 p-8 shadow-[0_22px_70px_rgba(15,23,42,0.1)]">
-        <h2 className="font-display mt-4 text-2xl text-foreground">
+      <section className="relative mt-10 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+        <div aria-hidden="true" className="absolute right-0 top-0 h-16 w-16 bg-[#f2cf27]" />
+        <h2 className="font-display mt-4 text-2xl font-black text-foreground">
           음반심의, 이렇게 진행됩니다
         </h2>
 
@@ -85,33 +86,33 @@ export default function GuidePage() {
           {albumSteps.map((step) => (
             <div
               key={step.number}
-              className="rounded-2xl border border-border/60 bg-background/70 p-5"
+              className="rounded-[8px] border-2 border-border bg-background/80 p-5"
             >
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-xs font-semibold uppercase tracking-[0.2em] text-background">
+                <span className="flex h-10 w-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] text-xs font-black uppercase tracking-normal text-[#111111]">
                   {step.number}
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-sm font-black text-foreground">
                     {step.title}
                   </p>
                   {step.description === "음원과 신청서만 보내주세요" && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs font-semibold text-muted-foreground">
                       {step.description}
                     </p>
                   )}
                 </div>
               </div>
               {step.description !== "음원과 신청서만 보내주세요" && (
-                <p className="mt-3 text-sm text-muted-foreground">
+                <p className="mt-3 text-sm font-semibold text-muted-foreground">
                   {step.description}
                 </p>
               )}
               {step.bullets && (
-                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                <ul className="mt-3 space-y-1 text-xs font-semibold text-muted-foreground">
                   {step.bullets.map((bullet) => (
                     <li key={bullet} className="flex gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-foreground/70" />
+                      <span className="mt-1 h-2 w-2 bg-[#1556a4]" />
                       <span>{bullet}</span>
                     </li>
                   ))}
@@ -124,15 +125,16 @@ export default function GuidePage() {
         <div className="mt-6">
           <Link
             href="/dashboard/new/album"
-            className="inline-flex items-center rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
+            className="bauhaus-button px-6 py-3 text-xs uppercase"
           >
             음반심의 신청하러 가기
           </Link>
         </div>
       </section>
 
-      <section className="mt-12 rounded-[32px] border border-border/60 bg-card/80 p-8 shadow-[0_22px_70px_rgba(15,23,42,0.1)]">
-        <h2 className="font-display mt-4 text-2xl text-foreground">
+      <section className="relative mt-12 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+        <div aria-hidden="true" className="absolute right-0 top-0 h-16 w-16 bg-[#1556a4]" />
+        <h2 className="font-display mt-4 text-2xl font-black text-foreground">
           뮤직비디오 심의, 이렇게 진행됩니다
         </h2>
 
@@ -140,26 +142,26 @@ export default function GuidePage() {
           {mvSteps.map((step) => (
             <div
               key={step.number}
-              className="rounded-2xl border border-border/60 bg-background/70 p-5"
+              className="rounded-[8px] border-2 border-border bg-background/80 p-5"
             >
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-xs font-semibold uppercase tracking-[0.2em] text-background">
+                <span className="flex h-10 w-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#1556a4] text-xs font-black uppercase tracking-normal text-white">
                   {step.number}
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-sm font-black text-foreground">
                     {step.title}
                   </p>
                 </div>
               </div>
-              <p className="mt-3 text-sm text-muted-foreground">
+              <p className="mt-3 text-sm font-semibold text-muted-foreground">
                 {step.description}
               </p>
               {step.bullets && (
-                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                <ul className="mt-3 space-y-1 text-xs font-semibold text-muted-foreground">
                   {step.bullets.map((bullet) => (
                     <li key={bullet} className="flex gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-foreground/70" />
+                      <span className="mt-1 h-2 w-2 bg-[#d9362c]" />
                       <span>{bullet}</span>
                     </li>
                   ))}
@@ -172,7 +174,7 @@ export default function GuidePage() {
         <div className="mt-6">
           <Link
             href="/dashboard/new/mv"
-            className="inline-flex items-center rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
+            className="bauhaus-button px-6 py-3 text-xs uppercase"
           >
             M/V 심의 신청하러 가기
           </Link>

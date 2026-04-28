@@ -41,14 +41,14 @@ export async function ProfilePageView(config?: ShellConfig) {
       contextLabel={config?.contextLabel ?? "마이페이지"}
     >
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-[32px] border border-border/60 bg-card/80 p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        <div className="rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
+          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
             프로필 수정
           </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
+          <h2 className="mt-3 text-xl font-black text-foreground">
             담당자 정보를 업데이트하세요.
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm font-semibold text-muted-foreground">
             접수 진행 및 결과 통보를 위한 기본 정보를 관리합니다.
           </p>
           <div className="mt-6">
@@ -62,17 +62,17 @@ export async function ProfilePageView(config?: ShellConfig) {
           </div>
         </div>
 
-        <div className="space-y-4 rounded-[32px] border border-border/60 bg-background/80 p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        <div className="space-y-4 rounded-[10px] border-2 border-[#111111] bg-background/80 p-6 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
+          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
             계정 요약
           </p>
-          <div className="rounded-2xl border border-border/60 bg-card/80 p-4">
+          <div className="rounded-[8px] border-2 border-border bg-card p-4">
             <p className="text-xs text-muted-foreground">로그인 이메일</p>
             <p className="mt-2 text-sm font-semibold text-foreground">
               {user.email}
             </p>
           </div>
-          <div className="rounded-2xl border border-dashed border-border/70 bg-background/80 p-4 text-xs text-muted-foreground">
+          <div className="rounded-[8px] border-2 border-dashed border-border bg-background/80 p-4 text-xs font-semibold text-muted-foreground">
             저장된 정보는 접수 확인 및 심의 통보에 활용됩니다.
           </div>
         </div>

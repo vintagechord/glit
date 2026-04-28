@@ -16,31 +16,30 @@ export default function AboutPage() {
         className="space-y-10"
         style={
           {
-            "--about-ink": "#111111",
-            "--about-surface": "#f6f6f6",
-            "--about-surface-strong": "#ededed",
+            "--about-ink": "var(--foreground)",
+            "--about-surface": "var(--card)",
+            "--about-surface-strong": "var(--muted)",
           } as CSSProperties
         }
       >
-        <section className="relative overflow-hidden rounded-[32px] border border-border/60 bg-white p-5 shadow-[0_24px_60px_rgba(0,0,0,0.08)] md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.12),transparent_70%)] blur-2xl" />
-          <div className="pointer-events-none absolute left-10 top-12 h-48 w-48 rounded-full bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.08),transparent_70%)] blur-2xl" />
-          <div className="pointer-events-none absolute -bottom-20 right-10 h-52 w-52 rounded-full bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.06),transparent_70%)] blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 left-8 h-60 w-60 rounded-full bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.05),transparent_70%)] blur-3xl" />
+        <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <div aria-hidden="true" className="pointer-events-none absolute right-0 top-0 h-16 w-16 bg-[#f2cf27]" />
+          <div aria-hidden="true" className="pointer-events-none absolute right-16 top-16 h-8 w-24 bg-[#1556a4]" />
+          <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 h-5 w-full bg-[#111111] dark:bg-[#f2cf27]" />
           <div className="relative z-10 grid gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.5em] text-[var(--about-ink)]">
+              <p className="bauhaus-kicker">
                 Since 2017
               </p>
-              <h1 className="font-display mt-3 text-2xl leading-tight text-[var(--about-ink)] sm:text-3xl md:text-4xl">
+              <h1 className="font-display mt-4 text-2xl font-black leading-tight text-[var(--about-ink)] sm:text-3xl md:text-4xl">
                 온사이드(onside)
               </h1>
-              <p className="mt-3 text-base leading-relaxed text-[var(--about-ink)]/80 md:text-lg">
+              <p className="mt-3 text-base font-semibold leading-relaxed text-[var(--about-ink)]/80 md:text-lg">
                 온사이드는 음반·뮤직비디오 심의를 온라인으로 연결해 “방송 가능”
                 상태까지 빠르고 안전하게 만들어줍니다. 심의 진행, 승인, 기록
                 아카이브를 한 곳에서 관리하세요.
               </p>
-              <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--about-ink)]/70">
+              <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-normal text-[var(--about-ink)]/70">
                 {[
                   "음반 심의",
                   "뮤비 심의",
@@ -48,7 +47,7 @@ export default function AboutPage() {
                 ].map((chip) => (
                   <span
                     key={chip}
-                    className="rounded-full border border-black/10 bg-white/80 px-3 py-1"
+                    className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1"
                   >
                     {chip}
                   </span>
@@ -56,7 +55,7 @@ export default function AboutPage() {
               </div>
             </div>
             <div className="relative">
-              <div className="relative overflow-hidden rounded-[28px] border border-border/60 bg-white/80">
+              <div className="relative overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white">
                 <Image
                   src="/media/hero/glit-hero-poster.jpg"
                   alt="온사이드 심의 서비스 소개 이미지"

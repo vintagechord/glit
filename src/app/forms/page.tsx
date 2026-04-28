@@ -39,14 +39,14 @@ export default function FormsPage() {
 
   return (
     <div className="page-centered mx-auto w-full max-w-5xl px-6 py-12">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+      <p className="bauhaus-kicker">
         Forms
       </p>
-      <h1 className="font-display mt-2 text-3xl text-foreground">
+      <h1 className="font-display mt-4 text-3xl font-black text-foreground">
         신청서 다운로드 및 이메일 접수{" "}
         <span className="text-base text-muted-foreground">(구양식)</span>
       </h1>
-      <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground">
+      <p className="mt-4 max-w-3xl text-base font-semibold leading-relaxed text-muted-foreground">
         신청서를 직접 다운받아 작성 후 이메일로 접수하는 방식이 편한 분들을 위한 접수
         페이지입니다.
         <span className="mt-2 block">
@@ -66,7 +66,7 @@ export default function FormsPage() {
           href="https://onside17.com/"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
+          className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-2 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27]"
         >
           구버전 사이트에서 접수
           <span aria-hidden>↗</span>
@@ -77,14 +77,15 @@ export default function FormsPage() {
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <section className="group relative overflow-hidden rounded-[28px] border border-border/60 bg-card/80 p-6 text-foreground shadow-[0_18px_50px_rgba(15,23,42,0.12)] transition hover:-translate-y-1 hover:border-foreground/40 hover:bg-background">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        <section className="group relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-6 text-foreground shadow-[6px_6px_0_#111111] transition hover:-translate-y-1 dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+          <div aria-hidden="true" className="absolute right-0 top-0 h-12 w-12 bg-[#f2cf27]" />
+          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
             음반 심의
           </p>
-          <h2 className="mt-3 text-xl font-semibold">
+          <h2 className="mt-3 text-xl font-black">
             음반 심의 신청서
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm font-semibold text-muted-foreground">
             음반 심의용 신청서를 다운로드하여 작성하세요.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -92,7 +93,7 @@ export default function FormsPage() {
               <Link
                 key={form.href}
                 href={form.href}
-                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-[#f6d64a] hover:bg-[#f6d64a] hover:text-black"
+                className="inline-flex rounded-[8px] border-2 border-[#111111] bg-white px-5 py-2 text-xs font-black uppercase tracking-normal text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
               >
                 {form.label} 다운로드
               </Link>
@@ -100,14 +101,15 @@ export default function FormsPage() {
           </div>
         </section>
 
-        <section className="group relative overflow-hidden rounded-[28px] border border-border/60 bg-card/80 p-6 text-foreground shadow-[0_18px_50px_rgba(15,23,42,0.12)] transition hover:-translate-y-1 hover:border-foreground/40 hover:bg-background">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        <section className="group relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-6 text-foreground shadow-[6px_6px_0_#111111] transition hover:-translate-y-1 dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+          <div aria-hidden="true" className="absolute right-0 top-0 h-12 w-12 bg-[#1556a4]" />
+          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
             M/V 심의
           </p>
-          <h2 className="mt-3 text-xl font-semibold">
+          <h2 className="mt-3 text-xl font-black">
             M/V 심의 신청서
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm font-semibold text-muted-foreground">
             M/V 심의용 신청서를 다운로드하여 작성하세요.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -115,7 +117,7 @@ export default function FormsPage() {
               <Link
                 key={form.href}
                 href={form.href}
-                className="inline-flex rounded-full border border-border/70 bg-background/80 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-[#f6d64a] hover:bg-[#f6d64a] hover:text-black"
+                className="inline-flex rounded-[8px] border-2 border-[#111111] bg-white px-5 py-2 text-xs font-black uppercase tracking-normal text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
               >
                 {form.label} 다운로드
               </Link>
@@ -124,13 +126,13 @@ export default function FormsPage() {
         </section>
       </div>
 
-      <div className="mt-8 rounded-[28px] border border-[#ffd84a] bg-[#fff4be] p-6 text-sm text-black shadow-[0_18px_50px_rgba(245,158,11,0.15)]">
+      <div className="mt-8 rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-6 text-sm text-black shadow-[6px_6px_0_#111111] dark:shadow-[6px_6px_0_#f2cf27]">
         <div className="flex flex-wrap items-start gap-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#ffd84a] text-base font-bold text-black shadow-[0_12px_24px_rgba(245,158,11,0.35)] live-blink">
+          <div className="flex h-11 w-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white text-base font-black text-black live-blink">
             !
           </div>
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-black">
+            <p className="text-xs font-black uppercase tracking-normal text-black">
               필독
             </p>
             <p className="text-sm font-semibold text-slate-900">

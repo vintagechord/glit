@@ -147,25 +147,26 @@ function ResetPasswordContent() {
 
   return (
     <div className="relative mx-auto flex w-full max-w-4xl flex-1 items-center justify-center px-6 py-16">
-      <div className="absolute left-8 top-12 h-40 w-40 rounded-full bg-emerald-400/15 blur-[100px] dark:bg-emerald-500/20" />
-      <div className="w-full max-w-xl space-y-6 rounded-[32px] border border-border/60 bg-card/80 p-8 shadow-[0_30px_100px_rgba(15,23,42,0.12)]">
+      <div aria-hidden="true" className="absolute left-8 top-12 h-8 w-32 bg-[#1556a4]" />
+      <div aria-hidden="true" className="absolute right-8 bottom-12 h-16 w-16 bg-[#d9362c]" />
+      <div className="w-full max-w-xl space-y-6 rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
         <div className="space-y-2 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          <p className="bauhaus-kicker mx-auto">
             Reset Password
           </p>
-          <h1 className="font-display text-2xl text-foreground">{heading}</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="font-display text-2xl font-black text-foreground">{heading}</h1>
+          <p className="text-sm font-semibold text-muted-foreground">
             비밀번호를 재설정한 뒤 새 비밀번호로 로그인해주세요.
           </p>
         </div>
 
         {status.state === "error" && (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600">
+          <div className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-sm font-semibold text-[#d9362c]">
             {status.message}
           </div>
         )}
         {success && (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
+          <div className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-3 text-sm font-semibold text-[#1f7a5a]">
             {success}
           </div>
         )}
@@ -182,7 +183,7 @@ function ResetPasswordContent() {
               autoComplete="new-password"
               required
               minLength={8}
-              className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />
           </div>
           <div className="space-y-2">
@@ -196,7 +197,7 @@ function ResetPasswordContent() {
               autoComplete="new-password"
               required
               minLength={8}
-              className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />
           </div>
           {error && (
@@ -207,7 +208,7 @@ function ResetPasswordContent() {
           <button
             type="submit"
             disabled={status.state === "verifying"}
-            className="w-full rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="bauhaus-button w-full px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
           >
             {status.state === "verifying" ? "처리 중..." : "비밀번호 변경하기"}
           </button>

@@ -63,7 +63,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
               type="text"
               required
               defaultValue={defaultValues.name}
-              className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />
             {state.fieldErrors?.name && (
               <p className="text-xs text-red-500">{state.fieldErrors.name}</p>
@@ -77,7 +77,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
               name="company"
               type="text"
               defaultValue={defaultValues.company}
-              className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />
           </div>
           <div className="space-y-2">
@@ -89,7 +89,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
               type="tel"
               required
               defaultValue={defaultValues.phone}
-              className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />
             {state.fieldErrors?.phone && (
               <p className="text-xs text-red-500">{state.fieldErrors.phone}</p>
@@ -97,23 +97,23 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
           </div>
         </div>
         {state.error && (
-          <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-600">
+          <p className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
             {state.error}
           </p>
         )}
         {state.message && (
-          <p className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-600">
+          <p className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]">
             {state.message}
           </p>
         )}
         <button
           type="submit"
-          className="rounded-full bg-foreground px-6 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
+          className="bauhaus-button px-6 py-3 text-sm"
         >
           프로필 저장
         </button>
       </form>
-      <div className="mt-8 rounded-2xl border border-border/60 bg-background/70 p-4">
+      <div className="mt-8 rounded-[8px] border-2 border-border bg-background/70 p-4">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           비밀번호 변경
         </p>
@@ -136,7 +136,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
                 autoComplete="new-password"
                 minLength={8}
                 required
-                className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
               />
               {passwordState.fieldErrors?.newPassword && (
                 <p className="text-xs text-red-500">
@@ -154,7 +154,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
                 autoComplete="new-password"
                 minLength={8}
                 required
-                className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
               />
               {passwordState.fieldErrors?.confirmPassword && (
                 <p className="text-xs text-red-500">
@@ -164,18 +164,18 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
             </div>
           </div>
           {passwordState.error && (
-            <p className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-600">
+            <p className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
               {passwordState.error}
             </p>
           )}
           {passwordState.message && (
-            <p className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-600">
+            <p className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]">
               {passwordState.message}
             </p>
           )}
           <button
             type="submit"
-            className="rounded-full border border-border/70 bg-foreground px-6 py-3 text-sm font-semibold text-background transition hover:-translate-y-0.5 hover:bg-foreground/90"
+            className="bauhaus-button px-6 py-3 text-sm"
           >
             비밀번호 변경
           </button>

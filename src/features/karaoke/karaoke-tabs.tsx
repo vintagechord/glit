@@ -47,14 +47,14 @@ export function KaraokeTabs({
 
   return (
     <div className="space-y-8">
-      <div className="inline-flex flex-wrap items-center gap-2 rounded-full bg-muted/60 p-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+      <div className="inline-flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-normal text-muted-foreground">
         <button
           type="button"
           onClick={() => setTab("apply")}
-          className={`rounded-full px-4 py-2 transition ${
+          className={`rounded-[8px] border-2 px-4 py-2 transition ${
             tab === "apply"
-              ? "bg-background text-foreground shadow-sm"
-              : "hover:text-foreground"
+              ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
+              : "border-border bg-background hover:border-[#111111] hover:text-foreground dark:hover:border-[#f2cf27]"
           }`}
         >
           노래방 등록 신청하기
@@ -62,10 +62,10 @@ export function KaraokeTabs({
         <button
           type="button"
           onClick={() => setTab("credit")}
-          className={`rounded-full px-4 py-2 transition ${
+          className={`rounded-[8px] border-2 px-4 py-2 transition ${
             tab === "credit"
-              ? "bg-background text-foreground shadow-sm"
-              : "hover:text-foreground"
+              ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
+              : "border-border bg-background hover:border-[#111111] hover:text-foreground dark:hover:border-[#f2cf27]"
           }`}
         >
           크레딧 적립하기
@@ -73,10 +73,10 @@ export function KaraokeTabs({
         <button
           type="button"
           onClick={() => setTab("status")}
-          className={`rounded-full px-4 py-2 transition ${
+          className={`rounded-[8px] border-2 px-4 py-2 transition ${
             tab === "status"
-              ? "bg-background text-foreground shadow-sm"
-              : "hover:text-foreground"
+              ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
+              : "border-border bg-background hover:border-[#111111] hover:text-foreground dark:hover:border-[#f2cf27]"
           }`}
         >
           진행상황

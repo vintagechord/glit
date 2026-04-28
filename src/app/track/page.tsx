@@ -21,14 +21,14 @@ export default async function TrackPage() {
 
   return (
     <div className="page-centered mx-auto w-full max-w-3xl px-6 py-12">
-      <div className="rounded-[32px] border border-border/60 bg-card/80 p-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+      <div className="rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+        <p className="bauhaus-kicker">
           진행상황 조회
         </p>
-        <h1 className="font-display mt-3 text-3xl text-foreground">
+        <h1 className="font-display mt-4 text-3xl font-black text-foreground">
           {isLoggedIn ? "접수된 심의가 없습니다" : "비회원 진행상황 확인"}
         </h1>
-        <p className="mt-3 text-sm text-muted-foreground">
+        <p className="mt-3 text-sm font-semibold leading-6 text-muted-foreground">
           {isLoggedIn
             ? "심의 접수를 진행하면 진행상황을 바로 확인할 수 있습니다."
             : "접수 시 발급받은 조회 코드를 입력하면 진행상황을 확인할 수 있으며, 코드를 잊어도 이름/이메일로 다시 찾을 수 있습니다."}
@@ -37,7 +37,7 @@ export default async function TrackPage() {
           <div className="mt-6">
             <Link
               href="/dashboard/new"
-              className="inline-flex items-center rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
+              className="bauhaus-button px-4 py-2 text-xs uppercase"
             >
               새 접수 시작 →
             </Link>

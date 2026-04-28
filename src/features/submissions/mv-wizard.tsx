@@ -159,10 +159,10 @@ const onlineOptionConfirmNote =
   "위 내용을 확인하셨다면 [확인]을 눌러주세요.";
 
 const mvOptionToneClasses = [
-  "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
-  "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
-  "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
-  "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]",
+  "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
+  "border-[#111111] bg-[#1556a4] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[6px_6px_0_#f2cf27]",
+  "border-[#111111] bg-[#d9362c] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
+  "border-[#111111] bg-white text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]",
 ];
 
 type BroadcastSpecFields = {

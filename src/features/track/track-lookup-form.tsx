@@ -158,7 +158,7 @@ export function TrackLookupForm({
       <form onSubmit={handleSubmit} className="space-y-3">
         <label
           htmlFor="guest-track-token"
-          className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
+          className="text-[11px] font-black uppercase tracking-normal text-muted-foreground"
         >
           조회 코드
         </label>
@@ -169,9 +169,9 @@ export function TrackLookupForm({
           placeholder="비회원 조회 코드 입력"
           aria-invalid={Boolean(error)}
           aria-describedby={error ? "guest-track-token-error" : undefined}
-          className={`w-full rounded-2xl border ${
-            error ? "border-[#f6d64a] bg-[#f6d64a]" : "border-border/70 bg-background"
-          } px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground`}
+          className={`w-full rounded-[8px] border-2 ${
+            error ? "border-[#d9362c] bg-[#d9362c]/10" : "border-border bg-background"
+          } px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]`}
         />
         {error ? (
           <p id="guest-track-token-error" className="text-xs text-black">
@@ -181,14 +181,14 @@ export function TrackLookupForm({
         <button
           type="submit"
           disabled={validating}
-          className="w-full rounded-full bg-foreground px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
+          className="bauhaus-button w-full px-4 py-3 text-xs uppercase disabled:cursor-not-allowed disabled:bg-muted"
         >
           {validating ? "확인 중..." : "진행상황 조회"}
         </button>
       </form>
 
-      <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+      <div className="rounded-[8px] border-2 border-border bg-background/70 p-4">
+        <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
           조회 코드 찾기
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
@@ -197,7 +197,7 @@ export function TrackLookupForm({
         <form onSubmit={handleLookupCode} className="mt-3 space-y-3">
           <label
             htmlFor="lookup-name"
-            className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
+            className="text-[11px] font-black uppercase tracking-normal text-muted-foreground"
           >
             접수자 이름
           </label>
@@ -207,11 +207,11 @@ export function TrackLookupForm({
             onChange={(event) => setLookupName(event.target.value)}
             placeholder="접수자 이름"
             aria-invalid={Boolean(lookupError)}
-            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           <label
             htmlFor="lookup-email"
-            className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground"
+            className="text-[11px] font-black uppercase tracking-normal text-muted-foreground"
           >
             접수자 이메일
           </label>
@@ -222,12 +222,12 @@ export function TrackLookupForm({
             onChange={(event) => setLookupEmail(event.target.value)}
             placeholder="접수자 이메일"
             aria-invalid={Boolean(lookupError)}
-            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           <button
             type="submit"
             disabled={lookupBusy}
-            className="w-full rounded-full border border-border/70 bg-background px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground hover:text-background disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-xs font-black uppercase tracking-normal text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white disabled:cursor-not-allowed disabled:opacity-60 dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
           >
             {lookupBusy ? "조회 중..." : "조회 코드 찾기"}
           </button>
@@ -255,7 +255,7 @@ export function TrackLookupForm({
             {lookupResults.map((item, index) => (
               <div
                 key={`${item.token}-${index}`}
-                className="rounded-xl border border-border/60 bg-card/80 px-3 py-3 text-xs"
+                className="rounded-[8px] border-2 border-border bg-card px-3 py-3 text-xs"
               >
                 <p className="font-semibold text-foreground">
                   {item.title?.trim() || `접수 ${index + 1}`}
@@ -271,14 +271,14 @@ export function TrackLookupForm({
                   <button
                     type="button"
                     onClick={() => void handleCopyToken(item.token)}
-                    className="rounded-full border border-border/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-black hover:bg-black hover:text-white"
+                    className="rounded-[6px] border-2 border-border px-2 py-1 text-[10px] font-black uppercase tracking-normal text-foreground transition hover:border-black hover:bg-black hover:text-white"
                   >
                     {copiedToken === item.token ? "복사됨" : "복사"}
                   </button>
                   <button
                     type="button"
                     onClick={() => openTrack(item.token)}
-                    className="rounded-full border border-border/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-black hover:bg-black hover:text-white"
+                    className="rounded-[6px] border-2 border-border px-2 py-1 text-[10px] font-black uppercase tracking-normal text-foreground transition hover:border-black hover:bg-black hover:text-white"
                   >
                     조회
                   </button>

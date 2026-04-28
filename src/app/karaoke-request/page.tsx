@@ -57,17 +57,17 @@ export default async function KaraokeRequestPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+      <p className="bauhaus-kicker">
         Karaoke
       </p>
-      <h1 className="font-display mt-2 text-3xl text-foreground">
+      <h1 className="font-display mt-4 text-3xl font-black text-foreground">
         노래방 등록
       </h1>
-      <p className="mt-3 text-sm text-muted-foreground">
+      <p className="mt-3 text-sm font-semibold text-muted-foreground">
         비회원도 요청할 수 있으며, 추천 참여로 크레딧을 적립할 수 있습니다.
       </p>
 
-      <div className="mt-8 rounded-[32px] border border-border/60 bg-card/80 p-6">
+      <div className="mt-8 rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
         <KaraokeTabs
           userId={user?.id ?? null}
           promotions={normalizedPromotions}

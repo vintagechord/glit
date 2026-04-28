@@ -1201,33 +1201,34 @@ export function SubmissionDetailClient({
           </div>
         </div>
       ) : null}
-      <section className="overflow-hidden rounded-[36px] border border-black/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,245,247,0.98))] p-8 shadow-[0_30px_80px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(29,29,31,0.94),rgba(0,0,0,0.98))] dark:shadow-none">
+      <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+        <div aria-hidden="true" className="absolute right-0 top-0 h-16 w-16 bg-[#f2cf27]" />
         <div className="flex flex-wrap items-start justify-between gap-8">
           <div className="max-w-3xl flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+            <p className="bauhaus-kicker">
               Submission Detail
             </p>
-            <h1 className="font-display mt-3 text-3xl leading-tight text-foreground sm:text-4xl">
+            <h1 className="font-display mt-4 text-3xl font-black leading-tight text-foreground sm:text-4xl">
               {submission.title || "제목 미입력"}
             </h1>
-            <p className="mt-3 text-lg font-medium text-foreground/82 sm:text-xl">
+            <p className="mt-3 text-lg font-semibold text-foreground/82 sm:text-xl">
               {submission.artist_name || "아티스트 미입력"}
             </p>
-            <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
-              <span className="rounded-full border border-[#0071e3]/12 bg-[#eaf3ff] px-3 py-1.5 text-[#0071e3] dark:border-[#2997ff]/20 dark:bg-[#0b2a46] dark:text-[#8bc3ff]">
+            <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-normal">
+              <span className="rounded-[6px] border-2 border-[#111111] bg-[#1556a4] px-3 py-1.5 text-white dark:border-[#f2cf27]">
                 {submissionTypeLabel}
               </span>
               {submission.genre ? (
-                <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1.5 text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
+                <span className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[#111111] dark:border-[#f2cf27]">
                   {submission.genre}
                 </span>
               ) : null}
               {!isMvSubmission && albumTracks.length > 0 ? (
-                <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1.5 text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
+                <span className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[#111111] dark:border-[#f2cf27]">
                   {albumTracks.length}곡
                 </span>
               ) : null}
-              <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1.5 text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
+              <span className="rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1.5 text-[#111111] dark:border-[#f2cf27]">
                 {guestToken ? "비회원 접수" : "회원 접수"}
               </span>
             </div>
@@ -1240,23 +1241,23 @@ export function SubmissionDetailClient({
                 type="button"
                 onClick={card.onClick}
                 disabled={!card.onClick}
-                className={`rounded-[24px] border px-5 py-4 text-left shadow-[0_16px_32px_rgba(0,0,0,0.04)] transition dark:shadow-none ${
+                className={`rounded-[8px] border-2 px-5 py-4 text-left shadow-[4px_4px_0_#111111] transition dark:shadow-[4px_4px_0_#f2cf27] ${
                   card.onClick
                     ? "cursor-pointer hover:-translate-y-0.5"
                     : "cursor-default"
                 } ${card.tone}`}
               >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] opacity-75">
+                <p className="text-[11px] font-black uppercase tracking-normal opacity-75">
                   {card.label}
                 </p>
-                <p className="mt-3 text-lg font-semibold tracking-[-0.02em]">
+                <p className="mt-3 text-lg font-black tracking-normal">
                   {card.value}
                 </p>
                 <p className="mt-2 text-xs leading-5 opacity-80">
                   {card.description}
                 </p>
                 {card.actionLabel ? (
-                  <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] opacity-90">
+                  <p className="mt-3 text-[11px] font-black uppercase tracking-normal opacity-90">
                     {card.actionLabel}
                   </p>
                 ) : null}
@@ -1268,9 +1269,9 @@ export function SubmissionDetailClient({
         <div className="mt-8">{renderStationReviewSection()}</div>
 
         <div className="mt-8 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-[28px] border border-black/6 bg-white/90 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+          <div className="rounded-[10px] border-2 border-border bg-background p-6">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
                 한눈에 보기
               </p>
               <span className="text-xs text-muted-foreground">
@@ -1281,9 +1282,9 @@ export function SubmissionDetailClient({
               {quickFacts.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4"
+                  className="rounded-[8px] border-2 border-border bg-card px-4 py-4"
                 >
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                     {item.label}
                   </p>
                   <p className="mt-2 break-all text-sm font-semibold text-foreground">
@@ -1305,9 +1306,9 @@ export function SubmissionDetailClient({
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-[28px] border border-[#cfe3fb] bg-[#eaf3ff] p-6 text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.1)] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-white dark:shadow-none">
+            <div className="rounded-[10px] border-2 border-[#111111] bg-[#1556a4] p-6 text-white shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#0071e3] dark:text-[#8bc3ff]">
+                <p className="text-xs font-black uppercase tracking-normal text-white/82">
                   진행 단계
                 </p>
                 <div className="flex items-center gap-2 text-xs font-semibold">
@@ -1482,7 +1483,7 @@ export function SubmissionDetailClient({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   전체 방송국
                 </p>
-                <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-foreground">
+                <p className="mt-2 text-2xl font-semibold tracking-normal text-foreground">
                   {stationSummary.total}
                 </p>
               </div>
@@ -1490,7 +1491,7 @@ export function SubmissionDetailClient({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-75">
                   결과 반영
                 </p>
-                <p className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
+                <p className="mt-2 text-2xl font-semibold tracking-normal">
                   {stationSummary.delivered}
                 </p>
               </div>
@@ -1498,7 +1499,7 @@ export function SubmissionDetailClient({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-75">
                   통과 반영
                 </p>
-                <p className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
+                <p className="mt-2 text-2xl font-semibold tracking-normal">
                   {stationSummary.approved}
                 </p>
               </div>
@@ -1506,7 +1507,7 @@ export function SubmissionDetailClient({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-75">
                   확인 필요
                 </p>
-                <p className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
+                <p className="mt-2 text-2xl font-semibold tracking-normal">
                   {stationSummary.actionNeeded}
                 </p>
                 <p className="mt-2 text-xs opacity-80">

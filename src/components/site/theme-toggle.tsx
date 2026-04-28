@@ -16,7 +16,7 @@ export function ThemeToggle() {
     return (
       <span
         aria-hidden="true"
-        className="inline-flex h-12 w-12 shrink-0 rounded-full border border-black/8 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-white/6"
+        className="inline-flex h-11 w-11 shrink-0 rounded-[8px] border-2 border-[#111111] bg-white dark:border-[#f2cf27] dark:bg-[#171717]"
       />
     );
   }
@@ -28,7 +28,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="inline-flex h-12 shrink-0 items-center gap-2.5 rounded-full border border-black/8 bg-white/82 px-[18px] text-[14px] font-medium tracking-[-0.01em] text-[#1d1d1f] shadow-[0_12px_32px_rgba(0,0,0,0.06)] backdrop-blur-xl transition hover:border-black/12 hover:bg-white dark:border-white/10 dark:bg-white/6 dark:text-white dark:hover:border-white/16 dark:hover:bg-white/10"
+      className="inline-flex h-11 shrink-0 items-center gap-2.5 rounded-[8px] border-2 border-[#111111] bg-white px-4 text-[14px] font-black tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:shadow-[5px_5px_0_#f2cf27]"
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
     >
       <Icon className="h-[18px] w-[18px]" />

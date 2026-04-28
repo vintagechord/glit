@@ -109,19 +109,19 @@ export function ChatbotWidget() {
             role="dialog"
             aria-modal="true"
             aria-label="자주 묻는 질문"
-            className="absolute bottom-6 right-6 w-[320px] rounded-3xl border border-border/60 bg-card/95 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.2)]"
+            className="absolute bottom-6 right-6 w-[320px] rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-foreground">
+                <p className="text-sm font-black text-foreground">
                   자주 묻는 질문
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-full border border-border/70 px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground"
+                className="rounded-[8px] border-2 border-border px-2 py-1 text-xs font-black text-muted-foreground transition hover:text-foreground"
               >
                 닫기
               </button>
@@ -134,7 +134,7 @@ export function ChatbotWidget() {
                     key={item.question}
                     type="button"
                     onClick={() => setActiveIndex(itemIndex)}
-                    className={`w-full rounded-2xl border px-3 py-2 text-left text-xs transition ${activeIndex === itemIndex
+                    className={`w-full rounded-[8px] border-2 px-3 py-2 text-left text-xs font-semibold transition ${activeIndex === itemIndex
                         ? "border-foreground bg-foreground text-background"
                         : "border-border/60 bg-background text-muted-foreground hover:border-foreground"
                       }`}
@@ -148,7 +148,7 @@ export function ChatbotWidget() {
                   type="button"
                   onClick={() => goToPage(pageIndex - 1)}
                   disabled={pageIndex === 0}
-                  className="rounded-full border border-border/70 px-3 py-1 font-semibold uppercase tracking-[0.2em] transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-[8px] border-2 border-border px-3 py-1 font-black uppercase tracking-normal transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   이전
                 </button>
@@ -159,18 +159,18 @@ export function ChatbotWidget() {
                   type="button"
                   onClick={() => goToPage(pageIndex + 1)}
                   disabled={pageIndex >= pageCount - 1}
-                  className="rounded-full border border-border/70 px-3 py-1 font-semibold uppercase tracking-[0.2em] transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-[8px] border-2 border-border px-3 py-1 font-black uppercase tracking-normal transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   다음
                 </button>
               </div>
             </div>
             {activeIndex === null ? (
-              <div className="mt-4 rounded-2xl border border-border/60 bg-background/80 px-3 py-3 text-sm leading-relaxed text-muted-foreground">
+              <div className="mt-4 rounded-[8px] border-2 border-border bg-background/80 px-3 py-3 text-sm font-semibold leading-relaxed text-muted-foreground">
                 질문을 선택해주세요.
               </div>
             ) : (
-              <div className="mt-4 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-3 py-3 text-sm leading-relaxed text-black shadow-sm dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
+              <div className="mt-4 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-3 text-sm font-semibold leading-relaxed text-black shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-black dark:shadow-none">
                 {faqItems[activeIndex]?.answer}
               </div>
             )}
@@ -181,7 +181,7 @@ export function ChatbotWidget() {
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background shadow-lg transition hover:-translate-y-0.5"
+          className="flex h-12 w-12 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] text-sm font-black text-[#111111] shadow-[4px_4px_0_#111111] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]"
         >
           FAQ
         </button>

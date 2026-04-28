@@ -711,8 +711,8 @@ export function HomeReviewPanel({
   );
 
   return (
-    <div className="min-w-0 w-full rounded-[24px] border border-black/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(245,245,247,0.98))] p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)] sm:rounded-[28px] sm:p-6 dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(29,29,31,0.94),rgba(0,0,0,0.98))] dark:shadow-none lg:min-h-[520px]">
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.16em] text-foreground/72 sm:text-sm sm:tracking-[0.2em] dark:text-white/82">
+    <div className="min-w-0 w-full rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] sm:p-6 lg:min-h-[520px]">
+      <div className="flex items-center justify-between text-xs font-black uppercase tracking-normal text-foreground/72 sm:text-sm dark:text-white/82">
         <span>
           {activeSubmission
             ? `${submissionLabels.summary} 심의`
@@ -732,15 +732,15 @@ export function HomeReviewPanel({
         </span>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 rounded-full bg-black/5 p-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground sm:mt-5 sm:text-sm sm:tracking-[0.2em] dark:bg-white/8 dark:text-white/76">
+      <div className="mt-4 flex items-center gap-2 text-xs font-black uppercase tracking-normal text-muted-foreground sm:mt-5 sm:text-sm dark:text-white/76">
         {availableTabs.includes("album") ? (
           <button
             type="button"
             onClick={() => setTab("album")}
-            className={`flex-1 rounded-full px-3 py-2 transition ${
+            className={`flex-1 rounded-[8px] border-2 px-3 py-2 transition ${
               tab === "album"
-                ? "bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(0,113,227,0.18)] dark:bg-[#2997ff] dark:text-[#00101f]"
-                : "text-foreground/72 hover:text-foreground dark:text-white/76 dark:hover:text-white"
+                ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
+                : "border-border bg-background text-foreground/72 hover:border-[#111111] hover:text-foreground dark:text-white/76 dark:hover:border-[#f2cf27] dark:hover:text-white"
             }`}
           >
             앨범
@@ -750,10 +750,10 @@ export function HomeReviewPanel({
           <button
             type="button"
             onClick={() => setTab("mv")}
-            className={`flex-1 rounded-full px-3 py-2 transition ${
+            className={`flex-1 rounded-[8px] border-2 px-3 py-2 transition ${
               tab === "mv"
-                ? "bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(0,113,227,0.18)] dark:bg-[#2997ff] dark:text-[#00101f]"
-                : "text-foreground/72 hover:text-foreground dark:text-white/76 dark:hover:text-white"
+                ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
+                : "border-border bg-background text-foreground/72 hover:border-[#111111] hover:text-foreground dark:text-white/76 dark:hover:border-[#f2cf27] dark:hover:text-white"
             }`}
           >
             뮤직비디오
@@ -761,7 +761,7 @@ export function HomeReviewPanel({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/68 sm:text-xs sm:tracking-[0.2em] dark:text-white/76">
+      <div className="mt-3 flex items-center justify-between text-[11px] font-black uppercase tracking-normal text-foreground/68 sm:text-xs dark:text-white/76">
         <span>
           {activeList.length > 0
             ? `${activeIndex + 1}/${activeList.length}`

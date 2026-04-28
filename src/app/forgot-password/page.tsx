@@ -17,7 +17,7 @@ function SubmitButton() {
   return (
     <button
       type="submit"
-      className="w-full rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[0_18px_40px_rgba(0,113,227,0.22)] transition hover:-translate-y-0.5 hover:bg-[#0077ed] disabled:cursor-not-allowed disabled:opacity-70 dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+      className="bauhaus-button w-full px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
       disabled={pending}
     >
       {pending ? (
@@ -38,18 +38,18 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="relative mx-auto flex w-full max-w-5xl flex-1 items-center justify-center px-6 py-16">
-      <div className="absolute left-6 top-10 h-40 w-40 rounded-full bg-[#0071e3]/10 blur-[100px] dark:bg-[#2997ff]/16" />
-      <div className="absolute bottom-6 right-6 h-44 w-44 rounded-full bg-white blur-[110px] dark:bg-white/6" />
+      <div aria-hidden="true" className="absolute left-6 top-10 h-8 w-32 bg-[#1556a4]" />
+      <div aria-hidden="true" className="absolute bottom-6 right-6 h-16 w-16 bg-[#f2cf27]" />
 
-      <div className="relative w-full max-w-xl rounded-[36px] border border-black/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(245,245,247,0.98))] p-8 shadow-[0_32px_100px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(29,29,31,0.94),rgba(0,0,0,0.98))] dark:shadow-none sm:p-10">
+      <div className="relative w-full max-w-xl rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-10">
         <div className="space-y-3 text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+          <p className="bauhaus-kicker mx-auto">
             Password Reset
           </p>
-          <h1 className="font-display text-3xl leading-tight tracking-[-0.03em] text-foreground">
+          <h1 className="font-display text-3xl font-black leading-tight tracking-normal text-foreground">
             비밀번호를 다시 설정하세요
           </h1>
-          <p className="mx-auto max-w-md text-sm text-muted-foreground sm:text-base">
+          <p className="mx-auto max-w-md text-sm font-semibold text-muted-foreground sm:text-base">
             가입한 이메일을 입력하면 재설정 링크를 보내드립니다.
           </p>
         </div>
@@ -70,7 +70,7 @@ export default function ForgotPasswordPage() {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-[20px] border border-border/70 bg-white/86 px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary dark:bg-white/6"
+              className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />
             {state.fieldErrors?.resetEmail ? (
               <p className="text-xs text-red-500">{state.fieldErrors.resetEmail}</p>
@@ -78,13 +78,13 @@ export default function ForgotPasswordPage() {
           </div>
 
           {state.error ? (
-            <div className="rounded-2xl border border-red-500/25 bg-red-500/8 px-4 py-3 text-sm text-red-600 dark:text-red-300">
+            <div className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-sm font-semibold text-[#d9362c] dark:text-red-300">
               {state.error}
             </div>
           ) : null}
 
           {state.message ? (
-            <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+            <div className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-3 text-sm font-semibold text-[#1f7a5a] dark:text-emerald-300">
               {state.message}
             </div>
           ) : null}
@@ -95,7 +95,7 @@ export default function ForgotPasswordPage() {
         <div className="mt-6 flex justify-center">
           <Link
             href="/login"
-            className="inline-flex items-center rounded-full border border-border/70 px-4 py-2 text-sm font-semibold text-foreground transition hover:border-primary hover:text-primary dark:hover:text-[#2997ff]"
+            className="inline-flex items-center rounded-[8px] border-2 border-border px-4 py-2 text-sm font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
           >
             로그인으로 돌아가기
           </Link>

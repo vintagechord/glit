@@ -19,7 +19,7 @@ const heroCtas = [
   {
     title: "음반 심의 신청",
     href: "/dashboard/new/album",
-    visual: "from-[#dff1ff] via-[#fef5e7] to-[#eef6ff]",
+    visual: "from-[#f2cf27] via-[#fffaf0] to-[#1556a4]",
     icon: (
       <svg
         viewBox="0 0 160 120"
@@ -62,7 +62,7 @@ const heroCtas = [
   {
     title: "뮤직비디오 심의 신청",
     href: "/dashboard/new/mv",
-    visual: "from-[#e6f0ff] via-[#f6f3ff] to-[#e7f7ff]",
+    visual: "from-[#1556a4] via-[#111111] to-[#d9362c]",
     icon: (
       <svg
         viewBox="0 0 160 120"
@@ -94,8 +94,8 @@ const featureHighlights = [
     description:
       "방송국별 심의 진행 상황을 실시간으로 확인하세요.\n회원/비회원 누구나",
     card:
-      "bg-[#f7f8fb] text-[#1d1d1f] border-white/80 shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#1d1d1f] dark:text-[#f5f5f7] dark:border-white/10 dark:shadow-none",
-    visual: "from-[#d7ecff] via-white to-[#eef6ff]",
+      "bg-[#fffaf0] text-[#111111] border-[#111111] shadow-[5px_5px_0_#111111] dark:bg-[#171717] dark:text-[#f5f5f7] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]",
+    visual: "from-[#f2cf27] via-white to-[#1556a4]",
     icon: (
       <svg
         viewBox="0 0 96 96"
@@ -134,8 +134,8 @@ const featureHighlights = [
     description:
       "온사이드는 자체 스토리지 운영으로 안전하게 음원과 영상을 관리합니다.",
     card:
-      "bg-white text-[#1d1d1f] border-[#eef2f7] shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#1d1d1f] dark:text-[#f5f5f7] dark:border-white/10 dark:shadow-none",
-    visual: "from-[#e7fff2] via-white to-[#eaf7ff]",
+      "bg-white text-[#111111] border-[#111111] shadow-[5px_5px_0_#111111] dark:bg-[#171717] dark:text-[#f5f5f7] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]",
+    visual: "from-[#1f7a5a] via-white to-[#f2cf27]",
     icon: (
       <svg
         viewBox="0 0 96 96"
@@ -169,8 +169,8 @@ const featureHighlights = [
     description:
       "접수 시 1차 체크, 방송국 전달 전 2차 검수로 빈틈 없이",
     card:
-      "bg-[#eef2ff] text-[#1d1d1f] border-[#dbe5ff] shadow-[0_16px_40px_rgba(15,23,42,0.08)] dark:bg-[#1d1d1f] dark:text-[#f5f5f7] dark:border-white/10 dark:shadow-none",
-    visual: "from-[#fff4d6] via-white to-[#ffe9d6]",
+      "bg-[#f2cf27] text-[#111111] border-[#111111] shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]",
+    visual: "from-[#d9362c] via-white to-[#f2cf27]",
     icon: (
       <svg
         viewBox="0 0 96 96"
@@ -304,30 +304,33 @@ export default function Home() {
   return (
     <div className="relative overflow-x-hidden">
       <ScrollRevealObserver />
-      <div className="pointer-events-none absolute left-[-20%] top-[-10%] h-[420px] w-[420px] rounded-full bg-[#a8cdf8]/26 blur-[180px] dark:bg-[#0b2a46]/60" />
-      <div className="pointer-events-none absolute right-[-15%] top-[10%] h-[380px] w-[380px] rounded-full bg-white/60 blur-[180px] dark:bg-[#2997ff]/18" />
-      <div className="pointer-events-none absolute bottom-[-10%] left-[20%] h-[320px] w-[320px] rounded-full bg-[#dbe9fb]/45 blur-[180px] dark:bg-white/6" />
+      <div aria-hidden="true" className="pointer-events-none absolute left-0 top-24 h-5 w-40 bg-[#f2cf27]" />
+      <div aria-hidden="true" className="pointer-events-none absolute right-0 top-48 h-16 w-16 bg-[#d9362c]" />
+      <div aria-hidden="true" className="pointer-events-none absolute bottom-20 left-[8%] h-8 w-32 bg-[#1556a4]" />
 
       <section className="w-full -mt-24 pb-8 pt-28 sm:-mt-28 sm:pb-10 sm:pt-36">
-        <div className="relative w-full overflow-hidden border-b border-border/60 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.98),_rgba(245,245,247,0.96),_rgba(232,239,247,0.9))] shadow-[0_24px_80px_rgba(31,41,55,0.12)] dark:bg-[radial-gradient(circle_at_top,_rgba(29,29,31,0.98),_rgba(0,0,0,0.99),_rgba(0,0,0,1))]">
+        <div className="relative w-full overflow-hidden border-y-2 border-[#111111] bg-[#fffaf0] shadow-[0_24px_80px_rgba(31,41,55,0.12)] dark:border-[#f2cf27] dark:bg-[#101010]">
           <div className="absolute inset-0">
             <OscilloscopeCurtainBackground />
-            <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/35 to-transparent dark:from-background/72 dark:via-background/30" />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,250,240,0.86),rgba(255,250,240,0.42),transparent)] dark:bg-[linear-gradient(90deg,rgba(16,16,16,0.9),rgba(16,16,16,0.52),transparent)]" />
+            <div aria-hidden="true" className="absolute right-0 top-0 h-20 w-20 bg-[#f2cf27]" />
+            <div aria-hidden="true" className="absolute right-20 top-20 hidden h-10 w-28 bg-[#1556a4] sm:block" />
+            <div aria-hidden="true" className="absolute bottom-0 left-0 h-6 w-full bg-[#111111] dark:bg-[#f2cf27]" />
           </div>
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-700 sm:gap-6 lg:min-h-[520px] lg:h-full">
-              <span className="inline-flex w-fit items-center rounded-full border border-black/8 bg-white/72 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-foreground/72 shadow-[0_12px_30px_rgba(0,0,0,0.06)] backdrop-blur-sm dark:border-white/10 dark:bg-white/6 dark:text-white/84 dark:shadow-none">
+              <span className="bauhaus-kicker">
                 OFFICIAL MUSIC & VIDEO CLEARANCE
               </span>
-              <h1 className="font-display text-2xl leading-tight text-foreground sm:text-4xl">
+              <h1 className="font-display break-keep text-3xl font-black leading-tight text-foreground sm:text-5xl">
                 음반 · M/V 심의를 쉽고 빠르게!
               </h1>
-              <div className="max-w-xl rounded-[24px] border border-black/6 bg-white/58 px-5 py-4 shadow-[0_14px_36px_rgba(15,23,42,0.06)] backdrop-blur-md dark:border-white/10 dark:bg-white/6 dark:shadow-none">
-                <p className="text-[13px] leading-6 text-foreground/78 sm:text-[15px] dark:text-white/80">
+              <div className="max-w-xl rounded-[10px] border-2 border-[#111111] bg-white px-5 py-4 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27]">
+                <p className="text-[13px] font-semibold leading-6 text-foreground/82 sm:text-[15px] dark:text-white/84">
                   온사이드에서 방송사별 심의 진행을 실시간으로 받아보세요.
                 </p>
-                <p className="mt-2 text-[13px] leading-6 text-foreground/68 sm:text-[15px] dark:text-white/72">
+                <p className="mt-2 text-[13px] font-semibold leading-6 text-foreground/72 sm:text-[15px] dark:text-white/74">
                   나의 모든 심의 기록, 온사이드에서 모아 관리할 수 있습니다.
                 </p>
               </div>
@@ -336,17 +339,17 @@ export default function Home() {
                   <Link
                     key={cta.title}
                     href={cta.href}
-                    className="group overflow-hidden rounded-[24px] border border-black/8 bg-white/62 backdrop-blur-md shadow-[0_14px_40px_rgba(0,0,0,0.1)] transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(0,0,0,0.14)] dark:border-white/10 dark:bg-white/6 dark:shadow-none dark:hover:bg-white/10 sm:rounded-[28px]"
+                    className="group overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] dark:hover:shadow-[8px_8px_0_#f2cf27]"
                   >
                     <div
                       className={`relative flex h-28 items-center justify-center overflow-hidden bg-gradient-to-br sm:h-32 ${cta.visual}`}
                     >
-                      <div className="absolute -left-6 top-[-22px] h-20 w-20 rounded-full bg-white/50 blur-xl" />
-                      <div className="absolute -right-6 bottom-[-28px] h-24 w-24 rounded-full bg-white/55 blur-xl" />
+                      <div className="absolute left-0 top-0 h-5 w-24 bg-[#111111]/90" />
+                      <div className="absolute bottom-0 right-0 h-8 w-16 bg-white/80" />
                       {cta.icon}
                     </div>
                     <div className="px-5 py-4 text-center">
-                      <p className="text-base font-semibold text-foreground dark:text-white">{cta.title}</p>
+                      <p className="break-keep text-[15px] font-black leading-snug text-foreground dark:text-white sm:text-base">{cta.title}</p>
                     </div>
                   </Link>
                 ))}
@@ -356,17 +359,17 @@ export default function Home() {
                 {featureHighlights.map((feature) => (
                   <div key={feature.title} className="group [perspective:1200px]">
                     <div
-                      className={`flip-card relative min-h-[148px] overflow-hidden rounded-[28px] border ${feature.card} transition-transform duration-500 group-hover:[transform:rotateY(180deg)]`}
+                      className={`flip-card relative min-h-[148px] overflow-hidden rounded-[10px] border-2 ${feature.card} transition-transform duration-500 group-hover:[transform:rotateY(180deg)]`}
                     >
                       <div className="flip-face absolute inset-0 z-0 flex flex-col p-4 text-center transition-opacity duration-300 group-hover:opacity-0">
                         <div
-                          className={`relative mb-2 flex h-14 items-center justify-center overflow-hidden rounded-[18px] bg-gradient-to-br ${feature.visual}`}
+                          className={`relative mb-2 flex h-14 items-center justify-center overflow-hidden rounded-[8px] border-2 border-current bg-gradient-to-br ${feature.visual}`}
                         >
-                          <div className="absolute -right-7 -top-6 h-12 w-12 rounded-full bg-white/70 blur-lg" />
-                          <div className="absolute -left-6 bottom-[-14px] h-10 w-10 rounded-full bg-white/60 blur-md" />
+                          <div className="absolute right-0 top-0 h-4 w-12 bg-white/70" />
+                          <div className="absolute bottom-0 left-0 h-3 w-16 bg-[#111111]/70" />
                           {feature.icon}
                         </div>
-                        <p className="text-[15px] font-semibold text-foreground dark:text-[#f5f5f7]">
+                        <p className="text-[15px] font-black text-foreground dark:text-[#f5f5f7]">
                           {feature.title}
                         </p>
                       </div>

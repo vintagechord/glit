@@ -45,7 +45,7 @@ export function StripAdBannerClient({ banners }: { banners: AdBanner[] }) {
   const banner = safeBanners[index] ?? safeBanners[0];
 
   return (
-    <div className="overflow-hidden rounded-[28px] border border-white/40 bg-white/55 shadow-[0_18px_60px_rgba(15,23,42,0.2)] backdrop-blur-md dark:border-white/10 dark:bg-black/35">
+    <div className="overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
       <div className="relative">
         <BannerLinkWrap banner={banner}>
           <BannerContent banner={banner} />
@@ -83,7 +83,7 @@ function BannerNavButton({
       type="button"
       onClick={onClick}
       aria-label={isPrevious ? "이전 배너" : "다음 배너"}
-      className={`group/control absolute top-1/2 z-20 inline-flex h-14 w-8 -translate-y-1/2 items-center justify-center border border-white/65 bg-white/78 text-[#1d1d1f] shadow-[0_12px_28px_rgba(15,23,42,0.16)] backdrop-blur-md transition-[width,background-color,border-color,box-shadow] duration-200 hover:w-10 hover:border-white/85 hover:bg-white/92 hover:shadow-[0_16px_36px_rgba(15,23,42,0.22)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0071e3]/65 dark:border-white/12 dark:bg-black/48 dark:text-white dark:hover:border-white/20 dark:hover:bg-black/68 sm:h-16 sm:w-9 sm:hover:w-11 ${
+      className={`group/control absolute top-1/2 z-20 inline-flex h-14 w-8 -translate-y-1/2 items-center justify-center border-2 border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] transition-[width,background-color,border-color,box-shadow] duration-200 hover:w-10 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4]/65 dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27] sm:h-16 sm:w-9 sm:hover:w-11 ${
         isPrevious
           ? "left-0 rounded-r-full border-l-0 pl-0.5"
           : "right-0 rounded-l-full border-r-0 pr-0.5"
@@ -162,7 +162,7 @@ function BannerLinkWrap({
 function BannerContent({ banner }: { banner: AdBanner }) {
   return (
     <div className="px-2 py-2 sm:px-3 sm:py-3">
-      <div className="group/banner relative flex h-20 overflow-hidden rounded-2xl border border-white/20 bg-white/25 shadow-[0_10px_30px_rgba(15,23,42,0.14)] backdrop-blur-md transition duration-300 hover:shadow-[0_18px_50px_rgba(0,0,0,0.25)] hover:border-border/70 dark:border-white/10 dark:bg-black/35 sm:h-24">
+      <div className="group/banner relative flex h-20 overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white transition duration-300 dark:border-[#f2cf27] sm:h-24">
         <Image
           src={banner.image_url}
           alt={banner.title}

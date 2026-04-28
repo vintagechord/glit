@@ -168,11 +168,11 @@ export function DashboardStatusClient({
       contextLabel={contextLabel}
     >
       {loading ? (
-        <div className="rounded-3xl border border-border/70 bg-card/70 p-8 text-sm text-muted-foreground">
+        <div className="rounded-[10px] border-2 border-[#111111] bg-card p-8 text-sm font-semibold text-muted-foreground shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
           진행 현황을 불러오는 중입니다...
         </div>
       ) : error ? (
-        <div className="rounded-3xl border border-rose-200/70 bg-rose-50/80 p-8 text-sm text-rose-700">
+        <div className="rounded-[10px] border-2 border-[#d9362c] bg-[#d9362c]/10 p-8 text-sm font-semibold text-[#d9362c]">
           {error}
         </div>
       ) : data ? (

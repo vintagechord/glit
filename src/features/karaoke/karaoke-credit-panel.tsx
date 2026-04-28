@@ -186,8 +186,8 @@ export function KaraokeCreditPanel({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+      <div className="rounded-[10px] border-2 border-border bg-card p-6 text-sm font-semibold text-muted-foreground">
+        <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
           크레딧 적립하기
         </p>
         <p className="mt-3 text-sm">
@@ -199,8 +199,8 @@ export function KaraokeCreditPanel({
         </p>
       </div>
 
-      <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+      <div className="rounded-[10px] border-2 border-border bg-card p-6">
+        <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
           추천 요청 보드
         </p>
         <p className="mt-3 text-xs text-muted-foreground">
@@ -227,34 +227,32 @@ export function KaraokeCreditPanel({
                           window.open(link, "_blank", "noopener,noreferrer");
                         }
                       }}
-                      className={`group flex min-w-[260px] flex-col overflow-hidden rounded-3xl border px-4 py-4 text-left transition ${
+                      className={`group flex min-w-[260px] flex-col overflow-hidden rounded-[10px] border-2 px-4 py-4 text-left transition ${
                         isSelected
                           ? "border-foreground bg-foreground text-background"
                           : "border-border/60 bg-background text-foreground hover:border-foreground"
                       }`}
                     >
-                      <div className="relative overflow-hidden rounded-2xl border border-white/70 bg-gradient-to-br from-[#dff1ff] via-white to-[#f3eaff] px-4 py-5 text-slate-900">
-                        <div className="absolute inset-0 opacity-50">
-                          <div className="absolute -left-8 top-2 h-16 w-16 rounded-full bg-white/70 blur-xl" />
-                          <div className="absolute -right-6 bottom-[-18px] h-20 w-20 rounded-full bg-white/60 blur-2xl" />
-                        </div>
+                      <div className="relative overflow-hidden rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-5 text-[#111111]">
+                        <div aria-hidden="true" className="absolute right-0 top-0 h-8 w-12 bg-[#1556a4]" />
+                        <div aria-hidden="true" className="absolute bottom-0 left-0 h-3 w-full bg-[#111111]" />
                         <div className="relative flex items-start justify-between">
-                          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/90 text-lg font-semibold text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.12)]">
+                          <div className="flex h-16 w-16 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white text-lg font-black text-[#111111]">
                             {(title.trim() || "O").slice(0, 1)}
                           </div>
                           <div className="flex flex-col items-end gap-1">
                             {targets.map((target) => (
                               <span
                                 key={`${promotion.id}-${target}-${index}`}
-                                className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white"
+                                className="rounded-[6px] bg-[#111111] px-2 py-0.5 text-[10px] font-black uppercase tracking-normal text-white"
                               >
                                 {target}
                               </span>
                             ))}
                           </div>
                         </div>
-                        <p className="mt-4 text-sm font-semibold">{title}</p>
-                        <p className="mt-1 text-xs text-slate-700">{artist}</p>
+                        <p className="mt-4 text-sm font-black">{title}</p>
+                        <p className="mt-1 text-xs font-semibold text-[#111111]/72">{artist}</p>
                       </div>
                       <div className="mt-3 flex items-center justify-between text-xs">
                         <span className="font-semibold">
@@ -265,7 +263,7 @@ export function KaraokeCreditPanel({
                         </span>
                       </div>
                       <span
-                        className={`mt-3 inline-flex w-fit items-center rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                        className={`mt-3 inline-flex w-fit items-center rounded-[6px] border-2 px-3 py-1 text-[10px] font-black uppercase tracking-normal ${
                           isSelected
                             ? "border-background/60 text-background"
                             : "border-border/70 text-foreground group-hover:border-foreground"
@@ -286,8 +284,8 @@ export function KaraokeCreditPanel({
         </div>
       </div>
 
-      <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+      <div className="rounded-[10px] border-2 border-border bg-card p-6">
+        <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
           추천 인증 제출
         </p>
         {!userId && (
@@ -296,11 +294,11 @@ export function KaraokeCreditPanel({
           </p>
         )}
         <div className="mt-4 space-y-3">
-          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <label className="text-xs font-black uppercase tracking-normal text-muted-foreground">
             추천할 곡 선택
           </label>
           {selectedPromotion ? (
-            <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-sm text-foreground">
+            <div className="rounded-[8px] border-2 border-border bg-background/70 px-4 py-3 text-sm text-foreground">
               <p className="font-semibold">
                 {selectedPromotion.submission?.title ?? "제목 미입력"}
               </p>
@@ -321,7 +319,7 @@ export function KaraokeCreditPanel({
         </div>
 
         <div className="mt-4 space-y-3">
-          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <label className="text-xs font-black uppercase tracking-normal text-muted-foreground">
             추천 인증샷 (선택)
           </label>
           <input
@@ -329,10 +327,10 @@ export function KaraokeCreditPanel({
             accept="image/*"
             onChange={onFileChange}
             disabled={!userId}
-            className="w-full rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm text-muted-foreground disabled:cursor-not-allowed"
+            className="w-full rounded-[8px] border-2 border-dashed border-border bg-background/60 px-4 py-6 text-sm text-muted-foreground disabled:cursor-not-allowed"
           />
           {recommendationUpload.name && (
-            <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs">
+            <div className="rounded-[8px] border-2 border-border bg-background/70 px-4 py-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-foreground">
                   {recommendationUpload.name}
@@ -358,12 +356,12 @@ export function KaraokeCreditPanel({
         </div>
 
         {notice.error && (
-          <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+          <div className="mt-4 rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-xs font-semibold text-[#d9362c]">
             {notice.error}
           </div>
         )}
         {notice.message && (
-          <div className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
+          <div className="mt-4 rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-3 text-xs font-semibold text-[#1f7a5a]">
             {notice.message}
           </div>
         )}
@@ -372,7 +370,7 @@ export function KaraokeCreditPanel({
           type="button"
           onClick={handleSubmit}
           disabled={isSubmitting || !userId}
-          className="mt-4 w-full rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-foreground/90 disabled:cursor-not-allowed disabled:bg-muted"
+          className="bauhaus-button mt-4 w-full px-6 py-3 text-xs uppercase disabled:cursor-not-allowed disabled:bg-muted"
         >
           추천 인증 제출
         </button>

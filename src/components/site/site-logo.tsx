@@ -31,13 +31,13 @@ export function SiteLogo({
   const textLogo = (
     <span
       className={cn(
-        "inline-flex items-center gap-2 text-[15px] font-semibold tracking-[0.16em] text-[#1d1d1f] dark:text-white sm:text-base",
+        "inline-flex items-center gap-2 text-[15px] font-black tracking-normal text-[#111111] dark:text-white sm:text-base",
         className,
       )}
       style={sizeStyle}
       aria-hidden={showSrLabel ? "true" : undefined}
     >
-      <span className="inline-flex h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_0_5px_rgba(0,113,227,0.12)] dark:bg-[#2997ff] dark:shadow-[0_0_0_5px_rgba(41,151,255,0.14)]" />
+      <span className="inline-flex h-3 w-3 rounded-[2px] border-2 border-[#111111] bg-[#f2cf27] dark:border-[#f2cf27]" />
       ONSIDE
     </span>
   );

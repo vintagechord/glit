@@ -49,13 +49,13 @@ export default async function SubscriptionPage() {
   if (!amountKrw || amountKrw <= 0) {
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-12">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        <p className="bauhaus-kicker">
           Subscription
         </p>
-        <h1 className="font-display mt-2 text-2xl text-foreground">
+        <h1 className="font-display mt-4 text-2xl font-black text-foreground">
           정기결제 금액이 설정되지 않았습니다.
         </h1>
-        <p className="mt-4 text-sm text-muted-foreground">
+        <p className="mt-4 text-sm font-semibold text-muted-foreground">
           환경변수 SUBSCRIPTION_PRICE_KRW 값을 설정한 후 다시 시도해주세요.
         </p>
       </div>
@@ -76,13 +76,13 @@ export default async function SubscriptionPage() {
   if (!config || configError) {
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-12">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        <p className="bauhaus-kicker">
           Subscription
         </p>
-        <h1 className="font-display mt-2 text-2xl text-foreground">
+        <h1 className="font-display mt-4 text-2xl font-black text-foreground">
           결제 설정을 확인할 수 없습니다.
         </h1>
-        <p className="mt-4 text-sm text-muted-foreground">
+        <p className="mt-4 text-sm font-semibold text-muted-foreground">
           {configError ?? "이니시스 결제 설정을 다시 확인해주세요."}
         </p>
       </div>
@@ -112,13 +112,13 @@ export default async function SubscriptionPage() {
     if (orderCreate.error || !orderCreate.orderId) {
       return (
         <div className="mx-auto w-full max-w-3xl px-6 py-12">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          <p className="bauhaus-kicker">
             Subscription
           </p>
-          <h1 className="font-display mt-2 text-2xl text-foreground">
+          <h1 className="font-display mt-4 text-2xl font-black text-foreground">
             결제 준비 중 오류가 발생했습니다.
           </h1>
-          <p className="mt-4 text-sm text-muted-foreground">
+          <p className="mt-4 text-sm font-semibold text-muted-foreground">
             {orderCreate.error?.message ?? "잠시 후 다시 시도해주세요."}
           </p>
         </div>
@@ -154,19 +154,19 @@ export default async function SubscriptionPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-10">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+      <p className="bauhaus-kicker">
         Subscription
       </p>
-      <h1 className="mt-2 text-2xl font-semibold text-foreground">
+      <h1 className="mt-4 text-2xl font-black text-foreground">
         정기결제
       </h1>
-      <p className="mt-2 text-sm text-muted-foreground">
+      <p className="mt-2 text-sm font-semibold text-muted-foreground">
         KG이니시스 정기결제(카드 빌링)으로 구독을 시작합니다. 결제창이
         열리지 않으면 팝업 차단 여부를 확인해주세요.
       </p>
 
       {subscription ? (
-        <div className="mt-6 rounded-2xl border border-emerald-400/50 bg-emerald-50/50 p-4 text-sm text-emerald-900">
+        <div className="mt-6 rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 p-4 text-sm font-semibold text-[#1f7a5a]">
           <p className="font-semibold">활성화된 구독이 있습니다.</p>
           <p className="mt-1">
             상태: {subscription.status} · 금액:{" "}

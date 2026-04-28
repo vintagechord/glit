@@ -147,16 +147,16 @@ export function HomeArtistSpotlight({
   const typeLabel = submission.type?.startsWith("MV") ? "뮤직비디오" : "음원";
 
   return (
-    <div className="mt-4 overflow-hidden rounded-[28px] border border-black/8 bg-white/62 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.08)] backdrop-blur-md dark:border-white/10 dark:bg-white/6 dark:shadow-none">
+    <div className="mt-4 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
             YouTube Spotlight
           </p>
-          <h3 className="mt-2 text-base font-semibold text-foreground">
+          <h3 className="mt-2 text-base font-black text-foreground">
             {submission.artist_name || "아티스트"} · {submission.title || "최신 접수곡"}
           </h3>
-          <p className="mt-1 text-[13px] text-muted-foreground">
+          <p className="mt-1 text-[13px] font-semibold text-muted-foreground">
             우측 진행표가 길어지는 앨범 접수에 맞춰 {typeLabel} 유튜브 검색 결과를 함께 보여줍니다.
           </p>
         </div>
@@ -164,13 +164,13 @@ export function HomeArtistSpotlight({
           href={searchUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex shrink-0 rounded-full border border-[#0071e3] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#0071e3] transition hover:bg-[#0071e3] hover:text-white dark:border-[#2997ff] dark:text-[#8bc3ff] dark:hover:bg-[#2997ff] dark:hover:text-[#00101f]"
+          className="inline-flex shrink-0 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-xs font-black uppercase tracking-normal text-[#111111] transition hover:bg-white dark:border-[#f2cf27]"
         >
           유튜브 열기
         </a>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-[24px] border border-border/70 bg-black">
+      <div className="mt-4 overflow-hidden rounded-[8px] border-2 border-border bg-black">
         <div className="w-full" style={{ height: `${frameHeight}px` }}>
           <iframe
             title={`${submission.artist_name || "artist"} youtube spotlight`}

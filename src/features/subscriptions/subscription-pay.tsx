@@ -120,22 +120,22 @@ export function SubscriptionPayButtons({
   return (
     <>
       <script src={stdJsUrl} type="text/javascript" />
-      <div className="rounded-2xl border border-border/70 bg-background/80 p-4">
+      <div className="rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
         <div className="flex flex-col gap-2">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
             주문번호
           </p>
           <p className="font-mono text-sm text-foreground">{orderId}</p>
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
             결제금액
           </p>
-          <p className="text-lg font-semibold text-foreground">{amountLabel}</p>
+          <p className="text-lg font-black text-foreground">{amountLabel}</p>
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
             onClick={handleStdPay}
-            className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black disabled:opacity-60"
+            className="bauhaus-button px-4 py-2 text-xs uppercase disabled:opacity-60"
             disabled={loading}
           >
             PC · 카드 정기결제
@@ -143,7 +143,7 @@ export function SubscriptionPayButtons({
           <button
             type="button"
             onClick={handleMobilePay}
-            className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground disabled:opacity-60"
+            className="rounded-[8px] border-2 border-border px-4 py-2 text-xs font-black uppercase tracking-normal text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white disabled:opacity-60 dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
             disabled={loading}
           >
             모바일 INIBill

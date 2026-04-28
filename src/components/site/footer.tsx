@@ -380,21 +380,21 @@ export function SiteFooter() {
   }, [pathname]);
 
   return (
-    <footer className="border-t border-white/10 bg-[#1d1d1f] text-[#f5f5f7] dark:bg-black">
+    <footer className="border-t-2 border-[#111111] bg-[#111111] text-[#f7f5ef] dark:border-[#f2cf27] dark:bg-[#0b0b0b]">
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-        <div className="grid gap-6 border-b border-white/12 pb-6 md:grid-cols-2">
+        <div className="grid gap-6 border-b-2 border-[#f2cf27] pb-6 md:grid-cols-2">
           <div className="space-y-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-white/58">
+            <p className="w-fit bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-[#111111]">
               CS CENTER
             </p>
-            <p className="text-xl font-semibold text-white sm:text-2xl">
-              <a href={`tel:${contactPhone}`} className="underline-offset-2 hover:text-[#2997ff] hover:underline">
+            <p className="text-xl font-black text-white sm:text-2xl">
+              <a href={`tel:${contactPhone}`} className="underline-offset-2 hover:text-[#f2cf27] hover:underline">
                 {contactPhone}
               </a>
             </p>
             <p className="text-base font-medium text-white/86">
               이메일{" "}
-              <a href={`mailto:${contactEmail}`} className="underline-offset-2 hover:text-[#2997ff] hover:underline">
+              <a href={`mailto:${contactEmail}`} className="underline-offset-2 hover:text-[#f2cf27] hover:underline">
                 {contactEmail}
               </a>
             </p>
@@ -403,7 +403,7 @@ export function SiteFooter() {
             </p>
           </div>
           <div className="space-y-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-white/58">
+            <p className="w-fit bg-[#1556a4] px-3 py-1 text-xs font-black uppercase tracking-normal text-white">
               BANK INFO
             </p>
             <p className="text-base font-medium text-white/86">
@@ -418,7 +418,7 @@ export function SiteFooter() {
             {APP_CONFIG.bankLink ? (
               <Link
                 href={APP_CONFIG.bankLink}
-                className="inline-flex items-center rounded-full border border-white/16 bg-white/6 px-4 py-2 text-sm font-semibold text-white transition hover:border-[#2997ff] hover:bg-[#2997ff] hover:text-[#00101f]"
+                className="inline-flex items-center rounded-[8px] border-2 border-[#f7f5ef] bg-[#f2cf27] px-4 py-2 text-sm font-black text-[#111111] transition hover:-translate-y-0.5 hover:bg-white"
               >
                 인터넷뱅킹 바로가기
               </Link>
@@ -426,31 +426,31 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 border-b border-white/12 py-4 text-sm font-semibold text-white/76">
-          <Link href="/about" className="transition hover:text-[#2997ff]">
+        <div className="flex flex-wrap gap-4 border-b-2 border-white/12 py-4 text-sm font-black text-white/78">
+          <Link href="/about" className="transition hover:text-[#f2cf27]">
             About Us
           </Link>
-          <Link href="/guide" className="transition hover:text-[#2997ff]">
+          <Link href="/guide" className="transition hover:text-[#f2cf27]">
             심의 안내
           </Link>
           <button
             type="button"
             onClick={() => setActiveModal("terms")}
-            className="transition hover:text-[#2997ff]"
+            className="transition hover:text-[#f2cf27]"
           >
             이용약관
           </button>
           <button
             type="button"
             onClick={() => setActiveModal("privacy")}
-            className="transition hover:text-[#2997ff]"
+            className="transition hover:text-[#f2cf27]"
           >
             개인정보처리방침
           </button>
           <button
             type="button"
             onClick={() => setActiveModal("partnership")}
-            className="transition hover:text-[#2997ff]"
+            className="transition hover:text-[#f2cf27]"
           >
             제휴안내
           </button>
@@ -465,7 +465,7 @@ export function SiteFooter() {
               전화:{" "}
               <a
                 href={`tel:${APP_CONFIG.supportPhone}`}
-                className="underline-offset-2 hover:text-[#2997ff] hover:underline"
+                className="underline-offset-2 hover:text-[#f2cf27] hover:underline"
               >
                 {APP_CONFIG.supportPhone}
               </a>
@@ -474,7 +474,7 @@ export function SiteFooter() {
               이메일:{" "}
               <a
                 href={`mailto:${APP_CONFIG.supportEmail}`}
-                className="underline-offset-2 hover:text-[#2997ff] hover:underline"
+                className="underline-offset-2 hover:text-[#f2cf27] hover:underline"
               >
                 {APP_CONFIG.supportEmail}
               </a>
@@ -500,25 +500,25 @@ export function SiteFooter() {
             role="dialog"
             aria-modal="true"
             aria-labelledby={modalTitleId}
-            className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.25)]"
+            className="w-full max-w-3xl overflow-hidden rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] shadow-[6px_6px_0_#111111]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-black/10 px-4 py-3 sm:px-6 sm:py-4">
+            <div className="flex items-center justify-between border-b-2 border-[#111111] px-4 py-3 sm:px-6 sm:py-4">
               <div className="flex items-center gap-3">
                 <span
                   id={modalTitleId}
-                  className="rounded-full border border-black/10 bg-black/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black"
+                  className="border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-black"
                 >
                   {modalTitle}
                 </span>
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-black/60">
+                <span className="text-xs font-black uppercase tracking-normal text-black/60">
                   {modalTag}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-full border border-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black transition hover:border-black"
+                className="rounded-[8px] border-2 border-[#111111] px-3 py-1 text-xs font-black uppercase tracking-normal text-black transition hover:bg-[#f2cf27]"
               >
                 닫기
               </button>

@@ -21,11 +21,11 @@ const authStorageKey = "onside:header-auth-state";
 type AuthState = "authenticated" | "unauthenticated";
 
 const navLinkClass =
-  "inline-flex h-12 items-center rounded-full px-6 text-[15px] font-medium tracking-[-0.01em] transition";
+  "inline-flex h-11 items-center rounded-[8px] border-2 border-transparent px-4 text-[14px] font-black tracking-normal transition";
 const subtleButtonClass =
-  "inline-flex h-12 shrink-0 items-center justify-center rounded-full border border-black/8 bg-white/82 px-6 text-[15px] font-medium tracking-[-0.01em] text-[#1d1d1f] shadow-[0_12px_32px_rgba(0,0,0,0.05)] backdrop-blur-xl transition hover:border-black/12 hover:bg-white dark:border-white/10 dark:bg-white/6 dark:text-white dark:hover:border-white/16 dark:hover:bg-white/10";
+  "inline-flex h-11 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-4 text-[14px] font-black tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:shadow-[5px_5px_0_#f2cf27]";
 const primaryButtonClass =
-  "inline-flex h-12 shrink-0 items-center justify-center rounded-full bg-primary px-6 text-[15px] font-medium tracking-[-0.01em] text-primary-foreground shadow-[0_18px_40px_rgba(0,113,227,0.18)] transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]";
+  "inline-flex h-11 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-4 text-[14px] font-black tracking-normal text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f478a] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[3px_3px_0_#f2cf27] dark:hover:bg-[#ffd93c] dark:hover:shadow-[5px_5px_0_#f2cf27]";
 
 const isActivePath = (
   pathname: string,
@@ -125,12 +125,12 @@ export function SiteHeader() {
   return (
     <header
       ref={headerRef}
-      className="sticky top-0 z-[90] isolate border-b border-black/6 bg-[rgba(250,250,252,0.82)] backdrop-blur-[24px] dark:border-white/10 dark:bg-[rgba(0,0,0,0.82)]"
+      className="sticky top-0 z-[90] isolate border-b-2 border-[#111111] bg-[rgba(247,245,239,0.92)] backdrop-blur-[18px] dark:border-[#f2cf27] dark:bg-[rgba(16,16,16,0.92)]"
     >
       <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
         <SiteLogo />
 
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1.5 lg:flex">
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 lg:flex">
           {navLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
             return (
@@ -139,13 +139,13 @@ export function SiteHeader() {
                 href={link.href}
                 className={`${navLinkClass} ${
                   activeLink
-                    ? "bg-primary text-primary-foreground dark:bg-[#2997ff] dark:text-[#00101f]"
-                    : "text-foreground/68 hover:bg-black/4 hover:text-foreground dark:text-white/72 dark:hover:bg-white/8 dark:hover:text-white"
+                    ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-none"
+                    : "text-foreground/74 hover:border-[#111111] hover:bg-white hover:text-foreground dark:text-white/76 dark:hover:border-[#f2cf27] dark:hover:bg-[#171717] dark:hover:text-white"
                 }`}
               >
                 <span>{link.label}</span>
                 {"badge" in link && link.badge ? (
-                  <span className="ml-2 rounded-full border border-current/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] opacity-75">
+                  <span className="ml-2 rounded-[6px] border border-current/40 px-2 py-0.5 text-[10px] font-black uppercase tracking-normal opacity-85">
                     {link.badge}
                   </span>
                 ) : null}
@@ -180,7 +180,7 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <nav className="border-t border-black/6 px-4 py-2.5 lg:hidden dark:border-white/10">
+      <nav className="border-t-2 border-[#111111] px-4 py-2.5 lg:hidden dark:border-[#f2cf27]">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-2 overflow-x-auto scrollbar-none sm:px-2">
           {navLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
@@ -190,13 +190,13 @@ export function SiteHeader() {
                 href={link.href}
                 className={`${navLinkClass} shrink-0 ${
                   activeLink
-                    ? "bg-primary text-primary-foreground dark:bg-[#2997ff] dark:text-[#00101f]"
-                    : "bg-transparent text-foreground/72 hover:bg-black/4 hover:text-foreground dark:text-white/74 dark:hover:bg-white/8 dark:hover:text-white"
+                    ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-none"
+                    : "bg-transparent text-foreground/72 hover:border-[#111111] hover:bg-white hover:text-foreground dark:text-white/74 dark:hover:border-[#f2cf27] dark:hover:bg-[#171717] dark:hover:text-white"
                 }`}
               >
                 <span>{link.label}</span>
                 {"badge" in link && link.badge ? (
-                  <span className="ml-2 rounded-full border border-current/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] opacity-75">
+                  <span className="ml-2 rounded-[6px] border border-current/40 px-2 py-0.5 text-[10px] font-black uppercase tracking-normal opacity-85">
                     {link.badge}
                   </span>
                 ) : null}
