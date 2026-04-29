@@ -319,7 +319,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
         return (
           <div
             key={submission.id}
-            className="grid items-center gap-4 rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-sm transition hover:border-foreground md:grid-cols-[28px_28px_1fr_auto]"
+            className="grid items-center gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-sm transition hover:border-foreground md:grid-cols-[28px_28px_minmax(0,1fr)_auto]"
           >
             <input
               type="checkbox"
@@ -330,13 +330,13 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
             <span className="text-xs text-muted-foreground">
               {submission.order}
             </span>
-            <div className="flex items-center gap-4">
+            <div className="flex min-w-0 items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] text-xs font-black text-[#111111] shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27]">
                 ONS
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="min-w-0 truncate text-sm font-semibold text-foreground">
                     {submission.title}
                   </p>
                   <span

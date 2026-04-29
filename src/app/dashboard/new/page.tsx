@@ -34,8 +34,6 @@ export default function NewSubmissionPage() {
   return (
     <div className="page-centered mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card px-6 py-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:px-8 sm:py-10">
-        <div aria-hidden="true" className="absolute right-0 top-0 h-16 w-16 bg-[#f2cf27]" />
-        <div aria-hidden="true" className="absolute right-16 top-16 h-8 w-24 bg-[#1556a4]" />
         <p className="bauhaus-kicker">
           New Submission
         </p>

@@ -34,7 +34,6 @@ export default async function MvSubmissionPage() {
       </div>
 
       <div className="relative mt-8 rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-        <div aria-hidden="true" className="absolute right-0 top-0 h-12 w-12 bg-[#1556a4]" />
         <p className="text-sm font-black uppercase tracking-normal text-muted-foreground">
           접수 전 참고사항
         </p>

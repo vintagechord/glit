@@ -23,7 +23,6 @@ export function AlbumIntroPanel({
 
   return (
     <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">
-      <div aria-hidden="true" className="absolute right-0 top-0 h-16 w-16 bg-[#f2cf27]" />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
           <p className="bauhaus-kicker">

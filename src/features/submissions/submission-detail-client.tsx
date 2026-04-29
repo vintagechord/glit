@@ -1202,7 +1202,6 @@ export function SubmissionDetailClient({
         </div>
       ) : null}
       <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
-        <div aria-hidden="true" className="absolute right-0 top-0 h-16 w-16 bg-[#f2cf27]" />
         <div className="flex flex-wrap items-start justify-between gap-8">
           <div className="max-w-3xl flex-1">
             <p className="bauhaus-kicker">

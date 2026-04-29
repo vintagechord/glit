@@ -82,22 +82,22 @@ function Thumbnail({ name, src }: { name: string; src: string | null }) {
 function ArtistCard({ group }: { group: ArtistGroup }) {
   const [open, setOpen] = React.useState(false);
   return (
-    <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.12)] transition hover:border-foreground/70">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+    <div className="overflow-hidden rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.12)] transition hover:border-foreground/70">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="flex min-w-0 items-center gap-3">
           <Thumbnail name={group.artistName} src={group.thumbnail} />
-          <div>
-            <p className="max-w-[12rem] truncate text-base font-semibold text-foreground md:max-w-[14rem]">
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold text-foreground">
               {group.artistName}
             </p>
             <p className="text-sm text-muted-foreground">총 {group.submissions.length}건 접수</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
           {group.artistId ? (
             <Link
               href={`/dashboard/artists/${group.artistId}`}
-              className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground whitespace-nowrap"
+              className="inline-flex shrink-0 items-center justify-center rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-foreground hover:text-foreground whitespace-nowrap"
             >
               아티스트 상세
             </Link>
@@ -105,7 +105,7 @@ function ArtistCard({ group }: { group: ArtistGroup }) {
           <button
             type="button"
             onClick={() => setOpen((prev) => !prev)}
-            className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground whitespace-nowrap"
+            className="inline-flex shrink-0 items-center justify-center rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-foreground hover:text-foreground whitespace-nowrap"
           >
             {open ? "접기" : "보기"}
           </button>

@@ -245,17 +245,17 @@ export function SubmissionStatusList({
           return (
             <div
               key={submission.id}
-              className="rounded-[28px] border border-border/60 bg-card/80 p-5"
+              className="overflow-hidden rounded-[28px] border border-border/60 bg-card/80 p-5"
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                     {typeLabel}
                   </p>
-                  <h2 className="mt-2 text-xl font-semibold text-foreground">
+                  <h2 className="mt-2 truncate text-xl font-semibold text-foreground">
                     {submission.title || "제목 미입력"}
                   </h2>
-                  <p className="mt-2 text-sm text-muted-foreground">
+                  <p className="mt-2 truncate text-sm text-muted-foreground">
                     {submission.artist_name || "아티스트 미입력"}
                   </p>
                   <p className="mt-2 text-sm text-muted-foreground">
@@ -263,7 +263,7 @@ export function SubmissionStatusList({
                     업데이트 {formatDateTime(submission.updated_at)}
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
                   <span
                     className={`bauhaus-status-chip ${statusInfo.tone}`}
                   >
@@ -294,14 +294,14 @@ export function SubmissionStatusList({
                   </button>
                 </div>
               </div>
-                <div className="mt-4">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>
-                      진행률 {progressPercent}% · {completedStations}/
-                      {totalStations}
-                    </span>
-                    <span>{stageLabel}</span>
-                  </div>
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    진행률 {progressPercent}% · {completedStations}/
+                    {totalStations}
+                  </span>
+                  <span>{stageLabel}</span>
+                </div>
                 <div className="mt-2 h-2 w-full rounded-full bg-muted">
                   <div
                     className="h-2 rounded-full bg-foreground transition-all"
