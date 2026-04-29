@@ -130,6 +130,19 @@ type StationReview = {
 
 const fallbackStationLogo = "/station-logos/default.svg";
 
+const detailPanelClass =
+  "rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]";
+const detailPanelTightClass =
+  "rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]";
+const detailSubPanelClass =
+  "rounded-[8px] border-2 border-border bg-background";
+const detailKickerClass =
+  "text-xs font-black uppercase tracking-normal text-muted-foreground";
+const detailActionButtonClass =
+  "inline-flex items-center justify-center gap-1 rounded-[8px] border-2 border-[#111111] bg-white px-4 py-2 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]";
+const detailToggleButtonClass =
+  "inline-flex items-center justify-center gap-1 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27]";
+
 const buildTrackSummaryText = (
   counts: { approved: number; rejected: number; pending: number },
   separator: string,
@@ -171,7 +184,7 @@ function StationLogoWithFallback({
   }, [mappedLogo, src]);
 
   return (
-    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-background/60">
+    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white dark:border-[#f2cf27] dark:bg-[#171717]">
       {src ? (
         <Image
           src={src}
@@ -195,27 +208,31 @@ const paymentMethodLabels: Record<string, string> = {
 };
 
 const submissionStatusToneMap: Record<string, string> = {
-  DRAFT: "border-black/8 bg-white text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white",
-  SUBMITTED: "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]",
-  PRE_REVIEW: "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]",
+  DRAFT:
+    "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white",
+  SUBMITTED:
+    "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]",
+  PRE_REVIEW:
+    "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]",
   WAITING_PAYMENT:
-    "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200",
+    "border-[#111111] bg-[#f2cf27] text-[#111111] dark:border-[#f2cf27]",
   IN_PROGRESS:
-    "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]",
+    "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]",
   RESULT_READY:
-    "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200",
+    "border-[#111111] bg-[#1f7a5a] text-white dark:border-[#f2cf27] dark:bg-[#46b783] dark:text-[#06111f]",
   COMPLETED:
-    "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200",
+    "border-[#111111] bg-[#1f7a5a] text-white dark:border-[#f2cf27] dark:bg-[#46b783] dark:text-[#06111f]",
 };
 
 const paymentStatusToneMap: Record<string, string> = {
   UNPAID:
-    "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200",
+    "border-[#111111] bg-[#f2cf27] text-[#111111] dark:border-[#f2cf27]",
   PAYMENT_PENDING:
-    "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]",
-  PAID: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200",
+    "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]",
+  PAID:
+    "border-[#111111] bg-[#1f7a5a] text-white dark:border-[#f2cf27] dark:bg-[#46b783] dark:text-[#06111f]",
   REFUNDED:
-    "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-200",
+    "border-[#111111] bg-[#d9362c] text-white dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111]",
 };
 
 const mvRatingLabel = (code?: string | null) => {
@@ -592,10 +609,10 @@ export function SubmissionDetailClient({
           : null;
   const submissionStatusTone =
     submissionStatusToneMap[submission.status] ??
-    "border-black/8 bg-white text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white";
+    "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white";
   const paymentStatusTone =
     paymentStatusToneMap[submission.payment_status] ??
-    "border-black/8 bg-white text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white";
+    "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white";
   const submissionTypeLabel = getSubmissionTypeLabel(submission.type);
   const preferredRadioStation = !isMvSubmission
     ? renderStationReviews.find((review) => {
@@ -666,8 +683,8 @@ export function SubmissionDetailClient({
           : "진행 정보 대기",
       tone:
         stationSummary.delivered > 0
-          ? "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]"
-          : "border-black/8 bg-white text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white",
+          ? "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]"
+          : "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white",
       description:
         stationSummary.actionNeeded > 0
           ? `확인 필요 ${stationSummary.actionNeeded}곳`
@@ -719,9 +736,9 @@ export function SubmissionDetailClient({
     },
   ];
   const renderStationReviewSection = () => (
-    <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+    <div className={detailPanelClass}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className={detailKickerClass}>
           방송국별 진행표
         </p>
         <span className="text-sm text-muted-foreground">
@@ -729,25 +746,25 @@ export function SubmissionDetailClient({
         </span>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
+        <span className="bauhaus-status-chip bauhaus-status-chip--neutral bauhaus-status-chip--compact">
           전체 {stationSummary.total}곳
         </span>
-        <span className="rounded-full border border-[#cfe3fb] bg-[#eaf3ff] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]">
+        <span className="bauhaus-status-chip bauhaus-status-chip--info bauhaus-status-chip--compact">
           결과 반영 {stationSummary.delivered}곳
         </span>
-        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+        <span className="bauhaus-status-chip bauhaus-status-chip--success bauhaus-status-chip--compact">
           통과 반영 {stationSummary.approved}곳
         </span>
-        <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200">
+        <span className="bauhaus-status-chip bauhaus-status-chip--waiting bauhaus-status-chip--compact">
           확인 필요 {stationSummary.actionNeeded}곳
         </span>
       </div>
       <div className="mt-5">
         {renderStationReviews && renderStationReviews.length > 0 ? (
-          <div className="rounded-2xl border border-border/60 bg-background/70">
+          <div className="rounded-[8px] border-2 border-[#111111] bg-background dark:border-[#f2cf27]">
             <div className="overflow-x-auto">
               <div className="min-w-0 sm:min-w-[720px]">
-                <div className="grid grid-cols-[72px_1fr_1fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]">
+                <div className="grid grid-cols-[72px_1fr_1fr] items-center gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-normal text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]">
                   <span className="justify-self-center text-center sm:hidden">방송국</span>
                   <span className="hidden justify-self-center text-center sm:block">로고</span>
                   <span className="hidden text-left sm:block">방송국</span>
@@ -762,7 +779,11 @@ export function SubmissionDetailClient({
                 <div className="divide-y divide-border/60">
                   {renderStationReviews.map((review) => {
                     const reception = isReviewComplete
-                      ? { label: "결과 통보", tone: "bg-emerald-500/15 text-emerald-800" }
+                      ? {
+                          label: "결과 통보",
+                          tone:
+                            "bg-[#1f7a5a] text-white dark:bg-[#46b783] dark:text-[#06111f]",
+                        }
                       : getReviewReception(review.status);
                     const trackInfo = buildTrackSummary(review.track_results);
                     const note = review.result_note?.trim() || null;
@@ -795,7 +816,8 @@ export function SubmissionDetailClient({
                       isReviewComplete && submission.mv_desired_rating
                         ? {
                             label: mvRatingLabel(submission.mv_desired_rating),
-                            tone: "bg-emerald-500/15 text-emerald-800",
+                            tone:
+                              "bg-[#1f7a5a] text-white dark:bg-[#46b783] dark:text-[#06111f]",
                           }
                         : trackInfo.outcome === "APPROVED"
                           ? reviewResultMap.APPROVED
@@ -865,18 +887,18 @@ export function SubmissionDetailClient({
                           ) : null}
                         </div>
                         <span
-                          className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
+                          className={`inline-flex items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-2 py-1 text-xs font-black dark:border-[#f2cf27] ${reception.tone}`}
                         >
                           {reception.label}
                         </span>
                         <button
                           type="button"
                           onClick={handleResultClick}
-                          className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${
+                          className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-2 py-1 text-xs font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${
                             resultTone.tone
                           } ${
                             shouldOpenResultModal
-                              ? "transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100"
+                              ? "transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0"
                               : "transition"
                           }`}
                         >
@@ -898,7 +920,7 @@ export function SubmissionDetailClient({
             </div>
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
+          <div className="rounded-[8px] border-2 border-dashed border-border bg-background px-4 py-6 text-sm text-muted-foreground">
             아직 방송국 진행 정보가 없습니다. 접수 제출 후 자동 생성됩니다.
           </div>
         )}
@@ -1104,15 +1126,15 @@ export function SubmissionDetailClient({
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
       {paymentFeedback ? (
         <div
-          className={`mb-6 rounded-[28px] border px-5 py-4 shadow-sm ${paymentFeedback.tone}`}
+          className={`mb-6 rounded-[10px] border-2 px-5 py-4 shadow-[5px_5px_0_#111111] dark:shadow-[5px_5px_0_#f2cf27] ${paymentFeedback.tone}`}
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] opacity-70">
+          <p className="text-xs font-black uppercase tracking-normal opacity-80">
             Payment
           </p>
-          <h2 className="mt-2 text-lg font-semibold">{paymentFeedback.title}</h2>
+          <h2 className="mt-2 text-lg font-black">{paymentFeedback.title}</h2>
           <p className="mt-1 text-sm opacity-90">{paymentFeedback.description}</p>
         </div>
       ) : null}
@@ -1124,13 +1146,13 @@ export function SubmissionDetailClient({
             className="absolute inset-0 bg-black/50"
             aria-label="결제 안내 닫기"
           />
-          <div className="relative z-10 w-full max-w-xl rounded-3xl border border-border/80 bg-card/95 p-6 shadow-2xl backdrop-blur">
+          <div className="relative z-10 w-full max-w-xl rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                <p className={detailKickerClass}>
                   결제 안내
                 </p>
-                <h2 className="mt-2 text-lg font-semibold text-foreground">
+                <h2 className="mt-2 text-lg font-black text-foreground">
                   {packageInfo?.name ?? submission.title ?? "신청 상품"}
                 </h2>
                 <p className="text-sm text-muted-foreground">
@@ -1140,17 +1162,17 @@ export function SubmissionDetailClient({
               <button
                 type="button"
                 onClick={() => setShowPaymentInfo(false)}
-                className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-foreground hover:border-foreground hover:bg-foreground/5"
+                className={detailToggleButtonClass}
               >
                 닫기
               </button>
             </div>
-            <div className="mt-4 grid gap-3 rounded-2xl border border-border/70 bg-background/80 p-4 text-sm">
+            <div className={`${detailSubPanelClass} mt-4 grid gap-3 p-4 text-sm`}>
               <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                <span className="text-xs font-black uppercase tracking-normal text-muted-foreground">
                   결제 금액
                 </span>
-                <span className="text-base font-semibold text-foreground">
+                <span className="text-base font-black text-foreground">
                   {submission.amount_krw
                     ? `${formatCurrency(submission.amount_krw)}원`
                     : packageInfo?.price_krw
@@ -1159,7 +1181,7 @@ export function SubmissionDetailClient({
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                <span className="text-xs font-black uppercase tracking-normal text-muted-foreground">
                   결제 방식
                 </span>
                 <span className="text-sm text-foreground">
@@ -1170,25 +1192,25 @@ export function SubmissionDetailClient({
                 </span>
               </div>
             </div>
-            <div className="mt-4 rounded-2xl border border-border/70 bg-background/80 p-4 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <div className={`${detailSubPanelClass} mt-4 p-4 text-sm`}>
+              <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
                 무통장 입금 안내
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                  <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                     은행
                   </p>
                   <p className="mt-1 font-semibold">{APP_CONFIG.bankName}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                  <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                     계좌번호
                   </p>
                   <p className="mt-1 font-semibold">{APP_CONFIG.bankAccount}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                  <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                     예금주
                   </p>
                   <p className="mt-1 font-semibold">{APP_CONFIG.bankHolder}</p>
@@ -1201,8 +1223,11 @@ export function SubmissionDetailClient({
           </div>
         </div>
       ) : null}
-      <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
-        <div className="flex flex-wrap items-start justify-between gap-8">
+      <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] px-5 py-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[8px_8px_0_#f2cf27] sm:px-8 sm:py-8">
+        <div className="pointer-events-none absolute right-0 top-0 h-6 w-32 bg-[#1556a4] dark:bg-[#3f8ad8]" />
+        <div className="pointer-events-none absolute bottom-0 left-0 h-4 w-24 bg-[#d9362c] dark:bg-[#ff6258]" />
+        <div className="pointer-events-none absolute bottom-0 right-0 h-4 w-40 bg-[#f2cf27]" />
+        <div className="relative z-10 flex flex-wrap items-start justify-between gap-8">
           <div className="max-w-3xl flex-1">
             <p className="bauhaus-kicker">
               Submission Detail
@@ -1218,12 +1243,12 @@ export function SubmissionDetailClient({
                 {submissionTypeLabel}
               </span>
               {submission.genre ? (
-                <span className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[#111111] dark:border-[#f2cf27]">
+              <span className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white">
                   {submission.genre}
                 </span>
               ) : null}
               {!isMvSubmission && albumTracks.length > 0 ? (
-                <span className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[#111111] dark:border-[#f2cf27]">
+                <span className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white">
                   {albumTracks.length}곡
                 </span>
               ) : null}
@@ -1264,13 +1289,14 @@ export function SubmissionDetailClient({
             ))}
           </div>
         </div>
+      </section>
 
-        <div className="mt-8">{renderStationReviewSection()}</div>
+      <div className="mt-8">{renderStationReviewSection()}</div>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-[10px] border-2 border-border bg-background p-6">
+      <div className="mt-8 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className={detailPanelClass}>
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
+              <p className={detailKickerClass}>
                 한눈에 보기
               </p>
               <span className="text-xs text-muted-foreground">
@@ -1281,7 +1307,7 @@ export function SubmissionDetailClient({
               {quickFacts.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-[8px] border-2 border-border bg-card px-4 py-4"
+                  className={`${detailSubPanelClass} px-4 py-4`}
                 >
                   <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                     {item.label}
@@ -1293,8 +1319,8 @@ export function SubmissionDetailClient({
               ))}
             </div>
             {ratingReason ? (
-              <div className="mt-4 rounded-2xl border border-rose-200/70 bg-rose-50/80 p-4 dark:border-rose-300/20 dark:bg-rose-500/10">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700 dark:text-rose-200">
+              <div className="mt-4 rounded-[8px] border-2 border-[#d9362c] bg-rose-50 p-4 dark:bg-[#2a1111]">
+                <p className="text-[11px] font-black uppercase tracking-normal text-[#d9362c] dark:text-[#ff6258]">
                   결과 메모
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-rose-700 dark:text-rose-100">
@@ -1324,12 +1350,12 @@ export function SubmissionDetailClient({
                   return (
                     <div
                       key={label}
-                      className={`rounded-2xl border px-3 py-3 text-center text-[11px] font-semibold leading-5 ${
+                      className={`rounded-[8px] border-2 px-3 py-3 text-center text-[11px] font-black leading-5 ${
                         isActive
-                          ? "border-[#0071e3]/12 bg-white text-[#123152] dark:border-white/10 dark:bg-white/10 dark:text-white"
+                          ? "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
                           : isPassed
-                            ? "border-white/40 bg-white/60 text-[#123152] dark:border-white/10 dark:bg-white/8 dark:text-white/85"
-                            : "border-white/35 bg-transparent text-[#123152]/70 dark:border-white/10 dark:text-white/65"
+                            ? "border-white bg-white/80 text-[#111111] dark:border-white dark:bg-white/14 dark:text-white"
+                            : "border-white/60 bg-transparent text-white/72"
                       }`}
                     >
                       {label}
@@ -1339,8 +1365,8 @@ export function SubmissionDetailClient({
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-black/6 bg-white/90 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            <div className={detailPanelTightClass}>
+              <p className={detailKickerClass}>
                 바로 할 수 있는 작업
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -1353,14 +1379,14 @@ export function SubmissionDetailClient({
                         code: preferredRadioStationCode,
                       })
                     }
-                    className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5"
+                    className={detailActionButtonClass}
                   >
                     라디오 신청 링크
                   </button>
                 ) : null}
                 <Link
                   href="/karaoke-request"
-                  className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground transition hover:border-foreground hover:bg-foreground/5"
+                  className={detailActionButtonClass}
                 >
                   노래방 등록
                 </Link>
@@ -1368,14 +1394,13 @@ export function SubmissionDetailClient({
             </div>
           </div>
         </div>
-      </section>
       {/* 관리자용 등급/필증 편집 UI는 관리자 페이지에서만 제공 */}
       {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}
 
       <div className="mt-8 flex flex-col gap-6">
         <div className="order-2">
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          <div className={detailPanelClass}>
+            <p className={detailKickerClass}>
               접수 정보
             </p>
             {isReceptionInfoOpen ? (
@@ -1459,7 +1484,7 @@ export function SubmissionDetailClient({
                 type="button"
                 onClick={() => setIsReceptionInfoOpen((prev) => !prev)}
                 aria-label={isReceptionInfoOpen ? "접수 정보 닫기" : "접수 정보 열기"}
-                className="inline-flex items-center gap-1 rounded-full border border-[#0071e3] bg-[#0071e3] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-[#0077ed] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+                className={detailToggleButtonClass}
               >
                 <span>{isReceptionInfoOpen ? "▲" : "▼"}</span>
                 <span>{isReceptionInfoOpen ? "접기" : "펼치기"}</span>
@@ -1468,9 +1493,9 @@ export function SubmissionDetailClient({
           </div>
         </div>
         <div className="order-1">
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+          <div className={detailPanelClass}>
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+              <p className={detailKickerClass}>
                 진행 현황 요약
               </p>
               <span className="text-xs text-muted-foreground">
@@ -1478,35 +1503,35 @@ export function SubmissionDetailClient({
               </span>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-border/60 bg-background/75 px-4 py-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              <div className={`${detailSubPanelClass} px-4 py-4`}>
+                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                   전체 방송국
                 </p>
-                <p className="mt-2 text-2xl font-semibold tracking-normal text-foreground">
+                <p className="mt-2 text-2xl font-black tracking-normal text-foreground">
                   {stationSummary.total}
                 </p>
               </div>
-              <div className="rounded-2xl border border-[#cfe3fb] bg-[#eaf3ff] px-4 py-4 text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-75">
+              <div className="rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-4 py-4 text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]">
+                <p className="text-[11px] font-black uppercase tracking-normal opacity-80">
                   결과 반영
                 </p>
-                <p className="mt-2 text-2xl font-semibold tracking-normal">
+                <p className="mt-2 text-2xl font-black tracking-normal">
                   {stationSummary.delivered}
                 </p>
               </div>
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-75">
+              <div className="rounded-[8px] border-2 border-[#111111] bg-[#1f7a5a] px-4 py-4 text-white dark:border-[#f2cf27] dark:bg-[#46b783] dark:text-[#06111f]">
+                <p className="text-[11px] font-black uppercase tracking-normal opacity-80">
                   통과 반영
                 </p>
-                <p className="mt-2 text-2xl font-semibold tracking-normal">
+                <p className="mt-2 text-2xl font-black tracking-normal">
                   {stationSummary.approved}
                 </p>
               </div>
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-75">
+              <div className="rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-4 text-[#111111] dark:border-[#f2cf27]">
+                <p className="text-[11px] font-black uppercase tracking-normal opacity-80">
                   확인 필요
                 </p>
-                <p className="mt-2 text-2xl font-semibold tracking-normal">
+                <p className="mt-2 text-2xl font-black tracking-normal">
                   {stationSummary.actionNeeded}
                 </p>
                 <p className="mt-2 text-xs opacity-80">
@@ -1516,8 +1541,8 @@ export function SubmissionDetailClient({
             </div>
           </div>
         </div>
-        <div className="order-4 rounded-[28px] border border-border/60 bg-card/80 p-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        <div className={`order-4 ${detailPanelClass}`}>
+          <p className={detailKickerClass}>
             작성 신청서
           </p>
           {isSubmissionFormOpen ? (
@@ -1685,7 +1710,7 @@ export function SubmissionDetailClient({
                     {submission.mv_lyrics ? (
                       <div className="md:col-span-2">
                         <p className="text-xs text-muted-foreground">가사</p>
-                        <div className="mt-2 whitespace-pre-wrap rounded-2xl border border-border/60 bg-background/70 p-3 text-sm text-foreground">
+                        <div className={`${detailSubPanelClass} mt-2 whitespace-pre-wrap p-3 text-sm text-foreground`}>
                           {submission.mv_lyrics}
                         </div>
                       </div>
@@ -1708,10 +1733,10 @@ export function SubmissionDetailClient({
               </div>
               {!isMvSubmission && albumTracks.length > 0 ? (
                 <div className="mt-5 space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
                     트랙 리스트
                   </p>
-                  <div className="rounded-2xl border border-border/60 bg-background/70 p-3 text-sm">
+                  <div className={`${detailSubPanelClass} p-3 text-sm`}>
                     <div className="divide-y divide-border/60">
                       {albumTracks.map((track, index) => (
                         <div key={`${track.track_no ?? index}-${track.track_title ?? index}`} className="py-2">
@@ -1745,7 +1770,7 @@ export function SubmissionDetailClient({
                 type="button"
                 onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
                 aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
-                className="inline-flex items-center gap-1 rounded-full border border-[#0071e3] bg-[#0071e3] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-[#0077ed] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+                className={detailToggleButtonClass}
               >
               <span>{isSubmissionFormOpen ? "▲" : "▼"}</span>
               <span>{isSubmissionFormOpen ? "접기" : "펼치기"}</span>
@@ -1753,8 +1778,8 @@ export function SubmissionDetailClient({
           </div>
         </div>
 
-        <div className="order-5 rounded-[28px] border border-border/60 bg-card/80 p-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        <div className={`order-5 ${detailPanelClass}`}>
+          <p className={detailKickerClass}>
             첨부 파일
           </p>
           {isAttachmentsOpen ? (
@@ -1772,7 +1797,7 @@ export function SubmissionDetailClient({
               type="button"
               onClick={() => setIsAttachmentsOpen((prev) => !prev)}
               aria-label={isAttachmentsOpen ? "첨부 파일 닫기" : "첨부 파일 열기"}
-              className="inline-flex items-center gap-1 rounded-full border border-[#0071e3] bg-[#0071e3] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-[#0077ed] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+              className={detailToggleButtonClass}
             >
               <span>{isAttachmentsOpen ? "▲" : "▼"}</span>
               <span>{isAttachmentsOpen ? "접기" : "펼치기"}</span>
@@ -1781,32 +1806,32 @@ export function SubmissionDetailClient({
         </div>
 
         {isMvSubmission ? (
-          <div className="order-6 rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          <div className={`order-6 ${detailPanelClass}`}>
+            <p className={detailKickerClass}>
               심의 등급 / 가이드 / 필증
             </p>
             <div className="mt-4 space-y-3 text-sm">
               {submission.mv_desired_rating ? (
-                <div className="rounded-2xl border border-transparent bg-[#f6d64a] px-4 py-3 text-[13px] font-semibold text-black shadow-sm">
+                <div className="rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-[13px] font-black text-black dark:border-[#f2cf27]">
                   심의 등급: {mvRatingLabel(submission.mv_desired_rating)} (설정 완료)
                   <span className="ml-2 text-xs font-normal text-black/80">
                     아래에서 등급 이미지와 필증 파일을 다운로드하세요.
                   </span>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3 text-[13px] text-muted-foreground">
+                <div className="rounded-[8px] border-2 border-dashed border-border bg-background px-4 py-3 text-[13px] text-muted-foreground">
                   심의 등급이 아직 설정되지 않았습니다.
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                <span className="w-32 text-xs font-black uppercase tracking-normal text-muted-foreground">
                   등급
                 </span>
                 <button
                   type="button"
                   onClick={handleRatingDownload}
                   disabled={!submission.mv_desired_rating || isRatingDownloading}
-                  className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={detailActionButtonClass}
                 >
                   {submission.mv_desired_rating
                     ? `${mvRatingLabel(submission.mv_desired_rating)} 이미지 다운로드`
@@ -1814,26 +1839,26 @@ export function SubmissionDetailClient({
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                <span className="w-32 text-xs font-black uppercase tracking-normal text-muted-foreground">
                   표기 가이드
                 </span>
                 <button
                   type="button"
                   onClick={handleGuideDownload}
-                  className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5"
+                  className={detailActionButtonClass}
                 >
                   가이드 PDF 다운로드
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="w-32 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                <span className="w-32 text-xs font-black uppercase tracking-normal text-muted-foreground">
                   심의 필증
                 </span>
                 <button
                   type="button"
                   onClick={handleCertificateDownload}
                   disabled={!submission.certificate_b2_path}
-                  className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={detailActionButtonClass}
                 >
                   {submission.certificate_original_name
                     ? submission.certificate_original_name
@@ -2034,15 +2059,15 @@ export function SubmissionDetailClient({
         </div>
       </div>
 
-      <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
+      <div className={`mt-8 ${detailPanelClass}`}>
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          <p className={detailKickerClass}>
             타임라인
           </p>
           <button
             type="button"
             onClick={() => setIsTimelineOpen((prev) => !prev)}
-            className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+            className={detailToggleButtonClass}
           >
             {isTimelineOpen ? "접기" : "펼치기"}
           </button>
@@ -2053,7 +2078,7 @@ export function SubmissionDetailClient({
               events.map((event) => (
                 <div
                   key={event.id}
-                  className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-sm"
+                  className={`${detailSubPanelClass} px-4 py-3 text-sm`}
                 >
                   <div className="flex items-center justify-between text-foreground">
                     <span className="font-semibold">{event.event_type}</span>
@@ -2065,7 +2090,7 @@ export function SubmissionDetailClient({
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
+              <div className="rounded-[8px] border-2 border-dashed border-border bg-background px-4 py-6 text-sm text-muted-foreground">
                 아직 등록된 이벤트가 없습니다.
               </div>
             )}
@@ -2079,8 +2104,8 @@ export function SubmissionDetailClient({
 
       {trackResultModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          <div className="w-full max-w-lg rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+            <p className={detailKickerClass}>
               트랙별 결과
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
@@ -2116,7 +2141,7 @@ export function SubmissionDetailClient({
                   return (
                     <div
                       key={`${track.track_id ?? index}-${track.track_no ?? index}`}
-                      className="flex items-center justify-between rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-sm"
+                      className={`${detailSubPanelClass} flex items-center justify-between px-3 py-2 text-sm`}
                     >
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-foreground">
@@ -2125,7 +2150,7 @@ export function SubmissionDetailClient({
                         </p>
                       </div>
                       <span
-                        className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${status.tone}`}
+                        className={`inline-flex items-center justify-center rounded-[6px] border-2 border-[#111111] px-3 py-1 text-xs font-black dark:border-[#f2cf27] ${status.tone}`}
                       >
                         {status.label}
                       </span>
@@ -2135,8 +2160,8 @@ export function SubmissionDetailClient({
               </div>
             ) : null}
             {trackResultModal.resultNote ? (
-              <div className="mt-4 rounded-2xl border border-rose-200/70 bg-rose-50/70 p-4 dark:border-rose-300/30 dark:bg-rose-500/10">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-700 dark:text-rose-200">
+              <div className="mt-4 rounded-[8px] border-2 border-[#d9362c] bg-rose-50 p-4 dark:bg-[#2a1111]">
+                <p className="text-xs font-black uppercase tracking-normal text-[#d9362c] dark:text-[#ff6258]">
                   불통과 사유
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-rose-700 dark:text-rose-100">
@@ -2155,7 +2180,7 @@ export function SubmissionDetailClient({
                     });
                     setTrackResultModal(null);
                   }}
-                  className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+                  className={detailActionButtonClass}
                 >
                   라디오 신청 링크
                 </button>
@@ -2165,7 +2190,7 @@ export function SubmissionDetailClient({
               <button
                 type="button"
                 onClick={() => setTrackResultModal(null)}
-                className="rounded-full bg-foreground px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
+                className={detailActionButtonClass}
               >
                 닫기
               </button>
@@ -2176,8 +2201,8 @@ export function SubmissionDetailClient({
 
       {radioLinksModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          <div className="w-full max-w-lg rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+            <p className={detailKickerClass}>
               라디오 신청 링크
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
@@ -2195,7 +2220,7 @@ export function SubmissionDetailClient({
                     href={link.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center justify-between rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-foreground"
+                    className={`${detailSubPanelClass} flex items-center justify-between px-4 py-3 text-sm font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-foreground`}
                   >
                     <span>{link.name}</span>
                     <span className="text-sm text-muted-foreground">새 창에서 열기 ↗</span>
@@ -2207,7 +2232,7 @@ export function SubmissionDetailClient({
               <button
                 type="button"
                 onClick={closeRadioLinks}
-                className="rounded-full bg-foreground px-5 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
+                className={detailActionButtonClass}
               >
                 닫기
               </button>

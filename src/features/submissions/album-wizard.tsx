@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
-import { openInicisCardPopup } from "@/lib/inicis/popup";
+import { openCardPaymentPopup } from "@/lib/payments/popup";
 import {
   buildLegacyProfanityMatchers,
   extractProfanityWords,
@@ -761,8 +761,14 @@ export function AlbumWizard({
       if (!data || typeof data !== "object") return;
       const type = (data as { type?: string }).type;
       const payload = (data as { payload?: Record<string, unknown> }).payload ?? {};
-      if (!type || !String(type).startsWith("INICIS:")) return;
-      const status = String(type).replace("INICIS:", "");
+      const typeText = String(type ?? "");
+      const providerPrefix = typeText.startsWith("INICIS:")
+        ? "INICIS:"
+        : typeText.startsWith("MOBILIANS:")
+          ? "MOBILIANS:"
+          : null;
+      if (!providerPrefix) return;
+      const status = typeText.replace(providerPrefix, "");
       const submissionIdFromMsg = (payload.submissionId as string | undefined) || currentSubmissionId;
       const guestTokenFromMsg = payload.guestToken as string | undefined;
       if (status === "SUCCESS") {
@@ -2982,7 +2988,7 @@ export function AlbumWizard({
       if (status === "SUBMITTED" && submissionIds.length > 0) {
         if (paymentMethod === "CARD") {
           setNotice(emailWarning ? { emailWarning } : {});
-          const { ok, error } = openInicisCardPopup({
+          const { ok, error } = openCardPaymentPopup({
             context: isOneClick ? "oneclick" : "music",
             submissionId: submissionIds[0],
             guestToken: guestTokens[0]?.token ?? currentGuestToken ?? undefined,

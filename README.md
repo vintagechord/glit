@@ -54,6 +54,12 @@ INICIS_STDJS_URL_STG=https://stgstdpay.inicis.com/stdjs/INIStdPay.js
 SUBSCRIPTION_PRICE_KRW=1000
 ```
 
+### Card payment provider
+- 기본 카드 결제는 `NEXT_PUBLIC_PAYMENT_PROVIDER=mobilians`, `PAYMENT_PROVIDER=mobilians` 기준입니다.
+- 이니시스로 되돌릴 때는 두 값을 모두 `inicis`로 바꾸고 재배포하면 기존 `/pay/inicis` 플로우를 사용합니다.
+- 모빌리언스 필요 env: `MOBILIANS_ENV`, `MOBILIANS_SID_{STG|PROD}`, `MOBILIANS_SKEY_{STG|PROD}`, 선택 `MOBILIANS_API_URL_{STG|PROD}`, `MOBILIANS_CASH_CODE`, `MOBILIANS_SITE_URL`. `MOBILIANS_SITE_URL`은 모빌리언스에 등록된 20자 이하 도메인으로 설정합니다.
+- 모빌리언스 콜백 URL은 `/api/mobilians/return`, 노티 URL은 `/api/mobilians/noti`, 취소 URL은 `/api/mobilians/close`를 사용합니다.
+
 ### Inicis STDPay(일반 결제) 체크리스트
 - 필요 env(일반 결제만): `INICIS_ENV`(기본 stg), `INICIS_MID_{STG|PROD}`, `INICIS_SIGN_KEY_{STG|PROD}`, 선택 `INICIS_STDJS_URL_{STG|PROD}`. 빌링용 키(`INICIS_BILLING_*`, `INICIS_LITE_KEY_*`, `INICIS_API_URL_*`)가 없어도 STDPay는 동작해야 합니다.
 - 로컬: 위 env만 넣고 `npm run dev` → `POST /api/inicis/submission/order`가 200/`stdJsUrl` 응답인지 확인 → 브라우저 Network에서 `INIStdPay.js` 200 로드 및 콘솔의 `[Inicis][STDPay] INIStdPay.js loaded?` 로그 확인. `localhost`는 INI에서 차단될 수 있으므로 ngrok 등 퍼블릭 URL을 `NEXT_PUBLIC_APP_URL`/`NEXT_PUBLIC_SITE_URL`로 주입하세요.

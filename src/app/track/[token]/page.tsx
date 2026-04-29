@@ -219,8 +219,8 @@ export default async function TrackDetailPage({
 
   return (
     <>
-      <div className="mx-auto w-full max-w-6xl px-6 pt-10">
-        <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-3 text-xs text-muted-foreground">
+      <div className="mx-auto w-full max-w-6xl px-4 pt-8 sm:px-6">
+        <div className="rounded-[8px] border-2 border-dashed border-[#111111] bg-card px-4 py-3 text-xs font-semibold text-muted-foreground dark:border-[#f2cf27]">
           비회원 조회는 실시간 갱신이 지원되지 않습니다. 최신 정보를 보려면
           새로고침을 눌러주세요.
         </div>

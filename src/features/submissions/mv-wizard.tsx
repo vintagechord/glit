@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
-import { openInicisCardPopup } from "@/lib/inicis/popup";
+import { openCardPaymentPopup } from "@/lib/payments/popup";
 import { safeRandomUUID } from "@/lib/uuid";
 
 import {
@@ -476,8 +476,14 @@ export function MvWizard({
       if (!data || typeof data !== "object") return;
       const type = (data as { type?: string }).type;
       const payload = (data as { payload?: Record<string, unknown> }).payload ?? {};
-      if (!type || !String(type).startsWith("INICIS:")) return;
-      const status = String(type).replace("INICIS:", "");
+      const typeText = String(type ?? "");
+      const providerPrefix = typeText.startsWith("INICIS:")
+        ? "INICIS:"
+        : typeText.startsWith("MOBILIANS:")
+          ? "MOBILIANS:"
+          : null;
+      if (!providerPrefix) return;
+      const status = typeText.replace(providerPrefix, "");
       const submissionFromMsg = (payload.submissionId as string | undefined) || submissionIdRef.current;
       const guestTokenFromMsg = payload.guestToken as string | undefined;
       if (status === "SUCCESS") {
@@ -2008,7 +2014,7 @@ export function MvWizard({
       if (result.submissionId) {
         if (paymentMethod === "CARD") {
           setNotice(result.emailWarning ? { emailWarning: result.emailWarning } : {});
-          const { ok, error } = openInicisCardPopup({
+          const { ok, error } = openCardPaymentPopup({
             context: "mv",
             submissionId: result.submissionId,
             guestToken: result.guestToken ?? (isGuest ? guestToken : undefined),
@@ -3224,7 +3230,7 @@ export function MvWizard({
                 </p>
                 <p className="mt-2 text-sm font-semibold">카드 결제</p>
                 <p className="mt-2 text-xs opacity-80">
-                  KG이니시스 카드 결제 · 결제 팝업에서 즉시 진행
+                  카드 결제 팝업에서 즉시 진행
                 </p>
               </button>
             </div>
@@ -3406,9 +3412,8 @@ export function MvWizard({
             </div>
           ) : (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
-              카드 결제 선택 시 결제 팝업(이니시스 STDPay)이 열립니다. 팝업이
-              차단된 경우 해제 후 다시 시도해주세요. 테스트용/실결제 카드 모두
-              지원합니다.
+              카드 결제 선택 시 결제 팝업이 열립니다. 팝업이 차단된 경우 해제 후
+              다시 시도해주세요. 테스트용/실결제 카드 모두 지원합니다.
             </div>
           )}
 

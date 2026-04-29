@@ -5,7 +5,7 @@ import * as React from "react";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { safeRandomUUID } from "@/lib/uuid";
-import { openInicisCardPopup } from "@/lib/inicis/popup";
+import { openCardPaymentPopup } from "@/lib/payments/popup";
 
 import {
   createKaraokeRequestAction,
@@ -212,7 +212,7 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
           setNotice({ error: "결제 요청 ID를 받을 수 없습니다. 다시 시도해주세요." });
           return;
         }
-        const { ok, error } = openInicisCardPopup({
+        const { ok, error } = openCardPaymentPopup({
           context: "karaoke",
           requestId,
         });
@@ -252,8 +252,14 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
       if (!data || typeof data !== "object") return;
       const type = (data as { type?: string }).type;
       const payload = (data as { payload?: Record<string, unknown> }).payload ?? {};
-      if (!type || !String(type).startsWith("INICIS:")) return;
-      const status = String(type).replace("INICIS:", "");
+      const typeText = String(type ?? "");
+      const providerPrefix = typeText.startsWith("INICIS:")
+        ? "INICIS:"
+        : typeText.startsWith("MOBILIANS:")
+          ? "MOBILIANS:"
+          : null;
+      if (!providerPrefix) return;
+      const status = typeText.replace(providerPrefix, "");
       if (status === "SUCCESS") {
         window.location.href = "/karaoke-request?payment=success";
         return;
