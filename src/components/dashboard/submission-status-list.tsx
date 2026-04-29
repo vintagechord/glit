@@ -30,26 +30,26 @@ type SubmissionItem = {
 };
 
 const statusLabels: Record<string, { label: string; tone: string }> = {
-  DRAFT: { label: "임시저장", tone: "bg-slate-500/10 text-slate-600" },
-  SUBMITTED: { label: "접수", tone: "bg-sky-500/10 text-sky-600" },
-  PRE_REVIEW: { label: "사전검토", tone: "bg-violet-500/10 text-violet-600" },
+  DRAFT: { label: "임시저장", tone: "bauhaus-status-chip--neutral" },
+  SUBMITTED: { label: "접수", tone: "bauhaus-status-chip--info" },
+  PRE_REVIEW: { label: "사전검토", tone: "bauhaus-status-chip--waiting" },
   WAITING_PAYMENT: {
     label: "결제대기",
-    tone: "bg-[#f6d64a] text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
-  IN_PROGRESS: { label: "진행중", tone: "bg-indigo-500/10 text-indigo-600" },
-  RESULT_READY: { label: "결과", tone: "bg-emerald-500/10 text-emerald-600" },
-  COMPLETED: { label: "완료", tone: "bg-emerald-500/15 text-emerald-700" },
+  IN_PROGRESS: { label: "진행중", tone: "bauhaus-status-chip--progress" },
+  RESULT_READY: { label: "결과", tone: "bauhaus-status-chip--success" },
+  COMPLETED: { label: "완료", tone: "bauhaus-status-chip--success" },
 };
 
 const paymentLabels: Record<string, { label: string; tone: string }> = {
-  UNPAID: { label: "미결제", tone: "bg-slate-500/10 text-slate-600" },
+  UNPAID: { label: "미결제", tone: "bauhaus-status-chip--neutral" },
   PAYMENT_PENDING: {
     label: "결제대기",
-    tone: "bg-[#f6d64a] text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
-  PAID: { label: "결제완료", tone: "bg-emerald-500/10 text-emerald-600" },
-  REFUNDED: { label: "환불", tone: "bg-rose-500/10 text-rose-600" },
+  PAID: { label: "결제완료", tone: "bauhaus-status-chip--success" },
+  REFUNDED: { label: "환불", tone: "bauhaus-status-chip--danger" },
 };
 
 const typeLabels: Record<string, string> = {
@@ -63,67 +63,67 @@ const completionStatuses = ["APPROVED", "REJECTED", "NEEDS_FIX"];
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
     label: "접수대기",
-    tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+    tone: "bauhaus-status-chip--waiting",
   },
   SENT: {
     label: "접수완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+    tone: "bauhaus-status-chip--info",
   },
   RECEIVED: {
     label: "심의진행중",
-    tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
+    tone: "bauhaus-status-chip--progress",
   },
   APPROVED: {
     label: "결과통보",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
     label: "결과통보",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    tone: "bauhaus-status-chip--danger",
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
 };
 
 const resultStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
     label: "대기",
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+    tone: "bauhaus-status-chip--neutral",
   },
   SENT: {
     label: "대기",
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+    tone: "bauhaus-status-chip--neutral",
   },
   RECEIVED: {
     label: "대기",
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+    tone: "bauhaus-status-chip--neutral",
   },
   APPROVED: {
     label: "통과",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
     label: "불통과",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    tone: "bauhaus-status-chip--danger",
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
 };
 
 const getReceptionStatus = (status: string) =>
   receptionStatusMap[status] ?? {
     label: "접수",
-    tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+    tone: "bauhaus-status-chip--neutral",
   };
 
 const getResultStatus = (status: string) =>
   resultStatusMap[status] ?? {
     label: "대기",
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+    tone: "bauhaus-status-chip--neutral",
   };
 
 const buildTrackSummaryText = (
@@ -150,7 +150,7 @@ const resolveResultStatus = (review: StationReview) => {
         : summary.outcome === "PARTIAL"
           ? {
               label: "부분 통과",
-              tone: "bg-[#f6d64a] text-black dark:text-black",
+              tone: "bauhaus-status-chip--waiting",
             }
           : getResultStatus(review.status);
 
@@ -265,13 +265,13 @@ export function SubmissionStatusList({
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${statusInfo.tone}`}
+                    className={`bauhaus-status-chip ${statusInfo.tone}`}
                   >
                     {statusInfo.label}
                   </span>
                   {shouldShowPaymentChip && (
                     <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${paymentInfo.tone}`}
+                      className={`bauhaus-status-chip ${paymentInfo.tone}`}
                     >
                       {paymentInfo.label}
                     </span>
@@ -413,7 +413,7 @@ export function SubmissionStatusList({
                           {station.station?.name ?? "-"}
                         </span>
                         <span
-                          className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
+                          className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${reception.tone}`}
                         >
                           {reception.label}
                         </span>
@@ -428,13 +428,13 @@ export function SubmissionStatusList({
                                   resultNote: station.result_note?.trim() || null,
                                 })
                               }
-                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
+                              className={`bauhaus-status-chip bauhaus-status-chip--compact transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${result.tone}`}
                             >
                               {result.label}
                             </button>
                           ) : (
                             <span
-                              className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
+                              className={`bauhaus-status-chip bauhaus-status-chip--compact ${result.tone}`}
                             >
                               {result.label}
                             </span>
@@ -480,19 +480,16 @@ export function SubmissionStatusList({
                   track.status === "APPROVED"
                     ? {
                         label: "통과",
-                        tone:
-                          "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+                        tone: "bauhaus-status-chip--success",
                       }
                     : track.status === "REJECTED"
                       ? {
                           label: "불통과",
-                          tone:
-                            "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+                          tone: "bauhaus-status-chip--danger",
                         }
                       : {
                           label: "대기",
-                          tone:
-                            "bg-slate-500/10 text-slate-600 dark:text-slate-300",
+                          tone: "bauhaus-status-chip--neutral",
                         };
                 const trackLabel =
                   track.title ||
@@ -517,7 +514,7 @@ export function SubmissionStatusList({
                       ) : null}
                     </div>
                     <span
-                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${status.tone}`}
+                      className={`bauhaus-status-chip bauhaus-status-chip--compact ${status.tone}`}
                     >
                       {status.label}
                     </span>

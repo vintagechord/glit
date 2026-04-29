@@ -36,50 +36,50 @@ type HistoryItem = {
 const submissionStatusMap: Record<string, { label: string; tone: string }> = {
   DRAFT: {
     label: "임시 저장",
-    tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+    tone: "bauhaus-status-chip--neutral",
   },
   SUBMITTED: {
     label: "접수 완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+    tone: "bauhaus-status-chip--info",
   },
   PRE_REVIEW: {
     label: "사전 검토",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
   WAITING_PAYMENT: {
     label: "결제대기",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
   IN_PROGRESS: {
     label: "심의 진행",
-    tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
+    tone: "bauhaus-status-chip--progress",
   },
   RESULT_READY: {
     label: "결과 전달",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
   COMPLETED: {
     label: "완료",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
 };
 
 const paymentStatusMap: Record<string, { label: string; tone: string }> = {
   UNPAID: {
     label: "미결제",
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+    tone: "bauhaus-status-chip--neutral",
   },
   PAYMENT_PENDING: {
     label: "결제대기",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
   PAID: {
     label: "결제 완료",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
   REFUNDED: {
     label: "환불",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    tone: "bauhaus-status-chip--danger",
   },
 };
 
@@ -91,79 +91,79 @@ const paymentMethodLabels: Record<string, string> = {
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
     label: "접수대기",
-    tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+    tone: "bauhaus-status-chip--waiting",
   },
   SENT: {
     label: "접수완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+    tone: "bauhaus-status-chip--info",
   },
   RECEIVED: {
     label: "심의진행중",
-    tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
+    tone: "bauhaus-status-chip--progress",
   },
   APPROVED: {
     label: "결과통보",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
     label: "결과통보",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    tone: "bauhaus-status-chip--danger",
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
 };
 
 const resultStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
     label: "대기",
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+    tone: "bauhaus-status-chip--neutral",
   },
   SENT: {
     label: "대기",
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+    tone: "bauhaus-status-chip--neutral",
   },
   RECEIVED: {
     label: "대기",
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+    tone: "bauhaus-status-chip--neutral",
   },
   APPROVED: {
     label: "통과",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
     label: "불통과",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    tone: "bauhaus-status-chip--danger",
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
 };
 
 const getReceptionStatus = (status: string) =>
   receptionStatusMap[status] ?? {
     label: "접수",
-    tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+    tone: "bauhaus-status-chip--neutral",
   };
 
 const getResultStatus = (status: string) =>
   resultStatusMap[status] ?? {
     label: "대기",
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+    tone: "bauhaus-status-chip--neutral",
   };
 
 const getSubmissionStatus = (status: string) =>
   submissionStatusMap[status] ?? {
     label: status,
-    tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+    tone: "bauhaus-status-chip--neutral",
   };
 
 const getPaymentStatus = (status?: string | null) =>
   status ? paymentStatusMap[status] ?? {
     label: status,
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+    tone: "bauhaus-status-chip--neutral",
   } : null;
 
 const getPaymentMethodLabel = (method?: string | null) =>
@@ -331,7 +331,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               {submission.order}
             </span>
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[#f6d64a] via-white/40 to-indigo-200/60 text-xs font-semibold text-foreground">
+              <div className="flex h-12 w-12 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] text-xs font-black text-[#111111] shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27]">
                 ONS
               </div>
               <div>
@@ -340,13 +340,13 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                     {submission.title}
                   </p>
                   <span
-                    className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${statusInfo.tone}`}
+                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${statusInfo.tone}`}
                   >
                     {statusInfo.label}
                   </span>
                   {paymentInfo && shouldShowPaymentChip && (
                     <span
-                      className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${paymentInfo.tone}`}
+                      className={`bauhaus-status-chip bauhaus-status-chip--compact ${paymentInfo.tone}`}
                     >
                       {paymentInfo.label}
                     </span>
@@ -540,12 +540,12 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                             {station.station?.name ?? "-"}
                           </span>
                           <span
-                            className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold ${reception.tone}`}
+                            className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${reception.tone}`}
                           >
                             {reception.label}
                           </span>
                           <span
-                            className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-[10px] font-semibold ${result.tone}`}
+                            className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${result.tone}`}
                           >
                             {result.label}
                           </span>

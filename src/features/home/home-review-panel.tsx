@@ -49,80 +49,80 @@ type TrackResultModalState = {
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
     label: "접수대기",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
   SENT: {
     label: "접수완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+    tone: "bauhaus-status-chip--info",
   },
   RECEIVED: {
     label: "심의진행중",
-    tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
+    tone: "bauhaus-status-chip--progress",
   },
   APPROVED: {
     label: "결과통보",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
     label: "결과통보",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    tone: "bauhaus-status-chip--danger",
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
 };
 
 const trackResultStatusMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
     label: "통과",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
     label: "불통과",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    tone: "bauhaus-status-chip--danger",
   },
 };
 
 const stationResultFallbackMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
     label: "결과통보",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
     label: "결과통보",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    tone: "bauhaus-status-chip--danger",
   },
   NEEDS_FIX: {
     label: "수정요청",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "bauhaus-status-chip--waiting",
   },
 };
 
 const stageStatusMap = {
   payment: {
     label: "결제대기",
-    tone: "bg-slate-500/10 text-slate-600 dark:text-slate-200",
+    tone: "bauhaus-status-chip--neutral",
   },
   pending: {
     label: "입금 예정",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+    tone: "bauhaus-status-chip--waiting",
   },
   paid: {
     label: "결제완료",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
   received: {
     label: "심의 접수완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+    tone: "bauhaus-status-chip--info",
   },
   progress: {
     label: "심의 진행중",
-    tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
+    tone: "bauhaus-status-chip--progress",
   },
   completed: {
     label: "전체 심의 완료",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: "bauhaus-status-chip--success",
   },
 };
 
@@ -130,7 +130,7 @@ function getReceptionStatus(status: string) {
   return (
     receptionStatusMap[status] ?? {
       label: "접수",
-      tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+      tone: "bauhaus-status-chip--neutral",
     }
   );
 }
@@ -162,11 +162,11 @@ function getResultStatus(
         : summary.outcome === "PARTIAL"
           ? {
               label: "부분통과",
-              tone: "bg-[#f6d64a] text-black dark:text-black",
+              tone: "bauhaus-status-chip--waiting",
             }
           : stationResultFallbackMap[review.status] ?? {
               label: "대기",
-              tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+              tone: "bauhaus-status-chip--neutral",
             };
 
   const summaryText =
@@ -336,7 +336,7 @@ function StationLogo({
           alt={station?.name ?? station?.code ?? "station logo"}
           width={28}
           height={28}
-          className="h-7 w-7 object-contain"
+          className="h-7 w-auto max-w-7 object-contain"
           unoptimized
           loading="lazy"
           onError={handleError}
@@ -836,7 +836,7 @@ export function HomeReviewPanel({
                 </p>
                 {currentSubmissionStatus ? (
                   <span
-                    className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${currentSubmissionStatus.tone}`}
+                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${currentSubmissionStatus.tone}`}
                   >
                     {currentSubmissionStatus.label}
                   </span>
@@ -954,7 +954,7 @@ export function HomeReviewPanel({
                               </span>
                             </span>
                             <span
-                              className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
+                              className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${reception.tone}`}
                             >
                               {reception.label}
                             </span>
@@ -972,7 +972,7 @@ export function HomeReviewPanel({
                                         station.result_note?.trim() || null,
                                     })
                                   }
-                                  className={`inline-flex min-h-[34px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${result.tone}`}
                                 >
                                   <span>{result.label}</span>
                                   {result.summaryText ? (
@@ -984,7 +984,7 @@ export function HomeReviewPanel({
                               ) : (
                                 <div className="flex flex-col items-center gap-1">
                                   <span
-                                    className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
+                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${result.tone}`}
                                   >
                                     {result.label}
                                   </span>
@@ -1032,7 +1032,7 @@ export function HomeReviewPanel({
                               <span className="sr-only">{stationLabel}</span>
                             </div>
                             <span
-                              className={`inline-flex items-center justify-center justify-self-center whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold ${reception.tone}`}
+                              className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${reception.tone}`}
                             >
                               {reception.label}
                             </span>
@@ -1048,14 +1048,14 @@ export function HomeReviewPanel({
                                       station.result_note?.trim() || null,
                                   })
                                 }
-                                className={`inline-flex min-h-[32px] min-w-[88px] items-center justify-center justify-self-center whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
+                                className={`bauhaus-status-chip bauhaus-status-chip--compact min-w-[88px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${result.tone}`}
                               >
                                 <span>{result.label}</span>
                               </button>
                             ) : (
                               <div className="flex items-center justify-self-center">
                                 <span
-                                  className={`inline-flex items-center justify-center whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold ${result.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact ${result.tone}`}
                                 >
                                   {result.label}
                                 </span>
@@ -1104,7 +1104,7 @@ export function HomeReviewPanel({
                             </div>
                             <div className="mt-2 flex flex-wrap gap-2">
                               <span
-                                className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
+                                className={`bauhaus-status-chip bauhaus-status-chip--compact ${reception.tone}`}
                               >
                                 {reception.label}
                               </span>
@@ -1119,7 +1119,7 @@ export function HomeReviewPanel({
                                       resultNote: station.result_note?.trim() || null,
                                     })
                                   }
-                                  className={`inline-flex min-h-[32px] flex-col items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100 ${result.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${result.tone}`}
                                 >
                                   <span>{result.label}</span>
                                   {result.summaryText ? (
@@ -1131,7 +1131,7 @@ export function HomeReviewPanel({
                               ) : (
                                 <div className="flex flex-col items-center gap-1">
                                   <span
-                                    className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${result.tone}`}
+                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${result.tone}`}
                                   >
                                     {result.label}
                                   </span>
@@ -1188,19 +1188,16 @@ export function HomeReviewPanel({
                   track.status === "APPROVED"
                     ? {
                         label: "통과",
-                        tone:
-                          "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+                        tone: "bauhaus-status-chip--success",
                       }
                     : track.status === "REJECTED"
                       ? {
                           label: "불통과",
-                          tone:
-                            "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+                          tone: "bauhaus-status-chip--danger",
                         }
                       : {
                           label: "대기",
-                          tone:
-                            "bg-slate-500/10 text-slate-600 dark:text-slate-300",
+                          tone: "bauhaus-status-chip--neutral",
                         };
                 const trackLabel =
                   track.title ||
@@ -1225,7 +1222,7 @@ export function HomeReviewPanel({
                       ) : null}
                     </div>
                     <span
-                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${status.tone}`}
+                      className={`bauhaus-status-chip bauhaus-status-chip--compact ${status.tone}`}
                     >
                       {status.label}
                     </span>

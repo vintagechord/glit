@@ -93,7 +93,9 @@ export function HomeSessionPanel() {
 
       if (!active) return;
       if (error) {
-        console.error("[HomeSessionPanel] Failed to read session:", error.message);
+        if (!error.message.toLowerCase().includes("auth session missing")) {
+          console.error("[HomeSessionPanel] Failed to read session:", error.message);
+        }
         setIsLoggedIn(false);
         return;
       }

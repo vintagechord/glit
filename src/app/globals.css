@@ -249,6 +249,70 @@
     box-shadow: 5px 5px 0 var(--bauhaus-shadow);
   }
 
+  .bauhaus-status-chip {
+    display: inline-flex;
+    min-height: 1.625rem;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--bauhaus-ink);
+    border-radius: 6px;
+    padding: 0.25rem 0.625rem;
+    box-shadow: 2px 2px 0 var(--bauhaus-shadow);
+    font-size: 0.75rem;
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+
+  .bauhaus-status-chip--compact {
+    min-height: 1.375rem;
+    padding: 0.2rem 0.45rem;
+    box-shadow: 1.5px 1.5px 0 var(--bauhaus-shadow);
+    font-size: 0.6875rem;
+  }
+
+  .bauhaus-status-chip--neutral {
+    background: var(--card);
+    color: var(--foreground);
+  }
+
+  .bauhaus-status-chip--waiting {
+    background: var(--bauhaus-yellow);
+    color: #111111;
+  }
+
+  .bauhaus-status-chip--info {
+    background: var(--bauhaus-blue);
+    color: #ffffff;
+  }
+
+  .bauhaus-status-chip--progress {
+    background: var(--bauhaus-blue);
+    color: #ffffff;
+  }
+
+  .bauhaus-status-chip--success {
+    background: var(--bauhaus-green);
+    color: #ffffff;
+  }
+
+  .bauhaus-status-chip--danger {
+    background: var(--bauhaus-red);
+    color: #ffffff;
+  }
+
+  .dark .bauhaus-status-chip {
+    border-color: var(--bauhaus-shadow);
+  }
+
+  .dark .bauhaus-status-chip--info,
+  .dark .bauhaus-status-chip--progress,
+  .dark .bauhaus-status-chip--success,
+  .dark .bauhaus-status-chip--danger {
+    color: #06111f;
+  }
+
   .rounded-\[32px\],
   .rounded-\[28px\],
   .rounded-\[36px\],

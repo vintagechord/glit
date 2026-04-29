@@ -100,7 +100,9 @@ export function SiteHeader() {
       if (!active) return;
 
       if (error) {
-        console.error("[SiteHeader] Failed to read session:", error.message);
+        if (!error.message.toLowerCase().includes("auth session missing")) {
+          console.error("[SiteHeader] Failed to read session:", error.message);
+        }
         persist("unauthenticated");
         return;
       }
