@@ -299,9 +299,6 @@ export default function Home() {
                 상품/방송국 패키지 선택부터 결제 확인까지 흐름을 간단하게 설계했습니다.
               </p>
             </div>
-            <div className="hidden border-2 border-[#111111] bg-[#d9362c] px-4 py-3 text-sm font-black text-white shadow-[4px_4px_0_#111111] dark:border-white lg:block">
-              4 STEP FLOW
-            </div>
           </div>
 
           <div className="relative z-10 mt-6">

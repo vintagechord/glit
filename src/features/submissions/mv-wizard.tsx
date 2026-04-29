@@ -85,7 +85,7 @@ const multipartThresholdBytes = multipartThresholdMb * 1024 * 1024;
 const baseOnlinePrice = 30000;
 const etnOptionPrice = 30000;
 const stationPriceMap: Record<string, number> = {
-  KBS: 30000,
+  KBS: 50000,
   MBC: 30000,
   SBS: 30000,
   ETN: etnOptionPrice,

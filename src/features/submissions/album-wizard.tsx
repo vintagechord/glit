@@ -803,6 +803,13 @@ export function AlbumWizard({
         const activeTone = selectedPackageTone
           ? selectedPackageTone.card
           : "border-[#0071e3] bg-[#0071e3] text-white dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]";
+        const displayLabel =
+          index === 0 && selectedPackageSummary
+            ? `${formatPackageName(
+                selectedPackageSummary.stationCount,
+                isOneClick,
+              )} (${formatCurrency(selectedPackageSummary.priceKrw)}원)`
+            : label;
         return (
           <div
             key={label}
@@ -828,7 +835,7 @@ export function AlbumWizard({
               ) : null}
             </div>
             <p className="mt-1.5 text-sm font-semibold tracking-normal">
-              {label}
+              {displayLabel}
             </p>
           </div>
         );
@@ -3357,81 +3364,6 @@ export function AlbumWizard({
                   ? ` · 추가 앨범 ${albumDrafts.length}건 등록됨`
                   : ""}
               </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="rounded-[28px] border border-black/6 bg-white/92 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                이번 단계에서 입력할 내용
-              </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
-                  <p className="font-semibold">기본 정보</p>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    {isOneClick
-                      ? "아티스트명, 앨범명(선택), 멜론 링크를 입력합니다."
-                      : "앨범명, 아티스트 표기, 발매일, 장르, 유통사, 제작사를 입력합니다."}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
-                  <p className="font-semibold">접수자 정보</p>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    이름, 이메일, 연락처는 접수 확인과 결과 안내에 사용됩니다.
-                  </p>
-                </div>
-                {!isOneClick ? (
-                  <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground sm:col-span-2">
-                    <p className="font-semibold">트랙 정보와 가사</p>
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                      곡 제목, 작곡·작사·편곡, 타이틀 여부, 가사를 실제 발매 내용과
-                      일치하게 입력해주세요. 결과 확인 시 트랙별 통과 여부가
-                      그대로 반영됩니다.
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-[#cfe3fb] bg-[#eaf3ff] p-6 text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.1)] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-white dark:shadow-none">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#0071e3] dark:text-[#8bc3ff]">
-                선택 내용 요약
-              </p>
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="rounded-2xl border border-white/45 bg-white/70 px-4 py-3 dark:border-white/10 dark:bg-white/5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-70">
-                    접수 방식
-                  </p>
-                  <p className="mt-1 font-semibold">
-                    {isOneClick ? "원클릭 접수" : "일반 접수"}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-white/45 bg-white/70 px-4 py-3 dark:border-white/10 dark:bg-white/5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-70">
-                    선택 패키지
-                  </p>
-                  <p className="mt-1 font-semibold">
-                    {selectedPackageSummary
-                      ? formatPackageName(selectedPackageSummary.stationCount, isOneClick)
-                      : "선택 전"}
-                  </p>
-                  <p className="mt-1 text-xs opacity-80">
-                    {selectedPackageSummary
-                      ? `${formatCurrency(selectedPackageSummary.priceKrw)}원`
-                      : "패키지를 먼저 선택해주세요."}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-white/45 bg-white/70 px-4 py-3 dark:border-white/10 dark:bg-white/5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-70">
-                    접수 완료 후
-                  </p>
-                  <p className="mt-1 text-xs leading-5 opacity-85">
-                    {isGuest
-                      ? "조회 코드가 발급되며, 이후 방송국별 진행 상태와 결과를 비회원 조회에서 확인할 수 있습니다."
-                      : "접수 내역이 마이페이지에 저장되어 결과 확인과 재조회가 더 간편합니다."}
-                  </p>
-                </div>
-              </div>
             </div>
           </div>
 
