@@ -224,7 +224,7 @@ export const markPaymentFailure = async (
     if (!approvedPayments?.length) {
       const { error: submissionError } = await admin
         .from("submissions")
-        .update({ payment_status: "UNPAID" })
+        .update({ payment_status: "UNPAID", status: "WAITING_PAYMENT" })
         .eq("id", updated.submission_id)
         .neq("payment_status", "PAID");
       if (submissionError) {
@@ -269,7 +269,7 @@ export const markPaymentCanceled = async (
     if (!approvedPayments?.length) {
       const { error: submissionError } = await admin
         .from("submissions")
-        .update({ payment_status: "UNPAID" })
+        .update({ payment_status: "UNPAID", status: "WAITING_PAYMENT" })
         .eq("id", updated.submission_id)
         .neq("payment_status", "PAID");
       if (submissionError) {

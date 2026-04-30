@@ -101,11 +101,11 @@ const stationResultFallbackMap: Record<string, { label: string; tone: string }> 
 
 const stageStatusMap = {
   payment: {
-    label: "결제대기",
+    label: "결제 대기",
     tone: "bauhaus-status-chip--neutral",
   },
   pending: {
-    label: "입금 예정",
+    label: "결제 대기",
     tone: "bauhaus-status-chip--waiting",
   },
   paid: {
@@ -594,6 +594,8 @@ export function HomeReviewPanel({
     activeSubmission && totalCount > 0 && completedCount === totalCount
       ? stageStatusMap.completed
       : getStageStatus(activeSubmission);
+  const needsPayment =
+    Boolean(activeSubmission) && activeSubmission?.payment_status !== "PAID";
 
   const rowsPerPage = Math.max(1, Math.floor(stationRowsPerPage));
   const rowHeight = 52;
@@ -853,6 +855,17 @@ export function HomeReviewPanel({
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
+                {needsPayment && activeSubmission ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f6d64a] bg-[#fff8d7] px-3 py-2 text-xs font-semibold text-[#111111] dark:bg-[#f6d64a]/10 dark:text-[#f6d64a]">
+                    <span>미결제 상태입니다. 결제를 완료하면 심의가 진행됩니다.</span>
+                    <Link
+                      href={`/dashboard/pay/${activeSubmission.id}`}
+                      className="rounded-full border border-[#111111] bg-[#111111] px-3 py-1.5 text-[11px] font-black uppercase tracking-normal text-[#f6d64a] transition hover:-translate-y-0.5 dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-[#111111]"
+                    >
+                      결제하기
+                    </Link>
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : (

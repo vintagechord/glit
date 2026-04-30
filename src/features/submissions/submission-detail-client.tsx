@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 import {
   paymentStatusLabelMap,
@@ -358,6 +359,7 @@ export function SubmissionDetailClient({
   guestToken?: string;
   paymentState?: string;
 }) {
+  const router = useRouter();
   const supabase = React.useMemo(
     () => (enableRealtime ? createClient() : null),
     [enableRealtime],
@@ -574,8 +576,11 @@ export function SubmissionDetailClient({
     paymentStatusLabelMap[
       submission.payment_status as keyof typeof paymentStatusLabelMap
     ] ??
-    submission.payment_status ??
-    "-";
+    (submission.payment_status === "UNPAID"
+      ? "미결제"
+      : submission.payment_status ?? "-");
+  const canRetryCardPayment =
+    submission.payment_method === "CARD" && submission.payment_status !== "PAID";
   const mvSongTitleDisplay =
     submission.mv_song_title_official ||
     submission.mv_song_title ||
@@ -667,13 +672,17 @@ export function SubmissionDetailClient({
         ? `${paymentMethodLabels[submission.payment_method] ?? submission.payment_method} 결제`
         : "결제 방식 미입력",
       onClick:
-        submission.payment_method === "BANK" && isPaymentPending
-          ? () => setShowPaymentInfo(true)
-          : undefined,
+        canRetryCardPayment
+          ? () => router.push(`/dashboard/pay/${submission.id}`)
+          : submission.payment_method === "BANK" && isPaymentPending
+            ? () => setShowPaymentInfo(true)
+            : undefined,
       actionLabel:
-        submission.payment_method === "BANK" && isPaymentPending
-          ? "입금 안내 보기"
-          : undefined,
+        canRetryCardPayment
+          ? "결제하기"
+          : submission.payment_method === "BANK" && isPaymentPending
+            ? "입금 안내 보기"
+            : undefined,
     },
     {
       label: "방송국 진행",
@@ -690,7 +699,9 @@ export function SubmissionDetailClient({
           ? `확인 필요 ${stationSummary.actionNeeded}곳`
           : stationSummary.processing > 0
             ? `진행 중 ${stationSummary.processing}곳`
-            : "현재 결과 기준",
+            : stationSummary.total > 0
+              ? "방송국별 결과가 순차 반영됩니다."
+              : "결제 확인 후 방송국 진행 정보가 표시됩니다.",
     },
   ];
   const quickFacts = [

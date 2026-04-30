@@ -34,7 +34,7 @@ const statusLabels: Record<string, { label: string; tone: string }> = {
   SUBMITTED: { label: "접수", tone: "bauhaus-status-chip--info" },
   PRE_REVIEW: { label: "사전검토", tone: "bauhaus-status-chip--waiting" },
   WAITING_PAYMENT: {
-    label: "결제대기",
+    label: "결제 대기",
     tone: "bauhaus-status-chip--waiting",
   },
   IN_PROGRESS: { label: "진행중", tone: "bauhaus-status-chip--progress" },
@@ -45,7 +45,7 @@ const statusLabels: Record<string, { label: string; tone: string }> = {
 const paymentLabels: Record<string, { label: string; tone: string }> = {
   UNPAID: { label: "미결제", tone: "bauhaus-status-chip--neutral" },
   PAYMENT_PENDING: {
-    label: "결제대기",
+    label: "결제 대기",
     tone: "bauhaus-status-chip--waiting",
   },
   PAID: { label: "결제완료", tone: "bauhaus-status-chip--success" },
@@ -197,8 +197,14 @@ export function SubmissionStatusList({
     <>
       <div className="space-y-4">
         {submissions.map((submission) => {
+          const displayStatus =
+            submission.payment_status !== "PAID" &&
+            submission.status !== "DRAFT" &&
+            submission.status !== "PRE_REVIEW"
+              ? "WAITING_PAYMENT"
+              : submission.status;
           const statusInfo =
-            statusLabels[submission.status] ?? statusLabels.DRAFT;
+            statusLabels[displayStatus] ?? statusLabels.DRAFT;
           const paymentInfo =
             paymentLabels[submission.payment_status] ?? paymentLabels.UNPAID;
           const shouldShowPaymentChip = !(
