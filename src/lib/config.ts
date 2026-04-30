@@ -58,7 +58,7 @@ export const APP_CONFIG = {
   businessRep: process.env.NEXT_PUBLIC_BUSINESS_REP ?? "정준영",
   businessAddress:
     process.env.NEXT_PUBLIC_BUSINESS_ADDRESS ??
-    "서울특별시 은평구 진흥로 37-6",
+    "경기도 김포시 사우중로74번길 29 (사우동) 시그마프라자 7층 뮤직스튜디오 (엘리베이터 좌측 통로)",
   businessRegNo:
     process.env.NEXT_PUBLIC_BUSINESS_REG_NO ?? "110-21-24454",
   businessMailOrderNo:

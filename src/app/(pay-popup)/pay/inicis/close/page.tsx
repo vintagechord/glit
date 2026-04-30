@@ -8,6 +8,9 @@ const CloseBridgePage = () => {
     const message = { type: "INICIS:CANCEL_BRIDGE", payload };
     try {
       window.opener?.postMessage(message, window.location.origin);
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(message, window.location.origin);
+      }
     } catch (error) {
       console.error("[Inicis][STDPay][bridge-close] postMessage error", error);
     }

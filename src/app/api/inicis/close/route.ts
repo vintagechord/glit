@@ -17,7 +17,10 @@ const postMessageResponse = () => {
   (function() {
     try {
       if (window.opener) {
-        window.opener.postMessage(${payload}, "*");
+        window.opener.postMessage(${payload}, window.location.origin);
+      }
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(${payload}, window.location.origin);
       }
     } catch (e) {
       console.error("INICIS postMessage error", e);

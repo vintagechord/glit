@@ -68,13 +68,18 @@ function ReturnBridgeContent() {
       if (hasOpener) {
         window.opener?.postMessage(message, window.location.origin);
       }
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(message, window.location.origin);
+      }
     } catch (error) {
       console.error("[Inicis][return-bridge] postMessage error", error);
     }
-    if (hasOpener) {
+    if (hasOpener || (window.parent && window.parent !== window)) {
       const timer = window.setTimeout(() => {
         try {
-          window.close();
+          if (hasOpener) {
+            window.close();
+          }
         } catch {
           // ignore
         }

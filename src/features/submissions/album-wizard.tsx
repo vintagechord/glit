@@ -1601,6 +1601,13 @@ export function AlbumWizard({
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
 
   const addFiles = (selected: File[]) => {
+    if (emailSubmitConfirmed) {
+      setNotice({
+        error:
+          "이메일 전송으로 진행을 선택한 뒤에는 파일 업로드로 변경할 수 없습니다.",
+      });
+      return;
+    }
     if (!currentSubmissionId) {
       setNotice({
         error:
@@ -2341,7 +2348,7 @@ export function AlbumWizard({
 
   const confirmEmailSubmission = React.useCallback(() => {
     const message =
-      "음원 파일 첨부가 완료되지 않으면 파일 없이 다음 단계로 진행해 신청서를 먼저 제출하고, 음원 파일만 이메일로 보내주세요.\n이 방식으로 계속하시겠습니까?";
+      "음원 파일 첨부가 완료되지 않으면 파일 없이 다음 단계로 진행해 신청서를 먼저 제출하고, 음원 파일만 이메일로 보내주세요.\n이메일 전송으로 진행하면 파일 업로드로 되돌릴 수 없습니다.\n이 방식으로 계속하시겠습니까?";
     const confirmed =
       typeof window !== "undefined" ? window.confirm(message) : false;
     if (confirmed) {
@@ -2351,7 +2358,7 @@ export function AlbumWizard({
         if (!prev) return prev;
         return prev.map((draft, index) =>
           index === uploadDraftIndex
-            ? { ...draft, emailSubmitConfirmed: true }
+            ? { ...draft, files: [], emailSubmitConfirmed: true }
             : draft,
         );
       });
@@ -2361,19 +2368,37 @@ export function AlbumWizard({
 
   const selectUploadDeliveryMode = React.useCallback(
     (mode: "upload" | "email") => {
-      const useEmail = mode === "email";
-      setEmailSubmitConfirmed(useEmail);
+      if (mode === "upload") {
+        if (emailSubmitConfirmed) {
+          setNotice({
+            error:
+              "이메일 전송으로 진행을 선택한 뒤에는 파일 업로드로 변경할 수 없습니다.",
+          });
+        } else {
+          setNotice({});
+        }
+        return;
+      }
+      if (emailSubmitConfirmed) {
+        setNotice({});
+        return;
+      }
+      setFiles([]);
+      setUploads([]);
+      setUploadedFiles([]);
+      setFileDigest("");
+      setEmailSubmitConfirmed(true);
       setNotice({});
       setUploadDrafts((prev) => {
         if (!prev) return prev;
         return prev.map((draft, index) =>
           index === uploadDraftIndex
-            ? { ...draft, emailSubmitConfirmed: useEmail }
+            ? { ...draft, files: [], emailSubmitConfirmed: true }
             : draft,
         );
       });
     },
-    [uploadDraftIndex],
+    [emailSubmitConfirmed, uploadDraftIndex],
   );
 
   const getTrackDisplayTitle = (track: TrackInput) =>
@@ -3024,14 +3049,16 @@ export function AlbumWizard({
       if (status === "SUBMITTED" && submissionIds.length > 0) {
         if (paymentMethod === "CARD") {
           setNotice(emailWarning ? { emailWarning } : {});
-          const { ok, error } = openInicisCardPopup({
+          const { ok, error } = await openInicisCardPopup({
             context: isOneClick ? "oneclick" : "music",
             submissionId: submissionIds[0],
             guestToken: guestTokens[0]?.token ?? currentGuestToken ?? undefined,
           });
           if (!ok) {
             setNotice({
-              error: error || "결제 팝업을 열지 못했습니다. 팝업 차단을 해제한 뒤 다시 시도해주세요.",
+              error:
+                error ||
+                "결제 모듈을 실행하지 못했습니다. 잠시 후 다시 시도해주세요.",
             });
           }
           return;
@@ -4386,10 +4413,11 @@ export function AlbumWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("upload")}
+                disabled={emailSubmitConfirmed}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
                   !emailSubmitConfirmed
                     ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                    : "cursor-not-allowed text-muted-foreground opacity-60"
                 }`}
               >
                 파일 업로드
@@ -4403,148 +4431,176 @@ export function AlbumWizard({
                     : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                 }`}
               >
-                이메일 전송
+                <span className="inline-flex items-center justify-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${
+                      emailSubmitConfirmed
+                        ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#3f8ad8]"
+                        : "border-current"
+                    }`}
+                  >
+                    {emailSubmitConfirmed ? "✓" : ""}
+                  </span>
+                  이메일 전송
+                </span>
               </button>
             </div>
-            <div className="mt-4">
-              <label
-                className="relative block"
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setIsDraggingOver(true);
-                }}
-                onDragEnter={() => setIsDraggingOver(true)}
-                onDragLeave={(event) => {
-                  event.preventDefault();
-                  setIsDraggingOver(false);
-                }}
-                onDrop={(event) => {
-                  setIsDraggingOver(false);
-                  onDropFiles(event);
-                }}
-              >
-                <span className="sr-only">파일 첨부</span>
-                <input
-                  type="file"
-                  multiple
-                  accept=".wav,.zip,application/zip"
-                  onChange={onFileChange}
-                  className="hidden"
-                  disabled={!currentSubmissionId || isPreparingDraft}
-                />
-                <div className="flex min-h-[120px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
-                  <span>
-                    {currentSubmissionId
-                      ? "파일 첨부 (드래그 앤 드롭 가능)"
-                      : isPreparingDraft
-                        ? "접수 ID 준비 중... 잠시 후 첨부 가능"
-                        : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
+            {emailSubmitConfirmed ? (
+              <div className="mt-4 rounded-2xl border border-emerald-300/70 bg-emerald-50 px-4 py-5 text-sm text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100">
+                <div className="flex flex-wrap items-start gap-3">
+                  <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border border-emerald-500 bg-emerald-500 text-xs font-black text-white">
+                    ✓
                   </span>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-black bg-gradient-to-br from-black to-slate-900 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm">
-                    허용 형식: <span className="font-mono text-[12px]">WAV/ZIP</span>
-                    <span className="text-white/70">·</span>
-                    최대 <span className="font-mono text-[12px]">{uploadMaxLabel}</span>
-                  </span>
-                  <span className="text-[11px] font-normal text-muted-foreground text-center">
-                    * 수록곡이 많은 경우 ZIP으로 압축한 하나의 파일로 업로드해주세요.
-                  </span>
-                  {!currentSubmissionId && !isPreparingDraft ? (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void createDraft({ force: true });
-                      }}
-                      className="inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-[12px] font-semibold tracking-[0.16em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
-                    >
-                      다시 시도
-                    </button>
-                  ) : null}
-                </div>
-                {isDraggingOver && (
-                  <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-[#f6d64a] bg-black/10 backdrop-blur-[1px]" />
-                )}
-              </label>
-            </div>
-            <div className="mt-4 space-y-3">
-              {uploads.map((upload, index) => (
-                <div
-                  key={`${upload.name}-${index}`}
-                  className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-semibold text-foreground">
-                      {upload.name}
-                    </span>
-                    <div className="flex items-center gap-3">
-                      {upload.status === "done" ? (
-                        <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
-                          첨부 완료
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          {upload.status === "uploading"
-                            ? `업로드 중 · ${upload.progress}%`
-                            : upload.status === "error"
-                              ? "실패"
-                              : "대기"}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextFiles = [...files];
-                          nextFiles.splice(index, 1);
-                          const nextUploads = [...uploads];
-                          nextUploads.splice(index, 1);
-                          setFiles(nextFiles);
-                          setUploads(nextUploads);
-                          setUploadedFiles((prev) =>
-                            prev.filter((_, idx) => idx !== index),
-                          );
-                          setFileDigest("");
-                        }}
-                        className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
-                      >
-                        삭제
-                      </button>
-                    </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">이메일 전송으로 진행합니다.</p>
+                    <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-100/75">
+                      파일 첨부 대신 아래 이메일 주소로 음원 파일을 보내주세요.
+                    </p>
+                    <p className="mt-3 break-all rounded-xl border border-emerald-300/70 bg-white/80 px-3 py-2 font-semibold text-emerald-900 dark:border-emerald-400/30 dark:bg-black/20 dark:text-emerald-100">
+                      {APP_CONFIG.supportEmail}
+                    </p>
                   </div>
-                  <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
-                    <div
-                      className="h-1.5 rounded-full bg-foreground transition-all"
-                      style={{ width: `${upload.progress}%` }}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mt-4">
+                  <label
+                    className="relative block"
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsDraggingOver(true);
+                    }}
+                    onDragEnter={() => setIsDraggingOver(true)}
+                    onDragLeave={(event) => {
+                      event.preventDefault();
+                      setIsDraggingOver(false);
+                    }}
+                    onDrop={(event) => {
+                      setIsDraggingOver(false);
+                      onDropFiles(event);
+                    }}
+                  >
+                    <span className="sr-only">파일 첨부</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept=".wav,.zip,application/zip"
+                      onChange={onFileChange}
+                      className="hidden"
+                      disabled={!currentSubmissionId || isPreparingDraft}
                     />
-                  </div>
-                </div>
-              ))}
-              {uploads.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-center text-xs text-muted-foreground">
-                  <p className="font-semibold text-foreground">
-                    아직 선택된 파일이 없습니다.
-                  </p>
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요.
-                  </p>
-                  <div className="mt-3 flex items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => selectUploadDeliveryMode("email")}
-                      className="rounded-full border border-border/70 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
-                    >
-                      이메일 전송으로 진행
-                    </button>
-                    {emailSubmitConfirmed ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
-                        선택됨
+                    <div className="flex min-h-[120px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
+                      <span>
+                        {currentSubmissionId
+                          ? "파일 첨부 (드래그 앤 드롭 가능)"
+                          : isPreparingDraft
+                            ? "접수 ID 준비 중... 잠시 후 첨부 가능"
+                            : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
                       </span>
-                    ) : null}
-                  </div>
+                      <span className="inline-flex items-center gap-2 rounded-full border border-black bg-gradient-to-br from-black to-slate-900 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm">
+                        허용 형식: <span className="font-mono text-[12px]">WAV/ZIP</span>
+                        <span className="text-white/70">·</span>
+                        최대 <span className="font-mono text-[12px]">{uploadMaxLabel}</span>
+                      </span>
+                      <span className="text-center text-[11px] font-normal text-muted-foreground">
+                        * 수록곡이 많은 경우 ZIP으로 압축한 하나의 파일로 업로드해주세요.
+                      </span>
+                      {!currentSubmissionId && !isPreparingDraft ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void createDraft({ force: true });
+                          }}
+                          className="inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-[12px] font-semibold tracking-[0.16em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+                        >
+                          다시 시도
+                        </button>
+                      ) : null}
+                    </div>
+                    {isDraggingOver && (
+                      <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-[#f6d64a] bg-black/10 backdrop-blur-[1px]" />
+                    )}
+                  </label>
                 </div>
-              )}
-            </div>
+                <div className="mt-4 space-y-3">
+                  {uploads.map((upload, index) => (
+                    <div
+                      key={`${upload.name}-${index}`}
+                      className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-foreground">
+                          {upload.name}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          {upload.status === "done" ? (
+                            <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                              첨부 완료
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {upload.status === "uploading"
+                                ? `업로드 중 · ${upload.progress}%`
+                                : upload.status === "error"
+                                  ? "실패"
+                                  : "대기"}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextFiles = [...files];
+                              nextFiles.splice(index, 1);
+                              const nextUploads = [...uploads];
+                              nextUploads.splice(index, 1);
+                              setFiles(nextFiles);
+                              setUploads(nextUploads);
+                              setUploadedFiles((prev) =>
+                                prev.filter((_, idx) => idx !== index),
+                              );
+                              setFileDigest("");
+                            }}
+                            className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
+                        <div
+                          className="h-1.5 rounded-full bg-foreground transition-all"
+                          style={{ width: `${upload.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  {uploads.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-center text-xs text-muted-foreground">
+                      <p className="font-semibold text-foreground">
+                        아직 선택된 파일이 없습니다.
+                      </p>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요.
+                      </p>
+                      <div className="mt-3 flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => selectUploadDeliveryMode("email")}
+                          className="rounded-full border border-border/70 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+                        >
+                          이메일 전송으로 진행
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
             <div className="mt-4 space-y-1 text-xs text-muted-foreground">
               <p>
                 음원 파일 업로드 시에 첨부 완료가 되지 않는 경우 파일 첨부 없이 하단 다음 단계 버튼을 눌러 신청서를 제출 후 음원 파일은 이메일로 보내주세요.
@@ -4552,9 +4608,11 @@ export function AlbumWizard({
               {isOneClick && (
                 <p>원클릭 접수도 동일하게 신청서를 먼저 제출한 뒤 음원 파일만 이메일로 보내주시면 됩니다.</p>
               )}
-              <p className="font-semibold text-foreground">
-                {APP_CONFIG.supportEmail}
-              </p>
+              {!emailSubmitConfirmed ? (
+                <p className="font-semibold text-foreground">
+                  {APP_CONFIG.supportEmail}
+                </p>
+              ) : null}
               <p className="text-xs text-muted-foreground">
                 CD 제작 등 실물 앨범을 발표한 경우{" "}
                 <button

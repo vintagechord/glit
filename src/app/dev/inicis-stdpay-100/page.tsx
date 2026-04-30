@@ -7,7 +7,7 @@ import { openInicisCardPopup } from "@/lib/inicis/popup";
 type InicisResult =
   | { status: "idle" }
   | { status: "init" }
-  | { status: "popup"; orderId?: string }
+  | { status: "payment"; orderId?: string }
   | { status: "success"; orderId: string; message?: string }
   | { status: "fail"; orderId: string; message?: string }
   | { status: "cancel"; orderId: string; message?: string }
@@ -62,11 +62,14 @@ export default function InicisStdPay1000Page() {
     setLoading(true);
     setResult({ status: "init" });
 
-    const { ok, error } = openInicisCardPopup({ context: "test1000", popupName: POPUP_NAME });
+    const { ok, error, orderId } = await openInicisCardPopup({
+      context: "test1000",
+      popupName: POPUP_NAME,
+    });
     if (!ok) {
-      setResult({ status: "error", message: error ?? "팝업을 열 수 없습니다." });
+      setResult({ status: "error", message: error ?? "결제 모듈을 실행할 수 없습니다." });
     } else {
-      setResult({ status: "popup" });
+      setResult({ status: "payment", orderId });
     }
     setLoading(false);
   };
@@ -75,8 +78,8 @@ export default function InicisStdPay1000Page() {
     <div className="mx-auto max-w-2xl space-y-6 px-6 py-10">
       <h1 className="text-2xl font-semibold text-foreground">1000원 카드 결제 테스트</h1>
       <p className="text-sm text-muted-foreground">
-        이 페이지는 KG 이니시스 STDPay 팝업 플로우를 검증하기 위한 1000원 테스트 결제용입니다. 버튼을 누르면 새 팝업에서
-        결제창이 열리고, 완료/취소 결과는 이 페이지에 표시됩니다.
+        이 페이지는 KG 이니시스 STDPay 플로우를 검증하기 위한 1000원 테스트 결제용입니다. 버튼을 누르면
+        결제 모듈이 열리고, 완료/취소 결과는 이 페이지에 표시됩니다.
       </p>
 
       <div className="rounded-2xl border border-border/70 bg-card/80 p-4 text-sm text-foreground">
@@ -92,8 +95,8 @@ export default function InicisStdPay1000Page() {
         </button>
 
         <div className="mt-4 space-y-1 text-sm text-muted-foreground">
-          <p>· 팝업이 차단된 경우 브라우저 설정에서 허용 후 다시 시도하세요.</p>
-          <p>· 결제 완료/취소 후 팝업이 닫히고 결과가 아래에 표시됩니다.</p>
+          <p>· 결제 모듈이 차단된 경우 브라우저 설정에서 팝업을 허용 후 다시 시도하세요.</p>
+          <p>· 결제 완료/취소 후 결제창이 닫히고 결과가 아래에 표시됩니다.</p>
         </div>
       </div>
 
@@ -101,9 +104,9 @@ export default function InicisStdPay1000Page() {
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">결과</p>
         {result.status === "idle" && <p className="mt-2 text-muted-foreground">아직 결제를 시작하지 않았습니다.</p>}
         {result.status === "init" && <p className="mt-2 text-muted-foreground">파라미터 생성 중...</p>}
-        {result.status === "popup" && (
+        {result.status === "payment" && (
           <p className="mt-2 text-foreground">
-            결제창을 열었습니다.{" "}
+            결제 모듈을 실행했습니다.{" "}
             {result.orderId ? (
               <>
                 주문번호 <span className="font-mono text-xs">{result.orderId}</span>

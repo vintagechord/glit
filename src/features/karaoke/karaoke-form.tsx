@@ -212,15 +212,20 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
           setNotice({ error: "결제 요청 ID를 받을 수 없습니다. 다시 시도해주세요." });
           return;
         }
-        const { ok, error } = openInicisCardPopup({
+        setNotice({ message: "이니시스 결제 모듈을 준비 중입니다." });
+        const { ok, error } = await openInicisCardPopup({
           context: "karaoke",
           requestId,
         });
         if (!ok) {
-          setNotice({ error: error ?? "결제 창을 열지 못했습니다. 팝업 차단을 확인해주세요." });
+          setNotice({
+            error:
+              error ??
+              "결제 모듈을 실행하지 못했습니다. 잠시 후 다시 시도해주세요.",
+          });
           return;
         }
-        setNotice({ message: "결제 창을 열었습니다. 결제를 완료해주세요." });
+        setNotice({ message: "결제 모듈을 실행했습니다. 결제를 완료해주세요." });
         return;
       }
 
