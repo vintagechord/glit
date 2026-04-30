@@ -126,6 +126,20 @@ const resultBenefits = [
   "방송국별 접수 상태, 트랙 결과, 수정 요청 여부를 한 번에 확인할 수 있습니다.",
 ];
 
+const isTestPackage = (name?: string | null) => name?.startsWith("[테스트]") ?? false;
+
+const sortPackagesForDisplay = <
+  T extends { name?: string | null; stationCount: number; priceKrw: number },
+>(
+  packages: T[],
+) =>
+  [...packages].sort((a, b) => {
+    const aIsTest = isTestPackage(a.name);
+    const bIsTest = isTestPackage(b.name);
+    if (aIsTest !== bIsTest) return aIsTest ? 1 : -1;
+    return a.stationCount - b.stationCount || a.priceKrw - b.priceKrw;
+  });
+
 export default async function AlbumSubmissionPage() {
   const supabase = await createServerSupabase();
   const profanityFilterV2Enabled = process.env.PROFANITY_FILTER_V2 === "true";
@@ -200,8 +214,9 @@ export default async function AlbumSubmissionPage() {
 
       <div className="mt-8">
         <AlbumWizard
-          packages={packages}
+          packages={sortPackagesForDisplay(packages)}
           userId={user?.id ?? null}
+          userEmail={user?.email ?? null}
           profanityTerms={profanityTerms}
           profanityFilterV2Enabled={profanityFilterV2Enabled}
         />

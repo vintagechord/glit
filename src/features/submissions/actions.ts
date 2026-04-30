@@ -316,6 +316,9 @@ const isValidEmailFormat = (value: string) =>
 
 const normalizeEmailValue = (value?: string | null) =>
   value?.trim().toLowerCase() ?? "";
+const adminReviewEmail = "iamwatermelon@daum.net";
+const isAdminReviewEmail = (value?: string | null) =>
+  normalizeEmailValue(value) === adminReviewEmail;
 
 const collectRecipientEmails = (
   ...values: Array<string | null | undefined>
@@ -662,6 +665,7 @@ export async function saveAlbumSubmissionAction(
 
   const isGuest = !user;
   const isSubmitted = parsed.data.status === "SUBMITTED";
+  const isAdminReviewer = isAdminReviewEmail(user?.email);
   const isOneClick = parsed.data.isOneClick ?? false;
   const titleValue = parsed.data.title?.trim() ?? "";
   const artistNameValue = parsed.data.artistName?.trim() ?? "";
@@ -693,10 +697,10 @@ export async function saveAlbumSubmissionAction(
   if (isSubmitted && isGuest && !isValidEmailFormat(guestEmailValue)) {
     return { error: "비회원 이메일 형식을 확인해주세요." };
   }
-  if (isSubmitted && !artistNameValue) {
+  if (isSubmitted && !isAdminReviewer && !artistNameValue) {
     return { error: "아티스트명을 입력해주세요. (원클릭 포함)" };
   }
-  if (isSubmitted && !isOneClick && !titleValue) {
+  if (isSubmitted && !isAdminReviewer && !isOneClick && !titleValue) {
     return { error: "앨범 제목을 입력해주세요." };
   }
 
@@ -734,19 +738,22 @@ export async function saveAlbumSubmissionAction(
   if (
     isSubmitted &&
     paymentMethod === "BANK" &&
-    !bankDepositorNameValue
+    !bankDepositorNameValue &&
+    !isAdminReviewer
   ) {
     return { error: "입금자명을 입력해주세요." };
   }
-  const bankPaymentDocumentError = validateBankPaymentDocument({
-    isSubmitted,
-    paymentMethod,
-    paymentDocumentType,
-    cashReceiptPurpose,
-    cashReceiptPhone: cashReceiptPhoneValue,
-    cashReceiptBusinessNumber: cashReceiptBusinessNumberDigits,
-    taxInvoiceBusinessNumber: taxInvoiceBusinessNumberDigits,
-  });
+  const bankPaymentDocumentError = isAdminReviewer
+    ? null
+    : validateBankPaymentDocument({
+        isSubmitted,
+        paymentMethod,
+        paymentDocumentType,
+        cashReceiptPurpose,
+        cashReceiptPhone: cashReceiptPhoneValue,
+        cashReceiptBusinessNumber: cashReceiptBusinessNumberDigits,
+        taxInvoiceBusinessNumber: taxInvoiceBusinessNumberDigits,
+      });
   if (bankPaymentDocumentError) {
     return { error: bankPaymentDocumentError };
   }
@@ -901,7 +908,7 @@ export async function saveAlbumSubmissionAction(
       broadcast_selected: Boolean(track.broadcastSelected),
     })) ?? [];
 
-  if (isSubmitted && !isOneClick) {
+  if (isSubmitted && !isAdminReviewer && !isOneClick) {
     if (trackRows.length === 0) {
       return { error: "트랙 정보를 입력해주세요." };
     }
@@ -1145,6 +1152,7 @@ export async function saveMvSubmissionAction(
 
   const isGuest = !user;
   const isSubmitted = parsed.data.status === "SUBMITTED";
+  const isAdminReviewer = isAdminReviewEmail(user?.email);
   const titleValue = parsed.data.title?.trim() ?? "";
   const artistNameValue = parsed.data.artistName?.trim() ?? "";
   const guestNameValue = parsed.data.guestName?.trim() ?? "";
@@ -1175,10 +1183,10 @@ export async function saveMvSubmissionAction(
   if (isSubmitted && isGuest && !isValidEmailFormat(guestEmailValue)) {
     return { error: "비회원 이메일 형식을 확인해주세요." };
   }
-  if (isSubmitted && !titleValue) {
+  if (isSubmitted && !isAdminReviewer && !titleValue) {
     return { error: "제목을 입력해주세요." };
   }
-  if (isSubmitted && !artistNameValue) {
+  if (isSubmitted && !isAdminReviewer && !artistNameValue) {
     return { error: "아티스트명을 입력해주세요." };
   }
 
@@ -1203,26 +1211,33 @@ export async function saveMvSubmissionAction(
   if (
     isSubmitted &&
     paymentMethod === "BANK" &&
-    !bankDepositorNameValue
+    !bankDepositorNameValue &&
+    !isAdminReviewer
   ) {
     return { error: "입금자명을 입력해주세요." };
   }
-  const bankPaymentDocumentError = validateBankPaymentDocument({
-    isSubmitted,
-    paymentMethod,
-    paymentDocumentType,
-    cashReceiptPurpose,
-    cashReceiptPhone: cashReceiptPhoneValue,
-    cashReceiptBusinessNumber: cashReceiptBusinessNumberDigits,
-    taxInvoiceBusinessNumber: taxInvoiceBusinessNumberDigits,
-  });
+  const bankPaymentDocumentError = isAdminReviewer
+    ? null
+    : validateBankPaymentDocument({
+        isSubmitted,
+        paymentMethod,
+        paymentDocumentType,
+        cashReceiptPurpose,
+        cashReceiptPhone: cashReceiptPhoneValue,
+        cashReceiptBusinessNumber: cashReceiptBusinessNumberDigits,
+        taxInvoiceBusinessNumber: taxInvoiceBusinessNumberDigits,
+      });
   if (bankPaymentDocumentError) {
     return { error: bankPaymentDocumentError };
   }
-  if (isSubmitted && !parsed.data.artistNameOfficial?.trim()) {
+  if (
+    isSubmitted &&
+    !isAdminReviewer &&
+    !parsed.data.artistNameOfficial?.trim()
+  ) {
     return { error: "아티스트명 공식 표기를 입력해주세요." };
   }
-  if (isSubmitted && !parsed.data.lyrics?.trim()) {
+  if (isSubmitted && !isAdminReviewer && !parsed.data.lyrics?.trim()) {
     return { error: "가사를 입력해주세요." };
   }
 

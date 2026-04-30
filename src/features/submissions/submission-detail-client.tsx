@@ -1355,7 +1355,7 @@ export function SubmissionDetailClient({
                           ? "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
                           : isPassed
                             ? "border-white bg-white/80 text-[#111111] dark:border-white dark:bg-white/14 dark:text-white"
-                            : "border-white/60 bg-transparent text-white/72"
+                            : "border-white/80 bg-white/16 text-white"
                       }`}
                     >
                       {label}

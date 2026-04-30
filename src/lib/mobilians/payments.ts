@@ -108,6 +108,17 @@ const buildRawRegistration = (
   registrationResponse: response ?? null,
 });
 
+const formatMobiliansConfigError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("Missing environment variables")) {
+    return "모빌리언스 결제 설정이 없습니다. MOBILIANS_ENV와 현재 모드의 MOBILIANS_SID/SKEY를 설정해주세요.";
+  }
+  if (message.includes("site_url must be 20 characters")) {
+    return "모빌리언스 사이트 URL 설정이 너무 깁니다. MOBILIANS_SITE_URL을 모빌리언스에 등록된 20자 이하 도메인으로 설정해주세요.";
+  }
+  return "모빌리언스 결제 설정을 확인할 수 없습니다.";
+};
+
 export const createMobiliansSubmissionPaymentOrder = async (
   submissionId: string,
   baseUrl: string,
@@ -157,7 +168,7 @@ export const createMobiliansSubmissionPaymentOrder = async (
     config = getMobiliansConfig();
   } catch (configError) {
     console.error("[Mobilians][submission][config-error]", configError);
-    return { error: "모빌리언스 결제 설정을 확인할 수 없습니다." };
+    return { error: formatMobiliansConfigError(configError) };
   }
   const admin = createAdminClient();
 
@@ -273,7 +284,7 @@ export const createMobiliansKaraokePaymentOrder = async (
     config = getMobiliansConfig();
   } catch (configError) {
     console.error("[Mobilians][karaoke][config-error]", configError);
-    return { error: "모빌리언스 결제 설정을 확인할 수 없습니다." };
+    return { error: formatMobiliansConfigError(configError) };
   }
   const admin = createAdminClient();
 

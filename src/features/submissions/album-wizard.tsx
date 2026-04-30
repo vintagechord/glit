@@ -129,8 +129,17 @@ const steps = [
   "접수 완료",
 ];
 
+const isReviewTestPackage = (name?: string | null) =>
+  name?.startsWith("[테스트]") ?? false;
 const formatPackageName = (count: number, isOneClick = false) =>
   `${isOneClick ? "원클릭 " : ""}${count}개 패키지`;
+const getPackageDisplayName = (
+  pkg: { name?: string | null; stationCount: number },
+  isOneClick = false,
+) =>
+  isReviewTestPackage(pkg.name)
+    ? (pkg.name ?? "테스트 패키지")
+    : formatPackageName(pkg.stationCount, isOneClick);
 const formatPackageDescription = (
   description: string | null | undefined,
   count: number,
@@ -167,6 +176,7 @@ const uploadMaxLabel =
     : `${uploadMaxMb}MB`;
 const draftDeleteTimeoutMs = 8000;
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
+const adminReviewEmail = "iamwatermelon@daum.net";
 
 const genreOptions = [
   "댄스",
@@ -297,17 +307,21 @@ type AlbumDraft = {
 export function AlbumWizard({
   packages,
   userId,
+  userEmail,
   profanityTerms = [],
   profanityFilterV2Enabled = false,
 }: {
   packages: PackageOption[];
   userId?: string | null;
+  userEmail?: string | null;
   profanityTerms?: ProfanityTerm[];
   profanityFilterV2Enabled?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isGuest = !userId;
+  const isAdminReviewer =
+    userEmail?.trim().toLowerCase() === adminReviewEmail;
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
   const [isOneClick, setIsOneClick] = React.useState(false);
@@ -811,8 +825,8 @@ export function AlbumWizard({
           : "border-[#0071e3] bg-[#0071e3] text-white dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]";
         const displayLabel =
           index === 0 && selectedPackageSummary
-            ? `${formatPackageName(
-                selectedPackageSummary.stationCount,
+            ? `${getPackageDisplayName(
+                selectedPackageSummary,
                 isOneClick,
               )} (${formatCurrency(selectedPackageSummary.priceKrw)}원)`
             : label;
@@ -2351,6 +2365,23 @@ export function AlbumWizard({
     return confirmed;
   }, [uploadDraftIndex]);
 
+  const selectUploadDeliveryMode = React.useCallback(
+    (mode: "upload" | "email") => {
+      const useEmail = mode === "email";
+      setEmailSubmitConfirmed(useEmail);
+      setNotice({});
+      setUploadDrafts((prev) => {
+        if (!prev) return prev;
+        return prev.map((draft, index) =>
+          index === uploadDraftIndex
+            ? { ...draft, emailSubmitConfirmed: useEmail }
+            : draft,
+        );
+      });
+    },
+    [uploadDraftIndex],
+  );
+
   const getTrackDisplayTitle = (track: TrackInput) =>
     track.trackTitle.trim() || "제목 미입력";
 
@@ -2373,6 +2404,10 @@ export function AlbumWizard({
     if (!selectedPackage) {
       setNotice({ error: "패키지를 선택해주세요." });
       return false;
+    }
+
+    if (isAdminReviewer) {
+      return true;
     }
 
     if (!applicantName.trim() || !applicantEmail.trim() || !applicantPhone.trim()) {
@@ -2460,6 +2495,8 @@ export function AlbumWizard({
   };
 
   const validateTranslatedLyrics = () => {
+    if (isAdminReviewer) return true;
+
     for (let index = 0; index < tracks.length; index += 1) {
       const track = tracks[index];
       if (!hasNonKoreanLyrics(track.lyrics)) continue;
@@ -2491,6 +2528,9 @@ export function AlbumWizard({
       (draft) => draft.files.length === 0 && !draft.emailSubmitConfirmed,
     );
     if (missingUploads.length > 0) {
+      if (isAdminReviewer) {
+        return true;
+      }
       if (missingUploads.length === 1 && confirmEmailSubmission()) {
         return true;
       }
@@ -2505,6 +2545,7 @@ export function AlbumWizard({
 
   const validatePaymentDocument = () => {
     if (paymentMethod !== "BANK") return true;
+    if (isAdminReviewer) return true;
     if (paymentDocumentType === "CASH_RECEIPT") {
       if (!cashReceiptPurpose) {
         setNotice({ error: "현금 영수증 발급 용도를 선택해주세요." });
@@ -2838,7 +2879,8 @@ export function AlbumWizard({
     if (
       status === "SUBMITTED" &&
       paymentMethod === "BANK" &&
-      !bankDepositorName.trim()
+      !bankDepositorName.trim() &&
+      !isAdminReviewer
     ) {
       setNotice({ error: "입금자명을 입력해주세요." });
       return;
@@ -3293,10 +3335,10 @@ export function AlbumWizard({
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
-                        {formatPackageName(pkg.stationCount, isOneClick)}
+                        {getPackageDisplayName(pkg, isOneClick)}
                       </p>
                       <h3 className="mt-2 text-xl font-semibold">
-                        {formatPackageName(pkg.stationCount, isOneClick)}
+                        {getPackageDisplayName(pkg, isOneClick)}
                       </h3>
                     </div>
                     <div className="flex flex-col items-end gap-2">
@@ -4346,6 +4388,30 @@ export function AlbumWizard({
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               전체 음원 파일 업로드
             </p>
+            <div className="mt-4 grid gap-2 rounded-2xl border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => selectUploadDeliveryMode("upload")}
+                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                  !emailSubmitConfirmed
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                }`}
+              >
+                파일 업로드
+              </button>
+              <button
+                type="button"
+                onClick={() => selectUploadDeliveryMode("email")}
+                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                  emailSubmitConfirmed
+                    ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
+                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                }`}
+              >
+                이메일 전송
+              </button>
+            </div>
             <div className="mt-4">
               <label
                 className="relative block"
@@ -4471,10 +4537,10 @@ export function AlbumWizard({
                   <div className="mt-3 flex items-center justify-center gap-2">
                     <button
                       type="button"
-                      onClick={confirmEmailSubmission}
+                      onClick={() => selectUploadDeliveryMode("email")}
                       className="rounded-full border border-border/70 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
                     >
-                      이메일 제출 선택
+                      이메일 전송으로 진행
                     </button>
                     {emailSubmitConfirmed ? (
                       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
@@ -4584,14 +4650,14 @@ export function AlbumWizard({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="font-semibold">
-                        {formatPackageName(
-                          selectedPackageSummary.stationCount,
+                        {getPackageDisplayName(
+                          selectedPackageSummary,
                           isOneClick,
                         )}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatPackageName(
-                          selectedPackageSummary.stationCount,
+                        {getPackageDisplayName(
+                          selectedPackageSummary,
                           isOneClick,
                         )}{" "}
                         · 총 {totalAlbumCount}건
@@ -4980,8 +5046,8 @@ export function AlbumWizard({
               확인
             </p>
             <p className="mt-2 text-lg font-semibold">
-              {`${formatPackageName(
-                packageConfirmTarget.stationCount,
+              {`${getPackageDisplayName(
+                packageConfirmTarget,
                 isOneClick,
               )}로 진행할까요?`}
             </p>

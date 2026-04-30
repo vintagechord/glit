@@ -71,6 +71,7 @@ const uploadMaxLabel =
   uploadMaxMb >= 1024
     ? `${Math.round(uploadMaxMb / 1024)}GB`
     : `${uploadMaxMb}MB`;
+const adminReviewEmail = "iamwatermelon@daum.net";
 const draftDeleteTimeoutMs = 8000;
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
 
@@ -233,13 +234,17 @@ const broadcastFieldLabels: Array<{
 export function MvWizard({
   stations,
   userId,
+  userEmail,
 }: {
   stations: StationOption[];
   userId?: string | null;
+  userEmail?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isGuest = !userId;
+  const isAdminReviewer =
+    userEmail?.trim().toLowerCase() === adminReviewEmail;
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
   const [mvType, setMvType] = React.useState<"MV_DISTRIBUTION" | "MV_BROADCAST">(
@@ -1391,17 +1396,13 @@ export function MvWizard({
     [],
   );
 
-  const confirmEmailSubmission = React.useCallback(() => {
-    const message =
-      "영상 파일 첨부가 완료되지 않으면 파일 없이 다음 단계로 진행해 신청서를 먼저 제출하고, 영상 파일만 이메일로 보내주세요.\n이 방식으로 계속하시겠습니까?";
-    const confirmed =
-      typeof window !== "undefined" ? window.confirm(message) : false;
-    if (confirmed) {
-      setEmailSubmitConfirmed(true);
+  const selectUploadDeliveryMode = React.useCallback(
+    (mode: "upload" | "email") => {
+      setEmailSubmitConfirmed(mode === "email");
       setNotice({});
-    }
-    return confirmed;
-  }, []);
+    },
+    [],
+  );
 
   const applyStoredDraft = React.useCallback((
     draft: Record<string, unknown>,
@@ -1639,6 +1640,7 @@ export function MvWizard({
 
   const validatePaymentDocument = () => {
     if (paymentMethod !== "BANK") return true;
+    if (isAdminReviewer) return true;
     if (paymentDocumentType === "CASH_RECEIPT") {
       if (!cashReceiptPurpose) {
         setNotice({ error: "현금 영수증 발급 용도를 선택해주세요." });
@@ -1694,6 +1696,10 @@ export function MvWizard({
     const guestPhoneValue = guestPhone.trim();
     const isValidEmail = (value: string) =>
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+    if (isAdminReviewer) {
+      return true;
+    }
 
     if (!titleValue || !artistNameValue) {
       setNotice({ error: "제목과 아티스트명을 입력해주세요." });
@@ -1772,6 +1778,7 @@ export function MvWizard({
   };
 
   const validateMvUploads = () => {
+    if (isAdminReviewer) return true;
     if (emailSubmitConfirmed) return true;
     if (uploads.length === 0) {
       setNotice({ error: "영상 파일을 업로드해주세요." });
@@ -2966,6 +2973,30 @@ export function MvWizard({
                 ))}
               </div>
             )}
+            <div className="mt-4 grid gap-2 rounded-2xl border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => selectUploadDeliveryMode("upload")}
+                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                  !emailSubmitConfirmed
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                }`}
+              >
+                파일 업로드
+              </button>
+              <button
+                type="button"
+                onClick={() => selectUploadDeliveryMode("email")}
+                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                  emailSubmitConfirmed
+                    ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
+                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                }`}
+              >
+                이메일 전송
+              </button>
+            </div>
             <div className="mt-4">
               <label
                 className="relative block"
@@ -3087,10 +3118,10 @@ export function MvWizard({
                   <div className="mt-3 flex items-center justify-center gap-2">
                     <button
                       type="button"
-                      onClick={confirmEmailSubmission}
+                      onClick={() => selectUploadDeliveryMode("email")}
                       className="rounded-full border border-border/70 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
                     >
-                      이메일 제출 선택
+                      이메일 전송으로 진행
                     </button>
                     {emailSubmitConfirmed ? (
                       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/70 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">

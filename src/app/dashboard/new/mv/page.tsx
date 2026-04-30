@@ -47,7 +47,11 @@ export default async function MvSubmissionPage() {
       </div>
 
       <div className="mt-8">
-        <MvWizard stations={stationRows ?? []} userId={user?.id ?? null} />
+        <MvWizard
+          stations={stationRows ?? []}
+          userId={user?.id ?? null}
+          userEmail={user?.email ?? null}
+        />
       </div>
     </div>
   );
