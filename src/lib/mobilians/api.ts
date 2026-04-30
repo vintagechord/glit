@@ -17,6 +17,8 @@ export type MobiliansRegistrationRequest = {
   ok_url: string;
   call_type: "P" | "S" | "I";
   hybrid_pay: "Y" | "N";
+  integrate_pay?: "Y" | "N";
+  integrate_pay_sequence?: string;
   noti_url?: string;
   close_url?: string;
   fail_url?: string;
@@ -97,4 +99,3 @@ export const requestMobiliansApproval = (payload: MobiliansApprovalRequest) =>
 
 export const isMobiliansSuccessCode = (code?: string | null) =>
   String(code ?? "").trim() === "0000";
-

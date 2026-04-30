@@ -14,6 +14,12 @@ const clean = (value?: string | null) => {
   return trimmed.length > 0 ? trimmed : "";
 };
 
+const normalizeCashCode = (value?: string | null) =>
+  clean(value).toUpperCase();
+
+const allowsStagingCard = () =>
+  clean(process.env.MOBILIANS_ALLOW_STG_CARD).toLowerCase() === "true";
+
 const normalizeMode = (value?: string | null): MobiliansMode | null => {
   const normalized = (value ?? "").trim().toLowerCase();
   if (normalized === "prod" || normalized === "production" || normalized === "live") {
@@ -68,13 +74,19 @@ export const getMobiliansConfig = (): MobiliansEnvConfig => {
       ? "https://mup.mobilians.co.kr"
       : "https://test.mobilians.co.kr");
   const cashCode =
-    clean(process.env[`MOBILIANS_CASH_CODE_${suffix}`]) ||
-    clean(process.env.MOBILIANS_CASH_CODE) ||
+    normalizeCashCode(process.env[`MOBILIANS_CASH_CODE_${suffix}`]) ||
+    normalizeCashCode(process.env.MOBILIANS_CASH_CODE) ||
     "CN";
 
   if (!sid || !skey) {
     throw new Error(
       `[Mobilians] Missing environment variables for mode=${env}. Please set MOBILIANS_SID_${suffix}, MOBILIANS_SKEY_${suffix}.`,
+    );
+  }
+
+  if (env === "stg" && cashCode === "CN" && !allowsStagingCard()) {
+    throw new Error(
+      "[Mobilians] Credit card service is not available on the test server. Use MOBILIANS_ENV=prod with production CN credentials.",
     );
   }
 
@@ -93,17 +105,32 @@ export const getMobiliansConfig = (): MobiliansEnvConfig => {
   return { env, sid, skey, apiBaseUrl, cashCode };
 };
 
+const normalizeSiteUrl = (value: string) => {
+  const trimmed = clean(value);
+  if (!trimmed) return "";
+  try {
+    return new URL(trimmed).hostname;
+  } catch {
+    return trimmed
+      .replace(/^https?:\/\//i, "")
+      .split("/")[0]
+      .split("?")[0]
+      .trim();
+  }
+};
+
 export const getMobiliansSiteUrl = (baseUrl: string) => {
   const configured = clean(process.env.MOBILIANS_SITE_URL);
+  const fallback = () => {
+    try {
+      return new URL(baseUrl).hostname;
+    } catch {
+      return "onside.co.kr";
+    }
+  };
   const value = configured
-    ? configured
-    : (() => {
-        try {
-          return new URL(baseUrl).hostname;
-        } catch {
-          return "onside.co.kr";
-        }
-      })();
+    ? normalizeSiteUrl(configured) || fallback()
+    : fallback();
   if (value.length > 20) {
     throw new Error(
       "[Mobilians] site_url must be 20 characters or fewer. Set MOBILIANS_SITE_URL to the registered short domain.",

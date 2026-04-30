@@ -56,7 +56,10 @@ const buildRegistrationPayload = (params: {
     `/api/mobilians/close?oid=${encodeURIComponent(params.orderId)}`,
     params.baseUrl,
   ).toString();
-  const failUrl = new URL("/api/mobilians/return?fail=1", params.baseUrl).toString();
+  const failUrl = new URL(
+    `/api/mobilians/return?fail=1&oid=${encodeURIComponent(params.orderId)}`,
+    params.baseUrl,
+  ).toString();
   const timeStamp = getMobiliansTimestamp();
   const amount = String(params.amountKrw);
   const hmac = makeRegistrationHmac(
@@ -79,6 +82,7 @@ const buildRegistrationPayload = (params: {
     ok_url: okUrl,
     call_type: "P",
     hybrid_pay: "Y",
+    integrate_pay: "N",
     noti_url: notiUrl,
     close_url: closeUrl,
     fail_url: failUrl,
@@ -115,6 +119,11 @@ const formatMobiliansConfigError = (error: unknown) => {
   }
   if (message.includes("site_url must be 20 characters")) {
     return "모빌리언스 사이트 URL 설정이 너무 깁니다. MOBILIANS_SITE_URL을 모빌리언스에 등록된 20자 이하 도메인으로 설정해주세요.";
+  }
+  if (
+    message.includes("Credit card service is not available on the test server")
+  ) {
+    return "모빌리언스 신용카드(CN)는 테스트 서버를 제공하지 않습니다. MOBILIANS_ENV=prod와 운영 SID/SKEY로 설정해주세요.";
   }
   return "모빌리언스 결제 설정을 확인할 수 없습니다.";
 };

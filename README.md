@@ -58,6 +58,7 @@ SUBSCRIPTION_PRICE_KRW=1000
 - 기본 카드 결제는 `NEXT_PUBLIC_PAYMENT_PROVIDER=mobilians`, `PAYMENT_PROVIDER=mobilians` 기준입니다.
 - 이니시스로 되돌릴 때는 두 값을 모두 `inicis`로 바꾸고 재배포하면 기존 `/pay/inicis` 플로우를 사용합니다.
 - 모빌리언스 필요 env: `MOBILIANS_ENV`, `MOBILIANS_SID_{STG|PROD}`, `MOBILIANS_SKEY_{STG|PROD}`, 선택 `MOBILIANS_API_URL_{STG|PROD}`, `MOBILIANS_CASH_CODE`, `MOBILIANS_SITE_URL`. `MOBILIANS_SITE_URL`은 모빌리언스에 등록된 20자 이하 도메인으로 설정합니다.
+- 신용카드(`MOBILIANS_CASH_CODE=CN`)는 KG 문서 기준 테스트 서버가 없으므로 `MOBILIANS_ENV=prod`, `MOBILIANS_API_URL_PROD=https://mup.mobilians.co.kr`, 운영 SID/SKEY로 설정해야 합니다.
 - 모빌리언스 콜백 URL은 `/api/mobilians/return`, 노티 URL은 `/api/mobilians/noti`, 취소 URL은 `/api/mobilians/close`를 사용합니다.
 
 ### Inicis STDPay(일반 결제) 체크리스트

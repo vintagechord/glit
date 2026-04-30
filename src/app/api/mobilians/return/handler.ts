@@ -57,6 +57,79 @@ const normalizeAmount = (value: string | number | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : NaN;
 };
 
+const isFormContentType = (contentType: string) =>
+  /application\/x-www-form-urlencoded|multipart\/form-data/i.test(contentType);
+
+const getCharset = (contentType: string) =>
+  contentType.match(/charset\s*=\s*("?)([^";]+)\1/i)?.[2]?.trim();
+
+const decodeRequestBody = async (req: NextRequest, contentType: string) => {
+  const buffer = await req.arrayBuffer();
+  if (!buffer.byteLength) return "";
+
+  const charset = getCharset(contentType);
+  const candidates = [
+    charset,
+    charset?.toLowerCase().includes("euc") ? "euc-kr" : null,
+    "utf-8",
+  ].filter((value): value is string => Boolean(value));
+
+  for (const encoding of candidates) {
+    try {
+      return new TextDecoder(encoding).decode(buffer);
+    } catch {
+      // Try the next decoder label.
+    }
+  }
+
+  return new TextDecoder().decode(buffer);
+};
+
+const htmlEntityDecode = (value: string) =>
+  value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+
+const parseHiddenInputParams = (body: string) => {
+  const params: Record<string, string> = {};
+  const inputPattern =
+    /<input\b(?=[^>]*\bname=(["'])([^"']+)\1)(?=[^>]*\bvalue=(["'])([^"']*)\3)[^>]*>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = inputPattern.exec(body))) {
+    params[htmlEntityDecode(match[2] ?? "")] = htmlEntityDecode(match[4] ?? "");
+  }
+  return params;
+};
+
+const parseBodyParams = (body: string): Record<string, string> => {
+  const trimmed = body.trim();
+  if (!trimmed) return {};
+
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      return Object.fromEntries(
+        Object.entries(parsed)
+          .filter(([, value]) => value != null)
+          .map(([key, value]) => [key, String(value)]),
+      );
+    } catch {
+      return {};
+    }
+  }
+
+  if (trimmed.includes("=") && !trimmed.startsWith("<")) {
+    return Object.fromEntries(
+      new URLSearchParams(trimmed.replace(/^\?/, "")).entries(),
+    );
+  }
+
+  return parseHiddenInputParams(trimmed);
+};
+
 const parseParams = async (req: NextRequest): Promise<ParsedReturn> => {
   const baseUrl = getBaseUrl(req);
   const contentType = req.headers.get("content-type") ?? "";
@@ -64,7 +137,7 @@ const parseParams = async (req: NextRequest): Promise<ParsedReturn> => {
   let params: Record<string, string> = {};
   let keys: string[] = [];
 
-  if (method === "POST") {
+  if (method === "POST" && isFormContentType(contentType)) {
     try {
       const form = await req.formData();
       keys = Array.from(form.keys());
@@ -73,6 +146,15 @@ const parseParams = async (req: NextRequest): Promise<ParsedReturn> => {
       );
     } catch (error) {
       console.warn("[Mobilians][return] formData parse error", error);
+    }
+  }
+
+  if (method === "POST" && !Object.keys(params).length) {
+    try {
+      params = parseBodyParams(await decodeRequestBody(req, contentType));
+      keys = Object.keys(params);
+    } catch (error) {
+      console.warn("[Mobilians][return] body parse error", error);
     }
   }
 
@@ -438,4 +520,3 @@ export const handleMobiliansReturn = async (
     });
   }
 };
-
