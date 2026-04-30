@@ -41,21 +41,21 @@ function ReturnBridgeContent() {
     const buildRedirectTarget = () => {
       const statusParam = status.toLowerCase();
       if (status === "SUCCESS") {
-        if (payload.submissionId) {
-          return `/dashboard/submissions/${payload.submissionId}?payment=success`;
-        }
         if (payload.guestToken) {
           return `/track/${payload.guestToken}?payment=success`;
+        }
+        if (payload.submissionId) {
+          return `/dashboard/submissions/${payload.submissionId}?payment=success`;
         }
         if (payload.requestId) {
           return `/karaoke-request?payment=success&requestId=${payload.requestId}`;
         }
       } else {
-        if (payload.submissionId) {
-          return `/dashboard/submissions/${payload.submissionId}?payment=${statusParam}`;
-        }
         if (payload.guestToken) {
           return `/track/${payload.guestToken}?payment=${statusParam}`;
+        }
+        if (payload.submissionId) {
+          return `/dashboard/submissions/${payload.submissionId}?payment=${statusParam}`;
         }
         if (payload.requestId) {
           return `/karaoke-request?payment=${statusParam}&requestId=${payload.requestId}`;

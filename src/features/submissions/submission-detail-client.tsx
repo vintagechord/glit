@@ -569,8 +569,8 @@ export function SubmissionDetailClient({
     reviewStatusLabelMap[submission.status as keyof typeof reviewStatusLabelMap] ??
     submission.status;
   const displaySubmissionStatusLabel =
-    submission.payment_method === "BANK" && isPaymentPending
-      ? "입금 예정"
+    isPaymentPending
+      ? "결제 대기"
       : submissionStatusLabel;
   const paymentStatusLabel =
     paymentStatusLabelMap[
@@ -580,7 +580,10 @@ export function SubmissionDetailClient({
       ? "미결제"
       : submission.payment_status ?? "-");
   const canRetryCardPayment =
-    submission.payment_method === "CARD" && submission.payment_status !== "PAID";
+    submission.payment_method !== "BANK" && submission.payment_status !== "PAID";
+  const retryPaymentHref = guestToken
+    ? `/dashboard/pay/${submission.id}?guestToken=${encodeURIComponent(guestToken)}`
+    : `/dashboard/pay/${submission.id}`;
   const mvSongTitleDisplay =
     submission.mv_song_title_official ||
     submission.mv_song_title ||
@@ -673,7 +676,7 @@ export function SubmissionDetailClient({
         : "결제 방식 미입력",
       onClick:
         canRetryCardPayment
-          ? () => router.push(`/dashboard/pay/${submission.id}`)
+          ? () => router.push(retryPaymentHref)
           : submission.payment_method === "BANK" && isPaymentPending
             ? () => setShowPaymentInfo(true)
             : undefined,
@@ -1464,7 +1467,7 @@ export function SubmissionDetailClient({
                 <div>
                   <p className="text-sm text-muted-foreground">결제 상태</p>
                   <p className="mt-1 font-semibold">
-                    {submission.payment_status}
+                    {paymentStatusLabel}
                   </p>
                 </div>
                 <div>

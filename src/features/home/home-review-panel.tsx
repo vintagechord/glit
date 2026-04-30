@@ -580,22 +580,24 @@ export function HomeReviewPanel({
     };
   }, [activeSubmissionId, normalizeStations, supabase, tab]);
 
-  const totalCount = activeStations.length;
+  const needsPayment =
+    Boolean(activeSubmission) && activeSubmission?.payment_status !== "PAID";
+  const totalCount = needsPayment ? 0 : activeStations.length;
   const completedCount = activeStations.filter((review) =>
     isStationCompleted(review),
   ).length;
   const progressPercent =
     totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   const progressText =
-    totalCount > 0
+    needsPayment
+      ? "결제 완료 후 방송국 진행 정보가 표시됩니다."
+      : totalCount > 0
       ? `진행률 : 총 ${totalCount}곳 중 ${completedCount}곳 완료`
       : "진행률 : 방송국 결과가 등록되면 진행률이 표시됩니다.";
   const currentSubmissionStatus =
-    activeSubmission && totalCount > 0 && completedCount === totalCount
+    activeSubmission && !needsPayment && totalCount > 0 && completedCount === totalCount
       ? stageStatusMap.completed
       : getStageStatus(activeSubmission);
-  const needsPayment =
-    Boolean(activeSubmission) && activeSubmission?.payment_status !== "PAID";
 
   const rowsPerPage = Math.max(1, Math.floor(stationRowsPerPage));
   const rowHeight = 52;
@@ -886,7 +888,7 @@ export function HomeReviewPanel({
               <button
                 type="button"
                 onClick={handlePrev}
-                disabled={!canScrollUp}
+                disabled={needsPayment || !canScrollUp}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary bg-primary text-sm font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="이전 심의 진행 상태"
               >
@@ -895,7 +897,7 @@ export function HomeReviewPanel({
               <button
                 type="button"
                 onClick={handleNext}
-                disabled={!canScrollDown}
+                disabled={needsPayment || !canScrollDown}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary bg-primary text-sm font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="다음 심의 진행 상태"
               >
@@ -910,7 +912,7 @@ export function HomeReviewPanel({
               <span className="justify-self-center text-center">{trackResultLabel}</span>
               <span className="text-right">Updated</span>
             </div>
-            {activeStations.length > 0 ? (
+            {!needsPayment && activeStations.length > 0 ? (
               <>
                 {mobileStationLayout === "table" ? (
                   <div className="grid grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden">
@@ -1165,7 +1167,9 @@ export function HomeReviewPanel({
               </>
             ) : (
               <div className="px-3 py-5 text-center text-xs text-muted-foreground">
-                접수 후 방송국 진행 정보를 확인할 수 있습니다.
+                {needsPayment
+                  ? "결제 완료 후 방송국 진행 정보를 확인할 수 있습니다."
+                  : "접수 후 방송국 진행 정보를 확인할 수 있습니다."}
               </div>
             )}
           </div>

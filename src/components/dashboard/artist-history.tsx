@@ -24,8 +24,7 @@ type ArtistGroup = {
 };
 
 const stageTone: Record<string, string> = {
-  "결제대기": "bg-[#f6d64a] text-black dark:text-black",
-  "입금 예정": "bg-sky-500/15 text-sky-700 dark:text-sky-200",
+  "결제 대기": "bg-[#f6d64a] text-black dark:text-black",
   "접수 완료": "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   "결제 확인": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   "심의 진행": "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
@@ -40,10 +39,10 @@ const getStageLabel = (item: SubmissionItem) => {
     return "심의 진행";
   }
   if (item.payment_status === "PAYMENT_PENDING") {
-    return "입금 예정";
+    return "결제 대기";
   }
   if (item.payment_status !== "PAID") {
-    return "결제대기";
+    return "결제 대기";
   }
   if (["SUBMITTED", "PRE_REVIEW"].includes(item.status)) {
     return "접수 완료";

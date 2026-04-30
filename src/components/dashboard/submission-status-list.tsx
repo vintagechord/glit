@@ -237,7 +237,7 @@ export function SubmissionStatusList({
               return "심의 진행중";
             }
             if (submission.payment_status !== "PAID") {
-              return "결제대기";
+              return "결제 대기";
             }
             if (
               submission.status === "SUBMITTED" ||

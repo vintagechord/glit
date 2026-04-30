@@ -124,7 +124,10 @@ export default async function proxy(request: NextRequest) {
   const isAdminRoute = pathname.startsWith("/admin");
   const isDashboardRoute = pathname.startsWith("/dashboard");
   const isMypageRoute = pathname.startsWith("/mypage");
-  const isPublicDashboardRoute = pathname.startsWith("/dashboard/new");
+  const isPublicDashboardRoute =
+    pathname.startsWith("/dashboard/new") ||
+    (pathname.startsWith("/dashboard/pay/") &&
+      Boolean(request.nextUrl.searchParams.get("guestToken")));
   const isUserProtectedRoute =
     (isDashboardRoute && !isPublicDashboardRoute) || isMypageRoute;
   const requiresSessionCookie =
@@ -140,8 +143,10 @@ export default async function proxy(request: NextRequest) {
 
   if (!hasSupabaseAuthCookie(request)) {
     const redirectUrl = request.nextUrl.clone();
+    const nextPath = `${pathname}${request.nextUrl.search}`;
     redirectUrl.pathname = "/login";
-    redirectUrl.searchParams.set("next", pathname);
+    redirectUrl.search = "";
+    redirectUrl.searchParams.set("next", nextPath);
     const redirectRes = NextResponse.redirect(redirectUrl);
     if (isDev && isDevStdPayPath) {
       redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);

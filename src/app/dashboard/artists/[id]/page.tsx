@@ -6,6 +6,7 @@ import {
   DashboardShell,
   statusDashboardTabs,
 } from "@/components/dashboard/dashboard-shell";
+import { paymentStatusLabelMap } from "@/constants/review-status";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -28,11 +29,16 @@ const statusLabels: Record<string, string> = {
   DRAFT: "임시 저장",
   SUBMITTED: "접수 완료",
   PRE_REVIEW: "사전 검토",
-  WAITING_PAYMENT: "결제대기",
+  WAITING_PAYMENT: "결제 대기",
   IN_PROGRESS: "심의 진행",
   RESULT_READY: "결과 전달",
   COMPLETED: "완료",
 };
+
+const getPaymentStatusLabel = (status?: string | null) =>
+  status && status in paymentStatusLabelMap
+    ? paymentStatusLabelMap[status as keyof typeof paymentStatusLabelMap]
+    : "미결제";
 
 type SubmissionRow = {
   id: string;
@@ -211,7 +217,7 @@ export default async function DashboardArtistDetailPage({
                       {statusLabels[submission.status] ?? submission.status}
                     </span>
                     <span className="rounded-full border border-border/70 px-3 py-1 font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      결제: {submission.payment_status ?? "-"}
+                      결제: {getPaymentStatusLabel(submission.payment_status)}
                     </span>
                     <span className="text-[11px] text-muted-foreground">
                       상세 보기 →

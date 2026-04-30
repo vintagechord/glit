@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
@@ -47,7 +48,7 @@ const submissionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bauhaus-status-chip--waiting",
   },
   WAITING_PAYMENT: {
-    label: "결제대기",
+    label: "결제 대기",
     tone: "bauhaus-status-chip--waiting",
   },
   IN_PROGRESS: {
@@ -70,7 +71,7 @@ const paymentStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bauhaus-status-chip--neutral",
   },
   PAYMENT_PENDING: {
-    label: "결제대기",
+    label: "결제 대기",
     tone: "bauhaus-status-chip--waiting",
   },
   PAID: {
@@ -154,11 +155,19 @@ const getResultStatus = (status: string) =>
     tone: "bauhaus-status-chip--neutral",
   };
 
-const getSubmissionStatus = (status: string) =>
-  submissionStatusMap[status] ?? {
+const getSubmissionStatus = (status: string, paymentStatus?: string | null) => {
+  if (
+    paymentStatus !== "PAID" &&
+    status !== "DRAFT" &&
+    status !== "PRE_REVIEW"
+  ) {
+    return submissionStatusMap.WAITING_PAYMENT;
+  }
+  return submissionStatusMap[status] ?? {
     label: status,
     tone: "bauhaus-status-chip--neutral",
   };
+};
 
 const getPaymentStatus = (status?: string | null) =>
   status ? paymentStatusMap[status] ?? {
@@ -301,7 +310,10 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
         </div>
       )}
       {filteredItems.map((submission) => {
-        const statusInfo = getSubmissionStatus(submission.status);
+        const statusInfo = getSubmissionStatus(
+          submission.status,
+          submission.paymentStatus,
+        );
         const paymentInfo = getPaymentStatus(submission.paymentStatus);
         const paymentMethodLabel = getPaymentMethodLabel(
           submission.paymentMethod,
@@ -370,6 +382,14 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               >
                 상세보기
               </button>
+              {submission.paymentStatus !== "PAID" ? (
+                <Link
+                  href={`/dashboard/pay/${submission.id}`}
+                  className="rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:bg-[#efcc49]"
+                >
+                  결제하기
+                </Link>
+              ) : null}
             </div>
           </div>
         );
@@ -425,7 +445,10 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                   현재 상태
                 </p>
                 <p className="mt-1 text-sm font-semibold text-foreground">
-                  {getSubmissionStatus(activeSubmission.status).label}
+                  {getSubmissionStatus(
+                    activeSubmission.status,
+                    activeSubmission.paymentStatus,
+                  ).label}
                 </p>
               </div>
               <div>

@@ -9,12 +9,18 @@ import { openInicisCardPopup, type InicisPopupContext } from "@/lib/inicis/popup
 type PaymentRetryClientProps = {
   submissionId: string;
   context: InicisPopupContext;
+  guestToken?: string;
+  detailHref: string;
+  successHref: string;
   disabled?: boolean;
 };
 
 export function PaymentRetryClient({
   submissionId,
   context,
+  guestToken,
+  detailHref,
+  successHref,
   disabled = false,
 }: PaymentRetryClientProps) {
   const router = useRouter();
@@ -36,7 +42,7 @@ export function PaymentRetryClient({
 
       const status = String(type).replace("INICIS:", "");
       if (status === "SUCCESS") {
-        router.push(`/dashboard/submissions/${submissionId}?payment=success`);
+        router.push(successHref);
         return;
       }
 
@@ -55,7 +61,7 @@ export function PaymentRetryClient({
 
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [router, submissionId]);
+  }, [router, submissionId, successHref]);
 
   const handleRetryPayment = async () => {
     if (isOpening || disabled) return;
@@ -64,6 +70,7 @@ export function PaymentRetryClient({
     const { ok, error } = await openInicisCardPopup({
       context,
       submissionId,
+      guestToken,
     });
     if (!ok) {
       setNotice({
@@ -100,7 +107,7 @@ export function PaymentRetryClient({
           {isOpening ? "결제 모듈 준비 중" : "카드 결제하기"}
         </button>
         <Link
-          href={`/dashboard/submissions/${submissionId}`}
+          href={detailHref}
           className="rounded-[8px] border-2 border-border px-5 py-3 text-xs font-black uppercase tracking-normal text-foreground transition hover:border-foreground"
         >
           접수 상세 보기

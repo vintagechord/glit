@@ -47,13 +47,14 @@ export async function HistoryPageView(config?: ShellConfig) {
     redirect("/login");
   }
 
-  const paymentStatuses = ["PAYMENT_PENDING", "PAID"];
+  const paymentStatuses = ["UNPAID", "PAYMENT_PENDING", "PAID"];
   const runSelect = (select: string) =>
     supabase
       .from("submissions")
       .select(select)
       .eq("user_id", user.id)
       .in("payment_status", paymentStatuses)
+      .not("status", "eq", "DRAFT")
       .order("updated_at", { ascending: false });
 
   const { data: primaryData, error: primaryError } = await runSelect(PRIMARY_SELECT);
