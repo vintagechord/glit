@@ -288,7 +288,6 @@ export const markPaymentSuccess = async (
     result_code?: string | null;
     result_message?: string | null;
     raw_response?: Record<string, unknown> | null;
-    providerName?: string | null;
   },
 ) => {
   const admin = createAdminClient();
@@ -334,7 +333,7 @@ export const markPaymentSuccess = async (
     const { error: eventError } = await admin.from("submission_events").insert({
       submission_id: updated.submission_id,
       event_type: "PAYMENT",
-      message: `${payload.providerName ?? "KG이니시스"} 카드 결제 완료`,
+      message: "KG이니시스 카드 결제 완료",
     });
     if (eventError) {
       return { ok: false, error: eventError, submissionId: updated.submission_id };

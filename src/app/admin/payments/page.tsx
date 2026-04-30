@@ -65,10 +65,10 @@ export default async function AdminPaymentsPage() {
             관리자
           </p>
           <h1 className="font-display mt-2 text-3xl text-foreground">
-            카드 결제 (승인 완료)
+            이니시스 카드 결제 (승인 완료)
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            승인 완료 건을 최신 순으로 표시합니다. 최대 200건까지 조회됩니다.
+            STDPay 승인 완료 건을 최신 순으로 표시합니다. 최대 200건까지 조회됩니다.
           </p>
         </div>
         <Link
