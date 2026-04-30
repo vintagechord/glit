@@ -691,13 +691,6 @@ export function MvWizard({
   };
 
   const addFiles = (selected: File[]) => {
-    if (emailSubmitConfirmed) {
-      setNotice({
-        error:
-          "이메일 전송으로 진행을 선택한 뒤에는 파일 업로드로 변경할 수 없습니다.",
-      });
-      return;
-    }
     if (!submissionIdRef.current) {
       setNotice({
         error:
@@ -1400,14 +1393,8 @@ export function MvWizard({
   const selectUploadDeliveryMode = React.useCallback(
     (mode: "upload" | "email") => {
       if (mode === "upload") {
-        if (emailSubmitConfirmed) {
-          setNotice({
-            error:
-              "이메일 전송으로 진행을 선택한 뒤에는 파일 업로드로 변경할 수 없습니다.",
-          });
-        } else {
-          setNotice({});
-        }
+        setEmailSubmitConfirmed(false);
+        setNotice({});
         return;
       }
       if (emailSubmitConfirmed) {
@@ -2997,11 +2984,10 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("upload")}
-                disabled={emailSubmitConfirmed}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
                   !emailSubmitConfirmed
                     ? "bg-foreground text-background shadow-sm"
-                    : "cursor-not-allowed text-muted-foreground opacity-60"
+                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                 }`}
               >
                 파일 업로드
@@ -3031,17 +3017,17 @@ export function MvWizard({
               </button>
             </div>
             {emailSubmitConfirmed ? (
-              <div className="mt-4 rounded-2xl border border-emerald-300/70 bg-emerald-50 px-4 py-5 text-sm text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100">
+              <div className="mt-4 rounded-2xl border-2 border-[#f6d64a] bg-[#fff8d7] px-4 py-5 text-sm text-[#111111] shadow-[4px_4px_0_#111111] dark:bg-[#f6d64a]/10 dark:text-[#f6d64a] dark:shadow-[4px_4px_0_#f6d64a]">
                 <div className="flex flex-wrap items-start gap-3">
-                  <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border border-emerald-500 bg-emerald-500 text-xs font-black text-white">
+                  <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border border-[#111111] bg-[#111111] text-xs font-black text-[#f6d64a] dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-[#111111]">
                     ✓
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">이메일 전송으로 진행합니다.</p>
-                    <p className="mt-1 text-xs text-emerald-800/80 dark:text-emerald-100/75">
+                    <p className="mt-1 text-xs text-[#4a4213] dark:text-[#fff2a8]/80">
                       파일 첨부 대신 아래 이메일 주소로 영상 파일을 보내주세요.
                     </p>
-                    <p className="mt-3 break-all rounded-xl border border-emerald-300/70 bg-white/80 px-3 py-2 font-semibold text-emerald-900 dark:border-emerald-400/30 dark:bg-black/20 dark:text-emerald-100">
+                    <p className="mt-3 break-all rounded-xl border border-[#111111]/15 bg-white/85 px-3 py-2 font-semibold text-[#111111] dark:border-[#f6d64a]/40 dark:bg-black/25 dark:text-[#f6d64a]">
                       {APP_CONFIG.supportEmail}
                     </p>
                   </div>
