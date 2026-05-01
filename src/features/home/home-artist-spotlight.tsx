@@ -156,9 +156,6 @@ export function HomeArtistSpotlight({
           <h3 className="mt-2 text-base font-black text-foreground">
             {submission.artist_name || "아티스트"} · {submission.title || "최신 접수곡"}
           </h3>
-          <p className="mt-1 text-[13px] font-semibold text-muted-foreground">
-            우측 진행표가 길어지는 앨범 접수에 맞춰 {typeLabel} 유튜브 검색 결과를 함께 보여줍니다.
-          </p>
         </div>
         <a
           href={searchUrl}
