@@ -152,8 +152,8 @@ const packageToneClasses = [
 
 const uploadMaxMb = Number(
   process.env.NEXT_PUBLIC_AUDIO_UPLOAD_MAX_MB ??
-    process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ??
-    "1024",
+  process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ??
+  "1024",
 );
 const uploadMaxBytes = uploadMaxMb * 1024 * 1024;
 const uploadMaxLabel =
@@ -388,7 +388,7 @@ export function AlbumWizard({
   const basePriceKrw = selectedPackage
     ? isOneClick
       ? oneClickPriceMap[selectedPackage.stationCount] ??
-        selectedPackage.priceKrw
+      selectedPackage.priceKrw
       : selectedPackage.priceKrw
     : 0;
   const additionalPriceKrw = Math.round(basePriceKrw * 0.5);
@@ -399,10 +399,10 @@ export function AlbumWizard({
   const selectionLocked = albumDrafts.length > 0;
   const selectedPackageSummary = selectedPackage
     ? {
-        name: selectedPackage.name,
-        stationCount: selectedPackage.stationCount,
-        priceKrw: basePriceKrw,
-      }
+      name: selectedPackage.name,
+      stationCount: selectedPackage.stationCount,
+      priceKrw: basePriceKrw,
+    }
     : null;
 
   const readDraftStorage = React.useCallback(() => {
@@ -543,9 +543,9 @@ export function AlbumWizard({
       ? completionTokens
       : completionSubmissionIds.length > 0
         ? completionSubmissionIds.map((id, index) => ({
-            token: id,
-            title: albumDrafts[index]?.title || title || "앨범",
-          }))
+          token: id,
+          title: albumDrafts[index]?.title || title || "앨범",
+        }))
         : [{ token: currentGuestToken, title: title || "앨범" }]
     : [];
 
@@ -582,16 +582,16 @@ export function AlbumWizard({
   const genderOptions =
     artistType === "GROUP"
       ? [
-          { value: "", label: "선택" },
-          { value: "MALE", label: "남성" },
-          { value: "FEMALE", label: "여성" },
-          { value: "MIXED", label: "혼성" },
-        ]
+        { value: "", label: "선택" },
+        { value: "MALE", label: "남성" },
+        { value: "FEMALE", label: "여성" },
+        { value: "MIXED", label: "혼성" },
+      ]
       : [
-          { value: "", label: "선택" },
-          { value: "MALE", label: "남성" },
-          { value: "FEMALE", label: "여성" },
-        ];
+        { value: "", label: "선택" },
+        { value: "MALE", label: "남성" },
+        { value: "FEMALE", label: "여성" },
+      ];
 
   const handleConfirmPackage = () => {
     if (!packageConfirmTarget) return;
@@ -686,18 +686,17 @@ export function AlbumWizard({
         const displayLabel =
           index === 0 && selectedPackageSummary
             ? `${getPackageDisplayName(
-                selectedPackageSummary,
-                isOneClick,
-              )} (${formatCurrency(selectedPackageSummary.priceKrw)}원)`
+              selectedPackageSummary,
+              isOneClick,
+            )} (${formatCurrency(selectedPackageSummary.priceKrw)}원)`
             : label;
         return (
           <div
             key={label}
-            className={`rounded-[18px] border px-3.5 py-2.5 text-xs ${
-              isCurrent || isCompleted
-                ? activeTone
-                : "border-border/60 bg-background text-muted-foreground"
-            }`}
+            className={`rounded-[18px] border px-3.5 py-2.5 text-xs ${isCurrent || isCompleted
+              ? activeTone
+              : "border-border/60 bg-background text-muted-foreground"
+              }`}
           >
             <div className="flex items-center justify-between gap-1.5">
               <span className="font-semibold uppercase tracking-[0.2em]">
@@ -1208,12 +1207,12 @@ export function AlbumWizard({
       initialUploads.length === targetFiles.length
         ? [...initialUploads]
         : targetFiles.map((file) => ({
-            name: file.name,
-            size: file.size,
-            progress: 0,
-            status: "pending" as const,
-            mime: file.type,
-          }));
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          status: "pending" as const,
+          mime: file.type,
+        }));
 
     for (let index = 0; index < targetFiles.length; index += 1) {
       const file = targetFiles[index];
@@ -1330,9 +1329,9 @@ export function AlbumWizard({
         path: String(file.object_key ?? file.file_path ?? ""),
         originalName: String(
           file.original_name ??
-            file.file_path ??
-            file.object_key ??
-            "파일",
+          file.file_path ??
+          file.object_key ??
+          "파일",
         ),
         mime: typeof file.mime === "string" ? file.mime : undefined,
         size: Number(file.size ?? 0),
@@ -1416,8 +1415,8 @@ export function AlbumWizard({
     setFileDigest("");
     setEmailSubmitConfirmed(
       options?.emailSubmitConfirmed ??
-        draft.emailSubmitConfirmed ??
-        draft.files.length === 0,
+      draft.emailSubmitConfirmed ??
+      draft.files.length === 0,
     );
     setNotice({});
     setCurrentSubmissionId(draft.submissionId);
@@ -2039,12 +2038,12 @@ export function AlbumWizard({
               : undefined,
           cashReceiptPhone:
             paymentDocumentType === "CASH_RECEIPT" &&
-            cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+              cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
               ? cashReceiptPhone.trim() || undefined
               : undefined,
           cashReceiptBusinessNumber:
             paymentDocumentType === "CASH_RECEIPT" &&
-            cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+              cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
               ? cashReceiptBusinessNumber.trim() || undefined
               : undefined,
           taxInvoiceBusinessNumber:
@@ -2343,14 +2342,14 @@ export function AlbumWizard({
               : undefined,
           cashReceiptPhone:
             status === "SUBMITTED" &&
-            paymentDocumentType === "CASH_RECEIPT" &&
-            cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+              paymentDocumentType === "CASH_RECEIPT" &&
+              cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
               ? cashReceiptPhone.trim() || undefined
               : undefined,
           cashReceiptBusinessNumber:
             status === "SUBMITTED" &&
-            paymentDocumentType === "CASH_RECEIPT" &&
-            cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+              paymentDocumentType === "CASH_RECEIPT" &&
+              cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
               ? cashReceiptBusinessNumber.trim() || undefined
               : undefined,
           taxInvoiceBusinessNumber:
@@ -2497,11 +2496,10 @@ export function AlbumWizard({
                   setIsOneClick(false);
                 }}
                 disabled={selectionLocked}
-                className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                  !isOneClick
-                    ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
-                    : "border-border/60 bg-background text-foreground hover:border-primary/40"
-                }`}
+                className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-70 ${!isOneClick
+                  ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
+                  : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                  }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -2528,11 +2526,10 @@ export function AlbumWizard({
                   setShowOneclickNotice(true);
                 }}
                 disabled={selectionLocked}
-                className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                  isOneClick
-                    ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_18px_40px_rgba(0,113,227,0.22)] dark:bg-[#2997ff] dark:text-[#00101f]"
-                    : "border-border/60 bg-background text-foreground hover:border-primary/40"
-                }`}
+                className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-70 ${isOneClick
+                  ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_18px_40px_rgba(0,113,227,0.22)] dark:bg-[#2997ff] dark:text-[#00101f]"
+                  : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                  }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -2580,11 +2577,10 @@ export function AlbumWizard({
                     setPackageConfirmTarget(pkg);
                   }}
                   disabled={isDisabled}
-                  className={`text-left rounded-[28px] border p-6 transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                    isActive
-                      ? tone.card
-                      : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
-                  }`}
+                  className={`text-left rounded-[28px] border p-6 transition disabled:cursor-not-allowed disabled:opacity-70 ${isActive
+                    ? tone.card
+                    : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
@@ -2613,11 +2609,10 @@ export function AlbumWizard({
                     {pkg.stations.map((station) => (
                       <span
                         key={station.id}
-                        className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em] ${
-                          isActive
-                            ? tone.chip
-                            : "border-border/60 text-muted-foreground"
-                        }`}
+                        className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em] ${isActive
+                          ? tone.chip
+                          : "border-border/60 text-muted-foreground"
+                          }`}
                       >
                         {station.name}
                       </span>
@@ -2946,11 +2941,10 @@ export function AlbumWizard({
                         key={`track-tab-${index}`}
                         type="button"
                         onClick={() => setActiveTrackIndex(index)}
-                        className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
-                          active
-                            ? "border-foreground bg-foreground text-background"
-                            : "border-border/60 bg-background text-foreground hover:border-foreground"
-                        }`}
+                        className={`w-full rounded-2xl border px-3 py-3 text-left transition ${active
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border/60 bg-background text-foreground hover:border-foreground"
+                          }`}
                       >
                         <p className="text-xs font-semibold uppercase tracking-[0.2em]">
                           Track {String(index + 1).padStart(2, "0")}
@@ -2959,21 +2953,19 @@ export function AlbumWizard({
                           {getTrackDisplayTitle(track)}
                         </p>
                         <div
-                          className={`mt-2 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] ${
-                            active ? "text-background" : ""
-                          }`}
+                          className={`mt-2 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] ${active ? "text-background" : ""
+                            }`}
                         >
                           {track.isTitle && (
                             <span
-                              className={`rounded-full border px-2 py-1 ${
-                                track.titleRole === "MAIN"
-                                  ? active
-                                    ? "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm"
-                                    : "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black"
-                                  : active
-                                    ? "border-background/80 bg-background text-foreground shadow-sm"
-                                    : "border-border/60 bg-background/80 text-foreground/80"
-                              }`}
+                              className={`rounded-full border px-2 py-1 ${track.titleRole === "MAIN"
+                                ? active
+                                  ? "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm"
+                                  : "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black"
+                                : active
+                                  ? "border-background/80 bg-background text-foreground shadow-sm"
+                                  : "border-border/60 bg-background/80 text-foreground/80"
+                                }`}
                             >
                               {track.titleRole === "MAIN"
                                 ? "메인 타이틀"
@@ -2982,11 +2974,10 @@ export function AlbumWizard({
                           )}
                           {track.broadcastSelected && (
                             <span
-                              className={`rounded-full border px-2 py-1 ${
-                                active
-                                  ? "border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm"
-                                  : "border-emerald-300 text-emerald-600 dark:text-emerald-200"
-                              }`}
+                              className={`rounded-full border px-2 py-1 ${active
+                                ? "border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm"
+                                : "border-emerald-300 text-emerald-600 dark:text-emerald-200"
+                                }`}
                             >
                               원음방송
                             </span>
@@ -3198,11 +3189,10 @@ export function AlbumWizard({
                             )
                           }
                           onScroll={handleLyricsScroll}
-                          className={`relative z-0 min-h-[180px] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${
-                            showProfanityOverlay
-                              ? "text-transparent caret-foreground"
-                              : "text-foreground"
-                          }`}
+                          className={`relative z-0 min-h-[180px] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${showProfanityOverlay
+                            ? "text-transparent caret-foreground"
+                            : "text-foreground"
+                            }`}
                         />
                       </div>
                       <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs">
@@ -3210,11 +3200,10 @@ export function AlbumWizard({
                           <button
                             type="button"
                             onClick={toggleTranslationPanel}
-                            className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] transition ${
-                              showTranslatedLyricsPanel
-                                ? "border-foreground bg-foreground text-background"
-                                : "border-border/70 text-muted-foreground hover:border-foreground hover:text-foreground"
-                            }`}
+                            className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] transition ${showTranslatedLyricsPanel
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border/70 text-muted-foreground hover:border-foreground hover:text-foreground"
+                              }`}
                           >
                             번역본 가사 탭
                           </button>
@@ -3325,17 +3314,15 @@ export function AlbumWizard({
                     onClick={() => startEditingDraft(index)}
                     role="button"
                     tabIndex={0}
-                    className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${
-                      editingIndex === index
-                        ? "border-[#f6d64a] bg-[#f6d64a] text-black"
-                        : "border-border/60 bg-background/70 hover:border-foreground"
-                    }`}
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${editingIndex === index
+                      ? "border-[#f6d64a] bg-[#f6d64a] text-black"
+                      : "border-border/60 bg-background/70 hover:border-foreground"
+                      }`}
                   >
                     <div>
                       <p
-                        className={`text-sm font-semibold ${
-                          editingIndex === index ? "text-black" : "text-foreground"
-                        }`}
+                        className={`text-sm font-semibold ${editingIndex === index ? "text-black" : "text-foreground"
+                          }`}
                       >
                         앨범 {index + 1}
                         {editingIndex === index && (
@@ -3345,11 +3332,10 @@ export function AlbumWizard({
                         )}
                       </p>
                       <p
-                        className={`text-xs ${
-                          editingIndex === index
-                            ? "text-black/80"
-                            : "text-muted-foreground"
-                        }`}
+                        className={`text-xs ${editingIndex === index
+                          ? "text-black/80"
+                          : "text-muted-foreground"
+                          }`}
                       >
                         {(draft.title.trim() ||
                           (isOneClick ? "원클릭 접수" : "제목 미입력")) +
@@ -3508,28 +3494,25 @@ export function AlbumWizard({
                     onClick={() => handleSelectUploadDraft(index)}
                     role="button"
                     tabIndex={0}
-                    className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${
-                      uploadDraftIndex === index
-                        ? "border-[#f6d64a] bg-[#f6d64a] text-black"
-                        : "border-border/60 bg-background/70 hover:border-foreground"
-                    }`}
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${uploadDraftIndex === index
+                      ? "border-[#f6d64a] bg-[#f6d64a] text-black"
+                      : "border-border/60 bg-background/70 hover:border-foreground"
+                      }`}
                   >
                     <div>
                       <p
-                        className={`text-sm font-semibold ${
-                          uploadDraftIndex === index
-                            ? "text-black"
-                            : "text-foreground"
-                        }`}
+                        className={`text-sm font-semibold ${uploadDraftIndex === index
+                          ? "text-black"
+                          : "text-foreground"
+                          }`}
                       >
                         앨범 {index + 1}
                       </p>
                       <p
-                        className={`text-xs ${
-                          uploadDraftIndex === index
-                            ? "text-black/80"
-                            : "text-muted-foreground"
-                        }`}
+                        className={`text-xs ${uploadDraftIndex === index
+                          ? "text-black/80"
+                          : "text-muted-foreground"
+                          }`}
                       >
                         {(draft.title.trim() ||
                           (isOneClick ? "원클릭 접수" : "제목 미입력")) +
@@ -3539,11 +3522,10 @@ export function AlbumWizard({
                       </p>
                     </div>
                     <span
-                      className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${
-                        uploadDraftIndex === index
-                          ? "text-black/80"
-                          : "text-muted-foreground"
-                      }`}
+                      className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${uploadDraftIndex === index
+                        ? "text-black/80"
+                        : "text-muted-foreground"
+                        }`}
                     >
                       {draft.files.length > 0
                         ? "업로드 완료"
@@ -3565,31 +3547,28 @@ export function AlbumWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("upload")}
-                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                  !emailSubmitConfirmed
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                }`}
+                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${!emailSubmitConfirmed
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  }`}
               >
                 파일 업로드
               </button>
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
-                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                  emailSubmitConfirmed
-                    ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
-                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                }`}
+                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
+                  ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  }`}
               >
                 <span className="inline-flex items-center justify-center gap-2">
                   <span
                     aria-hidden="true"
-                    className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${
-                      emailSubmitConfirmed
-                        ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#3f8ad8]"
-                        : "border-current"
-                    }`}
+                    className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${emailSubmitConfirmed
+                      ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#3f8ad8]"
+                      : "border-current"
+                      }`}
                   >
                     {emailSubmitConfirmed ? "✓" : ""}
                   </span>
@@ -3754,10 +3733,10 @@ export function AlbumWizard({
             )}
             <div className="mt-4 space-y-1 text-xs text-muted-foreground">
               <p>
-                음원 파일 업로드 시에 첨부 완료가 되지 않는 경우 파일 첨부 없이 하단 다음 단계 버튼을 눌러 신청서를 제출 후 음원 파일은 이메일로 보내주세요.
+                음원 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 신청서를 먼저 제출한 뒤 음원 파일만 이메일로 보내주세요.
               </p>
               {isOneClick && (
-                <p>원클릭 접수도 동일하게 신청서를 먼저 제출한 뒤 음원 파일만 이메일로 보내주시면 됩니다.</p>
+                <p>원클릭 접수도 동일하게 신청서 제출 후 음원 파일을 이메일로 보내주시면 됩니다.</p>
               )}
               {!emailSubmitConfirmed ? (
                 <p className="font-semibold text-foreground">
@@ -3911,11 +3890,10 @@ export function AlbumWizard({
               <button
                 type="button"
                 onClick={() => setPaymentMethod("BANK")}
-                className={`rounded-2xl border p-4 text-left transition ${
-                  paymentMethod === "BANK"
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border/60 bg-background text-foreground hover:border-foreground"
-                }`}
+                className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "BANK"
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border/60 bg-background text-foreground hover:border-foreground"
+                  }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
                   Bank
@@ -3928,11 +3906,10 @@ export function AlbumWizard({
               <button
                 type="button"
                 onClick={() => setPaymentMethod("CARD")}
-                className={`rounded-2xl border p-4 text-left transition ${
-                  paymentMethod === "CARD"
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border/60 bg-background text-foreground hover:border-foreground"
-                }`}
+                className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "CARD"
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border/60 bg-background text-foreground hover:border-foreground"
+                  }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
                   Card
@@ -3981,11 +3958,10 @@ export function AlbumWizard({
                 </p>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
                   <label
-                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                      paymentDocumentType === "CASH_RECEIPT"
-                        ? "border-foreground bg-foreground/5 text-foreground"
-                        : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
-                    }`}
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "CASH_RECEIPT"
+                      ? "border-foreground bg-foreground/5 text-foreground"
+                      : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                      }`}
                   >
                     <input
                       type="radio"
@@ -4000,11 +3976,10 @@ export function AlbumWizard({
                     현금 영수증 발급
                   </label>
                   <label
-                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                      paymentDocumentType === "TAX_INVOICE"
-                        ? "border-foreground bg-foreground/5 text-foreground"
-                        : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
-                    }`}
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "TAX_INVOICE"
+                      ? "border-foreground bg-foreground/5 text-foreground"
+                      : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                      }`}
                   >
                     <input
                       type="radio"
@@ -4028,11 +4003,10 @@ export function AlbumWizard({
                   <div className="mt-4 space-y-3">
                     <div className="grid gap-2 sm:grid-cols-2">
                       <label
-                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                          cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
-                            ? "border-foreground bg-foreground/5 text-foreground"
-                            : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
-                        }`}
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+                          ? "border-foreground bg-foreground/5 text-foreground"
+                          : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                          }`}
                       >
                         <input
                           type="radio"
@@ -4049,11 +4023,10 @@ export function AlbumWizard({
                         개인소득공제용
                       </label>
                       <label
-                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                          cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
-                            ? "border-foreground bg-foreground/5 text-foreground"
-                            : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
-                        }`}
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+                          ? "border-foreground bg-foreground/5 text-foreground"
+                          : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                          }`}
                       >
                         <input
                           type="radio"
