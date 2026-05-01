@@ -54,15 +54,15 @@ export const APP_CONFIG = {
   bankAccount: process.env.NEXT_PUBLIC_BANK_ACCOUNT ?? "1003-0026-3141",
   bankHolder: process.env.NEXT_PUBLIC_BANK_HOLDER ?? "정준영(영포에버)",
   bankLink: process.env.NEXT_PUBLIC_BANK_LINK ?? "",
-  businessName: process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "영포에버",
+  businessName: process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "(주)빈티지하우슨",
   businessRep: process.env.NEXT_PUBLIC_BUSINESS_REP ?? "정준영",
   businessAddress:
     process.env.NEXT_PUBLIC_BUSINESS_ADDRESS ??
-    "경기도 김포시 사우중로74번길 29 (사우동) 시그마프라자 7층 뮤직스튜디오 (엘리베이터 좌측 통로)",
+    "경기도 김포시 사우중로74번길 29 (사우동) 시그마프라자 7층 뮤직스튜디오",
   businessRegNo:
-    process.env.NEXT_PUBLIC_BUSINESS_REG_NO ?? "110-21-24454",
+    process.env.NEXT_PUBLIC_BUSINESS_REG_NO ?? "748-88-01472",
   businessMailOrderNo:
-    process.env.NEXT_PUBLIC_BUSINESS_MAIL_ORDER_NO ?? "2015-서울은평-0095",
+    process.env.NEXT_PUBLIC_BUSINESS_MAIL_ORDER_NO ?? "2023-경기김포-1524",
   privacyOfficer: process.env.NEXT_PUBLIC_PRIVACY_OFFICER ?? "정준영",
   hostingProvider:
     process.env.NEXT_PUBLIC_HOSTING_PROVIDER ?? "(주)가비아인터넷서비스",

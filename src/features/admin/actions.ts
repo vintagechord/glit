@@ -412,14 +412,6 @@ const profanityTermSchema = z.object({
   isActive: z.boolean(),
 });
 
-const spellcheckTermSchema = z.object({
-  id: z.string().uuid().optional(),
-  fromText: z.string().min(1),
-  toText: z.string().min(1),
-  language: z.enum(["KO", "EN"]),
-  isActive: z.boolean(),
-});
-
 const deleteSubmissionsSchema = z.object({
   ids: z.array(z.string().uuid()).min(1),
 });
@@ -2106,86 +2098,6 @@ export async function deleteProfanityTermFormAction(
   formData: FormData,
 ): Promise<void> {
   const result = await deleteProfanityTermAction({
-    id: String(formData.get("id") ?? ""),
-  });
-  if (result.error) {
-    console.error(result.error);
-    return;
-  }
-  revalidatePath("/admin/config");
-  revalidatePath("/dashboard/new/album");
-}
-
-export async function upsertSpellcheckTermAction(
-  payload: z.infer<typeof spellcheckTermSchema>,
-): Promise<AdminActionState> {
-  const parsed = spellcheckTermSchema.safeParse(payload);
-  if (!parsed.success) {
-    return { error: "맞춤법 사전 정보를 확인해주세요." };
-  }
-
-  const supabase = await createServerSupabase();
-  const { error } = await supabase.from("spellcheck_terms").upsert({
-    id: parsed.data.id,
-    from_text: parsed.data.fromText.trim(),
-    to_text: parsed.data.toText.trim(),
-    language: parsed.data.language,
-    is_active: parsed.data.isActive,
-  });
-
-  if (error) {
-    return { error: "맞춤법 사전 저장에 실패했습니다." };
-  }
-
-  return { message: "맞춤법 사전이 저장되었습니다." };
-}
-
-export async function upsertSpellcheckTermFormAction(
-  formData: FormData,
-): Promise<void> {
-  const id = String(formData.get("id") ?? "");
-  const result = await upsertSpellcheckTermAction({
-    id: id ? id : undefined,
-    fromText: String(formData.get("fromText") ?? ""),
-    toText: String(formData.get("toText") ?? ""),
-    language: (String(formData.get("language") ?? "KO") || "KO") as
-      | "KO"
-      | "EN",
-    isActive: formData.get("isActive") === "on",
-  });
-  if (result.error) {
-    console.error(result.error);
-    return;
-  }
-  revalidatePath("/admin/config");
-  revalidatePath("/dashboard/new/album");
-  redirect(withSavedQuery("/admin/config"));
-}
-
-export async function deleteSpellcheckTermAction(
-  payload: { id: string },
-): Promise<AdminActionState> {
-  if (!payload.id) {
-    return { error: "맞춤법 사전 ID를 확인해주세요." };
-  }
-
-  const supabase = await createServerSupabase();
-  const { error } = await supabase
-    .from("spellcheck_terms")
-    .delete()
-    .eq("id", payload.id);
-
-  if (error) {
-    return { error: "맞춤법 사전 삭제에 실패했습니다." };
-  }
-
-  return { message: "맞춤법 사전이 삭제되었습니다." };
-}
-
-export async function deleteSpellcheckTermFormAction(
-  formData: FormData,
-): Promise<void> {
-  const result = await deleteSpellcheckTermAction({
     id: String(formData.get("id") ?? ""),
   });
   if (result.error) {

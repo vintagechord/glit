@@ -93,26 +93,6 @@ type DraftSnapshot = {
   emailSubmitConfirmed: boolean;
 };
 
-type SpellcheckSuggestion = {
-  id?: string;
-  start: number;
-  end: number;
-  before: string;
-  after: string;
-  reason?: string;
-  source?: string;
-  confidence?: number;
-  type?: string;
-};
-
-type SpellcheckDiff = {
-  op: "equal" | "insert" | "delete" | "replace";
-  a: string;
-  b: string;
-  indexA: number;
-  indexB: number;
-};
-
 const initialTrack: TrackInput = {
   trackTitle: "",
   featuring: "",
@@ -313,39 +293,10 @@ export function AlbumWizard({
   const [profanityHighlightMap, setProfanityHighlightMap] = React.useState<
     Record<number, boolean>
   >({});
-  const [spellcheckChangesByTrack, setSpellcheckChangesByTrack] =
-    React.useState<
-      Record<number, Array<{ before: string; after: string; index?: number }>>
-    >({});
-  const [spellcheckAppliedMap, setSpellcheckAppliedMap] = React.useState<
-    Record<number, boolean>
-  >({});
-  const [spellcheckNoticeMap, setSpellcheckNoticeMap] = React.useState<
-    Record<
-      number,
-      { type: "success" | "error" | "info"; message: string }
-    >
-  >({});
-  const [spellcheckSuggestionsByTrack, setSpellcheckSuggestionsByTrack] =
-    React.useState<Record<number, SpellcheckSuggestion[]>>({});
-  const [spellcheckOriginalByTrack, setSpellcheckOriginalByTrack] =
-    React.useState<Record<number, string>>({});
-  const [spellcheckCorrectedByTrack, setSpellcheckCorrectedByTrack] =
-    React.useState<Record<number, string>>({});
-  const [spellcheckDiffsByTrack, setSpellcheckDiffsByTrack] =
-    React.useState<Record<number, SpellcheckDiff[]>>({});
-  const [spellcheckModalOpen, setSpellcheckModalOpen] =
-    React.useState(false);
-  const [spellcheckPendingTrack, setSpellcheckPendingTrack] =
-    React.useState<number | null>(null);
-  const [isSpellchecking, setIsSpellchecking] = React.useState(false);
   const [isTranslatingLyrics, setIsTranslatingLyrics] = React.useState(false);
   const [translationPanelOpenMap, setTranslationPanelOpenMap] = React.useState<
     Record<number, boolean>
   >({});
-  const [lyricsTab, setLyricsTab] = React.useState<"profanity" | "spellcheck">(
-    "profanity",
-  );
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -404,18 +355,8 @@ export function AlbumWizard({
   const showProfanityPanel = Boolean(profanityCheckedMap[activeTrackIndex]);
   const showProfanityOverlay =
     showProfanityPanel &&
-    lyricsTab === "profanity" &&
     Boolean(profanityHighlightMap[activeTrackIndex]) &&
     profanityWords.length > 0;
-  const spellcheckChanges =
-    spellcheckChangesByTrack[activeTrackIndex] ?? [];
-  const spellcheckNotice = spellcheckNoticeMap[activeTrackIndex];
-  const showSpellcheckPreview = Boolean(
-    spellcheckAppliedMap[activeTrackIndex],
-  );
-  const hasSpellcheckChanges = spellcheckChanges.length > 0;
-  const spellcheckSuggestions =
-    spellcheckSuggestionsByTrack[activeTrackIndex] ?? [];
   const needsTranslatedLyrics = hasNonKoreanLyrics(activeTrack.lyrics);
   const showTranslatedLyricsPanel =
     Boolean(translationPanelOpenMap[activeTrackIndex]) ||
@@ -430,7 +371,7 @@ export function AlbumWizard({
     },
     [],
   );
-  const showLyricsTabs = showProfanityPanel || showSpellcheckPreview;
+  const showLyricsTabs = showProfanityPanel;
   const requireSubmissionId = React.useCallback(() => {
     if (!currentSubmissionId) {
       throw new Error("접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.");
@@ -596,15 +537,6 @@ export function AlbumWizard({
     void createDraft();
   }, [createDraft, currentSubmissionId, isPreparingDraft, resumeChecked]);
 
-  React.useEffect(() => {
-    if (spellcheckAppliedMap[activeTrackIndex]) {
-      setLyricsTab("spellcheck");
-      return;
-    }
-    if (profanityCheckedMap[activeTrackIndex]) {
-      setLyricsTab("profanity");
-    }
-  }, [activeTrackIndex, profanityCheckedMap, spellcheckAppliedMap]);
   const shouldShowGuestLookup = isGuest || completionTokens.length > 0;
   const completionCodesToShow = shouldShowGuestLookup
     ? completionTokens.length > 0
@@ -861,483 +793,7 @@ export function AlbumWizard({
       ...prev,
       [activeTrackIndex]: hasProfanity,
     }));
-    setLyricsTab("profanity");
     markLyricsToolApplied(activeTrackIndex);
-  };
-
-  const clearSpellcheckModal = () => {
-    setSpellcheckModalOpen(false);
-    setSpellcheckPendingTrack(null);
-  };
-
-  const buildChangesFromDiffs = (diffs: SpellcheckDiff[]) =>
-    diffs
-      .filter((diff) => diff.op !== "equal")
-      .map((diff) => ({
-        before: diff.a ?? "",
-        after: diff.b ?? "",
-        index: diff.indexA,
-      }))
-      .filter((change) => change.before || change.after);
-
-  const applySpellcheckSuggestions = (
-    trackIndex: number,
-    suggestionsToApply: SpellcheckSuggestion[],
-    options?: { closeModal?: boolean },
-  ) => {
-    if (!suggestionsToApply.length) return;
-    const currentLyrics = tracks[trackIndex]?.lyrics ?? "";
-    let nextLyrics = currentLyrics;
-    const applied: SpellcheckSuggestion[] = [];
-    const sorted = [...suggestionsToApply].sort((a, b) => b.start - a.start);
-
-    sorted.forEach((suggestion) => {
-      const start = Math.max(0, suggestion.start);
-      const expectedEnd =
-        typeof suggestion.end === "number"
-          ? suggestion.end
-          : suggestion.start + suggestion.before.length;
-      const end = Math.max(start, expectedEnd);
-      const before = suggestion.before ?? "";
-      const after = suggestion.after ?? "";
-      if (!before && !after) return;
-      if (!before && after) {
-        nextLyrics =
-          nextLyrics.slice(0, start) +
-          after +
-          nextLyrics.slice(start);
-        applied.push({ ...suggestion, start, end: start });
-        return;
-      }
-      const slice = nextLyrics.slice(start, end);
-      if (slice === before) {
-        nextLyrics =
-          nextLyrics.slice(0, start) +
-          after +
-          nextLyrics.slice(end);
-        applied.push({ ...suggestion, start, end });
-        return;
-      }
-      const fallbackIndex = nextLyrics.indexOf(
-        before,
-        Math.max(0, start - 8),
-      );
-      if (fallbackIndex >= 0) {
-        nextLyrics =
-          nextLyrics.slice(0, fallbackIndex) +
-          after +
-          nextLyrics.slice(fallbackIndex + before.length);
-        applied.push({
-          ...suggestion,
-          start: fallbackIndex,
-          end: fallbackIndex + before.length,
-        });
-      }
-    });
-
-    if (!applied.length) {
-      setSpellcheckNoticeMap((prev) => ({
-        ...prev,
-        [trackIndex]: {
-          type: "error",
-          message: "적용할 제안이 없습니다. 다시 시도해주세요.",
-        },
-      }));
-      return;
-    }
-
-    updateTrack(trackIndex, "lyrics", nextLyrics);
-    setSpellcheckChangesByTrack((prev) => ({
-      ...prev,
-      [trackIndex]: applied.map((item) => ({
-        before: item.before,
-        after: item.after,
-        index: item.start,
-      })),
-    }));
-    setSpellcheckAppliedMap((prev) => ({
-      ...prev,
-      [trackIndex]: true,
-    }));
-    setLyricsTab("spellcheck");
-    markLyricsToolApplied(trackIndex);
-    setSpellcheckNoticeMap((prev) => ({
-      ...prev,
-      [trackIndex]: {
-        type: "success",
-        message: `맞춤법이 적용되었습니다. (${applied.length}건)`,
-      },
-    }));
-    if (options?.closeModal) {
-      clearSpellcheckModal();
-    }
-  };
-
-  const handleSpellcheckUndo = () => {
-    const original = spellcheckOriginalByTrack[activeTrackIndex];
-    if (typeof original !== "string") {
-      setSpellcheckNoticeMap((prev) => ({
-        ...prev,
-        [activeTrackIndex]: {
-          type: "error",
-          message: "복원할 원문이 없습니다. 다시 맞춤법을 실행해주세요.",
-        },
-      }));
-      return;
-    }
-    updateTrack(activeTrackIndex, "lyrics", original);
-    setSpellcheckAppliedMap((prev) => ({
-      ...prev,
-      [activeTrackIndex]: false,
-    }));
-    setSpellcheckChangesByTrack((prev) => ({
-      ...prev,
-      [activeTrackIndex]: [],
-    }));
-    setSpellcheckCorrectedByTrack((prev) => ({
-      ...prev,
-      [activeTrackIndex]: original,
-    }));
-    setSpellcheckDiffsByTrack((prev) => ({
-      ...prev,
-      [activeTrackIndex]: [],
-    }));
-    setSpellcheckNoticeMap((prev) => ({
-      ...prev,
-      [activeTrackIndex]: {
-        type: "info",
-        message: "원문으로 복원했습니다.",
-      },
-    }));
-    clearSpellcheckModal();
-  };
-
-  const handleSpellCheck = async () => {
-    const lyricsFromState = activeTrack.lyrics;
-    const lyricsFromDom = lyricsTextareaRef.current?.value ?? "";
-    const lyrics = lyricsFromDom || lyricsFromState;
-    const trimmedLyrics = lyrics.trim();
-    if (!trimmedLyrics) {
-      setSpellcheckNoticeMap((prev) => ({
-        ...prev,
-        [activeTrackIndex]: {
-          type: "error",
-          message: "가사를 입력한 뒤 맞춤법을 적용해주세요.",
-        },
-      }));
-      return;
-    }
-    const textarea = lyricsTextareaRef.current;
-    const selectionStart = textarea?.selectionStart ?? null;
-    const selectionEnd = textarea?.selectionEnd ?? null;
-    const scrollTop = textarea?.scrollTop ?? 0;
-    setSpellcheckOriginalByTrack((prev) => ({
-      ...prev,
-      [activeTrackIndex]: lyrics,
-    }));
-    setSpellcheckChangesByTrack((prev) => ({
-      ...prev,
-      [activeTrackIndex]: [],
-    }));
-    setSpellcheckAppliedMap((prev) => ({
-      ...prev,
-      [activeTrackIndex]: false,
-    }));
-    setSpellcheckSuggestionsByTrack((prev) => ({
-      ...prev,
-      [activeTrackIndex]: [],
-    }));
-
-    setIsSpellchecking(true);
-    setSpellcheckNoticeMap((prev) => ({
-      ...prev,
-      [activeTrackIndex]: {
-        type: "info",
-        message: "맞춤법을 적용하는 중입니다.",
-      },
-    }));
-    try {
-      console.info("[Spellcheck][request][start]", {
-        length: lyrics.length,
-        stateLength: lyricsFromState.length,
-        domLength: lyricsFromDom.length,
-        previewHead: lyrics.slice(0, 80),
-        previewTail: lyrics.slice(Math.max(0, lyrics.length - 80)),
-        trackIndex: activeTrackIndex,
-      });
-      const response = await fetch("/api/spellcheck", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: lyrics, mode: "strict", domain: "music" }),
-      });
-      const payload = await response.json().catch(() => null);
-      console.info("[Spellcheck][request][done]", {
-        status: response.status,
-        ok: response.ok,
-        keys: payload ? Object.keys(payload) : [],
-        traceId: payload?.meta?.traceId ?? null,
-      });
-      type SpellcheckResponse = {
-        originalText?: string;
-        normalizedText?: string;
-        correctedText?: string;
-        corrected?: string;
-        suggestions?: Array<{
-          id?: unknown;
-          start?: unknown;
-          end?: unknown;
-          original?: unknown;
-          replacement?: unknown;
-          type?: unknown;
-          confidence?: unknown;
-          message?: unknown;
-          source?: unknown;
-        }>;
-        diffs?: Array<{
-          op?: unknown;
-          a?: unknown;
-          b?: unknown;
-          indexA?: unknown;
-          indexB?: unknown;
-        }>;
-        meta?: { truncated?: boolean; reasonIfEmpty?: string; traceId?: string };
-        error?: { message?: string };
-      };
-      const spellcheckPayload = payload as SpellcheckResponse | null;
-      const rawSuggestions: SpellcheckSuggestion[] = Array.isArray(
-        spellcheckPayload?.suggestions,
-      )
-        ? (spellcheckPayload?.suggestions ?? []).map((item) => ({
-            id: typeof item?.id === "string" ? item.id : undefined,
-            start:
-              typeof item?.start === "number"
-                ? item.start
-                : Number(item?.start ?? -1),
-            end:
-              typeof item?.end === "number"
-                ? item.end
-                : Number(item?.end ?? -1),
-            before:
-              typeof item?.original === "string"
-                ? item.original
-                : String(item?.original ?? ""),
-            after:
-              typeof item?.replacement === "string"
-                ? item.replacement
-                : String(item?.replacement ?? ""),
-            reason:
-              typeof item?.message === "string"
-                ? item.message
-                : typeof item?.type === "string"
-                  ? item.type
-                  : undefined,
-            source:
-              typeof item?.source === "string" ? item.source : undefined,
-            confidence:
-              typeof item?.confidence === "number"
-                ? item.confidence
-                : undefined,
-            type: typeof item?.type === "string" ? item.type : undefined,
-          }))
-        : [];
-      const parsedSuggestions = rawSuggestions.filter(
-        (item) =>
-          Number.isFinite(item.start) &&
-          Number.isFinite(item.end) &&
-          typeof item.before === "string" &&
-          typeof item.after === "string" &&
-          (item.before.length > 0 || item.after.length > 0) &&
-          item.start >= 0 &&
-          item.end >= item.start,
-      );
-      const diffs: SpellcheckDiff[] = Array.isArray(spellcheckPayload?.diffs)
-        ? (spellcheckPayload?.diffs ?? [])
-            .map((diff) => {
-              const resolvedOp: SpellcheckDiff["op"] =
-                diff?.op === "equal" ||
-                diff?.op === "insert" ||
-                diff?.op === "delete" ||
-                diff?.op === "replace"
-                  ? diff.op
-                  : "equal";
-              return {
-                op: resolvedOp,
-                a: typeof diff?.a === "string" ? diff.a : String(diff?.a ?? ""),
-                b: typeof diff?.b === "string" ? diff.b : String(diff?.b ?? ""),
-                indexA:
-                  typeof diff?.indexA === "number"
-                    ? diff.indexA
-                    : Number(diff?.indexA ?? 0),
-                indexB:
-                  typeof diff?.indexB === "number"
-                    ? diff.indexB
-                    : Number(diff?.indexB ?? 0),
-              };
-            })
-            .filter((diff) => Number.isFinite(diff.indexA) && Number.isFinite(diff.indexB))
-        : [];
-      const correctedText =
-        typeof spellcheckPayload?.correctedText === "string"
-          ? spellcheckPayload.correctedText
-          : typeof spellcheckPayload?.corrected === "string"
-            ? spellcheckPayload.corrected
-            : lyrics;
-      const originalText =
-        typeof spellcheckPayload?.originalText === "string"
-          ? spellcheckPayload.originalText
-          : lyrics;
-      const reasonIfEmpty = spellcheckPayload?.meta?.reasonIfEmpty;
-      if (!response.ok) {
-        const message =
-          spellcheckPayload?.error?.message ??
-          "일시적으로 맞춤법 적용에 실패했습니다. 잠시 후 다시 시도해주세요.";
-        setSpellcheckNoticeMap((prev) => ({
-          ...prev,
-          [activeTrackIndex]: { type: "error", message },
-        }));
-        return;
-      }
-
-      setSpellcheckCorrectedByTrack((prev) => ({
-        ...prev,
-        [activeTrackIndex]: correctedText,
-      }));
-      setSpellcheckDiffsByTrack((prev) => ({
-        ...prev,
-        [activeTrackIndex]: diffs,
-      }));
-
-      if (!parsedSuggestions.length) {
-        setSpellcheckNoticeMap((prev) => ({
-          ...prev,
-          [activeTrackIndex]: {
-            type: "info",
-            message: `맞춤법 제안이 없습니다.${
-              reasonIfEmpty ? ` (사유: ${reasonIfEmpty})` : ""
-            }`,
-          },
-        }));
-        return;
-      }
-
-      setSpellcheckOriginalByTrack((prev) => ({
-        ...prev,
-        [activeTrackIndex]: originalText,
-      }));
-      setSpellcheckSuggestionsByTrack((prev) => ({
-        ...prev,
-        [activeTrackIndex]: parsedSuggestions,
-      }));
-      setSpellcheckNoticeMap((prev) => ({
-        ...prev,
-        [activeTrackIndex]: {
-          type: "info",
-          message: `맞춤법 제안 ${parsedSuggestions.length}건을 검토 후 적용하세요.`,
-        },
-      }));
-      setSpellcheckPendingTrack(activeTrackIndex);
-      setSpellcheckModalOpen(true);
-
-      requestAnimationFrame(() => {
-        const target = lyricsTextareaRef.current;
-        if (target) {
-          if (selectionStart !== null && selectionEnd !== null) {
-            target.setSelectionRange(selectionStart, selectionEnd);
-          }
-          target.scrollTop = scrollTop;
-        }
-        if (lyricsOverlayRef.current) {
-          lyricsOverlayRef.current.scrollTop = scrollTop;
-        }
-      });
-    } catch (error) {
-      console.error("[Spellcheck][request][error]", error);
-      setSpellcheckNoticeMap((prev) => ({
-        ...prev,
-        [activeTrackIndex]: {
-          type: "error",
-          message:
-            "일시적으로 맞춤법 적용에 실패했습니다. 잠시 후 다시 시도해주세요.",
-        },
-      }));
-    } finally {
-      setIsSpellchecking(false);
-    }
-  };
-
-  const handleApplyAllSpellcheck = () => {
-    const suggestions = spellcheckSuggestionsByTrack[activeTrackIndex] ?? [];
-    const corrected = spellcheckCorrectedByTrack[activeTrackIndex];
-    const diffs = spellcheckDiffsByTrack[activeTrackIndex] ?? [];
-    if (typeof corrected === "string" && corrected.length > 0) {
-      updateTrack(activeTrackIndex, "lyrics", corrected);
-      const appliedChanges =
-        diffs.length > 0 ? buildChangesFromDiffs(diffs) : suggestions.map((item) => ({
-          before: item.before,
-          after: item.after ?? "",
-          index: item.start,
-        }));
-      setSpellcheckChangesByTrack((prev) => ({
-        ...prev,
-        [activeTrackIndex]: appliedChanges,
-      }));
-      setSpellcheckAppliedMap((prev) => ({
-        ...prev,
-        [activeTrackIndex]: true,
-      }));
-      setLyricsTab("spellcheck");
-      markLyricsToolApplied(activeTrackIndex);
-      setSpellcheckNoticeMap((prev) => ({
-        ...prev,
-        [activeTrackIndex]: {
-          type: "success",
-          message: `맞춤법이 적용되었습니다. (${appliedChanges.length}건)`,
-        },
-      }));
-      clearSpellcheckModal();
-      setSpellcheckSuggestionsByTrack((prev) => ({
-        ...prev,
-        [activeTrackIndex]: [],
-      }));
-      return;
-    }
-
-    applySpellcheckSuggestions(activeTrackIndex, suggestions, {
-      closeModal: true,
-    });
-    setSpellcheckSuggestionsByTrack((prev) => ({
-      ...prev,
-      [activeTrackIndex]: [],
-    }));
-  };
-
-  const handleApplySingleSuggestion = (index: number) => {
-    const suggestions = spellcheckSuggestionsByTrack[activeTrackIndex] ?? [];
-    const target = suggestions[index];
-    if (!target) return;
-    applySpellcheckSuggestions(activeTrackIndex, [target]);
-    setSpellcheckSuggestionsByTrack((prev) => {
-      const next = [...(prev[activeTrackIndex] ?? [])];
-      next.splice(index, 1);
-      return { ...prev, [activeTrackIndex]: next };
-    });
-  };
-
-  const handleIgnoreSpellcheck = () => {
-    clearSpellcheckModal();
-    setSpellcheckSuggestionsByTrack((prev) => ({
-      ...prev,
-      [activeTrackIndex]: [],
-    }));
-    setSpellcheckNoticeMap((prev) => ({
-      ...prev,
-      [activeTrackIndex]: {
-        type: "info",
-        message: "맞춤법 제안을 닫았습니다. 필요 시 다시 실행하세요.",
-      },
-    }));
   };
 
   const handleTranslateLyrics = async () => {
@@ -1373,13 +829,6 @@ export function AlbumWizard({
         [activeTrackIndex]: true,
       }));
       markLyricsToolApplied(activeTrackIndex);
-      setSpellcheckNoticeMap((prev) => ({
-        ...prev,
-        [activeTrackIndex]: {
-          type: "info",
-          message: "번역본 가사 탭에 자동 번역 결과를 적용했습니다.",
-        },
-      }));
     } catch (error) {
       console.error(error);
       setNotice({
@@ -3018,108 +2467,6 @@ export function AlbumWizard({
           </div>
         </div>
       ) : null}
-      {spellcheckModalOpen && spellcheckPendingTrack === activeTrackIndex ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
-          <button
-            type="button"
-            onClick={handleIgnoreSpellcheck}
-            className="absolute inset-0 bg-black/50"
-            aria-label="맞춤법 제안 닫기"
-          />
-          <div className="relative z-10 w-full max-w-3xl rounded-3xl border border-border/80 bg-card/95 p-6 shadow-2xl backdrop-blur">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  맞춤법 제안
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {spellcheckSuggestions.length}건의 제안을 검토 후 적용하세요.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleApplyAllSpellcheck}
-                  className="rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-background hover:bg-foreground/90"
-                >
-                  전체 적용
-                </button>
-                <button
-                  type="button"
-                  onClick={handleIgnoreSpellcheck}
-                  className="rounded-full border border-border/70 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-foreground hover:border-foreground hover:bg-foreground/5"
-                >
-                  모두 무시
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSpellcheckUndo}
-                  className="rounded-full border border-border/70 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-foreground hover:border-foreground hover:bg-foreground/5"
-                >
-                  원문으로 되돌리기
-                </button>
-                <button
-                  type="button"
-                  onClick={clearSpellcheckModal}
-                  className="rounded-full border border-border/70 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-foreground hover:border-foreground hover:bg-foreground/5"
-                >
-                  닫기
-                </button>
-              </div>
-            </div>
-            <div className="mt-4 max-h-[50vh] space-y-3 overflow-auto pr-1">
-              {spellcheckSuggestions.length > 0 ? (
-                spellcheckSuggestions.map((suggestion, index) => (
-                  <div
-                    key={`${suggestion.before}-${suggestion.after}-${suggestion.start}-${index}`}
-                    className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 text-sm"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-xs text-muted-foreground">
-                        위치 {suggestion.start}–{suggestion.end}
-                        {suggestion.reason ? ` · ${suggestion.reason}` : ""}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleApplySingleSuggestion(index)}
-                        className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-foreground hover:border-foreground hover:bg-foreground/5"
-                      >
-                        적용
-                      </button>
-                    </div>
-                    <div className="mt-2 flex flex-col gap-1 text-sm leading-relaxed">
-                      <div className="inline-flex items-start gap-2 rounded-xl bg-rose-50 px-3 py-2 text-rose-800 dark:bg-rose-500/20 dark:text-rose-100">
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-rose-500">
-                          Before
-                        </span>
-                        <span className="font-semibold">
-                          {suggestion.before || "(삽입)"}
-                        </span>
-                      </div>
-                      <div className="inline-flex items-start gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-100">
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-emerald-600">
-                          After
-                        </span>
-                        <span className="font-semibold">
-                          {suggestion.after || "(삭제)"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border/70 bg-background/70 px-4 py-3 text-sm text-muted-foreground">
-                  맞춤법 제안이 없습니다.
-                </div>
-              )}
-            </div>
-            <div className="mt-4 rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
-              제안은 원문 기준 위치로 표시됩니다. 가사를 수정했다면 다시 맞춤법을 실행해주세요.
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {stepLabels}
 
       {step === 1 && (
@@ -3810,14 +3157,6 @@ export function AlbumWizard({
                           </button>
                           <button
                             type="button"
-                            onClick={handleSpellCheck}
-                            disabled={isSpellchecking}
-                            className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            맞춤법 {isSpellchecking ? "적용 중..." : "자동 적용"}
-                          </button>
-                          <button
-                            type="button"
                             onClick={handleTranslateLyrics}
                             disabled={isTranslatingLyrics}
                             className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
@@ -3825,19 +3164,6 @@ export function AlbumWizard({
                             자동번역 {isTranslatingLyrics ? "중..." : ""}
                           </button>
                         </div>
-                        {spellcheckNotice && (
-                          <div
-                            className={`mt-2 rounded-2xl border px-4 py-2 text-xs font-semibold ${
-                              spellcheckNotice.type === "error"
-                                ? "border-red-200/70 bg-red-50 text-red-700"
-                                : spellcheckNotice.type === "success"
-                                  ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
-                                  : "border-[#f6d64a] bg-[#f6d64a] text-black"
-                            }`}
-                          >
-                            {spellcheckNotice.message}
-                          </div>
-                        )}
                         {showLyricsToolNotice && (
                           <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-black opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-[#f6d64a] group-hover/lyrics-tools:bg-[#f6d64a] group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-[#f6d64a] group-focus-within/lyrics-tools:bg-[#f6d64a] group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100">
                             위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
@@ -3925,35 +3251,7 @@ export function AlbumWizard({
                       )}
                       {showLyricsTabs && (
                         <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-foreground">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {showProfanityPanel && (
-                              <button
-                                type="button"
-                                onClick={() => setLyricsTab("profanity")}
-                                className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
-                                  lyricsTab === "profanity"
-                                    ? "bg-foreground text-background"
-                                    : "border border-border/70 text-muted-foreground hover:text-foreground"
-                                }`}
-                              >
-                                욕설 표시
-                              </button>
-                            )}
-                            {showSpellcheckPreview && (
-                              <button
-                                type="button"
-                                onClick={() => setLyricsTab("spellcheck")}
-                                className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
-                                  lyricsTab === "spellcheck"
-                                    ? "bg-foreground text-background"
-                                    : "border border-border/70 text-muted-foreground hover:text-foreground"
-                                }`}
-                              >
-                                맞춤법 수정
-                              </button>
-                            )}
-                          </div>
-                          {lyricsTab === "profanity" && showProfanityPanel && (
+                          {showProfanityPanel && (
                             <div className="mt-3 space-y-2">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                                 감지된 단어
@@ -3978,38 +3276,6 @@ export function AlbumWizard({
                               </div>
                             </div>
                           )}
-                          {lyricsTab === "spellcheck" &&
-                            showSpellcheckPreview && (
-                              <div className="mt-3 space-y-2">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                                  수정 내역
-                                </p>
-                                <div className="max-h-32 space-y-2 overflow-auto pr-1">
-                                  {hasSpellcheckChanges ? (
-                                    spellcheckChanges.map((change, index) => (
-                                      <div
-                                        key={`${change.before}-${index}`}
-                                        className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px]"
-                                      >
-                                        <span className="text-muted-foreground">
-                                          {change.before}
-                                        </span>
-                                        <span className="mx-2 text-muted-foreground">
-                                          →
-                                        </span>
-                                        <span className="font-semibold text-foreground">
-                                          {change.after}
-                                        </span>
-                                      </div>
-                                    ))
-                                  ) : (
-                                    <div className="rounded-xl border border-dashed border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
-                                      맞춤법 수정 내역이 없습니다.
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
                         </div>
                       )}
                       <div className="group rounded-2xl border border-border/60 bg-background/70 px-3 py-3 text-xs text-muted-foreground transition-all duration-200 group-hover:[&_li]:text-sm group-hover:[&_li]:leading-relaxed group-hover:[&_p]:text-xs">

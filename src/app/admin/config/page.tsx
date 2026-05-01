@@ -1,12 +1,10 @@
 import {
   deletePackageFormAction,
   deleteProfanityTermFormAction,
-  deleteSpellcheckTermFormAction,
   deleteStationFormAction,
   updatePackageStationsFormAction,
   upsertProfanityTermFormAction,
   upsertPackageFormAction,
-  upsertSpellcheckTermFormAction,
   upsertStationFormAction,
 } from "@/features/admin/actions";
 import { AdminSaveToast } from "@/components/admin/save-toast";
@@ -104,11 +102,6 @@ export default async function AdminConfigPage({
   const { data: profanityTerms } = await supabase
     .from("profanity_terms")
     .select("id, term, language, is_active, created_at")
-    .order("created_at", { ascending: false });
-
-  const { data: spellcheckTerms } = await supabase
-    .from("spellcheck_terms")
-    .select("id, from_text, to_text, language, is_active, created_at")
     .order("created_at", { ascending: false });
 
   return (
@@ -477,120 +470,6 @@ export default async function AdminConfigPage({
           </div>
         </section>
 
-        <section className="space-y-4 rounded-[32px] border border-border/60 bg-card/80 p-6">
-          <h2 className="text-lg font-semibold text-foreground">
-            맞춤법 사전
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            반복적으로 발생하는 오탈자를 직접 교정어로 등록할 수 있습니다.
-          </p>
-          <div className="space-y-3">
-            {spellcheckTerms?.map((term) => (
-              <div
-                key={term.id}
-                className="grid gap-3 rounded-2xl border border-border/60 bg-background/70 p-4 md:grid-cols-[1fr_auto]"
-              >
-                <form
-                  action={upsertSpellcheckTermFormAction}
-                  className="grid gap-3 md:grid-cols-[1.4fr_1.4fr_0.6fr_auto_auto]"
-                >
-                  <input type="hidden" name="id" value={term.id} />
-                  <input
-                    name="fromText"
-                    defaultValue={term.from_text}
-                    className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-                    placeholder="교정 전"
-                  />
-                  <input
-                    name="toText"
-                    defaultValue={term.to_text}
-                    className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-                    placeholder="교정 후"
-                  />
-                  <select
-                    name="language"
-                    defaultValue={(term.language ?? "KO").toUpperCase()}
-                    className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-                  >
-                    <option value="KO">한글</option>
-                    <option value="EN">영문</option>
-                  </select>
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      name="isActive"
-                      defaultChecked={term.is_active}
-                      className="h-4 w-4 rounded border-border"
-                    />
-                    활성화
-                  </label>
-                  <button
-                    type="submit"
-                    className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background"
-                  >
-                    저장
-                  </button>
-                </form>
-                <form
-                  action={deleteSpellcheckTermFormAction}
-                  className="flex items-center justify-end"
-                >
-                  <input type="hidden" name="id" value={term.id} />
-                  <button
-                    type="submit"
-                    className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground"
-                  >
-                    삭제
-                  </button>
-                </form>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 p-4">
-            <h3 className="text-sm font-semibold text-foreground">
-              새 교정어 추가
-            </h3>
-            <form
-              action={upsertSpellcheckTermFormAction}
-              className="mt-3 grid gap-3 md:grid-cols-[1.4fr_1.4fr_0.6fr_auto_auto]"
-            >
-              <input
-                name="fromText"
-                placeholder="교정 전"
-                className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-              />
-              <input
-                name="toText"
-                placeholder="교정 후"
-                className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-              />
-              <select
-                name="language"
-                defaultValue="KO"
-                className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
-              >
-                <option value="KO">한글</option>
-                <option value="EN">영문</option>
-              </select>
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  name="isActive"
-                  defaultChecked
-                  className="h-4 w-4"
-                />
-                활성화
-              </label>
-              <button
-                type="submit"
-                className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background"
-              >
-                추가
-              </button>
-            </form>
-          </div>
-        </section>
       </div>
     </div>
   );
