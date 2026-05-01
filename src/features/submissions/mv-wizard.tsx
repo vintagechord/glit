@@ -74,8 +74,8 @@ const steps = [
 
 const uploadMaxMb = Number(
   process.env.NEXT_PUBLIC_VIDEO_UPLOAD_MAX_MB ??
-    process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ??
-    "4096",
+  process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ??
+  "4096",
 );
 const uploadMaxBytes = uploadMaxMb * 1024 * 1024;
 const uploadMaxLabel =
@@ -233,14 +233,14 @@ const broadcastFieldLabels: Array<{
   key: keyof BroadcastSpecFields;
   label: string;
 }> = [
-  { key: "format", label: "파일 형식(컨테이너)" },
-  { key: "codec", label: "코덱/프로파일" },
-  { key: "resolution", label: "해상도" },
-  { key: "fps", label: "프레임레이트" },
-  { key: "maxSize", label: "최대 용량" },
-  { key: "duration", label: "길이 제한" },
-  { key: "note", label: "비고/추가 조건" },
-];
+    { key: "format", label: "파일 형식(컨테이너)" },
+    { key: "codec", label: "코덱/프로파일" },
+    { key: "resolution", label: "해상도" },
+    { key: "fps", label: "프레임레이트" },
+    { key: "maxSize", label: "최대 용량" },
+    { key: "duration", label: "길이 제한" },
+    { key: "note", label: "비고/추가 조건" },
+  ];
 
 export function MvWizard({
   stations,
@@ -583,7 +583,7 @@ export function MvWizard({
       }
       setDraftError(
         json?.error ||
-          "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
+        "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
       );
     } catch (error) {
       setDraftError(
@@ -618,14 +618,14 @@ export function MvWizard({
   const totalAmount =
     mvType === "MV_BROADCAST"
       ? selectedCodes.reduce(
-          (sum, code) => sum + (stationPriceMap[code] ?? 0),
-          0,
-        )
+        (sum, code) => sum + (stationPriceMap[code] ?? 0),
+        0,
+      )
       : baseAmount +
-        selectedCodes.reduce(
-          (sum, code) => sum + (stationPriceMap[code] ?? 0),
-          0,
-        );
+      selectedCodes.reduce(
+        (sum, code) => sum + (stationPriceMap[code] ?? 0),
+        0,
+      );
   const uploadHintTitle =
     mvType === "MV_DISTRIBUTION" ? "파일 포맷" : "방송국별 제출 규격";
   const uploadChips = React.useMemo(() => {
@@ -705,11 +705,10 @@ export function MvWizard({
         return (
           <div
             key={label}
-            className={`rounded-2xl border px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] ${
-              active
+            className={`rounded-2xl border px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] ${active
                 ? activeStepTone
                 : "border-border/60 bg-background text-muted-foreground"
-            }`}
+              }`}
           >
             STEP {String(index + 1).padStart(2, "0")}
             <p className="mt-2 text-[11px] font-medium tracking-normal">
@@ -1117,11 +1116,11 @@ export function MvWizard({
     const urlMap =
       partsToUpload.length > 0
         ? await presignMultipartParts({
-            submissionId,
-            key: key!,
-            uploadId: uploadId!,
-            partNumbers: partsToUpload,
-          })
+          submissionId,
+          key: key!,
+          uploadId: uploadId!,
+          partNumbers: partsToUpload,
+        })
         : new Map<number, string>();
 
     const partProgress = new Map<number, number>();
@@ -1311,12 +1310,12 @@ export function MvWizard({
       initialUploads.length === targetFiles.length
         ? [...initialUploads]
         : targetFiles.map((file) => ({
-            name: file.name,
-            size: file.size,
-            progress: 0,
-            status: "pending" as const,
-            mime: file.type,
-          }));
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          status: "pending" as const,
+          mime: file.type,
+        }));
 
     for (let index = 0; index < targetFiles.length; index += 1) {
       const file = targetFiles[index];
@@ -1409,9 +1408,9 @@ export function MvWizard({
         path: String(file.object_key ?? file.file_path ?? ""),
         originalName: String(
           file.original_name ??
-            file.file_path ??
-            file.object_key ??
-            "파일",
+          file.file_path ??
+          file.object_key ??
+          "파일",
         ),
         mime: typeof file.mime === "string" ? file.mime : undefined,
         size: Number(file.size ?? 0),
@@ -2046,12 +2045,12 @@ export function MvWizard({
             : undefined,
         cashReceiptPhone:
           paymentDocumentType === "CASH_RECEIPT" &&
-          cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+            cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
             ? cashReceiptPhone.trim() || undefined
             : undefined,
         cashReceiptBusinessNumber:
           paymentDocumentType === "CASH_RECEIPT" &&
-          cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+            cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
             ? cashReceiptBusinessNumber.trim() || undefined
             : undefined,
         taxInvoiceBusinessNumber:
@@ -2169,12 +2168,12 @@ export function MvWizard({
             : undefined,
         cashReceiptPhone:
           paymentDocumentType === "CASH_RECEIPT" &&
-          cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+            cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
             ? cashReceiptPhone.trim() || undefined
             : undefined,
         cashReceiptBusinessNumber:
           paymentDocumentType === "CASH_RECEIPT" &&
-          cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+            cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
             ? cashReceiptBusinessNumber.trim() || undefined
             : undefined,
         taxInvoiceBusinessNumber:
@@ -2469,11 +2468,10 @@ export function MvWizard({
                   onClick={() =>
                     setMvType(item.value as "MV_DISTRIBUTION" | "MV_BROADCAST")
                   }
-                  className={`text-left rounded-[28px] border p-6 transition ${
-                    active
+                  className={`text-left rounded-[28px] border p-6 transition ${active
                       ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
                       : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -2514,11 +2512,10 @@ export function MvWizard({
                       key={code}
                       type="button"
                       onClick={() => toggleTvStation(code)}
-                      className={`text-left rounded-2xl border p-4 transition ${
-                        active
+                      className={`text-left rounded-2xl border p-4 transition ${active
                           ? tone
                           : "border-border/60 bg-background text-foreground hover:border-primary/40"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="space-y-1">
@@ -2555,11 +2552,10 @@ export function MvWizard({
                 <button
                   type="button"
                   onClick={() => setOnlineBaseSelected((prev) => !prev)}
-                  className={`text-left rounded-2xl border p-4 transition ${
-                    onlineBaseSelected
+                  className={`text-left rounded-2xl border p-4 transition ${onlineBaseSelected
                       ? mvOptionToneClasses[0]
                       : "border-border/60 bg-background text-foreground hover:border-primary/40"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
@@ -2590,11 +2586,10 @@ export function MvWizard({
                       key={code}
                       type="button"
                       onClick={() => toggleOnlineOption(code)}
-                      className={`text-left rounded-2xl border p-4 transition ${
-                        active
+                      className={`text-left rounded-2xl border p-4 transition ${active
                           ? tone
                           : "border-border/60 bg-background text-foreground hover:border-primary/40"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="space-y-1">
@@ -3022,13 +3017,12 @@ export function MvWizard({
             </div>
             {lyricsToolNotice && (
               <div
-                className={`mt-3 rounded-2xl border px-4 py-2 text-xs font-semibold ${
-                  lyricsToolNotice.type === "error"
+                className={`mt-3 rounded-2xl border px-4 py-2 text-xs font-semibold ${lyricsToolNotice.type === "error"
                     ? "border-red-200/70 bg-red-50 text-red-700"
                     : lyricsToolNotice.type === "success"
                       ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
                       : "border-[#f6d64a] bg-[#f6d64a] text-black"
-                }`}
+                  }`}
               >
                 {lyricsToolNotice.message}
               </div>
@@ -3054,11 +3048,10 @@ export function MvWizard({
                 value={lyrics}
                 onChange={(event) => setLyrics(event.target.value)}
                 onScroll={handleLyricsScroll}
-                className={`relative z-0 min-h-[8rem] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${
-                  showProfanityOverlay
+                className={`relative z-0 min-h-[8rem] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${showProfanityOverlay
                     ? "text-transparent caret-foreground"
                     : "text-foreground"
-                }`}
+                  }`}
               />
             </div>
             {profanityChecked && (
@@ -3237,31 +3230,28 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("upload")}
-                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                  !emailSubmitConfirmed
+                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${!emailSubmitConfirmed
                     ? "bg-foreground text-background shadow-sm"
                     : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                }`}
+                  }`}
               >
                 파일 업로드
               </button>
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
-                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                  emailSubmitConfirmed
+                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
                     ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
                     : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                }`}
+                  }`}
               >
                 <span className="inline-flex items-center justify-center gap-2">
                   <span
                     aria-hidden="true"
-                    className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${
-                      emailSubmitConfirmed
+                    className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${emailSubmitConfirmed
                         ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#3f8ad8]"
                         : "border-current"
-                    }`}
+                      }`}
                   >
                     {emailSubmitConfirmed ? "✓" : ""}
                   </span>
@@ -3401,7 +3391,7 @@ export function MvWizard({
                   {uploads.length === 0 && (
                     <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-center text-xs text-muted-foreground">
                       <p className="font-semibold text-foreground">
-                        아직 선택된 파일이 없습니다.
+                        선택된 파일이 없습니다.
                       </p>
                       <p className="mt-2 text-[11px] text-muted-foreground">
                         파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요.
@@ -3521,11 +3511,10 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={() => setPaymentMethod("BANK")}
-                className={`rounded-2xl border p-4 text-left transition ${
-                  paymentMethod === "BANK"
+                className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "BANK"
                     ? "border-foreground bg-foreground text-background"
                     : "border-border/60 bg-background text-foreground hover:border-foreground"
-                }`}
+                  }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
                   Bank
@@ -3538,11 +3527,10 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={() => setPaymentMethod("CARD")}
-                className={`rounded-2xl border p-4 text-left transition ${
-                  paymentMethod === "CARD"
+                className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "CARD"
                     ? "border-foreground bg-foreground text-background"
                     : "border-border/60 bg-background text-foreground hover:border-foreground"
-                }`}
+                  }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
                   Card
@@ -3591,11 +3579,10 @@ export function MvWizard({
                 </p>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
                   <label
-                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                      paymentDocumentType === "CASH_RECEIPT"
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "CASH_RECEIPT"
                         ? "border-foreground bg-foreground/5 text-foreground"
                         : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
-                    }`}
+                      }`}
                   >
                     <input
                       type="radio"
@@ -3610,11 +3597,10 @@ export function MvWizard({
                     현금 영수증 발급
                   </label>
                   <label
-                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                      paymentDocumentType === "TAX_INVOICE"
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "TAX_INVOICE"
                         ? "border-foreground bg-foreground/5 text-foreground"
                         : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
-                    }`}
+                      }`}
                   >
                     <input
                       type="radio"
@@ -3638,11 +3624,10 @@ export function MvWizard({
                   <div className="mt-4 space-y-3">
                     <div className="grid gap-2 sm:grid-cols-2">
                       <label
-                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                          cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
                             ? "border-foreground bg-foreground/5 text-foreground"
                             : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
-                        }`}
+                          }`}
                       >
                         <input
                           type="radio"
@@ -3659,11 +3644,10 @@ export function MvWizard({
                         개인소득공제용
                       </label>
                       <label
-                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                          cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
                             ? "border-foreground bg-foreground/5 text-foreground"
                             : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
-                        }`}
+                          }`}
                       >
                         <input
                           type="radio"

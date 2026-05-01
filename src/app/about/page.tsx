@@ -35,9 +35,8 @@ export default function AboutPage() {
                 온사이드(onside)
               </h1>
               <p className="mt-3 text-base font-semibold leading-relaxed text-[var(--about-ink)]/80 md:text-lg">
-                온사이드는 음반·뮤직비디오 심의를 온라인으로 연결해 “방송 가능”
-                상태까지 빠르고 안전하게 만들어줍니다. 심의 진행, 승인, 기록
-                아카이브를 한 곳에서 관리하세요.
+                온사이드는 음반·뮤직비디오 심의를 온라인으로 간편하게 접수하고, 방송 가능 상태까지 빠르고 안전하게 진행할 수 있도록 도와줍니다.
+                심의 진행 현황부터 승인 결과, 접수 기록까지 한 곳에서 관리하세요.
               </p>
               <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-normal text-[var(--about-ink)]/70">
                 {[

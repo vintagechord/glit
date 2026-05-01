@@ -182,7 +182,7 @@ const genreOptions = [
 const lyricCautions = [
   "코러스, 나레이션, 반복하는 후렴을 포함하여 모든 가사를 수록해야 합니다.",
   "음원과 다르게 고의로 가사(욕설 및 선정성 문구 포함)를 누락하는 경우 심의가 불가하며, 향후 방송사에서 해당 음반기획사의 심의를 거부할 수 있습니다.",
-  "외국어 가사에는 반드시 번역을 나란히 기재해주세요.",
+  "외국어 가사에는 반드시 번역을 나란히 또는 번역본은 기재해주세요.",
   "심의요청서의 곡 순서와 CD 순서는 반드시 일치해야 합니다.",
   "실제 발매 앨범과 동일한 음원·가사·트랙수가 필요합니다. (예: 2트랙 앨범—AR 1곡 + INST 1곡—의 경우 INST까지 제출)",
 ];
@@ -3485,7 +3485,7 @@ export function AlbumWizard({
           {uploadDrafts && uploadDrafts.length > 0 && (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                업로드 대상 앨범
+                업로드 앨범
               </p>
               <div className="mt-3 space-y-2">
                 {uploadDrafts.map((draft, index) => (
@@ -3712,7 +3712,7 @@ export function AlbumWizard({
                   {uploads.length === 0 && (
                     <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-center text-xs text-muted-foreground">
                       <p className="font-semibold text-foreground">
-                        아직 선택된 파일이 없습니다.
+                        선택된 파일이 없습니다.
                       </p>
                       <p className="mt-2 text-[11px] text-muted-foreground">
                         파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요.
@@ -4139,15 +4139,14 @@ export function AlbumWizard({
               <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
                 <p className="font-semibold">2. 진행 상태 확인</p>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  마이페이지 또는 조회 코드로 방송국별 처리 현황과 결과를 다시
+                  마이페이지 또는 조회 코드로 방송국별 처리 현황과 결과를
                   확인할 수 있습니다.
                 </p>
               </div>
               <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
                 <p className="font-semibold">3. 업로드 이슈 대응</p>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  파일 제출이 불안정했다면 신청서는 유지한 채 파일만 이메일로
-                  보내주시면 됩니다.
+                  파일 업로드가 잘 안 되면 신청서는 그대로 진행하고, 파일만 이메일로 보내주세요.
                 </p>
               </div>
             </div>

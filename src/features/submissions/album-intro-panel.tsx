@@ -32,8 +32,7 @@ export function AlbumIntroPanel({
             음반 심의 접수
           </h1>
           <p className="mt-4 max-w-2xl text-sm font-semibold text-muted-foreground sm:text-base">
-            접수 방식만 고르면 바로 신청서 작성으로 이어집니다. 비회원도 접수할 수 있고,
-            로그인 상태라면 진행 내역이 마이페이지에 저장됩니다.
+            접수 방식을 선택하면 바로 신청서를 작성할 수 있습니다.
           </p>
         </div>
         <div className="flex flex-col items-start gap-3 sm:items-end">
