@@ -35,7 +35,7 @@ const featureHighlights = [
   {
     title: "실시간 진행 알림",
     description:
-      "방송국별 심의 진행 상황을 실시간으로 확인하세요.\n회원/비회원 누구나",
+      "방송국별 심의 진행 상황을 실시간으로 확인하세요.",
     card:
       "bg-[#fffaf0] text-[#111111] border-[#111111] shadow-[5px_5px_0_#111111] dark:bg-[#171717] dark:text-[#f5f5f7] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]",
     iconBox: "bg-[#1556a4] text-white dark:bg-[#3f8ad8] dark:text-[#06111f]",
@@ -53,7 +53,7 @@ const featureHighlights = [
   {
     title: "관리자 승인",
     description:
-      "접수 시 1차 체크, 방송국 전달 전 2차 검수로 빈틈 없이",
+      "접수 시 1차 체크, 방송국 전달 전 2차 검수로 빈틈 없이 진행합니다.",
     card:
       "bg-[#f2cf27] text-[#111111] border-[#111111] shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]",
     iconBox: "bg-[#d9362c] text-white dark:bg-[#ff6258] dark:text-[#111111]",

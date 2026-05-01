@@ -161,13 +161,13 @@ function getResultStatus(
         ? trackResultStatusMap.REJECTED
         : summary.outcome === "PARTIAL"
           ? {
-              label: "부분통과",
-              tone: "bauhaus-status-chip--waiting",
-            }
+            label: "부분통과",
+            tone: "bauhaus-status-chip--waiting",
+          }
           : stationResultFallbackMap[review.status] ?? {
-              label: "대기",
-              tone: "bauhaus-status-chip--neutral",
-            };
+            label: "대기",
+            tone: "bauhaus-status-chip--neutral",
+          };
 
   const summaryText =
     summary.outcome === "PARTIAL" && showPartialTrackBreakdown
@@ -261,26 +261,26 @@ const stationLogoSources: Array<{
   src: string;
   alt: string;
 }> = [
-  { patterns: ["KBS", "KBS 1FM", "KBS 2FM"], src: "/station-logos/kbs.svg", alt: "KBS" },
-  { patterns: ["MBC", "MBC FM4U", "MBC 표준FM"], src: "/station-logos/mbc.svg", alt: "MBC" },
-  { patterns: ["SBS", "SBS 파워FM", "SBS 러브FM"], src: "/station-logos/sbs.svg", alt: "SBS" },
-  { patterns: ["TBS", "TBS EFM"], src: "/station-logos/tbs.svg", alt: "TBS" },
-  { patterns: ["YTN"], src: "/station-logos/ytn.svg", alt: "YTN" },
-  { patterns: ["CBS"], src: "/station-logos/cbs.svg", alt: "CBS" },
-  { patterns: ["BBS"], src: "/station-logos/bbs.svg", alt: "BBS 불교방송" },
-  { patterns: ["WBS"], src: "/station-logos/wbs.svg", alt: "WBS" },
-  { patterns: ["PBC"], src: "/station-logos/pbc.svg", alt: "PBC 평화방송" },
-  { patterns: ["FEBC"], src: "/station-logos/febc.svg", alt: "FEBC 극동방송" },
-  { patterns: ["ARIRANG"], src: "/station-logos/arirang.svg", alt: "Arirang" },
-  { patterns: ["GYEONGIN IFM", "KFM", "IFM"], src: "/station-logos/ifm.svg", alt: "경인방송 iFM" },
-  { patterns: ["TBN"], src: "/station-logos/tbn.svg", alt: "TBN" },
-  { patterns: ["KISS"], src: "/station-logos/kiss.svg", alt: "KISS" },
-  { patterns: ["GUGAK"], src: "/station-logos/gugak.svg", alt: "국악방송" },
-  { patterns: ["EBS"], src: "/station-logos/ebs.svg", alt: "EBS" },
-  { patterns: ["TVN"], src: "/station-logos/tvn.svg", alt: "tvN" },
-  { patterns: ["JTBC"], src: "/station-logos/jtbc.svg", alt: "JTBC" },
-  { patterns: ["G1", "GFM"], src: "/station-logos/g1.svg", alt: "G1" },
-];
+    { patterns: ["KBS", "KBS 1FM", "KBS 2FM"], src: "/station-logos/kbs.svg", alt: "KBS" },
+    { patterns: ["MBC", "MBC FM4U", "MBC 표준FM"], src: "/station-logos/mbc.svg", alt: "MBC" },
+    { patterns: ["SBS", "SBS 파워FM", "SBS 러브FM"], src: "/station-logos/sbs.svg", alt: "SBS" },
+    { patterns: ["TBS", "TBS EFM"], src: "/station-logos/tbs.svg", alt: "TBS" },
+    { patterns: ["YTN"], src: "/station-logos/ytn.svg", alt: "YTN" },
+    { patterns: ["CBS"], src: "/station-logos/cbs.svg", alt: "CBS" },
+    { patterns: ["BBS"], src: "/station-logos/bbs.svg", alt: "BBS 불교방송" },
+    { patterns: ["WBS"], src: "/station-logos/wbs.svg", alt: "WBS" },
+    { patterns: ["PBC"], src: "/station-logos/pbc.svg", alt: "PBC 평화방송" },
+    { patterns: ["FEBC"], src: "/station-logos/febc.svg", alt: "FEBC 극동방송" },
+    { patterns: ["ARIRANG"], src: "/station-logos/arirang.svg", alt: "Arirang" },
+    { patterns: ["GYEONGIN IFM", "KFM", "IFM"], src: "/station-logos/ifm.svg", alt: "경인방송 iFM" },
+    { patterns: ["TBN"], src: "/station-logos/tbn.svg", alt: "TBN" },
+    { patterns: ["KISS"], src: "/station-logos/kiss.svg", alt: "KISS" },
+    { patterns: ["GUGAK"], src: "/station-logos/gugak.svg", alt: "국악방송" },
+    { patterns: ["EBS"], src: "/station-logos/ebs.svg", alt: "EBS" },
+    { patterns: ["TVN"], src: "/station-logos/tvn.svg", alt: "tvN" },
+    { patterns: ["JTBC"], src: "/station-logos/jtbc.svg", alt: "JTBC" },
+    { patterns: ["G1", "GFM"], src: "/station-logos/g1.svg", alt: "G1" },
+  ];
 
 const completionStatusSet = new Set(["APPROVED", "REJECTED", "NEEDS_FIX"]);
 
@@ -592,8 +592,8 @@ export function HomeReviewPanel({
     needsPayment
       ? "결제 완료 후 방송국 진행 정보가 표시됩니다."
       : totalCount > 0
-      ? `진행률 : 총 ${totalCount}곳 중 ${completedCount}곳 완료`
-      : "진행률 : 방송국 결과가 등록되면 진행률이 표시됩니다.";
+        ? `진행률 : 총 ${totalCount}곳 중 ${completedCount}곳 완료`
+        : "진행률 : 방송국 결과가 등록되면 진행률이 표시됩니다.";
   const currentSubmissionStatus =
     activeSubmission && !needsPayment && totalCount > 0 && completedCount === totalCount
       ? stageStatusMap.completed
@@ -741,11 +741,10 @@ export function HomeReviewPanel({
           <button
             type="button"
             onClick={() => setTab("album")}
-            className={`flex-1 rounded-[8px] border-2 px-3 py-2 transition ${
-              tab === "album"
+            className={`flex-1 rounded-[8px] border-2 px-3 py-2 transition ${tab === "album"
                 ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
                 : "border-border bg-background text-foreground/72 hover:border-[#111111] hover:text-foreground dark:text-white/76 dark:hover:border-[#f2cf27] dark:hover:text-white"
-            }`}
+              }`}
           >
             앨범
           </button>
@@ -754,11 +753,10 @@ export function HomeReviewPanel({
           <button
             type="button"
             onClick={() => setTab("mv")}
-            className={`flex-1 rounded-[8px] border-2 px-3 py-2 transition ${
-              tab === "mv"
+            className={`flex-1 rounded-[8px] border-2 px-3 py-2 transition ${tab === "mv"
                 ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
                 : "border-border bg-background text-foreground/72 hover:border-[#111111] hover:text-foreground dark:text-white/76 dark:hover:border-[#f2cf27] dark:hover:text-white"
-            }`}
+              }`}
           >
             뮤직비디오
           </button>
@@ -859,7 +857,7 @@ export function HomeReviewPanel({
                 </div>
                 {needsPayment && activeSubmission ? (
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f6d64a] bg-[#fff8d7] px-3 py-2 text-xs font-semibold text-[#111111] dark:bg-[#f6d64a]/10 dark:text-[#f6d64a]">
-                    <span>미결제 상태입니다. 결제를 완료하면 심의가 진행됩니다.</span>
+                    <span>결제 완료 후 심의가 진행됩니다.</span>
                     <Link
                       href={`/dashboard/pay/${activeSubmission.id}`}
                       className="rounded-full border border-[#111111] bg-[#111111] px-3 py-1.5 text-[11px] font-black uppercase tracking-normal text-[#f6d64a] transition hover:-translate-y-0.5 dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-[#111111]"
@@ -923,11 +921,10 @@ export function HomeReviewPanel({
                 ) : null}
                 <div
                   ref={stationListRef}
-                  className={`overflow-y-auto overscroll-contain px-2.5 py-2.5 touch-pan-y sm:px-3 sm:py-3 ${
-                    isMouseDraggingList
+                  className={`overflow-y-auto overscroll-contain px-2.5 py-2.5 touch-pan-y sm:px-3 sm:py-3 ${isMouseDraggingList
                       ? "cursor-grabbing select-none"
                       : "cursor-auto sm:cursor-grab"
-                  }`}
+                    }`}
                   style={{ maxHeight: `${listViewportHeight}px` }}
                   onScroll={handleStationListScroll}
                   onPointerDown={handleStationListPointerDown}
@@ -1204,18 +1201,18 @@ export function HomeReviewPanel({
                 const status =
                   track.status === "APPROVED"
                     ? {
-                        label: "통과",
-                        tone: "bauhaus-status-chip--success",
-                      }
+                      label: "통과",
+                      tone: "bauhaus-status-chip--success",
+                    }
                     : track.status === "REJECTED"
                       ? {
-                          label: "불통과",
-                          tone: "bauhaus-status-chip--danger",
-                        }
+                        label: "불통과",
+                        tone: "bauhaus-status-chip--danger",
+                      }
                       : {
-                          label: "대기",
-                          tone: "bauhaus-status-chip--neutral",
-                        };
+                        label: "대기",
+                        tone: "bauhaus-status-chip--neutral",
+                      };
                 const trackLabel =
                   track.title ||
                   (typeof track.track_no === "number"
@@ -1232,7 +1229,7 @@ export function HomeReviewPanel({
                         {trackLabel}
                       </p>
                       {track.status === "REJECTED" &&
-                      trackResultModal.resultNote ? (
+                        trackResultModal.resultNote ? (
                         <p className="mt-1 break-words text-xs text-rose-600/80 dark:text-rose-200/80">
                           사유: {trackResultModal.resultNote}
                         </p>

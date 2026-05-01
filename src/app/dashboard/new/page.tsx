@@ -10,7 +10,7 @@ const submissionCards = [
   {
     eyebrow: "Broadcast Review Submission",
     title: "음반 심의",
-    description: "트랙 정보 입력부터 패키지 선택, 음원 제출까지 순서대로 진행합니다.",
+    description: "발매 & 미발매 음원의 TV, Radio 송출을 위한 심의입니다.",
     href: "/dashboard/new/album",
     tone: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
   },
@@ -24,7 +24,7 @@ const submissionCards = [
   {
     eyebrow: "One Click",
     title: "원클릭 접수",
-    description: "발매 음원의 멜론 링크와 음원 파일 중심으로 빠르게 접수하는 방식입니다.",
+    description: "멜론 링크와 음원만 보내주세요. 온사이드가 다 알아서 해드립니다.",
     href: "/dashboard/new/album?mode=oneclick",
     tone: "border-[#111111] bg-[#d9362c] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
   },
@@ -43,7 +43,6 @@ export default function NewSubmissionPage() {
         <ul className="mt-4 space-y-2 text-sm font-semibold text-muted-foreground sm:text-base">
           <li>비회원도 바로 접수할 수 있습니다.</li>
           <li>로그인 상태로 접수하면 내역이 마이페이지에 자동 저장됩니다.</li>
-          <li>원하시는 접수 방식만 고르면 바로 다음 단계로 이어집니다.</li>
         </ul>
 
         <div className="mt-8 grid gap-5 md:grid-cols-3">
@@ -71,8 +70,7 @@ export default function NewSubmissionPage() {
         </div>
       </section>
       <div className="mt-5 rounded-[10px] border-2 border-[#111111] bg-white px-5 py-4 text-sm font-semibold text-muted-foreground shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27]">
-        파일 업로드가 원활하지 않으면 신청서는 사이트에서 계속 진행하시고,
-        파일만 이메일로 별도 제출해주세요.
+        파일 업로드가 안 될 경우, 신청은 사이트에서 진행하고 파일만 이메일로 보내주세요.
         <p className="mt-2 font-semibold text-foreground">{APP_CONFIG.supportEmail}</p>
       </div>
     </div>
