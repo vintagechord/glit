@@ -10,6 +10,7 @@ import { openInicisCardPopup } from "@/lib/inicis/popup";
 import {
   buildInlineTranslatedLyrics,
   collectForeignLyricsSegments,
+  requestLyricsTranslations,
 } from "@/lib/lyrics-tools";
 import { runProfanityCheck } from "@/lib/profanity/check";
 import {
@@ -1780,24 +1781,10 @@ export function MvWizard({
       message: "자동번역을 적용하는 중입니다.",
     });
     try {
-      const response = await fetch("/api/translate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          lines: sentencesToTranslate,
-          source: "auto",
-          target: "ko",
-        }),
+      const translations = await requestLyricsTranslations(sentencesToTranslate, {
+        source: "auto",
+        target: "ko",
       });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(payload?.error ?? "Translation failed");
-      }
-      const translations: string[] = Array.isArray(payload?.translations)
-        ? payload.translations
-        : [];
       const translatedLines = buildInlineTranslatedLyrics(
         lines,
         segmentMap,

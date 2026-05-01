@@ -13,6 +13,37 @@ const sleep = (ms: number) =>
     setTimeout(resolve, ms);
   });
 
+const maxTranslateChunkLength = 1200;
+
+const splitTextForTranslation = (text: string) => {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxTranslateChunkLength) return [trimmed];
+
+  const chunks: string[] = [];
+  let remaining = trimmed;
+
+  while (remaining.length > maxTranslateChunkLength) {
+    const slice = remaining.slice(0, maxTranslateChunkLength);
+    const breakIndex = Math.max(
+      slice.lastIndexOf("\n"),
+      slice.lastIndexOf(". "),
+      slice.lastIndexOf("! "),
+      slice.lastIndexOf("? "),
+      slice.lastIndexOf(", "),
+      slice.lastIndexOf(" "),
+    );
+    const end = breakIndex > maxTranslateChunkLength * 0.45
+      ? breakIndex + 1
+      : maxTranslateChunkLength;
+    const chunk = remaining.slice(0, end).trim();
+    if (chunk) chunks.push(chunk);
+    remaining = remaining.slice(end).trim();
+  }
+
+  if (remaining) chunks.push(remaining);
+  return chunks;
+};
+
 const translateLineOnce = async (
   text: string,
   source: string,
@@ -49,6 +80,18 @@ const translateLine = async (
   source: string,
   target: string,
 ) => {
+  const chunks = splitTextForTranslation(text);
+  if (chunks.length > 1) {
+    const translations: string[] = [];
+    for (const chunk of chunks) {
+      const translated = await translateLine(chunk, source, target);
+      if (translated.trim()) {
+        translations.push(translated.trim());
+      }
+    }
+    return translations.join(" ");
+  }
+
   const maxAttempts = 3;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {

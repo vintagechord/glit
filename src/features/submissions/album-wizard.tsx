@@ -11,6 +11,7 @@ import {
   buildInlineTranslatedLyrics,
   collectForeignLyricsSegments,
   hasNonKoreanLyrics,
+  requestLyricsTranslations,
 } from "@/lib/lyrics-tools";
 import {
   buildLegacyProfanityMatchers,
@@ -1357,24 +1358,10 @@ export function AlbumWizard({
     }
     setIsTranslatingLyrics(true);
     try {
-      const response = await fetch("/api/translate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          lines: sentencesToTranslate,
-          source: "auto",
-          target: "ko",
-        }),
+      const translations = await requestLyricsTranslations(sentencesToTranslate, {
+        source: "auto",
+        target: "ko",
       });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload?.error ?? "Translation failed");
-      }
-      const translations: string[] = Array.isArray(payload?.translations)
-        ? payload.translations
-        : [];
       const translatedLines = buildInlineTranslatedLyrics(
         lines,
         segmentMap,
