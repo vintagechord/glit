@@ -88,18 +88,10 @@ const translateBatch = async (
   }
 
   if (uniqueTexts.length > 0) {
-    const queue = [...uniqueTexts];
-    const workerCount = Math.min(4, queue.length);
-    await Promise.all(
-      Array.from({ length: workerCount }, async () => {
-        while (queue.length > 0) {
-          const next = queue.shift();
-          if (!next) continue;
-          const translated = await translateLine(next, source, target);
-          normalizedCache.set(next, translated);
-        }
-      }),
-    );
+    for (const text of uniqueTexts) {
+      const translated = await translateLine(text, source, target);
+      normalizedCache.set(text, translated);
+    }
   }
 
   return lines.map((line) => {
@@ -127,6 +119,15 @@ export async function POST(request: Request) {
         : "ko";
 
     const translations = await translateBatch(lines, source, target);
+    const requestedCount = lines.filter((line) => line.trim()).length;
+    const translatedCount = translations.filter((line) => line.trim()).length;
+
+    if (requestedCount > 0 && translatedCount === 0) {
+      return NextResponse.json(
+        { error: "Translation provider returned no results" },
+        { status: 502 },
+      );
+    }
 
     return NextResponse.json({ translations });
   } catch (error) {

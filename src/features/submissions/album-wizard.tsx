@@ -8,6 +8,11 @@ import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { openInicisCardPopup } from "@/lib/inicis/popup";
 import {
+  buildInlineTranslatedLyrics,
+  collectForeignLyricsSegments,
+  hasNonKoreanLyrics,
+} from "@/lib/lyrics-tools";
+import {
   buildLegacyProfanityMatchers,
   extractProfanityWords,
   type ProfanityTerm,
@@ -200,78 +205,6 @@ const lyricCautions = [
   "심의요청서의 곡 순서와 CD 순서는 반드시 일치해야 합니다.",
   "실제 발매 앨범과 동일한 음원·가사·트랙수가 필요합니다. (예: 2트랙 앨범—AR 1곡 + INST 1곡—의 경우 INST까지 제출)",
 ];
-
-const koreanLetterPattern = /[ㄱ-ㅎㅏ-ㅣ가-힣]/;
-const unicodeLetterPattern = /\p{L}/u;
-
-const hasNonKoreanLyrics = (value: string) => {
-  for (const char of value) {
-    if (!unicodeLetterPattern.test(char)) continue;
-    if (!koreanLetterPattern.test(char)) return true;
-  }
-  return false;
-};
-
-const splitForeignSentences = (value: string) => {
-  const matches = value.match(/[^.!?]+[.!?]*/g);
-  return matches?.map((item) => item.trim()).filter(Boolean) ?? [];
-};
-
-const isForeignLetter = (char: string) =>
-  unicodeLetterPattern.test(char) && !koreanLetterPattern.test(char);
-
-type ForeignSegment = {
-  raw: string;
-  start: number;
-  end: number;
-  sentences: string[];
-};
-
-const extractForeignSegments = (line: string): ForeignSegment[] => {
-  const segments: ForeignSegment[] = [];
-  let start = -1;
-  let hasForeign = false;
-
-  const pushSegment = (end: number) => {
-    if (start < 0) return;
-    const raw = line.slice(start, end);
-    const trimmed = raw.trim();
-    if (!hasForeign || !trimmed || trimmed.includes("번역:")) {
-      start = -1;
-      hasForeign = false;
-      return;
-    }
-    const sentences = splitForeignSentences(trimmed);
-    if (sentences.length > 0) {
-      segments.push({
-        raw,
-        start,
-        end,
-        sentences,
-      });
-    }
-    start = -1;
-    hasForeign = false;
-  };
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    const isKorean = koreanLetterPattern.test(char);
-    if (isKorean) {
-      pushSegment(index);
-      continue;
-    }
-    if (start < 0 && isForeignLetter(char)) {
-      start = index;
-    }
-    if (start >= 0 && isForeignLetter(char)) {
-      hasForeign = true;
-    }
-  }
-
-  pushSegment(line.length);
-  return segments;
-};
 
 const broadcastRequirementMessage =
   "타이틀곡 지정해 주시고 4곡 이상의 앨범일 경우 원음방송 심의를 위해 3곡 지정 해주세요. (원음방송은 앨범당 3곡만 심의가 가능합니다.)";
@@ -1407,16 +1340,15 @@ export function AlbumWizard({
   };
 
   const handleTranslateLyrics = async () => {
-    const lyrics = activeTrack.lyrics.trim();
-    if (!lyrics) {
+    const lyricsFromState = activeTrack.lyrics;
+    const lyricsFromDom = lyricsTextareaRef.current?.value ?? "";
+    const lyrics = lyricsFromDom || lyricsFromState;
+    if (!lyrics.trim()) {
       setNotice({ error: "번역할 가사를 먼저 입력해주세요." });
       return;
     }
-    const lines = lyrics.split("\n");
-    const segmentMap = lines.map((line) => extractForeignSegments(line));
-    const sentencesToTranslate = segmentMap.flatMap((segments) =>
-      segments.flatMap((segment) => segment.sentences),
-    );
+    const { lines, segmentMap, sentencesToTranslate } =
+      collectForeignLyricsSegments(lyrics);
     if (!sentencesToTranslate.length) {
       setNotice({
         error: "한국어 외 언어 가사를 찾지 못했습니다. 번역 대상을 확인해주세요.",
@@ -1443,39 +1375,11 @@ export function AlbumWizard({
       const translations: string[] = Array.isArray(payload?.translations)
         ? payload.translations
         : [];
-      let translationIndex = 0;
-      const translatedLines = lines.map((line, index) => {
-        const segments = segmentMap[index];
-        if (!segments.length) return line;
-
-        let nextLine = line;
-        const replacements = segments.map((segment) => {
-          const translatedSentences = segment.sentences.map((sentence) => {
-            const translation = translations[translationIndex] ?? "";
-            translationIndex += 1;
-            const translated = translation.trim() || "번역 실패";
-            return `${sentence} (번역: ${translated})`;
-          });
-          const leading = segment.raw.match(/^\s*/)?.[0] ?? "";
-          const trailing = segment.raw.match(/\s*$/)?.[0] ?? "";
-          return {
-            start: segment.start,
-            end: segment.end,
-            replacement: `${leading}${translatedSentences.join(" ")}${trailing}`,
-          };
-        });
-
-        replacements
-          .sort((a, b) => b.start - a.start)
-          .forEach((segment) => {
-            nextLine =
-              nextLine.slice(0, segment.start) +
-              segment.replacement +
-              nextLine.slice(segment.end);
-          });
-
-        return nextLine;
-      });
+      const translatedLines = buildInlineTranslatedLyrics(
+        lines,
+        segmentMap,
+        translations,
+      );
       updateTrack(activeTrackIndex, "translatedLyrics", translatedLines.join("\n"));
       setTranslationPanelOpenMap((prev) => ({
         ...prev,

@@ -7,6 +7,16 @@ import { PendingOverlay } from "@/components/ui/pending-overlay";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { openInicisCardPopup } from "@/lib/inicis/popup";
+import {
+  buildInlineTranslatedLyrics,
+  collectForeignLyricsSegments,
+} from "@/lib/lyrics-tools";
+import { runProfanityCheck } from "@/lib/profanity/check";
+import {
+  buildLegacyProfanityMatchers,
+  extractProfanityWords,
+  type ProfanityTerm,
+} from "@/lib/profanity/legacy";
 import { safeRandomUUID } from "@/lib/uuid";
 
 import {
@@ -235,10 +245,14 @@ export function MvWizard({
   stations,
   userId,
   userEmail,
+  profanityTerms = [],
+  profanityFilterV2Enabled = false,
 }: {
   stations: StationOption[];
   userId?: string | null;
   userEmail?: string | null;
+  profanityTerms?: ProfanityTerm[];
+  profanityFilterV2Enabled?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -329,6 +343,16 @@ export function MvWizard({
   );
 
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
+  const lyricsOverlayRef = React.useRef<HTMLDivElement | null>(null);
+  const lyricsTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const [lyricsToolApplied, setLyricsToolApplied] = React.useState(false);
+  const [profanityChecked, setProfanityChecked] = React.useState(false);
+  const [profanityHighlight, setProfanityHighlight] = React.useState(false);
+  const [lyricsToolNotice, setLyricsToolNotice] = React.useState<{
+    type: "error" | "info" | "success";
+    message: string;
+  } | null>(null);
+  const [isTranslatingLyrics, setIsTranslatingLyrics] = React.useState(false);
   const [confirmModal, setConfirmModal] = React.useState<{
     code: string;
     title: string;
@@ -348,6 +372,17 @@ export function MvWizard({
     () => `onside:guest-token:mv:${userId ?? "guest"}`,
     [userId],
   );
+  const profanityMatchers = React.useMemo(
+    () => buildLegacyProfanityMatchers(profanityTerms),
+    [profanityTerms],
+  );
+  const isProfanityFilterV2Enabled = Boolean(profanityFilterV2Enabled);
+  const profanityPattern = profanityMatchers?.pattern ?? null;
+  const profanityTestPattern = profanityMatchers?.testPattern ?? null;
+  const profanityWords = extractProfanityWords(lyrics, profanityPattern);
+  const showLyricsToolNotice = lyricsToolApplied;
+  const showProfanityOverlay =
+    profanityChecked && profanityHighlight && profanityWords.length > 0;
 
   if (!guestTokenRef.current) {
     guestTokenRef.current = safeRandomUUID();
@@ -1645,6 +1680,149 @@ export function MvWizard({
     return { songTitleKrValue, songTitleEnValue, songTitleOfficialValue };
   };
 
+  const markLyricsToolApplied = () => {
+    setLyricsToolApplied(true);
+  };
+
+  const handleLyricsScroll = React.useCallback(
+    (event: React.UIEvent<HTMLTextAreaElement>) => {
+      if (lyricsOverlayRef.current) {
+        lyricsOverlayRef.current.scrollTop = event.currentTarget.scrollTop;
+      }
+    },
+    [],
+  );
+
+  const renderProfanityPreview = (
+    value: string,
+    pattern?: RegExp | null,
+    testPattern?: RegExp | null,
+  ) => {
+    if (!value || !pattern || !testPattern) return value;
+    const parts = value.split(pattern);
+    return parts.map((part, index) => {
+      if (!part) return null;
+      if (testPattern.test(part)) {
+        return (
+          <mark
+            key={`${part}-${index}`}
+            className="rounded bg-red-200/80 px-1 text-red-900 dark:bg-red-500/30 dark:text-red-100"
+          >
+            {part}
+          </mark>
+        );
+      }
+      return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
+    });
+  };
+
+  const handleProfanityCheck = () => {
+    const currentLyrics = lyricsTextareaRef.current?.value ?? lyrics;
+    if (!currentLyrics.trim()) {
+      setLyricsToolNotice({
+        type: "error",
+        message: "가사를 입력한 뒤 욕설 체크를 실행해주세요.",
+      });
+      return;
+    }
+    if (currentLyrics !== lyrics) {
+      setLyrics(currentLyrics);
+    }
+
+    const v1HasProfanity = profanityTestPattern
+      ? profanityTestPattern.test(currentLyrics)
+      : false;
+    const { hasProfanity } = runProfanityCheck(currentLyrics, {
+      v1HasProfanity,
+      enableV2: isProfanityFilterV2Enabled,
+    });
+    if (hasProfanity) {
+      const shouldProceed = window.confirm(
+        "욕설이 감지되었습니다. 욕설이 있는 경우 심의 불통과 확률이 높습니다",
+      );
+      if (!shouldProceed) return;
+    }
+
+    setProfanityChecked(true);
+    setProfanityHighlight(hasProfanity);
+    markLyricsToolApplied();
+    setLyricsToolNotice({
+      type: hasProfanity ? "error" : "success",
+      message: hasProfanity
+        ? "욕설 또는 회피 패턴이 감지되었습니다."
+        : "욕설이 감지되지 않았습니다.",
+    });
+  };
+
+  const handleTranslateLyrics = async () => {
+    const currentLyrics = lyricsTextareaRef.current?.value ?? lyrics;
+    if (!currentLyrics.trim()) {
+      setLyricsToolNotice({
+        type: "error",
+        message: "번역할 가사를 먼저 입력해주세요.",
+      });
+      return;
+    }
+
+    const { lines, segmentMap, sentencesToTranslate } =
+      collectForeignLyricsSegments(currentLyrics);
+    if (!sentencesToTranslate.length) {
+      setLyricsToolNotice({
+        type: "error",
+        message: "한국어 외 언어 가사를 찾지 못했습니다. 번역 대상을 확인해주세요.",
+      });
+      return;
+    }
+
+    setIsTranslatingLyrics(true);
+    setLyricsToolNotice({
+      type: "info",
+      message: "자동번역을 적용하는 중입니다.",
+    });
+    try {
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lines: sentencesToTranslate,
+          source: "auto",
+          target: "ko",
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Translation failed");
+      }
+      const translations: string[] = Array.isArray(payload?.translations)
+        ? payload.translations
+        : [];
+      const translatedLines = buildInlineTranslatedLyrics(
+        lines,
+        segmentMap,
+        translations,
+      );
+
+      setLyrics(translatedLines.join("\n"));
+      setProfanityChecked(false);
+      setProfanityHighlight(false);
+      markLyricsToolApplied();
+      setLyricsToolNotice({
+        type: "success",
+        message: "가사 입력란에 자동번역 결과를 적용했습니다.",
+      });
+    } catch (error) {
+      console.error(error);
+      setLyricsToolNotice({
+        type: "error",
+        message: "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+      });
+    } finally {
+      setIsTranslatingLyrics(false);
+    }
+  };
+
   const validatePaymentDocument = () => {
     if (paymentMethod !== "BANK") return true;
     if (isAdminReviewer) return true;
@@ -2825,14 +3003,102 @@ export function MvWizard({
           </div>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              가사 *
-            </p>
-            <textarea
-              value={lyrics}
-              onChange={(event) => setLyrics(event.target.value)}
-              className="mt-4 h-32 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-            />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                가사 *
+              </p>
+              <div className="group/lyrics-tools">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleProfanityCheck}
+                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer"
+                  >
+                    욕설 체크
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTranslateLyrics}
+                    disabled={isTranslatingLyrics}
+                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    자동번역 {isTranslatingLyrics ? "중..." : ""}
+                  </button>
+                </div>
+                {showLyricsToolNotice && (
+                  <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-black opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-[#f6d64a] group-hover/lyrics-tools:bg-[#f6d64a] group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-[#f6d64a] group-focus-within/lyrics-tools:bg-[#f6d64a] group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100">
+                    위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
+                    체크해주세요.
+                  </div>
+                )}
+              </div>
+            </div>
+            {lyricsToolNotice && (
+              <div
+                className={`mt-3 rounded-2xl border px-4 py-2 text-xs font-semibold ${
+                  lyricsToolNotice.type === "error"
+                    ? "border-red-200/70 bg-red-50 text-red-700"
+                    : lyricsToolNotice.type === "success"
+                      ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
+                      : "border-[#f6d64a] bg-[#f6d64a] text-black"
+                }`}
+              >
+                {lyricsToolNotice.message}
+              </div>
+            )}
+            <div className="relative isolate mt-4 overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
+              {showProfanityOverlay && (
+                <div
+                  ref={lyricsOverlayRef}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 z-10 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-foreground"
+                >
+                  <div className="whitespace-pre-wrap">
+                    {renderProfanityPreview(
+                      lyrics,
+                      profanityPattern,
+                      profanityTestPattern,
+                    )}
+                  </div>
+                </div>
+              )}
+              <textarea
+                ref={lyricsTextareaRef}
+                value={lyrics}
+                onChange={(event) => setLyrics(event.target.value)}
+                onScroll={handleLyricsScroll}
+                className={`relative z-0 min-h-[8rem] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${
+                  showProfanityOverlay
+                    ? "text-transparent caret-foreground"
+                    : "text-foreground"
+                }`}
+              />
+            </div>
+            {profanityChecked && (
+              <div className="mt-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-foreground">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  감지된 단어
+                </p>
+                <div className="mt-2 max-h-32 space-y-2 overflow-auto pr-1">
+                  {profanityWords.length > 0 ? (
+                    profanityWords.map((word) => (
+                      <div
+                        key={word}
+                        className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px] font-semibold text-red-600"
+                      >
+                        {word}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
+                      {profanityHighlight
+                        ? "회피 패턴이 감지되었습니다."
+                        : "욕설이 감지되지 않았습니다."}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <p className="mt-2 text-xs text-muted-foreground">
               가사의 외국어는 반드시 번역이 있어야 합니다.
             </p>
