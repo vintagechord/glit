@@ -166,7 +166,7 @@ export default function Home() {
                   온사이드에서 방송사별 심의 진행을 실시간으로 받아보세요.
                 </p>
                 <p className="mt-2 text-[13px] font-semibold leading-6 text-foreground/72 sm:text-[15px] dark:text-white/74">
-                  나의 모든 심의 기록, 온사이드에서 모아 관리할 수 있습니다.
+                  나의 모든 심의 기록, 온사이드에서 관리할 수 있습니다.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
