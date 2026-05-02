@@ -1278,8 +1278,8 @@ export function SubmissionDetailClient({
                 onClick={card.onClick}
                 disabled={!card.onClick}
                 className={`rounded-[8px] border-2 px-5 py-4 text-left shadow-[4px_4px_0_#111111] transition dark:shadow-[4px_4px_0_#f2cf27] ${card.onClick
-                    ? "cursor-pointer hover:-translate-y-0.5"
-                    : "cursor-default"
+                  ? "cursor-pointer hover:-translate-y-0.5"
+                  : "cursor-default"
                   } ${card.tone}`}
               >
                 <p className="text-[11px] font-black uppercase tracking-normal opacity-75">
@@ -1360,10 +1360,10 @@ export function SubmissionDetailClient({
                   <div
                     key={label}
                     className={`rounded-[8px] border-2 px-3 py-3 text-center text-[11px] font-black leading-5 ${isActive
-                        ? "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
-                        : isPassed
-                          ? "border-white bg-white/80 text-[#111111] dark:border-white dark:bg-white/14 dark:text-white"
-                          : "border-white/80 bg-white/16 text-white"
+                      ? "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
+                      : isPassed
+                        ? "border-white bg-white/80 text-[#111111] dark:border-white dark:bg-white/14 dark:text-white"
+                        : "border-white/80 bg-white/16 text-white"
                       }`}
                   >
                     {label}
@@ -1506,9 +1506,6 @@ export function SubmissionDetailClient({
               <p className={detailKickerClass}>
                 진행 현황 요약
               </p>
-              <span className="text-xs text-muted-foreground">
-                방송국 기준 요약
-              </span>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className={`${detailSubPanelClass} px-4 py-4`}>
