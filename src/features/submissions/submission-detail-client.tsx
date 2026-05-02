@@ -474,8 +474,8 @@ export function SubmissionDetailClient({
   const resultStatusLabel =
     submission.result_status
       ? resultStatusLabelMap[
-          submission.result_status as keyof typeof resultStatusLabelMap
-        ] ?? submission.result_status
+      submission.result_status as keyof typeof resultStatusLabelMap
+      ] ?? submission.result_status
       : "-";
 
 
@@ -500,15 +500,15 @@ export function SubmissionDetailClient({
       ? stationReviews
       : submission.type === "MV_DISTRIBUTION"
         ? [
-            {
-              id: `fallback-${submission.id}`,
-              status: submission.status,
-              result_note: null,
-              track_results: null,
-              updated_at: submission.updated_at,
-              station: { name: "영상물등급위원회" },
-            },
-          ]
+          {
+            id: `fallback-${submission.id}`,
+            status: submission.status,
+            result_note: null,
+            track_results: null,
+            updated_at: submission.updated_at,
+            station: { name: "영상물등급위원회" },
+          },
+        ]
         : stationReviews;
 
   const handleGuideDownload = async () => {
@@ -574,7 +574,7 @@ export function SubmissionDetailClient({
       : submissionStatusLabel;
   const paymentStatusLabel =
     paymentStatusLabelMap[
-      submission.payment_status as keyof typeof paymentStatusLabelMap
+    submission.payment_status as keyof typeof paymentStatusLabelMap
     ] ??
     (submission.payment_status === "UNPAID"
       ? "미결제"
@@ -593,27 +593,27 @@ export function SubmissionDetailClient({
   const paymentFeedback =
     paymentState === "success"
       ? {
-          title: "결제가 완료되었습니다.",
-          description: "접수가 정상적으로 반영되었습니다. 아래 상세 화면에서 진행 상황을 확인할 수 있습니다.",
-          tone:
-            "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100",
-        }
+        title: "결제가 완료되었습니다.",
+        description: "접수가 정상적으로 반영되었습니다. 아래 상세 화면에서 진행 상황을 확인할 수 있습니다.",
+        tone:
+          "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100",
+      }
       : paymentState === "cancel"
         ? {
-            title: "결제가 취소되었습니다.",
-            description:
-              "현재 접수 내용은 유지되어 있습니다. 필요하면 다시 결제를 진행하거나 무통장 입금으로 접수할 수 있습니다.",
-            tone:
-              "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-100",
-          }
+          title: "결제가 취소되었습니다.",
+          description:
+            "현재 접수 내용은 유지되어 있습니다. 필요하면 다시 결제를 진행하거나 무통장 입금으로 접수할 수 있습니다.",
+          tone:
+            "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-100",
+        }
         : paymentState === "fail" || paymentState === "error"
           ? {
-              title: "결제가 완료되지 않았습니다.",
-              description:
-                "결제 과정에서 문제가 발생했습니다. 다시 시도하거나 다른 결제 방식을 선택해주세요.",
-              tone:
-                "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-100",
-            }
+            title: "결제가 완료되지 않았습니다.",
+            description:
+              "결제 과정에서 문제가 발생했습니다. 다시 시도하거나 다른 결제 방식을 선택해주세요.",
+            tone:
+              "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-100",
+          }
           : null;
   const submissionStatusTone =
     submissionStatusToneMap[submission.status] ??
@@ -624,13 +624,13 @@ export function SubmissionDetailClient({
   const submissionTypeLabel = getSubmissionTypeLabel(submission.type);
   const preferredRadioStation = !isMvSubmission
     ? renderStationReviews.find((review) => {
-        const summary = buildTrackSummary(review.track_results);
-        return summary.counts.approved > 0 || review.status === "APPROVED";
-      }) ?? null
+      const summary = buildTrackSummary(review.track_results);
+      return summary.counts.approved > 0 || review.status === "APPROVED";
+    }) ?? null
     : null;
   const preferredRadioStationCode =
     preferredRadioStation?.station &&
-    "code" in preferredRadioStation.station
+      "code" in preferredRadioStation.station
       ? preferredRadioStation.station.code
       : null;
   const stationSummary = renderStationReviews.reduce(
@@ -794,10 +794,10 @@ export function SubmissionDetailClient({
                   {renderStationReviews.map((review) => {
                     const reception = isReviewComplete
                       ? {
-                          label: "결과 통보",
-                          tone:
-                            "bg-[#1f7a5a] text-white dark:bg-[#46b783] dark:text-[#06111f]",
-                        }
+                        label: "결과 통보",
+                        tone:
+                          "bg-[#1f7a5a] text-white dark:bg-[#46b783] dark:text-[#06111f]",
+                      }
                       : getReviewReception(review.status);
                     const trackInfo = buildTrackSummary(review.track_results);
                     const note = review.result_note?.trim() || null;
@@ -814,9 +814,9 @@ export function SubmissionDetailClient({
                         : trackInfo.counts.total;
                     const pendingGap = Math.max(
                       totalTracksForDisplay -
-                        (trackInfo.counts.approved +
-                          trackInfo.counts.rejected +
-                          trackInfo.counts.pending),
+                      (trackInfo.counts.approved +
+                        trackInfo.counts.rejected +
+                        trackInfo.counts.pending),
                       0,
                     );
                     const pendingCount = trackInfo.counts.pending + pendingGap;
@@ -829,26 +829,26 @@ export function SubmissionDetailClient({
                     const resultTone =
                       isReviewComplete && submission.mv_desired_rating
                         ? {
-                            label: mvRatingLabel(submission.mv_desired_rating),
-                            tone:
-                              "bg-[#1f7a5a] text-white dark:bg-[#46b783] dark:text-[#06111f]",
-                          }
+                          label: mvRatingLabel(submission.mv_desired_rating),
+                          tone:
+                            "bg-[#1f7a5a] text-white dark:bg-[#46b783] dark:text-[#06111f]",
+                        }
                         : trackInfo.outcome === "APPROVED"
                           ? reviewResultMap.APPROVED
                           : trackInfo.outcome === "REJECTED"
                             ? reviewResultMap.REJECTED
                             : trackInfo.outcome === "PARTIAL"
                               ? {
-                                  label: "부분 통과",
-                                  tone:
-                                    "bg-[#f6d64a] text-black dark:text-black",
-                                }
+                                label: "부분 통과",
+                                tone:
+                                  "bg-[#f6d64a] text-black dark:text-black",
+                              }
                               : hasTrackDetails
                                 ? {
-                                    label: "대기",
-                                    tone:
-                                      "bg-slate-500/10 text-slate-500 dark:text-slate-300",
-                                  }
+                                  label: "대기",
+                                  tone:
+                                    "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+                                }
                                 : getReviewResult(review.status);
                     const trackSummaryLine =
                       totalTracksForDisplay > 1
@@ -908,13 +908,11 @@ export function SubmissionDetailClient({
                         <button
                           type="button"
                           onClick={handleResultClick}
-                          className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-2 py-1 text-xs font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${
-                            resultTone.tone
-                          } ${
-                            shouldOpenResultModal
+                          className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-2 py-1 text-xs font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${resultTone.tone
+                            } ${shouldOpenResultModal
                               ? "transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0"
                               : "transition"
-                          }`}
+                            }`}
                         >
                           <span>{resultTone.label}</span>
                           {trackSummaryLine ? (
@@ -1037,9 +1035,9 @@ export function SubmissionDetailClient({
           const base =
             review && typeof review === "object"
               ? (review as {
-                  station?: StationReview["station"] | StationReview["station"][];
-                  [key: string]: unknown;
-                })
+                station?: StationReview["station"] | StationReview["station"][];
+                [key: string]: unknown;
+              })
               : {};
           const station = Array.isArray(base.station) ? base.station[0] : base.station;
           return { ...base, station };
@@ -1201,7 +1199,7 @@ export function SubmissionDetailClient({
                 <span className="text-sm text-foreground">
                   {submission.payment_method
                     ? paymentMethodLabels[submission.payment_method] ??
-                      submission.payment_method
+                    submission.payment_method
                     : "무통장"}
                 </span>
               </div>
@@ -1257,7 +1255,7 @@ export function SubmissionDetailClient({
                 {submissionTypeLabel}
               </span>
               {submission.genre ? (
-              <span className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white">
+                <span className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white">
                   {submission.genre}
                 </span>
               ) : null}
@@ -1279,11 +1277,10 @@ export function SubmissionDetailClient({
                 type="button"
                 onClick={card.onClick}
                 disabled={!card.onClick}
-                className={`rounded-[8px] border-2 px-5 py-4 text-left shadow-[4px_4px_0_#111111] transition dark:shadow-[4px_4px_0_#f2cf27] ${
-                  card.onClick
+                className={`rounded-[8px] border-2 px-5 py-4 text-left shadow-[4px_4px_0_#111111] transition dark:shadow-[4px_4px_0_#f2cf27] ${card.onClick
                     ? "cursor-pointer hover:-translate-y-0.5"
                     : "cursor-default"
-                } ${card.tone}`}
+                  } ${card.tone}`}
               >
                 <p className="text-[11px] font-black uppercase tracking-normal opacity-75">
                   {card.label}
@@ -1308,106 +1305,103 @@ export function SubmissionDetailClient({
       <div className="mt-8">{renderStationReviewSection()}</div>
 
       <div className="mt-8 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className={detailPanelClass}>
-            <div className="flex items-center justify-between gap-3">
-              <p className={detailKickerClass}>
-                한눈에 보기
-              </p>
-              <span className="text-xs text-muted-foreground">
-                최근 업데이트 {formatDateTime(submission.updated_at)}
-              </span>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {quickFacts.map((item) => (
-                <div
-                  key={item.label}
-                  className={`${detailSubPanelClass} px-4 py-4`}
-                >
-                  <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                    {item.label}
-                  </p>
-                  <p className="mt-2 break-all text-sm font-semibold text-foreground">
-                    {item.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-            {ratingReason ? (
-              <div className="mt-4 rounded-[8px] border-2 border-[#d9362c] bg-rose-50 p-4 dark:bg-[#2a1111]">
-                <p className="text-[11px] font-black uppercase tracking-normal text-[#d9362c] dark:text-[#ff6258]">
-                  결과 메모
+        <div className={detailPanelClass}>
+          <div className="flex items-center justify-between gap-3">
+            <p className={detailKickerClass}>              </p>
+            <span className="text-xs text-muted-foreground">
+              최근 업데이트 {formatDateTime(submission.updated_at)}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {quickFacts.map((item) => (
+              <div
+                key={item.label}
+                className={`${detailSubPanelClass} px-4 py-4`}
+              >
+                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                  {item.label}
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-rose-700 dark:text-rose-100">
-                  {ratingReason}
+                <p className="mt-2 break-all text-sm font-semibold text-foreground">
+                  {item.value}
                 </p>
               </div>
-            ) : null}
+            ))}
+          </div>
+          {ratingReason ? (
+            <div className="mt-4 rounded-[8px] border-2 border-[#d9362c] bg-rose-50 p-4 dark:bg-[#2a1111]">
+              <p className="text-[11px] font-black uppercase tracking-normal text-[#d9362c] dark:text-[#ff6258]">
+                결과 메모
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-rose-700 dark:text-rose-100">
+                {ratingReason}
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-[10px] border-2 border-[#111111] bg-[#1556a4] p-6 text-white shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-black uppercase tracking-normal text-white/82">
+                진행 단계
+              </p>
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current/15 bg-white/45 dark:bg-white/10">
+                  <span className={`inline-block h-2.5 w-2.5 rounded-full ${flowStatusNotice.dotTone}`} />
+                </span>
+                <span>{flowStatusNotice.message}</span>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-4 gap-2">
+              {flowSteps.map((label, index) => {
+                const isActive = index === flowIndex;
+                const isPassed = index < flowIndex;
+                return (
+                  <div
+                    key={label}
+                    className={`rounded-[8px] border-2 px-3 py-3 text-center text-[11px] font-black leading-5 ${isActive
+                        ? "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
+                        : isPassed
+                          ? "border-white bg-white/80 text-[#111111] dark:border-white dark:bg-white/14 dark:text-white"
+                          : "border-white/80 bg-white/16 text-white"
+                      }`}
+                  >
+                    {label}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="rounded-[10px] border-2 border-[#111111] bg-[#1556a4] p-6 text-white shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-black uppercase tracking-normal text-white/82">
-                  진행 단계
-                </p>
-                <div className="flex items-center gap-2 text-xs font-semibold">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current/15 bg-white/45 dark:bg-white/10">
-                    <span className={`inline-block h-2.5 w-2.5 rounded-full ${flowStatusNotice.dotTone}`} />
-                  </span>
-                  <span>{flowStatusNotice.message}</span>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-4 gap-2">
-                {flowSteps.map((label, index) => {
-                  const isActive = index === flowIndex;
-                  const isPassed = index < flowIndex;
-                  return (
-                    <div
-                      key={label}
-                      className={`rounded-[8px] border-2 px-3 py-3 text-center text-[11px] font-black leading-5 ${
-                        isActive
-                          ? "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
-                          : isPassed
-                            ? "border-white bg-white/80 text-[#111111] dark:border-white dark:bg-white/14 dark:text-white"
-                            : "border-white/80 bg-white/16 text-white"
-                      }`}
-                    >
-                      {label}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className={detailPanelTightClass}>
-              <p className={detailKickerClass}>
-                바로 할 수 있는 작업
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {!isMvSubmission && preferredRadioStation ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      openRadioLinks({
-                        name: preferredRadioStation.station?.name,
-                        code: preferredRadioStationCode,
-                      })
-                    }
-                    className={detailActionButtonClass}
-                  >
-                    라디오 신청 링크
-                  </button>
-                ) : null}
-                <Link
-                  href="/karaoke-request"
+          <div className={detailPanelTightClass}>
+            <p className={detailKickerClass}>
+              바로 할 수 있는 작업
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {!isMvSubmission && preferredRadioStation ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    openRadioLinks({
+                      name: preferredRadioStation.station?.name,
+                      code: preferredRadioStationCode,
+                    })
+                  }
                   className={detailActionButtonClass}
                 >
-                  노래방 등록
-                </Link>
-              </div>
+                  라디오 신청 링크
+                </button>
+              ) : null}
+              <Link
+                href="/karaoke-request"
+                className={detailActionButtonClass}
+              >
+                노래방 등록
+              </Link>
             </div>
           </div>
         </div>
+      </div>
       {/* 관리자용 등급/필증 편집 UI는 관리자 페이지에서만 제공 */}
       {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}
 
@@ -1475,7 +1469,7 @@ export function SubmissionDetailClient({
                   <p className="mt-1 font-semibold">
                     {submission.payment_method
                       ? paymentMethodLabels[submission.payment_method] ??
-                        submission.payment_method
+                      submission.payment_method
                       : "-"}
                   </p>
                 </div>
@@ -1780,12 +1774,12 @@ export function SubmissionDetailClient({
             </>
           ) : null}
           <div className="mt-4 flex justify-center">
-              <button
-                type="button"
-                onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
-                aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
-                className={detailToggleButtonClass}
-              >
+            <button
+              type="button"
+              onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
+              aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
+              className={detailToggleButtonClass}
+            >
               <span>{isSubmissionFormOpen ? "▲" : "▼"}</span>
               <span>{isSubmissionFormOpen ? "접기" : "펼치기"}</span>
             </button>
@@ -1946,9 +1940,9 @@ export function SubmissionDetailClient({
                             : trackInfo.counts.total;
                         const pendingGap = Math.max(
                           totalTracksForDisplay -
-                            (trackInfo.counts.approved +
-                              trackInfo.counts.rejected +
-                              trackInfo.counts.pending),
+                          (trackInfo.counts.approved +
+                            trackInfo.counts.rejected +
+                            trackInfo.counts.pending),
                           0,
                         );
                         const pendingCount = trackInfo.counts.pending + pendingGap;
@@ -1961,25 +1955,25 @@ export function SubmissionDetailClient({
                         const resultTone =
                           isReviewComplete && submission.mv_desired_rating
                             ? {
-                                label: mvRatingLabel(submission.mv_desired_rating),
-                                tone: "bg-emerald-500/15 text-emerald-800",
-                              }
+                              label: mvRatingLabel(submission.mv_desired_rating),
+                              tone: "bg-emerald-500/15 text-emerald-800",
+                            }
                             : trackInfo.outcome === "APPROVED"
                               ? reviewResultMap.APPROVED
                               : trackInfo.outcome === "REJECTED"
                                 ? reviewResultMap.REJECTED
                                 : trackInfo.outcome === "PARTIAL"
                                   ? {
-                                      label: "부분 통과",
-                                      tone:
-                                        "bg-[#f6d64a] text-black dark:text-black",
-                                    }
+                                    label: "부분 통과",
+                                    tone:
+                                      "bg-[#f6d64a] text-black dark:text-black",
+                                  }
                                   : hasTrackDetails
                                     ? {
-                                        label: "대기",
-                                        tone:
-                                          "bg-slate-500/10 text-slate-500 dark:text-slate-300",
-                                      }
+                                      label: "대기",
+                                      tone:
+                                        "bg-slate-500/10 text-slate-500 dark:text-slate-300",
+                                    }
                                     : getReviewResult(review.status);
                         const trackSummaryLine =
                           totalTracksForDisplay > 1
@@ -2039,13 +2033,11 @@ export function SubmissionDetailClient({
                             <button
                               type="button"
                               onClick={handleResultClick}
-                              className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${
-                                resultTone.tone
-                              } ${
-                                shouldOpenResultModal
+                              className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${resultTone.tone
+                                } ${shouldOpenResultModal
                                   ? "transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100"
                                   : "transition"
-                              }`}
+                                }`}
                             >
                               <span>{resultTone.label}</span>
                               {trackSummaryLine ? (
