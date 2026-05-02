@@ -296,7 +296,7 @@ export default function Home() {
                 심의는 4단계로 진행됩니다
               </h2>
               <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-[#111111]/68 dark:text-white/72">
-                상품/방송국 패키지 선택부터 결제 확인까지 흐름을 간단하게 설계했습니다.
+                방송국 패키지 선택부터 결과 확인까지 쉽고 편하게 설계했습니다.
               </p>
             </div>
           </div>
