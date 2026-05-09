@@ -166,12 +166,12 @@ function BannerContent({ banner }: { banner: AdBanner }) {
         <Image
           src={banner.image_url}
           alt={banner.title}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 ease-out group-hover/banner:scale-[1.03]"
           width={1200}
           height={240}
           priority={false}
         />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/30 via-black/10 to-white/85 transition duration-300 group-hover/banner:from-white/20 group-hover/banner:via-white/10 group-hover/banner:to-white/90 dark:from-black/45 dark:via-black/30 dark:to-black/85" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white/10 via-white/0 to-white/80 dark:from-black/12 dark:via-black/4 dark:to-black/72" />
         <div className="relative z-10 flex w-full min-w-0 items-center justify-between gap-3 px-3 sm:px-4">
           <div className="min-w-0 hidden sm:block">
             <div className="text-[10px] font-semibold uppercase leading-tight tracking-[0.2em] text-muted-foreground">

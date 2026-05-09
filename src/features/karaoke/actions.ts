@@ -28,6 +28,8 @@ const karaokeRequestSchema = z.object({
   bankDepositorName: z.string().optional(),
   tjRequested: z.boolean().optional(),
   kyRequested: z.boolean().optional(),
+  recommendationPublic: z.boolean().optional(),
+  promotionCredits: z.number().int().min(0).optional(),
   guestName: z.string().min(1).optional(),
   guestEmail: z.string().email().optional(),
   guestPhone: z.string().min(3).optional(),
@@ -131,8 +133,29 @@ export async function createKaraokeRequestAction(
   ) {
     return { error: "입금자명을 입력해주세요." };
   }
+  const recommendationPublic = parsed.data.recommendationPublic ?? false;
+  const promotionCredits = parsed.data.promotionCredits ?? 0;
+  if (recommendationPublic && isGuest) {
+    return { error: "추천 공개는 로그인 후 이용할 수 있습니다." };
+  }
+  if (recommendationPublic && promotionCredits < 1) {
+    return { error: "추천 공개에는 최소 1크레딧이 필요합니다." };
+  }
 
-  const db = isGuest ? createAdminClient() : supabase;
+  const admin = createAdminClient();
+  const db = isGuest ? admin : supabase;
+
+  if (recommendationPublic && user) {
+    const { data: creditRow } = await admin
+      .from("karaoke_credits")
+      .select("balance")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const currentBalance = creditRow?.balance ?? 0;
+    if (currentBalance < promotionCredits) {
+      return { error: "보유한 크레딧이 부족합니다." };
+    }
+  }
 
   const { data, error } = await db
     .from("karaoke_requests")
@@ -157,12 +180,54 @@ export async function createKaraokeRequestAction(
           : null,
       tj_requested: parsed.data.tjRequested ?? true,
       ky_requested: parsed.data.kyRequested ?? true,
+      recommendation_public: recommendationPublic,
+      recommendation_url: null,
     })
     .select("id")
     .maybeSingle();
 
   if (error) {
     return { error: "요청 접수에 실패했습니다." };
+  }
+
+  if (recommendationPublic && user && data?.id) {
+    const nextBalance = Math.max(0, promotionCredits);
+    const { error: promotionError } = await admin.from("karaoke_promotions").insert({
+      karaoke_request_id: data.id,
+      submission_id: null,
+      owner_user_id: user.id,
+      status: nextBalance > 0 ? "ACTIVE" : "PENDING",
+      credits_balance: nextBalance,
+      credits_required: 1,
+      tj_enabled: parsed.data.tjRequested ?? true,
+      ky_enabled: parsed.data.kyRequested ?? true,
+      reference_url: null,
+    });
+
+    if (promotionError) {
+      console.error("[karaoke][promotion][create-error]", promotionError);
+      return {
+        error:
+          "등록 요청은 접수되었지만 추천 공개 설정을 저장하지 못했습니다. 관리자에게 문의해주세요.",
+        requestId: data.id,
+      };
+    }
+
+    const { data: creditRow } = await admin
+      .from("karaoke_credits")
+      .select("balance")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const currentBalance = creditRow?.balance ?? 0;
+    await admin.from("karaoke_credits").upsert({
+      user_id: user.id,
+      balance: Math.max(0, currentBalance - nextBalance),
+    });
+    await admin.from("karaoke_credit_events").insert({
+      user_id: user.id,
+      delta: -nextBalance,
+      reason: "노래방 추천 공개 크레딧 예치",
+    });
   }
 
   return { message: "노래방 등록 요청이 접수되었습니다.", requestId: data?.id ?? undefined };

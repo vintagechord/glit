@@ -20,7 +20,7 @@ const schema = z.object({
   guestToken: z.string().min(8).optional(),
 });
 
-const MAX_AUDIO_BYTES = 1 * 1024 * 1024 * 1024; // 1GB
+const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const EXPIRES_SECONDS = Number(process.env.B2_PRESIGN_EXPIRES_SECONDS ?? "900");
 
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       {
         error:
           kind === "audio"
-            ? "음원 파일은 최대 1GB까지 업로드할 수 있습니다."
+            ? "음원 파일은 최대 4GB까지 업로드할 수 있습니다."
             : "뮤직비디오는 최대 4GB까지 업로드할 수 있습니다.",
       },
       { status: 413 },

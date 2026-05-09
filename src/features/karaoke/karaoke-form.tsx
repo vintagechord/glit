@@ -21,7 +21,13 @@ type UploadState = {
 
 const uploadMaxBytes = APP_CONFIG.uploadMaxMb * 1024 * 1024;
 
-export function KaraokeForm({ userId }: { userId?: string | null }) {
+export function KaraokeForm({
+  userId,
+  creditBalance = 0,
+}: {
+  userId?: string | null;
+  creditBalance?: number;
+}) {
   const isGuest = !userId;
   const [title, setTitle] = React.useState("");
   const [artist, setArtist] = React.useState("");
@@ -35,6 +41,10 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
   const [bankDepositorName, setBankDepositorName] = React.useState("");
   const [tjRequested, setTjRequested] = React.useState(true);
   const [kyRequested, setKyRequested] = React.useState(true);
+  const [recommendationPublic, setRecommendationPublic] = React.useState(false);
+  const [promotionCredits, setPromotionCredits] = React.useState(() =>
+    Math.min(10, Math.max(0, creditBalance)),
+  );
   const [file, setFile] = React.useState<File | null>(null);
   const [upload, setUpload] = React.useState<UploadState>({
     name: "",
@@ -156,6 +166,18 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
       setNotice({ error: "입금자명을 입력해주세요." });
       return;
     }
+    if (recommendationPublic && isGuest) {
+      setNotice({ error: "추천 공개는 로그인 후 이용할 수 있습니다." });
+      return;
+    }
+    if (recommendationPublic && promotionCredits < 1) {
+      setNotice({ error: "추천 공개에는 최소 1크레딧이 필요합니다." });
+      return;
+    }
+    if (recommendationPublic && promotionCredits > creditBalance) {
+      setNotice({ error: "보유한 크레딧보다 많이 사용할 수 없습니다." });
+      return;
+    }
 
     setIsSubmitting(true);
     setNotice({});
@@ -196,6 +218,8 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
           paymentMethod === "BANK" ? bankDepositorName.trim() : undefined,
         tjRequested,
         kyRequested,
+        recommendationPublic,
+        promotionCredits: recommendationPublic ? promotionCredits : 0,
         guestName: isGuest ? guestName : undefined,
         guestEmail: isGuest ? guestEmail : undefined,
         guestPhone: isGuest ? contact : undefined,
@@ -240,6 +264,8 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
       setBankDepositorName("");
       setTjRequested(true);
       setKyRequested(true);
+      setRecommendationPublic(false);
+      setPromotionCredits(Math.min(10, Math.max(0, creditBalance)));
       setFile(null);
       setUpload({ name: "", progress: 0, status: "idle" });
     } catch {
@@ -287,10 +313,10 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
         <p className="mt-3 text-xs text-muted-foreground">
           기본 신청 비용 {formatCurrency(APP_CONFIG.karaokeFeeKrw)}원
         </p>
-        <div className="mt-4 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-sm text-black shadow-sm dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em]">주의사항</p>
+        <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary shadow-sm dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em]">추천 구조</p>
           <p className="mt-1">
-            노래방 등록 신청만 온사이드가 대행합니다. 신청 접수 후 해당 곡의 추천수가 많아야만 실제 노래방에 등록되게 됩니다.
+            추천 공개를 켜면 보유 크레딧을 예치하고, 다른 회원이 추천 인증을 완료할 때마다 1크레딧이 지급됩니다.
           </p>
         </div>
       </div>
@@ -368,11 +394,11 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             등록 요청 방송사
           </p>
-          <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <div className="mt-4 grid gap-3 text-xs text-muted-foreground sm:grid-cols-2">
             <label
-              className={`flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
+              className={`flex min-h-[54px] items-center gap-3 rounded-[10px] border-2 px-4 py-3 text-sm font-semibold transition ${
                 tjRequested
-                  ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_18px_40px_rgba(0,113,227,0.2)] dark:bg-[#2997ff] dark:text-[#00101f]"
+                  ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_14px_28px_rgba(0,113,227,0.18)] dark:bg-[#2997ff] dark:text-[#00101f]"
                   : "border-border/70 bg-background text-foreground hover:border-primary/40"
               }`}
             >
@@ -384,20 +410,25 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
               />
               <span
                 aria-hidden="true"
-                className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] ${
+                className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border-2 text-[13px] font-black ${
                   tjRequested
-                    ? "border-white/25 bg-white/12 text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]"
+                    ? "border-white bg-white text-[#0071e3] dark:border-[#00101f] dark:bg-[#00101f] dark:text-[#2997ff]"
                     : "border-border bg-background text-transparent"
                 }`}
               >
                 ✓
               </span>
-              태진
+              <span>태진</span>
+              {tjRequested ? (
+                <span className="ml-auto rounded-full bg-white/18 px-2 py-1 text-[10px] font-black uppercase tracking-normal dark:bg-[#00101f]/10">
+                  선택됨
+                </span>
+              ) : null}
             </label>
             <label
-              className={`flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
+              className={`flex min-h-[54px] items-center gap-3 rounded-[10px] border-2 px-4 py-3 text-sm font-semibold transition ${
                 kyRequested
-                  ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_18px_40px_rgba(0,113,227,0.2)] dark:bg-[#2997ff] dark:text-[#00101f]"
+                  ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_14px_28px_rgba(0,113,227,0.18)] dark:bg-[#2997ff] dark:text-[#00101f]"
                   : "border-border/70 bg-background text-foreground hover:border-primary/40"
               }`}
             >
@@ -409,17 +440,85 @@ export function KaraokeForm({ userId }: { userId?: string | null }) {
               />
               <span
                 aria-hidden="true"
-                className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] ${
+                className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border-2 text-[13px] font-black ${
                   kyRequested
-                    ? "border-white/25 bg-white/12 text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]"
+                    ? "border-white bg-white text-[#0071e3] dark:border-[#00101f] dark:bg-[#00101f] dark:text-[#2997ff]"
                     : "border-border bg-background text-transparent"
                 }`}
               >
                 ✓
               </span>
-              금영
+              <span>금영</span>
+              {kyRequested ? (
+                <span className="ml-auto rounded-full bg-white/18 px-2 py-1 text-[10px] font-black uppercase tracking-normal dark:bg-[#00101f]/10">
+                  선택됨
+                </span>
+              ) : null}
             </label>
           </div>
+        </div>
+
+        <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            추천 요청 공개
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setRecommendationPublic(true)}
+              className={`rounded-2xl border p-4 text-left transition ${
+                recommendationPublic
+                  ? "border-primary bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
+                  : "border-border/60 bg-background text-foreground hover:border-primary/40"
+              }`}
+            >
+              <p className="text-sm font-semibold">공개</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                온사이드 추천 보드에 올리고, 인증된 추천 1건마다 내 크레딧 1개를 지급합니다.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRecommendationPublic(false)}
+              className={`rounded-2xl border p-4 text-left transition ${
+                !recommendationPublic
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border/60 bg-background text-foreground hover:border-foreground"
+              }`}
+            >
+              <p className="text-sm font-semibold">비공개</p>
+              <p className="mt-2 text-xs leading-5 opacity-80">
+                등록 대행만 진행하고 추천 보드에는 노출하지 않습니다.
+              </p>
+            </button>
+          </div>
+          {recommendationPublic ? (
+            <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/8 p-4 text-xs text-muted-foreground dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="font-semibold text-foreground">
+                  보유 크레딧 {creditBalance}개
+                </p>
+                <label className="flex items-center gap-2">
+                  <span>예치할 크레딧</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={Math.max(1, creditBalance)}
+                    value={promotionCredits}
+                    onChange={(event) =>
+                      setPromotionCredits(
+                        Math.max(0, Number.parseInt(event.target.value, 10) || 0),
+                      )
+                    }
+                    className="w-24 rounded-xl border border-border/70 bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none transition focus:border-foreground"
+                  />
+                </label>
+              </div>
+              <p className="mt-2 leading-5">
+                예치한 크레딧 수만큼 추천 인증을 받을 수 있습니다. 크레딧이 0개이면 먼저 다른 곡을 추천해 크레딧을 적립해주세요.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">

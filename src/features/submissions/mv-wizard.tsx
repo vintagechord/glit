@@ -58,6 +58,22 @@ type UploadResult = {
   accessUrl?: string;
 };
 
+type LyricsSpellcheckSuggestion = {
+  id?: string;
+  original: string;
+  replacement: string;
+  message?: string;
+  type?: string;
+};
+
+type LyricsSpellcheckResult = {
+  correctedText: string;
+  suggestions: LyricsSpellcheckSuggestion[];
+  meta?: {
+    truncated?: boolean;
+  };
+};
+
 type PaymentDocumentType = "" | "CASH_RECEIPT" | "TAX_INVOICE";
 type CashReceiptPurpose =
   | ""
@@ -82,7 +98,8 @@ const uploadMaxLabel =
   uploadMaxMb >= 1024
     ? `${Math.round(uploadMaxMb / 1024)}GB`
     : `${uploadMaxMb}MB`;
-const adminReviewEmail = "iamwatermelon@daum.net";
+const adminReviewEmail =
+  process.env.NEXT_PUBLIC_ADMIN_REVIEW_EMAIL ?? APP_CONFIG.supportEmail;
 const draftDeleteTimeoutMs = 8000;
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
 
@@ -259,7 +276,7 @@ export function MvWizard({
   const searchParams = useSearchParams();
   const isGuest = !userId;
   const isAdminReviewer =
-    userEmail?.trim().toLowerCase() === adminReviewEmail;
+    userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
   const [mvType, setMvType] = React.useState<"MV_DISTRIBUTION" | "MV_BROADCAST">(
@@ -354,6 +371,9 @@ export function MvWizard({
     message: string;
   } | null>(null);
   const [isTranslatingLyrics, setIsTranslatingLyrics] = React.useState(false);
+  const [isCheckingSpelling, setIsCheckingSpelling] = React.useState(false);
+  const [spellcheckResult, setSpellcheckResult] =
+    React.useState<LyricsSpellcheckResult | null>(null);
   const [confirmModal, setConfirmModal] = React.useState<{
     code: string;
     title: string;
@@ -1809,6 +1829,76 @@ export function MvWizard({
     }
   };
 
+  const handleSpellcheckLyrics = async () => {
+    const currentLyrics = lyricsTextareaRef.current?.value ?? lyrics;
+    if (!currentLyrics.trim()) {
+      setLyricsToolNotice({
+        type: "error",
+        message: "맞춤법을 검사할 가사를 먼저 입력해주세요.",
+      });
+      return;
+    }
+
+    if (currentLyrics !== lyrics) {
+      setLyrics(currentLyrics);
+    }
+
+    setIsCheckingSpelling(true);
+    setLyricsToolNotice({
+      type: "info",
+      message: "맞춤법을 검사하는 중입니다.",
+    });
+    try {
+      const response = await fetch("/api/spellcheck", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: currentLyrics,
+          mode: "balanced",
+          domain: "music",
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | LyricsSpellcheckResult
+        | { error?: string }
+        | null;
+      if (!response.ok || !payload || "error" in payload) {
+        throw new Error(
+          payload && "error" in payload
+            ? payload.error
+            : "맞춤법 검사에 실패했습니다.",
+        );
+      }
+      const spellcheckPayload = payload as LyricsSpellcheckResult;
+      setSpellcheckResult({
+        correctedText:
+          typeof spellcheckPayload.correctedText === "string"
+            ? spellcheckPayload.correctedText
+            : currentLyrics,
+        suggestions: Array.isArray(spellcheckPayload.suggestions)
+          ? spellcheckPayload.suggestions
+          : [],
+        meta: spellcheckPayload.meta,
+      });
+      markLyricsToolApplied();
+      setLyricsToolNotice({
+        type: "success",
+        message: "맞춤법 검사를 완료했습니다. 제출 가사는 자동 변경되지 않습니다.",
+      });
+    } catch (error) {
+      console.error(error);
+      setLyricsToolNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "맞춤법 검사 중 오류가 발생했습니다.",
+      });
+    } finally {
+      setIsCheckingSpelling(false);
+    }
+  };
+
   const validatePaymentDocument = () => {
     if (paymentMethod !== "BANK") return true;
     if (isAdminReviewer) return true;
@@ -1894,7 +1984,7 @@ export function MvWizard({
     ) {
       setNotice({
         error:
-          "제작 정보(제작사/소속사/앨범명/제작 연월일/유통사/용도)를 입력해주세요.",
+          "제작 정보(제작사/소속사/앨범명/공개일/유통사/용도)를 입력해주세요.",
       });
       return false;
     }
@@ -2792,13 +2882,13 @@ export function MvWizard({
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     소속사 *
                   </label>
-                  <div className="group relative">
-                    <button
-                      type="button"
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/70 bg-background text-[11px] font-semibold text-muted-foreground transition hover:border-primary hover:text-primary"
-                      aria-label="소속사 표기 안내"
-                    >
-                      ?
+	                  <div className="group relative">
+	                    <button
+	                      type="button"
+	                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-primary bg-primary text-sm font-black text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.22)] transition hover:-translate-y-0.5 hover:bg-[#0077ed] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-[#2997ff] dark:text-[#00101f]"
+	                      aria-label="소속사 표기 안내"
+	                    >
+	                      ?
                     </button>
                     <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-72 rounded-2xl border border-border/70 bg-background px-4 py-3 text-[11px] font-medium leading-5 text-foreground shadow-[0_18px_40px_rgba(0,0,0,0.14)] group-hover:block group-focus-within:block">
                       공개되는 뮤직비디오 좌측 하단에 들어갈 소속사/기획사/로고 등과 동일한 명칭을 기입해주세요. 대소문자 및 한/영 표기 모두 동일해야합니다.
@@ -2821,10 +2911,10 @@ export function MvWizard({
                   className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  제작 연월일 *
-                </label>
+	              <div className="space-y-2">
+	                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+	                  공개일 *
+	                </label>
                 <input
                   type="date"
                   value={productionDate}
@@ -2957,10 +3047,10 @@ export function MvWizard({
                   className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                 />
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  메모 (장르) (선택)
-                </label>
+	              <div className="space-y-2 md:col-span-2">
+	                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+	                  메모 (선택)
+	                </label>
                 <input
                   value={songMemo}
                   onChange={(event) => setSongMemo(event.target.value)}
@@ -3006,9 +3096,17 @@ export function MvWizard({
                   >
                     자동번역 {isTranslatingLyrics ? "중..." : ""}
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleSpellcheckLyrics}
+                    disabled={isCheckingSpelling}
+                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    맞춤법 검사 {isCheckingSpelling ? "중..." : ""}
+                  </button>
                 </div>
                 {showLyricsToolNotice && (
-                  <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-black opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-[#f6d64a] group-hover/lyrics-tools:bg-[#f6d64a] group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-[#f6d64a] group-focus-within/lyrics-tools:bg-[#f6d64a] group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100">
+                  <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
                     위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
                     체크해주세요.
                   </div>
@@ -3017,17 +3115,57 @@ export function MvWizard({
             </div>
             {lyricsToolNotice && (
               <div
-                className={`mt-3 rounded-2xl border px-4 py-2 text-xs font-semibold ${lyricsToolNotice.type === "error"
-                    ? "border-red-200/70 bg-red-50 text-red-700"
-                    : lyricsToolNotice.type === "success"
-                      ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
-                      : "border-[#f6d64a] bg-[#f6d64a] text-black"
-                  }`}
-              >
-                {lyricsToolNotice.message}
-              </div>
-            )}
-            <div className="relative isolate mt-4 overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
+	                className={`mt-3 rounded-2xl border px-4 py-2 text-xs font-semibold ${lyricsToolNotice.type === "error"
+	                    ? "border-red-200/70 bg-red-50 text-red-700"
+	                    : lyricsToolNotice.type === "success"
+	                      ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
+	                      : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
+	                  }`}
+	              >
+	                {lyricsToolNotice.message}
+	              </div>
+	            )}
+	            {spellcheckResult && (
+	              <div className="mt-3 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs leading-5 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+	                <p className="font-semibold">
+	                  맞춤법 검사는 참고용입니다. 실제 제출 가사는 변경되지 않습니다.
+	                </p>
+	                {spellcheckResult.suggestions.length > 0 ? (
+	                  <div className="mt-3 space-y-2">
+	                    {spellcheckResult.suggestions.slice(0, 8).map((suggestion, index) => (
+	                      <div
+	                        key={suggestion.id ?? `${suggestion.original}-${index}`}
+	                        className="rounded-xl border border-primary/15 bg-background/80 px-3 py-2 text-foreground"
+	                      >
+	                        <span className="font-semibold">{suggestion.original}</span>
+	                        <span className="mx-2 text-muted-foreground">→</span>
+	                        <span className="font-semibold">{suggestion.replacement}</span>
+	                        {suggestion.message ? (
+	                          <span className="mt-1 block text-muted-foreground">
+	                            {suggestion.message}
+	                          </span>
+	                        ) : null}
+	                      </div>
+	                    ))}
+	                    {spellcheckResult.suggestions.length > 8 ? (
+	                      <p className="text-muted-foreground">
+	                        외 {spellcheckResult.suggestions.length - 8}건이 더 있습니다.
+	                      </p>
+	                    ) : null}
+	                  </div>
+	                ) : (
+	                  <p className="mt-2 text-muted-foreground">
+	                    감지된 맞춤법/띄어쓰기 안내가 없습니다.
+	                  </p>
+	                )}
+	                {spellcheckResult.meta?.truncated ? (
+	                  <p className="mt-2 text-muted-foreground">
+	                    긴 가사는 앞부분 기준으로 검사했습니다.
+	                  </p>
+	                ) : null}
+	              </div>
+	            )}
+	            <div className="relative isolate mt-4 overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
               {showProfanityOverlay && (
                 <div
                   ref={lyricsOverlayRef}
@@ -3260,21 +3398,13 @@ export function MvWizard({
               </button>
             </div>
             {emailSubmitConfirmed ? (
-              <div className="mt-4 rounded-2xl border-2 border-[#f6d64a] bg-[#fff8d7] px-4 py-5 text-sm text-[#111111] shadow-[4px_4px_0_#111111] dark:bg-[#f6d64a]/10 dark:text-[#f6d64a] dark:shadow-[4px_4px_0_#f6d64a]">
-                <div className="flex flex-wrap items-start gap-3">
-                  <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border border-[#111111] bg-[#111111] text-xs font-black text-[#f6d64a] dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-[#111111]">
-                    ✓
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">이메일 전송으로 진행합니다.</p>
-                    <p className="mt-1 text-xs text-[#4a4213] dark:text-[#fff2a8]/80">
-                      파일 첨부 대신 아래 이메일 주소로 영상 파일을 보내주세요.
-                    </p>
-                    <p className="mt-3 break-all rounded-xl border border-[#111111]/15 bg-white/85 px-3 py-2 font-semibold text-[#111111] dark:border-[#f6d64a]/40 dark:bg-black/25 dark:text-[#f6d64a]">
-                      {APP_CONFIG.supportEmail}
-                    </p>
-                  </div>
-                </div>
+              <div className="mt-4 rounded-2xl border-2 border-primary/25 bg-primary/8 px-4 py-5 text-sm text-foreground shadow-[4px_4px_0_rgba(0,113,227,0.18)] dark:border-[#2997ff]/35 dark:bg-[#2997ff]/12">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  아래 이메일 주소로 영상 파일을 보내주세요.
+                </p>
+                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
+                  {APP_CONFIG.supportEmail}
+                </p>
               </div>
             ) : (
               <>
@@ -3332,7 +3462,7 @@ export function MvWizard({
                 </div>
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground">
                   <p>
-                    음원/뮤비 파일 업로드 시에 첨부 완료가 되지 않는 경우 파일 첨부 없이 하단 다음 단계 버튼을 눌러 신청서를 제출 후 영상 파일은 이메일로 보내주세요.
+                    영상 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 신청서를 먼저 제출한 뒤 영상 파일만 이메일로 보내주세요.
                   </p>
                   <p className="font-semibold text-foreground">{APP_CONFIG.supportEmail}</p>
                 </div>
@@ -3578,47 +3708,67 @@ export function MvWizard({
                   결제 서류 옵션
                 </p>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
-                  <label
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (paymentDocumentType === "CASH_RECEIPT") {
+                        setPaymentDocumentType("");
+                        setCashReceiptPurpose("");
+                        setCashReceiptPhone("");
+                        setCashReceiptBusinessNumber("");
+                        return;
+                      }
+                      setPaymentDocumentType("CASH_RECEIPT");
+                      setTaxInvoiceBusinessNumber("");
+                    }}
                     className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "CASH_RECEIPT"
                         ? "border-foreground bg-foreground/5 text-foreground"
                         : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
                       }`}
                   >
-                    <input
-                      type="radio"
-                      name="mv-payment-document"
-                      checked={paymentDocumentType === "CASH_RECEIPT"}
-                      onChange={() => {
-                        setPaymentDocumentType("CASH_RECEIPT");
-                        setTaxInvoiceBusinessNumber("");
-                      }}
-                      className="h-4 w-4 accent-foreground"
-                    />
+                    <span
+                      aria-hidden="true"
+                      className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${paymentDocumentType === "CASH_RECEIPT"
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-current"
+                        }`}
+                    >
+                      {paymentDocumentType === "CASH_RECEIPT" ? "✓" : ""}
+                    </span>
                     현금 영수증 발급
-                  </label>
-                  <label
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (paymentDocumentType === "TAX_INVOICE") {
+                        setPaymentDocumentType("");
+                        setTaxInvoiceBusinessNumber("");
+                        return;
+                      }
+                      setPaymentDocumentType("TAX_INVOICE");
+                      setCashReceiptPurpose("");
+                      setCashReceiptPhone("");
+                      setCashReceiptBusinessNumber("");
+                    }}
                     className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "TAX_INVOICE"
                         ? "border-foreground bg-foreground/5 text-foreground"
                         : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
                       }`}
                   >
-                    <input
-                      type="radio"
-                      name="mv-payment-document"
-                      checked={paymentDocumentType === "TAX_INVOICE"}
-                      onChange={() => {
-                        setPaymentDocumentType("TAX_INVOICE");
-                        setCashReceiptPurpose("");
-                        setCashReceiptPhone("");
-                        setCashReceiptBusinessNumber("");
-                      }}
-                      className="h-4 w-4 accent-foreground"
-                    />
+                    <span
+                      aria-hidden="true"
+                      className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${paymentDocumentType === "TAX_INVOICE"
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-current"
+                        }`}
+                    >
+                      {paymentDocumentType === "TAX_INVOICE" ? "✓" : ""}
+                    </span>
                     세금계산서 발급
-                  </label>
+                  </button>
                 </div>
                 <p className="mt-3 text-[11px] text-muted-foreground">
-                  * 결제 연관 서류는 기재해주신 이메일로 전송됩니다.
+                  * 결제 연관 서류는 기재해주신 이메일로 전송됩니다. 세금계산서 신청 시 사업자등록증을 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
                 </p>
                 {paymentDocumentType === "CASH_RECEIPT" && (
                   <div className="mt-4 space-y-3">
@@ -3701,25 +3851,26 @@ export function MvWizard({
                     <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       사업자번호
                     </label>
-                    <input
-                      value={taxInvoiceBusinessNumber}
-                      onChange={(event) =>
-                        setTaxInvoiceBusinessNumber(event.target.value)
-                      }
-                      placeholder="사업자번호 10자리를 입력해주세요."
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
-              카드 결제 선택 시 이니시스 STDPay 결제 모듈이 열립니다. 결제창이
-              차단된 경우 해제 후 다시 시도해주세요. 테스트용/실결제 카드 모두
-              지원합니다.
-            </div>
-          )}
+	                    <input
+	                      value={taxInvoiceBusinessNumber}
+	                      onChange={(event) =>
+	                        setTaxInvoiceBusinessNumber(event.target.value)
+	                      }
+	                      placeholder="사업자번호 10자리를 입력해주세요."
+	                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+	                    />
+	                    <p className="text-[11px] leading-5 text-muted-foreground">
+	                      사업자등록증 파일은 영상 파일과 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
+	                    </p>
+	                  </div>
+	                )}
+	              </div>
+	            </div>
+	          ) : (
+	            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
+	              카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
+	            </div>
+	          )}
 
           {notice.error && (
             <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
@@ -3758,10 +3909,10 @@ export function MvWizard({
           <p className="mt-3 text-sm text-muted-foreground">
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
-          {notice.emailWarning ? (
-            <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-              {notice.emailWarning}
-            </div>
+	          {notice.emailWarning ? (
+	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+	              {notice.emailWarning}
+	            </div>
           ) : null}
           {completionId && !shouldShowGuestLookup && (
             <button

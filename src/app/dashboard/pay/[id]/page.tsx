@@ -223,21 +223,52 @@ export default async function PayPage({
             결제가 완료된 접수입니다.
           </div>
         ) : isCardPayment ? (
-          <div className="mt-6 rounded-[8px] border-2 border-border bg-background/80 p-4 text-sm text-foreground">
-            <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-              카드 결제
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              접수 내용은 유지되어 있습니다. 아래 버튼으로 이니시스 결제 모듈을 다시 열어 결제를 완료할 수 있습니다.
-            </p>
-            <div className="mt-4">
-              <PaymentRetryClient
-                submissionId={paymentSubmission.id}
-                context={paymentContext}
-                guestToken={hasGuestAccess ? guestToken : undefined}
-                detailHref={detailHref}
-                successHref={successHref}
-              />
+          <div className="mt-6 grid gap-4">
+            <div className="rounded-[8px] border-2 border-border bg-background/80 p-4 text-sm text-foreground">
+              <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
+                카드 결제
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
+              </p>
+              <div className="mt-4">
+                <PaymentRetryClient
+                  submissionId={paymentSubmission.id}
+                  context={paymentContext}
+                  guestToken={hasGuestAccess ? guestToken : undefined}
+                  detailHref={detailHref}
+                  successHref={successHref}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-[8px] border-2 border-primary/20 bg-primary/8 p-4 text-sm text-foreground dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12">
+              <p className="text-xs font-black uppercase tracking-normal text-primary dark:text-[#8bc3ff]">
+                무통장 입금 안내
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                    은행
+                  </p>
+                  <p className="mt-1 font-semibold">{APP_CONFIG.bankName}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                    계좌번호
+                  </p>
+                  <p className="mt-1 font-semibold">{APP_CONFIG.bankAccount}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                    예금주
+                  </p>
+                  <p className="mt-1 font-semibold">{APP_CONFIG.bankHolder}</p>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                카드 결제가 어렵다면 위 계좌로 입금 후 문의하기로 알려주세요.
+              </p>
             </div>
           </div>
         ) : (

@@ -88,6 +88,22 @@ type UploadResult = {
   accessUrl?: string;
 };
 
+type LyricsSpellcheckSuggestion = {
+  id?: string;
+  original: string;
+  replacement: string;
+  message?: string;
+  type?: string;
+};
+
+type LyricsSpellcheckResult = {
+  correctedText: string;
+  suggestions: LyricsSpellcheckSuggestion[];
+  meta?: {
+    truncated?: boolean;
+  };
+};
+
 type DraftSnapshot = {
   draft: AlbumDraft;
   emailSubmitConfirmed: boolean;
@@ -153,7 +169,7 @@ const packageToneClasses = [
 const uploadMaxMb = Number(
   process.env.NEXT_PUBLIC_AUDIO_UPLOAD_MAX_MB ??
   process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ??
-  "1024",
+  "4096",
 );
 const uploadMaxBytes = uploadMaxMb * 1024 * 1024;
 const uploadMaxLabel =
@@ -162,7 +178,8 @@ const uploadMaxLabel =
     : `${uploadMaxMb}MB`;
 const draftDeleteTimeoutMs = 8000;
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
-const adminReviewEmail = "iamwatermelon@daum.net";
+const adminReviewEmail =
+  process.env.NEXT_PUBLIC_ADMIN_REVIEW_EMAIL ?? APP_CONFIG.supportEmail;
 
 const genreOptions = [
   "댄스",
@@ -235,7 +252,7 @@ export function AlbumWizard({
   const searchParams = useSearchParams();
   const isGuest = !userId;
   const isAdminReviewer =
-    userEmail?.trim().toLowerCase() === adminReviewEmail;
+    userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
   const [isOneClick, setIsOneClick] = React.useState(false);
@@ -297,6 +314,10 @@ export function AlbumWizard({
   const [translationPanelOpenMap, setTranslationPanelOpenMap] = React.useState<
     Record<number, boolean>
   >({});
+  const [isCheckingSpelling, setIsCheckingSpelling] = React.useState(false);
+  const [spellcheckPanelMap, setSpellcheckPanelMap] = React.useState<
+    Record<number, LyricsSpellcheckResult | null>
+  >({});
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -357,6 +378,7 @@ export function AlbumWizard({
     showProfanityPanel &&
     Boolean(profanityHighlightMap[activeTrackIndex]) &&
     profanityWords.length > 0;
+  const activeSpellcheckResult = spellcheckPanelMap[activeTrackIndex] ?? null;
   const needsTranslatedLyrics = hasNonKoreanLyrics(activeTrack.lyrics);
   const showTranslatedLyricsPanel =
     Boolean(translationPanelOpenMap[activeTrackIndex]) ||
@@ -835,6 +857,69 @@ export function AlbumWizard({
       });
     } finally {
       setIsTranslatingLyrics(false);
+    }
+  };
+
+  const handleSpellcheckLyrics = async () => {
+    const lyricsFromState = activeTrack.lyrics;
+    const lyricsFromDom = lyricsTextareaRef.current?.value ?? "";
+    const lyrics = lyricsFromDom || lyricsFromState;
+    if (!lyrics.trim()) {
+      setNotice({ error: "맞춤법을 검사할 가사를 먼저 입력해주세요." });
+      return;
+    }
+
+    if (lyrics !== lyricsFromState) {
+      updateTrack(activeTrackIndex, "lyrics", lyrics);
+    }
+
+    setIsCheckingSpelling(true);
+    try {
+      const response = await fetch("/api/spellcheck", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: lyrics,
+          mode: "balanced",
+          domain: "music",
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | LyricsSpellcheckResult
+        | { error?: string }
+        | null;
+      if (!response.ok || !payload || "error" in payload) {
+        throw new Error(
+          payload && "error" in payload
+            ? payload.error
+            : "맞춤법 검사에 실패했습니다.",
+        );
+      }
+      const spellcheckPayload = payload as LyricsSpellcheckResult;
+      setSpellcheckPanelMap((prev) => ({
+        ...prev,
+        [activeTrackIndex]: {
+          correctedText:
+            typeof spellcheckPayload.correctedText === "string"
+              ? spellcheckPayload.correctedText
+              : lyrics,
+          suggestions: Array.isArray(spellcheckPayload.suggestions)
+            ? spellcheckPayload.suggestions
+            : [],
+          meta: spellcheckPayload.meta,
+        },
+      }));
+      markLyricsToolApplied(activeTrackIndex);
+    } catch (error) {
+      console.error(error);
+      setNotice({
+        error:
+          error instanceof Error
+            ? error.message
+            : "맞춤법 검사 중 오류가 발생했습니다.",
+      });
+    } finally {
+      setIsCheckingSpelling(false);
     }
   };
 
@@ -1771,10 +1856,6 @@ export function AlbumWizard({
     if (isOneClick) {
       if (!melonUrl.trim()) {
         setNotice({ error: "멜론 링크를 입력해주세요." });
-        return false;
-      }
-      if (!artistName.trim()) {
-        setNotice({ error: "아티스트명을 입력해주세요. (원클릭 필수)" });
         return false;
       }
     } else {
@@ -2827,39 +2908,17 @@ export function AlbumWizard({
               </div>
             ) : (
               <div className="mt-4 space-y-4">
-                <div className="rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-xs text-black dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
+                <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em]">
                     원클릭 접수 안내
                   </p>
                   <p className="mt-2 text-xs">
-                    이미 발매된 음원에 한정된 서비스입니다. 멜론 링크와 음원 파일만
-                    첨부하면 접수가 완료됩니다.
+                    이미 발매된 음원에 한정된 서비스입니다. 멜론 링크, 접수자 정보,
+                    음원 파일만 제출하면 접수가 완료됩니다.
                   </p>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      아티스트명 *
-                    </label>
-                    <input
-                      value={artistName}
-                      onChange={(event) => setArtistName(event.target.value)}
-                      placeholder="발매된 음원의 아티스트명을 입력해주세요."
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      앨범 제목 (선택)
-                    </label>
-                    <input
-                      value={title}
-                      onChange={(event) => setTitle(event.target.value)}
-                      placeholder="입력하지 않으면 '원클릭 접수'로 표시됩니다."
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
                     <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       멜론 링크 *
                     </label>
@@ -3154,14 +3213,68 @@ export function AlbumWizard({
                           >
                             자동번역 {isTranslatingLyrics ? "중..." : ""}
                           </button>
+                          <button
+                            type="button"
+                            onClick={handleSpellcheckLyrics}
+                            disabled={isCheckingSpelling}
+                            className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            맞춤법 검사 {isCheckingSpelling ? "중..." : ""}
+                          </button>
                         </div>
                         {showLyricsToolNotice && (
-                          <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-black opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-[#f6d64a] group-hover/lyrics-tools:bg-[#f6d64a] group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-[#f6d64a] group-focus-within/lyrics-tools:bg-[#f6d64a] group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100">
+                          <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
                             위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
                             체크해주세요.
                           </div>
                         )}
                       </div>
+                      {activeSpellcheckResult && (
+                        <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs leading-5 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+                          <p className="font-semibold">
+                            맞춤법 검사는 참고용입니다. 실제 제출 가사는 변경되지 않습니다.
+                          </p>
+                          {activeSpellcheckResult.suggestions.length > 0 ? (
+                            <div className="mt-3 space-y-2">
+                              {activeSpellcheckResult.suggestions
+                                .slice(0, 8)
+                                .map((suggestion, index) => (
+                                  <div
+                                    key={suggestion.id ?? `${suggestion.original}-${index}`}
+                                    className="rounded-xl border border-primary/15 bg-background/80 px-3 py-2 text-foreground"
+                                  >
+                                    <span className="font-semibold">
+                                      {suggestion.original}
+                                    </span>
+                                    <span className="mx-2 text-muted-foreground">→</span>
+                                    <span className="font-semibold">
+                                      {suggestion.replacement}
+                                    </span>
+                                    {suggestion.message ? (
+                                      <span className="mt-1 block text-muted-foreground">
+                                        {suggestion.message}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ))}
+                              {activeSpellcheckResult.suggestions.length > 8 ? (
+                                <p className="text-muted-foreground">
+                                  외 {activeSpellcheckResult.suggestions.length - 8}건이 더 있습니다.
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-muted-foreground">
+                              감지된 맞춤법/띄어쓰기 안내가 없습니다.
+                            </p>
+                          )}
+                          {activeSpellcheckResult.meta?.truncated ? (
+                            <p className="mt-2 text-muted-foreground">
+                              긴 가사는 앞부분 기준으로 검사했습니다.
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
                       <div className="relative isolate overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
                         {showProfanityOverlay && (
                           <div
@@ -3441,44 +3554,8 @@ export function AlbumWizard({
                 파일 업로드
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                업로드 대상 앨범을 선택한 뒤 음원 파일을 첨부하세요.
+                심의 받을 음원을 신청서의 트랙 순서에 맞춰 WAV 또는 ZIP 파일로 업로드해주세요.
               </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-[28px] border border-black/6 bg-white/92 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                업로드 안내
-              </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
-                  <p className="font-semibold">업로드 파일</p>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    WAV 또는 ZIP 파일만 업로드할 수 있으며, 업로드 완료 후 다음
-                    단계로 넘어갈 수 있습니다.
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
-                  <p className="font-semibold">업로드 기준</p>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    앨범별로 실제 심의 대상 음원이 누락 없이 포함되어야 하며,
-                    트랙 순서와 신청서 내용이 일치해야 합니다.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-[#cfe3fb] bg-[#eaf3ff] p-6 text-[#123152] shadow-[0_18px_40px_rgba(0,113,227,0.1)] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-white dark:shadow-none">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#0071e3] dark:text-[#8bc3ff]">
-                업로드가 어려운 경우
-              </p>
-              <p className="mt-4 text-sm leading-6">
-                신청서는 사이트에서 계속 진행하시고, 파일만 별도로 이메일로
-                보내주세요. 접수 흐름은 그대로 유지되고 파일 확인만 별도
-                지원합니다.
-              </p>
-              <p className="mt-4 text-sm font-semibold">{APP_CONFIG.supportEmail}</p>
             </div>
           </div>
 
@@ -3577,21 +3654,13 @@ export function AlbumWizard({
               </button>
             </div>
             {emailSubmitConfirmed ? (
-              <div className="mt-4 rounded-2xl border-2 border-[#f6d64a] bg-[#fff8d7] px-4 py-5 text-sm text-[#111111] shadow-[4px_4px_0_#111111] dark:bg-[#f6d64a]/10 dark:text-[#f6d64a] dark:shadow-[4px_4px_0_#f6d64a]">
-                <div className="flex flex-wrap items-start gap-3">
-                  <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border border-[#111111] bg-[#111111] text-xs font-black text-[#f6d64a] dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-[#111111]">
-                    ✓
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">이메일 전송으로 진행합니다.</p>
-                    <p className="mt-1 text-xs text-[#4a4213] dark:text-[#fff2a8]/80">
-                      파일 첨부 대신 아래 이메일 주소로 음원 파일을 보내주세요.
-                    </p>
-                    <p className="mt-3 break-all rounded-xl border border-[#111111]/15 bg-white/85 px-3 py-2 font-semibold text-[#111111] dark:border-[#f6d64a]/40 dark:bg-black/25 dark:text-[#f6d64a]">
-                      {APP_CONFIG.supportEmail}
-                    </p>
-                  </div>
-                </div>
+              <div className="mt-4 rounded-2xl border-2 border-primary/25 bg-primary/8 px-4 py-5 text-sm text-foreground shadow-[4px_4px_0_rgba(0,113,227,0.18)] dark:border-[#2997ff]/35 dark:bg-[#2997ff]/12">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  파일 첨부 대신 아래 이메일 주소로 음원 파일을 보내주세요.
+                </p>
+                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
+                  {APP_CONFIG.supportEmail}
+                </p>
               </div>
             ) : (
               <>
@@ -3745,11 +3814,11 @@ export function AlbumWizard({
               ) : null}
               <p className="text-xs text-muted-foreground">
                 CD 제작 등 실물 앨범을 발표한 경우{" "}
-                <button
-                  type="button"
-                  onClick={() => setShowCdInfo(true)}
-                  className="font-semibold text-amber-500 transition hover:text-amber-400"
-                >
+	                <button
+	                  type="button"
+	                  onClick={() => setShowCdInfo(true)}
+	                  className="font-semibold text-primary transition hover:text-primary/80"
+	                >
                   자세히 보기 →
                 </button>
               </p>
@@ -3957,47 +4026,67 @@ export function AlbumWizard({
                   결제 서류 옵션
                 </p>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
-                  <label
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (paymentDocumentType === "CASH_RECEIPT") {
+                        setPaymentDocumentType("");
+                        setCashReceiptPurpose("");
+                        setCashReceiptPhone("");
+                        setCashReceiptBusinessNumber("");
+                        return;
+                      }
+                      setPaymentDocumentType("CASH_RECEIPT");
+                      setTaxInvoiceBusinessNumber("");
+                    }}
                     className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "CASH_RECEIPT"
                       ? "border-foreground bg-foreground/5 text-foreground"
                       : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
                       }`}
                   >
-                    <input
-                      type="radio"
-                      name="album-payment-document"
-                      checked={paymentDocumentType === "CASH_RECEIPT"}
-                      onChange={() => {
-                        setPaymentDocumentType("CASH_RECEIPT");
-                        setTaxInvoiceBusinessNumber("");
-                      }}
-                      className="h-4 w-4 accent-foreground"
-                    />
+                    <span
+                      aria-hidden="true"
+                      className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${paymentDocumentType === "CASH_RECEIPT"
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-current"
+                        }`}
+                    >
+                      {paymentDocumentType === "CASH_RECEIPT" ? "✓" : ""}
+                    </span>
                     현금 영수증 발급
-                  </label>
-                  <label
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (paymentDocumentType === "TAX_INVOICE") {
+                        setPaymentDocumentType("");
+                        setTaxInvoiceBusinessNumber("");
+                        return;
+                      }
+                      setPaymentDocumentType("TAX_INVOICE");
+                      setCashReceiptPurpose("");
+                      setCashReceiptPhone("");
+                      setCashReceiptBusinessNumber("");
+                    }}
                     className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "TAX_INVOICE"
                       ? "border-foreground bg-foreground/5 text-foreground"
                       : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
                       }`}
                   >
-                    <input
-                      type="radio"
-                      name="album-payment-document"
-                      checked={paymentDocumentType === "TAX_INVOICE"}
-                      onChange={() => {
-                        setPaymentDocumentType("TAX_INVOICE");
-                        setCashReceiptPurpose("");
-                        setCashReceiptPhone("");
-                        setCashReceiptBusinessNumber("");
-                      }}
-                      className="h-4 w-4 accent-foreground"
-                    />
+                    <span
+                      aria-hidden="true"
+                      className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${paymentDocumentType === "TAX_INVOICE"
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-current"
+                        }`}
+                    >
+                      {paymentDocumentType === "TAX_INVOICE" ? "✓" : ""}
+                    </span>
                     세금계산서 발급
-                  </label>
+                  </button>
                 </div>
                 <p className="mt-3 text-[11px] text-muted-foreground">
-                  * 결제 연관 서류는 기재해주신 이메일로 전송됩니다.
+                  * 결제 연관 서류는 기재해주신 이메일로 전송됩니다. 세금계산서 신청 시 사업자등록증을 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
                 </p>
                 {paymentDocumentType === "CASH_RECEIPT" && (
                   <div className="mt-4 space-y-3">
@@ -4075,26 +4164,35 @@ export function AlbumWizard({
                     )}
                   </div>
                 )}
-                {paymentDocumentType === "TAX_INVOICE" && (
-                  <div className="mt-4 space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      사업자번호
-                    </label>
-                    <input
-                      value={taxInvoiceBusinessNumber}
-                      onChange={(event) =>
-                        setTaxInvoiceBusinessNumber(event.target.value)
-                      }
-                      placeholder="사업자번호 10자리를 입력해주세요."
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+	                {paymentDocumentType === "TAX_INVOICE" && (
+	                  <div className="mt-4 space-y-2">
+	                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+	                      사업자번호
+	                    </label>
+	                    <input
+	                      value={taxInvoiceBusinessNumber}
+	                      onChange={(event) =>
+	                        setTaxInvoiceBusinessNumber(event.target.value)
+	                      }
+	                      placeholder="사업자번호 10자리를 입력해주세요."
+	                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+	                    />
+	                    <p className="text-[11px] leading-5 text-muted-foreground">
+	                      사업자등록증 파일은 음원 파일과 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
+	                    </p>
+	                  </div>
+	                )}
+	              </div>
+	            </div>
+	          )}
 
-          <div className="flex flex-wrap justify-end gap-3">
+	          {paymentMethod === "CARD" && (
+	            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
+	              카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
+	            </div>
+	          )}
+
+	          <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
               onClick={() => setStep(3)}
@@ -4151,10 +4249,10 @@ export function AlbumWizard({
               </div>
             </div>
           </div>
-          {notice.emailWarning ? (
-            <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-              {notice.emailWarning}
-            </div>
+	          {notice.emailWarning ? (
+	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+	              {notice.emailWarning}
+	            </div>
           ) : null}
           {completionId && !shouldShowGuestLookup && (
             <button

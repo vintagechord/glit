@@ -18,6 +18,11 @@ type PromotionSummary = {
     artist_name?: string | null;
     melon_url?: string | null;
   } | null;
+  request?: {
+    title?: string | null;
+    artist?: string | null;
+    recommendation_public?: boolean | null;
+  } | null;
 };
 
 type KaraokeRequest = {
@@ -25,6 +30,7 @@ type KaraokeRequest = {
   title: string;
   artist: string | null;
   file_path?: string | null;
+  recommendation_public?: boolean | null;
   status: string;
   created_at: string;
   updated_at?: string | null;
@@ -83,7 +89,9 @@ export function KaraokeTabs({
         </button>
       </div>
 
-      {tab === "apply" && <KaraokeForm userId={userId ?? null} />}
+      {tab === "apply" && (
+        <KaraokeForm userId={userId ?? null} creditBalance={creditBalance} />
+      )}
       {tab === "credit" && (
         <KaraokeCreditPanel
           userId={userId ?? null}

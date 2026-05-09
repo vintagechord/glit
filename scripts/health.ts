@@ -8,11 +8,13 @@
  */
 
 import process from "node:process";
+import { loadEnvConfig } from "@next/env";
 
 type Check = { name: string; ok: boolean; detail?: string };
 
+loadEnvConfig(process.cwd());
+
 const requiredEnv = [
-  "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
@@ -29,19 +31,11 @@ const b2Env = [
 const inicisProd = [
   "INICIS_MID_PROD",
   "INICIS_SIGN_KEY_PROD",
-  "INICIS_BILLING_API_KEY_PROD",
-  "INICIS_BILLING_API_IV_PROD",
-  "INICIS_LITE_KEY_PROD",
-  "INICIS_API_URL_PROD",
 ];
 
 const inicisStg = [
   "INICIS_MID_STG",
   "INICIS_SIGN_KEY_STG",
-  "INICIS_BILLING_API_KEY_STG",
-  "INICIS_BILLING_API_IV_STG",
-  "INICIS_LITE_KEY_STG",
-  "INICIS_API_URL_STG",
 ];
 
 const truthy = (value: string | undefined | null) =>

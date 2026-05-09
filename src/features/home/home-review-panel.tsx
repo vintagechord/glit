@@ -834,7 +834,7 @@ export function HomeReviewPanel({
             <div className="mt-3 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm font-semibold text-foreground">
-                  {submissionLabels.summary}
+                  진행 현황
                 </p>
                 {currentSubmissionStatus ? (
                   <span
@@ -856,7 +856,7 @@ export function HomeReviewPanel({
                   />
                 </div>
                 {needsPayment && activeSubmission ? (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f6d64a] bg-[#fff8d7] px-3 py-2 text-xs font-semibold text-[#111111] dark:bg-[#f6d64a]/10 dark:text-[#f6d64a]">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/8 px-3 py-2 text-xs font-semibold text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
                     <span>결제 완료 후 심의가 진행됩니다.</span>
                     <Link
                       href={`/dashboard/pay/${activeSubmission.id}`}

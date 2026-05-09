@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
 import { getInicisMode, getStdPayConfig } from "@/lib/inicis/config";
+import { sendSubmissionUpdateEmail } from "@/lib/email";
+import { sendKakaoOfficialNotification } from "@/lib/kakao";
+import { buildUrl, getBaseUrl } from "@/lib/url";
 
 export type StdPayInitResult = {
   orderId: string;
@@ -22,6 +25,8 @@ type SubmissionRecord = {
   applicant_name: string | null;
   applicant_email: string | null;
   applicant_phone: string | null;
+  guest_email: string | null;
+  guest_phone: string | null;
   amount_krw: number | null;
   payment_method: string | null;
   payment_status: string | null;
@@ -34,12 +39,28 @@ type SubmissionRecord = {
   package?: Array<{ name?: string | null }> | { name?: string | null } | null;
 };
 
+const normalizeEmailValue = (value?: string | null) =>
+  value?.trim().toLowerCase() ?? "";
+
+const collectNotificationEmails = (
+  ...values: Array<string | null | undefined>
+) => {
+  const recipients = new Set<string>();
+  for (const value of values) {
+    const normalized = normalizeEmailValue(value);
+    if (normalized) {
+      recipients.add(normalized);
+    }
+  }
+  return Array.from(recipients);
+};
+
 export const findSubmissionById = async (submissionId: string) => {
   const admin = createAdminClient();
   const selectWithRating =
-    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, amount_krw, payment_method, payment_status, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, package:packages ( name )";
+    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, package:packages ( name )";
   const selectFallback =
-    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, amount_krw, payment_method, payment_status, mv_desired_rating, package:packages ( name )";
+    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, package:packages ( name )";
 
   const primary = await admin
     .from("submissions")
@@ -337,6 +358,78 @@ export const markPaymentSuccess = async (
     });
     if (eventError) {
       return { ok: false, error: eventError, submissionId: updated.submission_id };
+    }
+
+    const { submission: notificationSubmission } = await findSubmissionById(
+      updated.submission_id,
+    );
+    if (notificationSubmission) {
+      let memberEmail: string | null = null;
+      let memberPhone: string | null = null;
+      if (notificationSubmission.user_id) {
+        const { data: userData, error: userError } =
+          await admin.auth.admin.getUserById(notificationSubmission.user_id);
+        if (userError) {
+          console.warn("[Email][payment] member lookup failed", {
+            submissionId: notificationSubmission.id,
+            userId: notificationSubmission.user_id,
+            error: userError,
+          });
+        } else {
+          memberEmail = userData?.user?.email ?? null;
+        }
+
+        const { data: profile, error: profileError } = await admin
+          .from("profiles")
+          .select("phone")
+          .eq("user_id", notificationSubmission.user_id)
+          .maybeSingle();
+        if (!profileError) {
+          memberPhone = profile?.phone ?? null;
+        }
+      }
+
+      const kind = notificationSubmission.type?.startsWith("MV") ? "MV" : "ALBUM";
+      const baseUrl = getBaseUrl();
+      const link =
+        notificationSubmission.guest_token &&
+        notificationSubmission.guest_token.length >= 8
+          ? buildUrl(
+              `/track/${encodeURIComponent(notificationSubmission.guest_token)}`,
+              baseUrl,
+            )
+          : buildUrl(
+              `/dashboard/submissions/${notificationSubmission.id}`,
+              baseUrl,
+            );
+      const recipientEmails = collectNotificationEmails(
+        notificationSubmission.applicant_email,
+        notificationSubmission.guest_email,
+        memberEmail,
+      );
+
+      for (const recipientEmail of recipientEmails) {
+        await sendSubmissionUpdateEmail({
+          email: recipientEmail,
+          title: notificationSubmission.title ?? "제목 미입력",
+          artist: notificationSubmission.artist_name ?? null,
+          kind,
+          headline: "결제가 완료되었습니다.",
+          summary: "결제 확인이 완료되어 심의가 시작됩니다.",
+          link,
+          subject: "[onside] 결제 완료 안내",
+        });
+      }
+
+      await sendKakaoOfficialNotification({
+        phone:
+          notificationSubmission.applicant_phone ??
+          notificationSubmission.guest_phone ??
+          memberPhone,
+        title: "결제가 완료되었습니다.",
+        message: `${notificationSubmission.title ?? "제목 미입력"} 결제가 완료되어 심의가 시작됩니다.`,
+        link,
+      });
     }
   }
 

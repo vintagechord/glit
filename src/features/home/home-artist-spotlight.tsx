@@ -144,7 +144,6 @@ export function HomeArtistSpotlight({
   const query = buildYouTubeQuery(submission);
   const embedUrl = buildEmbedUrl(query);
   const searchUrl = buildSearchUrl(query);
-  const typeLabel = submission.type?.startsWith("MV") ? "뮤직비디오" : "음원";
 
   return (
     <div className="mt-4 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">

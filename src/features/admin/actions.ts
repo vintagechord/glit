@@ -25,6 +25,7 @@ import {
   summarizeTrackResults,
 } from "@/lib/track-results";
 import { sendResultEmail, sendSubmissionUpdateEmail } from "@/lib/email";
+import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRatingCode } from "@/lib/mv-assets";
@@ -166,9 +167,12 @@ type SubmissionNotificationContext = {
     user_id?: string | null;
     guest_token?: string | null;
     applicant_email?: string | null;
+    applicant_phone?: string | null;
     guest_email?: string | null;
+    guest_phone?: string | null;
   };
   recipientEmails: string[];
+  recipientPhone?: string | null;
   link: string;
   kind: "ALBUM" | "MV";
 };
@@ -180,7 +184,7 @@ const loadSubmissionNotificationContext = async (
   const { data: submission, error } = await supabase
     .from("submissions")
     .select(
-      "id, title, artist_name, type, user_id, guest_token, applicant_email, guest_email",
+      "id, title, artist_name, type, user_id, guest_token, applicant_email, applicant_phone, guest_email, guest_phone",
     )
     .eq("id", submissionId)
     .maybeSingle();
@@ -196,6 +200,7 @@ const loadSubmissionNotificationContext = async (
   }
 
   let memberEmail: string | null = null;
+  let memberPhone: string | null = null;
   if (submission.user_id) {
     const { data: userData, error: userError } = await supabase.auth.admin.getUserById(
       submission.user_id,
@@ -209,6 +214,12 @@ const loadSubmissionNotificationContext = async (
     } else {
       memberEmail = userData?.user?.email ?? null;
     }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("phone")
+      .eq("user_id", submission.user_id)
+      .maybeSingle();
+    memberPhone = profile?.phone ?? null;
   }
 
   const recipientEmails = collectNotificationEmails(
@@ -227,6 +238,8 @@ const loadSubmissionNotificationContext = async (
   return {
     submission,
     recipientEmails,
+    recipientPhone:
+      submission.applicant_phone ?? submission.guest_phone ?? memberPhone ?? null,
     link,
     kind,
   };
@@ -269,7 +282,7 @@ const sendSubmissionUpdateNotificationById = async ({
   subject?: string;
 }) => {
   const context = await loadSubmissionNotificationContext(submissionId);
-  if (!context || !context.recipientEmails.length) return;
+  if (!context) return;
 
   for (const recipientEmail of context.recipientEmails) {
     const result = await sendSubmissionUpdateEmail({
@@ -290,6 +303,12 @@ const sendSubmissionUpdateNotificationById = async ({
       });
     }
   }
+  await sendKakaoOfficialNotification({
+    phone: context.recipientPhone,
+    title: headline,
+    message: summary,
+    link: context.link,
+  });
 };
 
 const sendSubmissionResultNotificationById = async ({
@@ -312,7 +331,21 @@ const sendSubmissionResultNotificationById = async ({
     };
   }
 
+  const sendKakaoResultNotification = () =>
+    sendKakaoOfficialNotification({
+      phone: context.recipientPhone,
+      title: "심의 결과가 업데이트되었습니다.",
+      message: [
+        `${context.submission.title ?? "제목 미입력"} 심의 결과가 업데이트되었습니다.`,
+        resultMemo ? `메모: ${resultMemo}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      link: context.link,
+    });
+
   if (!context.recipientEmails.length) {
+    await sendKakaoResultNotification();
     return {
       deliveredCount: 0,
       skippedCount: 0,
@@ -357,6 +390,7 @@ const sendSubmissionResultNotificationById = async ({
   if (deliveredCount > 0) {
     await markSubmissionResultNotified(submissionId);
   }
+  await sendKakaoResultNotification();
 
   const warning =
     deliveredCount === 0
@@ -530,6 +564,14 @@ export async function updateSubmissionStatusAction(
     `관리자 상태 변경: ${parsed.data.status}`,
     "ADMIN_STATUS",
   );
+  await sendSubmissionUpdateNotificationById({
+    submissionId: parsed.data.submissionId,
+    headline: "심의 진행 상태가 업데이트되었습니다.",
+    summary: `현재 상태: ${
+      reviewStatusLabelMap[parsed.data.status] ?? parsed.data.status
+    }`,
+    subject: "[onside] 심의 진행 상태 업데이트",
+  });
 
   return { message: "상태가 업데이트되었습니다." };
 }

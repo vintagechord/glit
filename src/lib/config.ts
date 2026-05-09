@@ -46,7 +46,7 @@ export const APP_CONFIG = {
     PUBLIC_LOGO_LIGHT ??
     PUBLIC_LOGO_FALLBACK ??
     "",
-  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "onside17@daum.net",
+  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "onside2017@daum.net",
   supportPhone: process.env.NEXT_PUBLIC_SUPPORT_PHONE ?? "010-8436-9035",
   supportHours:
     process.env.NEXT_PUBLIC_SUPPORT_HOURS ?? "10:00 ~ 18:00 (주말/공휴일 휴무)",
@@ -70,7 +70,7 @@ export const APP_CONFIG = {
   uploadMaxMb: Number(
     process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ??
     process.env.NEXT_PUBLIC_AUDIO_UPLOAD_MAX_MB ??
-    "1024",
+    "4096",
   ),
   karaokeFeeKrw: Number(process.env.NEXT_PUBLIC_KARAOKE_FEE ?? "50000"),
 };

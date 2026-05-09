@@ -30,6 +30,7 @@ type KaraokeRequestRow = {
   bank_depositor_name: string | null;
   tj_requested: boolean | null;
   ky_requested: boolean | null;
+  recommendation_public?: boolean | null;
   guest_name?: string | null;
   guest_email?: string | null;
   guest_phone?: string | null;
@@ -63,7 +64,7 @@ export default async function AdminKaraokePage({
 
   const supabase = await createServerSupabase();
   const baseSelect =
-    "id, title, artist, contact, notes, file_path, status, created_at, payment_status, payment_method, amount_krw, bank_depositor_name, tj_requested, ky_requested";
+    "id, title, artist, contact, notes, file_path, status, created_at, payment_status, payment_method, amount_krw, bank_depositor_name, tj_requested, ky_requested, recommendation_public";
   const guestSelect = `${baseSelect}, guest_name, guest_email, guest_phone`;
 
   const buildQuery = (selectFields: string) => {
@@ -99,7 +100,7 @@ export default async function AdminKaraokePage({
   const { data: recommendations } = await supabase
     .from("karaoke_promotion_recommendations")
     .select(
-      "id, status, created_at, proof_path, recommender_user_id, promotion:karaoke_promotions ( id, credits_balance, submission:submissions ( title, artist_name ) )",
+      "id, status, created_at, proof_path, recommender_user_id, promotion:karaoke_promotions ( id, credits_balance, submission:submissions ( title, artist_name ), request:karaoke_requests ( title, artist ) )",
     )
     .order("created_at", { ascending: false })
     .limit(30);
@@ -165,11 +166,14 @@ export default async function AdminKaraokePage({
                       입금자명: {request.bank_depositor_name}
                     </p>
                   )}
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    태진 {request.tj_requested ? "요청" : "미요청"} · 금영{" "}
-                    {request.ky_requested ? "요청" : "미요청"}
-                  </p>
-                </div>
+	                  <p className="mt-1 text-xs text-muted-foreground">
+	                    태진 {request.tj_requested ? "요청" : "미요청"} · 금영{" "}
+	                    {request.ky_requested ? "요청" : "미요청"}
+	                  </p>
+	                  <p className="mt-1 text-xs text-muted-foreground">
+	                    추천 요청 {request.recommendation_public ? "공개" : "비공개"}
+	                  </p>
+	                </div>
                 <p className="text-xs text-muted-foreground">
                   {formatDateTime(request.created_at)}
                 </p>
@@ -254,16 +258,19 @@ export default async function AdminKaraokePage({
                   const promotion = Array.isArray(recommendation.promotion)
                     ? recommendation.promotion[0]
                     : recommendation.promotion;
-                  const submission = Array.isArray(promotion?.submission)
-                    ? promotion?.submission[0]
-                    : promotion?.submission;
-                  return (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {submission?.title ?? "제목 미입력"} ·{" "}
-                      {submission?.artist_name ?? "-"}
-                    </p>
+	                  const submission = Array.isArray(promotion?.submission)
+	                    ? promotion?.submission[0]
+	                    : promotion?.submission;
+	                  const request = Array.isArray(promotion?.request)
+	                    ? promotion?.request[0]
+	                    : promotion?.request;
+	                  return (
+	                <div className="flex flex-wrap items-center justify-between gap-3">
+	                  <div>
+	                    <p className="text-sm font-semibold text-foreground">
+	                      {submission?.title ?? request?.title ?? "제목 미입력"} ·{" "}
+	                      {submission?.artist_name ?? request?.artist ?? "-"}
+	                    </p>
                     <p className="text-xs text-muted-foreground">
                       추천자: {recommendation.recommender_user_id ?? "-"}
                     </p>

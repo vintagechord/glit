@@ -21,7 +21,7 @@ const schema = z.object({
   sizeBytes: z.coerce.number().int().positive(),
 });
 
-const MAX_AUDIO_BYTES = 1 * 1024 * 1024 * 1024; // 1GB
+const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 
 const isVideoLike = (mime?: string | null, filename?: string | null) => {
@@ -169,9 +169,7 @@ export async function POST(request: Request) {
     if (parsed.data.sizeBytes > maxSizeBytes) {
       parseErrorStatus = 400;
       parseErrorBody = {
-        error: `파일 용량이 허용 한도(${
-          videoLike ? "4GB" : "1GB"
-        })를 초과했습니다.`,
+        error: "파일 용량이 허용 한도(4GB)를 초과했습니다.",
       };
       filePart.stream.resume();
       return;

@@ -14,7 +14,7 @@ export default async function KaraokeRequestPage() {
   const { data: promotions } = await supabase
     .from("karaoke_promotions")
     .select(
-      "id, credits_balance, credits_required, tj_enabled, ky_enabled, reference_url, submission:submissions ( id, title, artist_name, melon_url )",
+      "id, credits_balance, credits_required, tj_enabled, ky_enabled, reference_url, submission:submissions ( id, title, artist_name, melon_url ), request:karaoke_requests ( id, title, artist, recommendation_public )",
     )
     .eq("status", "ACTIVE")
     .gt("credits_balance", 0)
@@ -26,8 +26,9 @@ export default async function KaraokeRequestPage() {
     id: string;
     title: string;
     artist: string | null;
-    file_path?: string | null;
-    status: string;
+	    file_path?: string | null;
+	    recommendation_public?: boolean | null;
+	    status: string;
     created_at: string;
     updated_at: string | null;
   }> = [];
@@ -39,10 +40,10 @@ export default async function KaraokeRequestPage() {
       .maybeSingle();
     creditBalance = creditRow?.balance ?? 0;
 
-    const { data: requestRows } = await supabase
-      .from("karaoke_requests")
-      .select("id, title, artist, file_path, status, created_at, updated_at")
-      .eq("user_id", user.id)
+	    const { data: requestRows } = await supabase
+	      .from("karaoke_requests")
+	      .select("id, title, artist, file_path, recommendation_public, status, created_at, updated_at")
+	      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     requests = requestRows ?? [];
   }
@@ -53,6 +54,9 @@ export default async function KaraokeRequestPage() {
       submission: Array.isArray(promotion.submission)
         ? promotion.submission[0]
         : promotion.submission,
+      request: Array.isArray(promotion.request)
+        ? promotion.request[0]
+        : promotion.request,
     })) ?? [];
 
   return (

@@ -91,7 +91,7 @@ export function PaymentRetryClient({
           className={`rounded-[8px] border-2 px-4 py-3 text-sm font-semibold ${
             notice.type === "error"
               ? "border-[#d9362c] bg-[#d9362c]/10 text-[#d9362c]"
-              : "border-[#f2cf27] bg-[#fff8d7] text-[#111111] dark:bg-[#f2cf27]/10 dark:text-[#f2cf27]"
+              : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
           }`}
         >
           {notice.message}

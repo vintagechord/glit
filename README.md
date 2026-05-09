@@ -25,14 +25,14 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Optional (UI/config)
-NEXT_PUBLIC_SUPPORT_EMAIL=help@vhouse.co.kr
+NEXT_PUBLIC_SUPPORT_EMAIL=onside2017@daum.net
 NEXT_PUBLIC_SUPPORT_PHONE=010-8436-9035
 NEXT_PUBLIC_BANK_NAME=국민은행
 NEXT_PUBLIC_BANK_ACCOUNT=073001-04-276967
 NEXT_PUBLIC_BANK_HOLDER=주식회사 빈티지하우스
 NEXT_PUBLIC_PRE_REVIEW_PRICE=0
-NEXT_PUBLIC_UPLOAD_MAX_MB=1024
-NEXT_PUBLIC_AUDIO_UPLOAD_MAX_MB=1024
+NEXT_PUBLIC_UPLOAD_MAX_MB=4096
+NEXT_PUBLIC_AUDIO_UPLOAD_MAX_MB=4096
 NEXT_PUBLIC_VIDEO_UPLOAD_MAX_MB=4096
 # Spellcheck proxy (Python microservice)
 SPELLCHECK_SERVICE_URL=https://glit-spellcheck.onrender.com
@@ -40,7 +40,12 @@ SPELLCHECK_SHARED_SECRET=optional-shared-secret
 
 # Optional (welcome email)
 RESEND_API_KEY=your_resend_key
-RESEND_FROM="onside <help@vhouse.co.kr>"
+RESEND_FROM="onside <onside2017@daum.net>"
+
+# Optional (official Kakao/Alimtalk notification webhook)
+KAKAO_ALIMTALK_WEBHOOK_URL=https://your-kakao-provider-webhook
+KAKAO_ALIMTALK_API_KEY=optional-provider-api-key
+KAKAO_ALIMTALK_TEMPLATE_CODE=ONSIDE_OFFICIAL_NOTICE
 
 # Inicis subscription billing (staging sample values)
 INICIS_ENV=stg
@@ -79,7 +84,7 @@ npm run dev
 
 - Auth: 회원가입/로그인/로그아웃 + profiles 자동 생성
 - 심의 접수: 음반/뮤직비디오 Wizard (STEP01~05)
-- 파일 업로드: Supabase Storage signed upload (로컬 디스크 미사용)
+- 파일 업로드: Backblaze B2 presigned/multipart upload (로컬 디스크 미사용)
 - 결제: 카드/무통장 선택 + 입금 확인 → PAYMENT_PENDING
 - 진행상황: 방송국별 상태 테이블 + 실시간 갱신
 - 결과 통보: 이벤트 타임라인

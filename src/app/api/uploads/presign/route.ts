@@ -18,9 +18,9 @@ const schema = z.object({
     .optional(),
 });
 
-const MAX_AUDIO_BYTES = 1 * 1024 * 1024 * 1024; // 1GB
+const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
-const MAX_GENERIC_BYTES = 1 * 1024 * 1024 * 1024; // 1GB
+const MAX_GENERIC_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabase();
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
           scope === "submission"
             ? inferredKind === "video"
               ? "뮤직비디오는 최대 4GB까지 업로드할 수 있습니다."
-              : "음원 파일은 최대 1GB까지 업로드할 수 있습니다."
+              : "음원 파일은 최대 4GB까지 업로드할 수 있습니다."
             : "파일 용량이 허용 한도를 초과했습니다.",
       },
       { status: 413 },

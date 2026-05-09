@@ -450,24 +450,28 @@ export function SubmissionDetailClient({
     if (isReviewComplete) {
       return {
         message: "모든 심의 절차가 완료되었습니다.",
-        dotTone: "bg-emerald-300",
+        label: "완료",
+        tone: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100",
       };
     }
     if (flowIndex === 3) {
       return {
         message: "심의 결과 통보가 진행 중입니다.",
-        dotTone: "bg-[#f6d64a]",
+        label: "결과",
+        tone: "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
       };
     }
     if (isPaymentDone) {
       return {
         message: "결제가 확인되었고 심의 절차가 진행됩니다.",
-        dotTone: "bg-sky-300",
+        label: "진행",
+        tone: "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
       };
     }
     return {
       message: "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다.",
-      dotTone: "bg-rose-300",
+      label: "대기",
+      tone: "border-slate-200 bg-slate-50 text-slate-700 dark:border-white/15 dark:bg-white/8 dark:text-white/80",
     };
   })();
   const ratingReason = submission.result_memo?.trim() || null;
@@ -510,6 +514,17 @@ export function SubmissionDetailClient({
           },
         ]
         : stationReviews;
+  const latestStationReviewUpdate = renderStationReviews.reduce<{
+    id: string;
+    timestamp: number;
+  } | null>((latest, review) => {
+    const timestamp = Date.parse(review.updated_at ?? "");
+    if (!Number.isFinite(timestamp)) return latest;
+    if (!latest || timestamp > latest.timestamp) {
+      return { id: review.id, timestamp };
+    }
+    return latest;
+  }, null);
 
   const handleGuideDownload = async () => {
     if (LABEL_GUIDE_KEY.startsWith("http")) {
@@ -604,7 +619,7 @@ export function SubmissionDetailClient({
           description:
             "현재 접수 내용은 유지되어 있습니다. 필요하면 다시 결제를 진행하거나 무통장 입금으로 접수할 수 있습니다.",
           tone:
-            "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-100",
+            "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
         }
         : paymentState === "fail" || paymentState === "error"
           ? {
@@ -744,10 +759,6 @@ export function SubmissionDetailClient({
       label: "접수 일시",
       value: formatDateTime(submission.created_at),
     },
-    {
-      label: "최근 업데이트",
-      value: formatDateTime(submission.updated_at),
-    },
   ];
   const renderStationReviewSection = () => (
     <div className={detailPanelClass}>
@@ -755,9 +766,6 @@ export function SubmissionDetailClient({
         <p className={detailKickerClass}>
           방송국별 진행표
         </p>
-        <span className="text-sm text-muted-foreground">
-          업데이트: {formatDateTime(submission.updated_at)}
-        </span>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <span className="bauhaus-status-chip bauhaus-status-chip--neutral bauhaus-status-chip--compact">
@@ -792,6 +800,8 @@ export function SubmissionDetailClient({
                 </div>
                 <div className="divide-y divide-border/60">
                   {renderStationReviews.map((review) => {
+                    const showReviewUpdate =
+                      latestStationReviewUpdate?.id === review.id;
                     const reception = isReviewComplete
                       ? {
                         label: "결과 통보",
@@ -922,7 +932,7 @@ export function SubmissionDetailClient({
                           ) : null}
                         </button>
                         <span className="hidden justify-self-center text-center text-xs text-muted-foreground sm:block">
-                          {formatDateTime(review.updated_at)}
+                          {showReviewUpdate ? formatDateTime(review.updated_at) : "-"}
                         </span>
                       </div>
                     );
@@ -933,7 +943,7 @@ export function SubmissionDetailClient({
           </div>
         ) : (
           <div className="rounded-[8px] border-2 border-dashed border-border bg-background px-4 py-6 text-sm text-muted-foreground">
-            아직 방송국 진행 정보가 없습니다. 접수 제출 후 자동 생성됩니다.
+            결제 완료 후 방송국 진행 정보가 자동 생성됩니다.
           </div>
         )}
       </div>
@@ -1306,12 +1316,7 @@ export function SubmissionDetailClient({
 
       <div className="mt-8 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <div className={detailPanelClass}>
-          <div className="flex items-center justify-between gap-3">
-            <p className={detailKickerClass}>              </p>
-            <span className="text-xs text-muted-foreground">
-              최근 업데이트 {formatDateTime(submission.updated_at)}
-            </span>
-          </div>
+          <p className={detailKickerClass}>접수 정보</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {quickFacts.map((item) => (
               <div
@@ -1340,18 +1345,18 @@ export function SubmissionDetailClient({
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-[10px] border-2 border-[#111111] bg-[#1556a4] p-6 text-white shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
+          <div className="rounded-[10px] border-2 border-[#111111] bg-card p-6 text-foreground shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27]">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-black uppercase tracking-normal text-white/82">
+              <p className={detailKickerClass}>
                 진행 단계
               </p>
-              <div className="flex items-center gap-2 text-xs font-semibold">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current/15 bg-white/45 dark:bg-white/10">
-                  <span className={`inline-block h-2.5 w-2.5 rounded-full ${flowStatusNotice.dotTone}`} />
-                </span>
-                <span>{flowStatusNotice.message}</span>
-              </div>
+              <span className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-normal ${flowStatusNotice.tone}`}>
+                {flowStatusNotice.label}
+              </span>
             </div>
+            <p className="mt-3 text-sm font-semibold leading-6 text-muted-foreground">
+              {flowStatusNotice.message}
+            </p>
             <div className="mt-4 grid grid-cols-4 gap-2">
               {flowSteps.map((label, index) => {
                 const isActive = index === flowIndex;
@@ -1360,10 +1365,10 @@ export function SubmissionDetailClient({
                   <div
                     key={label}
                     className={`rounded-[8px] border-2 px-3 py-3 text-center text-[11px] font-black leading-5 ${isActive
-                      ? "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
+                      ? "border-primary bg-primary/8 text-primary dark:border-[#2997ff] dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
                       : isPassed
-                        ? "border-white bg-white/80 text-[#111111] dark:border-white dark:bg-white/14 dark:text-white"
-                        : "border-white/80 bg-white/16 text-white"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100"
+                        : "border-border bg-background text-muted-foreground"
                       }`}
                   >
                     {label}
@@ -1477,12 +1482,6 @@ export function SubmissionDetailClient({
                   <p className="text-sm text-muted-foreground">접수 일시</p>
                   <p className="mt-1 font-semibold">
                     {formatDateTime(submission.created_at)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">최근 업데이트</p>
-                  <p className="mt-1 font-semibold">
-                    {formatDateTime(submission.updated_at)}
                   </p>
                 </div>
               </div>
@@ -1882,9 +1881,6 @@ export function SubmissionDetailClient({
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               방송국별 진행표
             </p>
-            <span className="text-sm text-muted-foreground">
-              업데이트: {formatDateTime(submission.updated_at)}
-            </span>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
@@ -1896,7 +1892,7 @@ export function SubmissionDetailClient({
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200">
               통과 반영 {stationSummary.approved}곳
             </span>
-            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-800 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200">
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 dark:border-white/15 dark:bg-white/8 dark:text-white/80">
               확인 필요 {stationSummary.actionNeeded}곳
             </span>
           </div>
@@ -1919,6 +1915,8 @@ export function SubmissionDetailClient({
                     </div>
                     <div className="divide-y divide-border/60">
                       {renderStationReviews.map((review) => {
+                        const showReviewUpdate =
+                          latestStationReviewUpdate?.id === review.id;
                         const reception = isReviewComplete
                           ? { label: "결과 통보", tone: "bg-emerald-500/15 text-emerald-800" }
                           : getReviewReception(review.status);
@@ -2044,7 +2042,7 @@ export function SubmissionDetailClient({
                               ) : null}
                             </button>
                             <span className="hidden justify-self-center text-center text-xs text-muted-foreground sm:block">
-                              {formatDateTime(review.updated_at)}
+                              {showReviewUpdate ? formatDateTime(review.updated_at) : "-"}
                             </span>
                           </div>
                         );
@@ -2055,7 +2053,7 @@ export function SubmissionDetailClient({
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
-                아직 방송국 진행 정보가 없습니다. 접수 제출 후 자동 생성됩니다.
+                결제 완료 후 방송국 진행 정보가 자동 생성됩니다.
               </div>
             )}
           </div>

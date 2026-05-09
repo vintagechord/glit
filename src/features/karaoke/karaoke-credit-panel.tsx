@@ -17,6 +17,11 @@ type PromotionSummary = {
     artist_name?: string | null;
     melon_url?: string | null;
   } | null;
+  request?: {
+    title?: string | null;
+    artist?: string | null;
+    recommendation_public?: boolean | null;
+  } | null;
 };
 
 type UploadState = {
@@ -36,6 +41,12 @@ const getPromotionTargets = (promotion: PromotionSummary) =>
 
 const getPromotionLink = (promotion: PromotionSummary) =>
   promotion.reference_url ?? promotion.submission?.melon_url ?? null;
+
+const getPromotionTitle = (promotion: PromotionSummary) =>
+  promotion.submission?.title ?? promotion.request?.title ?? "제목 미입력";
+
+const getPromotionArtist = (promotion: PromotionSummary) =>
+  promotion.submission?.artist_name ?? promotion.request?.artist ?? "아티스트 미입력";
 
 export function KaraokeCreditPanel({
   userId,
@@ -191,8 +202,7 @@ export function KaraokeCreditPanel({
           크레딧 적립하기
         </p>
         <p className="mt-3 text-sm">
-          추천 요청된 곡을 태진/금영에 추천한 뒤 인증샷을 제출하면 크레딧이
-          적립됩니다.
+          공개된 곡을 태진/금영에 추천하고 인증을 제출하면, 승인 후 곡 주인이 예치한 크레딧 1개가 적립됩니다.
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
           내 보유 크레딧 {creditBalance} · 추천 노출은 10크레딧부터 시작됩니다.
@@ -204,7 +214,7 @@ export function KaraokeCreditPanel({
           추천 요청 보드
         </p>
         <p className="mt-3 text-xs text-muted-foreground">
-          노출 크레딧이 높은 곡이 상단에 표시됩니다.
+          크레딧이 남아 있는 공개 요청만 표시됩니다.
         </p>
         <div className="mt-4">
           {promotions.length > 0 ? (
@@ -212,9 +222,8 @@ export function KaraokeCreditPanel({
               <div className="flex w-max gap-4 animate-marquee hover:[animation-play-state:paused]">
                 {promotionStream.map((promotion, index) => {
                   const isSelected = promotion.id === promotionId;
-                  const title = promotion.submission?.title ?? "제목 미입력";
-                  const artist =
-                    promotion.submission?.artist_name ?? "아티스트 미입력";
+                  const title = getPromotionTitle(promotion);
+                  const artist = getPromotionArtist(promotion);
                   const targets = getPromotionTargets(promotion);
                   const link = getPromotionLink(promotion);
                   return (
@@ -299,13 +308,13 @@ export function KaraokeCreditPanel({
           </label>
           {selectedPromotion ? (
             <div className="rounded-[8px] border-2 border-border bg-background/70 px-4 py-3 text-sm text-foreground">
-              <p className="font-semibold">
-                {selectedPromotion.submission?.title ?? "제목 미입력"}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {selectedPromotion.submission?.artist_name ?? "아티스트 미입력"} ·{" "}
-                {getPromotionTargets(selectedPromotion).join(" · ") || "미선택"}
-              </p>
+	              <p className="font-semibold">
+	                {getPromotionTitle(selectedPromotion)}
+	              </p>
+	              <p className="mt-1 text-xs text-muted-foreground">
+	                {getPromotionArtist(selectedPromotion)} ·{" "}
+	                {getPromotionTargets(selectedPromotion).join(" · ") || "미선택"}
+	              </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 현재 노출 크레딧 {selectedPromotion.credits_balance} · 최소{" "}
                 {selectedPromotion.credits_required} 크레딧 필요

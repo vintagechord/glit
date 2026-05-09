@@ -8,8 +8,10 @@ import {
   sendSubmissionReceiptEmail,
 } from "@/lib/email";
 import { ensureArtistByName } from "@/lib/artist";
+import { APP_CONFIG } from "@/lib/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 
 export type SubmissionActionState = {
@@ -316,9 +318,12 @@ const isValidEmailFormat = (value: string) =>
 
 const normalizeEmailValue = (value?: string | null) =>
   value?.trim().toLowerCase() ?? "";
-const adminReviewEmail = "iamwatermelon@daum.net";
+const adminReviewEmail =
+  process.env.ADMIN_REVIEW_EMAIL ??
+  process.env.NEXT_PUBLIC_ADMIN_REVIEW_EMAIL ??
+  APP_CONFIG.supportEmail;
 const isAdminReviewEmail = (value?: string | null) =>
-  normalizeEmailValue(value) === adminReviewEmail;
+  normalizeEmailValue(value) === normalizeEmailValue(adminReviewEmail);
 
 const collectRecipientEmails = (
   ...values: Array<string | null | undefined>
@@ -331,6 +336,24 @@ const collectRecipientEmails = (
     }
   }
   return Array.from(recipients);
+};
+
+const loadMemberPhone = async (userId?: string | null) => {
+  if (!userId) return null;
+  const admin = createAdminClient();
+  const { data: profile, error } = await admin
+    .from("profiles")
+    .select("phone")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[Kakao][submission] profile phone lookup failed", {
+      userId,
+      error,
+    });
+    return null;
+  }
+  return profile?.phone ?? null;
 };
 
 const paymentDocumentTypeValues = ["CASH_RECEIPT", "TAX_INVOICE"] as const;
@@ -697,8 +720,8 @@ export async function saveAlbumSubmissionAction(
   if (isSubmitted && isGuest && !isValidEmailFormat(guestEmailValue)) {
     return { error: "비회원 이메일 형식을 확인해주세요." };
   }
-  if (isSubmitted && !isAdminReviewer && !artistNameValue) {
-    return { error: "아티스트명을 입력해주세요. (원클릭 포함)" };
+  if (isSubmitted && !isAdminReviewer && !isOneClick && !artistNameValue) {
+    return { error: "아티스트명을 입력해주세요." };
   }
   if (isSubmitted && !isAdminReviewer && !isOneClick && !titleValue) {
     return { error: "앨범 제목을 입력해주세요." };
@@ -1073,14 +1096,14 @@ export async function saveAlbumSubmissionAction(
       guestEmailValue,
       user?.email,
     );
-    if (recipientEmails.length > 0) {
-      const baseUrl = getBaseUrl();
-      const siteLink = buildUrl("/", baseUrl);
-      const link =
-        isGuest && parsed.data.guestToken && parsed.data.guestToken.length >= 8
-          ? buildUrl(`/track/${encodeURIComponent(parsed.data.guestToken)}`, baseUrl)
-          : buildUrl(`/dashboard/submissions/${parsed.data.submissionId}`, baseUrl);
+    const baseUrl = getBaseUrl();
+    const siteLink = buildUrl("/", baseUrl);
+    const link =
+      isGuest && parsed.data.guestToken && parsed.data.guestToken.length >= 8
+        ? buildUrl(`/track/${encodeURIComponent(parsed.data.guestToken)}`, baseUrl)
+        : buildUrl(`/dashboard/submissions/${parsed.data.submissionId}`, baseUrl);
 
+    if (recipientEmails.length > 0) {
       for (const recipientEmail of recipientEmails) {
         const emailResult = await sendSubmissionReceiptEmail({
           email: recipientEmail,
@@ -1122,6 +1145,14 @@ export async function saveAlbumSubmissionAction(
         }
       }
     }
+
+    const memberPhoneValue = isGuest ? null : await loadMemberPhone(user?.id);
+    await sendKakaoOfficialNotification({
+      phone: parsed.data.applicantPhone?.trim() || guestPhoneValue || memberPhoneValue,
+      title: "음반 심의 접수 완료",
+      message: `${titleValue || "제목 미입력"} 접수가 완료되었습니다. 진행 상황은 온사이드에서 확인할 수 있습니다.`,
+      link,
+    });
   }
 
   return {
@@ -1471,14 +1502,14 @@ export async function saveMvSubmissionAction(
       guestEmailValue,
       user?.email,
     );
-    if (recipientEmails.length > 0) {
-      const baseUrl = getBaseUrl();
-      const siteLink = buildUrl("/", baseUrl);
-      const link =
-        isGuest && parsed.data.guestToken && parsed.data.guestToken.length >= 8
-          ? buildUrl(`/track/${encodeURIComponent(parsed.data.guestToken)}`, baseUrl)
-          : buildUrl(`/dashboard/submissions/${parsed.data.submissionId}`, baseUrl);
+    const baseUrl = getBaseUrl();
+    const siteLink = buildUrl("/", baseUrl);
+    const link =
+      isGuest && parsed.data.guestToken && parsed.data.guestToken.length >= 8
+        ? buildUrl(`/track/${encodeURIComponent(parsed.data.guestToken)}`, baseUrl)
+        : buildUrl(`/dashboard/submissions/${parsed.data.submissionId}`, baseUrl);
 
+    if (recipientEmails.length > 0) {
       for (const recipientEmail of recipientEmails) {
         const emailResult = await sendSubmissionReceiptEmail({
           email: recipientEmail,
@@ -1520,6 +1551,14 @@ export async function saveMvSubmissionAction(
         }
       }
     }
+
+    const memberPhoneValue = isGuest ? null : await loadMemberPhone(user?.id);
+    await sendKakaoOfficialNotification({
+      phone: guestPhoneValue || memberPhoneValue,
+      title: "뮤직비디오 심의 접수 완료",
+      message: `${titleValue || "제목 미입력"} 접수가 완료되었습니다. 진행 상황은 온사이드에서 확인할 수 있습니다.`,
+      link,
+    });
   }
 
   return {

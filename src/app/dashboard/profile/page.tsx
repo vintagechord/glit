@@ -35,7 +35,7 @@ export async function ProfilePageView(config?: ShellConfig) {
   return (
     <DashboardShell
       title="계정 정보"
-      description="담당자 정보를 최신 상태로 유지해주세요."
+      description="접수 진행 및 결과 통보를 위한 정보입니다."
       activeTab="profile"
       tabs={config?.tabs ?? defaultDashboardTabs}
       contextLabel={config?.contextLabel ?? "마이페이지"}
@@ -46,11 +46,8 @@ export async function ProfilePageView(config?: ShellConfig) {
             프로필 수정
           </p>
           <h2 className="mt-3 text-xl font-black text-foreground">
-            담당자 정보를 업데이트하세요.
+            접수 진행 및 결과 통보를 위한 정보입니다.
           </h2>
-          <p className="mt-2 text-sm font-semibold text-muted-foreground">
-            접수 진행 및 결과 통보를 위한 기본 정보를 관리합니다.
-          </p>
           <div className="mt-6">
             <ProfileForm
               defaultValues={{
