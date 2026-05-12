@@ -60,48 +60,48 @@
   --bauhaus-ink: #d8e1ef;
   --bauhaus-paper: #fbfcfe;
   --bauhaus-panel: #ffffff;
-  --bauhaus-yellow: #eef6ff;
-  --bauhaus-blue: #1268b3;
+  --bauhaus-yellow: #edf4f7;
+  --bauhaus-blue: #2f6f9f;
   --bauhaus-red: #c0332a;
   --bauhaus-green: #1f9d6a;
   --bauhaus-shadow: rgba(15, 23, 42, 0.08);
   --bauhaus-grid: transparent;
   --background: #fbfcfe;
-  --foreground: #26324a;
+  --foreground: #2f3a4d;
   --card: #ffffff;
-  --card-foreground: #26324a;
+  --card-foreground: #2f3a4d;
   --popover: #ffffff;
   --popover-foreground: #111111;
-  --primary: #1268b3;
+  --primary: #2f6f9f;
   --primary-foreground: #ffffff;
   --secondary: #ffffff;
   --secondary-foreground: #111111;
   --muted: #f2f5f9;
   --muted-foreground: #667085;
-  --accent: #eef6ff;
-  --accent-foreground: #1268b3;
+  --accent: #edf4f7;
+  --accent-foreground: #2f6f9f;
   --destructive: #c0332a;
   --border: #d8e1ef;
   --input: #c9d6e8;
-  --ring: rgba(18, 104, 179, 0.32);
-  --chart-1: #1268b3;
+  --ring: rgba(47, 111, 159, 0.32);
+  --chart-1: #2f6f9f;
   --chart-2: #8ab7df;
   --chart-3: #c0332a;
-  --chart-4: #26324a;
+  --chart-4: #2f3a4d;
   --chart-5: #1f9d6a;
   --sidebar: #ffffff;
-  --sidebar-foreground: #26324a;
-  --sidebar-primary: #1268b3;
+  --sidebar-foreground: #2f3a4d;
+  --sidebar-primary: #2f6f9f;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef6ff;
-  --sidebar-accent-foreground: #1268b3;
+  --sidebar-accent: #edf4f7;
+  --sidebar-accent-foreground: #2f6f9f;
   --sidebar-border: #d8e1ef;
-  --sidebar-ring: rgba(18, 104, 179, 0.32);
-  --legacy-highlight-surface: #eef6ff;
+  --sidebar-ring: rgba(47, 111, 159, 0.32);
+  --legacy-highlight-surface: #edf4f7;
   --legacy-highlight-border: #c9d6e8;
-  --legacy-highlight-foreground: #1268b3;
-  --legacy-strong-surface: #1268b3;
-  --legacy-strong-surface-hover: #0f5797;
+  --legacy-highlight-foreground: #2f6f9f;
+  --legacy-strong-surface: #2f6f9f;
+  --legacy-strong-surface-hover: #285f87;
   --legacy-strong-foreground: #ffffff;
   --legacy-soft-surface: #ffffff;
   --legacy-soft-border: #d8e1ef;
@@ -115,7 +115,7 @@
   --bauhaus-paper: #101010;
   --bauhaus-panel: #171717;
   --bauhaus-yellow: #f2cf27;
-  --bauhaus-blue: #3f8ad8;
+  --bauhaus-blue: #78a7c3;
   --bauhaus-red: #ff6258;
   --bauhaus-green: #46b783;
   --bauhaus-shadow: #f2cf27;
@@ -126,7 +126,7 @@
   --card-foreground: #f5f5f7;
   --popover: #171717;
   --popover-foreground: #f5f5f7;
-  --primary: #3f8ad8;
+  --primary: #78a7c3;
   --primary-foreground: #06111f;
   --secondary: #171717;
   --secondary-foreground: #f5f5f7;
@@ -138,14 +138,14 @@
   --border: rgba(242, 207, 39, 0.24);
   --input: rgba(255, 255, 255, 0.18);
   --ring: rgba(242, 207, 39, 0.48);
-  --chart-1: #3f8ad8;
+  --chart-1: #78a7c3;
   --chart-2: #f2cf27;
   --chart-3: #ff6258;
   --chart-4: #f5f5f7;
   --chart-5: #46b783;
   --sidebar: #171717;
   --sidebar-foreground: #f5f5f7;
-  --sidebar-primary: #3f8ad8;
+  --sidebar-primary: #78a7c3;
   --sidebar-primary-foreground: #06111f;
   --sidebar-accent: #f2cf27;
   --sidebar-accent-foreground: #111111;
@@ -154,8 +154,8 @@
   --legacy-highlight-surface: #f2cf27;
   --legacy-highlight-border: #f2cf27;
   --legacy-highlight-foreground: #111111;
-  --legacy-strong-surface: #3f8ad8;
-  --legacy-strong-surface-hover: #5ba1e8;
+  --legacy-strong-surface: #78a7c3;
+  --legacy-strong-surface-hover: #8bb8cf;
   --legacy-strong-foreground: #06111f;
   --legacy-soft-surface: #171717;
   --legacy-soft-border: rgba(242, 207, 39, 0.24);
@@ -279,13 +279,13 @@
   }
 
   .bauhaus-status-chip--info {
-    background: #eef6ff;
-    color: #1268b3;
+    background: #edf4f7;
+    color: #2f6f9f;
   }
 
   .bauhaus-status-chip--progress {
-    background: #eef6ff;
-    color: #1268b3;
+    background: #edf4f7;
+    color: #2f6f9f;
   }
 
   .bauhaus-status-chip--success {
@@ -388,8 +388,8 @@
   .bg-\[\#f2cf27\],
   .hover\:bg-\[\#f2cf27\]:hover,
   .dark .dark\:bg-\[\#f2cf27\] {
-    background-color: #eef6ff !important;
-    color: #1268b3 !important;
+    background-color: #edf4f7 !important;
+    color: #2f6f9f !important;
   }
 
   .flip-card {

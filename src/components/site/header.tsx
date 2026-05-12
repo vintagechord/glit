@@ -5,13 +5,15 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
+import { ResultCheckButton } from "@/features/track/result-check-button";
 
 import { SiteLogo } from "./site-logo";
 
 const navLinks = [
-  { label: "심의 신청", href: "/dashboard/new", match: "prefix" as const },
-  { label: "결과 확인", href: "/dashboard", match: "exact" as const },
-  { label: "서식", href: "/forms", match: "prefix" as const },
+  { label: "음반심의", href: "/dashboard/new/album", match: "prefix" as const },
+  { label: "뮤비심의", href: "/dashboard/new/mv", match: "prefix" as const },
+  { label: "결과 확인", href: "/dashboard", match: "exact" as const, action: "result" as const },
+  { label: "구버전(이메일) 접수", href: "/forms", match: "prefix" as const },
 ];
 
 const authStorageKey = "onside:header-auth-state";
@@ -23,9 +25,9 @@ const navLinkClass =
 const mobileNavLinkClass =
   "inline-flex min-h-10 items-center justify-center border-b-2 border-transparent px-2 py-2 text-center text-[12px] font-semibold leading-tight tracking-normal transition";
 const subtleButtonClass =
-  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border border-[#c9d6e8] bg-white px-3 text-[12px] font-semibold tracking-normal text-[#26324a] transition hover:border-[#1268b3] hover:text-[#1268b3] dark:border-white/16 dark:bg-[#111827] dark:text-white dark:hover:border-[#8bc3ff] sm:h-11 sm:px-4 sm:text-[14px]";
+  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border border-[#c9d6e8] bg-white px-3 text-[12px] font-semibold tracking-normal text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/16 dark:bg-[#111827] dark:text-white dark:hover:border-[#a9c8dc] sm:h-11 sm:px-4 sm:text-[14px]";
 const primaryButtonClass =
-  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] bg-[#1268b3] px-3 text-[12px] font-semibold tracking-normal text-white transition hover:bg-[#0f5797] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:hover:bg-[#5ba1e8] sm:h-11 sm:px-4 sm:text-[14px]";
+  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] bg-[#2f6f9f] px-3 text-[12px] font-semibold tracking-normal text-white transition hover:bg-[#285f87] dark:bg-[#78a7c3] dark:text-[#06111f] dark:hover:bg-[#8bb8cf] sm:h-11 sm:px-4 sm:text-[14px]";
 
 const isActivePath = (
   pathname: string,
@@ -135,15 +137,25 @@ export function SiteHeader() {
         <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 lg:flex">
           {navLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
+            const linkClass = `${navLinkClass} ${
+              activeLink
+                ? "border-[#2f6f9f] text-[#2f6f9f] dark:border-[#a9c8dc] dark:text-[#a9c8dc]"
+                : "text-[#667085] hover:border-[#c9d6e8] hover:text-[#2f3a4d] dark:text-white/70 dark:hover:border-white/24 dark:hover:text-white"
+            }`;
+            if ("action" in link && link.action === "result") {
+              return (
+                <ResultCheckButton
+                  key={link.href}
+                  label={link.label}
+                  className={linkClass}
+                />
+              );
+            }
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`${navLinkClass} ${
-                  activeLink
-                    ? "border-[#1268b3] text-[#1268b3] dark:border-[#8bc3ff] dark:text-[#8bc3ff]"
-                    : "text-[#667085] hover:border-[#c9d6e8] hover:text-[#26324a] dark:text-white/70 dark:hover:border-white/24 dark:hover:text-white"
-                }`}
+                className={linkClass}
               >
                 <span>{link.label}</span>
               </Link>
@@ -177,18 +189,28 @@ export function SiteHeader() {
       </div>
 
       <nav className="border-t border-[#edf1f7] px-3 py-2.5 lg:hidden dark:border-white/10">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-3 gap-1.5 sm:gap-2">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-4 gap-1.5 sm:gap-2">
           {navLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
+            const linkClass = `${mobileNavLinkClass} ${
+              activeLink
+                ? "border-[#2f6f9f] text-[#2f6f9f] dark:border-[#a9c8dc] dark:text-[#a9c8dc]"
+                : "bg-transparent text-[#667085] hover:border-[#c9d6e8] hover:text-[#2f3a4d] dark:text-white/70 dark:hover:border-white/24 dark:hover:text-white"
+            }`;
+            if ("action" in link && link.action === "result") {
+              return (
+                <ResultCheckButton
+                  key={link.href}
+                  label={link.label}
+                  className={linkClass}
+                />
+              );
+            }
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`${mobileNavLinkClass} ${
-                  activeLink
-                    ? "border-[#1268b3] text-[#1268b3] dark:border-[#8bc3ff] dark:text-[#8bc3ff]"
-                    : "bg-transparent text-[#667085] hover:border-[#c9d6e8] hover:text-[#26324a] dark:text-white/70 dark:hover:border-white/24 dark:hover:text-white"
-                }`}
+                className={linkClass}
               >
                 <span>{link.label}</span>
               </Link>

@@ -33,10 +33,10 @@ export default async function MvSubmissionPage() {
     <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-[#1268b3] dark:text-[#8bc3ff]">
+          <p className="text-sm font-semibold text-[#2f6f9f] dark:text-[#a9c8dc]">
             MV Review
           </p>
-          <h1 className="mt-4 text-3xl font-semibold text-[#26324a] dark:text-white">
+          <h1 className="mt-4 text-3xl font-semibold text-[#2f3a4d] dark:text-white">
             MV 심의 접수
           </h1>
           <p className="mt-3 break-keep text-base text-[#667085] dark:text-white/64">
@@ -50,7 +50,7 @@ export default async function MvSubmissionPage() {
         <p className="text-sm font-semibold tracking-normal text-[#667085] dark:text-white/64">
           접수 전 참고사항
         </p>
-        <h2 className="mt-2 text-2xl font-semibold text-[#26324a] dark:text-white">
+        <h2 className="mt-2 text-2xl font-semibold text-[#2f3a4d] dark:text-white">
           뮤직비디오 심의, 이것만 확인하세요
         </h2>
         <ul className="mt-4 space-y-2 text-base text-[#667085] dark:text-white/64">

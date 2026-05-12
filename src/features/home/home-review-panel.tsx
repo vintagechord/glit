@@ -742,8 +742,8 @@ export function HomeReviewPanel({
             type="button"
             onClick={() => setTab("album")}
             className={`flex-1 rounded-[8px] border px-3 py-2 transition ${tab === "album"
-                ? "border-[#1268b3] bg-[#eef6ff] text-[#1268b3]"
-                : "border-[#d8e1ef] bg-white text-[#667085] hover:border-[#1268b3] hover:text-[#1268b3] dark:border-white/10 dark:bg-[#0f172a] dark:text-white/64 dark:hover:border-[#8bc3ff] dark:hover:text-[#8bc3ff]"
+                ? "border-[#2f6f9f] bg-[#edf4f7] text-[#2f6f9f]"
+                : "border-[#d8e1ef] bg-white text-[#667085] hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/10 dark:bg-[#0f172a] dark:text-white/64 dark:hover:border-[#a9c8dc] dark:hover:text-[#a9c8dc]"
               }`}
           >
             앨범
@@ -754,8 +754,8 @@ export function HomeReviewPanel({
             type="button"
             onClick={() => setTab("mv")}
             className={`flex-1 rounded-[8px] border px-3 py-2 transition ${tab === "mv"
-                ? "border-[#1268b3] bg-[#eef6ff] text-[#1268b3]"
-                : "border-[#d8e1ef] bg-white text-[#667085] hover:border-[#1268b3] hover:text-[#1268b3] dark:border-white/10 dark:bg-[#0f172a] dark:text-white/64 dark:hover:border-[#8bc3ff] dark:hover:text-[#8bc3ff]"
+                ? "border-[#2f6f9f] bg-[#edf4f7] text-[#2f6f9f]"
+                : "border-[#d8e1ef] bg-white text-[#667085] hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/10 dark:bg-[#0f172a] dark:text-white/64 dark:hover:border-[#a9c8dc] dark:hover:text-[#a9c8dc]"
               }`}
           >
             뮤직비디오
@@ -856,11 +856,11 @@ export function HomeReviewPanel({
                   />
                 </div>
                 {needsPayment && activeSubmission ? (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/8 px-3 py-2 text-xs font-semibold text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/8 px-3 py-2 text-xs font-semibold text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]">
                     <span>결제 완료 후 심의가 진행됩니다.</span>
                     <Link
                       href={`/dashboard/pay/${activeSubmission.id}`}
-                      className="rounded-[8px] bg-[#1268b3] px-3 py-1.5 text-[11px] font-semibold tracking-normal text-white transition hover:bg-[#0f5797]"
+                      className="rounded-[8px] bg-[#2f6f9f] px-3 py-1.5 text-[11px] font-semibold tracking-normal text-white transition hover:bg-[#285f87]"
                     >
                       결제하기
                     </Link>
@@ -887,7 +887,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handlePrev}
                 disabled={needsPayment || !canScrollUp}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#1268b3] bg-[#1268b3] text-sm font-bold text-white transition hover:bg-[#0f5797] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#2f6f9f] bg-[#2f6f9f] text-sm font-bold text-white transition hover:bg-[#285f87] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-45"
                 aria-label="이전 심의 진행 상태"
               >
                 ↑
@@ -896,7 +896,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handleNext}
                 disabled={needsPayment || !canScrollDown}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#1268b3] bg-[#1268b3] text-sm font-bold text-white transition hover:bg-[#0f5797] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#2f6f9f] bg-[#2f6f9f] text-sm font-bold text-white transition hover:bg-[#285f87] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-45"
                 aria-label="다음 심의 진행 상태"
               >
                 ↓

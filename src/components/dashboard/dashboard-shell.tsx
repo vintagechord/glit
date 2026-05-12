@@ -40,10 +40,10 @@ export function DashboardShell({
       <div className="relative flex flex-wrap items-start justify-between gap-4 border-b border-[#d8e1ef] pb-6 dark:border-white/10">
         <div className="flex flex-col gap-3">
           <div>
-            <p className="text-sm font-semibold text-[#1268b3] dark:text-[#8bc3ff]">
+            <p className="text-sm font-semibold text-[#2f6f9f] dark:text-[#a9c8dc]">
               {contextLabel}
             </p>
-            <h1 className="mt-3 text-2xl font-semibold leading-tight text-[#26324a] dark:text-white sm:text-3xl">
+            <h1 className="mt-3 text-2xl font-semibold leading-tight text-[#2f3a4d] dark:text-white sm:text-3xl">
               {title}
             </h1>
             {description ? (
@@ -64,8 +64,8 @@ export function DashboardShell({
               href={tab.href}
               className={`shrink-0 rounded-[8px] border-2 px-4 py-2 transition ${
                 activeTab === tab.key
-                  ? "border-[#1268b3] bg-[#eef6ff] text-[#1268b3] dark:border-[#8bc3ff] dark:bg-white/8 dark:text-[#8bc3ff]"
-                  : "border-[#d8e1ef] bg-white text-[#667085] hover:border-[#1268b3] hover:text-[#1268b3] dark:border-white/10 dark:bg-[#111827] dark:text-white/64 dark:hover:border-[#8bc3ff] dark:hover:text-[#8bc3ff]"
+                  ? "border-[#2f6f9f] bg-[#edf4f7] text-[#2f6f9f] dark:border-[#a9c8dc] dark:bg-white/8 dark:text-[#a9c8dc]"
+                  : "border-[#d8e1ef] bg-white text-[#667085] hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/10 dark:bg-[#111827] dark:text-white/64 dark:hover:border-[#a9c8dc] dark:hover:text-[#a9c8dc]"
               }`}
             >
               {tab.label}

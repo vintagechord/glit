@@ -3,150 +3,110 @@ import Link from "next/link";
 import { APP_CONFIG } from "@/lib/config";
 
 export const metadata = {
-  title: "신청서(구양식)",
+  title: "구버전(이메일) 접수",
 };
 
+const albumForms = [
+  {
+    label: "HWP",
+    title: "음반 심의 신청서",
+    href:
+      "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_music_application_hangul_form(2026).hwp",
+  },
+  {
+    label: "Word",
+    title: "음반 심의 신청서",
+    href:
+      "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_music_application_word_form(2026).doc",
+  },
+];
+
+const mvForms = [
+  {
+    label: "HWP",
+    title: "M/V 심의 신청서",
+    href:
+      "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_MVapplication_hangul_form(2026).hwp",
+  },
+  {
+    label: "Word",
+    title: "M/V 심의 신청서",
+    href:
+      "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_MVapplication_word_form(2026).doc",
+  },
+];
+
+const formGroups = [
+  {
+    eyebrow: "음반 심의",
+    title: "음반 심의 신청서",
+    description: "음반 심의용 신청서를 내려받습니다.",
+    forms: albumForms,
+  },
+  {
+    eyebrow: "M/V 심의",
+    title: "M/V 심의 신청서",
+    description: "뮤직비디오 심의용 신청서를 내려받습니다.",
+    forms: mvForms,
+  },
+];
+
 export default function FormsPage() {
-  const albumForms = [
-    {
-      label: "HWP",
-      title: "음반 심의 신청서 (한글)",
-      href:
-        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_music_application_hangul_form(2026).hwp",
-    },
-    {
-      label: "Word",
-      title: "음반 심의 신청서 (Word)",
-      href:
-        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_music_application_word_form(2026).doc",
-    },
-  ];
-
-  const mvForms = [
-    {
-      label: "HWP",
-      title: "M/V 심의 신청서 (한글)",
-      href:
-        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_MVapplication_hangul_form(2026).hwp",
-    },
-    {
-      label: "Word",
-      title: "M/V 심의 신청서 (Word)",
-      href:
-        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_MVapplication_word_form(2026).doc",
-    },
-  ];
-
   return (
-    <div className="page-centered mx-auto w-full max-w-5xl px-6 py-12">
-      <p className="bauhaus-kicker">
-        Forms
+    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+      <p className="text-sm font-semibold text-[#2f6f9f]">
+        Legacy Email Submission
       </p>
-      <h1 className="font-display mt-4 text-3xl font-black text-foreground">
-        신청서 다운로드 및 이메일 접수{" "}
-        <span className="text-base text-muted-foreground">(구양식)</span>
+      <h1 className="mt-3 text-2xl font-semibold text-[#2f3a4d] sm:text-3xl">
+        구버전(이메일) 접수
       </h1>
-      <p className="mt-4 max-w-3xl text-base font-semibold leading-relaxed text-muted-foreground">
-        신청서를 직접 다운받아 작성 후 이메일로 접수하는 방식이 편한 분들을 위한 접수
-        페이지입니다.
-        <span className="mt-2 block">
-          다운받은 신청서를 작성 후{" "}
-          <span className="font-semibold text-foreground">
-            이메일로 음원과 함께 보내주시면
-          </span>{" "}
-          <span className="font-semibold text-foreground">
-            온라인 접수와 동일하게 심의진행
-          </span>
-          이 됩니다.
-        </span>
+      <p className="mt-3 max-w-2xl break-keep text-sm leading-6 text-[#667085]">
+        신청서를 내려받아 작성한 뒤 이메일로 보내는 방식입니다. 온라인 접수와
+        동일하게 심의가 진행됩니다.
       </p>
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <Link
-          href="https://onside17.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-2 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27]"
-        >
-          구버전 사이트에서 접수
-          <span aria-hidden>↗</span>
-        </Link>
-        <span className="text-xs text-muted-foreground">
-          구버전 사이트에서의 접수 또한 동일하게 심의 접수 진행이 가능하며, 결과 안내 페이지는 따로 드립니다.
-        </span>
+      <div className="mt-7 grid gap-4 lg:grid-cols-2">
+        {formGroups.map((group) => (
+          <section
+            key={group.title}
+            className="rounded-[8px] border border-[#d8e1ef] bg-white p-5 sm:p-6"
+          >
+            <p className="text-xs font-semibold text-[#667085]">
+              {group.eyebrow}
+            </p>
+            <h2 className="mt-3 text-xl font-semibold text-[#2f3a4d]">
+              {group.title}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-[#667085]">
+              {group.description}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {group.forms.map((form) => (
+                <Link
+                  key={form.href}
+                  href={form.href}
+                  className="inline-flex h-10 items-center rounded-[8px] border border-[#c9d6e8] px-4 text-sm font-semibold text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f]"
+                >
+                  {form.label} 다운로드
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <section className="group relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-6 text-foreground shadow-[6px_6px_0_#111111] transition hover:-translate-y-1 dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-          <div aria-hidden="true" className="absolute right-0 top-0 h-12 w-12 bg-[#f2cf27]" />
-          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-            음반 심의
-          </p>
-          <h2 className="mt-3 text-xl font-black">
-            음반 심의 신청서
-          </h2>
-          <p className="mt-2 text-sm font-semibold text-muted-foreground">
-            음반 심의용 신청서를 다운로드하여 작성하세요.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            {albumForms.map((form) => (
-              <Link
-                key={form.href}
-                href={form.href}
-                className="inline-flex rounded-[8px] border-2 border-[#111111] bg-white px-5 py-2 text-xs font-black uppercase tracking-normal text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
-              >
-                {form.label} 다운로드
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="group relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-6 text-foreground shadow-[6px_6px_0_#111111] transition hover:-translate-y-1 dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-          <div aria-hidden="true" className="absolute right-0 top-0 h-12 w-12 bg-[#1556a4]" />
-          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-            M/V 심의
-          </p>
-          <h2 className="mt-3 text-xl font-black">
-            M/V 심의 신청서
-          </h2>
-          <p className="mt-2 text-sm font-semibold text-muted-foreground">
-            M/V 심의용 신청서를 다운로드하여 작성하세요.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            {mvForms.map((form) => (
-              <Link
-                key={form.href}
-                href={form.href}
-                className="inline-flex rounded-[8px] border-2 border-[#111111] bg-white px-5 py-2 text-xs font-black uppercase tracking-normal text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
-              >
-                {form.label} 다운로드
-              </Link>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <div className="mt-8 rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-6 text-sm text-black shadow-[6px_6px_0_#111111] dark:shadow-[6px_6px_0_#f2cf27]">
-        <div className="flex flex-wrap items-start gap-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white text-base font-black text-black live-blink">
-            !
-          </div>
-          <div className="space-y-2">
-            <p className="text-xs font-black uppercase tracking-normal text-black">
-              필독
-            </p>
-            <p className="text-sm font-semibold text-slate-900">
-              작성 완료된 신청서와 음원/영상 파일을 이메일{" "}
-              <span className="font-bold text-slate-900">
-                {APP_CONFIG.supportEmail}
-              </span>
-              로 보내주시면 접수 안내를 드립니다.
-            </p>
-            <p className="text-xs text-black/80">
-              신청서와 음원/영상 파일을 모두 보내셔야 접수가 가능합니다.
-            </p>
-          </div>
-        </div>
+      <div className="mt-5 rounded-[8px] border border-[#cbdde8] bg-[#edf4f7] p-5 text-sm leading-6 text-[#526071]">
+        <p className="font-semibold text-[#2f3a4d]">이메일 접수 방법</p>
+        <p className="mt-1">
+          작성한 신청서와 음원/영상 파일을{" "}
+          <a
+            href={`mailto:${APP_CONFIG.supportEmail}`}
+            className="font-semibold text-[#2f6f9f] underline underline-offset-2"
+          >
+            {APP_CONFIG.supportEmail}
+          </a>
+          로 보내주세요.
+        </p>
       </div>
     </div>
   );

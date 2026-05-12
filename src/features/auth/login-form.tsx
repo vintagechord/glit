@@ -19,7 +19,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
     return (
       <button
         type="submit"
-        className="h-12 w-full rounded-[8px] bg-[#1268b3] px-5 text-sm font-semibold text-white transition hover:bg-[#0f5797] disabled:cursor-not-allowed disabled:opacity-70"
+        className="h-12 w-full rounded-[8px] bg-[#2f6f9f] px-5 text-sm font-semibold text-white transition hover:bg-[#285f87] disabled:cursor-not-allowed disabled:opacity-70"
         disabled={pending}
       >
         {pending ? (
@@ -39,7 +39,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
       <form action={formAction} className="space-y-5">
         {nextPath ? <input type="hidden" name="next" value={nextPath} /> : null}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-[#26324a] dark:text-white">
+          <label className="text-sm font-semibold text-[#2f3a4d] dark:text-white">
             이메일
           </label>
           <input
@@ -51,14 +51,14 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
             onChange={(event) => {
               setEmailValue(event.target.value);
             }}
-            className="w-full rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-3 text-sm text-[#26324a] outline-none transition focus:border-[#1268b3] dark:border-white/16 dark:bg-[#0f172a] dark:text-white"
+            className="w-full rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-3 text-sm text-[#2f3a4d] outline-none transition focus:border-[#2f6f9f] dark:border-white/16 dark:bg-[#0f172a] dark:text-white"
           />
           {state.fieldErrors?.email && (
             <p className="text-xs text-red-500">{state.fieldErrors.email}</p>
           )}
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-[#26324a] dark:text-white">
+          <label className="text-sm font-semibold text-[#2f3a4d] dark:text-white">
             비밀번호
           </label>
           <input
@@ -66,7 +66,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
             type="password"
             autoComplete="current-password"
             required
-            className="w-full rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-3 text-sm text-[#26324a] outline-none transition focus:border-[#1268b3] dark:border-white/16 dark:bg-[#0f172a] dark:text-white"
+            className="w-full rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-3 text-sm text-[#2f3a4d] outline-none transition focus:border-[#2f6f9f] dark:border-white/16 dark:bg-[#0f172a] dark:text-white"
           />
           {state.fieldErrors?.password && (
             <p className="text-xs text-red-500">{state.fieldErrors.password}</p>
@@ -83,7 +83,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
         <div className="flex justify-center">
           <Link
             href="/forgot-password"
-            className="inline-flex w-full justify-center rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-2 text-xs font-semibold text-[#26324a] transition hover:border-[#1268b3] hover:text-[#1268b3] dark:border-white/16 dark:bg-[#111827] dark:text-white sm:w-auto"
+            className="inline-flex w-full justify-center rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-2 text-xs font-semibold text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/16 dark:bg-[#111827] dark:text-white sm:w-auto"
           >
             비밀번호 찾기
           </Link>
@@ -94,7 +94,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
         <TrackLookupModalTrigger
           label="코드입력"
           modalTitle="비회원 코드 입력"
-          className="inline-flex items-center rounded-[8px] border border-[#c9d6e8] bg-white px-3 py-1 text-xs font-semibold text-[#26324a] transition hover:border-[#1268b3] hover:text-[#1268b3]"
+          className="inline-flex items-center rounded-[8px] border border-[#c9d6e8] bg-white px-3 py-1 text-xs font-semibold text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f]"
         />
         <span> 으로 확인 가능합니다.</span>
       </div>

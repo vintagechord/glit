@@ -188,10 +188,10 @@ const onlineOptionConfirmNote =
   "위 내용을 확인하셨다면 [확인]을 눌러주세요.";
 
 const mvOptionToneClasses = [
-  "border-[#1268b3] bg-[#eef6ff] text-[#26324a] dark:border-[#8bc3ff] dark:bg-[#8bc3ff]/10 dark:text-white",
-  "border-[#1268b3] bg-[#eef6ff] text-[#26324a] dark:border-[#8bc3ff] dark:bg-[#8bc3ff]/10 dark:text-white",
-  "border-[#1268b3] bg-[#eef6ff] text-[#26324a] dark:border-[#8bc3ff] dark:bg-[#8bc3ff]/10 dark:text-white",
-  "border-[#1268b3] bg-[#eef6ff] text-[#26324a] dark:border-[#8bc3ff] dark:bg-[#8bc3ff]/10 dark:text-white",
+  "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
+  "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
+  "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
+  "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
 ];
 
 type BroadcastSpecFields = {
@@ -3106,7 +3106,7 @@ export function MvWizard({
                   </button>
                 </div>
                 {showLyricsToolNotice && (
-                  <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
+                  <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#a9c8dc]">
                     위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
                     체크해주세요.
                   </div>
@@ -3119,14 +3119,14 @@ export function MvWizard({
 	                    ? "border-red-200/70 bg-red-50 text-red-700"
 	                    : lyricsToolNotice.type === "success"
 	                      ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
-	                      : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
+	                      : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]"
 	                  }`}
 	              >
 	                {lyricsToolNotice.message}
 	              </div>
 	            )}
 	            {spellcheckResult && (
-	              <div className="mt-3 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs leading-5 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+	              <div className="mt-3 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs leading-5 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]">
 	                <p className="font-semibold">
 	                  맞춤법 검사는 참고용입니다. 실제 제출 가사는 변경되지 않습니다.
 	                </p>
@@ -3379,7 +3379,7 @@ export function MvWizard({
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
-                    ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
+                    ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#78a7c3] dark:text-[#06111f]"
                     : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                   }`}
               >
@@ -3387,7 +3387,7 @@ export function MvWizard({
                   <span
                     aria-hidden="true"
                     className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${emailSubmitConfirmed
-                        ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#3f8ad8]"
+                        ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#78a7c3]"
                         : "border-current"
                       }`}
                   >
@@ -3402,7 +3402,7 @@ export function MvWizard({
                 <p className="text-xs font-semibold text-muted-foreground">
                   아래 이메일 주소로 영상 파일을 보내주세요.
                 </p>
-                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
+                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#a9c8dc]">
                   {APP_CONFIG.supportEmail}
                 </p>
               </div>
@@ -3910,7 +3910,7 @@ export function MvWizard({
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
 	          {notice.emailWarning ? (
-	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]">
 	              {notice.emailWarning}
 	            </div>
           ) : null}

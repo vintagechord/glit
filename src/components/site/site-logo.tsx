@@ -31,7 +31,7 @@ export function SiteLogo({
   const textLogo = (
     <span
       className={cn(
-        "inline-flex flex-col leading-none text-[#1268b3] dark:text-[#8bc3ff]",
+        "inline-flex flex-col leading-none text-[#2f6f9f] dark:text-[#a9c8dc]",
         className,
       )}
       style={sizeStyle}
