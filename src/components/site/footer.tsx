@@ -380,45 +380,45 @@ export function SiteFooter() {
   }, [pathname]);
 
   return (
-    <footer className="border-t-2 border-[#111111] bg-[#111111] text-[#f7f5ef] dark:border-[#f2cf27] dark:bg-[#0b0b0b]">
+    <footer className="border-t border-[#d8e1ef] bg-white text-[#526071] dark:border-white/10 dark:bg-[#0f172a] dark:text-white/64">
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-        <div className="grid gap-6 border-b-2 border-[#f2cf27] pb-6 md:grid-cols-2">
+        <div className="grid gap-6 border-b border-[#edf1f7] pb-6 dark:border-white/10 md:grid-cols-2">
           <div className="space-y-3">
-            <p className="w-fit bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-[#111111]">
+            <p className="w-fit rounded-[4px] bg-[#eef6ff] px-3 py-1 text-xs font-semibold uppercase tracking-normal text-[#1268b3]">
               CS CENTER
             </p>
-            <p className="text-xl font-black text-white sm:text-2xl">
-              <a href={`tel:${contactPhone}`} className="underline-offset-2 hover:text-[#f2cf27] hover:underline">
+            <p className="text-xl font-semibold text-[#26324a] dark:text-white sm:text-2xl">
+              <a href={`tel:${contactPhone}`} className="underline-offset-2 hover:text-[#1268b3] hover:underline">
                 {contactPhone}
               </a>
             </p>
-            <p className="text-base font-medium text-white/86">
+            <p className="text-base font-medium text-[#526071] dark:text-white/72">
               이메일{" "}
-              <a href={`mailto:${contactEmail}`} className="underline-offset-2 hover:text-[#f2cf27] hover:underline">
+              <a href={`mailto:${contactEmail}`} className="underline-offset-2 hover:text-[#1268b3] hover:underline">
                 {contactEmail}
               </a>
             </p>
-            <p className="text-base font-medium text-white/72">
+            <p className="text-base font-medium text-[#667085] dark:text-white/56">
               상담시간 {APP_CONFIG.supportHours}
             </p>
           </div>
           <div className="space-y-3">
-            <p className="w-fit bg-[#1556a4] px-3 py-1 text-xs font-black uppercase tracking-normal text-white">
+            <p className="w-fit rounded-[4px] bg-[#1268b3] px-3 py-1 text-xs font-semibold uppercase tracking-normal text-white">
               BANK INFO
             </p>
-            <p className="text-base font-medium text-white/86">
+            <p className="text-base font-medium text-[#526071] dark:text-white/72">
               {bankName} {bankAccount}
             </p>
-            <p className="text-base font-medium text-white/72">
+            <p className="text-base font-medium text-[#667085] dark:text-white/56">
               예금주:{" "}
-              <span className="font-semibold text-white">
+              <span className="font-semibold text-[#26324a] dark:text-white">
                 {bankHolder}
               </span>
             </p>
             {APP_CONFIG.bankLink ? (
               <Link
                 href={APP_CONFIG.bankLink}
-                className="inline-flex items-center rounded-[8px] border-2 border-[#f7f5ef] bg-[#f2cf27] px-4 py-2 text-sm font-black text-[#111111] transition hover:-translate-y-0.5 hover:bg-white"
+                className="inline-flex items-center rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-2 text-sm font-semibold text-[#26324a] transition hover:border-[#1268b3] hover:text-[#1268b3]"
               >
                 인터넷뱅킹 바로가기
               </Link>
@@ -426,37 +426,37 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 border-b-2 border-white/12 py-4 text-sm font-black text-white/78">
-          <Link href="/about" className="transition hover:text-[#f2cf27]">
+        <div className="flex flex-wrap gap-4 border-b border-[#edf1f7] py-4 text-sm font-semibold text-[#526071] dark:border-white/10 dark:text-white/64">
+          <Link href="/about" className="transition hover:text-[#1268b3]">
             About Us
           </Link>
-          <Link href="/guide" className="transition hover:text-[#f2cf27]">
+          <Link href="/guide" className="transition hover:text-[#1268b3]">
             심의 안내
           </Link>
           <button
             type="button"
             onClick={() => setActiveModal("terms")}
-            className="transition hover:text-[#f2cf27]"
+            className="transition hover:text-[#1268b3]"
           >
             이용약관
           </button>
           <button
             type="button"
             onClick={() => setActiveModal("privacy")}
-            className="transition hover:text-[#f2cf27]"
+            className="transition hover:text-[#1268b3]"
           >
             개인정보처리방침
           </button>
           <button
             type="button"
             onClick={() => setActiveModal("partnership")}
-            className="transition hover:text-[#f2cf27]"
+            className="transition hover:text-[#1268b3]"
           >
             제휴안내
           </button>
         </div>
 
-        <div className="space-y-3 pt-4 text-sm font-medium text-white/72">
+        <div className="space-y-3 pt-4 text-sm font-medium text-[#667085] dark:text-white/56">
           <div className="grid gap-1 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-1">
             <p>회사명: {APP_CONFIG.businessName}</p>
             <p>대표자: {APP_CONFIG.businessRep}</p>
@@ -465,7 +465,7 @@ export function SiteFooter() {
               전화:{" "}
               <a
                 href={`tel:${APP_CONFIG.supportPhone}`}
-                className="underline-offset-2 hover:text-[#f2cf27] hover:underline"
+                className="underline-offset-2 hover:text-[#1268b3] hover:underline"
               >
                 {APP_CONFIG.supportPhone}
               </a>
@@ -474,7 +474,7 @@ export function SiteFooter() {
               이메일:{" "}
               <a
                 href={`mailto:${APP_CONFIG.supportEmail}`}
-                className="underline-offset-2 hover:text-[#f2cf27] hover:underline"
+                className="underline-offset-2 hover:text-[#1268b3] hover:underline"
               >
                 {APP_CONFIG.supportEmail}
               </a>
@@ -484,7 +484,7 @@ export function SiteFooter() {
             <p>개인정보 보호책임자: {APP_CONFIG.privacyOfficer}</p>
             <p>호스팅 제공자: {APP_CONFIG.hostingProvider}</p>
           </div>
-          <p className="text-white/52">
+          <p className="text-[#8a94a6] dark:text-white/40">
             Copyright © {APP_CONFIG.businessName}. All Rights Reserved.
           </p>
         </div>

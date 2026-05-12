@@ -149,20 +149,20 @@ const formatPackageDescription = (
 
 const packageToneClasses = [
   {
-    card: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
-    chip: "border-[#111111]/30 bg-white/45 text-[#111111]",
+    card: "border-[#1268b3] bg-[#eef6ff] text-[#26324a] dark:border-[#8bc3ff] dark:bg-[#8bc3ff]/10 dark:text-white",
+    chip: "border-[#b8d9f6] bg-white text-[#1268b3] dark:border-[#8bc3ff]/30 dark:bg-[#0f172a] dark:text-[#8bc3ff]",
   },
   {
-    card: "border-[#111111] bg-[#1556a4] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[6px_6px_0_#f2cf27]",
-    chip: "border-white/30 bg-white/16 text-white dark:text-[#06111f]",
+    card: "border-[#1268b3] bg-[#eef6ff] text-[#26324a] dark:border-[#8bc3ff] dark:bg-[#8bc3ff]/10 dark:text-white",
+    chip: "border-[#b8d9f6] bg-white text-[#1268b3] dark:border-[#8bc3ff]/30 dark:bg-[#0f172a] dark:text-[#8bc3ff]",
   },
   {
-    card: "border-[#111111] bg-[#d9362c] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
-    chip: "border-white/30 bg-white/16 text-white dark:text-[#111111]",
+    card: "border-[#1268b3] bg-[#eef6ff] text-[#26324a] dark:border-[#8bc3ff] dark:bg-[#8bc3ff]/10 dark:text-white",
+    chip: "border-[#b8d9f6] bg-white text-[#1268b3] dark:border-[#8bc3ff]/30 dark:bg-[#0f172a] dark:text-[#8bc3ff]",
   },
   {
-    card: "border-[#111111] bg-white text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]",
-    chip: "border-[#111111]/30 bg-[#f2cf27] text-[#111111]",
+    card: "border-[#1268b3] bg-[#eef6ff] text-[#26324a] dark:border-[#8bc3ff] dark:bg-[#8bc3ff]/10 dark:text-white",
+    chip: "border-[#b8d9f6] bg-white text-[#1268b3] dark:border-[#8bc3ff]/30 dark:bg-[#0f172a] dark:text-[#8bc3ff]",
   },
 ];
 
@@ -2590,7 +2590,7 @@ export function AlbumWizard({
                     <p className="mt-2 text-sm font-semibold">일반 접수</p>
                   </div>
                   {!isOneClick ? (
-                    <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
+                    <span className="rounded-full border border-[#1268b3] bg-[#1268b3] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
                       선택됨
                     </span>
                   ) : null}
@@ -2620,7 +2620,7 @@ export function AlbumWizard({
                     <p className="mt-2 text-sm font-semibold">원클릭 접수</p>
                   </div>
                   {isOneClick ? (
-                    <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
+                    <span className="rounded-full border border-[#1268b3] bg-[#1268b3] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
                       선택됨
                     </span>
                   ) : null}
@@ -2674,7 +2674,7 @@ export function AlbumWizard({
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {isActive ? (
-                        <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
+                        <span className="rounded-full border border-[#1268b3] bg-[#1268b3] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
                           선택됨
                         </span>
                       ) : null}

@@ -30,30 +30,30 @@ export default async function MvSubmissionPage() {
     })) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="bauhaus-kicker">
+          <p className="text-sm font-semibold text-[#1268b3] dark:text-[#8bc3ff]">
             MV Review
           </p>
-          <h1 className="font-display mt-4 text-3xl font-black text-foreground">
+          <h1 className="mt-4 text-3xl font-semibold text-[#26324a] dark:text-white">
             MV 심의 접수
           </h1>
-          <p className="mt-3 text-base font-semibold text-muted-foreground">
+          <p className="mt-3 break-keep text-base text-[#667085] dark:text-white/64">
             비회원도 접수할 수 있으며, 로그인 시 마이페이지에서 진행 상황을
             확인할 수 있습니다.
           </p>
         </div>
       </div>
 
-      <div className="relative mt-8 rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-        <p className="text-sm font-black uppercase tracking-normal text-muted-foreground">
+      <div className="relative mt-8 rounded-[8px] border border-[#d8e1ef] bg-white p-6 dark:border-white/10 dark:bg-[#111827]">
+        <p className="text-sm font-semibold tracking-normal text-[#667085] dark:text-white/64">
           접수 전 참고사항
         </p>
-        <h2 className="font-display mt-2 text-2xl font-black text-foreground">
+        <h2 className="mt-2 text-2xl font-semibold text-[#26324a] dark:text-white">
           뮤직비디오 심의, 이것만 확인하세요
         </h2>
-        <ul className="mt-4 space-y-2 text-base font-semibold text-muted-foreground">
+        <ul className="mt-4 space-y-2 text-base text-[#667085] dark:text-white/64">
           <li>TV 송출 목적은 방송국별 개별 심의가 필요합니다.</li>
           <li>온라인 업로드 목적은 기본 MV 심의로 유통/업로드 가능합니다.</li>
         </ul>

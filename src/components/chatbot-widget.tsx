@@ -79,6 +79,8 @@ export function ChatbotWidget() {
   const pageCount = Math.ceil(faqItems.length / pageSize);
   const startIndex = pageIndex * pageSize;
   const visibleItems = faqItems.slice(startIndex, startIndex + pageSize);
+  const isCoreReviewFlow =
+    pathname === "/" || pathname === "/login" || pathname.startsWith("/dashboard");
 
   const goToPage = (nextPage: number) => {
     const clamped = Math.min(Math.max(nextPage, 0), pageCount - 1);
@@ -96,6 +98,10 @@ export function ChatbotWidget() {
     setOpen(false);
     setActiveIndex(null);
   }, [pathname]);
+
+  if (isCoreReviewFlow) {
+    return null;
+  }
 
   return (
     <>

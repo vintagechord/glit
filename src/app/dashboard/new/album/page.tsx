@@ -204,7 +204,7 @@ export default async function AlbumSubmissionPage() {
     })) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
       <AlbumIntroPanel
         processHighlights={processHighlights}
         preparationChecklist={preparationChecklist}

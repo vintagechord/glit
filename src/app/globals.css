@@ -57,54 +57,54 @@
   --app-font-size: 16px;
   --app-line-height: 1.47;
   --app-letter-spacing: 0;
-  --bauhaus-ink: #111111;
-  --bauhaus-paper: #f7f5ef;
-  --bauhaus-panel: #fffaf0;
-  --bauhaus-yellow: #f2cf27;
-  --bauhaus-blue: #1556a4;
-  --bauhaus-red: #d9362c;
-  --bauhaus-green: #1f7a5a;
-  --bauhaus-shadow: #111111;
-  --bauhaus-grid: rgba(17, 17, 17, 0.055);
-  --background: #f7f5ef;
-  --foreground: #111111;
-  --card: #fffaf0;
-  --card-foreground: #111111;
+  --bauhaus-ink: #d8e1ef;
+  --bauhaus-paper: #fbfcfe;
+  --bauhaus-panel: #ffffff;
+  --bauhaus-yellow: #eef6ff;
+  --bauhaus-blue: #1268b3;
+  --bauhaus-red: #c0332a;
+  --bauhaus-green: #1f9d6a;
+  --bauhaus-shadow: rgba(15, 23, 42, 0.08);
+  --bauhaus-grid: transparent;
+  --background: #fbfcfe;
+  --foreground: #26324a;
+  --card: #ffffff;
+  --card-foreground: #26324a;
   --popover: #ffffff;
   --popover-foreground: #111111;
-  --primary: #1556a4;
+  --primary: #1268b3;
   --primary-foreground: #ffffff;
   --secondary: #ffffff;
   --secondary-foreground: #111111;
-  --muted: #ebe7de;
-  --muted-foreground: rgba(17, 17, 17, 0.64);
-  --accent: #f2cf27;
-  --accent-foreground: #111111;
-  --destructive: #d9362c;
-  --border: rgba(17, 17, 17, 0.18);
-  --input: rgba(17, 17, 17, 0.28);
-  --ring: rgba(21, 86, 164, 0.44);
-  --chart-1: #1556a4;
-  --chart-2: #f2cf27;
-  --chart-3: #d9362c;
-  --chart-4: #111111;
-  --chart-5: #1f7a5a;
-  --sidebar: #fffaf0;
-  --sidebar-foreground: #111111;
-  --sidebar-primary: #1556a4;
+  --muted: #f2f5f9;
+  --muted-foreground: #667085;
+  --accent: #eef6ff;
+  --accent-foreground: #1268b3;
+  --destructive: #c0332a;
+  --border: #d8e1ef;
+  --input: #c9d6e8;
+  --ring: rgba(18, 104, 179, 0.32);
+  --chart-1: #1268b3;
+  --chart-2: #8ab7df;
+  --chart-3: #c0332a;
+  --chart-4: #26324a;
+  --chart-5: #1f9d6a;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #26324a;
+  --sidebar-primary: #1268b3;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f2cf27;
-  --sidebar-accent-foreground: #111111;
-  --sidebar-border: rgba(17, 17, 17, 0.18);
-  --sidebar-ring: rgba(21, 86, 164, 0.44);
-  --legacy-highlight-surface: #f2cf27;
-  --legacy-highlight-border: #111111;
-  --legacy-highlight-foreground: #111111;
-  --legacy-strong-surface: #1556a4;
-  --legacy-strong-surface-hover: #0f478a;
+  --sidebar-accent: #eef6ff;
+  --sidebar-accent-foreground: #1268b3;
+  --sidebar-border: #d8e1ef;
+  --sidebar-ring: rgba(18, 104, 179, 0.32);
+  --legacy-highlight-surface: #eef6ff;
+  --legacy-highlight-border: #c9d6e8;
+  --legacy-highlight-foreground: #1268b3;
+  --legacy-strong-surface: #1268b3;
+  --legacy-strong-surface-hover: #0f5797;
   --legacy-strong-foreground: #ffffff;
-  --legacy-soft-surface: #fffaf0;
-  --legacy-soft-border: rgba(17, 17, 17, 0.2);
+  --legacy-soft-surface: #ffffff;
+  --legacy-soft-border: #d8e1ef;
 }
 
 .dark {
@@ -184,10 +184,7 @@
     letter-spacing: var(--app-letter-spacing);
     min-height: 100vh;
     font-feature-settings: "kern" 1, "liga" 1;
-    background-image:
-      linear-gradient(var(--bauhaus-grid) 1px, transparent 1px),
-      linear-gradient(90deg, var(--bauhaus-grid) 1px, transparent 1px);
-    background-size: 44px 44px;
+    background-image: none;
   }
 
   body::selection {
@@ -201,41 +198,40 @@
 
 @layer utilities {
   .bauhaus-panel {
-    border: 2px solid var(--bauhaus-ink);
-    border-radius: 10px;
+    border: 1px solid var(--bauhaus-ink);
+    border-radius: 8px;
     background: var(--card);
-    box-shadow: 6px 6px 0 var(--bauhaus-shadow);
+    box-shadow: none;
   }
 
   .bauhaus-card {
-    border: 2px solid var(--bauhaus-ink);
+    border: 1px solid var(--bauhaus-ink);
     border-radius: 8px;
     background: var(--card);
-    box-shadow: 4px 4px 0 var(--bauhaus-shadow);
+    box-shadow: none;
   }
 
   .bauhaus-kicker {
     width: fit-content;
-    border: 2px solid var(--bauhaus-ink);
-    background: var(--bauhaus-yellow);
-    color: #111111;
-    padding: 0.25rem 0.75rem;
-    font-size: 0.6875rem;
-    font-weight: 900;
+    border: 0;
+    background: transparent;
+    color: var(--bauhaus-blue);
+    padding: 0;
+    font-size: 0.8125rem;
+    font-weight: 700;
     letter-spacing: 0;
-    text-transform: uppercase;
   }
 
   .bauhaus-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid var(--bauhaus-ink);
+    border: 1px solid var(--bauhaus-blue);
     border-radius: 8px;
-    background: var(--bauhaus-yellow);
-    color: #111111;
-    box-shadow: 3px 3px 0 var(--bauhaus-shadow);
-    font-weight: 900;
+    background: var(--bauhaus-blue);
+    color: #ffffff;
+    box-shadow: none;
+    font-weight: 700;
     letter-spacing: 0;
     transition:
       transform 160ms ease,
@@ -245,8 +241,8 @@
   }
 
   .bauhaus-button:hover {
-    transform: translate(-1px, -1px);
-    box-shadow: 5px 5px 0 var(--bauhaus-shadow);
+    transform: none;
+    box-shadow: none;
   }
 
   .bauhaus-status-chip {
@@ -254,12 +250,12 @@
     min-height: 1.625rem;
     align-items: center;
     justify-content: center;
-    border: 2px solid var(--bauhaus-ink);
-    border-radius: 6px;
-    padding: 0.25rem 0.625rem;
-    box-shadow: 2px 2px 0 var(--bauhaus-shadow);
+    border: 0;
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    box-shadow: none;
     font-size: 0.75rem;
-    font-weight: 900;
+    font-weight: 700;
     line-height: 1.1;
     letter-spacing: 0;
     white-space: nowrap;
@@ -267,39 +263,39 @@
 
   .bauhaus-status-chip--compact {
     min-height: 1.375rem;
-    padding: 0.2rem 0.45rem;
-    box-shadow: 1.5px 1.5px 0 var(--bauhaus-shadow);
+    padding: 0.24rem 0.58rem;
+    box-shadow: none;
     font-size: 0.6875rem;
   }
 
   .bauhaus-status-chip--neutral {
-    background: var(--card);
-    color: var(--foreground);
+    background: #eef3f8;
+    color: #526071;
   }
 
   .bauhaus-status-chip--waiting {
-    background: var(--bauhaus-yellow);
-    color: #111111;
+    background: #f3f5f7;
+    color: #526071;
   }
 
   .bauhaus-status-chip--info {
-    background: var(--bauhaus-blue);
-    color: #ffffff;
+    background: #eef6ff;
+    color: #1268b3;
   }
 
   .bauhaus-status-chip--progress {
-    background: var(--bauhaus-blue);
-    color: #ffffff;
+    background: #eef6ff;
+    color: #1268b3;
   }
 
   .bauhaus-status-chip--success {
-    background: var(--bauhaus-green);
-    color: #ffffff;
+    background: #e9f8f1;
+    color: #137a52;
   }
 
   .bauhaus-status-chip--danger {
-    background: var(--bauhaus-red);
-    color: #ffffff;
+    background: #fff2f1;
+    color: #c0332a;
   }
 
   .dark .bauhaus-status-chip {
@@ -361,7 +357,39 @@
   [class*="shadow-[0_24px"],
   [class*="shadow-[0_28px"],
   [class*="shadow-[0_30px"] {
-    box-shadow: 5px 5px 0 var(--bauhaus-shadow) !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+  }
+
+  [class*="shadow-[2px_2px_0"],
+  [class*="shadow-[3px_3px_0"],
+  [class*="shadow-[4px_4px_0"],
+  [class*="shadow-[5px_5px_0"],
+  [class*="shadow-[6px_6px_0"],
+  [class*="shadow-[8px_8px_0"],
+  [class*="shadow-[9px_9px_0"],
+  [class*="shadow-[12px_12px_0"] {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+  }
+
+  [class*="hover:shadow-[4px_4px_0"]:hover,
+  [class*="hover:shadow-[5px_5px_0"]:hover,
+  [class*="hover:shadow-[8px_8px_0"]:hover,
+  [class*="hover:shadow-[9px_9px_0"]:hover,
+  [class*="hover:shadow-[12px_12px_0"]:hover {
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08) !important;
+  }
+
+  .border-\[\#111111\],
+  .hover\:border-\[\#111111\]:hover,
+  .dark .dark\:border-\[\#f2cf27\] {
+    border-color: #d8e1ef !important;
+  }
+
+  .bg-\[\#f2cf27\],
+  .hover\:bg-\[\#f2cf27\]:hover,
+  .dark .dark\:bg-\[\#f2cf27\] {
+    background-color: #eef6ff !important;
+    color: #1268b3 !important;
   }
 
   .flip-card {

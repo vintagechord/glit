@@ -31,14 +31,18 @@ export function SiteLogo({
   const textLogo = (
     <span
       className={cn(
-        "inline-flex items-center gap-2 text-[15px] font-black tracking-normal text-[#111111] dark:text-white sm:text-base",
+        "inline-flex flex-col leading-none text-[#1268b3] dark:text-[#8bc3ff]",
         className,
       )}
       style={sizeStyle}
       aria-hidden={showSrLabel ? "true" : undefined}
     >
-      <span className="inline-flex h-3 w-3 rounded-[2px] border-2 border-[#111111] bg-[#f2cf27] dark:border-[#f2cf27]" />
-      ONSIDE
+      <span className="text-[19px] font-semibold tracking-normal sm:text-[21px]">
+        ONSIDE
+      </span>
+      <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-normal text-[#7a8797] dark:text-white/56">
+        Review System
+      </span>
     </span>
   );
 
