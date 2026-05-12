@@ -64,8 +64,8 @@ function buildExampleState() {
     id: "sample-mv",
     title: "샘플 MV 심의",
     artist_name: "온사이드",
-    status: "WAITING_PAYMENT",
-    payment_status: "PAYMENT_PENDING",
+    status: "IN_PROGRESS",
+    payment_status: "PAID",
     updated_at: new Date(now).toISOString(),
   };
 
@@ -120,10 +120,10 @@ export function HomeSessionPanel() {
   return (
     <HomeReviewPanel
       isLoggedIn={isLoggedIn}
-      albumSubmissions={isLoggedIn ? [] : exampleState.albumSubmissions}
-      mvSubmissions={isLoggedIn ? [] : exampleState.mvSubmissions}
-      albumStationsMap={isLoggedIn ? {} : exampleState.albumStationsMap}
-      mvStationsMap={isLoggedIn ? {} : exampleState.mvStationsMap}
+      albumSubmissions={exampleState.albumSubmissions}
+      mvSubmissions={exampleState.mvSubmissions}
+      albumStationsMap={exampleState.albumStationsMap}
+      mvStationsMap={exampleState.mvStationsMap}
       enableRemoteSync={isLoggedIn}
       stationRowsPerPage={5}
       showPartialTrackBreakdown={false}

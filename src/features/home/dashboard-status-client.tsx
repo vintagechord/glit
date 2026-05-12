@@ -39,7 +39,7 @@ type StatusResponse = {
   mvStationsMap: Record<string, StationItem[]>;
 };
 
-const STATUS_CLIENT_CACHE_TTL_MS = 30_000;
+const STATUS_CLIENT_CACHE_TTL_MS = 0;
 
 const cachedStatusByUser = new Map<
   string,
@@ -84,7 +84,7 @@ async function fetchDashboardStatus(viewerId: string) {
   }
 
   const requestPromise = (async () => {
-    const res = await fetch("/api/dashboard/status", { cache: "default" });
+    const res = await fetch("/api/dashboard/status", { cache: "no-store" });
     const json = (await res.json().catch(() => null)) as
       | (StatusResponse & { error?: string })
       | null;
@@ -158,6 +158,27 @@ export function DashboardStatusClient({
       aborted = true;
     };
   }, [initialData, viewerId]);
+
+  React.useEffect(() => {
+    let aborted = false;
+    const refresh = async () => {
+      try {
+        const nextData = await fetchDashboardStatus(viewerId);
+        if (aborted) return;
+        setData(nextData);
+        setError(null);
+      } catch {
+        // Keep the last visible data during background refresh failures.
+      }
+    };
+    const intervalId = window.setInterval(refresh, 15_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      aborted = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [viewerId]);
 
   return (
     <DashboardShell

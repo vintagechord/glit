@@ -5,14 +5,13 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
-import { ResultCheckButton } from "@/features/track/result-check-button";
 
 import { SiteLogo } from "./site-logo";
 
 const navLinks = [
   { label: "음반심의", href: "/dashboard/new/album", match: "prefix" as const },
   { label: "뮤비심의", href: "/dashboard/new/mv", match: "prefix" as const },
-  { label: "결과 확인", href: "/dashboard", match: "exact" as const, action: "result" as const },
+  { label: "결과 확인", href: "/track", match: "prefix" as const },
   { label: "구버전(이메일) 접수", href: "/forms", match: "prefix" as const },
 ];
 
@@ -142,15 +141,6 @@ export function SiteHeader() {
                 ? "border-[#2f6f9f] text-[#2f6f9f] dark:border-[#a9c8dc] dark:text-[#a9c8dc]"
                 : "text-[#667085] hover:border-[#c9d6e8] hover:text-[#2f3a4d] dark:text-white/70 dark:hover:border-white/24 dark:hover:text-white"
             }`;
-            if ("action" in link && link.action === "result") {
-              return (
-                <ResultCheckButton
-                  key={link.href}
-                  label={link.label}
-                  className={linkClass}
-                />
-              );
-            }
             return (
               <Link
                 key={link.href}
@@ -197,15 +187,6 @@ export function SiteHeader() {
                 ? "border-[#2f6f9f] text-[#2f6f9f] dark:border-[#a9c8dc] dark:text-[#a9c8dc]"
                 : "bg-transparent text-[#667085] hover:border-[#c9d6e8] hover:text-[#2f3a4d] dark:text-white/70 dark:hover:border-white/24 dark:hover:text-white"
             }`;
-            if ("action" in link && link.action === "result") {
-              return (
-                <ResultCheckButton
-                  key={link.href}
-                  label={link.label}
-                  className={linkClass}
-                />
-              );
-            }
             return (
               <Link
                 key={link.href}

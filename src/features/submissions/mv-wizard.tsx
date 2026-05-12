@@ -558,12 +558,12 @@ export function MvWizard({
       const guestTokenFromMsg = payload.guestToken as string | undefined;
       if (status === "SUCCESS") {
         clearDraftStorage();
-        if (submissionFromMsg) {
-          window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=success`;
-          return;
-        }
         if (guestTokenFromMsg) {
           window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
+          return;
+        }
+        if (submissionFromMsg) {
+          window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=success`;
           return;
         }
       }
@@ -573,12 +573,12 @@ export function MvWizard({
             ? payload.message
             : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
         const paymentState = status.toLowerCase();
-        if (submissionFromMsg) {
-          window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=${paymentState}`;
-          return;
-        }
         if (guestTokenFromMsg) {
           window.location.href = `/track/${guestTokenFromMsg}?payment=${paymentState}`;
+          return;
+        }
+        if (submissionFromMsg) {
+          window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=${paymentState}`;
           return;
         }
         setNotice({ error: message });

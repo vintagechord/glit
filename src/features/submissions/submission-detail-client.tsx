@@ -349,6 +349,7 @@ export function SubmissionDetailClient({
   enableRealtime = true,
   guestToken,
   paymentState,
+  refreshIntervalMs,
 }: {
   submissionId: string;
   initialSubmission: Submission;
@@ -358,6 +359,7 @@ export function SubmissionDetailClient({
   enableRealtime?: boolean;
   guestToken?: string;
   paymentState?: string;
+  refreshIntervalMs?: number;
 }) {
   const router = useRouter();
   const supabase = React.useMemo(
@@ -961,6 +963,13 @@ export function SubmissionDetailClient({
   const closeRadioLinks = () => setRadioLinksModal(null);
   const [isTimelineOpen, setIsTimelineOpen] = React.useState(false);
 
+  React.useEffect(() => {
+    setSubmission(initialSubmission);
+    setEvents(initialEvents ?? []);
+    setStationReviews(initialStationReviews ?? []);
+    setFiles(initialFiles ?? []);
+  }, [initialEvents, initialFiles, initialStationReviews, initialSubmission]);
+
   const fetchLatest = React.useCallback(async () => {
     if (!supabase) return;
     const { data: submissionDataRaw } = await supabase
@@ -1070,6 +1079,14 @@ export function SubmissionDetailClient({
   React.useEffect(() => {
     void fetchLatest();
   }, [fetchLatest]);
+
+  React.useEffect(() => {
+    if (!refreshIntervalMs || refreshIntervalMs <= 0) return;
+    const intervalId = window.setInterval(() => {
+      router.refresh();
+    }, refreshIntervalMs);
+    return () => window.clearInterval(intervalId);
+  }, [refreshIntervalMs, router]);
 
   React.useEffect(() => {
     if (!enableRealtime || !supabase) return;

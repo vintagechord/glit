@@ -669,10 +669,10 @@ export function AlbumWizard({
       const guestTokenFromMsg = payload.guestToken as string | undefined;
       if (status === "SUCCESS") {
         clearDraftStorage();
-        if (submissionIdFromMsg) {
-          window.location.href = `/dashboard/submissions/${submissionIdFromMsg}?payment=success`;
-        } else if (guestTokenFromMsg) {
+        if (guestTokenFromMsg) {
           window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
+        } else if (submissionIdFromMsg) {
+          window.location.href = `/dashboard/submissions/${submissionIdFromMsg}?payment=success`;
         }
         return;
       }
@@ -682,12 +682,12 @@ export function AlbumWizard({
             ? payload.message
             : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
         const paymentState = status.toLowerCase();
-        if (submissionIdFromMsg) {
-          window.location.href = `/dashboard/submissions/${submissionIdFromMsg}?payment=${paymentState}`;
-          return;
-        }
         if (guestTokenFromMsg) {
           window.location.href = `/track/${guestTokenFromMsg}?payment=${paymentState}`;
+          return;
+        }
+        if (submissionIdFromMsg) {
+          window.location.href = `/dashboard/submissions/${submissionIdFromMsg}?payment=${paymentState}`;
           return;
         }
         setNotice({ error: message });
@@ -705,13 +705,7 @@ export function AlbumWizard({
         const activeTone = selectedPackageTone
           ? selectedPackageTone.card
           : "border-[#0071e3] bg-[#0071e3] text-white dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]";
-        const displayLabel =
-          index === 0 && selectedPackageSummary
-            ? `${getPackageDisplayName(
-              selectedPackageSummary,
-              isOneClick,
-            )} (${formatCurrency(selectedPackageSummary.priceKrw)}원)`
-            : label;
+        const displayLabel = index === 0 ? "패키지 선택" : label;
         return (
           <div
             key={label}
@@ -2663,27 +2657,24 @@ export function AlbumWizard({
                     : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
                     }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
-                        {getPackageDisplayName(pkg, isOneClick)}
-                      </p>
-                      <h3 className="mt-2 text-xl font-semibold">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h3 className="text-xl font-semibold leading-tight">
                         {getPackageDisplayName(pkg, isOneClick)}
                       </h3>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
+                    <div className="flex shrink-0 flex-col items-end gap-2">
                       {isActive ? (
                         <span className="rounded-full border border-[#2f6f9f] bg-[#2f6f9f] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
                           선택됨
                         </span>
                       ) : null}
-                      <span className="text-sm font-semibold">
+                      <span className="text-sm font-semibold leading-tight">
                         {formatCurrency(displayPrice)}원
                       </span>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs opacity-70">
+                  <p className="mt-4 text-xs opacity-70">
                     {formatPackageDescription(pkg.description, pkg.stationCount)}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">

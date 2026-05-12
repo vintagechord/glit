@@ -63,7 +63,7 @@ export type DashboardStatusResult = {
   error?: string;
 };
 
-const configuredStatusCacheMs = Number(process.env.DASHBOARD_STATUS_CACHE_MS ?? "8000");
+const configuredStatusCacheMs = Number(process.env.DASHBOARD_STATUS_CACHE_MS ?? "0");
 const dashboardStatusCacheTtlMs = Number.isFinite(configuredStatusCacheMs)
   ? Math.max(0, Math.trunc(configuredStatusCacheMs))
   : 8000;

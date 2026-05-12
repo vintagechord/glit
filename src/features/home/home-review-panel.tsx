@@ -415,6 +415,8 @@ export function HomeReviewPanel({
   const [remoteStatus, setRemoteStatus] = React.useState<
     "idle" | "loading" | "loaded" | "error"
   >("idle");
+  const [showingFallbackExample, setShowingFallbackExample] =
+    React.useState(false);
   const hasRequestedRemote = React.useRef(false);
 
   const availableTabs = React.useMemo<TabKey[]>(() => {
@@ -446,6 +448,17 @@ export function HomeReviewPanel({
           setRemoteStatus("error");
           return;
         }
+        const nextAlbumSubmissions = json.albumSubmissions ?? [];
+        const nextMvSubmissions = json.mvSubmissions ?? [];
+        if (
+          nextAlbumSubmissions.length === 0 &&
+          nextMvSubmissions.length === 0 &&
+          (albumList.length > 0 || mvList.length > 0)
+        ) {
+          setShowingFallbackExample(true);
+          setRemoteStatus("loaded");
+          return;
+        }
         const normalizeMap = (map: Record<string, StationItem[]>) =>
           Object.fromEntries(
             Object.entries(map ?? {}).map(([key, value]) => [
@@ -454,15 +467,16 @@ export function HomeReviewPanel({
             ]),
           );
         setAlbumState({
-          submissions: json.albumSubmissions ?? [],
+          submissions: nextAlbumSubmissions,
           stationsById: normalizeMap(json.albumStationsMap ?? {}),
           index: 0,
         });
         setMvState({
-          submissions: json.mvSubmissions ?? [],
+          submissions: nextMvSubmissions,
           stationsById: normalizeMap(json.mvStationsMap ?? {}),
           index: 0,
         });
+        setShowingFallbackExample(false);
         setRemoteStatus("loaded");
       } catch {
         if (!cancelled) setRemoteStatus("error");
@@ -472,7 +486,13 @@ export function HomeReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [enableRemoteSync, isLoggedIn, normalizeStations]);
+  }, [
+    albumList.length,
+    enableRemoteSync,
+    isLoggedIn,
+    mvList.length,
+    normalizeStations,
+  ]);
 
   const activeList = tab === "album" ? albumState.submissions : mvState.submissions;
   const activeIndex = tab === "album" ? albumState.index : mvState.index;
@@ -485,12 +505,14 @@ export function HomeReviewPanel({
     : [];
   const submissionLabels = getSubmissionLabels(activeSubmission);
   const trackResultLabel = tab === "mv" ? "등급 분류" : "트랙 결과";
+  const displayAsExample = !isLoggedIn || showingFallbackExample;
   const isLive =
-    (forceLiveBadge && isLoggedIn) ||
-    (isLoggedIn &&
+    !displayAsExample &&
+    ((forceLiveBadge && isLoggedIn) ||
+      (isLoggedIn &&
       [...albumState.submissions, ...mvState.submissions].some(
         (submission) => submission && submission.status !== "COMPLETED",
-      ));
+      )));
 
   React.useEffect(() => {
     if (!supabase || !activeSubmissionId) return;
@@ -592,7 +614,7 @@ export function HomeReviewPanel({
     totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   const progressText =
     needsPayment
-      ? "결제 완료 후 방송국 진행 정보가 표시됩니다."
+      ? "진행률 : 결제 대기"
       : totalCount > 0
         ? `진행률 : 총 ${totalCount}곳 중 ${completedCount}곳 완료`
         : "진행률 : 방송국 결과가 등록되면 진행률이 표시됩니다.";
@@ -725,7 +747,7 @@ export function HomeReviewPanel({
             : "나의 심의"}
         </span>
         <span className="inline-flex items-center gap-2">
-          {isLoggedIn ? (
+          {!displayAsExample ? (
             <>
               {isLive ? (
                 <span className="h-2 w-2 rounded-full bg-rose-500 live-blink" />
@@ -1167,7 +1189,7 @@ export function HomeReviewPanel({
             ) : (
               <div className="px-3 py-5 text-center text-xs text-muted-foreground">
                 {needsPayment
-                  ? "결제 완료 후 방송국 진행 정보를 확인할 수 있습니다."
+                  ? "방송국 진행 정보 대기"
                   : "접수 후 방송국 진행 정보를 확인할 수 있습니다."}
               </div>
             )}

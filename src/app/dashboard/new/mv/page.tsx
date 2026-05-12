@@ -40,8 +40,8 @@ export default async function MvSubmissionPage() {
             MV 심의 접수
           </h1>
           <p className="mt-3 break-keep text-base text-[#667085] dark:text-white/64">
-            비회원도 접수할 수 있으며, 로그인 시 마이페이지에서 진행 상황을
-            확인할 수 있습니다.
+            비회원도 접수할 수 있으며, 발급되는 코드로 언제든 결과를 확인할
+            수 있습니다.
           </p>
         </div>
       </div>
