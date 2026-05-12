@@ -369,6 +369,7 @@ export function HomeReviewPanel({
   stationRowsPerPage = 10,
   showPartialTrackBreakdown = true,
   mobileStationLayout = "cards",
+  showDetailLink = true,
 }: {
   isLoggedIn: boolean;
   albumSubmissions: SubmissionSummary[];
@@ -381,6 +382,7 @@ export function HomeReviewPanel({
   stationRowsPerPage?: number;
   showPartialTrackBreakdown?: boolean;
   mobileStationLayout?: "cards" | "table";
+  showDetailLink?: boolean;
 }) {
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
@@ -1170,7 +1172,7 @@ export function HomeReviewPanel({
               </div>
             )}
           </div>
-          {activeSubmission ? (
+          {activeSubmission && showDetailLink ? (
             <div className="mt-4 flex justify-center">
               <Link
                 href={`/dashboard/submissions/${activeSubmission.id}`}

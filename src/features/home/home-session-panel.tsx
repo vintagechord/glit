@@ -128,6 +128,7 @@ export function HomeSessionPanel() {
       stationRowsPerPage={5}
       showPartialTrackBreakdown={false}
       mobileStationLayout="table"
+      showDetailLink={false}
     />
   );
 }

@@ -211,6 +211,17 @@ type BroadcastSpec = {
   fields: BroadcastSpecFields;
 };
 
+type MvType = "MV_DISTRIBUTION" | "MV_BROADCAST";
+
+const getInitialMvType = (
+  searchParams: ReturnType<typeof useSearchParams>,
+): MvType => {
+  const type = searchParams?.get("type")?.toLowerCase();
+  return type === "broadcast" || type === "mv_broadcast"
+    ? "MV_BROADCAST"
+    : "MV_DISTRIBUTION";
+};
+
 const broadcastSpecs: BroadcastSpec[] = [
   {
     id: "KBS",
@@ -279,8 +290,8 @@ export function MvWizard({
     userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
-  const [mvType, setMvType] = React.useState<"MV_DISTRIBUTION" | "MV_BROADCAST">(
-    "MV_DISTRIBUTION",
+  const [mvType, setMvType] = React.useState<MvType>(() =>
+    getInitialMvType(searchParams),
   );
   const [tvStations, setTvStations] = React.useState<string[]>([]);
   const [onlineOptions, setOnlineOptions] = React.useState<string[]>([]);
@@ -294,6 +305,10 @@ export function MvWizard({
   const [productionCompany, setProductionCompany] = React.useState("");
   const [agency, setAgency] = React.useState("");
   const [albumTitle, setAlbumTitle] = React.useState("");
+
+  React.useEffect(() => {
+    setMvType(getInitialMvType(searchParams));
+  }, [searchParams]);
   const [productionDate, setProductionDate] = React.useState("");
   const [distributionCompany, setDistributionCompany] = React.useState("");
   const [businessRegNo, setBusinessRegNo] = React.useState("");

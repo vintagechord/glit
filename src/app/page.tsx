@@ -1,24 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, Disc3, Film } from "lucide-react";
 
+import { HomeSessionPanel } from "@/features/home/home-session-panel";
 import { ResultCheckButton } from "@/features/track/result-check-button";
-
-const primaryTasks = [
-  {
-    title: "음반 심의 신청",
-    description: "앨범 정보와 음원 파일을 제출합니다.",
-    href: "/dashboard/new/album",
-    icon: Disc3,
-    meta: "음반 심의",
-  },
-  {
-    title: "뮤비 심의 신청",
-    description: "뮤직비디오 심의를 접수합니다.",
-    href: "/dashboard/new/mv",
-    icon: Film,
-    meta: "뮤비 심의",
-  },
-];
 
 export default function Home() {
   return (
@@ -44,35 +28,51 @@ export default function Home() {
               </h2>
             </div>
             <div className="divide-y divide-[#edf1f7]">
-              {primaryTasks.map((task) => {
-                const Icon = task.icon;
-                return (
-                  <Link
-                    key={task.href}
-                    href={task.href}
-                    className="group grid gap-4 px-5 py-5 transition hover:bg-[#f7fafc] sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:items-center sm:px-6"
-                  >
-                    <span className="flex h-12 w-12 items-center justify-center rounded-[8px] bg-[#edf4f7] text-[#2f6f9f]">
-                      <Icon className="h-6 w-6" aria-hidden />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-base font-semibold text-[#2f3a4d]">
-                        {task.title}
-                      </span>
-                      <span className="mt-1 block break-keep text-sm leading-6 text-[#667085]">
-                        {task.description}
-                      </span>
-                    </span>
-                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#2f6f9f]">
-                      {task.meta}
-                      <ArrowRight
-                        className="h-4 w-4 transition group-hover:translate-x-0.5"
-                        aria-hidden
-                      />
-                    </span>
-                  </Link>
-                );
-              })}
+              <Link
+                href="/dashboard/new/album"
+                className="group grid gap-4 px-5 py-5 transition hover:bg-[#f7fafc] sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:items-center sm:px-6"
+              >
+                <span className="flex h-12 w-12 items-center justify-center rounded-[8px] bg-[#edf4f7] text-[#2f6f9f]">
+                  <Disc3 className="h-6 w-6" aria-hidden />
+                </span>
+                <span className="min-w-0 text-base font-semibold text-[#2f3a4d]">
+                  음반 심의 신청
+                </span>
+                <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#2f6f9f]">
+                  방송국 패키지 선택
+                  <ArrowRight
+                    className="h-4 w-4 transition group-hover:translate-x-0.5"
+                    aria-hidden
+                  />
+                </span>
+              </Link>
+
+              <div className="grid gap-4 px-5 py-5 sm:grid-cols-[48px_minmax(0,1fr)] sm:items-center sm:px-6">
+                <span className="flex h-12 w-12 items-center justify-center rounded-[8px] bg-[#edf4f7] text-[#2f6f9f]">
+                  <Film className="h-6 w-6" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <span className="block text-base font-semibold text-[#2f3a4d]">
+                    뮤비 심의 신청
+                  </span>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      href="/dashboard/new/mv?type=distribution"
+                      className="inline-flex h-9 items-center rounded-[8px] border border-[#c9d6e8] bg-white px-3 text-xs font-semibold text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f]"
+                    >
+                      온라인 유통용
+                      <ArrowRight className="ml-2 h-3.5 w-3.5" aria-hidden />
+                    </Link>
+                    <Link
+                      href="/dashboard/new/mv?type=broadcast"
+                      className="inline-flex h-9 items-center rounded-[8px] border border-[#c9d6e8] bg-white px-3 text-xs font-semibold text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f]"
+                    >
+                      공중파·케이블 방송용
+                      <ArrowRight className="ml-2 h-3.5 w-3.5" aria-hidden />
+                    </Link>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -83,6 +83,21 @@ export default function Home() {
             />
           </div>
         </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-6xl px-4 pb-14 sm:px-6">
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-[#2f6f9f]">
+            Review Status
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-[#2f3a4d]">
+            결과 안내
+          </h2>
+          <p className="mt-2 max-w-2xl break-keep text-sm leading-6 text-[#667085]">
+            접수 후 방송국별 진행 상태와 결과를 표로 확인할 수 있습니다.
+          </p>
+        </div>
+        <HomeSessionPanel />
       </section>
     </div>
   );
