@@ -11,6 +11,7 @@ export const runProfanityCheck = (
   options: {
     v1HasProfanity: boolean;
     enableV2?: boolean;
+    preferV2?: boolean;
     v2Options?: ProfanityEvaluateOptions;
   },
 ): ProfanityCheckOutcome => {
@@ -20,7 +21,9 @@ export const runProfanityCheck = (
   }
 
   const v2Result = evaluate(text, options.v2Options);
-  const hasProfanity = v1HasProfanity || v2Result.action !== "allow";
+  const hasProfanity = options.preferV2
+    ? v2Result.action !== "allow"
+    : v1HasProfanity || v2Result.action !== "allow";
 
   return { hasProfanity, v1HasProfanity, v2Result };
 };

@@ -35,7 +35,7 @@ const purposeNotes = [
 
 export default async function MvSubmissionPage() {
   const supabase = await createServerSupabase();
-  const profanityFilterV2Enabled = process.env.PROFANITY_FILTER_V2 === "true";
+  const profanityFilterV2Enabled = process.env.PROFANITY_FILTER_V2 !== "false";
   const user = await getServerSessionUser(supabase);
 
   const { data: stationRows } = await supabase

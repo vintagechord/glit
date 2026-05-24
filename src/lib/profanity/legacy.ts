@@ -1,3 +1,5 @@
+import type { RuleConfig } from "./engine";
+
 export type ProfanityTerm = {
   term: string;
   language?: string | null;
@@ -36,6 +38,43 @@ const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const normalizeTermKey = (value: string) => value.trim().toLowerCase();
+
+const buildTermPattern = (term: string, language?: string | null) => {
+  const normalizedLanguage = (language ?? "KO").toUpperCase();
+  const escapedChars = Array.from(term.trim()).map(escapeRegExp);
+  if (escapedChars.length === 0) return "";
+  const flexible = escapedChars.join("[\\s\\-_.*/\\\\|+~`^'\":;!?()[\\]{}<>#,]*");
+  if (normalizedLanguage === "EN") {
+    return `\\b(?:${flexible})\\b`;
+  }
+  return flexible;
+};
+
+export const buildProfanityExtraRules = (
+  terms?: ProfanityTerm[],
+): RuleConfig[] => {
+  const seen = new Set<string>();
+  return (terms ?? [])
+    .map((item): RuleConfig | null => {
+      const term = item.term?.trim();
+      if (!term) return null;
+      const language = (item.language ?? "KO").toUpperCase();
+      const key = `${language}:${normalizeTermKey(term)}`;
+      if (seen.has(key)) return null;
+      seen.add(key);
+      const pattern = buildTermPattern(term, language);
+      if (!pattern) return null;
+      return {
+        id: `custom_${language.toLowerCase()}_${seen.size}`,
+        severity: "WARN",
+        pattern,
+        description: `Admin configured term: ${term}`,
+        lang: language === "EN" ? "en" : "ko",
+        score: 2,
+      };
+    })
+    .filter((rule): rule is RuleConfig => Boolean(rule));
+};
 
 export const buildLegacyProfanityMatchers = (terms?: ProfanityTerm[]) => {
   const customKorean: string[] = [];

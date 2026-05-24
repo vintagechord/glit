@@ -3,6 +3,7 @@ const unicodeLetterPattern = /\p{L}/u;
 const sentencePattern = /[^.!?。！？…]+[.!?。！？…]*/gu;
 const translationMarkerPattern = /^[\s([{（]*번역\s*:/;
 const maxTranslateChunkLength = 1200;
+const browserTranslationRetryCount = 2;
 
 export type ForeignLyricSegment = {
   raw: string;
@@ -162,6 +163,12 @@ const splitTextForTranslation = (text: string) => {
   return chunks;
 };
 
+const normalizeTranslationOutput = (value: string) =>
+  value
+    .replace(/\s+/g, " ")
+    .replace(/^\s*번역\s*:\s*/i, "")
+    .trim();
+
 const translateLineInBrowser = async (
   text: string,
   source: string,
@@ -184,20 +191,29 @@ const translateLineInBrowser = async (
   url.searchParams.set("dt", "t");
   url.searchParams.set("q", text);
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    cache: "no-store",
-  });
+  for (let attempt = 1; attempt <= browserTranslationRetryCount; attempt += 1) {
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      cache: "no-store",
+    }).catch(() => null);
 
-  if (!response.ok) return "";
-  const data = (await response.json()) as unknown;
-  if (!Array.isArray(data) || !Array.isArray(data[0])) return "";
+    if (!response?.ok) {
+      if (attempt === browserTranslationRetryCount) return "";
+      continue;
+    }
+    const data = (await response.json().catch(() => null)) as unknown;
+    if (!Array.isArray(data) || !Array.isArray(data[0])) return "";
 
-  return data[0]
-    .map((chunk: unknown) =>
-      Array.isArray(chunk) && typeof chunk[0] === "string" ? chunk[0] : "",
-    )
-    .join("");
+    return normalizeTranslationOutput(
+      data[0]
+        .map((chunk: unknown) =>
+          Array.isArray(chunk) && typeof chunk[0] === "string" ? chunk[0] : "",
+        )
+        .join(""),
+    );
+  }
+
+  return "";
 };
 
 const translateBatchInBrowser = async (
@@ -205,12 +221,21 @@ const translateBatchInBrowser = async (
   source: string,
   target: string,
 ) => {
+  const cache = new Map<string, string>();
   const translations: string[] = [];
   for (const line of lines) {
     const normalized = line.trim();
-    translations.push(
-      normalized ? await translateLineInBrowser(normalized, source, target) : "",
-    );
+    if (!normalized) {
+      translations.push("");
+      continue;
+    }
+    if (!cache.has(normalized)) {
+      cache.set(
+        normalized,
+        await translateLineInBrowser(normalized, source, target),
+      );
+    }
+    translations.push(cache.get(normalized) ?? "");
   }
   return translations;
 };
@@ -231,7 +256,9 @@ export const requestLyricsTranslations = async (
   });
   const payload = await response.json().catch(() => null);
   const apiTranslations: string[] = Array.isArray(payload?.translations)
-    ? payload.translations
+    ? payload.translations.map((line: unknown) =>
+        typeof line === "string" ? normalizeTranslationOutput(line) : "",
+      )
     : [];
 
   const apiTranslatedEveryLine =
@@ -242,13 +269,32 @@ export const requestLyricsTranslations = async (
     return apiTranslations;
   }
 
-  const fallbackTranslations = await translateBatchInBrowser(
-    lines,
-    source,
-    target,
-  );
-  if (fallbackTranslations.some((line) => line.trim())) {
-    return fallbackTranslations;
+  const missingIndexes = lines
+    .map((line, index) =>
+      line.trim() && !apiTranslations[index]?.trim() ? index : -1,
+    )
+    .filter((index) => index >= 0);
+  const fallbackTranslations = missingIndexes.length
+    ? await translateBatchInBrowser(
+        missingIndexes.map((index) => lines[index]),
+        source,
+        target,
+      )
+    : [];
+
+  const mergedTranslations = [...apiTranslations];
+  missingIndexes.forEach((lineIndex, fallbackIndex) => {
+    mergedTranslations[lineIndex] =
+      normalizeTranslationOutput(fallbackTranslations[fallbackIndex] ?? "") ||
+      mergedTranslations[lineIndex] ||
+      "";
+  });
+
+  if (
+    mergedTranslations.length === lines.length &&
+    lines.every((line, index) => !line.trim() || mergedTranslations[index]?.trim())
+  ) {
+    return mergedTranslations;
   }
 
   throw new Error(payload?.error ?? "Translation failed");

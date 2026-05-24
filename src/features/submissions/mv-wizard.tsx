@@ -14,6 +14,7 @@ import {
 } from "@/lib/lyrics-tools";
 import { runProfanityCheck } from "@/lib/profanity/check";
 import {
+  buildProfanityExtraRules,
   buildLegacyProfanityMatchers,
   extractProfanityWords,
   type ProfanityTerm,
@@ -56,22 +57,6 @@ type UploadResult = {
   checksum?: string;
   durationSeconds?: number;
   accessUrl?: string;
-};
-
-type LyricsSpellcheckSuggestion = {
-  id?: string;
-  original: string;
-  replacement: string;
-  message?: string;
-  type?: string;
-};
-
-type LyricsSpellcheckResult = {
-  correctedText: string;
-  suggestions: LyricsSpellcheckSuggestion[];
-  meta?: {
-    truncated?: boolean;
-  };
 };
 
 type PaymentDocumentType = "" | "CASH_RECEIPT" | "TAX_INVOICE";
@@ -373,9 +358,6 @@ export function MvWizard({
     message: string;
   } | null>(null);
   const [isTranslatingLyrics, setIsTranslatingLyrics] = React.useState(false);
-  const [isCheckingSpelling, setIsCheckingSpelling] = React.useState(false);
-  const [spellcheckResult, setSpellcheckResult] =
-    React.useState<LyricsSpellcheckResult | null>(null);
   const [confirmModal, setConfirmModal] = React.useState<{
     code: string;
     title: string;
@@ -397,6 +379,10 @@ export function MvWizard({
   );
   const profanityMatchers = React.useMemo(
     () => buildLegacyProfanityMatchers(profanityTerms),
+    [profanityTerms],
+  );
+  const profanityExtraRules = React.useMemo(
+    () => buildProfanityExtraRules(profanityTerms),
     [profanityTerms],
   );
   const isProfanityFilterV2Enabled = Boolean(profanityFilterV2Enabled);
@@ -1757,6 +1743,8 @@ export function MvWizard({
     const { hasProfanity } = runProfanityCheck(currentLyrics, {
       v1HasProfanity,
       enableV2: isProfanityFilterV2Enabled,
+      preferV2: isProfanityFilterV2Enabled,
+      v2Options: { extraRules: profanityExtraRules },
     });
     if (hasProfanity) {
       const shouldProceed = window.confirm(
@@ -1828,76 +1816,6 @@ export function MvWizard({
       });
     } finally {
       setIsTranslatingLyrics(false);
-    }
-  };
-
-  const handleSpellcheckLyrics = async () => {
-    const currentLyrics = lyricsTextareaRef.current?.value ?? lyrics;
-    if (!currentLyrics.trim()) {
-      setLyricsToolNotice({
-        type: "error",
-        message: "맞춤법을 검사할 가사를 먼저 입력해주세요.",
-      });
-      return;
-    }
-
-    if (currentLyrics !== lyrics) {
-      setLyrics(currentLyrics);
-    }
-
-    setIsCheckingSpelling(true);
-    setLyricsToolNotice({
-      type: "info",
-      message: "맞춤법을 검사하는 중입니다.",
-    });
-    try {
-      const response = await fetch("/api/spellcheck", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: currentLyrics,
-          mode: "balanced",
-          domain: "music",
-        }),
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | LyricsSpellcheckResult
-        | { error?: string }
-        | null;
-      if (!response.ok || !payload || "error" in payload) {
-        throw new Error(
-          payload && "error" in payload
-            ? payload.error
-            : "맞춤법 검사에 실패했습니다.",
-        );
-      }
-      const spellcheckPayload = payload as LyricsSpellcheckResult;
-      setSpellcheckResult({
-        correctedText:
-          typeof spellcheckPayload.correctedText === "string"
-            ? spellcheckPayload.correctedText
-            : currentLyrics,
-        suggestions: Array.isArray(spellcheckPayload.suggestions)
-          ? spellcheckPayload.suggestions
-          : [],
-        meta: spellcheckPayload.meta,
-      });
-      markLyricsToolApplied();
-      setLyricsToolNotice({
-        type: "success",
-        message: "맞춤법 검사를 완료했습니다. 제출 가사는 자동 변경되지 않습니다.",
-      });
-    } catch (error) {
-      console.error(error);
-      setLyricsToolNotice({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "맞춤법 검사 중 오류가 발생했습니다.",
-      });
-    } finally {
-      setIsCheckingSpelling(false);
     }
   };
 
@@ -3110,14 +3028,6 @@ export function MvWizard({
                   >
                     자동번역 {isTranslatingLyrics ? "중..." : ""}
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleSpellcheckLyrics}
-                    disabled={isCheckingSpelling}
-                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    맞춤법 검사 {isCheckingSpelling ? "중..." : ""}
-                  </button>
                 </div>
                 {showLyricsToolNotice && (
                   <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
@@ -3137,46 +3047,6 @@ export function MvWizard({
 	                  }`}
 	              >
 	                {lyricsToolNotice.message}
-	              </div>
-	            )}
-	            {spellcheckResult && (
-	              <div className="mt-3 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs leading-5 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
-	                <p className="font-semibold">
-	                  맞춤법 검사는 참고용입니다. 실제 제출 가사는 변경되지 않습니다.
-	                </p>
-	                {spellcheckResult.suggestions.length > 0 ? (
-	                  <div className="mt-3 space-y-2">
-	                    {spellcheckResult.suggestions.slice(0, 8).map((suggestion, index) => (
-	                      <div
-	                        key={suggestion.id ?? `${suggestion.original}-${index}`}
-	                        className="rounded-xl border border-primary/15 bg-background/80 px-3 py-2 text-foreground"
-	                      >
-	                        <span className="font-semibold">{suggestion.original}</span>
-	                        <span className="mx-2 text-muted-foreground">→</span>
-	                        <span className="font-semibold">{suggestion.replacement}</span>
-	                        {suggestion.message ? (
-	                          <span className="mt-1 block text-muted-foreground">
-	                            {suggestion.message}
-	                          </span>
-	                        ) : null}
-	                      </div>
-	                    ))}
-	                    {spellcheckResult.suggestions.length > 8 ? (
-	                      <p className="text-muted-foreground">
-	                        외 {spellcheckResult.suggestions.length - 8}건이 더 있습니다.
-	                      </p>
-	                    ) : null}
-	                  </div>
-	                ) : (
-	                  <p className="mt-2 text-muted-foreground">
-	                    감지된 맞춤법/띄어쓰기 안내가 없습니다.
-	                  </p>
-	                )}
-	                {spellcheckResult.meta?.truncated ? (
-	                  <p className="mt-2 text-muted-foreground">
-	                    긴 가사는 앞부분 기준으로 검사했습니다.
-	                  </p>
-	                ) : null}
 	              </div>
 	            )}
 	            <div className="relative isolate mt-4 overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
@@ -3212,7 +3082,7 @@ export function MvWizard({
                   감지된 단어
                 </p>
                 <div className="mt-2 max-h-32 space-y-2 overflow-auto pr-1">
-                  {profanityWords.length > 0 ? (
+                  {profanityHighlight && profanityWords.length > 0 ? (
                     profanityWords.map((word) => (
                       <div
                         key={word}

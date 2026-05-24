@@ -146,7 +146,7 @@ const sortPackagesForDisplay = <
 
 export default async function AlbumSubmissionPage() {
   const supabase = await createServerSupabase();
-  const profanityFilterV2Enabled = process.env.PROFANITY_FILTER_V2 === "true";
+  const profanityFilterV2Enabled = process.env.PROFANITY_FILTER_V2 !== "false";
   const user = await getServerSessionUser(supabase);
 
   const { data: joinedPackageRows, error: packageJoinError } = await supabase

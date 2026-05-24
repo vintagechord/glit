@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 
 import { evaluate, normalize } from "../src/lib/profanity/engine";
 import { runProfanityCheck } from "../src/lib/profanity/check";
-import { buildLegacyProfanityMatchers } from "../src/lib/profanity/legacy";
+import {
+  buildLegacyProfanityMatchers,
+  buildProfanityExtraRules,
+} from "../src/lib/profanity/legacy";
 
 test("normalize applies leet replacements and repeat compression", () => {
   const input = "fuuuuuck!!!";
@@ -78,4 +81,29 @@ test("flag off preserves legacy detection results", () => {
     });
     assert.equal(outcome.hasProfanity, v1HasProfanity);
   });
+});
+
+test("v2 can override legacy false positives with allowlist", () => {
+  const matchers = buildLegacyProfanityMatchers();
+  const text = "시발점부터 다시 시작합니다";
+  const v1HasProfanity = matchers?.testPattern
+    ? matchers.testPattern.test(text)
+    : false;
+
+  assert.equal(v1HasProfanity, true);
+  const outcome = runProfanityCheck(text, {
+    v1HasProfanity,
+    enableV2: true,
+    preferV2: true,
+  });
+
+  assert.equal(outcome.hasProfanity, false);
+});
+
+test("admin configured terms are normalized by v2 extra rules", () => {
+  const extraRules = buildProfanityExtraRules([{ term: "나쁜말", language: "KO" }]);
+  const result = evaluate("나.쁜-말", { extraRules });
+
+  assert.notEqual(result.action, "allow");
+  assert.ok(result.matched_rule_ids.some((id) => id.startsWith("custom_ko_")));
 });

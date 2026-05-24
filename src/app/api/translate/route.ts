@@ -14,6 +14,24 @@ const sleep = (ms: number) =>
   });
 
 const maxTranslateChunkLength = 1200;
+const maxTranslateLines = 120;
+const maxTranslateLineLength = 5000;
+const translateConcurrency = 3;
+
+const normalizeLanguageCode = (value: string, fallback: string) => {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (normalized === "auto") return "auto";
+  return /^[a-z]{2,8}(?:-[a-z0-9]{2,8})?$/.test(normalized)
+    ? normalized
+    : fallback;
+};
+
+const normalizeTranslationOutput = (value: string) =>
+  value
+    .replace(/\s+/g, " ")
+    .replace(/^\s*번역\s*:\s*/i, "")
+    .trim();
 
 const splitTextForTranslation = (text: string) => {
   const trimmed = text.trim();
@@ -68,11 +86,13 @@ const translateLineOnce = async (
 
   const data = (await response.json()) as unknown;
   if (!Array.isArray(data) || !Array.isArray(data[0])) return "";
-  return data[0]
-    .map((chunk: unknown) =>
-      Array.isArray(chunk) && typeof chunk[0] === "string" ? chunk[0] : "",
-    )
-    .join("");
+  return normalizeTranslationOutput(
+    data[0]
+      .map((chunk: unknown) =>
+        Array.isArray(chunk) && typeof chunk[0] === "string" ? chunk[0] : "",
+      )
+      .join(""),
+  );
 };
 
 const translateLine = async (
@@ -131,10 +151,19 @@ const translateBatch = async (
   }
 
   if (uniqueTexts.length > 0) {
-    for (const text of uniqueTexts) {
-      const translated = await translateLine(text, source, target);
-      normalizedCache.set(text, translated);
-    }
+    let nextIndex = 0;
+    const workers = Array.from(
+      { length: Math.min(translateConcurrency, uniqueTexts.length) },
+      async () => {
+        while (nextIndex < uniqueTexts.length) {
+          const text = uniqueTexts[nextIndex];
+          nextIndex += 1;
+          const translated = await translateLine(text, source, target);
+          normalizedCache.set(text, translated);
+        }
+      },
+    );
+    await Promise.all(workers);
   }
 
   return lines.map((line) => {
@@ -147,18 +176,22 @@ const translateBatch = async (
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as TranslateRequest;
-    const lines = Array.isArray(body.lines) ? body.lines : [];
+    const lines = Array.isArray(body.lines)
+      ? body.lines
+          .slice(0, maxTranslateLines)
+          .map((line) => String(line ?? "").slice(0, maxTranslateLineLength))
+      : [];
     if (!lines.length) {
       return NextResponse.json({ translations: [] });
     }
 
     const source =
       typeof body.source === "string" && body.source.trim()
-        ? body.source.trim()
+        ? normalizeLanguageCode(body.source, "auto")
         : "auto";
     const target =
       typeof body.target === "string" && body.target.trim()
-        ? body.target.trim()
+        ? normalizeLanguageCode(body.target, "ko")
         : "ko";
 
     const translations = await translateBatch(lines, source, target);

@@ -24,6 +24,7 @@ export type ProfanityEvaluation = {
   action: ProfanityAction;
   score: number;
   matched_rule_ids: string[];
+  matched_terms?: string[];
   masked_text?: string;
 };
 
@@ -400,6 +401,8 @@ export const evaluate = (
 
   const matchedRuleIds: string[] = [];
   const matchedRuleSet = new Set<string>();
+  const matchedTerms: string[] = [];
+  const matchedTermSet = new Set<string>();
   const matchCounts: Record<string, number> = {};
   let score = 0;
   let hasWarn = false;
@@ -422,6 +425,11 @@ export const evaluate = (
       if (!matchedRuleSet.has(rule.id)) {
         matchedRuleSet.add(rule.id);
         matchedRuleIds.push(rule.id);
+      }
+      const matchedTerm = match[0].trim();
+      if (matchedTerm && !matchedTermSet.has(matchedTerm)) {
+        matchedTermSet.add(matchedTerm);
+        matchedTerms.push(matchedTerm);
       }
       matchCounts[rule.id] = (matchCounts[rule.id] ?? 0) + 1;
 
@@ -478,6 +486,7 @@ export const evaluate = (
     action,
     score,
     matched_rule_ids: matchedRuleIds,
+    matched_terms: matchedTerms,
   };
 };
 
