@@ -332,9 +332,9 @@ const getSubmissionTypeLabel = (type: string) => {
     case "ALBUM":
       return "음반 심의";
     case "MV_BROADCAST":
-      return "M/V 방송 심의";
+      return "뮤직비디오 방송 심의";
     case "MV_DISTRIBUTION":
-      return "M/V 온라인 심의";
+      return "뮤직비디오 온라인 심의";
     default:
       return type;
   }

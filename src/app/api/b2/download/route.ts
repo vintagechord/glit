@@ -33,8 +33,8 @@ export async function GET(req: NextRequest) {
     objectKey = filePath;
   }
 
-  const isPublic = filePath.startsWith(PUBLIC_PREFIX);
-  const certMatch = filePath.match(CERT_PATH_PATTERN);
+  const isPublic = objectKey.startsWith(PUBLIC_PREFIX);
+  const certMatch = objectKey.match(CERT_PATH_PATTERN);
   let allowed = false;
 
   if (isPublic) {

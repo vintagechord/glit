@@ -415,8 +415,6 @@ export function HomeReviewPanel({
   const [remoteStatus, setRemoteStatus] = React.useState<
     "idle" | "loading" | "loaded" | "error"
   >("idle");
-  const [showingFallbackExample, setShowingFallbackExample] =
-    React.useState(false);
   const hasRequestedRemote = React.useRef(false);
 
   const availableTabs = React.useMemo<TabKey[]>(() => {
@@ -448,17 +446,6 @@ export function HomeReviewPanel({
           setRemoteStatus("error");
           return;
         }
-        const nextAlbumSubmissions = json.albumSubmissions ?? [];
-        const nextMvSubmissions = json.mvSubmissions ?? [];
-        if (
-          nextAlbumSubmissions.length === 0 &&
-          nextMvSubmissions.length === 0 &&
-          (albumList.length > 0 || mvList.length > 0)
-        ) {
-          setShowingFallbackExample(true);
-          setRemoteStatus("loaded");
-          return;
-        }
         const normalizeMap = (map: Record<string, StationItem[]>) =>
           Object.fromEntries(
             Object.entries(map ?? {}).map(([key, value]) => [
@@ -467,16 +454,15 @@ export function HomeReviewPanel({
             ]),
           );
         setAlbumState({
-          submissions: nextAlbumSubmissions,
+          submissions: json.albumSubmissions ?? [],
           stationsById: normalizeMap(json.albumStationsMap ?? {}),
           index: 0,
         });
         setMvState({
-          submissions: nextMvSubmissions,
+          submissions: json.mvSubmissions ?? [],
           stationsById: normalizeMap(json.mvStationsMap ?? {}),
           index: 0,
         });
-        setShowingFallbackExample(false);
         setRemoteStatus("loaded");
       } catch {
         if (!cancelled) setRemoteStatus("error");
@@ -486,13 +472,7 @@ export function HomeReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [
-    albumList.length,
-    enableRemoteSync,
-    isLoggedIn,
-    mvList.length,
-    normalizeStations,
-  ]);
+  }, [enableRemoteSync, isLoggedIn, normalizeStations]);
 
   const activeList = tab === "album" ? albumState.submissions : mvState.submissions;
   const activeIndex = tab === "album" ? albumState.index : mvState.index;
@@ -505,14 +485,12 @@ export function HomeReviewPanel({
     : [];
   const submissionLabels = getSubmissionLabels(activeSubmission);
   const trackResultLabel = tab === "mv" ? "등급 분류" : "트랙 결과";
-  const displayAsExample = !isLoggedIn || showingFallbackExample;
   const isLive =
-    !displayAsExample &&
-    ((forceLiveBadge && isLoggedIn) ||
-      (isLoggedIn &&
+    (forceLiveBadge && isLoggedIn) ||
+    (isLoggedIn &&
       [...albumState.submissions, ...mvState.submissions].some(
         (submission) => submission && submission.status !== "COMPLETED",
-      )));
+      ));
 
   React.useEffect(() => {
     if (!supabase || !activeSubmissionId) return;
@@ -614,7 +592,7 @@ export function HomeReviewPanel({
     totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   const progressText =
     needsPayment
-      ? "진행률 : 결제 대기"
+      ? "결제 완료 후 방송국 진행 정보가 표시됩니다."
       : totalCount > 0
         ? `진행률 : 총 ${totalCount}곳 중 ${completedCount}곳 완료`
         : "진행률 : 방송국 결과가 등록되면 진행률이 표시됩니다.";
@@ -739,35 +717,35 @@ export function HomeReviewPanel({
   );
 
   return (
-    <div className="min-w-0 w-full rounded-[8px] border border-[#d8e1ef] bg-white p-4 dark:border-white/10 dark:bg-[#111827] sm:p-6 lg:min-h-[520px]">
-      <div className="flex items-center justify-between text-xs font-semibold tracking-normal text-[#667085] sm:text-sm dark:text-white/64">
+    <div className="min-w-0 w-full rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] sm:p-6 lg:min-h-[520px]">
+      <div className="flex items-center justify-between text-xs font-black uppercase tracking-normal text-foreground/72 sm:text-sm dark:text-white/82">
         <span>
           {activeSubmission
             ? `${submissionLabels.summary} 심의`
             : "나의 심의"}
         </span>
         <span className="inline-flex items-center gap-2">
-          {!displayAsExample ? (
+          {isLoggedIn ? (
             <>
               {isLive ? (
                 <span className="h-2 w-2 rounded-full bg-rose-500 live-blink" />
               ) : null}
-              LIVE
+              실시간
             </>
           ) : (
-            "Example"
+            "진행 현황 예시"
           )}
         </span>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 text-xs font-semibold tracking-normal text-[#667085] sm:mt-5 sm:text-sm dark:text-white/64">
+      <div className="mt-4 flex items-center gap-2 text-xs font-black uppercase tracking-normal text-muted-foreground sm:mt-5 sm:text-sm dark:text-white/76">
         {availableTabs.includes("album") ? (
           <button
             type="button"
             onClick={() => setTab("album")}
-            className={`flex-1 rounded-[8px] border px-3 py-2 transition ${tab === "album"
-                ? "border-[#2f6f9f] bg-[#edf4f7] text-[#2f6f9f]"
-                : "border-[#d8e1ef] bg-white text-[#667085] hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/10 dark:bg-[#0f172a] dark:text-white/64 dark:hover:border-[#a9c8dc] dark:hover:text-[#a9c8dc]"
+            className={`flex-1 rounded-[8px] border-2 px-3 py-2 transition ${tab === "album"
+                ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
+                : "border-border bg-background text-foreground/72 hover:border-[#111111] hover:text-foreground dark:text-white/76 dark:hover:border-[#f2cf27] dark:hover:text-white"
               }`}
           >
             앨범
@@ -777,9 +755,9 @@ export function HomeReviewPanel({
           <button
             type="button"
             onClick={() => setTab("mv")}
-            className={`flex-1 rounded-[8px] border px-3 py-2 transition ${tab === "mv"
-                ? "border-[#2f6f9f] bg-[#edf4f7] text-[#2f6f9f]"
-                : "border-[#d8e1ef] bg-white text-[#667085] hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/10 dark:bg-[#0f172a] dark:text-white/64 dark:hover:border-[#a9c8dc] dark:hover:text-[#a9c8dc]"
+            className={`flex-1 rounded-[8px] border-2 px-3 py-2 transition ${tab === "mv"
+                ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
+                : "border-border bg-background text-foreground/72 hover:border-[#111111] hover:text-foreground dark:text-white/76 dark:hover:border-[#f2cf27] dark:hover:text-white"
               }`}
           >
             뮤직비디오
@@ -787,7 +765,7 @@ export function HomeReviewPanel({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[11px] font-semibold tracking-normal text-[#667085] sm:text-xs dark:text-white/64">
+      <div className="mt-3 flex items-center justify-between text-[11px] font-black uppercase tracking-normal text-foreground/68 sm:text-xs dark:text-white/76">
         <span>
           {activeList.length > 0
             ? `${activeIndex + 1}/${activeList.length}`
@@ -852,7 +830,7 @@ export function HomeReviewPanel({
       </div>
 
       <div className="mt-5 space-y-4 sm:mt-6 sm:space-y-5">
-        <div className="rounded-[8px] border border-[#edf1f7] bg-[#fbfcfe] p-4 dark:border-white/10 dark:bg-white/5">
+        <div className="rounded-2xl border border-dashed border-border/80 bg-background/70 p-4">
           <p className="sr-only">접수 현황</p>
           {activeSubmission ? (
             <div className="mt-3 space-y-3">
@@ -868,7 +846,7 @@ export function HomeReviewPanel({
                   </span>
                 ) : null}
               </div>
-              <div className="rounded-[8px] border border-[#d8e1ef] bg-white p-3 dark:border-white/10 dark:bg-[#0f172a]">
+              <div className="rounded-xl border border-border/60 bg-background/80 p-3">
                 <div className="flex items-center justify-between gap-3 text-sm font-semibold text-foreground">
                   <span className="truncate">{progressText}</span>
                   {totalCount > 0 ? <span>{progressPercent}%</span> : null}
@@ -880,11 +858,11 @@ export function HomeReviewPanel({
                   />
                 </div>
                 {needsPayment && activeSubmission ? (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/8 px-3 py-2 text-xs font-semibold text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/8 px-3 py-2 text-xs font-semibold text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
                     <span>결제 완료 후 심의가 진행됩니다.</span>
                     <Link
                       href={`/dashboard/pay/${activeSubmission.id}`}
-                      className="rounded-[8px] bg-[#2f6f9f] px-3 py-1.5 text-[11px] font-semibold tracking-normal text-white transition hover:bg-[#285f87]"
+                      className="rounded-full border border-[#111111] bg-[#111111] px-3 py-1.5 text-[11px] font-black uppercase tracking-normal text-[#f6d64a] transition hover:-translate-y-0.5 dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-[#111111]"
                     >
                       결제하기
                     </Link>
@@ -901,7 +879,7 @@ export function HomeReviewPanel({
           )}
         </div>
 
-        <div className="rounded-[8px] border border-[#d8e1ef] bg-white p-4 dark:border-white/10 dark:bg-[#0f172a]">
+        <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">
               심의 진행 상황
@@ -911,7 +889,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handlePrev}
                 disabled={needsPayment || !canScrollUp}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#2f6f9f] bg-[#2f6f9f] text-sm font-bold text-white transition hover:bg-[#285f87] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary bg-primary text-sm font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="이전 심의 진행 상태"
               >
                 ↑
@@ -920,19 +898,19 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handleNext}
                 disabled={needsPayment || !canScrollDown}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#2f6f9f] bg-[#2f6f9f] text-sm font-bold text-white transition hover:bg-[#285f87] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary bg-primary text-sm font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                 aria-label="다음 심의 진행 상태"
               >
                 ↓
               </button>
             </div>
           </div>
-          <div className="mt-3 overflow-hidden rounded-[8px] border border-[#d8e1ef] bg-white dark:border-white/10 dark:bg-[#111827]">
-            <div className="hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-[#edf1f7] bg-[#fbfcfe] px-3 py-2 text-xs font-semibold text-[#667085] sm:grid dark:border-white/10 dark:bg-white/5">
+          <div className="mt-3 overflow-hidden rounded-2xl border border-border/60 bg-background/70">
+            <div className="hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid">
               <span className="pl-2 text-left">방송국</span>
               <span className="justify-self-center text-center">접수 상태</span>
               <span className="justify-self-center text-center">{trackResultLabel}</span>
-              <span className="text-right">Updated</span>
+              <span className="text-right">업데이트</span>
             </div>
             {!needsPayment && activeStations.length > 0 ? (
               <>
@@ -1189,7 +1167,7 @@ export function HomeReviewPanel({
             ) : (
               <div className="px-3 py-5 text-center text-xs text-muted-foreground">
                 {needsPayment
-                  ? "방송국 진행 정보 대기"
+                  ? "결제 완료 후 방송국 진행 정보를 확인할 수 있습니다."
                   : "접수 후 방송국 진행 정보를 확인할 수 있습니다."}
               </div>
             )}

@@ -43,14 +43,15 @@ export default function ForgotPasswordPage() {
 
       <div className="relative w-full max-w-xl rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-10">
         <div className="space-y-3 text-center">
-          <p className="bauhaus-kicker mx-auto">
-            Password Reset
-          </p>
+          <p className="bauhaus-kicker mx-auto">비밀번호 재설정</p>
           <h1 className="font-display text-3xl font-black leading-tight tracking-normal text-foreground">
             비밀번호를 다시 설정하세요
           </h1>
           <p className="mx-auto max-w-md text-sm font-semibold text-muted-foreground sm:text-base">
             가입한 이메일을 입력하면 재설정 링크를 보내드립니다.
+          </p>
+          <p className="mx-auto max-w-md text-xs font-semibold leading-5 text-muted-foreground">
+            비회원 접수 내역을 찾는 경우 비밀번호 재설정이 아니라 조회 코드 찾기를 이용해주세요.
           </p>
         </div>
 
@@ -93,12 +94,20 @@ export default function ForgotPasswordPage() {
         </form>
 
         <div className="mt-6 flex justify-center">
-          <Link
-            href="/login"
-            className="inline-flex items-center rounded-[8px] border-2 border-border px-4 py-2 text-sm font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
-          >
-            로그인으로 돌아가기
-          </Link>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Link
+              href="/login"
+              className="inline-flex items-center rounded-[8px] border-2 border-border px-4 py-2 text-sm font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
+            >
+              로그인으로 돌아가기
+            </Link>
+            <Link
+              href="/track"
+              className="inline-flex items-center rounded-[8px] border-2 border-border px-4 py-2 text-sm font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
+            >
+              조회 코드 찾기
+            </Link>
+          </div>
         </div>
       </div>
     </div>

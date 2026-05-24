@@ -46,8 +46,8 @@ const uuidPattern =
 
 const typeLabels: Record<string, string> = {
   ALBUM: "음반 심의",
-  MV_DISTRIBUTION: "M/V 심의 (유통/온라인)",
-  MV_BROADCAST: "M/V 심의 (TV 송출)",
+  MV_DISTRIBUTION: "뮤직비디오 심의 (유통/온라인)",
+  MV_BROADCAST: "뮤직비디오 심의 (TV 송출)",
 };
 
 type SubmissionRow = {
@@ -816,7 +816,7 @@ export default async function AdminSubmissionDetailPage({
                           target="_blank"
                           rel="noreferrer"
                         >
-                          필증 다운로드 (테스트)
+                          필증 다운로드
                         </a>
                         {submission.certificate_uploaded_at ? (
                           <span className="text-xs text-muted-foreground">

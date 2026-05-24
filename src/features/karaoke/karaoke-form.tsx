@@ -617,7 +617,7 @@ export function KaraokeForm({
               }`}
             >
               <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                Bank
+                무통장
               </p>
               <p className="mt-2 text-sm font-semibold">무통장 입금</p>
               <p className="mt-2 text-xs opacity-80">
@@ -635,7 +635,7 @@ export function KaraokeForm({
               }`}
             >
               <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                Card
+                카드
               </p>
               <p className="mt-2 text-sm font-semibold">카드 결제</p>
               <p className="mt-2 text-xs opacity-80">

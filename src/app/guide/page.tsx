@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { albumPreparationItems, faqItems, mvPreparationItems } from "@/lib/onside-content";
+
 export const metadata = {
   title: "심의 안내",
 };
@@ -63,9 +65,7 @@ const mvSteps = [
 export default function GuidePage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
-      <p className="bauhaus-kicker">
-        Review Guide
-      </p>
+      <p className="bauhaus-kicker">이용가이드</p>
       <h1 className="font-display mt-4 text-3xl font-black text-foreground">심의 안내</h1>
       <p className="mt-3 text-sm font-semibold text-muted-foreground">
         음반과 뮤직비디오 심의 진행 방식과 준비사항을 한눈에 정리했습니다.
@@ -128,6 +128,38 @@ export default function GuidePage() {
       </section>
 
       <section className="relative mt-12 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+        <h2 className="font-display text-2xl font-black text-foreground">
+          신청 전 준비물 체크리스트
+        </h2>
+        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <div className="rounded-[8px] border-2 border-border bg-background p-5">
+            <p className="text-sm font-black text-foreground">음반 심의 준비물</p>
+            <ul className="mt-4 space-y-2 text-sm font-semibold text-muted-foreground">
+              {albumPreparationItems.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <span className="mt-2 h-2 w-2 bg-[#f2cf27]" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-[8px] border-2 border-border bg-background p-5">
+            <p className="text-sm font-black text-foreground">
+              뮤직비디오 심의 준비물
+            </p>
+            <ul className="mt-4 space-y-2 text-sm font-semibold text-muted-foreground">
+              {mvPreparationItems.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <span className="mt-2 h-2 w-2 bg-[#1556a4]" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative mt-12 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
         <div aria-hidden="true" className="absolute right-0 top-0 h-16 w-16 bg-[#1556a4]" />
         <h2 className="font-display mt-4 text-2xl font-black text-foreground">
           뮤직비디오 심의, 이렇게 진행됩니다
@@ -171,8 +203,30 @@ export default function GuidePage() {
             href="/dashboard/new/mv"
             className="bauhaus-button px-6 py-3 text-xs uppercase"
           >
-            M/V 심의 신청하러 가기
+            뮤직비디오 심의 신청하러 가기
           </Link>
+        </div>
+      </section>
+
+      <section className="mt-12 rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+        <h2 className="font-display text-2xl font-black text-foreground">
+          자주 묻는 질문
+        </h2>
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {faqItems.slice(0, 6).map((item) => (
+            <Link
+              key={item.question}
+              href="/faq"
+              className="rounded-[8px] border-2 border-border bg-background p-4 transition hover:border-[#1556a4]"
+            >
+              <p className="text-[11px] font-black text-muted-foreground">
+                {item.category}
+              </p>
+              <p className="mt-2 text-sm font-black text-foreground">
+                {item.question}
+              </p>
+            </Link>
+          ))}
         </div>
       </section>
     </div>

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Disc3, FileText, Film } from "lucide-react";
+
+import { APP_CONFIG } from "@/lib/config";
 
 export const metadata = {
   title: "새 심의 접수",
@@ -7,93 +8,71 @@ export const metadata = {
 
 const submissionCards = [
   {
-    title: "음반 심의 신청",
-    description: "방송 송출을 위한 음반 심의 접수입니다.",
+    eyebrow: "방송국별 음반 심의",
+    title: "음반 심의",
+    description: "발매·미발매 음원의 TV·라디오 송출을 위한 심의입니다.",
     href: "/dashboard/new/album",
-    icon: Disc3,
-    details: ["앨범 정보", "수록곡/가사", "음원 파일"],
+    tone: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
   },
   {
-    title: "뮤비 심의 신청",
-    description: "온라인 업로드용 또는 방송 송출용 MV 심의 접수입니다.",
+    eyebrow: "뮤직비디오 심의",
+    title: "뮤직비디오 온라인 심의",
+    description: "TV 송출용과 온라인 업로드용을 구분해 필요한 항목만 접수할 수 있습니다.",
     href: "/dashboard/new/mv",
-    icon: Film,
-    details: ["영상 정보", "가사/제작 정보", "영상 파일"],
+    tone: "border-[#111111] bg-[#1556a4] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[6px_6px_0_#f2cf27]",
+  },
+  {
+    eyebrow: "TV 송출 목적",
+    title: "뮤직비디오 TV 송출 심의",
+    description: "방송국별 제출 조건과 편성 여부를 확인한 뒤 접수합니다.",
+    href: "/dashboard/new/mv?type=broadcast",
+    tone: "border-[#111111] bg-[#d9362c] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
   },
 ];
 
 export default function NewSubmissionPage() {
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
-      <div className="mb-7">
-        <p className="text-sm font-semibold text-[#2f6f9f]">New Submission</p>
-        <h1 className="mt-3 text-2xl font-semibold text-[#2f3a4d] sm:text-3xl">
-          접수 유형 선택
+    <div className="page-centered mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+      <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card px-6 py-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:px-8 sm:py-10">
+        <p className="bauhaus-kicker">심의 신청</p>
+        <h1 className="font-display mt-4 text-3xl font-black leading-tight text-foreground sm:text-4xl">
+          무엇을 신청하시나요?
         </h1>
-        <p className="mt-2 text-sm leading-6 text-[#667085]">
-          필요한 심의를 선택하면 신청서로 바로 이동합니다.
-        </p>
-      </div>
+        <ul className="mt-4 space-y-2 text-sm font-semibold text-muted-foreground sm:text-base">
+          <li>비회원도 바로 접수할 수 있습니다.</li>
+          <li>로그인 상태로 접수하면 내역이 마이페이지에 자동 저장됩니다.</li>
+        </ul>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {submissionCards.map((card) => {
-          const Icon = card.icon;
-          return (
+        <div className="mt-8 grid gap-5 md:grid-cols-3">
+          {submissionCards.map((card) => (
             <Link
               key={card.href}
               href={card.href}
-              className="group rounded-[8px] border border-[#d8e1ef] bg-white p-5 transition hover:border-[#2f6f9f] hover:bg-[#f7fbff] sm:p-6"
+              className={`group rounded-[10px] border-2 p-6 transition duration-200 hover:-translate-y-1 hover:shadow-[9px_9px_0_#111111] ${card.tone}`}
             >
-              <div className="flex items-start justify-between gap-4">
-                <span className="flex h-12 w-12 items-center justify-center rounded-[8px] bg-[#edf4f7] text-[#2f6f9f]">
-                  <Icon className="h-6 w-6" aria-hidden />
-                </span>
-                <ArrowRight
-                  className="mt-1 h-5 w-5 text-[#2f6f9f] transition group-hover:translate-x-0.5"
-                  aria-hidden
-                />
-              </div>
-              <h2 className="mt-5 text-xl font-semibold text-[#2f3a4d]">
+              <p className="text-[11px] font-black uppercase tracking-normal opacity-75">
+                {card.eyebrow}
+              </p>
+              <h2 className="mt-4 text-[28px] font-black tracking-normal">
                 {card.title}
               </h2>
-              <p className="mt-2 break-keep text-sm leading-6 text-[#667085]">
-                {card.description}
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                {card.details.map((detail) => (
-                  <span
-                    key={detail}
-                    className="rounded-full bg-[#eef3f8] px-3 py-1 text-xs font-medium text-[#526071]"
-                  >
-                    {detail}
-                  </span>
-                ))}
+              <p className="mt-3 text-sm font-semibold leading-6 opacity-82">{card.description}</p>
+              <div className="mt-6 inline-flex items-center gap-2 border-2 border-current bg-white px-4 py-2 text-sm font-black text-[#111111]">
+                바로 시작
+                <span className="transition-transform duration-200 group-hover:translate-x-1">
+                  →
+                </span>
               </div>
             </Link>
-          );
-        })}
-      </div>
-
-      <div className="mt-5 grid gap-4 rounded-[8px] border border-[#d8e1ef] bg-white p-5 text-sm leading-6 text-[#667085] sm:grid-cols-[1fr_auto] sm:items-center">
-        <div className="flex gap-3">
-          <FileText className="mt-1 h-4 w-4 shrink-0 text-[#2f6f9f]" aria-hidden />
-          <div>
-            <p className="font-semibold text-[#2f3a4d]">
-              이메일 전송 방식도 계속 이용할 수 있습니다.
-            </p>
-            <p className="mt-1">
-              구버전 신청서로 접수하려면 서식을 내려받아 이메일로 보내주세요.
-            </p>
-          </div>
+          ))}
         </div>
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Link
-            href="/forms"
-            className="inline-flex h-10 items-center rounded-[8px] border border-[#c9d6e8] px-4 font-semibold text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f]"
-          >
-            구버전(이메일) 접수
-          </Link>
-        </div>
+      </section>
+      <div className="mt-5 rounded-[10px] border-2 border-[#111111] bg-white px-5 py-4 text-sm font-semibold text-muted-foreground shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27]">
+        파일 업로드가 안 될 경우, 신청은 사이트에서 진행하고 파일만 이메일로 보내주세요.
+        <p className="mt-2 font-semibold text-foreground">{APP_CONFIG.supportEmail}</p>
+        <Link href="/forms" className="mt-3 inline-flex text-xs font-black text-foreground underline underline-offset-4">
+          신청서 다운로드·이메일 접수 안내
+        </Link>
       </div>
     </div>
   );

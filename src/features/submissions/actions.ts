@@ -71,12 +71,63 @@ const albumStationCodesByCount: Record<number, string[]> = {
   ],
 };
 
+const albumOneClickPriceMap: Record<number, number> = {
+  7: 100000,
+  10: 130000,
+  13: 150000,
+  15: 170000,
+};
+
+const albumAdditionalDiscountWindowMs = 30 * 60 * 1000;
+
+const mvBaseOnlinePrice = 30000;
+const mvStationPriceMap: Record<string, number> = {
+  KBS: 50000,
+  MBC: 30000,
+  SBS: 30000,
+  ETN: 30000,
+  MNET: 30000,
+};
+
 const extractMissingColumn = (error: SupabaseError) => {
   const message = error.message ?? "";
   const match =
     message.match(/'([^']+)' column/i) ||
     message.match(/column \"([^\"]+)\"/i);
   return match?.[1] ?? null;
+};
+
+const hasRecentBaseAlbumForDiscount = async ({
+  db,
+  packageId,
+  submissionId,
+  userId,
+  guestToken,
+  basePriceKrw,
+}: {
+  db: ReturnType<typeof createAdminClient>;
+  packageId: string;
+  submissionId: string;
+  userId?: string | null;
+  guestToken?: string | null;
+  basePriceKrw: number;
+}) => {
+  if (!userId && !guestToken) return false;
+  const cutoff = new Date(Date.now() - albumAdditionalDiscountWindowMs).toISOString();
+  let query = db
+    .from("submissions")
+    .select("id")
+    .eq("package_id", packageId)
+    .eq("amount_krw", basePriceKrw)
+    .neq("id", submissionId)
+    .gte("created_at", cutoff)
+    .in("status", ["WAITING_PAYMENT", "IN_PROGRESS", "COMPLETED", "SUBMITTED"])
+    .limit(1);
+
+  query = userId ? query.eq("user_id", userId) : query.eq("guest_token", guestToken);
+  const { data, error } = await query.maybeSingle();
+  if (error) return false;
+  return Boolean(data?.id);
 };
 
 const stripColumn = <T extends Record<string, unknown>>(
@@ -706,6 +757,7 @@ export async function saveAlbumSubmissionAction(
   const taxInvoiceBusinessNumberDigits = normalizeDigits(
     parsed.data.taxInvoiceBusinessNumber,
   );
+  const paymentMethod = parsed.data.paymentMethod ?? "BANK";
 
   if (isGuest && !parsed.data.guestToken) {
     return { error: "로그인 정보를 확인할 수 없습니다." };
@@ -734,6 +786,7 @@ export async function saveAlbumSubmissionAction(
   let amountKrw = parsed.data.amountKrw ?? 0;
   let packageStationCount: number | null = null;
   let packageName: string | null = null;
+  let serverBasePriceKrw = 0;
 
   if (hasPackage && parsed.data.packageId) {
     const { data: selectedPackage, error: packageError } = await db
@@ -747,8 +800,57 @@ export async function saveAlbumSubmissionAction(
     }
     packageStationCount = selectedPackage.station_count ?? null;
     packageName = selectedPackage.name ?? null;
-    if (amountKrw <= 0) {
-      amountKrw = selectedPackage.price_krw;
+    serverBasePriceKrw = Math.max(
+      0,
+      Math.round(
+        Number(
+          isOneClick && packageStationCount
+            ? albumOneClickPriceMap[packageStationCount] ??
+              selectedPackage.price_krw
+            : selectedPackage.price_krw,
+        ),
+      ),
+    );
+
+    if (isSubmitted) {
+      const requestedAmount = Math.max(
+        0,
+        Math.round(Number(parsed.data.amountKrw ?? 0)),
+      );
+      const additionalPriceKrw = Math.round(serverBasePriceKrw * 0.5);
+      const requestedAdditionalDiscount =
+        additionalPriceKrw > 0 && requestedAmount === additionalPriceKrw;
+      const hasRecentBaseAlbum =
+        additionalPriceKrw > 0 &&
+        (await hasRecentBaseAlbumForDiscount({
+          db: adminDb,
+          packageId: parsed.data.packageId,
+          submissionId: parsed.data.submissionId,
+          userId: user?.id ?? null,
+          guestToken: parsed.data.guestToken ?? null,
+          basePriceKrw: serverBasePriceKrw,
+        }));
+      if (paymentMethod === "CARD" && hasRecentBaseAlbum) {
+        return {
+          error:
+            "여러 앨범 동시 접수의 카드 결제는 아직 지원하지 않습니다. 무통장 입금으로 진행해주세요.",
+        };
+      }
+      const canUseAdditionalDiscount =
+        requestedAdditionalDiscount &&
+        paymentMethod === "BANK" &&
+        hasRecentBaseAlbum;
+      amountKrw = canUseAdditionalDiscount
+        ? additionalPriceKrw
+        : serverBasePriceKrw;
+      if (requestedAdditionalDiscount && paymentMethod === "CARD") {
+        return {
+          error:
+            "추가 앨범 할인 접수는 무통장 입금으로 진행해주세요. 카드 결제는 단일 앨범 접수만 지원합니다.",
+        };
+      }
+    } else if (amountKrw <= 0) {
+      amountKrw = serverBasePriceKrw;
     }
   }
 
@@ -757,7 +859,6 @@ export async function saveAlbumSubmissionAction(
   }
   amountKrw = Math.max(0, amountKrw);
 
-  const paymentMethod = parsed.data.paymentMethod ?? "BANK";
   if (
     isSubmitted &&
     paymentMethod === "BANK" &&
@@ -1224,11 +1325,36 @@ export async function saveMvSubmissionAction(
   const adminDb = createAdminClient();
   let db = isGuest ? adminDb : supabase;
 
-  let amountKrw = parsed.data.amountKrw ?? 0;
+  let amountKrw = Math.max(0, Math.round(Number(parsed.data.amountKrw ?? 0)));
+  if (isSubmitted) {
+    let selectedCodes: string[] = [];
+    if (parsed.data.selectedStationIds?.length) {
+      const { data: selectedStations, error: stationError } = await adminDb
+        .from("stations")
+        .select("code")
+        .in("id", parsed.data.selectedStationIds);
+      if (stationError) {
+        return { error: "선택한 방송국 정보를 확인할 수 없습니다." };
+      }
+      selectedCodes = (selectedStations ?? [])
+        .map((station) => station.code)
+        .filter((code): code is string => Boolean(code));
+    }
+
+    const stationAmountKrw = selectedCodes.reduce(
+      (sum, code) => sum + (mvStationPriceMap[code] ?? 0),
+      0,
+    );
+    const baseAmountKrw =
+      parsed.data.mvType === "MV_DISTRIBUTION" &&
+      (parsed.data.mvBaseSelected ?? true)
+        ? mvBaseOnlinePrice
+        : 0;
+    amountKrw = baseAmountKrw + stationAmountKrw;
+  }
   if (isSubmitted && amountKrw <= 0) {
     return { error: "결제 금액 정보를 확인할 수 없습니다." };
   }
-  amountKrw = Math.max(0, amountKrw);
   const songTitleValue =
     parsed.data.songTitleOfficial?.trim() ||
     parsed.data.songTitle?.trim() ||
@@ -1485,7 +1611,7 @@ export async function saveMvSubmissionAction(
         ? paymentMethod === "CARD"
           ? "카드 결제 요청이 접수되었습니다."
           : "입금 확인 요청이 접수되었습니다."
-        : "MV 심의 접수가 완료되었습니다."
+        : "뮤직비디오 심의 접수가 완료되었습니다."
       : "임시 저장이 완료되었습니다.";
 
   await db.from("submission_events").insert({

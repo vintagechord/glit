@@ -5,6 +5,7 @@ import { ReadableStream as NodeReadableStream } from "stream/web";
 import { z } from "zod";
 
 import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
+import { ensureSubmissionOwner, findSubmissionById } from "@/lib/payments/submission";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { Upload } from "@aws-sdk/lib-storage";
 
@@ -24,6 +25,22 @@ const schema = z.object({
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 
+class UploadRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "UploadRequestError";
+    this.status = status;
+  }
+}
+
+type DirectUploadResult = {
+  objectKey: string;
+  userId: string | null;
+  guest: boolean;
+};
+
 const isVideoLike = (mime?: string | null, filename?: string | null) => {
   const lowerMime = (mime || "").toLowerCase();
   const lowerName = (filename || "").toLowerCase();
@@ -31,12 +48,95 @@ const isVideoLike = (mime?: string | null, filename?: string | null) => {
   return /\.(mp4|mov|mkv|webm|avi|wmv|m4v|mpg|mpeg)$/.test(lowerName);
 };
 
-export async function POST(request: Request) {
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+const ensureUploadAccess = async (
+  submissionId: string,
+  guestToken?: string,
+) => {
+  const ownership = await ensureSubmissionOwner(submissionId, guestToken);
+  if (!ownership.error && ownership.submission) {
+    return {
+      user: ownership.user,
+      submission: ownership.submission,
+    };
+  }
+  if (ownership.error === "NOT_FOUND") {
+    throw new UploadRequestError("접수를 찾을 수 없습니다.", 404);
+  }
+  if (ownership.error === "UNAUTHORIZED") {
+    throw new UploadRequestError("로그인 또는 게스트 토큰이 필요합니다.", 401);
+  }
+  if (ownership.error === "FORBIDDEN") {
+    const supabase = await createServerSupabase();
+    const { data: isAdmin } = await supabase.rpc("is_admin");
+    if (isAdmin === true) {
+      const { submission, error } = await findSubmissionById(submissionId);
+      if (error || !submission) {
+        throw new UploadRequestError("접수를 찾을 수 없습니다.", 404);
+      }
+      return {
+        user: ownership.user,
+        submission,
+      };
+    }
+    throw new UploadRequestError("접수에 대한 권한이 없습니다.", 403);
+  }
 
+  throw new UploadRequestError("접수에 대한 권한이 없습니다.", 403);
+};
+
+const startValidatedUpload = async (
+  data: z.infer<typeof schema>,
+  filePart: {
+    stream: PassThrough;
+    filename?: string;
+    mimeType?: string;
+  },
+): Promise<DirectUploadResult> => {
+  try {
+    const { user, submission } = await ensureUploadAccess(
+      data.submissionId,
+      data.guestToken,
+    );
+
+    const objectOwnerId =
+      submission.user_id ??
+      (submission.guest_token ? `guest-${submission.guest_token}` : null) ??
+      user?.id ??
+      `guest-${data.guestToken ?? "new"}`;
+
+    const key = buildObjectKey({
+      userId: objectOwnerId,
+      submissionId: data.submissionId,
+      title: data.title,
+      filename: data.filename,
+    });
+
+    const { client, bucket } = getB2Config();
+    const uploader = new Upload({
+      client,
+      params: {
+        Bucket: bucket,
+        Key: key,
+        Body: filePart.stream,
+        ContentType: data.mimeType || undefined,
+        ContentLength: data.sizeBytes,
+      },
+      leavePartsOnError: false,
+    });
+    await uploader.done();
+
+    return {
+      objectKey: key,
+      userId: user?.id ?? null,
+      guest: Boolean(submission.guest_token ?? data.guestToken),
+    };
+  } catch (error) {
+    filePart.stream.resume();
+    throw error;
+  }
+};
+
+export async function POST(request: Request) {
   const contentType = request.headers.get("content-type");
   const contentLength = request.headers.get("content-length");
   const userAgent = request.headers.get("user-agent");
@@ -70,8 +170,7 @@ export async function POST(request: Request) {
 
   const fields: Record<string, string> = {};
   let parsedData: z.infer<typeof schema> | null = null;
-  let objectKey: string | null = null;
-  let uploadPromise: Promise<unknown> | null = null;
+  let uploadPromise: Promise<DirectUploadResult> | null = null;
   let parseErrorStatus: number | null = null;
   let parseErrorBody: { error: string; detail?: string } | null = null;
   let filePart:
@@ -154,13 +253,6 @@ export async function POST(request: Request) {
 
     parsedData = parsed.data;
 
-    if (!user && !parsed.data.guestToken) {
-      parseErrorStatus = 401;
-      parseErrorBody = { error: "로그인 또는 게스트 토큰이 필요합니다." };
-      filePart.stream.resume();
-      return;
-    }
-
     const videoLike = isVideoLike(
       filePart.mimeType || parsed.data.mimeType,
       filePart.filename || parsed.data.filename,
@@ -175,45 +267,7 @@ export async function POST(request: Request) {
       return;
     }
 
-    try {
-      const key = buildObjectKey({
-        userId: user?.id ?? `guest-${parsed.data.guestToken}`,
-        submissionId: parsed.data.submissionId,
-        title: parsed.data.title,
-        filename: parsed.data.filename,
-      });
-      objectKey = key;
-
-      const { client, bucket } = getB2Config();
-      const uploader = new Upload({
-        client,
-        params: {
-          Bucket: bucket,
-          Key: key,
-          Body: filePart.stream,
-          ContentType: parsed.data.mimeType || undefined,
-          ContentLength: parsed.data.sizeBytes,
-        },
-        leavePartsOnError: false,
-      });
-      uploadPromise = uploader.done();
-    } catch (error) {
-      const message =
-        error instanceof B2ConfigError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : "업로드 중 오류가 발생했습니다.";
-      parseErrorStatus = 500;
-      parseErrorBody = { error: message };
-      console.error("[Upload][direct] error before upload", {
-        submissionId: parsed.data.submissionId,
-        user: user?.id ?? null,
-        guest: Boolean(parsed.data.guestToken),
-        message,
-      });
-      filePart.stream.resume();
-    }
+    uploadPromise = startValidatedUpload(parsed.data, filePart);
   };
 
   try {
@@ -242,15 +296,13 @@ export async function POST(request: Request) {
     return NextResponse.json(parseErrorBody, { status: parseErrorStatus });
   }
 
-  const uploadObjectKey = objectKey;
   const uploadPromiseResolved = uploadPromise;
   const missing: string[] = [];
   if (!parsedData) missing.push("fields");
   if (!filePart) missing.push("file");
   if (!uploadPromiseResolved) missing.push("upload");
-  if (!uploadObjectKey) missing.push("objectKey");
 
-  if (missing.length > 0) {
+  if (missing.length > 0 || !parsedData || !uploadPromiseResolved) {
     console.error("[Upload][direct] missing file or parsed data", {
       contentType,
       contentLength,
@@ -260,21 +312,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "업로드 정보를 확인해주세요.", missing }, { status: 400 });
   }
 
-  const uploadDetails = parsedData!;
+  const uploadDetails = parsedData as z.infer<typeof schema>;
+  const uploadTask = uploadPromiseResolved as Promise<DirectUploadResult>;
 
   try {
-    await uploadPromiseResolved;
+    const uploadResult = await uploadTask;
 
     console.info("[Upload][direct] ok", {
       submissionId: uploadDetails.submissionId,
-      objectKey: uploadObjectKey,
+      objectKey: uploadResult.objectKey,
       sizeBytes: uploadDetails.sizeBytes,
-      user: user?.id ?? null,
-      guest: Boolean(uploadDetails.guestToken),
+      user: uploadResult.userId,
+      guest: uploadResult.guest,
     });
 
-    return NextResponse.json({ objectKey: uploadObjectKey });
+    return NextResponse.json({ objectKey: uploadResult.objectKey });
   } catch (error) {
+    if (error instanceof UploadRequestError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const message =
       error instanceof B2ConfigError
         ? error.message
@@ -283,7 +339,6 @@ export async function POST(request: Request) {
           : "업로드 중 오류가 발생했습니다.";
     console.error("[Upload][direct] error", {
       submissionId: uploadDetails.submissionId,
-      user: user?.id ?? null,
       guest: Boolean(uploadDetails.guestToken),
       message,
     });

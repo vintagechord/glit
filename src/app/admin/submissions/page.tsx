@@ -22,8 +22,8 @@ const PAGE_SIZE = 20;
 
 const typeOptions = [
   { value: "ALBUM", label: "음반 심의" },
-  { value: "MV_DISTRIBUTION", label: "M/V 심의 (유통/온라인)" },
-  { value: "MV_BROADCAST", label: "M/V 심의 (TV 송출)" },
+  { value: "MV_DISTRIBUTION", label: "뮤직비디오 심의 (유통/온라인)" },
+  { value: "MV_BROADCAST", label: "뮤직비디오 심의 (TV 송출)" },
 ];
 
 const typeLabelMap: Record<string, string> = Object.fromEntries(

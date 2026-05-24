@@ -19,12 +19,12 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
     return (
       <button
         type="submit"
-        className="h-12 w-full rounded-[8px] bg-[#2f6f9f] px-5 text-sm font-semibold text-white transition hover:bg-[#285f87] disabled:cursor-not-allowed disabled:opacity-70"
+        className="bauhaus-button w-full px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
         disabled={pending}
       >
         {pending ? (
           <span className="inline-flex items-center justify-center gap-2">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-background/40 border-t-transparent" />
             <span>로그인 중...</span>
           </span>
         ) : (
@@ -39,7 +39,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
       <form action={formAction} className="space-y-5">
         {nextPath ? <input type="hidden" name="next" value={nextPath} /> : null}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-[#2f3a4d] dark:text-white">
+          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
             이메일
           </label>
           <input
@@ -47,18 +47,18 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
             type="email"
             autoComplete="email"
             required
-            value={emailValue}
-            onChange={(event) => {
-              setEmailValue(event.target.value);
-            }}
-            className="w-full rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-3 text-sm text-[#2f3a4d] outline-none transition focus:border-[#2f6f9f] dark:border-white/16 dark:bg-[#0f172a] dark:text-white"
+          value={emailValue}
+          onChange={(event) => {
+            setEmailValue(event.target.value);
+          }}
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.email && (
             <p className="text-xs text-red-500">{state.fieldErrors.email}</p>
           )}
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-[#2f3a4d] dark:text-white">
+          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
             비밀번호
           </label>
           <input
@@ -66,37 +66,41 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
             type="password"
             autoComplete="current-password"
             required
-            className="w-full rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-3 text-sm text-[#2f3a4d] outline-none transition focus:border-[#2f6f9f] dark:border-white/16 dark:bg-[#0f172a] dark:text-white"
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.password && (
             <p className="text-xs text-red-500">{state.fieldErrors.password}</p>
           )}
         </div>
         {state.error && (
-          <p className="rounded-[8px] border border-[#f1b7b2] bg-[#fff2f1] px-4 py-2 text-xs font-semibold text-[#c0332a]">
+          <p className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
             {state.error}
           </p>
         )}
         <SubmitButton />
       </form>
-      <div className="space-y-2 rounded-[8px] border border-[#edf1f7] bg-[#fbfcfe] px-4 py-3 dark:border-white/10 dark:bg-white/5">
+      <div className="space-y-2 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3">
         <div className="flex justify-center">
           <Link
             href="/forgot-password"
-            className="inline-flex w-full justify-center rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-2 text-xs font-semibold text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/16 dark:bg-[#111827] dark:text-white sm:w-auto"
+            className="inline-flex w-full justify-center rounded-[8px] border-2 border-border px-4 py-2 text-xs font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white sm:w-auto dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
           >
             비밀번호 찾기
           </Link>
         </div>
       </div>
-      <div className="text-center text-sm text-[#667085] dark:text-white/60">
-        <span>비회원으로 접수한 경우 </span>
+      <div className="grid gap-2 text-center text-sm text-muted-foreground sm:grid-cols-2">
         <TrackLookupModalTrigger
-          label="코드입력"
-          modalTitle="비회원 코드 입력"
-          className="inline-flex items-center rounded-[8px] border border-[#c9d6e8] bg-white px-3 py-1 text-xs font-semibold text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f]"
+          label="비회원 접수 조회하기"
+          modalTitle="비회원 접수 조회"
+          className="inline-flex items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         />
-        <span> 으로 확인 가능합니다.</span>
+        <Link
+          href="/track"
+          className="inline-flex items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
+        >
+          조회 코드 찾기
+        </Link>
       </div>
     </div>
   );

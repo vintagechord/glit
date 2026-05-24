@@ -154,6 +154,7 @@ const onlineOptionDetails: Record<string, { title: string; note: string }> = {
     note: "온라인 심의 완료된 영상에 한하여 ETN 방송 '입고'만 가능합니다.",
   },
 };
+const conditionalOnlineOptions = new Set(["MBC", "MNET", "ETN"]);
 
 const onlineOptionConfirmDetails: Record<
   string,
@@ -162,7 +163,7 @@ const onlineOptionConfirmDetails: Record<
   MBC: {
     title: "MBC 뮤직비디오 심의 안내",
     lines: [
-      "2020.06.25부터 MBC M (<쇼챔피언>, <주간아이돌> 등) 방송되는 아티스트 M/V에 한해 심의 가능.",
+      "2020.06.25부터 MBC M (<쇼챔피언>, <주간아이돌> 등) 방송되는 아티스트 뮤직비디오에 한해 심의 가능.",
       "심의 영상은 온라인용으로 사용 가능합니다.",
       "심의 완료 후 등급분류 + MBC 로고 삽입본 사용 가능.",
       "파일 용량 2GB 미만.",
@@ -171,7 +172,7 @@ const onlineOptionConfirmDetails: Record<
   MNET: {
     title: "Mnet 뮤직비디오 심의 안내",
     lines: [
-      "자사 편성 계획 M/V 외 등급심의가 불가합니다. 방송 일정이 있는 경우만 문의 주세요.",
+      "자사 편성 계획 뮤직비디오 외 등급심의가 불가합니다. 방송 일정이 있는 경우만 문의 주세요.",
       "심의 완료 시 등급분류 + Mnet 로고를 삽입하여 온라인 유통이 가능합니다.",
       "제출 규격: WMV 또는 MPG",
       "파일 용량 1GB 미만.",
@@ -188,10 +189,10 @@ const onlineOptionConfirmNote =
   "위 내용을 확인하셨다면 [확인]을 눌러주세요.";
 
 const mvOptionToneClasses = [
-  "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
-  "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
-  "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
-  "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
+  "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
+  "border-[#111111] bg-[#1556a4] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[6px_6px_0_#f2cf27]",
+  "border-[#111111] bg-[#d9362c] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
+  "border-[#111111] bg-white text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]",
 ];
 
 type BroadcastSpecFields = {
@@ -209,17 +210,6 @@ type BroadcastSpec = {
   title: string;
   summaryBadges: string[];
   fields: BroadcastSpecFields;
-};
-
-type MvType = "MV_DISTRIBUTION" | "MV_BROADCAST";
-
-const getInitialMvType = (
-  searchParams: ReturnType<typeof useSearchParams>,
-): MvType => {
-  const type = searchParams?.get("type")?.toLowerCase();
-  return type === "broadcast" || type === "mv_broadcast"
-    ? "MV_BROADCAST"
-    : "MV_DISTRIBUTION";
 };
 
 const broadcastSpecs: BroadcastSpec[] = [
@@ -290,12 +280,13 @@ export function MvWizard({
     userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
-  const [mvType, setMvType] = React.useState<MvType>(() =>
-    getInitialMvType(searchParams),
+  const requestedType = searchParams?.get("type");
+  const [mvType, setMvType] = React.useState<"MV_DISTRIBUTION" | "MV_BROADCAST">(
+    requestedType === "broadcast" ? "MV_BROADCAST" : "MV_DISTRIBUTION",
   );
   const [tvStations, setTvStations] = React.useState<string[]>([]);
   const [onlineOptions, setOnlineOptions] = React.useState<string[]>([]);
-  const [onlineBaseSelected, setOnlineBaseSelected] = React.useState(false);
+  const [onlineBaseSelected, setOnlineBaseSelected] = React.useState(true);
   const [title, setTitle] = React.useState("");
   const [artistName, setArtistName] = React.useState("");
   const [artistNameOfficial, setArtistNameOfficial] = React.useState("");
@@ -305,10 +296,6 @@ export function MvWizard({
   const [productionCompany, setProductionCompany] = React.useState("");
   const [agency, setAgency] = React.useState("");
   const [albumTitle, setAlbumTitle] = React.useState("");
-
-  React.useEffect(() => {
-    setMvType(getInitialMvType(searchParams));
-  }, [searchParams]);
   const [productionDate, setProductionDate] = React.useState("");
   const [distributionCompany, setDistributionCompany] = React.useState("");
   const [businessRegNo, setBusinessRegNo] = React.useState("");
@@ -463,7 +450,7 @@ export function MvWizard({
           mvType: payload.mvType,
           tvStations: payload.tvStations ?? [],
           onlineOptions: payload.onlineOptions ?? [],
-          onlineBaseSelected: payload.onlineBaseSelected ?? false,
+          onlineBaseSelected: payload.onlineBaseSelected ?? true,
           emailSubmitConfirmed: payload.emailSubmitConfirmed ?? false,
           updatedAt: Date.now(),
         }),
@@ -558,12 +545,12 @@ export function MvWizard({
       const guestTokenFromMsg = payload.guestToken as string | undefined;
       if (status === "SUCCESS") {
         clearDraftStorage();
-        if (guestTokenFromMsg) {
-          window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
-          return;
-        }
         if (submissionFromMsg) {
           window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=success`;
+          return;
+        }
+        if (guestTokenFromMsg) {
+          window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
           return;
         }
       }
@@ -573,12 +560,12 @@ export function MvWizard({
             ? payload.message
             : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
         const paymentState = status.toLowerCase();
-        if (guestTokenFromMsg) {
-          window.location.href = `/track/${guestTokenFromMsg}?payment=${paymentState}`;
-          return;
-        }
         if (submissionFromMsg) {
           window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=${paymentState}`;
+          return;
+        }
+        if (guestTokenFromMsg) {
+          window.location.href = `/track/${guestTokenFromMsg}?payment=${paymentState}`;
           return;
         }
         setNotice({ error: message });
@@ -1562,7 +1549,7 @@ export function MvWizard({
           ? selection.onlineBaseSelected
           : typeof draft.mv_base_selected === "boolean"
             ? draft.mv_base_selected
-            : false;
+            : true;
       setOnlineBaseSelected(baseSelected);
     }
 
@@ -1605,7 +1592,7 @@ export function MvWizard({
         onlineOptions: Array.isArray(resumePrompt.stored?.onlineOptions)
           ? resumePrompt.stored.onlineOptions
           : [],
-        onlineBaseSelected: resumePrompt.stored?.onlineBaseSelected ?? false,
+        onlineBaseSelected: resumePrompt.stored?.onlineBaseSelected ?? true,
         emailSubmitConfirmed: resumePrompt.stored?.emailSubmitConfirmed ?? false,
       });
     }
@@ -2543,7 +2530,7 @@ export function MvWizard({
                 STEP 01
               </p>
               <h2 className="font-display mt-2 text-2xl text-foreground">
-                M/V 심의 목적을 선택하세요.
+                뮤직비디오 심의 목적을 선택하세요.
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 TV 송출용 심의와 유통/온라인 업로드 목적 심의를 구분합니다.
@@ -2556,7 +2543,7 @@ export function MvWizard({
               {
                 value: "MV_DISTRIBUTION",
                 label: "유통사 제출 & 온라인 업로드",
-                description: "온라인 유통을 위한 일반 MV 심의입니다.",
+                description: "온라인 유통을 위한 일반 뮤직비디오 심의입니다.",
               },
               {
                 value: "MV_BROADCAST",
@@ -2581,7 +2568,7 @@ export function MvWizard({
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
-                        MV Purpose
+                        심의 목적
                       </p>
                       <h3 className="mt-2 text-lg font-semibold">{item.label}</h3>
                     </div>
@@ -2651,7 +2638,7 @@ export function MvWizard({
                 유통사 제출 & 온라인 업로드
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                기본 MV 심의 + 방송국 입고 옵션을 선택할 수 있습니다.
+                기본 뮤직비디오 심의는 바로 신청할 수 있고, 방송국 입고 옵션은 조건 확인 후 진행합니다.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <button
@@ -2686,6 +2673,7 @@ export function MvWizard({
                   const details = onlineOptionDetails[code];
                   const tone =
                     mvOptionToneClasses[(index + 1) % mvOptionToneClasses.length];
+                  const isConditional = conditionalOnlineOptions.has(code);
                   return (
                     <button
                       key={code}
@@ -2701,19 +2689,30 @@ export function MvWizard({
                           <p className="text-sm font-semibold">
                             {details?.title ?? `${stationName} 입고 옵션`}
                           </p>
+                          {isConditional ? (
+                            <span className={`inline-flex rounded-[6px] border px-2.5 py-1 text-[10px] font-black tracking-normal ${active ? "border-white/30 bg-white/20 text-current" : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}>
+                              문의 필요
+                            </span>
+                          ) : null}
                           {active ? (
                             <span className="inline-flex rounded-full border border-[#0071e3]/14 bg-white/72 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
                               선택됨
                             </span>
                           ) : null}
                         </div>
-                        <span className="text-xs font-semibold">
+                        <span className="text-right text-xs font-semibold">
+                          {isConditional ? "문의 필요 · " : null}
                           {formatCurrency(stationPriceMap[code] ?? 0)}원
                         </span>
                       </div>
                       <p className="mt-2 text-xs opacity-80">
                         {details?.note}
                       </p>
+                      {isConditional ? (
+                        <p className="mt-3 text-xs font-semibold opacity-90">
+                          조건 확인하기 후 담당자 확인을 거쳐 진행됩니다.
+                        </p>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -2760,7 +2759,7 @@ export function MvWizard({
                 STEP 02
               </p>
               <h2 className="font-display mt-2 text-2xl text-foreground">
-                M/V 신청서 정보를 입력하세요.
+                뮤직비디오 신청서 정보를 입력하세요.
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 제목/러닝타임/포맷 등 기본 정보를 입력합니다.
@@ -2770,12 +2769,12 @@ export function MvWizard({
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              MV 기본 정보
+              뮤직비디오 기본 정보
             </p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  MV 제목 *
+                  뮤직비디오 제목 *
                 </label>
                 <input
                   value={title}
@@ -3121,7 +3120,7 @@ export function MvWizard({
                   </button>
                 </div>
                 {showLyricsToolNotice && (
-                  <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#a9c8dc]">
+                  <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
                     위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
                     체크해주세요.
                   </div>
@@ -3134,14 +3133,14 @@ export function MvWizard({
 	                    ? "border-red-200/70 bg-red-50 text-red-700"
 	                    : lyricsToolNotice.type === "success"
 	                      ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
-	                      : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]"
+	                      : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
 	                  }`}
 	              >
 	                {lyricsToolNotice.message}
 	              </div>
 	            )}
 	            {spellcheckResult && (
-	              <div className="mt-3 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs leading-5 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]">
+	              <div className="mt-3 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs leading-5 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
 	                <p className="font-semibold">
 	                  맞춤법 검사는 참고용입니다. 실제 제출 가사는 변경되지 않습니다.
 	                </p>
@@ -3355,7 +3354,7 @@ export function MvWizard({
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              MV 파일 업로드
+              뮤직비디오 파일 업로드
             </p>
             <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               {uploadHintTitle}
@@ -3394,7 +3393,7 @@ export function MvWizard({
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
-                    ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#78a7c3] dark:text-[#06111f]"
+                    ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
                     : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                   }`}
               >
@@ -3402,7 +3401,7 @@ export function MvWizard({
                   <span
                     aria-hidden="true"
                     className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${emailSubmitConfirmed
-                        ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#78a7c3]"
+                        ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#3f8ad8]"
                         : "border-current"
                       }`}
                   >
@@ -3417,7 +3416,7 @@ export function MvWizard({
                 <p className="text-xs font-semibold text-muted-foreground">
                   아래 이메일 주소로 영상 파일을 보내주세요.
                 </p>
-                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#a9c8dc]">
+                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
                   {APP_CONFIG.supportEmail}
                 </p>
               </div>
@@ -3646,6 +3645,12 @@ export function MvWizard({
               <span>총 결제 금액</span>
               <span>{formatCurrency(totalAmount)}원</span>
             </div>
+            <div className="mt-4 grid gap-2 border-t border-border/60 pt-4 text-xs font-semibold text-muted-foreground sm:grid-cols-2">
+              <span>예상 진행 기간: 목적/방송국별 상이</span>
+              <span>부가세 및 증빙 요청은 결제 방식 선택 후 확인</span>
+              <span>조건부 방송국은 담당자 확인 후 진행</span>
+              <span>영상 파일 누락 또는 규격 문제 시 보완 요청</span>
+            </div>
           </div>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -3662,7 +3667,7 @@ export function MvWizard({
                   }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  Bank
+                  무통장
                 </p>
                 <p className="mt-2 text-sm font-semibold">무통장 입금</p>
                 <p className="mt-2 text-xs opacity-80">
@@ -3678,7 +3683,7 @@ export function MvWizard({
                   }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  Card
+                  카드
                 </p>
                 <p className="mt-2 text-sm font-semibold">카드 결제</p>
                 <p className="mt-2 text-xs opacity-80">
@@ -3925,7 +3930,7 @@ export function MvWizard({
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
 	          {notice.emailWarning ? (
-	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]">
+	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
 	              {notice.emailWarning}
 	            </div>
           ) : null}

@@ -37,17 +37,25 @@ export function DashboardShell({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-      <div className="relative flex flex-wrap items-start justify-between gap-4 border-b border-[#d8e1ef] pb-6 dark:border-white/10">
+      <div className="relative flex flex-wrap items-start justify-between gap-4 border-b-2 border-[#111111] pb-6 dark:border-[#f2cf27]">
+        <div
+          aria-hidden="true"
+          className="absolute bottom-0 right-0 hidden h-4 w-28 bg-[#1556a4] sm:block"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute bottom-0 right-28 hidden h-4 w-12 bg-[#d9362c] sm:block"
+        />
         <div className="flex flex-col gap-3">
           <div>
-            <p className="text-sm font-semibold text-[#2f6f9f] dark:text-[#a9c8dc]">
+            <p className="bauhaus-kicker">
               {contextLabel}
             </p>
-            <h1 className="mt-3 text-2xl font-semibold leading-tight text-[#2f3a4d] dark:text-white sm:text-3xl">
+            <h1 className="font-display mt-4 text-2xl font-black leading-tight text-foreground sm:text-3xl">
               {title}
             </h1>
             {description ? (
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#667085] dark:text-white/64">
+              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-muted-foreground">
                 {description}
               </p>
             ) : null}
@@ -57,15 +65,15 @@ export function DashboardShell({
       </div>
 
       {shouldRenderTabs ? (
-        <nav className="mt-5 flex w-full items-center gap-2 overflow-x-auto text-xs font-semibold tracking-normal text-[#667085] scrollbar-none sm:mt-6 sm:inline-flex sm:w-auto sm:flex-wrap">
+        <nav className="mt-5 flex w-full items-center gap-2 overflow-x-auto text-xs font-black uppercase tracking-normal text-muted-foreground scrollbar-none sm:mt-6 sm:inline-flex sm:w-auto sm:flex-wrap">
           {tabList.map((tab) => (
             <Link
               key={tab.key}
               href={tab.href}
               className={`shrink-0 rounded-[8px] border-2 px-4 py-2 transition ${
                 activeTab === tab.key
-                  ? "border-[#2f6f9f] bg-[#edf4f7] text-[#2f6f9f] dark:border-[#a9c8dc] dark:bg-white/8 dark:text-[#a9c8dc]"
-                  : "border-[#d8e1ef] bg-white text-[#667085] hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/10 dark:bg-[#111827] dark:text-white/64 dark:hover:border-[#a9c8dc] dark:hover:text-[#a9c8dc]"
+                  ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
+                  : "border-border bg-card text-muted-foreground hover:border-[#111111] hover:text-foreground dark:hover:border-[#f2cf27]"
               }`}
             >
               {tab.label}

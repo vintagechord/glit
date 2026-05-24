@@ -53,13 +53,13 @@ export function TrackLookupModalTrigger({
             role="dialog"
             aria-modal="true"
             aria-labelledby={modalTitle ? titleId : undefined}
-            className="w-full max-w-md rounded-[8px] border border-[#cbdde8] bg-white p-6 text-[#2f3a4d] shadow-[0_16px_44px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-[#111827] dark:text-white"
+            className="w-full max-w-md rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <div>
                 {modalTitle ? (
-                  <p id={titleId} className="text-sm font-semibold">
+                  <p id={titleId} className="text-sm font-black text-foreground">
                     {modalTitle}
                   </p>
                 ) : null}
@@ -67,7 +67,7 @@ export function TrackLookupModalTrigger({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-[8px] border border-[#c9d6e8] px-3 py-1 text-xs font-semibold text-[#667085] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/16 dark:text-white/70"
+                className="rounded-[8px] border-2 border-border px-2 py-1 text-xs font-black text-muted-foreground transition hover:text-foreground"
               >
                 닫기
               </button>

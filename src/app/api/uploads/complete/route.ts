@@ -56,6 +56,9 @@ const inferKind = (filename: string | undefined, mimeType: string | undefined): 
   return "ETC";
 };
 
+const keyMatchesSubmission = (key: string, submissionId: string) =>
+  key.includes(`/${submissionId}/`);
+
 export async function POST(request: Request) {
   const startedAt = Date.now();
   const body = await request.json().catch(() => null);
@@ -103,6 +106,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
     }
     if (error === "FORBIDDEN") {
+      return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
+    }
+    if (!keyMatchesSubmission(normalizedKey, submissionId)) {
       return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
     }
 

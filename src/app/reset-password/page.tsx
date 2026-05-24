@@ -151,9 +151,7 @@ function ResetPasswordContent() {
       <div aria-hidden="true" className="absolute right-8 bottom-12 h-16 w-16 bg-[#d9362c]" />
       <div className="w-full max-w-xl space-y-6 rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
         <div className="space-y-2 text-center">
-          <p className="bauhaus-kicker mx-auto">
-            Reset Password
-          </p>
+          <p className="bauhaus-kicker mx-auto">비밀번호 재설정</p>
           <h1 className="font-display text-2xl font-black text-foreground">{heading}</h1>
           <p className="text-sm font-semibold text-muted-foreground">
             비밀번호를 재설정한 뒤 새 비밀번호로 로그인해주세요.

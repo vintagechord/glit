@@ -75,8 +75,11 @@ const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   confirmPassword: z.string().min(8),
+  agreeAge: z.literal("on"),
   agreeTerms: z.literal("on"),
   agreePrivacy: z.literal("on"),
+  agreeRefund: z.literal("on"),
+  agreeMarketing: z.literal("on").optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   path: ["confirmPassword"],
   message: "비밀번호가 일치하지 않습니다.",
@@ -158,8 +161,11 @@ export async function signupAction(
     email: formData.get("email"),
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
+    agreeAge: formData.get("agreeAge"),
     agreeTerms: formData.get("agreeTerms"),
     agreePrivacy: formData.get("agreePrivacy"),
+    agreeRefund: formData.get("agreeRefund"),
+    agreeMarketing: formData.get("agreeMarketing") || undefined,
   });
 
   if (!parsed.success) {
@@ -178,6 +184,7 @@ export async function signupAction(
         name: parsed.data.name ?? "",
         company: parsed.data.company ?? "",
         phone: parsed.data.phone ?? "",
+        marketingConsent: parsed.data.agreeMarketing === "on",
       },
     });
 
@@ -221,10 +228,12 @@ export async function resetPasswordAction(
   }
 
   try {
-    const redirectTo = `${
+    const appUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ??
       process.env.NEXT_PUBLIC_APP_URL ??
-      "https://glit-b1yn.onrender.com"
-    }/reset-password`;
+      process.env.APP_URL ??
+      "https://onside17.com";
+    const redirectTo = `${appUrl.replace(/\/+$/, "")}/reset-password`;
     let customMailError: string | undefined;
 
     try {

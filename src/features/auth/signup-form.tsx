@@ -20,11 +20,10 @@ export function SignupForm() {
   const emailRef = useRef<HTMLInputElement | null>(null);
   const passwordRef = useRef<HTMLInputElement | null>(null);
   const confirmRef = useRef<HTMLInputElement | null>(null);
-  const nameRef = useRef<HTMLInputElement | null>(null);
-  const phoneRef = useRef<HTMLInputElement | null>(null);
-  const companyRef = useRef<HTMLInputElement | null>(null);
+  const agreeAgeRef = useRef<HTMLInputElement | null>(null);
   const agreeTermsRef = useRef<HTMLInputElement | null>(null);
   const agreePrivacyRef = useRef<HTMLInputElement | null>(null);
+  const agreeRefundRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!state.message || didRedirect.current) return;
@@ -40,22 +39,20 @@ export function SignupForm() {
       "email",
       "password",
       "confirmPassword",
+      "agreeAge",
       "agreeTerms",
       "agreePrivacy",
-      "name",
-      "phone",
-      "company",
+      "agreeRefund",
     ];
     const firstErrorKey = order.find((key) => state.fieldErrors?.[key]);
     const refMap: Record<string, React.RefObject<HTMLInputElement | null>> = {
       email: emailRef,
       password: passwordRef,
       confirmPassword: confirmRef,
-      name: nameRef,
-      phone: phoneRef,
-      company: companyRef,
+      agreeAge: agreeAgeRef,
       agreeTerms: agreeTermsRef,
       agreePrivacy: agreePrivacyRef,
+      agreeRefund: agreeRefundRef,
     };
     if (firstErrorKey) {
       const target = refMap[firstErrorKey]?.current;
@@ -158,49 +155,6 @@ export function SignupForm() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            이름 (선택)
-          </label>
-          <input
-            name="name"
-            type="text"
-            ref={nameRef}
-            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
-          />
-          {state.fieldErrors?.name && (
-            <p className="text-xs text-red-500">{state.fieldErrors.name}</p>
-          )}
-        </div>
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            연락처 (선택)
-          </label>
-          <input
-            name="phone"
-            type="tel"
-            autoComplete="tel"
-            ref={phoneRef}
-            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
-          />
-          {state.fieldErrors?.phone && (
-            <p className="text-xs text-red-500">{state.fieldErrors.phone}</p>
-          )}
-        </div>
-      </div>
-      <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          회사/기획사 (선택)
-        </label>
-        <input
-          name="company"
-          type="text"
-          ref={companyRef}
-          className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
-        />
-      </div>
-
       <div className="space-y-3 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3 text-sm text-foreground">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -222,6 +176,19 @@ export function SignupForm() {
               개인정보처리방침 보기
             </button>
           </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <input
+            id="agreeAge"
+            name="agreeAge"
+            type="checkbox"
+            required
+            ref={agreeAgeRef}
+            className="h-4 w-4 rounded border-border"
+          />
+          <label htmlFor="agreeAge" className="text-foreground">
+            만 14세 이상입니다.
+          </label>
         </div>
         <div className="flex items-center gap-2 text-xs">
           <input
@@ -249,9 +216,36 @@ export function SignupForm() {
             개인정보처리방침에 동의합니다.
           </label>
         </div>
-        {(state.fieldErrors?.agreeTerms || state.fieldErrors?.agreePrivacy) && (
+        <div className="flex items-center gap-2 text-xs">
+          <input
+            id="agreeRefund"
+            name="agreeRefund"
+            type="checkbox"
+            required
+            ref={agreeRefundRef}
+            className="h-4 w-4 rounded border-border"
+          />
+          <label htmlFor="agreeRefund" className="text-foreground">
+            결제/환불 정책을 확인했습니다.
+          </label>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <input
+            id="agreeMarketing"
+            name="agreeMarketing"
+            type="checkbox"
+            className="h-4 w-4 rounded border-border"
+          />
+          <label htmlFor="agreeMarketing" className="text-foreground">
+            심의 안내 및 서비스 소식 수신에 동의합니다. (선택)
+          </label>
+        </div>
+        {(state.fieldErrors?.agreeAge ||
+          state.fieldErrors?.agreeTerms ||
+          state.fieldErrors?.agreePrivacy ||
+          state.fieldErrors?.agreeRefund) && (
           <p className="text-xs text-red-500">
-            약관과 개인정보 처리방침에 동의해야 가입이 가능합니다.
+            필수 약관과 정책에 동의해야 가입이 가능합니다.
           </p>
         )}
       </div>

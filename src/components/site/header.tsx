@@ -6,13 +6,15 @@ import { usePathname } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
 
+import { ThemeToggle } from "./theme-toggle";
 import { SiteLogo } from "./site-logo";
 
 const navLinks = [
-  { label: "음반심의", href: "/dashboard/new/album", match: "prefix" as const },
-  { label: "뮤비심의", href: "/dashboard/new/mv", match: "prefix" as const },
-  { label: "결과 확인", href: "/track", match: "prefix" as const },
-  { label: "구버전(이메일) 접수", href: "/forms", match: "prefix" as const },
+  { label: "심의 신청", href: "/dashboard/new", match: "prefix" as const },
+  { label: "진행/결과 조회", href: "/track", match: "prefix" as const },
+  { label: "이용가이드", href: "/guide", match: "prefix" as const },
+  { label: "FAQ", href: "/faq", match: "prefix" as const },
+  { label: "고객센터", href: "/support", match: "prefix" as const },
 ];
 
 const authStorageKey = "onside:header-auth-state";
@@ -20,13 +22,13 @@ const authStorageKey = "onside:header-auth-state";
 type AuthState = "authenticated" | "unauthenticated";
 
 const navLinkClass =
-  "inline-flex h-11 items-center border-b-2 border-transparent px-2 text-[14px] font-semibold tracking-normal transition";
+  "inline-flex h-11 items-center rounded-[8px] border-2 border-transparent px-4 text-[14px] font-black tracking-normal transition";
 const mobileNavLinkClass =
-  "inline-flex min-h-10 items-center justify-center border-b-2 border-transparent px-2 py-2 text-center text-[12px] font-semibold leading-tight tracking-normal transition";
+  "inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-transparent px-2 py-2 text-center text-[12px] font-black leading-tight tracking-normal transition";
 const subtleButtonClass =
-  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border border-[#c9d6e8] bg-white px-3 text-[12px] font-semibold tracking-normal text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f] dark:border-white/16 dark:bg-[#111827] dark:text-white dark:hover:border-[#a9c8dc] sm:h-11 sm:px-4 sm:text-[14px]";
+  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-3 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 const primaryButtonClass =
-  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] bg-[#2f6f9f] px-3 text-[12px] font-semibold tracking-normal text-white transition hover:bg-[#285f87] dark:bg-[#78a7c3] dark:text-[#06111f] dark:hover:bg-[#8bb8cf] sm:h-11 sm:px-4 sm:text-[14px]";
+  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-3 text-[12px] font-black tracking-normal text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f478a] hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ffd93c] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 
 const isActivePath = (
   pathname: string,
@@ -128,7 +130,7 @@ export function SiteHeader() {
   return (
     <header
       ref={headerRef}
-      className="sticky top-0 z-[90] isolate border-b border-[#d8e1ef] bg-white/95 backdrop-blur-[18px] dark:border-white/10 dark:bg-[#0f172a]/92"
+      className="sticky top-0 z-[90] isolate border-b-2 border-[#111111] bg-[rgba(247,245,239,0.92)] backdrop-blur-[18px] dark:border-[#f2cf27] dark:bg-[rgba(16,16,16,0.92)]"
     >
       <div className="mx-auto flex w-full max-w-6xl items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6">
         <SiteLogo />
@@ -136,16 +138,15 @@ export function SiteHeader() {
         <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 lg:flex">
           {navLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
-            const linkClass = `${navLinkClass} ${
-              activeLink
-                ? "border-[#2f6f9f] text-[#2f6f9f] dark:border-[#a9c8dc] dark:text-[#a9c8dc]"
-                : "text-[#667085] hover:border-[#c9d6e8] hover:text-[#2f3a4d] dark:text-white/70 dark:hover:border-white/24 dark:hover:text-white"
-            }`;
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={linkClass}
+                className={`${navLinkClass} ${
+                  activeLink
+                    ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-none"
+                    : "text-foreground/74 hover:border-[#111111] hover:bg-white hover:text-foreground dark:text-white/76 dark:hover:border-[#f2cf27] dark:hover:bg-[#171717] dark:hover:text-white"
+                }`}
               >
                 <span>{link.label}</span>
               </Link>
@@ -154,6 +155,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
+          <ThemeToggle />
           {authState === "authenticated" ? (
             <>
               <form action="/logout" method="post">
@@ -161,8 +163,11 @@ export function SiteHeader() {
                   로그아웃
                 </button>
               </form>
-              <Link href="/mypage" className={primaryButtonClass}>
+              <Link href="/mypage" className={subtleButtonClass}>
                 마이페이지
+              </Link>
+              <Link href="/dashboard/new" className={primaryButtonClass}>
+                지금 신청
               </Link>
             </>
           ) : (
@@ -170,28 +175,27 @@ export function SiteHeader() {
               <Link href="/login" className={subtleButtonClass}>
                 로그인
               </Link>
-              <Link href="/signup" className={primaryButtonClass}>
-                회원가입
+              <Link href="/dashboard/new" className={primaryButtonClass}>
+                지금 신청
               </Link>
             </>
           )}
         </div>
       </div>
 
-      <nav className="border-t border-[#edf1f7] px-3 py-2.5 lg:hidden dark:border-white/10">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-4 gap-1.5 sm:gap-2">
+      <nav className="border-t-2 border-[#111111] px-3 py-2.5 lg:hidden dark:border-[#f2cf27]">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-5 gap-1.5 sm:gap-2">
           {navLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
-            const linkClass = `${mobileNavLinkClass} ${
-              activeLink
-                ? "border-[#2f6f9f] text-[#2f6f9f] dark:border-[#a9c8dc] dark:text-[#a9c8dc]"
-                : "bg-transparent text-[#667085] hover:border-[#c9d6e8] hover:text-[#2f3a4d] dark:text-white/70 dark:hover:border-white/24 dark:hover:text-white"
-            }`;
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={linkClass}
+                className={`${mobileNavLinkClass} ${
+                  activeLink
+                    ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-none"
+                    : "bg-transparent text-foreground/72 hover:border-[#111111] hover:bg-white hover:text-foreground dark:text-white/74 dark:hover:border-[#f2cf27] dark:hover:bg-[#171717] dark:hover:text-white"
+                }`}
               >
                 <span>{link.label}</span>
               </Link>

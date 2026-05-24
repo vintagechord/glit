@@ -78,8 +78,8 @@ export async function sendWelcomeEmail(payload: WelcomeEmailPayload) {
   const body = {
     from,
     to: payload.email,
-    subject: "Welcome to onside",
-    html: `<p>Hi ${name},</p><p>Your release is now officially greenlit with onside.</p><p>Submit, track, and archive every review in one place — we'll keep you posted.</p>`,
+    subject: "[onside] 회원가입이 완료되었습니다",
+    html: `<p>${name}님, 온사이드 가입이 완료되었습니다.</p><p>음반·뮤직비디오 심의 신청, 진행 확인, 결과 파일 수령을 한 곳에서 이용하실 수 있습니다.</p><p>다음 신청부터 신청자 정보와 접수 기록을 더 빠르게 관리할 수 있습니다.</p>`,
   };
 
   try {

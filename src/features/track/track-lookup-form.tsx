@@ -20,7 +20,6 @@ export function TrackLookupForm({
   const [lookupError, setLookupError] = React.useState("");
   const [noMatchAttemptCount, setNoMatchAttemptCount] = React.useState(0);
   const [lookupBusy, setLookupBusy] = React.useState(false);
-  const [showLookupFinder, setShowLookupFinder] = React.useState(false);
   const [copiedToken, setCopiedToken] = React.useState<string | null>(null);
   const [lookupResults, setLookupResults] = React.useState<
     Array<{
@@ -159,7 +158,7 @@ export function TrackLookupForm({
       <form onSubmit={handleSubmit} className="space-y-3">
         <label
           htmlFor="guest-track-token"
-          className="text-sm font-semibold text-[#2f3a4d]"
+          className="text-[11px] font-black uppercase tracking-normal text-muted-foreground"
         >
           조회 코드
         </label>
@@ -170,86 +169,78 @@ export function TrackLookupForm({
           placeholder="비회원 조회 코드 입력"
           aria-invalid={Boolean(error)}
           aria-describedby={error ? "guest-track-token-error" : undefined}
-          className={`w-full rounded-[8px] border ${
-            error ? "border-[#c0332a] bg-[#fff2f1]" : "border-[#c9d6e8] bg-white"
-          } px-4 py-3 text-sm text-[#2f3a4d] outline-none transition focus:border-[#2f6f9f]`}
+          className={`w-full rounded-[8px] border-2 ${
+            error ? "border-[#d9362c] bg-[#d9362c]/10" : "border-border bg-background"
+          } px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]`}
         />
         {error ? (
-          <p id="guest-track-token-error" className="text-xs text-[#c0332a]">
+          <p id="guest-track-token-error" className="text-xs text-black">
             {error}
           </p>
         ) : null}
         <button
           type="submit"
           disabled={validating}
-          className="w-full rounded-[8px] bg-[#2f6f9f] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#285f87] disabled:cursor-not-allowed disabled:opacity-60"
+          className="bauhaus-button w-full px-4 py-3 text-xs uppercase disabled:cursor-not-allowed disabled:bg-muted"
         >
           {validating ? "확인 중..." : "진행상황 조회"}
         </button>
       </form>
 
-      <div className="rounded-[8px] border border-[#d8e1ef] bg-[#fbfcfe] p-4">
-        <button
-          type="button"
-          onClick={() => setShowLookupFinder((prev) => !prev)}
-          className="text-sm font-semibold text-[#2f6f9f] underline-offset-2 hover:underline"
-        >
+      <div className="rounded-[8px] border-2 border-border bg-background/70 p-4">
+        <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
           조회 코드 찾기
-        </button>
-        {showLookupFinder ? (
-          <>
-            <p className="mt-2 text-xs leading-5 text-[#667085]">
-              접수자 이름과 이메일로 조회 코드를 확인할 수 있습니다.
-            </p>
-            <form onSubmit={handleLookupCode} className="mt-3 space-y-3">
-              <label
-                htmlFor="lookup-name"
-                className="text-xs font-semibold text-[#526071]"
-              >
-                접수자 이름
-              </label>
-              <input
-                id="lookup-name"
-                value={lookupName}
-                onChange={(event) => setLookupName(event.target.value)}
-                placeholder="접수자 이름"
-                aria-invalid={Boolean(lookupError)}
-                className="w-full rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-3 text-sm text-[#2f3a4d] outline-none transition focus:border-[#2f6f9f]"
-              />
-              <label
-                htmlFor="lookup-email"
-                className="text-xs font-semibold text-[#526071]"
-              >
-                접수자 이메일
-              </label>
-              <input
-                id="lookup-email"
-                type="email"
-                value={lookupEmail}
-                onChange={(event) => setLookupEmail(event.target.value)}
-                placeholder="접수자 이메일"
-                aria-invalid={Boolean(lookupError)}
-                className="w-full rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-3 text-sm text-[#2f3a4d] outline-none transition focus:border-[#2f6f9f]"
-              />
-              <button
-                type="submit"
-                disabled={lookupBusy}
-                className="w-full rounded-[8px] border border-[#c9d6e8] bg-white px-4 py-3 text-sm font-semibold text-[#2f3a4d] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {lookupBusy ? "조회 중..." : "조회 코드 찾기"}
-              </button>
-            </form>
-          </>
-        ) : null}
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          조회 코드를 잊은 경우 접수자 이름과 이메일로 조회 코드를 확인할 수 있습니다.
+        </p>
+        <form onSubmit={handleLookupCode} className="mt-3 space-y-3">
+          <label
+            htmlFor="lookup-name"
+            className="text-[11px] font-black uppercase tracking-normal text-muted-foreground"
+          >
+            접수자 이름
+          </label>
+          <input
+            id="lookup-name"
+            value={lookupName}
+            onChange={(event) => setLookupName(event.target.value)}
+            placeholder="접수자 이름"
+            aria-invalid={Boolean(lookupError)}
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
+          />
+          <label
+            htmlFor="lookup-email"
+            className="text-[11px] font-black uppercase tracking-normal text-muted-foreground"
+          >
+            접수자 이메일
+          </label>
+          <input
+            id="lookup-email"
+            type="email"
+            value={lookupEmail}
+            onChange={(event) => setLookupEmail(event.target.value)}
+            placeholder="접수자 이메일"
+            aria-invalid={Boolean(lookupError)}
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
+          />
+          <button
+            type="submit"
+            disabled={lookupBusy}
+            className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-xs font-black uppercase tracking-normal text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white disabled:cursor-not-allowed disabled:opacity-60 dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
+          >
+            {lookupBusy ? "조회 중..." : "조회 코드 찾기"}
+          </button>
+        </form>
         {lookupError ? (
           <div className="mt-3 space-y-1">
             <p className="text-xs text-red-500">{lookupError}</p>
             {lookupError === noMatchLookupError && noMatchAttemptCount >= 2 ? (
-              <p className="text-xs text-[#667085]">
+              <p className="text-xs text-muted-foreground">
                 접수 정보를 잊었다면{" "}
                 <a
                   href={`mailto:${APP_CONFIG.supportEmail}`}
-                  className="font-semibold text-[#2f6f9f] underline underline-offset-2"
+                  className="font-semibold text-foreground underline underline-offset-2"
                 >
                   {APP_CONFIG.supportEmail}
                 </a>
@@ -264,30 +255,30 @@ export function TrackLookupForm({
             {lookupResults.map((item, index) => (
               <div
                 key={`${item.token}-${index}`}
-                className="rounded-[8px] border border-[#d8e1ef] bg-white px-3 py-3 text-xs"
+                className="rounded-[8px] border-2 border-border bg-card px-3 py-3 text-xs"
               >
-                <p className="font-semibold text-[#2f3a4d]">
+                <p className="font-semibold text-foreground">
                   {item.title?.trim() || `접수 ${index + 1}`}
                 </p>
-                <p className="mt-1 text-[#667085]">
-                  {(item.type ?? "").startsWith("MV") ? "MV" : "ALBUM"}
+                <p className="mt-1 text-muted-foreground">
+                  {(item.type ?? "").startsWith("MV") ? "뮤직비디오" : "음반"}
                   {item.createdAt ? ` · ${formatCreatedAt(item.createdAt)}` : ""}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <code className="rounded-md bg-[#edf4f7] px-2 py-1 text-[11px] text-[#2f3a4d]">
+                  <code className="rounded-md bg-black/5 px-2 py-1 text-[11px] text-foreground dark:bg-white/10">
                     {item.token}
                   </code>
                   <button
                     type="button"
                     onClick={() => void handleCopyToken(item.token)}
-                    className="rounded-[6px] border border-[#c9d6e8] px-2 py-1 text-[11px] font-semibold text-[#526071] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f]"
+                    className="rounded-[6px] border-2 border-border px-2 py-1 text-[10px] font-black uppercase tracking-normal text-foreground transition hover:border-black hover:bg-black hover:text-white"
                   >
                     {copiedToken === item.token ? "복사됨" : "복사"}
                   </button>
                   <button
                     type="button"
                     onClick={() => openTrack(item.token)}
-                    className="rounded-[6px] border border-[#c9d6e8] px-2 py-1 text-[11px] font-semibold text-[#526071] transition hover:border-[#2f6f9f] hover:text-[#2f6f9f]"
+                    className="rounded-[6px] border-2 border-border px-2 py-1 text-[10px] font-black uppercase tracking-normal text-foreground transition hover:border-black hover:bg-black hover:text-white"
                   >
                     조회
                   </button>

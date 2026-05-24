@@ -146,23 +146,45 @@ const formatPackageDescription = (
   description: string | null | undefined,
   count: number,
 ) => (description ? description.replace(`${count}곳`, `${count}개`) : "");
+const packageGuidance: Record<
+  number,
+  { recommendation: string; badge?: string; conditional?: string[] }
+> = {
+  3: {
+    recommendation: "지상파 핵심만 빠르게 확인하고 싶은 경우",
+  },
+  7: {
+    recommendation: "기본 방송 홍보용으로 가장 많이 선택",
+    badge: "가장 많이 선택",
+  },
+  10: {
+    recommendation: "전국·종교·교통방송까지 포함하는 기본 확장",
+  },
+  13: {
+    recommendation: "라디오와 지역 방송까지 넓게 송출하려는 경우",
+  },
+  15: {
+    recommendation: "CCM·국악 등 특수 방송국까지 필요한 경우",
+    conditional: ["극동방송: CCM 음원만 가능", "국악방송: 국악 장르만 가능"],
+  },
+};
 
 const packageToneClasses = [
   {
-    card: "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
-    chip: "border-[#cbdde8] bg-white text-[#2f6f9f] dark:border-[#a9c8dc]/30 dark:bg-[#0f172a] dark:text-[#a9c8dc]",
+    card: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
+    chip: "border-[#111111]/30 bg-white/45 text-[#111111]",
   },
   {
-    card: "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
-    chip: "border-[#cbdde8] bg-white text-[#2f6f9f] dark:border-[#a9c8dc]/30 dark:bg-[#0f172a] dark:text-[#a9c8dc]",
+    card: "border-[#111111] bg-[#1556a4] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[6px_6px_0_#f2cf27]",
+    chip: "border-white/30 bg-white/16 text-white dark:text-[#06111f]",
   },
   {
-    card: "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
-    chip: "border-[#cbdde8] bg-white text-[#2f6f9f] dark:border-[#a9c8dc]/30 dark:bg-[#0f172a] dark:text-[#a9c8dc]",
+    card: "border-[#111111] bg-[#d9362c] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
+    chip: "border-white/30 bg-white/16 text-white dark:text-[#111111]",
   },
   {
-    card: "border-[#2f6f9f] bg-[#edf4f7] text-[#2f3a4d] dark:border-[#a9c8dc] dark:bg-[#a9c8dc]/10 dark:text-white",
-    chip: "border-[#cbdde8] bg-white text-[#2f6f9f] dark:border-[#a9c8dc]/30 dark:bg-[#0f172a] dark:text-[#a9c8dc]",
+    card: "border-[#111111] bg-white text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]",
+    chip: "border-[#111111]/30 bg-[#f2cf27] text-[#111111]",
   },
 ];
 
@@ -427,6 +449,12 @@ export function AlbumWizard({
     }
     : null;
 
+  React.useEffect(() => {
+    if (additionalAlbumCount > 0 && paymentMethod === "CARD") {
+      setPaymentMethod("BANK");
+    }
+  }, [additionalAlbumCount, paymentMethod]);
+
   const readDraftStorage = React.useCallback(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -669,10 +697,10 @@ export function AlbumWizard({
       const guestTokenFromMsg = payload.guestToken as string | undefined;
       if (status === "SUCCESS") {
         clearDraftStorage();
-        if (guestTokenFromMsg) {
-          window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
-        } else if (submissionIdFromMsg) {
+        if (submissionIdFromMsg) {
           window.location.href = `/dashboard/submissions/${submissionIdFromMsg}?payment=success`;
+        } else if (guestTokenFromMsg) {
+          window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
         }
         return;
       }
@@ -682,12 +710,12 @@ export function AlbumWizard({
             ? payload.message
             : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
         const paymentState = status.toLowerCase();
-        if (guestTokenFromMsg) {
-          window.location.href = `/track/${guestTokenFromMsg}?payment=${paymentState}`;
-          return;
-        }
         if (submissionIdFromMsg) {
           window.location.href = `/dashboard/submissions/${submissionIdFromMsg}?payment=${paymentState}`;
+          return;
+        }
+        if (guestTokenFromMsg) {
+          window.location.href = `/track/${guestTokenFromMsg}?payment=${paymentState}`;
           return;
         }
         setNotice({ error: message });
@@ -705,7 +733,13 @@ export function AlbumWizard({
         const activeTone = selectedPackageTone
           ? selectedPackageTone.card
           : "border-[#0071e3] bg-[#0071e3] text-white dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]";
-        const displayLabel = index === 0 ? "패키지 선택" : label;
+        const displayLabel =
+          index === 0 && selectedPackageSummary
+            ? `${getPackageDisplayName(
+              selectedPackageSummary,
+              isOneClick,
+            )} (${formatCurrency(selectedPackageSummary.priceKrw)}원)`
+            : label;
         return (
           <div
             key={label}
@@ -2579,12 +2613,12 @@ export function AlbumWizard({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                      Standard
+                      일반 접수
                     </p>
                     <p className="mt-2 text-sm font-semibold">일반 접수</p>
                   </div>
                   {!isOneClick ? (
-                    <span className="rounded-full border border-[#2f6f9f] bg-[#2f6f9f] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
+                    <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
                       선택됨
                     </span>
                   ) : null}
@@ -2609,12 +2643,12 @@ export function AlbumWizard({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                      One Click
+                      원클릭
                     </p>
                     <p className="mt-2 text-sm font-semibold">원클릭 접수</p>
                   </div>
                   {isOneClick ? (
-                    <span className="rounded-full border border-[#2f6f9f] bg-[#2f6f9f] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
+                    <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
                       선택됨
                     </span>
                   ) : null}
@@ -2641,6 +2675,7 @@ export function AlbumWizard({
               const displayPrice = isOneClick
                 ? oneClickPriceMap[pkg.stationCount] ?? pkg.priceKrw
                 : pkg.priceKrw;
+              const guidance = packageGuidance[pkg.stationCount];
               return (
                 <button
                   key={pkg.id}
@@ -2657,26 +2692,53 @@ export function AlbumWizard({
                     : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
                     }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <h3 className="text-xl font-semibold leading-tight">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
+                          {getPackageDisplayName(pkg, isOneClick)}
+                        </p>
+                        {guidance?.badge ? (
+                          <span className={`rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}>
+                            {guidance.badge}
+                          </span>
+                        ) : null}
+                      </div>
+                      <h3 className="mt-2 text-xl font-semibold">
                         {getPackageDisplayName(pkg, isOneClick)}
                       </h3>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
+                    <div className="flex flex-col items-end gap-2">
                       {isActive ? (
-                        <span className="rounded-full border border-[#2f6f9f] bg-[#2f6f9f] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
+                        <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
                           선택됨
                         </span>
                       ) : null}
-                      <span className="text-sm font-semibold leading-tight">
+                      <span className="text-sm font-semibold">
                         {formatCurrency(displayPrice)}원
                       </span>
                     </div>
                   </div>
-                  <p className="mt-4 text-xs opacity-70">
+                  <p className="mt-3 text-xs opacity-70">
                     {formatPackageDescription(pkg.description, pkg.stationCount)}
                   </p>
+                  {guidance?.recommendation ? (
+                    <p className="mt-2 text-xs font-semibold leading-5 opacity-90">
+                      추천 상황: {guidance.recommendation}
+                    </p>
+                  ) : null}
+                  {guidance?.conditional ? (
+                    <div className="mt-3 grid gap-2">
+                      {guidance.conditional.map((item) => (
+                        <span
+                          key={item}
+                          className={`w-fit rounded-[6px] border px-2 py-1 text-[11px] font-black tracking-normal ${isActive ? tone.chip : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}
+                        >
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="mt-4 flex flex-wrap gap-2">
                     {pkg.stations.map((station) => (
                       <span
@@ -2899,7 +2961,7 @@ export function AlbumWizard({
               </div>
             ) : (
               <div className="mt-4 space-y-4">
-                <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]">
+                <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em]">
                     원클릭 접수 안내
                   </p>
@@ -3214,14 +3276,14 @@ export function AlbumWizard({
                           </button>
                         </div>
                         {showLyricsToolNotice && (
-                          <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#a9c8dc]">
+                          <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
                             위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
                             체크해주세요.
                           </div>
                         )}
                       </div>
                       {activeSpellcheckResult && (
-                        <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs leading-5 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]">
+                        <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs leading-5 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
                           <p className="font-semibold">
                             맞춤법 검사는 참고용입니다. 실제 제출 가사는 변경되지 않습니다.
                           </p>
@@ -3626,7 +3688,7 @@ export function AlbumWizard({
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
-                  ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#78a7c3] dark:text-[#06111f]"
+                  ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                   }`}
               >
@@ -3634,7 +3696,7 @@ export function AlbumWizard({
                   <span
                     aria-hidden="true"
                     className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${emailSubmitConfirmed
-                      ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#78a7c3]"
+                      ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#3f8ad8]"
                       : "border-current"
                       }`}
                   >
@@ -3649,7 +3711,7 @@ export function AlbumWizard({
                 <p className="text-xs font-semibold text-muted-foreground">
                   파일 첨부 대신 아래 이메일 주소로 음원 파일을 보내주세요.
                 </p>
-                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#a9c8dc]">
+                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
                   {APP_CONFIG.supportEmail}
                 </p>
               </div>
@@ -3940,6 +4002,12 @@ export function AlbumWizard({
                 {formatCurrency(totalPriceKrw)}원
               </span>
             </div>
+            <div className="mt-4 grid gap-2 border-t border-border/60 pt-4 text-xs font-semibold text-muted-foreground sm:grid-cols-2">
+              <span>예상 진행 기간: 접수 후 1영업일~최대 3주</span>
+              <span>부가세 및 증빙 요청은 결제 방식 선택 후 확인</span>
+              <span>방송국 접수 전 취소 가능 여부 확인</span>
+              <span>누락 자료가 있으면 보완 요청 후 진행</span>
+            </div>
           </div>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -3956,7 +4024,7 @@ export function AlbumWizard({
                   }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  Bank
+                  무통장
                 </p>
                 <p className="mt-2 text-sm font-semibold">무통장 입금</p>
                 <p className="mt-2 text-xs opacity-80">
@@ -3965,18 +4033,25 @@ export function AlbumWizard({
               </button>
               <button
                 type="button"
-                onClick={() => setPaymentMethod("CARD")}
+                onClick={() => {
+                  if (additionalAlbumCount === 0) setPaymentMethod("CARD");
+                }}
+                disabled={additionalAlbumCount > 0}
                 className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "CARD"
                   ? "border-foreground bg-foreground text-background"
-                  : "border-border/60 bg-background text-foreground hover:border-foreground"
+                  : additionalAlbumCount > 0
+                    ? "cursor-not-allowed border-border/40 bg-muted/40 text-muted-foreground opacity-70"
+                    : "border-border/60 bg-background text-foreground hover:border-foreground"
                   }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  Card
+                  카드
                 </p>
                 <p className="mt-2 text-sm font-semibold">카드 결제</p>
                 <p className="mt-2 text-xs opacity-80">
-                  카드 결제로 진행할 수 있습니다.
+                  {additionalAlbumCount > 0
+                    ? "추가 앨범 할인 접수는 무통장 입금으로 진행됩니다."
+                    : "카드 결제로 진행할 수 있습니다."}
                 </p>
               </button>
             </div>
@@ -4241,7 +4316,7 @@ export function AlbumWizard({
             </div>
           </div>
 	          {notice.emailWarning ? (
-	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#a9c8dc]">
+	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
 	              {notice.emailWarning}
 	            </div>
           ) : null}

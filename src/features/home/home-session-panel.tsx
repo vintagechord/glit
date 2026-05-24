@@ -53,8 +53,8 @@ function buildExampleState() {
 
   const sampleAlbum: SubmissionSummary = {
     id: "sample-album",
-    title: "샘플 앨범 심의",
-    artist_name: "온사이드",
+    title: "방송국별 진행 현황 예시",
+    artist_name: "비회원 조회 코드 화면",
     status: "IN_PROGRESS",
     payment_status: "PAID",
     updated_at: new Date(now).toISOString(),
@@ -62,10 +62,10 @@ function buildExampleState() {
 
   const sampleMv: SubmissionSummary = {
     id: "sample-mv",
-    title: "샘플 MV 심의",
-    artist_name: "온사이드",
-    status: "IN_PROGRESS",
-    payment_status: "PAID",
+    title: "뮤직비디오 결과 수령 예시",
+    artist_name: "온라인 유통 심의",
+    status: "WAITING_PAYMENT",
+    payment_status: "PAYMENT_PENDING",
     updated_at: new Date(now).toISOString(),
   };
 
@@ -120,10 +120,10 @@ export function HomeSessionPanel() {
   return (
     <HomeReviewPanel
       isLoggedIn={isLoggedIn}
-      albumSubmissions={exampleState.albumSubmissions}
-      mvSubmissions={exampleState.mvSubmissions}
-      albumStationsMap={exampleState.albumStationsMap}
-      mvStationsMap={exampleState.mvStationsMap}
+      albumSubmissions={isLoggedIn ? [] : exampleState.albumSubmissions}
+      mvSubmissions={isLoggedIn ? [] : exampleState.mvSubmissions}
+      albumStationsMap={isLoggedIn ? {} : exampleState.albumStationsMap}
+      mvStationsMap={isLoggedIn ? {} : exampleState.mvStationsMap}
       enableRemoteSync={isLoggedIn}
       stationRowsPerPage={5}
       showPartialTrackBreakdown={false}

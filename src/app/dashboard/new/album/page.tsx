@@ -60,8 +60,8 @@ const albumStationLabelByCode: Record<string, string> = {
   GYEONGIN_IFM: "경인 iFM",
   TBN: "TBN 한국교통방송",
   KISS: "KISS 디지털 라디오 음악방송",
-  FEBC: "극동방송(Only CCM)",
-  GUGAK: "국악방송(Only 국악)",
+  FEBC: "극동방송",
+  GUGAK: "국악방송",
 };
 
 const normalizeStations = (
@@ -93,37 +93,41 @@ const normalizeStations = (
 const processHighlights = [
   {
     step: "01",
-    title: "패키지 선택",
-    description: "심의를 보낼 방송국 수를 선택합니다.",
+    title: "접수 방식 선택",
+    description: "일반 접수와 원클릭 중 현재 상황에 맞는 방식만 고르면 바로 다음 단계로 이동합니다.",
   },
   {
     step: "02",
-    title: "정보 입력",
-    description: "앨범, 곡, 가사 정보를 입력합니다.",
+    title: "신청서 작성",
+    description: "앨범 기본 정보, 접수자 정보, 트랙 정보와 가사를 한 번에 정리해 제출합니다.",
   },
   {
     step: "03",
-    title: "파일·결제",
-    description: "음원 파일을 올리고 결제를 진행합니다.",
+    title: "파일 제출 및 결제",
+    description: "파일 업로드 후 무통장 또는 카드 결제를 진행하고, 접수 상태가 즉시 기록됩니다.",
   },
   {
     step: "04",
     title: "결과 확인",
-    description: "발급된 코드나 마이페이지에서 확인합니다.",
+    description: "마이페이지 또는 비회원 조회 코드로 방송국별 진행 상태와 결과를 한 화면에서 확인합니다.",
   },
 ];
 
 const preparationChecklist = [
-  "앨범명, 아티스트명, 발매일",
-  "곡 제목, 가사, 작사·작곡 정보",
+  "WAV 음원 또는 전체 음원 ZIP",
+  "앨범명, 아티스트명, 발매일, 장르, 유통사, 제작사",
+  "트랙별 제목, 작·편곡자, 작사가, 전체 가사",
+  "반복 후렴, 나레이션, 코러스 포함 전체 가사",
+  "외국어 가사가 있는 경우 번역 가사",
+  "실제 발매 앨범과 동일한 트랙 순서와 INST 포함 여부",
   "접수자 이름, 이메일, 연락처",
-  "원클릭은 멜론 링크",
+  "원클릭 접수 시 멜론 링크와 음원 파일",
 ];
 
 const resultBenefits = [
-  "회원은 마이페이지에서 확인",
-  "비회원은 접수 코드로 확인",
-  "방송국별 상태와 트랙 결과 확인",
+  "로그인 접수는 마이페이지에 자동 저장됩니다.",
+  "비회원 접수도 조회 코드로 진행 상황과 결과를 확인할 수 있습니다.",
+  "방송국별 접수 상태, 트랙 결과, 수정 요청 여부를 한 번에 확인할 수 있습니다.",
 ];
 
 const isTestPackage = (name?: string | null) => name?.startsWith("[테스트]") ?? false;
@@ -203,8 +207,10 @@ export default async function AlbumSubmissionPage() {
       language: row.language,
     })) ?? [];
 
+  const visiblePackages = packages.filter((pkg) => !isTestPackage(pkg.name));
+
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
+    <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base">
       <AlbumIntroPanel
         processHighlights={processHighlights}
         preparationChecklist={preparationChecklist}
@@ -214,7 +220,7 @@ export default async function AlbumSubmissionPage() {
 
       <div className="mt-8">
         <AlbumWizard
-          packages={sortPackagesForDisplay(packages)}
+          packages={sortPackagesForDisplay(visiblePackages)}
           userId={user?.id ?? null}
           userEmail={user?.email ?? null}
           profanityTerms={profanityTerms}

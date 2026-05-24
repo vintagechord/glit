@@ -12,6 +12,15 @@ const services = [
   "전 방송사 접수 진행",
 ];
 
+const trustSignals = [
+  "2017년부터 운영",
+  "전 방송사 접수 진행",
+  "CD/가사집/DVD 제작 지원",
+  "세금계산서·현금영수증 발급",
+  "조회 코드 기반 진행 페이지",
+  "자료 보완 요청 기록 관리",
+];
+
 const revealBaseClass =
   "opacity-0 translate-y-6 transition-all duration-700 ease-out will-change-transform data-[reveal-state=visible]:opacity-100 data-[reveal-state=visible]:translate-y-0";
 
@@ -70,6 +79,16 @@ export function AboutRevealSection() {
             );
           })}
         </div>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          {trustSignals.map((item) => (
+            <span
+              key={item}
+              className="rounded-[6px] border-2 border-border bg-background px-3 py-2 text-xs font-black text-foreground"
+            >
+              {item}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-4">
@@ -86,6 +105,7 @@ export function AboutRevealSection() {
             <div className="space-y-3 text-base font-semibold leading-relaxed text-white/80">
               <p>통신판매업, 대중문화예술기획업, 음반·음악영상물제작업 등록 업체</p>
               <p>세금계산서·현금영수증·거래내역서 등 각종 증빙 서류 발급 가능</p>
+              <p>사업자 및 등록 증빙 정보는 고객센터 요청 시 확인할 수 있습니다.</p>
               <div className="pt-1 space-y-1">
                 <p className="font-semibold text-white/90">함께하는 브랜드 :</p>
                 <p>
