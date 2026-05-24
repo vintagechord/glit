@@ -17,6 +17,7 @@ const maxTranslateChunkLength = 1200;
 const maxTranslateLines = 120;
 const maxTranslateLineLength = 5000;
 const translateConcurrency = 3;
+const lingvaTranslateOrigins = ["https://lingva.ml"];
 
 const normalizeLanguageCode = (value: string, fallback: string) => {
   const normalized = value.trim().toLowerCase();
@@ -32,6 +33,9 @@ const normalizeTranslationOutput = (value: string) =>
     .replace(/\s+/g, " ")
     .replace(/^\s*번역\s*:\s*/i, "")
     .trim();
+
+const baseLanguageCode = (value: string) =>
+  value === "auto" ? value : value.split("-")[0] || value;
 
 const splitTextForTranslation = (text: string) => {
   const trimmed = text.trim();
@@ -62,7 +66,7 @@ const splitTextForTranslation = (text: string) => {
   return chunks;
 };
 
-const translateLineOnce = async (
+const translateLineWithGoogle = async (
   text: string,
   source: string,
   target: string,
@@ -78,6 +82,12 @@ const translateLineOnce = async (
   const response = await fetch(url.toString(), {
     method: "GET",
     cache: "no-store",
+    headers: {
+      Accept: "application/json,text/plain,*/*",
+      "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+      "User-Agent":
+        "Mozilla/5.0 (compatible; ONSIDE-Translate/1.0; +https://onside17.com)",
+    },
   });
 
   if (!response.ok) {
@@ -93,6 +103,66 @@ const translateLineOnce = async (
       )
       .join(""),
   );
+};
+
+const translateLineWithLingva = async (
+  text: string,
+  source: string,
+  target: string,
+) => {
+  if (!text.trim()) return "";
+  const sourceCode = baseLanguageCode(source);
+  const targetCode = baseLanguageCode(target);
+
+  for (const origin of lingvaTranslateOrigins) {
+    const url = `${origin}/api/v1/${encodeURIComponent(sourceCode)}/${encodeURIComponent(targetCode)}/${encodeURIComponent(text)}`;
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        "User-Agent":
+          "Mozilla/5.0 (compatible; ONSIDE-Translate/1.0; +https://onside17.com)",
+      },
+    }).catch(() => null);
+
+    if (!response?.ok) continue;
+    const data = (await response.json().catch(() => null)) as unknown;
+    const translation =
+      data &&
+      typeof data === "object" &&
+      "translation" in data &&
+      typeof data.translation === "string"
+        ? data.translation
+        : "";
+    const normalized = normalizeTranslationOutput(translation);
+    if (normalized) return normalized;
+  }
+
+  return "";
+};
+
+const translateLineOnce = async (
+  text: string,
+  source: string,
+  target: string,
+) => {
+  const providers = [
+    { name: "google", translate: translateLineWithGoogle },
+    { name: "lingva", translate: translateLineWithLingva },
+  ];
+
+  for (const provider of providers) {
+    try {
+      const translated = await provider.translate(text, source, target);
+      if (translated.trim()) return translated;
+    } catch (error) {
+      console.error("[translate] provider failed", provider.name, error);
+    }
+  }
+
+  return "";
 };
 
 const translateLine = async (
@@ -116,7 +186,9 @@ const translateLine = async (
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      return await translateLineOnce(text, source, target);
+      const translated = await translateLineOnce(text, source, target);
+      if (translated.trim()) return translated;
+      throw new Error("Translation providers returned empty results");
     } catch (error) {
       const isLastAttempt = attempt === maxAttempts;
       console.error(

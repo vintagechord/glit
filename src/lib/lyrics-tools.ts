@@ -4,6 +4,7 @@ const sentencePattern = /[^.!?。！？…]+[.!?。！？…]*/gu;
 const translationMarkerPattern = /^[\s([{（]*번역\s*:/;
 const maxTranslateChunkLength = 1200;
 const browserTranslationRetryCount = 2;
+const lingvaTranslateOrigins = ["https://lingva.ml"];
 
 export type ForeignLyricSegment = {
   raw: string;
@@ -169,21 +170,14 @@ const normalizeTranslationOutput = (value: string) =>
     .replace(/^\s*번역\s*:\s*/i, "")
     .trim();
 
-const translateLineInBrowser = async (
+const baseLanguageCode = (value: string) =>
+  value === "auto" ? value : value.split("-")[0] || value;
+
+const translateLineWithGoogleInBrowser = async (
   text: string,
   source: string,
   target: string,
-): Promise<string> => {
-  const chunks = splitTextForTranslation(text);
-  if (chunks.length > 1) {
-    const translatedChunks: string[] = [];
-    for (const chunk of chunks) {
-      const translated = await translateLineInBrowser(chunk, source, target);
-      if (translated.trim()) translatedChunks.push(translated.trim());
-    }
-    return translatedChunks.join(" ");
-  }
-
+) => {
   const url = new URL("https://translate.googleapis.com/translate_a/single");
   url.searchParams.set("client", "gtx");
   url.searchParams.set("sl", source);
@@ -211,6 +205,71 @@ const translateLineInBrowser = async (
         )
         .join(""),
     );
+  }
+
+  return "";
+};
+
+const translateLineWithLingvaInBrowser = async (
+  text: string,
+  source: string,
+  target: string,
+) => {
+  const sourceCode = baseLanguageCode(source);
+  const targetCode = baseLanguageCode(target);
+
+  for (const origin of lingvaTranslateOrigins) {
+    const url = `${origin}/api/v1/${encodeURIComponent(sourceCode)}/${encodeURIComponent(targetCode)}/${encodeURIComponent(text)}`;
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+    }).catch(() => null);
+
+    if (!response?.ok) continue;
+    const data = (await response.json().catch(() => null)) as unknown;
+    const translation =
+      data &&
+      typeof data === "object" &&
+      "translation" in data &&
+      typeof data.translation === "string"
+        ? data.translation
+        : "";
+    const normalized = normalizeTranslationOutput(translation);
+    if (normalized) return normalized;
+  }
+
+  return "";
+};
+
+const translateLineInBrowser = async (
+  text: string,
+  source: string,
+  target: string,
+): Promise<string> => {
+  const chunks = splitTextForTranslation(text);
+  if (chunks.length > 1) {
+    const translatedChunks: string[] = [];
+    for (const chunk of chunks) {
+      const translated = await translateLineInBrowser(chunk, source, target);
+      if (translated.trim()) translatedChunks.push(translated.trim());
+    }
+    return translatedChunks.join(" ");
+  }
+
+  for (let attempt = 1; attempt <= browserTranslationRetryCount; attempt += 1) {
+    const googleTranslation = await translateLineWithGoogleInBrowser(
+      text,
+      source,
+      target,
+    );
+    if (googleTranslation.trim()) return googleTranslation;
+
+    const fallbackTranslation = await translateLineWithLingvaInBrowser(
+      text,
+      source,
+      target,
+    );
+    if (fallbackTranslation.trim()) return fallbackTranslation;
   }
 
   return "";
