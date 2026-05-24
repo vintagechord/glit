@@ -438,8 +438,18 @@ export function AlbumWizard({
   const additionalPriceKrw = Math.round(basePriceKrw * 0.5);
   const additionalAlbumCount = albumDrafts.length;
   const totalAlbumCount = additionalAlbumCount + 1;
+  const additionalAlbumTotalKrw = additionalAlbumCount * additionalPriceKrw;
+  const undiscountedTotalPriceKrw = totalAlbumCount * basePriceKrw;
+  const additionalDiscountPerAlbumKrw = Math.max(
+    0,
+    basePriceKrw - additionalPriceKrw,
+  );
+  const totalDiscountKrw =
+    additionalAlbumCount * additionalDiscountPerAlbumKrw;
   const totalPriceKrw =
-    basePriceKrw + additionalAlbumCount * additionalPriceKrw;
+    basePriceKrw + additionalAlbumTotalKrw;
+  const hasAdditionalAlbumDiscount =
+    additionalAlbumCount > 0 && basePriceKrw > 0;
   const selectionLocked = albumDrafts.length > 0;
   const selectedPackageSummary = selectedPackage
     ? {
@@ -3971,19 +3981,55 @@ export function AlbumWizard({
                       {formatCurrency(basePriceKrw)}원
                     </span>
                   </div>
-                  {additionalAlbumCount > 0 && (
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>
-                        추가 앨범 {additionalAlbumCount}건 (50% 할인)
-                      </span>
-                      <span>
-                        {formatCurrency(
-                          additionalAlbumCount * additionalPriceKrw,
-                        )}
-                        원
-                      </span>
+                  <div className="rounded-[18px] border border-border/60 bg-background/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      결제 금액 계산
+                    </p>
+                    <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span>
+                          1번째 앨범 정상가격
+                        </span>
+                        <span className="font-semibold text-foreground">
+                          {formatCurrency(basePriceKrw)}원 × 1 ={" "}
+                          {formatCurrency(basePriceKrw)}원
+                        </span>
+                      </div>
+                      {hasAdditionalAlbumDiscount ? (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span>
+                              2번째~{totalAlbumCount}번째 앨범 50% 할인
+                            </span>
+                            <span className="font-semibold text-foreground">
+                              {formatCurrency(basePriceKrw)}원 × 50% ={" "}
+                              {formatCurrency(additionalPriceKrw)}원 ×{" "}
+                              {additionalAlbumCount}건 ={" "}
+                              {formatCurrency(additionalAlbumTotalKrw)}원
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2">
+                            <span>할인 전 금액</span>
+                            <span>
+                              {formatCurrency(basePriceKrw)}원 ×{" "}
+                              {totalAlbumCount}건 ={" "}
+                              {formatCurrency(undiscountedTotalPriceKrw)}원
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-[#1f7a5a] dark:text-emerald-300">
+                            <span>추가 앨범 할인 금액</span>
+                            <span className="font-semibold">
+                              -{formatCurrency(totalDiscountKrw)}원
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <p>
+                          앨범을 추가하면 2번째 앨범부터 같은 패키지 정상가격의 50%로 계산됩니다.
+                        </p>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </>
               ) : (
                 <p className="text-xs text-muted-foreground">
