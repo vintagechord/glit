@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { areServerDevToolsEnabled } from "@/lib/dev-tools";
+
 const postMessageResponse = () => {
   const payload = JSON.stringify({
     type: "INICIS:CANCEL",
@@ -38,6 +40,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export function GET() {
+  if (!areServerDevToolsEnabled()) {
+    return NextResponse.json({ error: "Not Found" }, { status: 404 });
+  }
   return postMessageResponse();
 }
 

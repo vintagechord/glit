@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { areServerDevToolsEnabled } from "@/lib/dev-tools";
 import { getStdPayConfig } from "@/lib/inicis/config";
 import { requestStdPayApproval } from "@/lib/inicis/api";
 import { getBaseUrl } from "../../../../../lib/url";
 
 export async function POST(req: NextRequest) {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Disabled in production" }, { status: 404 });
+  if (!areServerDevToolsEnabled()) {
+    return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
 
   const form = await req.formData();

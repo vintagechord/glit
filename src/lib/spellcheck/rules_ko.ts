@@ -771,7 +771,9 @@ export const KO_SPELLCHECK_RULES: Rule[] = [
   r("\\?{2,}", "?", "중복 물음표 정리", 0.6),
 ];
 
-console.log("[spellcheck][ko] rule count", KO_SPELLCHECK_RULES.length);
+if (process.env.SPELLCHECK_DEBUG === "true") {
+  console.info("[spellcheck][ko] rule count", KO_SPELLCHECK_RULES.length);
+}
 
 // 기존 코드 호환을 위해 Rule type 재노출
 export default KO_SPELLCHECK_RULES;

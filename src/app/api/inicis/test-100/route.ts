@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { areServerDevToolsEnabled } from "@/lib/dev-tools";
 import { getStdPayConfig } from "@/lib/inicis/config";
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
 import { buildUrl, getBaseUrl } from "@/lib/url";
@@ -10,6 +11,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  if (!areServerDevToolsEnabled()) {
+    return NextResponse.json({ error: "Not Found" }, { status: 404 });
+  }
+
   try {
     const baseUrl = getBaseUrl(req);
     const config = getStdPayConfig();

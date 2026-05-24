@@ -120,12 +120,6 @@ export default async function SubmissionDetailPage({
     ? resolvedSearchParams.payment[0]
     : resolvedSearchParams.payment;
 
-  // 디버그용: params.id만 검사 (추후 headers/search fallback 복원 가능)
-  console.log("[Dashboard SubmissionDetail] incoming", {
-    params: { id },
-    submissionId,
-  });
-
   if (!submissionId || !uuidPattern.test(submissionId)) {
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-12">
@@ -202,12 +196,6 @@ export default async function SubmissionDetailPage({
   const admin = createAdminClient();
   const { submission: adminSubmission, error: adminError } =
     await fetchSubmission(admin);
-
-  console.log("[Dashboard SubmissionDetail] admin lookup", {
-    submissionId,
-    found: Boolean(adminSubmission),
-    error: adminError?.message,
-  });
 
   const fallbackPackage =
     adminSubmission?.package_id && !adminSubmission.package
@@ -298,14 +286,7 @@ export default async function SubmissionDetailPage({
     );
   }
 
-  const { submission: userSubmission, error: userError } =
-    await fetchSubmission(supabase);
-
-  console.log("[Dashboard SubmissionDetail] user lookup", {
-    submissionId,
-    found: Boolean(userSubmission),
-    error: userError?.message,
-  });
+  const { submission: userSubmission } = await fetchSubmission(supabase);
 
   const resolvedSubmission = {
     ...(userSubmission ?? adminSubmission),

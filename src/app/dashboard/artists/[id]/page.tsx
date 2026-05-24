@@ -74,11 +74,6 @@ export default async function DashboardArtistDetailPage({
   const rawId = id?.trim();
   const artistId = rawId && uuidPattern.test(rawId) ? rawId : "";
 
-  console.log("[Dashboard ArtistDetail] incoming", {
-    params: { id },
-    artistId,
-  });
-
   if (!artistId) {
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">

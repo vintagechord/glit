@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { areServerDevToolsEnabled } from "@/lib/dev-tools";
 import { buildStdPayRequest } from "../../../../../lib/inicis/stdpay";
 import { buildUrl, getBaseUrl } from "../../../../../lib/url";
 
@@ -44,14 +45,10 @@ const loadEnvConfig = (mode: "stg" | "prod") => {
 };
 
 export async function POST(req: NextRequest) {
-  const devToolsEnabled =
-    process.env.NODE_ENV !== "production" ||
-    String(process.env.INICIS_DEV_TOOLS ?? "").toLowerCase() === "true";
-
-  if (!devToolsEnabled) {
+  if (!areServerDevToolsEnabled()) {
     return NextResponse.json(
-      { error: "Dev STDPay API는 프로덕션에서 비활성화되어 있습니다. INICIS_DEV_TOOLS=true 로 켜세요." },
-      { status: 403 },
+      { error: "Not Found" },
+      { status: 404 },
     );
   }
 

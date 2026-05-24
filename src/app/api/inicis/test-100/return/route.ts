@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { areServerDevToolsEnabled } from "@/lib/dev-tools";
 import { requestStdPayApproval, isInicisSuccessCode } from "@/lib/inicis/api";
 import { getStdPayConfig } from "@/lib/inicis/config";
 import { getBaseUrl } from "@/lib/url";
@@ -22,6 +23,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 async function handler(req: NextRequest) {
+  if (!areServerDevToolsEnabled()) {
+    return NextResponse.json({ error: "Not Found" }, { status: 404 });
+  }
+
   if (req.method !== "POST") {
     return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
   }
