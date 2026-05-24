@@ -23,6 +23,26 @@ const schema = z.object({
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const EXPIRES_SECONDS = Number(process.env.B2_PRESIGN_EXPIRES_SECONDS ?? "900");
+const audioUploadPattern = /\.(wav|zip)$/i;
+const videoUploadPattern = /\.(mp4|mov|wmv|mpg|mpeg|m4v)$/i;
+
+const isAllowedUploadFile = (
+  kind: "audio" | "video",
+  filename: string,
+  mimeType: string,
+) => {
+  const mime = mimeType.toLowerCase();
+  if (kind === "audio") {
+    return (
+      audioUploadPattern.test(filename) ||
+      mime === "audio/wav" ||
+      mime === "audio/x-wav" ||
+      mime === "application/zip" ||
+      mime === "application/x-zip-compressed"
+    );
+  }
+  return videoUploadPattern.test(filename) || mime.startsWith("video/");
+};
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -49,6 +69,17 @@ export async function POST(request: Request) {
             : "뮤직비디오는 최대 4GB까지 업로드할 수 있습니다.",
       },
       { status: 413 },
+    );
+  }
+  if (!isAllowedUploadFile(kind, filename, mimeType)) {
+    return NextResponse.json(
+      {
+        error:
+          kind === "audio"
+            ? "음원 파일은 WAV 또는 ZIP만 업로드할 수 있습니다."
+            : "영상 파일은 MP4/MOV/WMV/MPG만 업로드할 수 있습니다.",
+      },
+      { status: 400 },
     );
   }
 

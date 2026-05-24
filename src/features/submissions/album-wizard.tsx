@@ -442,6 +442,50 @@ export function AlbumWizard({
       priceKrw: basePriceKrw,
     }
     : null;
+  const albumFilesReady = uploadDrafts?.length
+    ? uploadDrafts.every((draft, index) =>
+      index === uploadDraftIndex
+        ? uploadedFiles.length > 0 || emailSubmitConfirmed
+        : draft.files.length > 0 || draft.emailSubmitConfirmed,
+    )
+    : uploadedFiles.length > 0 || emailSubmitConfirmed;
+  const uploadStatusLabel = emailSubmitConfirmed
+    ? "이메일 전송 선택"
+    : uploads.some((upload) => upload.status === "uploading")
+      ? "업로드 진행 중"
+      : uploads.some((upload) => upload.status === "error")
+        ? "업로드 실패 확인 필요"
+        : uploadedFiles.length > 0
+          ? `${uploadedFiles.length}개 업로드 완료`
+          : "파일 필요";
+  const albumPaymentReadiness = [
+    {
+      label: "심의 상품",
+      value: selectedPackageSummary
+        ? getPackageDisplayName(selectedPackageSummary, isOneClick)
+        : "패키지 선택 필요",
+      ready: Boolean(selectedPackageSummary),
+    },
+    {
+      label: "신청서",
+      value: `앨범 ${totalAlbumCount}건 저장됨`,
+      ready: step >= 4 || Boolean(uploadDrafts?.length),
+    },
+    {
+      label: "파일",
+      value: uploadStatusLabel,
+      ready: albumFilesReady,
+    },
+    {
+      label: "결제 금액",
+      value: `${formatCurrency(totalPriceKrw)}원`,
+      ready: totalPriceKrw > 0,
+    },
+  ];
+  const albumPaymentReady = albumPaymentReadiness.every((item) => item.ready);
+  const albumQuickSteps = isOneClick
+    ? ["담당자 정보", "멜론 링크", "음원 WAV/ZIP", "결제"]
+    : ["담당자 정보", "앨범·트랙 정보", "음원 WAV/ZIP", "결제"];
 
   React.useEffect(() => {
     if (additionalAlbumCount > 0 && paymentMethod === "CARD") {
@@ -1007,16 +1051,13 @@ export function AlbumWizard({
         invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
         return false;
       }
-      if (file.type && !allowedTypes.has(file.type)) {
+      const lowerName = file.name.toLowerCase();
+      const hasAllowedExtension =
+        lowerName.endsWith(".wav") || lowerName.endsWith(".zip");
+      const hasAllowedMime = allowedTypes.has(file.type);
+      if (!hasAllowedExtension && !hasAllowedMime) {
         invalidNotice = "WAV 또는 ZIP 파일만 업로드할 수 있습니다.";
         return false;
-      }
-      if (!file.type) {
-        const lowerName = file.name.toLowerCase();
-        if (!lowerName.endsWith(".wav") && !lowerName.endsWith(".zip")) {
-          invalidNotice = "WAV 또는 ZIP 파일만 업로드할 수 있습니다.";
-          return false;
-        }
       }
       return true;
     });
@@ -2731,6 +2772,28 @@ export function AlbumWizard({
             </div>
           </div>
 
+          <div className="rounded-[28px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]">
+            <p className="text-xs font-black uppercase tracking-[0.22em]">
+              빠른 접수 순서
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-4">
+              {albumQuickSteps.map((item, index) => (
+                <div
+                  key={item}
+                  className="rounded-xl border border-[#111111]/30 bg-white/45 px-3 py-2 text-sm font-black"
+                >
+                  <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-[5px] bg-[#111111] text-[11px] text-white">
+                    {index + 1}
+                  </span>
+                  {item}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs font-semibold leading-5">
+              헷갈리면 필수 항목만 먼저 입력하고 다음 단계로 이동하세요. 파일이 크거나 업로드가 불안정하면 신청서를 먼저 제출한 뒤 이메일 전송으로 이어갈 수 있습니다.
+            </p>
+          </div>
+
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               기본 정보
@@ -3492,6 +3555,33 @@ export function AlbumWizard({
             </div>
           </div>
 
+          <div className="grid gap-3 md:grid-cols-3">
+            {[
+              {
+                title: "1. 파일 형식",
+                body: "WAV 파일 또는 여러 음원을 묶은 ZIP 파일만 첨부하세요.",
+              },
+              {
+                title: "2. 트랙 순서",
+                body: "신청서의 트랙 순서와 파일/CD 순서가 같아야 합니다.",
+              },
+              {
+                title: "3. 업로드가 어려울 때",
+                body: `이메일 전송을 선택하고 ${APP_CONFIG.supportEmail}로 파일만 보내면 됩니다.`,
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="rounded-2xl border border-border/60 bg-background/70 px-4 py-4 text-sm"
+              >
+                <p className="font-semibold text-foreground">{item.title}</p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {item.body}
+                </p>
+              </div>
+            ))}
+          </div>
+
           {uploadDrafts && uploadDrafts.length > 0 && (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -3594,6 +3684,12 @@ export function AlbumWizard({
                 <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
                   {APP_CONFIG.supportEmail}
                 </p>
+                <div className="mt-3 rounded-xl border border-border/60 bg-background/80 px-3 py-3 text-xs leading-5 text-muted-foreground">
+                  <p className="font-semibold text-foreground">메일 제목 예시</p>
+                  <p className="mt-1 break-all">
+                    [음반심의 파일] {artistName.trim() || "아티스트명"} / {title.trim() || "앨범명"} / {applicantName.trim() || "신청자명"}
+                  </p>
+                </div>
               </div>
             ) : (
               <>
@@ -3821,6 +3917,33 @@ export function AlbumWizard({
               <p className="mt-2 text-sm text-muted-foreground">
                 무통장 입금 또는 카드 결제를 선택할 수 있습니다.
               </p>
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border-2 border-[#111111] bg-background p-5 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              결제 전 확인
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
+              {albumPaymentReadiness.map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl border px-4 py-3 text-sm ${item.ready
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100"
+                    : "border-[#f2cf27] bg-[#f2cf27]/18 text-foreground"
+                    }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
+                      {item.label}
+                    </p>
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] border border-current text-[11px] font-black">
+                      {item.ready ? "✓" : "!"}
+                    </span>
+                  </div>
+                  <p className="mt-2 font-semibold leading-5">{item.value}</p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -4185,7 +4308,7 @@ export function AlbumWizard({
             <button
               type="button"
               onClick={() => handleSave("SUBMITTED")}
-              disabled={isSaving || isAddingAlbum}
+              disabled={isSaving || isAddingAlbum || !albumPaymentReady}
               className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >
               결제하기

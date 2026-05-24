@@ -22,6 +22,8 @@ const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MIN_PART_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_PARTS = 10000;
+const audioUploadPattern = /\.(wav|zip)$/i;
+const videoUploadPattern = /\.(mp4|mov|wmv|mpg|mpeg|m4v)$/i;
 
 const DEFAULT_PART_SIZE_MB_RAW = Number(
   process.env.B2_MULTIPART_PART_SIZE_MB ?? "16",
@@ -44,6 +46,24 @@ const resolvePartSize = (sizeBytes: number) => {
   );
   const rounded = Math.ceil(base / MIN_PART_SIZE) * MIN_PART_SIZE;
   return Math.max(MIN_PART_SIZE, rounded);
+};
+
+const isAllowedUploadFile = (
+  kind: "audio" | "video",
+  filename: string,
+  mimeType: string,
+) => {
+  const mime = mimeType.toLowerCase();
+  if (kind === "audio") {
+    return (
+      audioUploadPattern.test(filename) ||
+      mime === "audio/wav" ||
+      mime === "audio/x-wav" ||
+      mime === "application/zip" ||
+      mime === "application/x-zip-compressed"
+    );
+  }
+  return videoUploadPattern.test(filename) || mime.startsWith("video/");
 };
 
 export async function POST(request: Request) {
@@ -71,6 +91,17 @@ export async function POST(request: Request) {
             : "뮤직비디오는 최대 4GB까지 업로드할 수 있습니다.",
       },
       { status: 413 },
+    );
+  }
+  if (!isAllowedUploadFile(kind, filename, mimeType)) {
+    return NextResponse.json(
+      {
+        error:
+          kind === "audio"
+            ? "음원 파일은 WAV 또는 ZIP만 업로드할 수 있습니다."
+            : "영상 파일은 MP4/MOV/WMV/MPG만 업로드할 수 있습니다.",
+      },
+      { status: 400 },
     );
   }
 

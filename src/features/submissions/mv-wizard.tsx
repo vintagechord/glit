@@ -634,6 +634,10 @@ export function MvWizard({
         (sum, code) => sum + (stationPriceMap[code] ?? 0),
         0,
       );
+  const canProceed =
+    mvType === "MV_BROADCAST"
+      ? tvStations.length > 0
+      : onlineBaseSelected || onlineOptions.length > 0;
   const uploadHintTitle =
     mvType === "MV_DISTRIBUTION" ? "파일 포맷" : "방송국별 제출 규격";
   const uploadChips = React.useMemo(() => {
@@ -641,9 +645,9 @@ export function MvWizard({
 
     if (mvType === "MV_DISTRIBUTION") {
       chips.push(
-        "확장자: 모두 가능",
-        "해상도: FHD 권장",
-        "용량: 4GB 미만",
+        "권장 형식: MOV 또는 MP4",
+        "해상도: 1920×1080 권장",
+        "프레임: 29.97fps 권장",
         "편집 완료된 최종본만 접수",
       );
       if (onlineOptions.includes("MBC")) {
@@ -681,6 +685,54 @@ export function MvWizard({
 
     return items;
   }, [mvType, onlineBaseSelected, onlineOptions, tvStations, stationMap]);
+  const mvUploadReady = emailSubmitConfirmed || uploadedFiles.length > 0;
+  const mvUploadStatusLabel = emailSubmitConfirmed
+    ? "이메일 전송 선택"
+    : uploads.some((upload) => upload.status === "uploading")
+      ? "업로드 진행 중"
+      : uploads.some((upload) => upload.status === "error")
+        ? "업로드 실패 확인 필요"
+        : uploadedFiles.length > 0
+          ? `${uploadedFiles.length}개 업로드 완료`
+          : "영상 파일 필요";
+  const mvSelectionLabel =
+    mvType === "MV_BROADCAST"
+      ? tvStations.length > 0
+        ? `${tvStations.length}개 방송국 선택`
+        : "방송국 선택 필요"
+      : onlineBaseSelected || onlineOptions.length > 0
+        ? `${paymentItems.length}개 옵션 선택`
+        : "옵션 선택 필요";
+  const mvPaymentReadiness = [
+    {
+      label: "심의 목적",
+      value:
+        mvType === "MV_BROADCAST"
+          ? "TV 송출 목적"
+          : "온라인 유통/업로드",
+      ready: true,
+    },
+    {
+      label: "선택 옵션",
+      value: mvSelectionLabel,
+      ready: canProceed,
+    },
+    {
+      label: "파일",
+      value: mvUploadStatusLabel,
+      ready: mvUploadReady,
+    },
+    {
+      label: "결제 금액",
+      value: `${formatCurrency(totalAmount)}원`,
+      ready: totalAmount > 0,
+    },
+  ];
+  const mvPaymentReady = mvPaymentReadiness.every((item) => item.ready);
+  const mvQuickSteps =
+    mvType === "MV_BROADCAST"
+      ? ["방송국 선택", "영상·곡 정보", "방송국 규격 파일", "결제"]
+      : ["온라인 심의 선택", "영상·곡 정보", "최종 영상 파일", "결제"];
 
   const selectedStepTone = React.useMemo(() => {
     if (mvType === "MV_BROADCAST") {
@@ -743,32 +795,28 @@ export function MvWizard({
       void createDraft({ force: true });
       return;
     }
-    const allowAllExtensions = mvType === "MV_DISTRIBUTION";
     const allowedTypes = new Set([
       "video/mp4",
       "video/quicktime",
       "video/x-ms-wmv",
       "video/mpeg",
     ]);
-    const allowedExtensions = [".mp4", ".mov", ".wmv", ".mpg", ".mpeg"];
+    const allowedExtensions = [".mp4", ".mov", ".wmv", ".mpg", ".mpeg", ".m4v"];
     let invalidNotice: string | null = null;
     const filtered = selected.filter((file) => {
       if (file.size > uploadMaxBytes) {
         invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
         return false;
       }
-      if (!allowAllExtensions) {
-        if (file.type && !allowedTypes.has(file.type)) {
-          invalidNotice = "MP4/MOV/WMV/MPG 파일만 업로드할 수 있습니다.";
-          return false;
-        }
-        if (!file.type) {
-          const lowerName = file.name.toLowerCase();
-          if (!allowedExtensions.some((ext) => lowerName.endsWith(ext))) {
-            invalidNotice = "MP4/MOV/WMV/MPG 파일만 업로드할 수 있습니다.";
-            return false;
-          }
-        }
+      const lowerName = file.name.toLowerCase();
+      const hasAllowedExtension = allowedExtensions.some((ext) =>
+        lowerName.endsWith(ext),
+      );
+      const hasAllowedMime =
+        file.type.startsWith("video/") || allowedTypes.has(file.type);
+      if (!hasAllowedExtension && !hasAllowedMime) {
+        invalidNotice = "영상 파일(MP4/MOV/WMV/MPG)만 업로드할 수 있습니다.";
+        return false;
       }
       return true;
     });
@@ -2260,11 +2308,6 @@ export function MvWizard({
     }
   };
 
-  const canProceed =
-    mvType === "MV_BROADCAST"
-      ? tvStations.length > 0
-      : onlineBaseSelected || onlineOptions.length > 0;
-
   const renderBroadcastSpecs = () => {
     if (broadcastSpecs.length === 0) return null;
     return (
@@ -2683,6 +2726,28 @@ export function MvWizard({
                 제목/러닝타임/포맷 등 기본 정보를 입력합니다.
               </p>
             </div>
+          </div>
+
+          <div className="rounded-[28px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]">
+            <p className="text-xs font-black uppercase tracking-[0.22em]">
+              빠른 접수 순서
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-4">
+              {mvQuickSteps.map((item, index) => (
+                <div
+                  key={item}
+                  className="rounded-xl border border-[#111111]/30 bg-white/45 px-3 py-2 text-sm font-black"
+                >
+                  <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-[5px] bg-[#111111] text-[11px] text-white">
+                    {index + 1}
+                  </span>
+                  {item}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs font-semibold leading-5">
+              정보가 많아 보여도 심의 목적, 곡 정보, 최종 영상 파일, 결제만 완료하면 접수됩니다. 영상 용량이 크면 이메일 제출로 전환할 수 있습니다.
+            </p>
           </div>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -3222,6 +3287,36 @@ export function MvWizard({
             </div>
           </div>
 
+          <div className="grid gap-3 md:grid-cols-3">
+            {[
+              {
+                title: "1. 최종본 확인",
+                body: "심의에 사용할 최종 영상 파일만 업로드하세요.",
+              },
+              {
+                title: "2. 권장 규격",
+                body:
+                  mvType === "MV_BROADCAST"
+                    ? "방송국별 MOV/MP4/WMV 규격과 용량 제한을 확인하세요."
+                    : "MOV 또는 MP4, 1920×1080, 29.97fps 파일을 권장합니다.",
+              },
+              {
+                title: "3. 업로드가 어려울 때",
+                body: `이메일 전송을 선택하고 ${APP_CONFIG.supportEmail}로 파일만 보내면 됩니다.`,
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="rounded-2xl border border-border/60 bg-background/70 px-4 py-4 text-sm"
+              >
+                <p className="font-semibold text-foreground">{item.title}</p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {item.body}
+                </p>
+              </div>
+            ))}
+          </div>
+
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               뮤직비디오 파일 업로드
@@ -3289,6 +3384,12 @@ export function MvWizard({
                 <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
                   {APP_CONFIG.supportEmail}
                 </p>
+                <div className="mt-3 rounded-xl border border-border/60 bg-background/80 px-3 py-3 text-xs leading-5 text-muted-foreground">
+                  <p className="font-semibold text-foreground">메일 제목 예시</p>
+                  <p className="mt-1 break-all">
+                    [MV심의 파일] {artistName.trim() || "아티스트명"} / {title.trim() || "곡명"} / {mvType === "MV_BROADCAST" ? "TV송출용" : "온라인용"}
+                  </p>
+                </div>
               </div>
             ) : (
               <>
@@ -3311,11 +3412,7 @@ export function MvWizard({
                     <input
                       type="file"
                       multiple
-                      accept={
-                        mvType === "MV_DISTRIBUTION"
-                          ? undefined
-                          : ".mp4,.mov,.wmv,.mpg,.mpeg,video/*"
-                      }
+                      accept=".mp4,.mov,.wmv,.mpg,.mpeg,.m4v,video/*"
                       onChange={onFileChange}
                       className="hidden"
                     />
@@ -3485,6 +3582,33 @@ export function MvWizard({
               <p className="mt-2 text-sm text-muted-foreground">
                 무통장 입금 또는 카드 결제를 선택할 수 있습니다.
               </p>
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border-2 border-[#111111] bg-background p-5 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              결제 전 확인
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
+              {mvPaymentReadiness.map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-2xl border px-4 py-3 text-sm ${item.ready
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100"
+                    : "border-[#f2cf27] bg-[#f2cf27]/18 text-foreground"
+                    }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
+                      {item.label}
+                    </p>
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] border border-current text-[11px] font-black">
+                      {item.ready ? "✓" : "!"}
+                    </span>
+                  </div>
+                  <p className="mt-2 font-semibold leading-5">{item.value}</p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -3779,7 +3903,7 @@ export function MvWizard({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={isSaving}
+              disabled={isSaving || !mvPaymentReady}
               className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >
               결제하기
