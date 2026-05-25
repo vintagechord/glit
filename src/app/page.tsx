@@ -1,63 +1,27 @@
-import Link from "next/link";
 import {
-  BellRing,
-  CheckCircle2,
   Clapperboard,
-  CreditCard,
   Disc3,
   FileText,
   MousePointerClick,
-  ShieldCheck,
-  UploadCloud,
 } from "lucide-react";
 
 import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
-import { HomeArtistSpotlight } from "@/features/home/home-artist-spotlight";
+import { ReliableLink } from "@/components/site/reliable-link";
 import { HomeSessionPanel } from "@/features/home/home-session-panel";
 
 const heroCtas = [
   {
-    title: "지금 심의 신청하기",
+    title: "심의 신청",
     href: "/dashboard/new",
     visual: "bg-[#1556a4] text-white dark:bg-[#3f8ad8] dark:text-[#06111f]",
     icon: MousePointerClick,
   },
   {
-    title: "조회 코드로 결과 확인",
+    title: "결과 조회",
     href: "/track",
     visual: "bg-[#f2cf27] text-[#111111] dark:bg-[#f2cf27] dark:text-[#111111]",
     icon: FileText,
-  },
-];
-
-const featureHighlights = [
-  {
-    title: "실시간 진행 알림",
-    description:
-      "방송국별 심의 진행 상황을 실시간으로 확인하세요.",
-    card:
-      "bg-[#fffaf0] text-[#111111] border-[#111111] shadow-[5px_5px_0_#111111] dark:bg-[#171717] dark:text-[#f5f5f7] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]",
-    iconBox: "bg-[#1556a4] text-white dark:bg-[#3f8ad8] dark:text-[#06111f]",
-    icon: BellRing,
-  },
-  {
-    title: "파일 업로드",
-    description:
-      "온사이드는 자체 스토리지 운영으로 안전하게 음원과 영상을 관리합니다.",
-    card:
-      "bg-white text-[#111111] border-[#111111] shadow-[5px_5px_0_#111111] dark:bg-[#171717] dark:text-[#f5f5f7] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]",
-    iconBox: "bg-[#1f7a5a] text-white dark:bg-[#46b783] dark:text-[#06111f]",
-    icon: UploadCloud,
-  },
-  {
-    title: "관리자 승인",
-    description:
-      "접수 시 1차 체크, 방송국 전달 전 2차 검수로 빈틈 없이 진행합니다.",
-    card:
-      "bg-[#f2cf27] text-[#111111] border-[#111111] shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]",
-    iconBox: "bg-[#d9362c] text-white dark:bg-[#ff6258] dark:text-[#111111]",
-    icon: ShieldCheck,
   },
 ];
 
@@ -68,7 +32,7 @@ const serviceCards = [
   {
     label: "방송국별 음반 심의",
     title: "음반 심의",
-    description: "TV·라디오 송출용. 준비물: 음원, 가사, 앨범 정보.",
+    description: "TV·라디오 송출용 음원 심의.",
     href: "/dashboard/new/album",
     tone: "album",
     cardClass: "border-[#111111] bg-[#f2cf27] text-[#111111]",
@@ -79,7 +43,7 @@ const serviceCards = [
   {
     label: "온라인 유통/업로드",
     title: "뮤직비디오 온라인 심의",
-    description: "멜론·지니·유튜브 등 유통사 제출과 온라인 업로드용.",
+    description: "유통사 제출·온라인 업로드용.",
     href: "/dashboard/new/mv?type=online",
     tone: "mv",
     cardClass: "border-[#111111] bg-[#1556a4] text-white",
@@ -90,41 +54,13 @@ const serviceCards = [
   {
     label: "TV 송출 목적",
     title: "뮤직비디오 TV 송출 심의",
-    description: "방송국별 조건과 편성 여부 확인이 필요한 TV 송출용.",
+    description: "방송국별 조건 확인 후 접수.",
     href: "/dashboard/new/mv?type=broadcast",
     tone: "oneclick",
     cardClass: "border-[#111111] bg-[#d9362c] text-white",
     labelClass: "text-white/74",
     descriptionClass: "text-white/82",
     actionClass: "bg-white text-[#111111]",
-  },
-];
-
-const processSteps = [
-  {
-    label: "신청",
-    tone: "bg-[#f2cf27] text-[#111111]",
-    icon: MousePointerClick,
-  },
-  {
-    label: "자료 확인",
-    tone: "bg-white text-[#111111]",
-    icon: UploadCloud,
-  },
-  {
-    label: "결제",
-    tone: "bg-[#1556a4] text-white",
-    icon: CreditCard,
-  },
-  {
-    label: "진행 확인",
-    tone: "bg-[#d9362c] text-white",
-    icon: BellRing,
-  },
-  {
-    label: "결과 수령",
-    tone: "bg-white text-[#111111]",
-    icon: CheckCircle2,
   },
 ];
 
@@ -164,23 +100,18 @@ export default function Home() {
                 온사이드 심의센터
               </span>
               <h1 className="font-display break-keep text-3xl font-black leading-tight text-foreground sm:text-5xl">
-                음반·뮤직비디오 심의,
+                심의 신청부터
                 <br className="hidden sm:block" />
-                신청부터 결과 수령까지 한 번에
+                결과 확인까지
               </h1>
-              <div className="max-w-xl rounded-[10px] border-2 border-[#111111] bg-white px-5 py-4 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27]">
-                <p className="text-[13px] font-semibold leading-6 text-foreground/82 sm:text-[15px] dark:text-white/84">
-                  3분 접수 · 방송국별 진행 현황 확인 · 결과 파일/필증 수령.
-                </p>
-                <p className="mt-2 text-[13px] font-semibold leading-6 text-foreground/72 sm:text-[15px] dark:text-white/74">
-                  온사이드는 방송국·온라인 유통 심의 접수부터 결제, 보완 요청, 결과 안내까지 한 흐름으로 관리합니다.
-                </p>
-              </div>
+              <p className="max-w-xl break-keep text-base font-semibold leading-7 text-foreground/74 dark:text-white/76">
+                음반·뮤직비디오 심의를 온라인으로 접수하고, 진행 현황과 결과 파일을 한 곳에서 확인하세요.
+              </p>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {heroCtas.map((cta) => {
                   const Icon = cta.icon;
                   return (
-                    <Link
+                    <ReliableLink
                       key={cta.title}
                       href={cta.href}
                       className="group overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] dark:hover:shadow-[8px_8px_0_#f2cf27]"
@@ -193,41 +124,10 @@ export default function Home() {
                       <div className="px-5 py-4 text-center">
                         <p className="break-keep text-[15px] font-black leading-snug text-foreground dark:text-white sm:text-base">{cta.title}</p>
                       </div>
-                    </Link>
+                    </ReliableLink>
                   );
                 })}
               </div>
-
-              <div className="hidden gap-5 pt-5 sm:grid sm:grid-cols-3 lg:mt-auto">
-                {featureHighlights.map((feature) => {
-                  const Icon = feature.icon;
-                  return (
-                    <div key={feature.title} className="group [perspective:1200px]">
-                      <div
-                        className={`flip-card relative min-h-[148px] overflow-hidden rounded-[10px] border-2 ${feature.card} transition-transform duration-500 group-hover:[transform:rotateY(180deg)]`}
-                      >
-                        <div className="flip-face absolute inset-0 z-0 flex flex-col items-center justify-center gap-3 p-4 text-center transition-opacity duration-300 group-hover:opacity-0">
-                          <div
-                            className={`flex h-14 w-14 items-center justify-center rounded-[8px] border-2 border-current ${feature.iconBox}`}
-                          >
-                            <Icon className="h-8 w-8" strokeWidth={2.35} />
-                          </div>
-                          <p className="text-[15px] font-black text-current">
-                            {feature.title}
-                          </p>
-                        </div>
-                        <div className="absolute inset-0 z-10 flex items-center justify-center px-5 text-center opacity-0 transition-opacity duration-300 [transform:rotateY(180deg)] group-hover:opacity-100">
-                          <p className="whitespace-pre-line text-[13px] font-semibold text-current">
-                            {feature.description}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <HomeArtistSpotlight frameHeight={212} />
             </div>
 
             <HomeSessionPanel />
@@ -243,21 +143,26 @@ export default function Home() {
         <div
           data-scroll-reveal
           data-reveal-state="hidden"
-          className={`flex flex-col gap-6 md:flex-row md:items-end md:justify-between ${scrollRevealBaseClass}`}
+          className={`flex flex-col gap-4 md:flex-row md:items-end md:justify-between ${scrollRevealBaseClass}`}
           style={{ transitionDelay: "0ms" }}
         >
-          <div />
-          <Link
+          <div>
+            <p className="bauhaus-kicker">신청 유형</p>
+            <h2 className="mt-4 text-2xl font-black text-foreground">
+              필요한 심의만 선택하세요
+            </h2>
+          </div>
+          <ReliableLink
             href="/forms"
             className="self-end text-sm font-semibold text-muted-foreground transition hover:text-foreground md:self-auto"
           >
-            온라인 접수가 어려우신가요? 신청서 다운로드·이메일 접수 안내 →
-          </Link>
+            온라인 접수가 어렵다면 구버전 신청서 작성 방식 안내 →
+          </ReliableLink>
         </div>
 
         <div className="mt-8 grid gap-6 md:grid-cols-3">
           {serviceCards.map((card, index) => (
-            <Link
+            <ReliableLink
               key={card.title}
               href={card.href}
               data-scroll-reveal
@@ -279,66 +184,11 @@ export default function Home() {
                   {card.description}
                 </p>
                 <div className={`mt-auto inline-flex w-fit items-center gap-2 px-4 py-3 text-sm font-black tracking-normal transition group-hover:translate-x-1 ${card.actionClass}`}>
-                  바로 시작 <span aria-hidden="true">→</span>
+                  시작 <span aria-hidden="true">→</span>
                 </div>
               </div>
-            </Link>
+            </ReliableLink>
           ))}
-        </div>
-      </section>
-
-      <section className="mx-auto w-full max-w-6xl px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-5">
-        <div className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white px-5 py-6 tracking-normal shadow-[8px_8px_0_#111111] dark:bg-[#111111] dark:text-white dark:shadow-[8px_8px_0_#f2cf27] sm:px-8 sm:py-7">
-          <div
-            data-scroll-reveal
-            data-reveal-state="hidden"
-            className={`relative z-10 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between ${scrollRevealBaseClass}`}
-            style={{ transitionDelay: "0ms" }}
-          >
-            <div className="max-w-2xl">
-              <p className="w-fit border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-[11px] font-black uppercase tracking-normal text-[#111111] dark:border-white">
-                온사이드 진행 방식
-              </p>
-              <h2 className="mt-4 text-2xl font-black leading-tight text-[#111111] dark:text-white sm:text-3xl">
-                신청 후 결과 수령까지 한 화면에서 확인합니다
-              </h2>
-              <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-[#111111]/68 dark:text-white/72">
-                접수, 자료 확인, 결제, 방송국별 진행 업데이트, 결과 파일 안내까지 순서대로 기록됩니다.
-              </p>
-            </div>
-          </div>
-
-          <div className="relative z-10 mt-6">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute left-3 right-3 top-1/2 hidden h-[3px] -translate-y-1/2 bg-[#111111] dark:bg-white md:block"
-            />
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              {processSteps.map(({ label, tone, icon: Icon }, index) => (
-                <div
-                  key={label}
-                  data-scroll-reveal
-                  data-reveal-state="hidden"
-                  style={{ transitionDelay: `${120 + index * 120}ms` }}
-                  className={`relative min-h-[118px] overflow-hidden rounded-[8px] border-2 border-[#111111] p-4 shadow-[4px_4px_0_#111111] ${scrollRevealBaseClass} ${tone}`}
-                >
-                  <div className="relative min-h-[78px] pr-11">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-normal opacity-75">
-                        STEP {String(index + 1).padStart(2, "0")}
-                      </p>
-                      <p className="mt-3 text-[15px] font-black leading-tight sm:text-base">
-                        {label}
-                      </p>
-                    </div>
-                    <div className="absolute right-0 top-0 flex h-9 w-9 items-center justify-center rounded-[8px] border-2 border-current bg-white/18 sm:h-10 sm:w-10">
-                      <Icon className="h-5 w-5" strokeWidth={2.4} />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </section>
     </div>

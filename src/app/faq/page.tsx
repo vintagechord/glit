@@ -16,7 +16,7 @@ export default function FaqPage() {
         자주 묻는 질문
       </h1>
       <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
-        심의 신청 전 준비물, 결제, 진행 확인, 결과 수령에서 자주 막히는 질문을 정리했습니다.
+        준비물, 결제, 진행 확인, 결과 수령에서 자주 묻는 내용을 정리했습니다.
       </p>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -31,11 +31,10 @@ export default function FaqPage() {
       </div>
 
       <section className="mt-8 grid gap-4">
-        {faqItems.map((item, index) => (
+        {faqItems.map((item) => (
           <details
             key={item.question}
             className="group rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#111111] open:bg-background dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]"
-            open={index < 3}
           >
             <summary className="flex list-none items-start justify-between gap-4">
               <span>
@@ -47,7 +46,8 @@ export default function FaqPage() {
                 </span>
               </span>
               <span className="rounded-[6px] border-2 border-border px-2 py-1 text-xs font-black text-muted-foreground group-open:bg-[#f2cf27] group-open:text-[#111111]">
-                열기
+                <span className="group-open:hidden">열기</span>
+                <span className="hidden group-open:inline">닫기</span>
               </span>
             </summary>
             <p className="mt-4 text-sm font-semibold leading-6 text-muted-foreground">

@@ -238,7 +238,7 @@ export function SiteFooter() {
             고객센터
           </Link>
           <Link href="/forms" className="transition hover:text-[#f2cf27]">
-            신청서 다운로드
+            구버전 신청서 작성
           </Link>
           <button
             type="button"

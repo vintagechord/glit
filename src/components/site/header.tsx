@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import * as React from "react";
 import { usePathname } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
 
+import { ReliableLink } from "./reliable-link";
 import { ThemeToggle } from "./theme-toggle";
 import { SiteLogo } from "./site-logo";
 
@@ -139,7 +139,7 @@ export function SiteHeader() {
           {navLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
             return (
-              <Link
+              <ReliableLink
                 key={link.href}
                 href={link.href}
                 className={`${navLinkClass} ${
@@ -149,7 +149,7 @@ export function SiteHeader() {
                 }`}
               >
                 <span>{link.label}</span>
-              </Link>
+              </ReliableLink>
             );
           })}
         </nav>
@@ -163,21 +163,21 @@ export function SiteHeader() {
                   로그아웃
                 </button>
               </form>
-              <Link href="/mypage" className={subtleButtonClass}>
+              <ReliableLink href="/mypage" className={subtleButtonClass}>
                 마이페이지
-              </Link>
-              <Link href="/dashboard/new" className={primaryButtonClass}>
+              </ReliableLink>
+              <ReliableLink href="/dashboard/new" className={primaryButtonClass}>
                 지금 신청
-              </Link>
+              </ReliableLink>
             </>
           ) : (
             <>
-              <Link href="/login" className={subtleButtonClass}>
+              <ReliableLink href="/login" className={subtleButtonClass}>
                 로그인
-              </Link>
-              <Link href="/dashboard/new" className={primaryButtonClass}>
+              </ReliableLink>
+              <ReliableLink href="/dashboard/new" className={primaryButtonClass}>
                 지금 신청
-              </Link>
+              </ReliableLink>
             </>
           )}
         </div>
@@ -188,7 +188,7 @@ export function SiteHeader() {
           {navLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
             return (
-              <Link
+              <ReliableLink
                 key={link.href}
                 href={link.href}
                 className={`${mobileNavLinkClass} ${
@@ -198,7 +198,7 @@ export function SiteHeader() {
                 }`}
               >
                 <span>{link.label}</span>
-              </Link>
+              </ReliableLink>
             );
           })}
         </div>

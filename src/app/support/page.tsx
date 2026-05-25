@@ -9,15 +9,15 @@ export const metadata = {
 const supportCards = [
   {
     title: "신청 전 상담",
-    description: "어떤 심의를 골라야 할지 애매한 경우 목적과 송출처를 먼저 확인합니다.",
+    description: "목적과 송출처에 맞는 심의 유형을 확인합니다.",
   },
   {
     title: "자료 보완",
-    description: "가사, 번역, 영상 규격, CD 제출 여부를 접수 전후로 확인합니다.",
+    description: "가사, 번역, 영상 규격, CD 제출 여부를 확인합니다.",
   },
   {
     title: "결과/코드 문의",
-    description: "조회 코드를 잃어버렸거나 결과 파일 확인이 어려운 경우 도와드립니다.",
+    description: "조회 코드와 결과 파일 확인을 도와드립니다.",
   },
 ];
 
@@ -29,7 +29,7 @@ export default function SupportPage() {
         접수 전후로 필요한 문의를 한 곳에서 확인하세요
       </h1>
       <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
-        온사이드는 온라인 접수를 기본으로 운영하며, 파일 업로드가 어렵거나 기존 신청서 양식이 필요한 경우 이메일 접수도 지원합니다.
+        온라인 접수를 기본으로 운영하며, 파일 업로드가 어려운 경우 구버전 신청서 작성 방식도 안내합니다.
       </p>
 
       <section className="mt-8 grid gap-4 md:grid-cols-3">
@@ -87,7 +87,7 @@ export default function SupportPage() {
               href="/forms"
               className="inline-flex items-center rounded-[8px] border-2 border-[#111111] bg-background px-5 py-3 text-sm font-black text-foreground shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
             >
-              신청서 다운로드
+              구버전 신청서 작성
             </Link>
           </div>
         </div>

@@ -11,28 +11,27 @@ const albumSteps = [
     number: "01",
     title: "음반심의란?",
     description:
-      "TV/라디오에 음악이 송출되려면 각 방송국 심의를 통과해야 합니다. 가사 내 욕설·비속어·상품 노출 등의 요소를 확인하는 절차를 통칭해 음반심의라고 합니다.",
+      "TV·라디오 송출 전 방송국이 음원, 가사, 앨범 정보를 확인하는 절차입니다.",
   },
   {
     number: "02",
     title: "방송국 심의 현황",
     description:
-      "심의를 받은 음반은 MBC, SBS, KBS, TBC, TBN 등의 채널을 통해 전국 79개 지역 방송국에 전달됩니다.",
+      "MBC, SBS, KBS 등 주요 방송국과 지역 방송국별로 접수·결과 일정이 다릅니다.",
     bullets: [
-      "심의기간: 접수 후 하루 ~ 최대 3주 (방송국별 상이)",
-      "발매 전/후 모두 접수 가능",
-      "현재 다수 방송국은 직접 방문 접수가 기준",
+      "결과 기간: 접수 후 1일~최대 3주",
+      "발매 전·후 모두 접수 가능",
+      "일부 방송국은 직접 제출 기준",
     ],
   },
   {
     number: "03",
     title: "온사이드의 심의 대행",
-    description: "온사이드 플랫폼에서 쉽고 빠른 접수",
+    description: "접수, 자료 확인, 결제, 결과 안내를 한 흐름으로 관리합니다.",
     bullets: [
-      "온라인/카드 결제 지원",
-      "온라인 제출로 간편 접수",
-      "디지털 음반의 경우 심의용 CD·가사집 무료 제작",
-      "진행 상황과 결과를 한눈에 보는 개별 페이지",
+      "온라인 접수·카드 결제 지원",
+      "디지털 음반은 심의용 CD·가사집 제작 지원",
+      "진행 현황과 결과를 개별 페이지에서 확인",
     ],
   },
 ];
@@ -42,22 +41,22 @@ const mvSteps = [
     number: "01",
     title: "뮤직비디오 심의란?",
     description:
-      "뮤직비디오의 송출/유통 목적에 맞는 심의 절차를 거칩니다. 폭력성·선정성·광고 노출 등 영상 요소를 확인합니다.",
+      "유통, 온라인 업로드, TV 송출 목적에 맞춰 영상 등급과 제출 조건을 확인합니다.",
   },
   {
     number: "02",
     title: "방송국 및 영등위 심의 현황",
     description:
-      "TV 송출 목적은 방송국별 개별 심의가 필요하고, 유통/온라인 목적은 한 곳 심의로 유통 제출이 가능합니다.",
+      "온라인용은 유통 제출 중심, TV 송출용은 방송국별 개별 조건 확인이 필요합니다.",
   },
   {
     number: "03",
     title: "온사이드의 뮤비 심의 대행",
-    description: "뮤직비디오 접수를 방송 가능 상태까지 빠르고 정확하게 진행합니다.",
+    description: "신청서 작성, 파일 제출, 결과 안내를 목적별로 정리해 진행합니다.",
     bullets: [
-      "온라인 신청서 작성과 파일 업로드 동시 지원",
-      "관리자 2차 확인으로 방송국 접수 누락 최소화",
-      "진행 상황과 결과를 한눈에 보는 개별 페이지 제공",
+      "온라인 신청서와 파일 업로드 지원",
+      "방송국 접수 전 자료 확인",
+      "결과 파일과 진행 현황 제공",
     ],
   },
 ];
@@ -68,7 +67,7 @@ export default function GuidePage() {
       <p className="bauhaus-kicker">이용가이드</p>
       <h1 className="font-display mt-4 text-3xl font-black text-foreground">심의 안내</h1>
       <p className="mt-3 text-sm font-semibold text-muted-foreground">
-        음반과 뮤직비디오 심의 진행 방식과 준비사항을 한눈에 정리했습니다.
+        음반과 뮤직비디오 심의 흐름, 준비물, 자주 묻는 질문을 정리했습니다.
       </p>
 
       <section className="relative mt-10 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
@@ -91,18 +90,11 @@ export default function GuidePage() {
                   <p className="text-sm font-black text-foreground">
                     {step.title}
                   </p>
-                  {step.description === "음원과 신청서만 보내주세요" && (
-                    <p className="text-xs font-semibold text-muted-foreground">
-                      {step.description}
-                    </p>
-                  )}
                 </div>
               </div>
-              {step.description !== "음원과 신청서만 보내주세요" && (
-                <p className="mt-3 text-sm font-semibold text-muted-foreground">
-                  {step.description}
-                </p>
-              )}
+              <p className="mt-3 text-sm font-semibold text-muted-foreground">
+                {step.description}
+              </p>
               {step.bullets && (
                 <ul className="mt-3 space-y-1 text-xs font-semibold text-muted-foreground">
                   {step.bullets.map((bullet) => (
@@ -124,38 +116,6 @@ export default function GuidePage() {
           >
             음반심의 신청하러 가기
           </Link>
-        </div>
-      </section>
-
-      <section className="relative mt-12 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
-        <h2 className="font-display text-2xl font-black text-foreground">
-          신청 전 준비물 체크리스트
-        </h2>
-        <div className="mt-6 grid gap-5 lg:grid-cols-2">
-          <div className="rounded-[8px] border-2 border-border bg-background p-5">
-            <p className="text-sm font-black text-foreground">음반 심의 준비물</p>
-            <ul className="mt-4 space-y-2 text-sm font-semibold text-muted-foreground">
-              {albumPreparationItems.map((item) => (
-                <li key={item} className="flex gap-2">
-                  <span className="mt-2 h-2 w-2 bg-[#f2cf27]" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-[8px] border-2 border-border bg-background p-5">
-            <p className="text-sm font-black text-foreground">
-              뮤직비디오 심의 준비물
-            </p>
-            <ul className="mt-4 space-y-2 text-sm font-semibold text-muted-foreground">
-              {mvPreparationItems.map((item) => (
-                <li key={item} className="flex gap-2">
-                  <span className="mt-2 h-2 w-2 bg-[#1556a4]" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
         </div>
       </section>
 
@@ -205,6 +165,38 @@ export default function GuidePage() {
           >
             뮤직비디오 심의 신청하러 가기
           </Link>
+        </div>
+      </section>
+
+      <section className="relative mt-12 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+        <h2 className="font-display text-2xl font-black text-foreground">
+          신청 전 준비물 체크리스트
+        </h2>
+        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <div className="rounded-[8px] border-2 border-border bg-background p-5">
+            <p className="text-sm font-black text-foreground">음반 심의 준비물</p>
+            <ul className="mt-4 space-y-2 text-sm font-semibold text-muted-foreground">
+              {albumPreparationItems.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <span className="mt-2 h-2 w-2 bg-[#f2cf27]" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-[8px] border-2 border-border bg-background p-5">
+            <p className="text-sm font-black text-foreground">
+              뮤직비디오 심의 준비물
+            </p>
+            <ul className="mt-4 space-y-2 text-sm font-semibold text-muted-foreground">
+              {mvPreparationItems.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <span className="mt-2 h-2 w-2 bg-[#1556a4]" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
 
