@@ -3,9 +3,11 @@
 import * as React from "react";
 import { MoonStar, SunMedium } from "lucide-react";
 import { useTheme } from "next-themes";
+import { usePathname } from "next/navigation";
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
+  const pathname = usePathname();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -22,6 +24,7 @@ export function ThemeToggle() {
   }
 
   const isDark = resolvedTheme === "dark";
+  const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const Icon = isDark ? SunMedium : MoonStar;
 
   return (
@@ -32,7 +35,9 @@ export function ThemeToggle() {
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
     >
       <Icon className="h-[18px] w-[18px]" />
-      <span className="hidden sm:inline">{isDark ? "라이트" : "다크"}</span>
+      <span className="hidden sm:inline">
+        {isEnglishRoute ? (isDark ? "Light" : "Dark") : isDark ? "라이트" : "다크"}
+      </span>
     </button>
   );
 }

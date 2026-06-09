@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import {
   Clapperboard,
   Disc3,
@@ -9,6 +10,16 @@ import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { ReliableLink } from "@/components/site/reliable-link";
 import { HomeSessionPanel } from "@/features/home/home-session-panel";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+    languages: {
+      ko: "/",
+      en: "/en",
+    },
+  },
+};
 
 const heroCtas = [
   {
@@ -110,14 +121,14 @@ export default function Home() {
                   음반·뮤직비디오 심의를 온라인으로 접수하고, 진행 현황과 결과 파일을 한 곳에서 확인하세요.
                 </p>
               </div>
-              <div className="grid min-h-[150px] flex-1 grid-cols-2 items-stretch gap-3 sm:min-h-[166px] sm:gap-4 lg:max-w-[540px]">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:max-w-[540px]">
                 {heroCtas.map((cta) => {
                   const Icon = cta.icon;
                   return (
                     <ReliableLink
                       key={cta.title}
                       href={cta.href}
-                      className="group flex h-full min-h-[150px] flex-col overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] dark:hover:shadow-[8px_8px_0_#f2cf27] sm:min-h-[166px]"
+                      className="group flex h-[166px] flex-col overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] dark:hover:shadow-[8px_8px_0_#f2cf27] sm:h-[188px]"
                     >
                       <div
                         className={`flex flex-1 items-center justify-center ${cta.visual}`}

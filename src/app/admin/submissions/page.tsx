@@ -40,6 +40,7 @@ type AdminSubmissionsSearchParamsInput = {
   status?: string | string[];
   payment?: string | string[];
   type?: string | string[];
+  origin?: string | string[];
   q?: string | string[];
   from?: string | string[];
   to?: string | string[];
@@ -56,6 +57,12 @@ type SubmissionRow = {
   created_at: string;
   updated_at: string | null;
   amount_krw: number | null;
+  locale?: string | null;
+  applicant_country?: string | null;
+  payment_provider?: string | null;
+  payment_currency?: string | null;
+  payment_amount?: number | null;
+  created_from?: string | null;
   package?:
     | Array<{ name?: string | null }>
     | { name?: string | null }
@@ -81,6 +88,7 @@ export default async function AdminSubmissionsPage({
     status: toSingle(resolvedSearchParams.status),
     payment: toSingle(resolvedSearchParams.payment),
     type: toSingle(resolvedSearchParams.type),
+    origin: toSingle(resolvedSearchParams.origin),
     q: toSingle(resolvedSearchParams.q),
     from: toDateInputValue(toSingle(resolvedSearchParams.from)),
     to: toDateInputValue(toSingle(resolvedSearchParams.to)),
@@ -94,9 +102,15 @@ export default async function AdminSubmissionsPage({
   const offset = (page - 1) * PAGE_SIZE;
   const baseSelect =
     "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, package:packages ( name )";
-  const guestSelect = `${baseSelect}, guest_name`;
+  const globalSelect =
+    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
+  const globalGuestSelect = `${globalSelect}, guest_name`;
 
-  const buildQuery = (selectFields: string, includeGuestColumns: boolean) => {
+  const buildQuery = (
+    selectFields: string,
+    includeGuestColumns: boolean,
+    includeGlobalColumns: boolean,
+  ) => {
     let query = supabase
       .from("submissions")
       .select(selectFields, { count: "exact" })
@@ -113,6 +127,11 @@ export default async function AdminSubmissionsPage({
     }
     if (filters.type) {
       query = query.eq("type", filters.type);
+    }
+    if (includeGlobalColumns && filters.origin === "global") {
+      query = query.eq("created_from", "global");
+    } else if (includeGlobalColumns && filters.origin === "domestic") {
+      query = query.or("created_from.is.null,created_from.eq.domestic");
     }
     if (filters.q) {
       const terms = [
@@ -141,17 +160,20 @@ export default async function AdminSubmissionsPage({
   let submissionsError = null as { message?: string; code?: string } | null;
   let totalCount = 0;
 
-  const guestResult = await buildQuery(guestSelect, true);
+  const guestResult = await buildQuery(globalGuestSelect, true, true);
   submissionsError = guestResult.error ?? null;
   submissions = (guestResult.data ?? []) as unknown as SubmissionRow[];
   totalCount = guestResult.count ?? 0;
 
   if (
     submissionsError?.message?.toLowerCase().includes("guest_name") ||
+    submissionsError?.message?.toLowerCase().includes("created_from") ||
+    submissionsError?.message?.toLowerCase().includes("locale") ||
+    submissionsError?.code === "PGRST204" ||
     submissionsError?.code === "42703"
   ) {
     hasGuestColumns = false;
-    const fallback = await buildQuery(baseSelect, false);
+    const fallback = await buildQuery(baseSelect, false, false);
     submissions = (fallback.data ?? []) as unknown as SubmissionRow[];
     submissionsError = fallback.error ?? null;
     totalCount = fallback.count ?? totalCount;
@@ -215,7 +237,7 @@ export default async function AdminSubmissionsPage({
 
       <form
         method="get"
-        className="mt-6 grid gap-4 rounded-[28px] border border-border/60 bg-card/80 p-6 md:grid-cols-[1fr_repeat(5,auto)_auto]"
+        className="mt-6 grid gap-4 rounded-[28px] border border-border/60 bg-card/80 p-6 md:grid-cols-[1fr_repeat(6,auto)_auto]"
       >
         <input
           name="q"
@@ -246,6 +268,15 @@ export default async function AdminSubmissionsPage({
                 {option.label}
               </option>
             ))}
+        </select>
+        <select
+          name="origin"
+          defaultValue={filters.origin}
+          className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+        >
+          <option value="">전체 접수</option>
+          <option value="domestic">국내</option>
+          <option value="global">해외</option>
         </select>
         <select
           name="status"
@@ -324,6 +355,10 @@ export default async function AdminSubmissionsPage({
               ? labelMap.payment[submission.payment_status] ??
                 submission.payment_status
               : "-";
+            const isGlobalSubmission =
+              submission.created_from === "global" ||
+              submission.locale === "en" ||
+              submission.payment_provider === "paypal";
             return (
               <div
                 key={submission.id}
@@ -343,6 +378,23 @@ export default async function AdminSubmissionsPage({
                       {labelMap.type[submission.type] ?? submission.type}
                       {hasGuestColumns && submission.guest_name ? " · 비회원" : ""}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {isGlobalSubmission ? (
+                        <span className="rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-2 py-0.5 text-[10px] font-black text-[#111111]">
+                          GLOBAL
+                        </span>
+                      ) : null}
+                      {submission.applicant_country ? (
+                        <span className="rounded-[6px] border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                          {submission.applicant_country}
+                        </span>
+                      ) : null}
+                      {submission.payment_provider ? (
+                        <span className="rounded-[6px] border border-border bg-background px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                          {submission.payment_provider}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="text-xs text-muted-foreground">
                     <p>
@@ -364,6 +416,10 @@ export default async function AdminSubmissionsPage({
                     <p>
                       {submission.amount_krw
                         ? `${submission.amount_krw.toLocaleString()}원`
+                        : submission.payment_amount
+                          ? `${submission.payment_currency ?? "USD"} ${Number(
+                              submission.payment_amount,
+                            ).toLocaleString()}`
                         : "-"}
                     </p>
                     <p className="text-foreground">상세 보기 →</p>

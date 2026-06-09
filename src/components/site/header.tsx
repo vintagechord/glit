@@ -17,6 +17,13 @@ const navLinks = [
   { label: "고객센터", href: "/support", match: "prefix" as const },
 ];
 
+const englishNavLinks = [
+  { label: "Services", href: "/en#services", match: "exact" as const },
+  { label: "Requirements", href: "/en#requirements", match: "exact" as const },
+  { label: "Apply", href: "/en/apply", match: "prefix" as const },
+  { label: "FAQ", href: "/en#faq", match: "exact" as const },
+];
+
 const authStorageKey = "onside:header-auth-state";
 
 type AuthState = "authenticated" | "unauthenticated";
@@ -46,6 +53,8 @@ export function SiteHeader() {
   const pathname = usePathname();
   const headerRef = React.useRef<HTMLElement | null>(null);
   const [authState, setAuthState] = React.useState<AuthState>("unauthenticated");
+  const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
+  const activeNavLinks = isEnglishRoute ? englishNavLinks : navLinks;
 
   React.useEffect(() => {
     const element = headerRef.current;
@@ -136,7 +145,7 @@ export function SiteHeader() {
         <SiteLogo />
 
         <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 lg:flex">
-          {navLinks.map((link) => {
+          {activeNavLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
             return (
               <ReliableLink
@@ -155,28 +164,40 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
+          <ReliableLink
+            href={isEnglishRoute ? "/" : "/en"}
+            className={subtleButtonClass}
+          >
+            {isEnglishRoute ? "KR" : "EN"}
+          </ReliableLink>
           <ThemeToggle />
           {authState === "authenticated" ? (
             <>
               <form action="/logout" method="post">
                 <button type="submit" className={subtleButtonClass}>
-                  로그아웃
+                  {isEnglishRoute ? "Logout" : "로그아웃"}
                 </button>
               </form>
               <ReliableLink href="/mypage" className={subtleButtonClass}>
-                마이페이지
+                {isEnglishRoute ? "My Page" : "마이페이지"}
               </ReliableLink>
-              <ReliableLink href="/dashboard/new" className={primaryButtonClass}>
-                지금 신청
+              <ReliableLink
+                href={isEnglishRoute ? "/en/apply" : "/dashboard/new"}
+                className={primaryButtonClass}
+              >
+                {isEnglishRoute ? "Apply Now" : "지금 신청"}
               </ReliableLink>
             </>
           ) : (
             <>
               <ReliableLink href="/login" className={subtleButtonClass}>
-                로그인
+                {isEnglishRoute ? "Login" : "로그인"}
               </ReliableLink>
-              <ReliableLink href="/dashboard/new" className={primaryButtonClass}>
-                지금 신청
+              <ReliableLink
+                href={isEnglishRoute ? "/en/apply" : "/dashboard/new"}
+                className={primaryButtonClass}
+              >
+                {isEnglishRoute ? "Apply Now" : "지금 신청"}
               </ReliableLink>
             </>
           )}
@@ -185,7 +206,7 @@ export function SiteHeader() {
 
       <nav className="border-t-2 border-[#111111] px-3 py-2.5 lg:hidden dark:border-[#f2cf27]">
         <div className="mx-auto grid w-full max-w-6xl grid-cols-5 gap-1.5 sm:gap-2">
-          {navLinks.map((link) => {
+          {activeNavLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
             return (
               <ReliableLink

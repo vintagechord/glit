@@ -2657,7 +2657,7 @@ export function MvWizard({
                             {details?.title ?? `${stationName} 입고 옵션`}
                           </p>
                           {isConditional ? (
-                            <span className={`inline-flex rounded-[6px] border px-2.5 py-1 text-[10px] font-black tracking-normal ${active ? "border-white/30 bg-white/20 text-current" : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}>
+                            <span className="inline-flex w-fit rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-2.5 py-1 text-[10px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[2px_2px_0_#111111]">
                               문의 필요
                             </span>
                           ) : null}
@@ -2668,7 +2668,6 @@ export function MvWizard({
                           ) : null}
                         </div>
                         <span className="text-right text-xs font-semibold">
-                          {isConditional ? "문의 필요 · " : null}
                           {formatCurrency(stationPriceMap[code] ?? 0)}원
                         </span>
                       </div>
@@ -2698,12 +2697,6 @@ export function MvWizard({
                 </p>
               </div>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground text-right">
-              무통장 입금 또는 카드 결제 모두 가능합니다.
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground text-right">
-              비회원 결제 가능
-            </p>
           </div>
           <div className="flex justify-end">
             <button
