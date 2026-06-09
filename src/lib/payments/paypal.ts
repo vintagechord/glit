@@ -208,7 +208,7 @@ export const createPayPalOrderForSubmission = async ({
   if (!Number.isFinite(amount) || amount <= 0) {
     return {
       error:
-        "PayPal amount is not available. Apply the global submission database migration first.",
+        "PayPal amount is not available. Apply the English submission database migration first.",
     };
   }
 
@@ -383,7 +383,7 @@ export const capturePayPalOrder = async ({
   await admin.from("submission_events").insert({
     submission_id: submission.id,
     event_type: "PAYMENT",
-    message: "PayPal payment captured for global submission.",
+    message: "PayPal payment captured for English submission.",
   });
 
   return {

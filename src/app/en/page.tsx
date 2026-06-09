@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, FileCheck2, Globe2, Languages } from "lucide-react";
+import { ArrowRight, FileCheck2, MonitorPlay, RadioTower } from "lucide-react";
 
+import type { GlobalProductKey } from "@/lib/global/config";
 import { GLOBAL_PRODUCTS } from "@/lib/global/config";
 import { getOnsideMessage } from "@/lib/i18n/onside";
 
@@ -35,6 +36,18 @@ const requirements = [
   "Rights holder and distributor information",
 ];
 
+const iconByProductKey: Record<GlobalProductKey, typeof FileCheck2> = {
+  album_review: FileCheck2,
+  mv_online_review: MonitorPlay,
+  mv_broadcast_review: RadioTower,
+};
+
+const hrefByProductKey: Record<GlobalProductKey, string> = {
+  album_review: "/en/apply/album",
+  mv_online_review: "/en/apply/mv",
+  mv_broadcast_review: "/en/apply/mv?type=broadcast",
+};
+
 export default function EnglishHomePage() {
   return (
     <div className="bg-[#fffaf0] text-foreground dark:bg-[#101010]">
@@ -42,7 +55,7 @@ export default function EnglishHomePage() {
         <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:py-16">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="bauhaus-kicker">Global</span>
+              <span className="bauhaus-kicker">Since 2017</span>
               <Link
                 href="/"
                 className="rounded-[8px] border-2 border-[#111111] bg-white px-3 py-1.5 text-xs font-black text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white"
@@ -63,9 +76,9 @@ export default function EnglishHomePage() {
               {t("hero.subtitle")}
             </p>
             <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-foreground/70 dark:text-white/70">
-              Planning to promote your music in Korea? Korean broadcasters may
-              require music, lyrics, translations, artwork, and related metadata
-              before a song or video can be reviewed for broadcast use.
+              If you want your music or music video prepared for Korean
+              broadcast review, Onside lets you submit, pay, track progress, and
+              check results through the same review workflow.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
@@ -104,22 +117,17 @@ export default function EnglishHomePage() {
           <div>
             <p className="bauhaus-kicker">Services</p>
             <h2 className="mt-4 text-3xl font-black">
-              Korean Broadcast Music Review Service
+              Same Onside Services, In English
             </h2>
           </div>
           <Link href="/en/apply" className="text-sm font-black text-foreground underline">
-            Start with PayPal checkout
+            Choose a review service
           </Link>
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {GLOBAL_PRODUCTS.map((product, index) => {
-            const Icon =
-              product.key === "music_review"
-                ? FileCheck2
-                : product.key === "mv_review"
-                  ? Globe2
-                  : Languages;
+            const Icon = iconByProductKey[product.key];
             const tone =
               index === 0
                 ? "bg-[#f2cf27] text-[#111111]"
@@ -127,8 +135,9 @@ export default function EnglishHomePage() {
                   ? "bg-[#1556a4] text-white"
                   : "bg-[#d9362c] text-white";
             return (
-              <article
+              <Link
                 key={product.key}
+                href={hrefByProductKey[product.key]}
                 className={`flex min-h-[320px] flex-col rounded-[10px] border-2 border-[#111111] p-5 shadow-[6px_6px_0_#111111] ${tone}`}
               >
                 <Icon className="h-9 w-9" strokeWidth={2.4} />
@@ -146,7 +155,7 @@ export default function EnglishHomePage() {
                 <p className="mt-auto pt-6 text-3xl font-black">
                   ${product.amountUsd.toLocaleString("en-US")}
                 </p>
-              </article>
+              </Link>
             );
           })}
         </div>

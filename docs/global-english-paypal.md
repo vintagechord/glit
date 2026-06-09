@@ -1,14 +1,20 @@
-# Onside Global English / PayPal Setup
+# Onside English / PayPal Setup
 
-This document covers the English global submission flow added for overseas
-artists, labels, distributors, managers, and PR agencies.
+This document covers the English Onside flow for overseas artists, labels,
+distributors, managers, and PR agencies. The English version is not a separate
+service concept. It mirrors the Korean Onside review process and changes the
+payment method to PayPal.
 
 ## Routes
 
-- `/en`: English landing page for Korean Broadcast Review Submission Service
-- `/en/apply`: English global submission form
-- `/en/submissions/[id]`: Global submission payment/status page
-- `/api/global/submissions`: Creates a global submission
+- `/en`: English landing page for the same Onside review service
+- `/en/apply`: English service selection
+- `/en/apply/album`: English album review submission
+- `/en/apply/mv`: English music video online review submission
+- `/en/apply/mv?type=broadcast`: English music video TV broadcast review submission
+- `/en/track`: English progress/result lookup
+- `/en/submissions/[id]`: PayPal payment/status return page
+- `/api/global/submissions`: Creates an English submission in the existing `submissions` table
 - `/api/paypal/orders`: Creates a PayPal Orders v2 checkout order
 - `/api/paypal/capture`: Captures or cancels PayPal checkout
 
@@ -20,12 +26,17 @@ Required for PayPal checkout:
 - `PAYPAL_CLIENT_ID`
 - `PAYPAL_CLIENT_SECRET`
 
-Optional global product pricing:
+Optional English service pricing:
 
-- `ONSIDE_GLOBAL_MUSIC_REVIEW_USD` default `180`
-- `ONSIDE_GLOBAL_MV_REVIEW_USD` default `220`
-- `ONSIDE_GLOBAL_TRANSLATION_USD` default `80`
+- `ONSIDE_EN_ALBUM_REVIEW_USD` default `180`
+- `ONSIDE_EN_MV_ONLINE_REVIEW_USD` default `220`
+- `ONSIDE_EN_MV_BROADCAST_REVIEW_USD` default `260`
 - `ONSIDE_GLOBAL_CURRENCY` default `USD`
+
+Legacy fallbacks are still read for compatibility:
+
+- `ONSIDE_GLOBAL_MUSIC_REVIEW_USD`
+- `ONSIDE_GLOBAL_MV_REVIEW_USD`
 
 Do not hardcode PayPal credentials in source code.
 
@@ -37,24 +48,40 @@ Apply the non-destructive migration manually after reviewing it:
 supabase/migrations/0046_global_submissions_paypal.sql
 ```
 
-The migration only adds nullable metadata columns, indexes, and the `PAYPAL`
-payment method enum value. It does not drop, rename, or rewrite existing Korean
-submission data.
+The migration adds nullable English/global metadata columns, indexes, and the
+`PAYPAL` payment method enum value. It does not drop, rename, or rewrite
+existing Korean submission data.
 
-Without this migration, `/en` and `/en/apply` still render, but PayPal checkout
-cannot safely calculate the server-side amount from stored submission metadata.
+Without this migration, English pages still render, but PayPal checkout cannot
+safely calculate the server-side amount from stored submission metadata.
+
+## Submission Mapping
+
+English submissions are saved into the same `submissions` table and use the same
+review types as Korean submissions:
+
+- `album_review` -> `ALBUM`
+- `mv_online_review` -> `MV_DISTRIBUTION`
+- `mv_broadcast_review` -> `MV_BROADCAST`
+
+English rows keep `locale = en`, `created_from = global`, and
+`payment_provider = paypal` so admins can identify overseas English submissions.
+Country, translation request status, ISRC, UPC, and overseas label metadata are
+stored in the English/global metadata columns and `global_form`.
 
 ## Payment Flow
 
-1. The applicant submits `/en/apply`.
-2. The server saves a global submission with `created_from = global`,
-   `locale = en`, and `payment_provider = paypal`.
-3. The client requests `/api/paypal/orders`.
-4. The server creates a PayPal Orders v2 order using the stored amount/currency.
-5. The applicant approves payment on PayPal.
-6. PayPal returns to `/api/paypal/capture`.
-7. The server captures the order and marks the submission as `PAID` and
+1. The applicant chooses a service on `/en/apply`.
+2. The applicant submits the English form for album or MV review.
+3. The server saves the row in `submissions` with the correct review type.
+4. The client requests `/api/paypal/orders`.
+5. The server creates a PayPal Orders v2 order using the stored amount/currency.
+6. The applicant approves payment on PayPal.
+7. PayPal returns to `/api/paypal/capture`.
+8. The server captures the order and marks the submission `PAID` and
    `IN_PROGRESS`.
+9. The applicant checks progress from `/en/track` with the same guest lookup
+   code.
 
 ## Required Disclaimer
 
@@ -76,7 +103,12 @@ Korean:
 - Existing Korean MV submission form loads normally.
 - Existing domestic Inicis payment routes still build.
 - `/en` loads and uses English copy.
-- `/en/apply` loads on desktop and mobile.
+- `/en/apply` shows the same three service categories as Korean.
+- `/en/apply/album` loads an English album form with package selection.
+- `/en/apply/mv` loads an English MV online form.
+- `/en/apply/mv?type=broadcast` loads an English MV broadcast form.
+- `/en/track` redirects logged-in users to My Page and shows guest lookup only
+  for logged-out users.
 - Header language switch shows `EN` on Korean pages and `KR` on English pages.
 - English form shows the required disclaimer before submit.
 - English form validates required fields.
@@ -85,14 +117,14 @@ Korean:
   approval URL.
 - PayPal capture marks the submission `PAID`.
 - PayPal cancel leaves the submission pending/unpaid.
-- Admin submissions list can show `GLOBAL`, country, and PayPal provider when
-  global columns exist.
+- Admin submissions list can show English/global rows, country, and PayPal
+  provider when global columns exist.
 - Mobile pages have no horizontal overflow.
 
 ## Rollback
 
-If the Korean submission or payment flow regresses, revert the code files added
-for the global flow and do not apply the migration.
+If the Korean submission or payment flow regresses, revert the English-specific
+code files and do not apply the migration.
 
 If the migration has already been applied, leave the added nullable columns in
 place unless a separate reviewed rollback migration is prepared. They are

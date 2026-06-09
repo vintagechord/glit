@@ -25,7 +25,7 @@ export const onsideMessages: Record<Locale, Messages> = {
   en: {
     "site.title": "Onside",
     "site.description":
-      "Korean Broadcast Review Submission Service for global artists, labels, and distributors.",
+      "English Onside service for Korean broadcast review submission.",
     "nav.home": "Home",
     "nav.services": "Services",
     "nav.apply": "Apply",
@@ -33,15 +33,15 @@ export const onsideMessages: Record<Locale, Messages> = {
     "nav.faq": "FAQ",
     "nav.login": "Login",
     "nav.my_requests": "My Requests",
-    "hero.title": "Korean Broadcast Review Submission for Global Artists",
+    "hero.title": "Submit Your Music for Korean Broadcast Review",
     "hero.subtitle":
-      "Onside helps overseas artists, labels, and distributors prepare and submit music materials for Korean broadcast review.",
+      "The English version provides the same Onside submission, payment, progress tracking, and result check flow for overseas artists, labels, and distributors.",
     "hero.cta_primary": "Start Submission",
     "hero.cta_secondary": "View Requirements",
-    "service.album_review.title": "Korean Broadcast Music Review Submission",
+    "service.album_review.title": "Album Review",
     "service.album_review.description":
       "For singles, albums, and music releases that need guided submission support for Korean broadcast review.",
-    "service.mv_review.title": "Korean Broadcast MV Review Submission",
+    "service.mv_review.title": "Music Video Review",
     "service.mv_review.description":
       "For music videos that need video material checks, metadata organization, and broadcast review submission support.",
     "service.translation_addon.title": "Korean Lyric Translation Add-on",

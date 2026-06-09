@@ -1,56 +1,78 @@
-export type GlobalProductKey = "music_review" | "mv_review" | "lyric_translation";
+export type GlobalProductKey =
+  | "album_review"
+  | "mv_online_review"
+  | "mv_broadcast_review";
 
 export type GlobalProduct = {
   key: GlobalProductKey;
+  submissionType: "ALBUM" | "MV_DISTRIBUTION" | "MV_BROADCAST";
   title: string;
+  shortTitle: string;
   description: string;
   includes: string[];
   amountUsd: number;
 };
 
-const readUsd = (key: string, fallback: number) => {
-  const value = Number(process.env[key] ?? fallback);
-  return Number.isFinite(value) && value >= 0 ? value : fallback;
+const readUsd = (keys: string | string[], fallback: number) => {
+  const candidates = Array.isArray(keys) ? keys : [keys];
+  for (const key of candidates) {
+    const value = Number(process.env[key]);
+    if (Number.isFinite(value) && value >= 0) return value;
+  }
+  return fallback;
 };
 
 export const GLOBAL_PRODUCTS: GlobalProduct[] = [
   {
-    key: "music_review",
-    title: "Korean Broadcast Music Review Submission",
+    key: "album_review",
+    submissionType: "ALBUM",
+    title: "Album Review",
+    shortTitle: "Album",
     description:
-      "For singles, albums, and audio releases that need guided submission support for Korean broadcast review.",
+      "For singles, albums, and audio releases that need Korean broadcast review submission support.",
     includes: [
+      "Broadcaster package selection",
       "Metadata check",
-      "Audio/file link check",
-      "Lyric material check",
-      "Submission support",
+      "Lyrics and translation status",
+      "Broadcast review progress tracking",
     ],
-    amountUsd: readUsd("ONSIDE_GLOBAL_MUSIC_REVIEW_USD", 180),
+    amountUsd: readUsd(
+      ["ONSIDE_EN_ALBUM_REVIEW_USD", "ONSIDE_GLOBAL_MUSIC_REVIEW_USD"],
+      180,
+    ),
   },
   {
-    key: "mv_review",
-    title: "Korean Broadcast MV Review Submission",
+    key: "mv_online_review",
+    submissionType: "MV_DISTRIBUTION",
+    title: "Music Video Online Review",
+    shortTitle: "MV Online",
     description:
-      "For music videos that need video material checks, metadata organization, and broadcast review submission support.",
+      "For music videos submitted for distributor delivery and online upload review.",
     includes: [
       "Video material check",
       "Metadata check",
-      "Music video URL review",
-      "Submission support",
+      "Requested rating field",
+      "Review result file tracking",
     ],
-    amountUsd: readUsd("ONSIDE_GLOBAL_MV_REVIEW_USD", 220),
+    amountUsd: readUsd(
+      ["ONSIDE_EN_MV_ONLINE_REVIEW_USD", "ONSIDE_GLOBAL_MV_REVIEW_USD"],
+      220,
+    ),
   },
   {
-    key: "lyric_translation",
-    title: "Korean Lyric Translation Add-on",
+    key: "mv_broadcast_review",
+    submissionType: "MV_BROADCAST",
+    title: "Music Video TV Broadcast Review",
+    shortTitle: "MV Broadcast",
     description:
-      "Preparation support for Korean lyric translations. This is not legal, certified, or notarized translation.",
+      "For music videos prepared for Korean TV broadcaster submission requirements.",
     includes: [
-      "Lyric translation preparation",
-      "Terminology consistency check",
-      "Submission material formatting",
+      "Broadcaster request memo",
+      "Video material check",
+      "Requested rating field",
+      "Broadcast review progress tracking",
     ],
-    amountUsd: readUsd("ONSIDE_GLOBAL_TRANSLATION_USD", 80),
+    amountUsd: readUsd("ONSIDE_EN_MV_BROADCAST_REVIEW_USD", 260),
   },
 ];
 

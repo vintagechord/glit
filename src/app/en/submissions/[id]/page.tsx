@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
-  title: "Global Submission Status",
+  title: "English Submission Status",
   robots: {
     index: false,
     follow: false,
@@ -89,7 +89,7 @@ export default async function GlobalSubmissionStatusPage({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
-      <p className="bauhaus-kicker">Global submission</p>
+      <p className="bauhaus-kicker">English submission</p>
       <h1 className="font-display mt-4 text-3xl font-black">
         Submission status
       </h1>
@@ -149,10 +149,18 @@ export default async function GlobalSubmissionStatusPage({
         ) : null}
 
         <p className="mt-6 text-sm font-semibold leading-7 text-muted-foreground">
-          Onside will review submitted materials after payment is confirmed. This
-          service does not guarantee approval, broadcast airplay, programming,
-          playlisting, or royalty collection.
+          Onside will review submitted materials after payment is confirmed.
+          You can use the lookup code to check the same submission from the
+          English progress page.
         </p>
+        {submission.guest_token ? (
+          <Link
+            href={`/en/track/${encodeURIComponent(submission.guest_token)}`}
+            className="mt-4 inline-flex rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111]"
+          >
+            Open progress page
+          </Link>
+        ) : null}
       </div>
 
       <Link

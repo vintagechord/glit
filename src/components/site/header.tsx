@@ -19,8 +19,9 @@ const navLinks = [
 
 const englishNavLinks = [
   { label: "Services", href: "/en#services", match: "exact" as const },
-  { label: "Requirements", href: "/en#requirements", match: "exact" as const },
   { label: "Apply", href: "/en/apply", match: "prefix" as const },
+  { label: "Results", href: "/en/track", match: "prefix" as const },
+  { label: "Requirements", href: "/en#requirements", match: "exact" as const },
   { label: "FAQ", href: "/en#faq", match: "exact" as const },
 ];
 
