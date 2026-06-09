@@ -11,6 +11,7 @@ type InicisMode = "prod" | "stg";
 
 type RuntimeHealthOptions = {
   strict?: boolean;
+  includeOptionalNotifications?: boolean;
 };
 
 const truthy = (value: string | undefined | null) =>
@@ -181,8 +182,10 @@ export const runRuntimeConfigChecks = (
   const optionalSeverity: RuntimeHealthCheck["severity"] = options.strict
     ? "error"
     : "warning";
+  const includeOptionalNotifications =
+    options.includeOptionalNotifications ?? Boolean(options.strict);
 
-  return [
+  const checks: RuntimeHealthCheck[] = [
     checkBaseUrl(),
     checkEnv(
       [
@@ -203,7 +206,6 @@ export const runRuntimeConfigChecks = (
       "b2",
     ),
     checkInicis(),
-    checkEnv(["RESEND_API_KEY", "RESEND_FROM"], "email", optionalSeverity),
     checkConfiguredValues(
       [
         ["supportEmail", APP_CONFIG.supportEmail],
@@ -215,12 +217,20 @@ export const runRuntimeConfigChecks = (
       "support and bank",
       optionalSeverity,
     ),
-    checkEnv(
-      ["KAKAO_ALIMTALK_WEBHOOK_URL"],
-      "kakao notification",
-      "warning",
-    ),
   ];
+
+  if (includeOptionalNotifications) {
+    checks.push(
+      checkEnv(["RESEND_API_KEY", "RESEND_FROM"], "email", optionalSeverity),
+      checkEnv(
+        ["KAKAO_ALIMTALK_WEBHOOK_URL"],
+        "kakao notification",
+        "warning",
+      ),
+    );
+  }
+
+  return checks;
 };
 
 export const summarizeRuntimeHealth = (checks: RuntimeHealthCheck[]) => {
