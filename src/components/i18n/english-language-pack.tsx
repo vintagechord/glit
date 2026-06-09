@@ -980,18 +980,27 @@ function translateElement(element: Element) {
   if (element instanceof HTMLInputElement) {
     const type = element.type.toLowerCase();
     if (type === "submit" || type === "button") {
-      element.value = translateValue(element.value);
+      const nextValue = translateValue(element.value);
+      if (nextValue !== element.value) {
+        element.value = nextValue;
+      }
     }
   }
 
   if (element instanceof HTMLButtonElement) {
-    element.value = translateValue(element.value);
+    const nextValue = translateValue(element.value);
+    if (nextValue !== element.value) {
+      element.value = nextValue;
+    }
   }
 
   for (const attr of translatableAttributes) {
     const value = element.getAttribute(attr);
     if (value) {
-      element.setAttribute(attr, translateValue(value));
+      const nextValue = translateValue(value);
+      if (nextValue !== value) {
+        element.setAttribute(attr, nextValue);
+      }
     }
   }
 }
