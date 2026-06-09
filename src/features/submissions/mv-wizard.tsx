@@ -73,6 +73,9 @@ const steps = [
   "접수 완료",
 ];
 
+const selectedBadgeClass =
+  "inline-flex items-center rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
+
 const uploadMaxMb = Number(
   process.env.NEXT_PUBLIC_VIDEO_UPLOAD_MAX_MB ??
   process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ??
@@ -2537,8 +2540,8 @@ export function MvWizard({
                       <h3 className="mt-2 text-lg font-semibold">{item.label}</h3>
                     </div>
                     {active ? (
-                      <span className="rounded-full border border-[#0071e3]/14 bg-white/72 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
-                        선택됨
+                      <span className={selectedBadgeClass}>
+                        ✓ 선택됨
                       </span>
                     ) : null}
                   </div>
@@ -2579,8 +2582,8 @@ export function MvWizard({
                             {details?.title ?? `${stationName} 심의`}
                           </p>
                           {active ? (
-                            <span className="inline-flex rounded-full border border-[#0071e3]/14 bg-white/72 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
-                              선택됨
+                            <span className={selectedBadgeClass}>
+                              ✓ 선택됨
                             </span>
                           ) : null}
                         </div>
@@ -2617,8 +2620,8 @@ export function MvWizard({
                     <div className="space-y-1">
                       <p className="text-sm font-semibold">일반 뮤직비디오 심의</p>
                       {onlineBaseSelected ? (
-                        <span className="inline-flex rounded-full border border-[#0071e3]/14 bg-white/72 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
-                          선택됨
+                        <span className={selectedBadgeClass}>
+                          ✓ 선택됨
                         </span>
                       ) : null}
                     </div>
@@ -2659,8 +2662,8 @@ export function MvWizard({
                             </span>
                           ) : null}
                           {active ? (
-                            <span className="inline-flex rounded-full border border-[#0071e3]/14 bg-white/72 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0071e3]">
-                              선택됨
+                            <span className={selectedBadgeClass}>
+                              ✓ 선택됨
                             </span>
                           ) : null}
                         </div>

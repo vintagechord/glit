@@ -116,6 +116,9 @@ const steps = [
   "접수 완료",
 ];
 
+const selectedBadgeClass =
+  "inline-flex items-center rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
+
 const isReviewTestPackage = (name?: string | null) =>
   name?.startsWith("[테스트]") ?? false;
 const formatPackageName = (count: number, isOneClick = false) =>
@@ -2595,8 +2598,8 @@ export function AlbumWizard({
                     <p className="mt-2 text-sm font-semibold">일반 접수</p>
                   </div>
                   {!isOneClick ? (
-                    <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
-                      선택됨
+                    <span className={selectedBadgeClass}>
+                      ✓ 선택됨
                     </span>
                   ) : null}
                 </div>
@@ -2625,8 +2628,8 @@ export function AlbumWizard({
                     <p className="mt-2 text-sm font-semibold">원클릭 접수</p>
                   </div>
                   {isOneClick ? (
-                    <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
-                      선택됨
+                    <span className={selectedBadgeClass}>
+                      ✓ 선택됨
                     </span>
                   ) : null}
                 </div>
@@ -2687,8 +2690,8 @@ export function AlbumWizard({
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {isActive ? (
-                        <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white dark:border-[#00101f]/12 dark:bg-[#00101f]/10 dark:text-[#00101f]">
-                          선택됨
+                        <span className={selectedBadgeClass}>
+                          ✓ 선택됨
                         </span>
                       ) : null}
                       <span className="text-sm font-semibold">
