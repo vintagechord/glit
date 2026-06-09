@@ -12,14 +12,21 @@ type TrackPageProps = {
   searchParams?: Promise<{ mode?: string | string[] }>;
 };
 
-export default async function TrackPage({ searchParams }: TrackPageProps) {
+type TrackPageViewOptions = {
+  dashboardPath?: string;
+};
+
+export async function TrackPageView({
+  searchParams,
+  dashboardPath = "/dashboard",
+}: TrackPageProps & TrackPageViewOptions) {
   const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect("/dashboard");
+    redirect(dashboardPath);
   }
 
   const resolvedSearchParams = (await searchParams) ?? {};
@@ -52,4 +59,8 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
       </div>
     </div>
   );
+}
+
+export default async function TrackPage({ searchParams }: TrackPageProps) {
+  return TrackPageView({ searchParams });
 }

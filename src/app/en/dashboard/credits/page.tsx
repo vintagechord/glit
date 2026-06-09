@@ -1,1 +1,5 @@
-export { default } from "@/app/dashboard/credits/page";
+import { redirect } from "next/navigation";
+
+export default function EnglishDashboardCreditsPage() {
+  redirect("/en/mypage/credits");
+}

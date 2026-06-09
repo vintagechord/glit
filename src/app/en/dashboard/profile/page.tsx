@@ -1,1 +1,5 @@
-export { default } from "@/app/dashboard/profile/page";
+import { redirect } from "next/navigation";
+
+export default function EnglishDashboardProfilePage() {
+  redirect("/en/mypage/profile");
+}

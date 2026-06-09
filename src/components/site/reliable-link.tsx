@@ -6,6 +6,7 @@ import * as React from "react";
 
 type ReliableLinkProps = LinkProps &
   Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, keyof LinkProps> & {
+    disableEnglishLocalization?: boolean;
     fallbackDelayMs?: number;
   };
 
@@ -42,8 +43,12 @@ function englishPathFor(pathname: string) {
   return match ? `/en${pathname}` : pathname;
 }
 
-function localizeHref(href: LinkProps["href"], isEnglishRoute: boolean) {
-  if (!isEnglishRoute || typeof href !== "string") return href;
+function localizeHref(
+  href: LinkProps["href"],
+  isEnglishRoute: boolean,
+  disabled: boolean,
+) {
+  if (disabled || !isEnglishRoute || typeof href !== "string") return href;
   if (
     href.startsWith("http") ||
     href.startsWith("mailto:") ||
@@ -66,6 +71,7 @@ function localizeHref(href: LinkProps["href"], isEnglishRoute: boolean) {
 }
 
 export function ReliableLink({
+  disableEnglishLocalization = false,
   onClick,
   fallbackDelayMs = 700,
   target,
@@ -73,7 +79,11 @@ export function ReliableLink({
 }: ReliableLinkProps) {
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
-  const href = localizeHref(props.href, isEnglishRoute);
+  const href = localizeHref(
+    props.href,
+    isEnglishRoute,
+    disableEnglishLocalization,
+  );
   const handleClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
       onClick?.(event);
@@ -110,5 +120,13 @@ export function ReliableLink({
     [fallbackDelayMs, onClick, target],
   );
 
-  return <Link {...props} href={href} target={target} onClick={handleClick} />;
+  return (
+    <Link
+      {...props}
+      href={href}
+      target={target}
+      onClick={handleClick}
+      data-no-localize={disableEnglishLocalization ? "true" : undefined}
+    />
+  );
 }

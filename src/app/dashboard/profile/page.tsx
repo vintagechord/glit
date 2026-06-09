@@ -16,6 +16,7 @@ export const metadata = {
 type ShellConfig = {
   contextLabel?: string;
   tabs?: DashboardTab[];
+  loginPath?: string;
 };
 
 export async function ProfilePageView(config?: ShellConfig) {
@@ -23,7 +24,7 @@ export async function ProfilePageView(config?: ShellConfig) {
   const user = await getServerSessionUser(supabase);
 
   if (!user) {
-    redirect("/login");
+    redirect(config?.loginPath ?? "/login");
   }
 
   const { data: profile } = await supabase

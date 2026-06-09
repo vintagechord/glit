@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 import { KeyRound, UserCheck } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 export function TrackLookupSelector() {
-  const memberHref = `/login?next=${encodeURIComponent("/dashboard")}`;
-  const guestHref = "/track?mode=guest";
+  const pathname = usePathname();
+  const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
+  const memberHref = isEnglishRoute
+    ? `/en/login?next=${encodeURIComponent("/en/dashboard")}`
+    : `/login?next=${encodeURIComponent("/dashboard")}`;
+  const guestHref = isEnglishRoute ? "/en/track?mode=guest" : "/track?mode=guest";
   const optionClass =
     "flex min-h-[172px] flex-col justify-between rounded-[10px] border-2 border-border bg-card p-5 text-left text-foreground transition hover:border-[#111111] hover:shadow-[4px_4px_0_#111111] dark:hover:border-[#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27]";
 

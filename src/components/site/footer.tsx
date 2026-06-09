@@ -108,6 +108,116 @@ const filePolicyContent = `파일 보관/삭제 정책
 
 파일 삭제 또는 보관 기간 문의는 ${APP_CONFIG.supportEmail}로 접수해주세요.`;
 
+const termsContentEn = `Onside Review Service Terms of Use
+
+Article 1. Purpose
+These terms define the conditions for using Onside review services, including album and music video review applications, file submission, payment, progress tracking, and result delivery, as well as the rights and obligations of the company and users.
+
+Article 2. Service Scope
+The company provides online application intake, material checks, audio and video file handling, submission support to broadcasters and review organizations, status updates, result or certificate guidance, and payment or receipt support.
+
+Article 3. User Responsibilities
+Users must submit audio, video, lyrics, album information, and applicant information that match the actual release or broadcast purpose. Users are responsible for delays or issues caused by false information, missing materials, or rights-infringing materials.
+
+Article 4. File Submission and Storage
+Files submitted by upload or email are used only for review submission and result guidance. File storage and deletion follow the separate file storage and deletion policy.
+
+Article 5. Payment and Cancellation
+Before payment, users must confirm the selected review type, broadcasters or organizations, total amount, and receipt information. Refunds and cancellations follow the separate refund and cancellation policy.
+
+Article 6. Review Results
+Review results and processing times follow each broadcaster or organization's own standards. The company checks and guides submission progress, but does not guarantee approval or any specific result.
+
+Article 7. Guest Lookup
+Guest applicants can check progress and results with the issued lookup code. If the lookup code is lost, re-confirmation may be requested using applicant name, email, or other identity information.
+
+Article 8. Changes to Terms
+The company may change these terms due to service operation or legal changes. Important changes will be announced on the site.`;
+
+const privacyOfficerNameEn =
+  APP_CONFIG.privacyOfficer === "정준영"
+    ? "Jung Junyoung"
+    : APP_CONFIG.privacyOfficer;
+
+const privacyContentEn = `Onside Privacy Policy
+
+Onside collects and uses personal information only as needed to provide album and music video review application, file submission, payment, progress tracking, and result delivery services.
+
+1. Collected Information
+Sign-up: email and password.
+Review application: applicant name, phone, email, company or label name, artist name, album, song, video information, payment information, and receipt information.
+File submission: audio, video, lyrics, application forms, business registration certificates, and other user-submitted materials.
+Service use: access records, lookup codes, payment status, review status, and inquiry history.
+
+2. Purpose of Use
+Information is used for review application intake, identity checks, material review, broadcaster or organization submission support, status updates, result and certificate delivery, payment processing, tax invoice or receipt issuance, support inquiries, and abuse prevention.
+
+3. Retention Period
+Member information is retained until account deletion or until the service purpose is completed. Records required for review applications, payment, tax evidence, and dispute handling may be retained for legally required periods. Uploaded files follow the file storage and deletion policy.
+
+4. Third-party Provision and Processing Entrustment
+Materials required for review submission may be provided or entrusted to broadcasters, review organizations, payment processors, storage providers, and notification services within the scope needed to perform the service. The company does not provide information for unrelated purposes and manages entrusted processors to handle personal information safely.
+
+5. User Rights
+Users may request access, correction, deletion, or suspension of processing for their personal information. Information subject to statutory retention obligations may be restricted from deletion during the required period.
+
+6. Security Measures
+The company applies technical and administrative measures such as access control, encrypted communication, file access restrictions, and staff access management to protect personal information and submitted materials.
+
+7. Privacy Officer
+Privacy Officer: ${privacyOfficerNameEn}
+Contact: ${APP_CONFIG.supportEmail}`;
+
+const partnershipContentEn = `Partnership
+
+If you have an original idea, partnership proposal, or business model, you can send us a proposal at any time.
+
+Proposal Process
+1. Partnership proposal: Send the proposal by email with required contact information and name.
+2. Internal review: Review usually takes 2 to 3 days.
+3. Contact: We will contact you about proposals that fit.
+4. Selection and execution: If selected, we proceed with contract and execution.
+
+How to Submit
+Please send partnership inquiries by email.
+${APP_CONFIG.supportEmail}`;
+
+const refundContentEn = `Refund / Cancellation Policy
+
+For review agency services, material checking and broadcaster or organization submission preparation begin after payment confirmation.
+
+1. Cancellation Before Submission
+Before submission to a broadcaster or organization, payment cancellation or refund may be possible.
+
+2. Cancellation After Submission Begins
+After materials are delivered to a broadcaster or organization, completed agency work and external submission costs may already have occurred, so a full refund may not be possible.
+
+3. Material Supplement Requests
+If missing materials, file errors, lyric mismatches, or other issues require supplementation, submission proceeds after supplementation is completed. Delays caused by user supplementation are not grounds for refund.
+
+4. Broadcaster Results
+Review results follow broadcaster or organization decisions. Non-approval or revision requests are not refund grounds by themselves.
+
+Refund availability is confirmed based on submission status and guided through ${APP_CONFIG.supportEmail}.`;
+
+const filePolicyContentEn = `File Storage / Deletion Policy
+
+Onside uses copyrighted materials such as audio, video, lyrics, and application forms only for review submission and result guidance.
+
+1. Storage Purpose
+Files are stored only within the scope needed for review submission, material supplementation, broadcaster or organization submission, result confirmation, dispute handling, and receipt issuance.
+
+2. Access Restrictions
+Uploaded files are accessible only to responsible staff and system administrators for submission handling purposes.
+
+3. Deletion Requests
+After review completion, applicants may request file deletion after identity confirmation. Records that must be retained by law, such as payment and tax evidence, may be stored for the required period.
+
+4. Email-submitted Files
+Files submitted by email are managed under the same standards as online submitted files.
+
+For file deletion or retention period inquiries, contact ${APP_CONFIG.supportEmail}.`;
+
 const footerLinkClass = "transition hover:text-[#f2cf27]";
 const footerDisclosureClass =
   "group rounded-[8px] border-2 border-white/14 bg-white/[0.03] px-4 py-3";
@@ -120,6 +230,7 @@ const footerLegalButtonClass =
 
 export function SiteFooter() {
   const pathname = usePathname();
+  const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const contactPhone = APP_CONFIG.supportPhone;
   const contactEmail = APP_CONFIG.supportEmail;
   const bankName = APP_CONFIG.bankName;
@@ -135,7 +246,7 @@ export function SiteFooter() {
   const isPrivacyOpen = activeModal === "privacy";
   const isRefundOpen = activeModal === "refund";
   const isFileOpen = activeModal === "file";
-  const modalTitle = isTermsOpen
+  const modalTitleKo = isTermsOpen
     ? "이용약관"
     : isPrivacyOpen
       ? "개인정보처리방침"
@@ -144,6 +255,16 @@ export function SiteFooter() {
         : isFileOpen
           ? "파일 보관/삭제 정책"
           : "제휴안내";
+  const modalTitleEn = isTermsOpen
+    ? "Terms of Use"
+    : isPrivacyOpen
+      ? "Privacy Policy"
+      : isRefundOpen
+        ? "Refund / Cancellation Policy"
+        : isFileOpen
+          ? "File Storage / Deletion Policy"
+          : "Partnership";
+  const modalTitle = isEnglishRoute ? modalTitleEn : modalTitleKo;
   const modalTag = isTermsOpen
     ? "Terms"
     : isPrivacyOpen
@@ -153,7 +274,7 @@ export function SiteFooter() {
         : isFileOpen
           ? "File Policy"
           : "Partnership";
-  const modalContent = isTermsOpen
+  const modalContentKo = isTermsOpen
     ? termsContent
     : isPrivacyOpen
       ? privacyContent
@@ -162,6 +283,16 @@ export function SiteFooter() {
         : isFileOpen
           ? filePolicyContent
           : partnershipContent;
+  const modalContentEn = isTermsOpen
+    ? termsContentEn
+    : isPrivacyOpen
+      ? privacyContentEn
+      : isRefundOpen
+        ? refundContentEn
+        : isFileOpen
+          ? filePolicyContentEn
+          : partnershipContentEn;
+  const modalContent = isEnglishRoute ? modalContentEn : modalContentKo;
   const modalTitleId = React.useId();
 
   React.useEffect(() => {
@@ -359,7 +490,7 @@ export function SiteFooter() {
                 onClick={closeModal}
                 className="rounded-[8px] border-2 border-[#111111] px-3 py-1 text-xs font-black uppercase tracking-normal text-black transition hover:bg-[#f2cf27]"
               >
-                닫기
+                {isEnglishRoute ? "Close" : "닫기"}
               </button>
             </div>
             <div className="max-h-[70vh] overflow-y-auto px-4 py-4 text-xs leading-relaxed text-black/80 whitespace-pre-line sm:px-6 sm:py-5">

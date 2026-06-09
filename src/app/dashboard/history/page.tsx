@@ -32,6 +32,7 @@ type SubmissionRow = {
 type ShellConfig = {
   contextLabel?: string;
   tabs?: DashboardTab[];
+  loginPath?: string;
 };
 
 const PRIMARY_SELECT =
@@ -44,7 +45,7 @@ export async function HistoryPageView(config?: ShellConfig) {
   const user = await getServerSessionUser(supabase);
 
   if (!user) {
-    redirect("/login");
+    redirect(config?.loginPath ?? "/login");
   }
 
   const paymentStatuses = ["UNPAID", "PAYMENT_PENDING", "PAID"];

@@ -1,1 +1,5 @@
-export { default } from "@/app/dashboard/drafts/page";
+import { redirect } from "next/navigation";
+
+export default function EnglishDashboardDraftsPage() {
+  redirect("/en/mypage/drafts");
+}

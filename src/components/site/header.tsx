@@ -56,6 +56,25 @@ export function SiteHeader() {
   const [authState, setAuthState] = React.useState<AuthState>("unauthenticated");
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const activeNavLinks = isEnglishRoute ? englishNavLinks : navLinks;
+  const languageHref = isEnglishRoute ? "/" : "/en";
+
+  const handleLanguageClick = React.useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      window.location.assign(languageHref);
+    },
+    [languageHref],
+  );
 
   React.useEffect(() => {
     const element = headerRef.current;
@@ -165,12 +184,14 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
-          <ReliableLink
-            href={isEnglishRoute ? "/" : "/en"}
+          <a
+            href={languageHref}
+            data-no-localize="true"
+            onClick={handleLanguageClick}
             className={subtleButtonClass}
           >
             {isEnglishRoute ? "KR" : "EN"}
-          </ReliableLink>
+          </a>
           <ThemeToggle />
           {authState === "authenticated" ? (
             <>
