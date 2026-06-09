@@ -36,25 +36,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           ) : null}
           <p className="bauhaus-kicker">로그인</p>
           <h1 className="font-display text-2xl font-black text-foreground sm:text-3xl">온사이드 로그인</h1>
-          <p className="text-sm font-semibold leading-6 text-muted-foreground">
-            간편한 접수 이후 심의 진행 상황을 실시간으로 확인하고, 나의 모든 기록을
-            온사이드에 아카이빙하세요.
-          </p>
-          <div className="grid gap-2 text-xs font-semibold text-muted-foreground">
-            {[
-              "신청 내역 자동 저장",
-              "여러 앨범·뮤직비디오 동시 관리",
-              "결과 파일과 영수증 보관",
-              "다음 신청 시 담당자 정보 재사용",
-            ].map((item) => (
-              <span
-                key={item}
-                className="rounded-[8px] border-2 border-border bg-background px-3 py-2"
-              >
-                {item}
-              </span>
-            ))}
-          </div>
         </div>
         <LoginForm nextPath={nextPath} />
       </div>

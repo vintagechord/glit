@@ -88,41 +88,43 @@ export default function Home() {
     <div className="relative overflow-x-hidden">
       <ScrollRevealObserver />
 
-      <section className="w-full -mt-24 pb-8 pt-28 sm:-mt-28 sm:pb-10 sm:pt-36">
+      <section className="w-full -mt-24 pb-4 pt-28 sm:-mt-28 sm:pb-6 sm:pt-36">
         <div className="relative w-full overflow-hidden border-y-2 border-[#111111] bg-[#fffaf0] shadow-[0_24px_80px_rgba(31,41,55,0.12)] dark:border-[#f2cf27] dark:bg-[#101010]">
           <div className="absolute inset-0">
             <div className="absolute inset-0 bg-[linear-gradient(135deg,#fffaf0_0%,#fffaf0_64%,rgba(242,207,39,0.18)_100%)] dark:bg-[linear-gradient(135deg,#101010_0%,#101010_64%,rgba(242,207,39,0.12)_100%)]" />
           </div>
 
-          <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1.02fr)_minmax(420px,0.98fr)] lg:items-start lg:gap-10">
-            <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-700 sm:gap-6">
-              <span className="bauhaus-kicker" style={{ textTransform: "none" }}>
-                Since 2017
-              </span>
-              <h1 className="font-display break-keep text-3xl font-black leading-tight text-foreground sm:text-5xl">
-                심의 신청부터
-                <span className="sm:hidden"> </span>
-                <br className="hidden sm:block" />
-                결과 확인까지
-              </h1>
-              <p className="max-w-xl break-keep text-base font-semibold leading-7 text-foreground/74 dark:text-white/76">
-                음반·뮤직비디오 심의를 온라인으로 접수하고, 진행 현황과 결과 파일을 한 곳에서 확인하세요.
-              </p>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-6 px-4 py-7 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,0.98fr)_minmax(430px,0.92fr)] lg:items-stretch lg:gap-9">
+            <div className="flex h-full flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-700 sm:gap-6">
+              <div className="space-y-5 sm:space-y-6">
+                <span className="bauhaus-kicker" style={{ textTransform: "none" }}>
+                  Since 2017
+                </span>
+                <h1 className="font-display break-keep text-3xl font-black leading-tight text-foreground sm:text-5xl">
+                  심의 신청부터
+                  <span className="sm:hidden"> </span>
+                  <br className="hidden sm:block" />
+                  결과 확인까지
+                </h1>
+                <p className="max-w-xl break-keep text-base font-semibold leading-7 text-foreground/74 dark:text-white/76">
+                  음반·뮤직비디오 심의를 온라인으로 접수하고, 진행 현황과 결과 파일을 한 곳에서 확인하세요.
+                </p>
+              </div>
+              <div className="grid min-h-[150px] flex-1 grid-cols-2 items-stretch gap-3 sm:min-h-[166px] sm:gap-4 lg:max-w-[540px]">
                 {heroCtas.map((cta) => {
                   const Icon = cta.icon;
                   return (
                     <ReliableLink
                       key={cta.title}
                       href={cta.href}
-                      className="group overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] dark:hover:shadow-[8px_8px_0_#f2cf27]"
+                      className="group flex h-full min-h-[150px] flex-col overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] dark:hover:shadow-[8px_8px_0_#f2cf27] sm:min-h-[166px]"
                     >
                       <div
-                        className={`flex h-28 items-center justify-center sm:h-32 ${cta.visual}`}
+                        className={`flex flex-1 items-center justify-center ${cta.visual}`}
                       >
-                        <Icon className="h-14 w-14 sm:h-16 sm:w-16" strokeWidth={2.2} />
+                        <Icon className="h-12 w-12 sm:h-14 sm:w-14" strokeWidth={2.2} />
                       </div>
-                      <div className="px-5 py-4 text-center">
+                      <div className="px-5 py-3 text-center">
                         <p className="break-keep text-[15px] font-black leading-snug text-foreground dark:text-white sm:text-base">{cta.title}</p>
                       </div>
                     </ReliableLink>
@@ -136,8 +138,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-6xl px-4 pb-12 pt-4 sm:px-6">
-        <div className="mb-12">
+      <section className="mx-auto w-full max-w-6xl px-4 pb-12 pt-2 sm:px-6">
+        <div className="mb-10">
           <StripAdBanner />
         </div>
 

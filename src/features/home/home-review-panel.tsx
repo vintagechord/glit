@@ -613,12 +613,20 @@ export function HomeReviewPanel({
   const listViewportHeight =
     rowsPerPage * rowHeight + (rowsPerPage - 1) * rowGap + listPadding * 2;
   const shellPaddingClass = compact ? "p-3 sm:p-4" : "p-4 sm:p-6";
+  const shellLayoutClass = compact ? "flex h-full flex-col" : "";
   const tabSpacingClass = compact ? "mt-3" : "mt-4 sm:mt-5";
   const pagerSpacingClass = compact ? "mt-2.5" : "mt-3";
   const bodySpacingClass = compact
-    ? "mt-4 space-y-3"
+    ? "mt-4 flex flex-1 flex-col gap-3"
     : "mt-5 space-y-4 sm:mt-6 sm:space-y-5";
   const sectionPaddingClass = compact ? "p-3" : "p-4";
+  const stationSectionClass = compact ? "flex flex-1 flex-col" : "";
+  const stationTableShellClass = compact
+    ? "mt-3 flex flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/70"
+    : "mt-3 overflow-hidden rounded-2xl border border-border/60 bg-background/70";
+  const stationEmptyClass = compact
+    ? "flex flex-1 items-center justify-center px-3 py-5 text-center text-xs text-muted-foreground"
+    : "px-3 py-5 text-center text-xs text-muted-foreground";
   const progressBodyClass = compact
     ? "mt-2.5 space-y-2.5"
     : "mt-3 space-y-3";
@@ -751,7 +759,7 @@ export function HomeReviewPanel({
   );
 
   return (
-    <div className={`min-w-0 w-full rounded-[10px] border-2 border-[#111111] bg-card ${shellPaddingClass} shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] ${panelMinHeightClassName}`}>
+    <div className={`min-w-0 w-full rounded-[10px] border-2 border-[#111111] bg-card ${shellPaddingClass} ${shellLayoutClass} shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] ${panelMinHeightClassName}`}>
       <div className="flex items-center justify-between text-xs font-black uppercase tracking-normal text-foreground/72 sm:text-sm dark:text-white/82">
         <span>
           {activeSubmission
@@ -913,7 +921,7 @@ export function HomeReviewPanel({
           )}
         </div>
 
-        <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass}`}>
+        <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass} ${stationSectionClass}`}>
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">
               심의 진행 상황
@@ -939,7 +947,7 @@ export function HomeReviewPanel({
               </button>
             </div>
           </div>
-          <div className="mt-3 overflow-hidden rounded-2xl border border-border/60 bg-background/70">
+          <div className={stationTableShellClass}>
             <div className={tableHeaderClass}>
               <span className="pl-2 text-left">방송국</span>
               <span className="justify-self-center text-center">접수 상태</span>
@@ -1199,7 +1207,7 @@ export function HomeReviewPanel({
                 </div>
               </>
             ) : (
-              <div className="px-3 py-5 text-center text-xs text-muted-foreground">
+              <div className={stationEmptyClass}>
                 {needsPayment
                   ? "결제 완료 후 방송국 진행 정보를 확인할 수 있습니다."
                   : "접수 후 방송국 진행 정보를 확인할 수 있습니다."}

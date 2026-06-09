@@ -129,7 +129,7 @@ export function HomeSessionPanel() {
       showPartialTrackBreakdown={false}
       mobileStationLayout="table"
       showDetailLink={false}
-      panelMinHeightClassName="lg:min-h-0"
+      panelMinHeightClassName="h-full lg:min-h-0"
       compact
     />
   );
