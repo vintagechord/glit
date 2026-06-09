@@ -98,8 +98,19 @@ export const normalizeStationReviewStatus = (
   switch (status) {
     case "REJECTED":
       return "APPROVED";
+    case "NOT_SENT":
+    case "SENT":
+    case "RECEIVED":
+    case "APPROVED":
+    case "NEEDS_FIX":
+      return status;
+    case "RESULT_READY":
+    case "COMPLETED":
+      return "APPROVED";
+    case "IN_PROGRESS":
+      return "RECEIVED";
     default:
-      return (status as StationReviewStatus) ?? "NOT_SENT";
+      return "NOT_SENT";
   }
 };
 

@@ -39,9 +39,6 @@ export function SiteLogo({
     >
       <span className="inline-flex h-3 w-3 rounded-[2px] border-2 border-[#111111] bg-[#f2cf27] dark:border-[#f2cf27]" />
       ONSIDE
-      <span className="hidden text-[12px] font-black text-foreground/70 sm:inline">
-        심의센터
-      </span>
     </span>
   );
 

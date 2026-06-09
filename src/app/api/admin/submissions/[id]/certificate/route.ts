@@ -1,8 +1,5 @@
-import Busboy from "busboy";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
-import { PassThrough, Readable } from "stream";
-import { ReadableStream as NodeReadableStream } from "stream/web";
-import { Upload } from "@aws-sdk/lib-storage";
 
 import { B2ConfigError, getB2Config, sanitizeFileName } from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -19,19 +16,6 @@ const ALLOWED_TYPES = new Set([
 ]);
 const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 
-type FilePart = {
-  stream: PassThrough;
-  filename?: string;
-  mimeType?: string;
-  sizeBytes?: number;
-};
-
-type UploadMeta = {
-  filenameRaw: string;
-  mimeType: string;
-  sizeBytes: number;
-};
-
 const normalizeUploadedFilename = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return "certificate";
@@ -47,6 +31,25 @@ const normalizeUploadedFilename = (value: string) => {
   } catch {
     return trimmed;
   }
+};
+
+const inferCertificateMimeType = (file: File, fallback?: string | null) => {
+  const mimeType = (fallback || file.type || "").toLowerCase();
+  if (ALLOWED_TYPES.has(mimeType)) return mimeType;
+
+  const filename = file.name.toLowerCase();
+  if (filename.endsWith(".pdf")) return "application/pdf";
+  if (filename.endsWith(".png")) return "image/png";
+  if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+
+  return mimeType || "application/octet-stream";
+};
+
+const readFormString = (formData: FormData, key: string) => {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.trim() : "";
 };
 
 export async function POST(
@@ -83,159 +86,74 @@ export async function POST(
     return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
   }
 
-  const fields: Record<string, string> = {};
-  let filePart: FilePart | null = null;
-  let objectKey: string | null = null;
-  let uploadPromise: Promise<unknown> | null = null;
-  let parseErrorStatus: number | null = null;
-  let parseErrorBody: { error: string; detail?: string } | null = null;
-  let uploadMeta: UploadMeta | null = null;
-
-  const busboy = Busboy({ headers: { "content-type": contentType } });
-  busboy.on("field", (name, value) => {
-    fields[name] = value;
-    tryStartUpload();
-  });
-  const parsePromise = new Promise<void>((resolve, reject) => {
-    busboy.on("finish", resolve);
-    busboy.on("error", (error) => {
-      if (parseErrorStatus === null) {
-        parseErrorStatus = 400;
-        parseErrorBody = {
-          error: "업로드 데이터를 읽지 못했습니다.",
-          detail: error instanceof Error ? error.message : String(error),
-        };
-      }
-      reject(error);
-    });
-  });
-  busboy.on("file", (_name, file, info) => {
-    if (filePart) {
-      file.resume();
-      return;
-    }
-    const pass = new PassThrough();
-    file.pipe(pass);
-    filePart = {
-      stream: pass,
-      filename: info.filename,
-      mimeType: info.mimeType,
-      sizeBytes: Number(fields.sizeBytes ?? 0) || undefined,
-    };
-    tryStartUpload();
+  const formData = await req.formData().catch((error) => {
+    console.error("[certificate][upload] formData parse failed", error);
+    return null;
   });
 
-  const tryStartUpload = () => {
-    if (uploadPromise || parseErrorStatus !== null || !filePart) return;
-
-    const filenameCandidate =
-      fields.filename?.trim() || filePart.filename || "certificate";
-    const filenameRaw = normalizeUploadedFilename(filenameCandidate);
-    const mimeType = (
-      filePart.mimeType ||
-      fields.mimeType ||
-      "application/octet-stream"
-    ).toLowerCase();
-    const sizeBytes = Number(fields.sizeBytes || filePart.sizeBytes || 0);
-
-    if (!filenameRaw || !sizeBytes || Number.isNaN(sizeBytes)) {
-      return;
-    }
-
-    if (!ALLOWED_TYPES.has(mimeType)) {
-      parseErrorStatus = 400;
-      parseErrorBody = { error: "허용되지 않은 파일 형식입니다." };
-      filePart.stream.resume();
-      return;
-    }
-
-    if (sizeBytes > MAX_SIZE_BYTES) {
-      parseErrorStatus = 400;
-      parseErrorBody = { error: "파일 크기가 허용 범위를 초과했습니다." };
-      filePart.stream.resume();
-      return;
-    }
-
-    try {
-      const { client, bucket } = getB2Config();
-      const safeName = sanitizeFileName(filenameRaw) || "certificate";
-      const nextObjectKey = `submissions/${submissionId}/certificate/${Date.now()}_${safeName}`;
-
-      objectKey = nextObjectKey;
-      uploadMeta = {
-        filenameRaw,
-        mimeType,
-        sizeBytes,
-      };
-
-      const uploader = new Upload({
-        client,
-        params: {
-          Bucket: bucket,
-          Key: nextObjectKey,
-          Body: filePart.stream,
-          ContentType: mimeType || undefined,
-          ContentLength: sizeBytes,
-        },
-        leavePartsOnError: false,
-      });
-
-      uploadPromise = uploader.done();
-    } catch (error) {
-      const message =
-        error instanceof B2ConfigError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : "업로드 중 오류가 발생했습니다.";
-      parseErrorStatus = 500;
-      parseErrorBody = { error: message };
-      filePart.stream.resume();
-    }
-  };
-
-  try {
-    const webStream = req.body as unknown as NodeReadableStream;
-    Readable.fromWeb(webStream).pipe(busboy as unknown as NodeJS.WritableStream);
-    await parsePromise;
-  } catch (error) {
+  if (!formData) {
     return NextResponse.json(
-      { error: "업로드 데이터를 읽지 못했습니다.", detail: error instanceof Error ? error.message : String(error) },
+      { error: "업로드 데이터를 읽지 못했습니다." },
       { status: 400 },
     );
   }
 
-  tryStartUpload();
-
-  if (parseErrorStatus !== null && parseErrorBody) {
-    return NextResponse.json(parseErrorBody, { status: parseErrorStatus });
-  }
-
-  if (!filePart) {
+  const fileValue = formData.get("file");
+  if (!(fileValue instanceof File)) {
     return NextResponse.json({ error: "파일이 포함되어 있지 않습니다." }, { status: 400 });
   }
-  if (!objectKey || !uploadPromise || !uploadMeta) {
+
+  const sizeBytes = fileValue.size;
+  if (!sizeBytes || Number.isNaN(sizeBytes)) {
     return NextResponse.json(
-      { error: "파일 업로드를 시작하지 못했습니다." },
+      { error: "파일 크기를 확인할 수 없습니다." },
+      { status: 400 },
+    );
+  }
+  if (sizeBytes > MAX_SIZE_BYTES) {
+    return NextResponse.json(
+      { error: "파일 크기가 허용 범위를 초과했습니다." },
       { status: 400 },
     );
   }
 
-  const uploadedFile = uploadMeta as UploadMeta;
-  const uploadedObjectKey = objectKey;
-  const startedUpload = uploadPromise;
+  const mimeType = inferCertificateMimeType(
+    fileValue,
+    readFormString(formData, "mimeType"),
+  );
+  if (!ALLOWED_TYPES.has(mimeType)) {
+    return NextResponse.json({ error: "허용되지 않은 파일 형식입니다." }, { status: 400 });
+  }
+
+  const filenameRaw = normalizeUploadedFilename(
+    readFormString(formData, "filename") || fileValue.name || "certificate",
+  );
+  const safeName = sanitizeFileName(filenameRaw) || "certificate";
+  const uploadedAt = new Date().toISOString();
+  const uploadedObjectKey = `submissions/${submissionId}/certificate/${Date.now()}_${safeName}`;
 
   try {
-    await startedUpload;
+    const { client, bucket } = getB2Config();
+    const body = Buffer.from(await fileValue.arrayBuffer());
+
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: uploadedObjectKey,
+        Body: body,
+        ContentType: mimeType,
+        ContentLength: sizeBytes,
+      }),
+    );
 
     const { error: updateError } = await admin
       .from("submissions")
       .update({
         certificate_b2_path: uploadedObjectKey,
-        certificate_original_name: uploadedFile.filenameRaw,
-        certificate_mime: uploadedFile.mimeType,
-        certificate_size: uploadedFile.sizeBytes,
-        certificate_uploaded_at: new Date().toISOString(),
+        certificate_original_name: filenameRaw,
+        certificate_mime: mimeType,
+        certificate_size: sizeBytes,
+        certificate_uploaded_at: uploadedAt,
       })
       .eq("id", submissionId);
 
@@ -243,7 +161,14 @@ export async function POST(
       return NextResponse.json({ error: "필증 정보를 저장하지 못했습니다." }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, objectKey });
+    return NextResponse.json({
+      ok: true,
+      certificate: {
+        objectKey: uploadedObjectKey,
+        originalName: filenameRaw,
+        uploadedAt,
+      },
+    });
   } catch (error) {
     const message =
       error instanceof B2ConfigError

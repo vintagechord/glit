@@ -12,6 +12,8 @@ type CertificateFields = {
   certificate_mime?: string | null;
   certificate_size?: number | null;
   status?: string | null;
+  result_status?: string | null;
+  result_notified_at?: string | null;
 };
 
 export async function GET(
@@ -36,12 +38,19 @@ export async function GET(
     return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
   }
 
-  if (submission.status && !["RESULT_READY", "COMPLETED"].includes(submission.status)) {
+  const cert = submission as CertificateFields;
+  const key = cert.certificate_b2_path?.trim();
+  const hasResultSignal = Boolean(
+    cert.result_status ||
+      cert.result_notified_at ||
+      key ||
+      (submission.status && ["RESULT_READY", "COMPLETED"].includes(submission.status)),
+  );
+
+  if (!hasResultSignal) {
     return NextResponse.json({ error: "아직 결과가 준비되지 않았습니다." }, { status: 403 });
   }
 
-  const cert = submission as CertificateFields;
-  const key = cert.certificate_b2_path?.trim();
   if (!key) {
     return NextResponse.json({ error: "필증이 등록되지 않았습니다." }, { status: 404 });
   }

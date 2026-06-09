@@ -733,12 +733,15 @@ export function AlbumWizard({
       const status = String(type).replace("INICIS:", "");
       const submissionIdFromMsg = (payload.submissionId as string | undefined) || currentSubmissionId;
       const guestTokenFromMsg = payload.guestToken as string | undefined;
+      const guestPaymentToken = isGuest
+        ? guestTokenFromMsg || currentGuestToken
+        : guestTokenFromMsg;
       if (status === "SUCCESS") {
         clearDraftStorage();
-        if (submissionIdFromMsg) {
-          window.location.href = `/dashboard/submissions/${submissionIdFromMsg}?payment=success`;
-        } else if (guestTokenFromMsg) {
-          window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
+        if (guestPaymentToken) {
+          window.location.href = `/track/${encodeURIComponent(guestPaymentToken)}?payment=success`;
+        } else if (submissionIdFromMsg) {
+          window.location.href = `/dashboard/submissions/${encodeURIComponent(submissionIdFromMsg)}?payment=success`;
         }
         return;
       }
@@ -748,12 +751,12 @@ export function AlbumWizard({
             ? payload.message
             : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
         const paymentState = status.toLowerCase();
-        if (submissionIdFromMsg) {
-          window.location.href = `/dashboard/submissions/${submissionIdFromMsg}?payment=${paymentState}`;
+        if (guestPaymentToken) {
+          window.location.href = `/track/${encodeURIComponent(guestPaymentToken)}?payment=${paymentState}`;
           return;
         }
-        if (guestTokenFromMsg) {
-          window.location.href = `/track/${guestTokenFromMsg}?payment=${paymentState}`;
+        if (submissionIdFromMsg) {
+          window.location.href = `/dashboard/submissions/${encodeURIComponent(submissionIdFromMsg)}?payment=${paymentState}`;
           return;
         }
         setNotice({ error: message });
@@ -761,7 +764,7 @@ export function AlbumWizard({
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [clearDraftStorage, currentSubmissionId]);
+  }, [clearDraftStorage, currentGuestToken, currentSubmissionId, isGuest]);
 
   const stepLabels = (
     <div className="grid gap-3 md:grid-cols-5">
@@ -2702,11 +2705,11 @@ export function AlbumWizard({
                     </p>
                   ) : null}
                   {guidance?.conditional ? (
-                    <div className="mt-3 grid gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       {guidance.conditional.map((item) => (
                         <span
                           key={item}
-                          className={`w-fit rounded-[6px] border px-2 py-1 text-[11px] font-black tracking-normal ${isActive ? tone.chip : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}
+                          className={`inline-flex max-w-full items-center rounded-[6px] border px-2 py-1 text-[11px] font-black tracking-normal ${isActive ? tone.chip : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}
                         >
                           {item}
                         </span>

@@ -12,7 +12,34 @@ type PaymentRetryClientProps = {
   guestToken?: string;
   detailHref: string;
   successHref: string;
+  paymentState?: string;
   disabled?: boolean;
+};
+
+const normalizeInicisStatus = (type: string) => {
+  const rawStatus = type.replace("INICIS:", "").toUpperCase();
+  if (rawStatus.startsWith("SUCCESS")) return "SUCCESS";
+  if (rawStatus.startsWith("CANCEL")) return "CANCEL";
+  if (rawStatus.startsWith("FAIL")) return "FAIL";
+  if (rawStatus.startsWith("ERROR")) return "ERROR";
+  return rawStatus;
+};
+
+const getInitialNotice = (paymentState?: string) => {
+  const normalized = paymentState?.toLowerCase();
+  if (normalized === "cancel") {
+    return {
+      type: "error" as const,
+      message: "결제가 취소되었습니다. 다시 결제할 수 있습니다.",
+    };
+  }
+  if (normalized === "fail" || normalized === "error") {
+    return {
+      type: "error" as const,
+      message: "결제가 완료되지 않았습니다. 다시 시도해주세요.",
+    };
+  }
+  return null;
 };
 
 export function PaymentRetryClient({
@@ -21,6 +48,7 @@ export function PaymentRetryClient({
   guestToken,
   detailHref,
   successHref,
+  paymentState,
   disabled = false,
 }: PaymentRetryClientProps) {
   const router = useRouter();
@@ -28,7 +56,18 @@ export function PaymentRetryClient({
   const [notice, setNotice] = React.useState<{
     type: "info" | "error";
     message: string;
-  } | null>(null);
+  } | null>(() => getInitialNotice(paymentState));
+
+  const reloadPaymentPage = React.useCallback((nextPaymentState: string) => {
+    if (typeof window === "undefined") {
+      router.refresh();
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("payment", nextPaymentState);
+    url.searchParams.set("reloadedAt", String(Date.now()));
+    window.location.replace(url.toString());
+  }, [router]);
 
   React.useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -40,13 +79,14 @@ export function PaymentRetryClient({
       const payload = (data as { payload?: Record<string, unknown> }).payload ?? {};
       if (!type || !String(type).startsWith("INICIS:")) return;
 
-      const status = String(type).replace("INICIS:", "");
+      const status = normalizeInicisStatus(String(type));
       if (status === "SUCCESS") {
         router.push(successHref);
         return;
       }
 
       if (status === "FAIL" || status === "CANCEL" || status === "ERROR") {
+        const paymentState = status.toLowerCase();
         const message =
           typeof payload.message === "string"
             ? payload.message
@@ -55,13 +95,13 @@ export function PaymentRetryClient({
               : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
         setNotice({ type: "error", message });
         setIsOpening(false);
-        router.refresh();
+        window.setTimeout(() => reloadPaymentPage(paymentState), 80);
       }
     };
 
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [router, submissionId, successHref]);
+  }, [reloadPaymentPage, router, submissionId, successHref]);
 
   const handleRetryPayment = async () => {
     if (isOpening || disabled) return;

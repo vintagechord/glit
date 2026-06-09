@@ -8,15 +8,6 @@ export const metadata = {
   title: "진행상황",
 };
 
-const previewItems = [
-  "접수 정보와 결제 상태",
-  "방송국별 접수·진행·결과",
-  "수정 요청 및 담당자 메모",
-  "결과 파일/필증 다운로드",
-  "세금계산서·영수증 상태",
-  "재접수/보완 요청 안내",
-];
-
 export default async function TrackPage() {
   const supabase = await createServerSupabase();
   const {
@@ -54,21 +45,6 @@ export default async function TrackPage() {
         ) : (
           <>
             <TrackLookupForm />
-            <div className="mt-6 rounded-[8px] border-2 border-border bg-background/70 p-4">
-              <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                조회 후 확인할 수 있는 정보
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {previewItems.map((item) => (
-                  <span
-                    key={item}
-                    className="rounded-[6px] border-2 border-border bg-card px-3 py-2 text-xs font-semibold text-foreground"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
             <div className="mt-6 text-xs text-muted-foreground">
               회원이라면 마이페이지에서 진행상황을 바로 확인할 수 있습니다.
             </div>

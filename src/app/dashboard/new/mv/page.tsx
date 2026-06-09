@@ -71,27 +71,29 @@ export default async function MvSubmissionPage() {
         </div>
       </div>
 
-      <div className="relative mt-8 rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-        <p className="text-sm font-black uppercase tracking-normal text-muted-foreground">
-          업로드 전 확인
-        </p>
-        <h2 className="font-display mt-2 text-2xl font-black text-foreground">
-          뮤직비디오 심의, 이것만 확인하세요
-        </h2>
-        <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <ul className="space-y-2 text-sm font-semibold text-muted-foreground">
-            {mvChecklist.map((item) => (
-              <li key={item} className="flex gap-2">
-                <span className="mt-2 h-2 w-2 bg-[#1556a4]" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="grid gap-3">
+      <div className="relative mt-8 rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] sm:p-6">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(360px,1.1fr)] lg:items-stretch">
+          <div className="flex min-h-full flex-col">
+            <p className="text-sm font-black uppercase tracking-normal text-muted-foreground">
+              업로드 전 확인
+            </p>
+            <h2 className="font-display mt-2 text-2xl font-black text-foreground">
+              뮤직비디오 심의, 이것만 확인하세요
+            </h2>
+            <ul className="mt-5 space-y-2 text-sm font-semibold leading-6 text-muted-foreground">
+              {mvChecklist.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <span className="mt-2 h-2 w-2 shrink-0 bg-[#1556a4]" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3 lg:h-full lg:grid-cols-1 lg:auto-rows-fr">
             {purposeNotes.map((item) => (
               <div
                 key={item.title}
-                className="rounded-[8px] border-2 border-border bg-background px-4 py-3"
+                className="flex min-h-[92px] flex-col justify-center rounded-[8px] border-2 border-border bg-background px-4 py-3 lg:min-h-0"
               >
                 <p className="text-sm font-black text-foreground">
                   {item.title}

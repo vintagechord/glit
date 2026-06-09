@@ -4,11 +4,5 @@ export const metadata = {
 };
 
 export default function PayPopupLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="ko" suppressHydrationWarning>
-      <body style={{ margin: 0, padding: 0, width: "100%", height: "100%", overflow: "auto", background: "#fff" }}>
-        {children}
-      </body>
-    </html>
-  );
+  return children;
 }

@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import "./globals.css";
-import { ChatbotWidget } from "@/components/chatbot-widget";
 import { NavigationLatencyLogger } from "@/components/perf/navigation-latency-logger";
-import { SiteFooter } from "@/components/site/footer";
-import { SiteHeader } from "@/components/site/header";
+import { AppShell } from "@/components/site/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
@@ -28,15 +26,7 @@ export default function RootLayout({
           <Suspense fallback={null}>
             <NavigationLatencyLogger />
           </Suspense>
-          <div className="flex min-h-screen flex-col bg-background text-foreground">
-            <SiteHeader />
-
-            {/* Left banner disabled: keep only center strip banner on pages that render it */}
-            <main className="flex-1">{children}</main>
-
-            <SiteFooter />
-            <ChatbotWidget />
-          </div>
+          <AppShell>{children}</AppShell>
         </ThemeProvider>
       </body>
     </html>

@@ -80,7 +80,10 @@ export default async function PayPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ guestToken?: string | string[] | undefined }>;
+  searchParams?: Promise<{
+    guestToken?: string | string[] | undefined;
+    payment?: string | string[] | undefined;
+  }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = (await searchParams) ?? {};
@@ -89,6 +92,11 @@ export default async function PayPage({
     : resolvedSearchParams.guestToken;
   const guestToken =
     typeof guestTokenRaw === "string" ? guestTokenRaw.trim() : "";
+  const paymentStateRaw = Array.isArray(resolvedSearchParams.payment)
+    ? resolvedSearchParams.payment[0]
+    : resolvedSearchParams.payment;
+  const paymentState =
+    typeof paymentStateRaw === "string" ? paymentStateRaw.trim() : "";
   const rawId = id?.trim();
   const submissionId = rawId && uuidPattern.test(rawId) ? rawId : "";
 
@@ -238,6 +246,7 @@ export default async function PayPage({
                   guestToken={hasGuestAccess ? guestToken : undefined}
                   detailHref={detailHref}
                   successHref={successHref}
+                  paymentState={paymentState}
                 />
               </div>
             </div>
@@ -266,9 +275,6 @@ export default async function PayPage({
                   <p className="mt-1 font-semibold">{APP_CONFIG.bankHolder}</p>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                카드 결제가 어렵다면 위 계좌로 입금 후 문의하기로 알려주세요.
-              </p>
             </div>
           </div>
         ) : (

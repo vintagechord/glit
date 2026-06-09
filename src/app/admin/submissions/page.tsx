@@ -36,6 +36,16 @@ const labelMap = {
   type: typeLabelMap,
 } as const;
 
+type AdminSubmissionsSearchParamsInput = {
+  status?: string | string[];
+  payment?: string | string[];
+  type?: string | string[];
+  q?: string | string[];
+  from?: string | string[];
+  to?: string | string[];
+  page?: string | string[];
+};
+
 type SubmissionRow = {
   id: string;
   title: string | null;
@@ -53,23 +63,33 @@ type SubmissionRow = {
   guest_name?: string | null;
 };
 
+const toSingle = (value?: string | string[]) => {
+  if (Array.isArray(value)) return value[0]?.trim() ?? "";
+  return value?.trim() ?? "";
+};
+
+const toDateInputValue = (value: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+
 export default async function AdminSubmissionsPage({
   searchParams,
 }: {
-  searchParams: {
-    status?: string;
-    payment?: string;
-    type?: string;
-    q?: string;
-    from?: string;
-    to?: string;
-    page?: string;
-  };
+  searchParams?: Promise<AdminSubmissionsSearchParamsInput> | AdminSubmissionsSearchParamsInput;
 }) {
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const filters = {
+    status: toSingle(resolvedSearchParams.status),
+    payment: toSingle(resolvedSearchParams.payment),
+    type: toSingle(resolvedSearchParams.type),
+    q: toSingle(resolvedSearchParams.q),
+    from: toDateInputValue(toSingle(resolvedSearchParams.from)),
+    to: toDateInputValue(toSingle(resolvedSearchParams.to)),
+    page: toSingle(resolvedSearchParams.page),
+  };
   const supabase = await createServerSupabase();
   const page =
-    typeof searchParams.page === "string" && Number(searchParams.page) > 1
-      ? Math.floor(Number(searchParams.page))
+    filters.page && Number(filters.page) > 1
+      ? Math.floor(Number(filters.page))
       : 1;
   const offset = (page - 1) * PAGE_SIZE;
   const baseSelect =
@@ -83,34 +103,34 @@ export default async function AdminSubmissionsPage({
       .order("updated_at", { ascending: false })
       .order("created_at", { ascending: false });
 
-    if (searchParams.status) {
-      query = query.eq("status", searchParams.status);
+    if (filters.status) {
+      query = query.eq("status", filters.status);
     } else {
       query = query.neq("status", "DRAFT");
     }
-    if (searchParams.payment) {
-      query = query.eq("payment_status", searchParams.payment);
+    if (filters.payment) {
+      query = query.eq("payment_status", filters.payment);
     }
-    if (searchParams.type) {
-      query = query.eq("type", searchParams.type);
+    if (filters.type) {
+      query = query.eq("type", filters.type);
     }
-    if (searchParams.q) {
+    if (filters.q) {
       const terms = [
-        `title.ilike.%${searchParams.q}%`,
-        `artist_name.ilike.%${searchParams.q}%`,
+        `title.ilike.%${filters.q}%`,
+        `artist_name.ilike.%${filters.q}%`,
       ];
       if (includeGuestColumns) {
-        terms.push(`guest_name.ilike.%${searchParams.q}%`);
+        terms.push(`guest_name.ilike.%${filters.q}%`);
       }
       query = query.or(terms.join(","));
     }
-    if (searchParams.from) {
-      const from = `${searchParams.from}T00:00:00.000Z`;
-      query = query.gte("updated_at", from).gte("created_at", from);
+    if (filters.from) {
+      const from = `${filters.from}T00:00:00.000Z`;
+      query = query.gte("created_at", from);
     }
-    if (searchParams.to) {
-      const to = `${searchParams.to}T23:59:59.999Z`;
-      query = query.lte("updated_at", to).lte("created_at", to);
+    if (filters.to) {
+      const to = `${filters.to}T23:59:59.999Z`;
+      query = query.lte("created_at", to);
     }
 
     return query.range(offset, offset + PAGE_SIZE - 1);
@@ -142,7 +162,7 @@ export default async function AdminSubmissionsPage({
 
   const buildStatusHref = (status?: string) => {
     const params = new URLSearchParams(
-      Object.entries(searchParams).filter(
+      Object.entries(filters).filter(
         ([, value]) => typeof value === "string" && value.length > 0,
       ) as Array<[string, string]>,
     );
@@ -156,11 +176,11 @@ export default async function AdminSubmissionsPage({
     return query ? `/admin/submissions?${query}` : "/admin/submissions";
   };
 
-  const isDraftView = searchParams.status === "DRAFT";
+  const isDraftView = filters.status === "DRAFT";
 
   const buildPageHref = (targetPage: number) => {
     const params = new URLSearchParams(
-      Object.entries(searchParams).filter(
+      Object.entries(filters).filter(
         ([, value]) => typeof value === "string" && value.length > 0,
       ) as Array<[string, string]>,
     );
@@ -193,28 +213,31 @@ export default async function AdminSubmissionsPage({
       </Link>
     </div>
 
-      <form className="mt-6 grid gap-4 rounded-[28px] border border-border/60 bg-card/80 p-6 md:grid-cols-[1fr_repeat(5,auto)_auto]">
+      <form
+        method="get"
+        className="mt-6 grid gap-4 rounded-[28px] border border-border/60 bg-card/80 p-6 md:grid-cols-[1fr_repeat(5,auto)_auto]"
+      >
         <input
           name="q"
-          defaultValue={searchParams.q ?? ""}
+          defaultValue={filters.q}
           placeholder="검색어 (제목/아티스트)"
           className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
         />
         <input
           type="date"
           name="from"
-          defaultValue={searchParams.from ?? ""}
+          defaultValue={filters.from}
           className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
         />
         <input
           type="date"
           name="to"
-          defaultValue={searchParams.to ?? ""}
+          defaultValue={filters.to}
           className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
         />
         <select
           name="type"
-          defaultValue={searchParams.type ?? ""}
+          defaultValue={filters.type}
           className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
         >
           <option value="">전체 유형</option>
@@ -226,7 +249,7 @@ export default async function AdminSubmissionsPage({
         </select>
         <select
           name="status"
-          defaultValue={searchParams.status ?? ""}
+          defaultValue={filters.status}
           className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
         >
           <option value="">전체 상태</option>
@@ -238,7 +261,7 @@ export default async function AdminSubmissionsPage({
         </select>
         <select
           name="payment"
-          defaultValue={searchParams.payment ?? ""}
+          defaultValue={filters.payment}
           className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
         >
           <option value="">결제 상태</option>

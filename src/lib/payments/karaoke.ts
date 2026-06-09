@@ -212,7 +212,7 @@ export const markKaraokePaymentCanceled = async (
   },
 ) => {
   const admin = createAdminClient();
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from("karaoke_payments")
     .update({
       status: "CANCELED",
@@ -221,7 +221,9 @@ export const markKaraokePaymentCanceled = async (
       raw_response: payload?.raw_response ?? null,
     })
     .eq("order_id", orderId)
-    .neq("status", "APPROVED");
+    .neq("status", "APPROVED")
+    .select("request_id")
+    .maybeSingle();
 
   const { error: requestUpdateError } = await admin
     .from("karaoke_requests")
@@ -235,7 +237,11 @@ export const markKaraokePaymentCanceled = async (
     .neq("payment_status", "PAID");
 
   const finalError = error ?? requestUpdateError ?? null;
-  return { ok: !finalError, error: finalError };
+  return {
+    ok: Boolean(updated?.request_id) && !finalError,
+    error: finalError,
+    requestId: updated?.request_id ?? null,
+  };
 };
 
 export const markKaraokePaymentSuccess = async (

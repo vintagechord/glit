@@ -36,7 +36,17 @@ type SubmissionRecord = {
   certificate_mime?: string | null;
   certificate_size?: number | null;
   certificate_uploaded_at?: string | null;
+  result_status?: string | null;
+  result_memo?: string | null;
+  result_notified_at?: string | null;
   package?: Array<{ name?: string | null }> | { name?: string | null } | null;
+};
+
+type PaymentCancelResult = {
+  ok: boolean;
+  error: unknown;
+  submissionId?: string | null;
+  guestToken?: string | null;
 };
 
 const normalizeEmailValue = (value?: string | null) =>
@@ -58,7 +68,7 @@ const collectNotificationEmails = (
 export const findSubmissionById = async (submissionId: string) => {
   const admin = createAdminClient();
   const selectWithRating =
-    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, package:packages ( name )";
+    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
   const selectFallback =
     "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, package:packages ( name )";
 
@@ -279,6 +289,8 @@ export const markPaymentCanceled = async (
     .select("submission_id")
     .maybeSingle();
 
+  let guestToken: string | null = null;
+
   if (updated?.submission_id) {
     const { data: approvedPayments } = await admin
       .from("submission_payments")
@@ -294,12 +306,29 @@ export const markPaymentCanceled = async (
         .eq("id", updated.submission_id)
         .neq("payment_status", "PAID");
       if (submissionError) {
-        return { ok: false, error: submissionError };
+        return {
+          ok: false,
+          error: submissionError,
+          submissionId: updated.submission_id,
+          guestToken,
+        } satisfies PaymentCancelResult;
       }
     }
+
+    const { data: submission } = await admin
+      .from("submissions")
+      .select("guest_token")
+      .eq("id", updated.submission_id)
+      .maybeSingle();
+    guestToken = submission?.guest_token ?? null;
   }
 
-  return { ok: !error, error };
+  return {
+    ok: Boolean(updated?.submission_id) && !error,
+    error,
+    submissionId: updated?.submission_id ?? null,
+    guestToken,
+  } satisfies PaymentCancelResult;
 };
 
 export const markPaymentSuccess = async (

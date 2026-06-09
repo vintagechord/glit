@@ -3,10 +3,13 @@ import { NextResponse } from "next/server";
 import { markPaymentCanceled } from "@/lib/payments/submission";
 import { markKaraokePaymentCanceled } from "@/lib/payments/karaoke";
 
-const postMessageResponse = () => {
+const postMessageResponse = (payloadData: Record<string, unknown> = {}) => {
   const payload = JSON.stringify({
     type: "INICIS:CANCEL",
-    payload: { message: "사용자가 결제를 취소했습니다." },
+    payload: {
+      message: "사용자가 결제를 취소했습니다.",
+      ...payloadData,
+    },
   });
   const html = `
 <!DOCTYPE html>
@@ -43,8 +46,10 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const orderId = url.searchParams.get("oid")?.trim();
+  const payloadData: Record<string, unknown> = {};
 
   if (orderId) {
+    payloadData.orderId = orderId;
     const rawResponse = {
       closeUrl: true,
       cancel: url.searchParams.get("cancel") ?? null,
@@ -61,6 +66,15 @@ export async function GET(req: Request) {
         raw_response: rawResponse,
       }),
     ]);
+    if (submissionResult.submissionId) {
+      payloadData.submissionId = submissionResult.submissionId;
+    }
+    if (submissionResult.guestToken) {
+      payloadData.guestToken = submissionResult.guestToken;
+    }
+    if (karaokeResult.requestId) {
+      payloadData.requestId = karaokeResult.requestId;
+    }
     if (!submissionResult.ok && !karaokeResult.ok) {
       console.warn("[Inicis][close] cancel persistence failed", {
         orderId,
@@ -70,7 +84,7 @@ export async function GET(req: Request) {
     }
   }
 
-  return postMessageResponse();
+  return postMessageResponse(payloadData);
 }
 
 export const POST = GET;

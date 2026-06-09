@@ -125,10 +125,12 @@ export function HomeSessionPanel() {
       albumStationsMap={isLoggedIn ? {} : exampleState.albumStationsMap}
       mvStationsMap={isLoggedIn ? {} : exampleState.mvStationsMap}
       enableRemoteSync={isLoggedIn}
-      stationRowsPerPage={5}
+      stationRowsPerPage={3}
       showPartialTrackBreakdown={false}
       mobileStationLayout="table"
       showDetailLink={false}
+      panelMinHeightClassName="lg:min-h-0"
+      compact
     />
   );
 }

@@ -567,6 +567,22 @@ export default async function AdminSubmissionDetailPage({
     ];
   }
 
+  const hasMvFinalResultForDisplay =
+    submission.type?.startsWith("MV_") &&
+    Boolean(submission.mv_desired_rating) &&
+    (submission.status === "RESULT_READY" ||
+      submission.status === "COMPLETED" ||
+      Boolean(submission.result_status));
+
+  if (hasMvFinalResultForDisplay && stationReviews && stationReviews.length > 0) {
+    stationReviews = stationReviews.map((review) => ({
+      ...review,
+      status: "APPROVED",
+      result_note: review.result_note ?? submission.result_memo ?? null,
+      updated_at: review.updated_at ?? submission.updated_at,
+    }));
+  }
+
   const { data: events } = await supabase
     .from("submission_events")
     .select("id, event_type, message, created_at")
@@ -578,6 +594,71 @@ export default async function AdminSubmissionDetailPage({
     .select("id, kind, file_path, original_name, mime, size, created_at")
     .eq("submission_id", submissionId)
     .order("created_at", { ascending: false });
+
+  const files = submissionFiles ?? [];
+  const reviews = stationReviews ?? [];
+  const completedReviewCount = reviews.filter((review) => {
+    const status = normalizeStationReviewStatus(review.status);
+    return (
+      status === "APPROVED" ||
+      status === "NEEDS_FIX" ||
+      review.status === "COMPLETED" ||
+      review.status === "RESULT_READY"
+    );
+  }).length;
+  const hasRequiredBasics = Boolean(submission.title && submission.artist_name);
+  const hasPaymentComplete = submission.payment_status === "PAID";
+  const hasFiles = files.length > 0;
+  const hasAllReviewsCompleted =
+    reviews.length > 0 && completedReviewCount === reviews.length;
+  const hasResultReady = Boolean(
+    submission.result_status ||
+      submission.result_notified_at ||
+      (isMvSubmission && submission.certificate_b2_path),
+  );
+  const latestEvent = events?.[0] ?? null;
+  const workflowSteps: Array<{
+    label: string;
+    value: string;
+    state: "done" | "active" | "pending";
+  }> = [
+    {
+      label: "접수 확인",
+      value: hasRequiredBasics ? "기본 정보 확인" : "정보 보완 필요",
+      state: hasRequiredBasics ? "done" : "active",
+    },
+    {
+      label: "결제/상태",
+      value: paymentLabel,
+      state: hasPaymentComplete ? "done" : "active",
+    },
+    {
+      label: "제출 파일",
+      value: `${files.length}개`,
+      state: hasFiles ? "done" : "active",
+    },
+    {
+      label: "방송국 진행",
+      value:
+        reviews.length > 0
+          ? `${completedReviewCount}/${reviews.length} 완료`
+          : "진행 없음",
+      state: hasAllReviewsCompleted
+        ? "done"
+        : hasPaymentComplete || completedReviewCount > 0
+          ? "active"
+          : "pending",
+    },
+    {
+      label: "결과 안내",
+      value: resultStatusLabel,
+      state: hasResultReady
+        ? "done"
+        : hasAllReviewsCompleted || submission.status === "RESULT_READY"
+          ? "active"
+          : "pending",
+    },
+  ];
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
@@ -626,56 +707,403 @@ export default async function AdminSubmissionDetailPage({
         </div>
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-6">
-          <div className="rounded-[28px] border border-border/60 bg-background/80 p-6 text-sm">
+      <div className="mt-8 rounded-[28px] border border-border/60 bg-background/80 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              접수 요약
+              심의 흐름
             </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <div>
-                <p className="text-xs text-muted-foreground">유형</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {typeLabels[submission.type] ?? submission.type}
-                </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              접수부터 결과 안내까지 현재 처리 위치를 먼저 확인합니다.
+            </p>
+          </div>
+          <Link
+            href="/admin/submissions"
+            className="rounded-full border border-border/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+          >
+            목록으로
+          </Link>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-5">
+          {workflowSteps.map((step, index) => (
+            <div
+              key={step.label}
+              className={[
+                "min-h-[116px] rounded-2xl border px-4 py-3 text-sm",
+                step.state === "done"
+                  ? "border-[#1f5fae] bg-[#1f5fae] text-white"
+                  : step.state === "active"
+                    ? "border-foreground bg-[#f2cf27] text-foreground"
+                    : "border-border/60 bg-card/70 text-muted-foreground",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={[
+                    "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
+                    step.state === "done"
+                      ? "bg-white/20 text-white"
+                      : step.state === "active"
+                        ? "bg-foreground text-background"
+                        : "bg-background text-muted-foreground",
+                  ].join(" ")}
+                >
+                  {index + 1}
+                </span>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.2em]">
+                  {step.state === "done"
+                    ? "완료"
+                    : step.state === "active"
+                      ? "확인"
+                      : "대기"}
+                </span>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">패키지</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {packageInfo?.name ?? "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">금액</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {submission.amount_krw
+              <p className="mt-4 font-semibold">{step.label}</p>
+              <p
+                className={[
+                  "mt-1 text-xs",
+                  step.state === "done" ? "text-white/80" : "text-inherit",
+                ].join(" ")}
+              >
+                {step.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-6">
+          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              1. 접수 확인
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <DetailRow
+                label="유형"
+                value={typeLabels[submission.type] ?? submission.type}
+              />
+              <DetailRow label="패키지" value={packageInfo?.name ?? "-"} />
+              <DetailRow
+                label="금액"
+                value={
+                  submission.amount_krw
                     ? `${submission.amount_krw.toLocaleString()}원`
-                    : "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">결제 방식</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {submission.payment_method
+                    : "-"
+                }
+              />
+              <DetailRow
+                label="결제 방식"
+                value={
+                  submission.payment_method
                     ? paymentMethodLabels[submission.payment_method] ??
                       submission.payment_method
-                    : "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">사전검토</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {submission.pre_review_requested ? "요청" : "미요청"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">노래방 등록</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {submission.karaoke_requested ? "요청" : "미요청"}
-                </p>
-              </div>
+                    : "-"
+                }
+              />
+              <DetailRow
+                label="사전검토"
+                value={submission.pre_review_requested ? "요청" : "미요청"}
+              />
+              <DetailRow
+                label="노래방 등록"
+                value={submission.karaoke_requested ? "요청" : "미요청"}
+              />
             </div>
           </div>
+
+          <form
+            action={saveSubmissionAdminFormAction}
+            method="post"
+            className="space-y-6"
+            id="admin-save-form"
+          >
+            <input type="hidden" name="submissionId" value={submission.id} />
+
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                기본 정보 보정
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                원클릭 접수 등에서 누락된 아티스트명과 제목만 빠르게 보완합니다.
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    아티스트명
+                  </label>
+                  <input
+                    name="artistName"
+                    defaultValue={submission.artist_name ?? ""}
+                    placeholder="아티스트명을 입력해주세요."
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    앨범 제목
+                  </label>
+                  <input
+                    name="title"
+                    defaultValue={submission.title ?? ""}
+                    placeholder="앨범 제목을 입력해주세요."
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                2. 결제/접수 상태
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                입금 확인, 접수 단계, 관리자 메모를 한 번에 저장합니다.
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    결제 방식
+                  </label>
+                  <input
+                    value={
+                      submission.payment_method
+                        ? paymentMethodLabels[submission.payment_method] ??
+                          submission.payment_method
+                        : "-"
+                    }
+                    readOnly
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    입금자명
+                  </label>
+                  <input
+                    value={
+                      submission.payment_method === "BANK"
+                        ? submission.bank_depositor_name ?? "-"
+                        : "카드 결제"
+                    }
+                    readOnly
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                  />
+                </div>
+                {submission.payment_method === "BANK" && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        결제 서류
+                      </label>
+                      <input
+                        value={paymentDocumentTypeLabel}
+                        readOnly
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                      />
+                    </div>
+                    {paymentDocument?.payment_document_type === "CASH_RECEIPT" && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          현금 영수증 용도
+                        </label>
+                        <input
+                          value={cashReceiptPurposeLabel}
+                          readOnly
+                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        발급 정보
+                      </label>
+                      <input
+                        value={paymentDocumentTargetValue}
+                        readOnly
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    접수 상태
+                  </label>
+                  <select
+                    name="status"
+                    defaultValue={submission.status}
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                  >
+                    {reviewStatusOptions.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    결제 상태
+                  </label>
+                  <select
+                    name="paymentStatus"
+                    defaultValue={submission.payment_status ?? "UNPAID"}
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                  >
+                    {paymentStatusOptions.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4 space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  관리자 메모
+                </label>
+                <textarea
+                  name="adminMemo"
+                  defaultValue={submission.admin_memo ?? ""}
+                  className="h-24 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                  placeholder="관리자 메모"
+                />
+              </div>
+              <div className="mt-5 flex justify-end">
+                <ConfirmSubmitButton
+                  className="rounded-full bg-foreground px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-background"
+                  message="저장하시겠습니까?"
+                >
+                  상태 저장
+                </ConfirmSubmitButton>
+              </div>
+            </div>
+          </form>
+
+          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              3. 제출 파일
+            </p>
+            <div className="mt-4">
+              <SubmissionFilesPanel submissionId={submission.id} files={files} />
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                4. 방송국별 진행
+              </p>
+              <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground">
+                {completedReviewCount}/{reviews.length} 완료
+              </span>
+            </div>
+            <div className="mt-4 space-y-4">
+              {reviews.length > 0 ? (
+                reviews.map((review, reviewIndex) => {
+                  const stationInfo = Array.isArray(review.station)
+                    ? review.station[0]
+                    : review.station;
+                  const trackSummary = summarizeTrackResults(
+                    review.track_results,
+                    albumTracks,
+                  );
+                  const baseTracks =
+                    albumTracks.length > 0
+                      ? albumTracks.map((track, index) => ({
+                          id: track.id ?? null,
+                          track_no: track.track_no ?? index + 1,
+                          title:
+                            track.track_title ??
+                            track.track_title_kr ??
+                            track.track_title_en ??
+                            "트랙",
+                          status: "PENDING",
+                        }))
+                      : [];
+
+                  const trackResults =
+                    baseTracks.length > 0
+                      ? baseTracks.map((bt) => {
+                          const matched =
+                            trackSummary.results.find(
+                              (item) =>
+                                (bt.id && item.track_id === bt.id) ||
+                                (typeof bt.track_no === "number" &&
+                                  typeof item.track_no === "number" &&
+                                  item.track_no === bt.track_no),
+                            ) ?? null;
+                          return {
+                            ...bt,
+                            status: matched?.status ?? bt.status,
+                          };
+                        })
+                      : trackSummary.results.map((item, idx) => ({
+                          id: item.track_id ?? null,
+                          track_no:
+                            typeof item.track_no === "number" &&
+                            Number.isFinite(item.track_no)
+                              ? item.track_no
+                              : idx + 1,
+                          title: item.title ?? "트랙",
+                          status: item.status ?? "PENDING",
+                        }));
+
+                  return (
+                    <StationReviewForm
+                      key={review.id ?? `review-${reviewIndex}`}
+                      submissionId={submission.id}
+                      reviewId={
+                        typeof review.id === "string" && uuidPattern.test(review.id)
+                          ? review.id
+                          : undefined
+                      }
+                      stationId={review.station_id ?? null}
+                      stationCode={stationInfo?.code ?? undefined}
+                      stationName={stationInfo?.name ?? undefined}
+                      initialStatus={normalizeStationReviewStatus(review.status)}
+                      initialMemo={review.result_note ?? ""}
+                      trackResults={trackResults}
+                      statusOptions={stationReviewStatusOptions}
+                      action={updateStationReviewFormAction}
+                    />
+                  );
+                })
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
+                  방송국 진행 정보가 없습니다.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {isMvSubmission ? (
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                5. MV 등급/필증
+              </p>
+              <div className="mt-4">
+                <MvRatingControl
+                  submissionId={submission.id}
+                  initialRating={submission.mv_desired_rating ?? ""}
+                />
+              </div>
+              <div className="mt-6 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  심의 필증 업로드
+                </p>
+                <CertificateUploader
+                  submissionId={submission.id}
+                  currentObjectKey={submission.certificate_b2_path}
+                  currentName={submission.certificate_original_name}
+                  currentUploadedAt={submission.certificate_uploaded_at}
+                />
+              </div>
+            </div>
+          ) : null}
 
           <ConfirmForm
             action={updateSubmissionResultFormAction}
@@ -685,7 +1113,7 @@ export default async function AdminSubmissionDetailPage({
           >
             <input type="hidden" name="submissionId" value={submission.id} />
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              심의 결과 안내
+              {isMvSubmission ? "6. 결과 안내" : "5. 결과 안내"}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               저장한 결과 상태와 메모는 사용자 상세 화면에 반영되고, 수신 가능한 이메일로 결과 안내가 발송됩니다.
@@ -746,395 +1174,144 @@ export default async function AdminSubmissionDetailPage({
               </button>
             </div>
           </ConfirmForm>
-          <form
-            action={saveSubmissionAdminFormAction}
-            method="post"
-            className="space-y-8"
-            id="admin-save-form"
-          >
-            <input type="hidden" name="submissionId" value={submission.id} />
+        </div>
 
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                아티스트/앨범 정보
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                원클릭 접수 등에서 누락된 정보를 관리자가 직접 입력합니다.
-              </p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    아티스트명
-                  </label>
-                  <input
-                    name="artistName"
-                    defaultValue={submission.artist_name ?? ""}
-                    placeholder="아티스트명을 입력해주세요."
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    앨범 제목
-                  </label>
-                  <input
-                    name="title"
-                    defaultValue={submission.title ?? ""}
-                    placeholder="앨범 제목을 입력해주세요."
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
-              {submission.type?.startsWith("MV_") ? (
-                <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                    MV 등급 설정
-                  </p>
-                  <div className="mt-4">
-                    <MvRatingControl
-                      submissionId={submission.id}
-                      initialRating={submission.mv_desired_rating ?? ""}
-                    />
-                  </div>
-                  <div className="mt-6 space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                      심의 필증 업로드
-                    </p>
-                    <CertificateUploader
-                      submissionId={submission.id}
-                      currentName={submission.certificate_original_name}
-                      currentUploadedAt={submission.certificate_uploaded_at}
-                    />
-                    {submission.certificate_b2_path ? (
-                      <div className="flex flex-wrap items-center gap-3">
-                        <a
-                          className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
-                          href={`/api/b2/download?filePath=${encodeURIComponent(submission.certificate_b2_path)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          필증 다운로드
-                        </a>
-                        {submission.certificate_uploaded_at ? (
-                          <span className="text-xs text-muted-foreground">
-                            업로드: {formatDateTime(submission.certificate_uploaded_at)}
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 lg:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  접수 상태 변경
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  접수 상태와 결제 상태를 함께 저장합니다.
-                </p>
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      결제 방식
-                    </label>
-                    <input
-                      value={
-                        submission.payment_method
-                          ? paymentMethodLabels[submission.payment_method] ??
-                            submission.payment_method
-                          : "-"
-                      }
-                      readOnly
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      입금자명
-                    </label>
-                    <input
-                      value={
-                        submission.payment_method === "BANK"
-                          ? submission.bank_depositor_name ?? "-"
-                          : "카드 결제"
-                      }
-                      readOnly
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
-                    />
-                  </div>
-                  {submission.payment_method === "BANK" && (
-                    <>
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          결제 서류
-                        </label>
-                        <input
-                          value={paymentDocumentTypeLabel}
-                          readOnly
-                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
-                        />
-                      </div>
-                      {paymentDocument?.payment_document_type === "CASH_RECEIPT" && (
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                            현금 영수증 용도
-                          </label>
-                          <input
-                            value={cashReceiptPurposeLabel}
-                            readOnly
-                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
-                          />
-                        </div>
-                      )}
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          발급 정보
-                        </label>
-                        <input
-                          value={paymentDocumentTargetValue}
-                          readOnly
-                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      접수 상태
-                    </label>
-                    <select
-                      name="status"
-                      defaultValue={submission.status}
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                    >
-                      {reviewStatusOptions.map((status) => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      결제 상태
-                    </label>
-                    <select
-                      name="paymentStatus"
-                      defaultValue={submission.payment_status ?? "UNPAID"}
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                    >
-                      {paymentStatusOptions.map((status) => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="mt-4 space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    관리자 메모
-                  </label>
-                  <textarea
-                    name="adminMemo"
-                    defaultValue={submission.admin_memo ?? ""}
-                    className="h-24 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                    placeholder="관리자 메모"
-                  />
-                </div>
+        <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
           <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 text-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              상태 요약
+              운영 요약
             </p>
             <div className="mt-3 space-y-2 text-[13px] text-foreground">
-              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
-                <span className="text-muted-foreground">심의 상태</span>
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <span className="text-muted-foreground">접수 상태</span>
                 <span className="font-semibold">{statusLabel}</span>
               </div>
-              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
-                <span className="text-muted-foreground">결제 상태</span>
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <span className="text-muted-foreground">결제</span>
                 <span className="font-semibold">{paymentLabel}</span>
               </div>
-              <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <span className="text-muted-foreground">파일</span>
+                <span className="font-semibold">{files.length}개</span>
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <span className="text-muted-foreground">방송국</span>
+                <span className="font-semibold">
+                  {completedReviewCount}/{reviews.length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
                 <span className="text-muted-foreground">결과</span>
                 <span className="font-semibold">{resultStatusLabel}</span>
               </div>
             </div>
+            {latestEvent ? (
+              <div className="mt-4 rounded-2xl border border-border/60 bg-card/70 px-3 py-3 text-xs">
+                <p className="font-semibold text-foreground">최근 처리</p>
+                <p className="mt-1 text-muted-foreground">
+                  {latestEvent.event_type} · {formatDateTime(latestEvent.created_at)}
+                </p>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 text-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              신청자 정보
+              신청자
             </p>
             {hasGuestColumns && submission.guest_name ? (
-              <div className="mt-3 space-y-1 text-sm text-foreground">
-                <p className="flex justify-between text-[13px] text-muted-foreground">
+              <div className="mt-3 space-y-2 text-[13px] text-muted-foreground">
+                <p className="flex justify-between gap-4">
                   <span>구분</span>
-                  <span className="text-foreground">비회원</span>
+                  <span className="text-right text-foreground">비회원</span>
                 </p>
-                <p className="flex justify-between text-[13px] text-muted-foreground">
+                <p className="flex justify-between gap-4">
                   <span>담당자</span>
-                  <span className="text-foreground">{submission.guest_name}</span>
+                  <span className="text-right text-foreground">
+                    {submission.guest_name}
+                  </span>
                 </p>
-                {submission.guest_company && (
-                  <p className="flex justify-between text-[13px] text-muted-foreground">
+                {submission.guest_company ? (
+                  <p className="flex justify-between gap-4">
                     <span>회사</span>
-                    <span className="text-foreground">{submission.guest_company}</span>
+                    <span className="text-right text-foreground">
+                      {submission.guest_company}
+                    </span>
                   </p>
-                )}
-                <p className="flex justify-between text-[13px] text-muted-foreground">
+                ) : null}
+                <p className="flex justify-between gap-4">
                   <span>연락처</span>
-                  <span className="text-foreground">{submission.guest_phone ?? "-"}</span>
+                  <span className="text-right text-foreground">
+                    {submission.guest_phone ?? "-"}
+                  </span>
                 </p>
-                <p className="flex justify-between text-[13px] text-muted-foreground">
+                <p className="flex justify-between gap-4">
                   <span>이메일</span>
-                  <span className="text-foreground">
+                  <span className="break-all text-right text-foreground">
                     {submission.guest_email ?? submission.applicant_email ?? "-"}
                   </span>
                 </p>
               </div>
             ) : (
-              <div className="mt-3 space-y-1 text-sm text-foreground">
-                <p className="flex justify-between text-[13px] text-muted-foreground">
+              <div className="mt-3 space-y-2 text-[13px] text-muted-foreground">
+                <p className="flex justify-between gap-4">
                   <span>구분</span>
-                  <span className="text-foreground">회원</span>
+                  <span className="text-right text-foreground">회원</span>
                 </p>
-                <p className="flex justify-between text-[13px] text-muted-foreground">
+                <p className="flex justify-between gap-4">
                   <span>이름</span>
-                  <span className="text-foreground">{memberProfile?.name ?? "회원 정보 미입력"}</span>
+                  <span className="text-right text-foreground">
+                    {memberProfile?.name ?? "회원 정보 미입력"}
+                  </span>
                 </p>
-                <p className="flex justify-between text-[13px] text-muted-foreground">
+                <p className="flex justify-between gap-4">
                   <span>회사</span>
-                  <span className="text-foreground">{memberProfile?.company ?? "-"}</span>
+                  <span className="text-right text-foreground">
+                    {memberProfile?.company ?? "-"}
+                  </span>
                 </p>
-                <p className="flex justify-between text-[13px] text-muted-foreground">
+                <p className="flex justify-between gap-4">
                   <span>연락처</span>
-                  <span className="text-foreground">{memberProfile?.phone ?? "-"}</span>
+                  <span className="text-right text-foreground">
+                    {memberProfile?.phone ?? "-"}
+                  </span>
                 </p>
-                <p className="flex justify-between text-[13px] text-muted-foreground">
-                  <span>로그인 이메일</span>
-                  <span className="text-foreground">{memberEmail ?? applicantEmail ?? "-"}</span>
+                <p className="flex justify-between gap-4">
+                  <span>이메일</span>
+                  <span className="break-all text-right text-foreground">
+                    {memberEmail ?? applicantEmail ?? "-"}
+                  </span>
                 </p>
-                {applicantEmail && (
-                  <p className="flex justify-between text-[12px] text-muted-foreground">
-                    <span>신청서 이메일</span>
-                    <span className="text-foreground">{applicantEmail}</span>
-                  </p>
-                )}
               </div>
             )}
           </div>
 
-          <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 text-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              파일
-            </p>
-            <div className="mt-3">
-              <SubmissionFilesPanel
-                submissionId={submission.id}
-                files={submissionFiles ?? []}
-              />
+          {submission.admin_memo ? (
+            <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                관리자 메모
+              </p>
+              <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">
+                {submission.admin_memo}
+              </p>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-end">
-        <ConfirmSubmitButton
-          className="rounded-full bg-foreground px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-background"
-          message="저장하시겠습니까?"
-        >
-          저장
-        </ConfirmSubmitButton>
-      </div>
-    </form>
-
-      <div className="mt-8 rounded-[28px] border border-border/60 bg-card/80 p-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          방송국별 진행 관리
-        </p>
-        <div className="mt-4 space-y-4">
-          {stationReviews && stationReviews.length > 0 ? (
-            stationReviews.map((review, reviewIndex) => {
-              const stationInfo = Array.isArray(review.station) ? review.station[0] : review.station;
-              const trackSummary = summarizeTrackResults(review.track_results, albumTracks);
-              const baseTracks =
-                albumTracks.length > 0
-                  ? albumTracks.map((track, index) => ({
-                      id: track.id ?? null,
-                      track_no: track.track_no ?? index + 1,
-                      title:
-                        track.track_title ??
-                        track.track_title_kr ??
-                        track.track_title_en ??
-                        "트랙",
-                      status: "PENDING",
-                    }))
-                  : [];
-
-              const trackResults =
-                baseTracks.length > 0
-                  ? baseTracks.map((bt) => {
-                      const matched =
-                        trackSummary.results.find(
-                          (item) =>
-                            (bt.id && item.track_id === bt.id) ||
-                            (typeof bt.track_no === "number" &&
-                              typeof item.track_no === "number" &&
-                              item.track_no === bt.track_no),
-                        ) ?? null;
-                      return {
-                        ...bt,
-                        status: matched?.status ?? bt.status,
-                      };
-                    })
-                  : trackSummary.results.map((item, idx) => ({
-                      id: item.track_id ?? null,
-                      track_no:
-                        typeof item.track_no === "number" && Number.isFinite(item.track_no)
-                          ? item.track_no
-                          : idx + 1,
-                      title: item.title ?? "트랙",
-                      status: item.status ?? "PENDING",
-                    }));
-
-              return (
-                <StationReviewForm
-                  key={review.id ?? `review-${reviewIndex}`}
-                  submissionId={submission.id}
-                  reviewId={typeof review.id === "string" ? review.id : undefined}
-                  stationId={review.station_id ?? null}
-                  stationCode={stationInfo?.code ?? undefined}
-                  stationName={stationInfo?.name ?? undefined}
-                  initialStatus={normalizeStationReviewStatus(review.status)}
-                  initialMemo={review.result_note ?? ""}
-                  trackResults={trackResults}
-                  statusOptions={stationReviewStatusOptions}
-                  action={updateStationReviewFormAction}
-                />
-              );
-            })
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
-              방송국 진행 정보가 없습니다.
-            </div>
-          )}
-        </div>
-      </div>
-      </div>
+          ) : null}
+        </aside>
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              신청 상세
-            </p>
+        <details
+          open={!isMvSubmission && isOneclick}
+          className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm"
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              신청 상세 원문
+            </span>
+            <span className="rounded-full border border-border/60 px-3 py-1 text-[11px] font-semibold text-muted-foreground">
+              펼치기
+            </span>
+          </summary>
+          <div className="mt-4 flex justify-end">
             <Link
               href={`/api/admin/submissions/${submission.id}/export`}
               className="rounded-full border border-border/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
@@ -1174,7 +1351,7 @@ export default async function AdminSubmissionDetailPage({
                 <DetailRow label="제작사" value={submission.mv_production_company || "-"} />
                 <DetailRow label="배급사" value={submission.mv_distribution_company || "-"} />
                 <DetailRow label="용도" value={submission.mv_usage || "-"} />
-                <DetailRow label="희망등급" value={submission.mv_desired_rating || "-"} />
+                <DetailRow label="심의 등급" value={submission.mv_desired_rating || "-"} />
                 <DetailRow
                   label="곡 제목"
                   value={
@@ -1331,12 +1508,17 @@ export default async function AdminSubmissionDetailPage({
               </div>
             </div>
           ) : null}
-        </div>
+        </details>
 
-        <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            이벤트 로그
-          </p>
+        <details className="rounded-[28px] border border-border/60 bg-background/80 p-6">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              처리 로그
+            </span>
+            <span className="rounded-full border border-border/60 px-3 py-1 text-[11px] font-semibold text-muted-foreground">
+              펼치기
+            </span>
+          </summary>
           <div className="mt-4 space-y-3 text-xs">
             {events && events.length > 0 ? (
               events.map((event) => (
@@ -1359,7 +1541,7 @@ export default async function AdminSubmissionDetailPage({
               </div>
             )}
           </div>
-        </div>
+        </details>
       </div>
     </div>
   );

@@ -94,13 +94,14 @@ export default function Home() {
             <div className="absolute inset-0 bg-[linear-gradient(135deg,#fffaf0_0%,#fffaf0_64%,rgba(242,207,39,0.18)_100%)] dark:bg-[linear-gradient(135deg,#101010_0%,#101010_64%,rgba(242,207,39,0.12)_100%)]" />
           </div>
 
-          <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-700 sm:gap-6 lg:min-h-[520px] lg:h-full">
-              <span className="bauhaus-kicker">
-                온사이드 심의센터
+          <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1.02fr)_minmax(420px,0.98fr)] lg:items-start lg:gap-10">
+            <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-700 sm:gap-6">
+              <span className="bauhaus-kicker" style={{ textTransform: "none" }}>
+                Since 2017
               </span>
               <h1 className="font-display break-keep text-3xl font-black leading-tight text-foreground sm:text-5xl">
                 심의 신청부터
+                <span className="sm:hidden"> </span>
                 <br className="hidden sm:block" />
                 결과 확인까지
               </h1>

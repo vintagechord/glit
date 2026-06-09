@@ -108,6 +108,16 @@ const filePolicyContent = `파일 보관/삭제 정책
 
 파일 삭제 또는 보관 기간 문의는 ${APP_CONFIG.supportEmail}로 접수해주세요.`;
 
+const footerLinkClass = "transition hover:text-[#f2cf27]";
+const footerDisclosureClass =
+  "group rounded-[8px] border-2 border-white/14 bg-white/[0.03] px-4 py-3";
+const footerSummaryClass =
+  "flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-white/86 marker:hidden [&::-webkit-details-marker]:hidden";
+const footerPanelClass =
+  "mt-3 flex flex-wrap gap-x-4 gap-y-2 border-t border-white/12 pt-3 text-sm font-semibold text-white/68";
+const footerLegalButtonClass =
+  "text-left transition hover:text-[#f2cf27]";
+
 export function SiteFooter() {
   const pathname = usePathname();
   const contactPhone = APP_CONFIG.supportPhone;
@@ -179,9 +189,9 @@ export function SiteFooter() {
 
   return (
     <footer className="border-t-2 border-[#111111] bg-[#111111] text-[#f7f5ef] dark:border-[#f2cf27] dark:bg-[#0b0b0b]">
-      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-        <div className="grid gap-6 border-b-2 border-[#f2cf27] pb-6 md:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-3">
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="grid gap-5 border-b-2 border-[#f2cf27] pb-5 md:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-2.5">
             <p className="w-fit bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-[#111111]">
               고객센터
             </p>
@@ -200,12 +210,9 @@ export function SiteFooter() {
               상담시간 {APP_CONFIG.supportHours}
             </p>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <p className="w-fit bg-[#1556a4] px-3 py-1 text-xs font-black uppercase tracking-normal text-white">
-              결제 안내
-            </p>
-            <p className="text-base font-medium text-white/86">
-              무통장 입금 계좌는 신청/결제 단계에서도 다시 안내됩니다.
+              입금 계좌
             </p>
             <p className="text-base font-medium text-white/72">
               {bankName} {bankAccount} · 예금주{" "}
@@ -224,91 +231,98 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 border-b-2 border-white/12 py-4 text-sm font-black text-white/78">
-          <Link href="/about" className="transition hover:text-[#f2cf27]">
-            회사소개
-          </Link>
-          <Link href="/guide" className="transition hover:text-[#f2cf27]">
-            심의 안내
-          </Link>
-          <Link href="/faq" className="transition hover:text-[#f2cf27]">
-            FAQ
-          </Link>
-          <Link href="/support" className="transition hover:text-[#f2cf27]">
-            고객센터
-          </Link>
-          <Link href="/forms" className="transition hover:text-[#f2cf27]">
-            구버전 신청서 작성
-          </Link>
-          <button
-            type="button"
-            onClick={() => setActiveModal("terms")}
-            className="transition hover:text-[#f2cf27]"
-          >
-            이용약관
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveModal("privacy")}
-            className="transition hover:text-[#f2cf27]"
-          >
-            개인정보처리방침
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveModal("refund")}
-            className="transition hover:text-[#f2cf27]"
-          >
-            환불/취소 규정
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveModal("file")}
-            className="transition hover:text-[#f2cf27]"
-          >
-            파일 보관/삭제 정책
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveModal("partnership")}
-            className="transition hover:text-[#f2cf27]"
-          >
-            제휴안내
-          </button>
+        <div className="grid gap-3 border-b-2 border-white/12 py-4 md:grid-cols-3">
+          <details className={footerDisclosureClass}>
+            <summary className={footerSummaryClass}>
+              사이트 링크
+              <span className="text-xs text-white/46 group-open:hidden">펼치기</span>
+              <span className="hidden text-xs text-white/46 group-open:inline">접기</span>
+            </summary>
+            <div className={footerPanelClass}>
+              <Link href="/about" className={footerLinkClass}>
+                회사소개
+              </Link>
+              <Link href="/guide" className={footerLinkClass}>
+                심의 안내
+              </Link>
+              <Link href="/faq" className={footerLinkClass}>
+                FAQ
+              </Link>
+              <Link href="/support" className={footerLinkClass}>
+                고객센터
+              </Link>
+              <Link href="/forms" className={footerLinkClass}>
+                신청서 작성
+              </Link>
+            </div>
+          </details>
+
+          <details className={footerDisclosureClass}>
+            <summary className={footerSummaryClass}>
+              약관/정책
+              <span className="text-xs text-white/46 group-open:hidden">펼치기</span>
+              <span className="hidden text-xs text-white/46 group-open:inline">접기</span>
+            </summary>
+            <div className={footerPanelClass}>
+              <button
+                type="button"
+                onClick={() => setActiveModal("terms")}
+                className={footerLegalButtonClass}
+              >
+                이용약관
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveModal("privacy")}
+                className={footerLegalButtonClass}
+              >
+                개인정보처리방침
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveModal("refund")}
+                className={footerLegalButtonClass}
+              >
+                환불/취소 규정
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveModal("file")}
+                className={footerLegalButtonClass}
+              >
+                파일 보관/삭제 정책
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveModal("partnership")}
+                className={footerLegalButtonClass}
+              >
+                제휴안내
+              </button>
+            </div>
+          </details>
+
+          <details className={footerDisclosureClass}>
+            <summary className={footerSummaryClass}>
+              사업자 정보
+              <span className="text-xs text-white/46 group-open:hidden">펼치기</span>
+              <span className="hidden text-xs text-white/46 group-open:inline">접기</span>
+            </summary>
+            <div className="mt-3 grid gap-1 border-t border-white/12 pt-3 text-sm font-medium text-white/68 sm:grid-cols-2 md:grid-cols-1">
+              <p>회사명: {APP_CONFIG.businessName}</p>
+              <p>대표자: {APP_CONFIG.businessRep}</p>
+              <p className="sm:col-span-2 md:col-span-1">
+                주소: {APP_CONFIG.businessAddress}
+              </p>
+              <p>사업자등록번호: {APP_CONFIG.businessRegNo}</p>
+              <p>통신판매업신고번호: {APP_CONFIG.businessMailOrderNo}</p>
+              <p>개인정보 보호책임자: {APP_CONFIG.privacyOfficer}</p>
+              <p>호스팅 제공자: {APP_CONFIG.hostingProvider}</p>
+            </div>
+          </details>
         </div>
 
-        <div className="space-y-3 pt-4 text-sm font-medium text-white/72">
-          <div className="grid gap-1 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-1">
-            <p className="sm:col-span-2 text-white/86">
-              온사이드는 2017년부터 운영된 음반·뮤직비디오 심의 대행 서비스이며, 현재 {APP_CONFIG.businessName}에서 운영합니다.
-            </p>
-            <p>회사명: {APP_CONFIG.businessName}</p>
-            <p>대표자: {APP_CONFIG.businessRep}</p>
-            <p className="sm:col-span-2">주소: {APP_CONFIG.businessAddress}</p>
-            <p>
-              전화:{" "}
-              <a
-                href={`tel:${APP_CONFIG.supportPhone}`}
-                className="underline-offset-2 hover:text-[#f2cf27] hover:underline"
-              >
-                {APP_CONFIG.supportPhone}
-              </a>
-            </p>
-            <p>
-              이메일:{" "}
-              <a
-                href={`mailto:${APP_CONFIG.supportEmail}`}
-                className="underline-offset-2 hover:text-[#f2cf27] hover:underline"
-              >
-                {APP_CONFIG.supportEmail}
-              </a>
-            </p>
-            <p>기존 문의 메일: onside17@daum.net 확인 가능</p>
-            <p>사업자등록번호: {APP_CONFIG.businessRegNo}</p>
-            <p>통신판매업신고번호: {APP_CONFIG.businessMailOrderNo}</p>
-            <p>개인정보 보호책임자: {APP_CONFIG.privacyOfficer}</p>
-            <p>호스팅 제공자: {APP_CONFIG.hostingProvider}</p>
-          </div>
+        <div className="pt-4 text-sm font-medium text-white/58">
           <p className="text-white/52">
             Copyright © {APP_CONFIG.businessName}. All Rights Reserved.
           </p>

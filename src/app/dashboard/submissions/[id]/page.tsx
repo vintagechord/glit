@@ -446,7 +446,6 @@ export default async function SubmissionDetailPage({
     <SubmissionDetailClient
       submissionId={submissionId}
       initialSubmission={initialSubmission as unknown as SubmissionDetailClientProps["initialSubmission"]}
-      initialEvents={[]}
       initialStationReviews={initialStationReviews}
       initialFiles={[]}
       paymentState={paymentState}

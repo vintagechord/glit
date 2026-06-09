@@ -9,6 +9,9 @@ export const metadata = {
   title: "비회원 진행 상황",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type SubmissionDetailClientProps = React.ComponentProps<typeof SubmissionDetailClient>;
 
 export default async function TrackDetailPage({
@@ -118,12 +121,6 @@ export default async function TrackDetailPage({
     );
   }
 
-  const { data: events } = await admin
-    .from("submission_events")
-    .select("id, event_type, message, created_at")
-    .eq("submission_id", submission.id)
-    .order("created_at", { ascending: false });
-
   const stationSelectWithTracks =
     "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code )";
   const stationSelectLegacyTracks =
@@ -227,7 +224,6 @@ export default async function TrackDetailPage({
       <SubmissionDetailClient
         submissionId={submission.id}
         initialSubmission={normalizedSubmission}
-        initialEvents={events ?? []}
         initialStationReviews={normalizedStationReviews}
         initialFiles={submissionFiles ?? []}
         enableRealtime={false}

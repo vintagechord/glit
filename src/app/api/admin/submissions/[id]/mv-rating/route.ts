@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { isRatingCode } from "@/lib/mv-assets";
+import { completeMvReviewFlow } from "@/lib/admin/mv-review-flow";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -32,27 +35,41 @@ export async function PATCH(
     return NextResponse.json({ error: "rating 값을 확인해주세요." }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("submissions")
-    .update({ mv_desired_rating: parsed.data.rating })
-    .eq("id", submissionId)
-    .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
-    .select("id, mv_desired_rating")
-    .maybeSingle();
+  const admin = createAdminClient();
+  const completion = await completeMvReviewFlow(admin, submissionId, {
+    rating: parsed.data.rating,
+  });
 
   console.info("[admin][mv-rating] update", {
     submissionId,
     rating: parsed.data.rating,
-    updated: Boolean(data?.id),
-    error: error?.message,
+    completed: completion.completed,
+    stationCount: completion.stationCount,
+    error: completion.error,
   });
 
-  if (error) {
-    return NextResponse.json({ error: "등급을 저장하지 못했습니다." }, { status: 500 });
+  if (completion.error) {
+    const status = completion.error.includes("찾을 수 없습니다") ? 404 : 500;
+    return NextResponse.json({ error: completion.error }, { status });
   }
-  if (!data) {
-    return NextResponse.json({ error: "뮤직비디오 접수를 찾을 수 없습니다." }, { status: 404 });
+  if (!completion.completed) {
+    return NextResponse.json(
+      { error: "뮤직비디오 접수를 찾을 수 없습니다." },
+      { status: 404 },
+    );
   }
 
-  return NextResponse.json({ ok: true, rating: parsed.data.rating });
+  revalidatePath("/admin/submissions");
+  revalidatePath(`/admin/submissions/${submissionId}`);
+  revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/mypage");
+  revalidatePath("/track");
+
+  return NextResponse.json({
+    ok: true,
+    rating: parsed.data.rating,
+    resultStatus: completion.resultStatus,
+    stationCount: completion.stationCount,
+  });
 }

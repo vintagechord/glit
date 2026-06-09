@@ -529,14 +529,17 @@ export function MvWizard({
       const status = String(type).replace("INICIS:", "");
       const submissionFromMsg = (payload.submissionId as string | undefined) || submissionIdRef.current;
       const guestTokenFromMsg = payload.guestToken as string | undefined;
+      const guestPaymentToken = isGuest
+        ? guestTokenFromMsg || guestTokenRef.current
+        : guestTokenFromMsg;
       if (status === "SUCCESS") {
         clearDraftStorage();
-        if (submissionFromMsg) {
-          window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=success`;
+        if (guestPaymentToken) {
+          window.location.href = `/track/${encodeURIComponent(guestPaymentToken)}?payment=success`;
           return;
         }
-        if (guestTokenFromMsg) {
-          window.location.href = `/track/${guestTokenFromMsg}?payment=success`;
+        if (submissionFromMsg) {
+          window.location.href = `/dashboard/submissions/${encodeURIComponent(submissionFromMsg)}?payment=success`;
           return;
         }
       }
@@ -546,12 +549,12 @@ export function MvWizard({
             ? payload.message
             : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
         const paymentState = status.toLowerCase();
-        if (submissionFromMsg) {
-          window.location.href = `/dashboard/submissions/${submissionFromMsg}?payment=${paymentState}`;
+        if (guestPaymentToken) {
+          window.location.href = `/track/${encodeURIComponent(guestPaymentToken)}?payment=${paymentState}`;
           return;
         }
-        if (guestTokenFromMsg) {
-          window.location.href = `/track/${guestTokenFromMsg}?payment=${paymentState}`;
+        if (submissionFromMsg) {
+          window.location.href = `/dashboard/submissions/${encodeURIComponent(submissionFromMsg)}?payment=${paymentState}`;
           return;
         }
         setNotice({ error: message });
@@ -559,7 +562,7 @@ export function MvWizard({
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [clearDraftStorage]);
+  }, [clearDraftStorage, isGuest]);
 
   const requireSubmissionId = React.useCallback(() => {
     if (submissionIdRef.current) return submissionIdRef.current;

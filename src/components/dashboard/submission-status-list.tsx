@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
+import { normalizeStationReviewStatus } from "@/constants/review-status";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { summarizeTrackResults } from "@/lib/track-results";
 
@@ -115,7 +116,7 @@ const resultStatusMap: Record<string, { label: string; tone: string }> = {
 };
 
 const getReceptionStatus = (status: string) =>
-  receptionStatusMap[status] ?? {
+  receptionStatusMap[normalizeStationReviewStatus(status)] ?? {
     label: "접수",
     tone: "bauhaus-status-chip--neutral",
   };

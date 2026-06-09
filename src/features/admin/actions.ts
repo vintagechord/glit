@@ -29,6 +29,10 @@ import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRatingCode } from "@/lib/mv-assets";
+import {
+  completeMvReviewFlow,
+  resolveMvFallbackStationId,
+} from "@/lib/admin/mv-review-flow";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 
 export type AdminActionState = {
@@ -77,6 +81,7 @@ const trackResultSchema = z.object({
   title: z.string().optional(),
   status: trackResultStatusEnum,
 });
+type StationReviewStatusValue = z.infer<typeof stationReviewStatusEnum>;
 
 const stationReviewPayloadSchema = z.object({
   reviewId: z.string().uuid().optional(),
@@ -114,11 +119,98 @@ const shouldRetryWithUserSession = (error?: { code?: string; message?: string | 
   );
 };
 
-const formatSupabaseError = (error?: { code?: string; message?: string | null }) => {
+const formatSupabaseError = (error?: { code?: string; message?: string | null } | null) => {
   if (!error) return "unknown error";
   const code = error.code ? `(${error.code})` : "";
   const message = error.message ?? "unknown error";
   return `${code} ${message}`.trim();
+};
+
+const uuidValueSchema = z.string().uuid();
+const normalizeUuid = (value?: string | null) => {
+  if (!value) return "";
+  return uuidValueSchema.safeParse(value).success ? value : "";
+};
+
+const stationStatusToSubmissionStatus = (
+  status: StationReviewStatusValue,
+): ReviewStatus | null => {
+  switch (status) {
+    case "SENT":
+    case "RECEIVED":
+      return "IN_PROGRESS";
+    case "APPROVED":
+    case "REJECTED":
+    case "NEEDS_FIX":
+      return "RESULT_READY";
+    default:
+      return null;
+  }
+};
+
+const submissionStatusRank: Record<ReviewStatus, number> = {
+  DRAFT: 0,
+  SUBMITTED: 1,
+  PRE_REVIEW: 1,
+  WAITING_PAYMENT: 1,
+  IN_PROGRESS: 2,
+  RESULT_READY: 3,
+  COMPLETED: 4,
+};
+
+const syncSubmissionStatusFromStationStatus = async (
+  client: SupabaseClient,
+  submissionId: string,
+  stationStatus: StationReviewStatusValue,
+  context: Record<string, unknown>,
+) => {
+  const nextStatus = stationStatusToSubmissionStatus(stationStatus);
+  if (!nextStatus) return null;
+
+  const { data: current, error: currentError } = await client
+    .from("submissions")
+    .select("status")
+    .eq("id", submissionId)
+    .maybeSingle();
+
+  if (currentError) {
+    console.warn("[station_review][save][submission_status][load_error]", {
+      ...context,
+      errorCode: currentError.code,
+      errorMessage: currentError.message,
+    });
+    return `SUBMISSION_STATUS_SYNC_FAILED: ${formatSupabaseError(currentError)}`;
+  }
+
+  const currentStatus = current?.status as ReviewStatus | undefined;
+  if (
+    currentStatus &&
+    currentStatus !== "COMPLETED" &&
+    submissionStatusRank[currentStatus] >= submissionStatusRank[nextStatus]
+  ) {
+    return null;
+  }
+
+  if (currentStatus === "COMPLETED") {
+    return null;
+  }
+
+  const { error: updateError } = await client
+    .from("submissions")
+    .update({ status: nextStatus, updated_at: new Date().toISOString() })
+    .eq("id", submissionId);
+
+  if (updateError) {
+    console.warn("[station_review][save][submission_status][update_error]", {
+      ...context,
+      nextStatus,
+      errorCode: updateError.code,
+      errorMessage: updateError.message,
+    });
+    return `SUBMISSION_STATUS_SYNC_FAILED: ${formatSupabaseError(updateError)}`;
+  }
+
+  return null;
 };
 
 const revalidateUserDashboards = (submissionId?: string) => {
@@ -613,18 +705,24 @@ export async function updateSubmissionMvRatingAction(
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("submissions")
-    .update({ mv_desired_rating: parsed.data.rating })
-    .eq("id", parsed.data.submissionId);
+  const completion = await completeMvReviewFlow(supabase, parsed.data.submissionId, {
+    rating: parsed.data.rating,
+  });
 
-  if (error) {
-    return { error: "등급을 저장하지 못했습니다." };
+  if (completion.error) {
+    return { error: completion.error };
+  }
+  if (!completion.completed) {
+    return { error: "뮤직비디오 접수를 찾을 수 없습니다." };
   }
 
-  await insertEvent(parsed.data.submissionId, `MV 등급 설정: ${parsed.data.rating}`, "ADMIN_STATUS");
+  await insertEvent(
+    parsed.data.submissionId,
+    `MV 등급 설정 및 결과통보 완료: ${parsed.data.rating}`,
+    "RESULT_UPDATE",
+  );
 
-  return { message: "등급이 저장되었습니다." };
+  return { message: "MV 등급과 결과통보 상태가 저장되었습니다." };
 }
 
 export async function updateSubmissionMvRatingFormAction(
@@ -1266,6 +1364,14 @@ export async function updateStationReviewAction(
     }
   }
 
+  const statusSyncWarning = await syncSubmissionStatusFromStationStatus(
+    supabase,
+    submissionId,
+    statusRequested,
+    logContext,
+  );
+  warning = warning ?? statusSyncWarning ?? undefined;
+
   await insertEvent(
     submissionId,
     `방송국 상태 변경: ${expectedStatus}`,
@@ -1303,8 +1409,8 @@ export async function updateStationReviewFormAction(
   };
 
   const submissionId = String(getFormValue("submission_id") ?? "").trim();
-  const stationId = String(getFormValue("station_id") ?? "").trim();
-  const reviewId = String(getFormValue("review_id") ?? "").trim();
+  let stationId = normalizeUuid(String(getFormValue("station_id") ?? "").trim());
+  const reviewId = normalizeUuid(String(getFormValue("review_id") ?? "").trim());
   const statusRaw = String(getFormValue("station_status") ?? "").trim().toUpperCase();
   const resultNote = String(getFormValue("station_memo") ?? "").trim();
   const trackResultsJson = String(getFormValue("track_results_json") ?? "").trim();
@@ -1319,7 +1425,7 @@ export async function updateStationReviewFormAction(
     trackResultsInput: hasTrackResultsInput,
   });
 
-  if (!submissionId || !stationId || !statusRaw) {
+  if (!submissionId || !statusRaw) {
     console.error("[station_review][form][parse][missing_fields]", {
       submissionId,
       stationId,
@@ -1331,6 +1437,23 @@ export async function updateStationReviewFormAction(
         "필수 값이 누락되었습니다.",
       )}`,
     );
+  }
+
+  if (!stationId && !reviewId) {
+    const fallback = await resolveMvFallbackStationId(createAdminClient(), submissionId);
+    if (fallback.error || !fallback.stationId) {
+      console.error("[station_review][form][parse][fallback_station_error]", {
+        submissionId,
+        statusRaw,
+        error: fallback.error,
+      });
+      redirect(
+        `/admin/submissions/${submissionId}?saved=station_error&savedError=${encodeURIComponent(
+          fallback.error ?? "방송국 ID를 확인할 수 없습니다.",
+        )}`,
+      );
+    }
+    stationId = fallback.stationId;
   }
 
   const status = stationReviewStatusValues.includes(statusRaw as typeof stationReviewStatusValues[number])
@@ -1648,6 +1771,7 @@ export async function updateSubmissionResultAction(
   let { error } = await supabase
     .from("submissions")
     .update({
+      status: "RESULT_READY",
       result_status: parsed.data.resultStatus,
       result_memo: parsed.data.resultMemo || null,
       result_notified_at: null,
@@ -1660,6 +1784,7 @@ export async function updateSubmissionResultAction(
       const retryWithoutNotifiedAt = await supabase
         .from("submissions")
         .update({
+          status: "RESULT_READY",
           result_status: parsed.data.resultStatus,
           result_memo: parsed.data.resultMemo || null,
         })
@@ -1672,6 +1797,7 @@ export async function updateSubmissionResultAction(
     const fallbackMemoOnly = await supabase
       .from("submissions")
       .update({
+        status: "RESULT_READY",
         result_memo: parsed.data.resultMemo || null,
       })
       .eq("id", parsed.data.submissionId);
@@ -1680,6 +1806,15 @@ export async function updateSubmissionResultAction(
 
   if (error) {
     return { error: "결과 정보를 저장하지 못했습니다." };
+  }
+
+  const completion = await completeMvReviewFlow(supabase, parsed.data.submissionId, {
+    resultStatus: parsed.data.resultStatus,
+    resultMemo: parsed.data.resultMemo ?? null,
+  });
+
+  if (completion.error) {
+    return { error: completion.error };
   }
 
   await insertEvent(

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import * as React from "react";
+import { normalizeStationReviewStatus } from "@/constants/review-status";
 import { formatDate } from "@/lib/format";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { createClient } from "@/lib/supabase/client";
@@ -128,7 +129,7 @@ const stageStatusMap = {
 
 function getReceptionStatus(status: string) {
   return (
-    receptionStatusMap[status] ?? {
+    receptionStatusMap[normalizeStationReviewStatus(status)] ?? {
       label: "접수",
       tone: "bauhaus-status-chip--neutral",
     }
@@ -370,6 +371,8 @@ export function HomeReviewPanel({
   showPartialTrackBreakdown = true,
   mobileStationLayout = "cards",
   showDetailLink = true,
+  panelMinHeightClassName = "lg:min-h-[520px]",
+  compact = false,
 }: {
   isLoggedIn: boolean;
   albumSubmissions: SubmissionSummary[];
@@ -383,6 +386,8 @@ export function HomeReviewPanel({
   showPartialTrackBreakdown?: boolean;
   mobileStationLayout?: "cards" | "table";
   showDetailLink?: boolean;
+  panelMinHeightClassName?: string;
+  compact?: boolean;
 }) {
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
@@ -602,11 +607,40 @@ export function HomeReviewPanel({
       : getStageStatus(activeSubmission);
 
   const rowsPerPage = Math.max(1, Math.floor(stationRowsPerPage));
-  const rowHeight = 52;
-  const rowGap = 8;
-  const listPadding = 12;
+  const rowHeight = compact ? 46 : 52;
+  const rowGap = compact ? 6 : 8;
+  const listPadding = compact ? 8 : 12;
   const listViewportHeight =
     rowsPerPage * rowHeight + (rowsPerPage - 1) * rowGap + listPadding * 2;
+  const shellPaddingClass = compact ? "p-3 sm:p-4" : "p-4 sm:p-6";
+  const tabSpacingClass = compact ? "mt-3" : "mt-4 sm:mt-5";
+  const pagerSpacingClass = compact ? "mt-2.5" : "mt-3";
+  const bodySpacingClass = compact
+    ? "mt-4 space-y-3"
+    : "mt-5 space-y-4 sm:mt-6 sm:space-y-5";
+  const sectionPaddingClass = compact ? "p-3" : "p-4";
+  const progressBodyClass = compact
+    ? "mt-2.5 space-y-2.5"
+    : "mt-3 space-y-3";
+  const innerCardPaddingClass = compact ? "p-2.5" : "p-3";
+  const roundButtonClass = compact
+    ? "h-7 w-7 text-[11px]"
+    : "h-8 w-8 text-xs";
+  const tableHeaderClass = compact
+    ? "hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:grid"
+    : "hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid";
+  const mobileTableHeaderClass = compact
+    ? "grid grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:hidden"
+    : "grid grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden";
+  const listPaddingClass = compact
+    ? "px-2 py-2"
+    : "px-2.5 py-2.5 sm:px-3 sm:py-3";
+  const desktopStationRowClass = compact
+    ? "grid min-h-[46px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-1.5 text-xs"
+    : "grid min-h-[52px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-sm";
+  const mobileStationRowClass = compact
+    ? "grid min-h-[44px] grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 px-2 py-1.5 text-xs"
+    : "grid min-h-[48px] grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 px-2 py-2 text-sm";
   const stationListRef = React.useRef<HTMLDivElement | null>(null);
   const mouseDragPointerId = React.useRef<number | null>(null);
   const mouseDragStartY = React.useRef(0);
@@ -717,7 +751,7 @@ export function HomeReviewPanel({
   );
 
   return (
-    <div className="min-w-0 w-full rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] sm:p-6 lg:min-h-[520px]">
+    <div className={`min-w-0 w-full rounded-[10px] border-2 border-[#111111] bg-card ${shellPaddingClass} shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] ${panelMinHeightClassName}`}>
       <div className="flex items-center justify-between text-xs font-black uppercase tracking-normal text-foreground/72 sm:text-sm dark:text-white/82">
         <span>
           {activeSubmission
@@ -738,7 +772,7 @@ export function HomeReviewPanel({
         </span>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 text-xs font-black uppercase tracking-normal text-muted-foreground sm:mt-5 sm:text-sm dark:text-white/76">
+      <div className={`${tabSpacingClass} flex items-center gap-2 text-xs font-black uppercase tracking-normal text-muted-foreground sm:text-sm dark:text-white/76`}>
         {availableTabs.includes("album") ? (
           <button
             type="button"
@@ -765,7 +799,7 @@ export function HomeReviewPanel({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-[11px] font-black uppercase tracking-normal text-foreground/68 sm:text-xs dark:text-white/76">
+      <div className={`${pagerSpacingClass} flex items-center justify-between text-[11px] font-black uppercase tracking-normal text-foreground/68 sm:text-xs dark:text-white/76`}>
         <span>
           {activeList.length > 0
             ? `${activeIndex + 1}/${activeList.length}`
@@ -794,7 +828,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex <= 0}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary/18 bg-white text-xs font-bold text-primary shadow-[0_8px_20px_rgba(0,113,227,0.12)] transition hover:border-primary hover:bg-[#eaf3ff] hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/16 dark:bg-white/8 dark:text-white dark:hover:border-white/24 dark:hover:bg-white/12"
+            className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary/18 bg-white font-bold text-primary shadow-[0_8px_20px_rgba(0,113,227,0.12)] transition hover:border-primary hover:bg-[#eaf3ff] hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/16 dark:bg-white/8 dark:text-white dark:hover:border-white/24 dark:hover:bg-white/12`}
             aria-label="이전 접수"
           >
             ←
@@ -821,7 +855,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex >= Math.max(0, activeList.length - 1)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary/18 bg-white text-xs font-bold text-primary shadow-[0_8px_20px_rgba(0,113,227,0.12)] transition hover:border-primary hover:bg-[#eaf3ff] hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/16 dark:bg-white/8 dark:text-white dark:hover:border-white/24 dark:hover:bg-white/12"
+            className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary/18 bg-white font-bold text-primary shadow-[0_8px_20px_rgba(0,113,227,0.12)] transition hover:border-primary hover:bg-[#eaf3ff] hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/16 dark:bg-white/8 dark:text-white dark:hover:border-white/24 dark:hover:bg-white/12`}
             aria-label="다음 접수"
           >
             →
@@ -829,11 +863,11 @@ export function HomeReviewPanel({
         </div>
       </div>
 
-      <div className="mt-5 space-y-4 sm:mt-6 sm:space-y-5">
-        <div className="rounded-2xl border border-dashed border-border/80 bg-background/70 p-4">
+      <div className={bodySpacingClass}>
+        <div className={`rounded-2xl border border-dashed border-border/80 bg-background/70 ${sectionPaddingClass}`}>
           <p className="sr-only">접수 현황</p>
           {activeSubmission ? (
-            <div className="mt-3 space-y-3">
+            <div className={progressBodyClass}>
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm font-semibold text-foreground">
                   진행 현황
@@ -846,7 +880,7 @@ export function HomeReviewPanel({
                   </span>
                 ) : null}
               </div>
-              <div className="rounded-xl border border-border/60 bg-background/80 p-3">
+              <div className={`rounded-xl border border-border/60 bg-background/80 ${innerCardPaddingClass}`}>
                 <div className="flex items-center justify-between gap-3 text-sm font-semibold text-foreground">
                   <span className="truncate">{progressText}</span>
                   {totalCount > 0 ? <span>{progressPercent}%</span> : null}
@@ -879,7 +913,7 @@ export function HomeReviewPanel({
           )}
         </div>
 
-        <div className="rounded-2xl border border-border/60 bg-background/80 p-4">
+        <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass}`}>
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">
               심의 진행 상황
@@ -889,7 +923,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handlePrev}
                 disabled={needsPayment || !canScrollUp}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary bg-primary text-sm font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0`}
                 aria-label="이전 심의 진행 상태"
               >
                 ↑
@@ -898,7 +932,7 @@ export function HomeReviewPanel({
                 type="button"
                 onClick={handleNext}
                 disabled={needsPayment || !canScrollDown}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-primary bg-primary text-sm font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0`}
                 aria-label="다음 심의 진행 상태"
               >
                 ↓
@@ -906,7 +940,7 @@ export function HomeReviewPanel({
             </div>
           </div>
           <div className="mt-3 overflow-hidden rounded-2xl border border-border/60 bg-background/70">
-            <div className="hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid">
+            <div className={tableHeaderClass}>
               <span className="pl-2 text-left">방송국</span>
               <span className="justify-self-center text-center">접수 상태</span>
               <span className="justify-self-center text-center">{trackResultLabel}</span>
@@ -915,7 +949,7 @@ export function HomeReviewPanel({
             {!needsPayment && activeStations.length > 0 ? (
               <>
                 {mobileStationLayout === "table" ? (
-                  <div className="grid grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden">
+                  <div className={mobileTableHeaderClass}>
                     <span className="justify-self-center text-center">방송국</span>
                     <span className="justify-self-center text-center">접수 상태</span>
                     <span className="justify-self-center text-center">{trackResultLabel}</span>
@@ -923,7 +957,7 @@ export function HomeReviewPanel({
                 ) : null}
                 <div
                   ref={stationListRef}
-                  className={`overflow-y-auto overscroll-contain px-2.5 py-2.5 touch-pan-y sm:px-3 sm:py-3 ${isMouseDraggingList
+                  className={`overflow-y-auto overscroll-contain ${listPaddingClass} touch-pan-y ${isMouseDraggingList
                       ? "cursor-grabbing select-none"
                       : "cursor-auto sm:cursor-grab"
                     }`}
@@ -952,7 +986,7 @@ export function HomeReviewPanel({
                         return (
                           <div
                             key={`${station.id}-${index}`}
-                            className="grid min-h-[52px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-sm"
+                            className={desktopStationRowClass}
                           >
                             <span className="flex min-w-0 items-center gap-3 pl-2 text-left">
                               <StationLogo station={station.station ?? undefined} hideOnMobile />
@@ -1036,7 +1070,7 @@ export function HomeReviewPanel({
                         return (
                           <div
                             key={`${station.id}-mobile-${index}`}
-                            className="grid min-h-[48px] grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 px-2 py-2 text-sm"
+                            className={mobileStationRowClass}
                           >
                             <div
                               className="flex items-center justify-center"
