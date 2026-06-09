@@ -40,6 +40,7 @@ type StatusResponse = {
 };
 
 const STATUS_CLIENT_CACHE_TTL_MS = 0;
+const DASHBOARD_STATUS_FETCH_TIMEOUT_MS = 12_000;
 
 const cachedStatusByUser = new Map<
   string,
@@ -84,16 +85,33 @@ async function fetchDashboardStatus(viewerId: string) {
   }
 
   const requestPromise = (async () => {
-    const res = await fetch("/api/dashboard/status", { cache: "no-store" });
-    const json = (await res.json().catch(() => null)) as
-      | (StatusResponse & { error?: string })
-      | null;
-    if (!res.ok || !json || json.error) {
-      throw new Error(json?.error || "진행 현황을 불러오지 못했습니다.");
-    }
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, DASHBOARD_STATUS_FETCH_TIMEOUT_MS);
 
-    writeCachedStatus(viewerId, json);
-    return json;
+    try {
+      const res = await fetch("/api/dashboard/status", {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const json = (await res.json().catch(() => null)) as
+        | (StatusResponse & { error?: string })
+        | null;
+      if (!res.ok || !json || json.error) {
+        throw new Error(json?.error || "진행 현황을 불러오지 못했습니다.");
+      }
+
+      writeCachedStatus(viewerId, json);
+      return json;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("진행 현황 응답이 지연되고 있습니다. 다시 시도해주세요.");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   })();
   inflightStatusRequestByUser.set(viewerId, requestPromise);
 
@@ -123,12 +141,13 @@ export function DashboardStatusClient({
   const [data, setData] = React.useState<StatusResponse | null>(initialData);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(initialData == null);
+  const [reloadSeq, setReloadSeq] = React.useState(0);
 
   React.useEffect(() => {
     setData(initialData);
     setError(null);
     setLoading(initialData == null);
-  }, [initialData, viewerId]);
+  }, [initialData, reloadSeq, viewerId]);
 
   React.useEffect(() => {
     let aborted = false;
@@ -157,7 +176,7 @@ export function DashboardStatusClient({
     return () => {
       aborted = true;
     };
-  }, [initialData, viewerId]);
+  }, [initialData, reloadSeq, viewerId]);
 
   React.useEffect(() => {
     let aborted = false;
@@ -194,7 +213,14 @@ export function DashboardStatusClient({
         </div>
       ) : error ? (
         <div className="rounded-[10px] border-2 border-[#d9362c] bg-[#d9362c]/10 p-8 text-sm font-semibold text-[#d9362c]">
-          {error}
+          <p>{error}</p>
+          <button
+            type="button"
+            onClick={() => setReloadSeq((value) => value + 1)}
+            className="mt-4 rounded-[8px] border-2 border-[#111111] bg-white px-4 py-2 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
+          >
+            다시 불러오기
+          </button>
         </div>
       ) : data ? (
         <HomeReviewPanel

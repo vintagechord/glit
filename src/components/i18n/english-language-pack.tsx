@@ -228,12 +228,23 @@ const exactTranslations: Record<string, string> = {
   "온라인 심의 완료 후 ETN 방송 입고 가능합니다.":
     "ETN broadcast delivery is possible after online review completion.",
   "진행상황": "Progress",
+  "접수현황": "Submission Status",
   "접수 현황": "Submission Status",
+  "작성중 신청서": "Draft Application Forms",
+  "나의 심의 내역": "My Review History",
+  "크레딧": "Credits",
+  "계정정보": "Account Info",
   "접수한 심의의 현재 상태를 확인할 수 있습니다.":
     "Check the current status of your submitted reviews.",
-  "나의 심의 내역": "My Review History",
   "심의 기록을 발매 음원 단위로 확인합니다.":
     "View review records by release.",
+  "진행 현황을 불러오는 중입니다...": "Loading review progress...",
+  "진행 현황 응답이 지연되고 있습니다. 다시 시도해주세요.":
+    "The review progress response is delayed. Please try again.",
+  "진행 현황을 불러오지 못했습니다.":
+    "Could not load review progress.",
+  "불러오기 실패": "Loading failed",
+  "다시 불러오기": "Retry",
   "조회 방식을 선택하세요": "Choose a Lookup Method",
   "비회원 진행/결과 조회": "Guest Progress / Result Lookup",
   "회원은 로그인 후 접수 현황으로 이동하고, 비회원은 조회 코드로 진행 상태와 결과를 확인합니다.":
@@ -476,6 +487,8 @@ const exactTranslations: Record<string, string> = {
   "호스팅 제공자:": "Hosting Provider:",
   "(주)빈티지하우스": "Vintage House Co., Ltd.",
   "(주)Vintage House": "Vintage House Co., Ltd.",
+  "주식회사 빈티지하우스": "Vintage House Co., Ltd.",
+  "주식회사 Vintage House": "Vintage House Co., Ltd.",
   "정준영": "Jung Junyoung",
   "경기도 김포시 사우중로74번길 29 (사우동) 시그마프라자 7층 뮤직스튜디오":
     "7F Music Studio, Sigma Plaza, 29 Saujung-ro 74beon-gil, Gimpo-si, Gyeonggi-do, Korea",
@@ -1112,18 +1125,45 @@ export function EnglishLanguagePack() {
     };
 
     apply();
+    const observeOptions: MutationObserverInit = {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["placeholder", "aria-label", "title", "alt", "href"],
+    };
+    const pendingRoots = new Set<ParentNode>();
+    let animationFrameId: number | null = null;
+    let observer: MutationObserver | null = null;
 
-    const observer = new MutationObserver((mutations) => {
+    const flush = () => {
+      animationFrameId = null;
+      const roots = Array.from(pendingRoots);
+      pendingRoots.clear();
+
+      observer?.disconnect();
+      roots.forEach((root) => apply(root));
+      observer?.observe(document.body, observeOptions);
+    };
+
+    const schedule = (root: ParentNode | null) => {
+      if (!root) return;
+      pendingRoots.add(root);
+      if (animationFrameId !== null) return;
+      animationFrameId = window.requestAnimationFrame(flush);
+    };
+
+    observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         if (mutation.type === "characterData" && mutation.target instanceof Text) {
-          translateTextNode(mutation.target);
+          schedule(mutation.target.parentElement);
           continue;
         }
 
         mutation.addedNodes.forEach((node) => {
           if (node instanceof Element || node instanceof Text) {
             const root = node instanceof Text ? node.parentElement : node;
-            if (root) apply(root);
+            schedule(root);
           }
         });
 
@@ -1131,19 +1171,12 @@ export function EnglishLanguagePack() {
           mutation.type === "attributes" &&
           mutation.target instanceof Element
         ) {
-          translateElement(mutation.target);
-          localizeLinks(mutation.target);
+          schedule(mutation.target);
         }
       }
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ["placeholder", "aria-label", "title", "alt", "href"],
-    });
+    observer.observe(document.body, observeOptions);
 
     const handleClick = (event: MouseEvent) => {
       if (
@@ -1179,7 +1212,10 @@ export function EnglishLanguagePack() {
     document.addEventListener("click", handleClick, true);
 
     return () => {
-      observer.disconnect();
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      observer?.disconnect();
       document.removeEventListener("click", handleClick, true);
       window.alert = originalAlert;
       window.confirm = originalConfirm;
