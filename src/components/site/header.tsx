@@ -18,11 +18,11 @@ const navLinks = [
 ];
 
 const englishNavLinks = [
-  { label: "Services", href: "/en#services", match: "exact" as const },
-  { label: "Apply", href: "/en/apply", match: "prefix" as const },
+  { label: "Apply", href: "/en/dashboard/new", match: "prefix" as const },
   { label: "Results", href: "/en/track", match: "prefix" as const },
-  { label: "Requirements", href: "/en#requirements", match: "exact" as const },
-  { label: "FAQ", href: "/en#faq", match: "exact" as const },
+  { label: "Guide", href: "/en/guide", match: "prefix" as const },
+  { label: "FAQ", href: "/en/faq", match: "prefix" as const },
+  { label: "Support", href: "/en/support", match: "prefix" as const },
 ];
 
 const authStorageKey = "onside:header-auth-state";
@@ -179,11 +179,14 @@ export function SiteHeader() {
                   {isEnglishRoute ? "Logout" : "로그아웃"}
                 </button>
               </form>
-              <ReliableLink href="/mypage" className={subtleButtonClass}>
+              <ReliableLink
+                href={isEnglishRoute ? "/en/mypage" : "/mypage"}
+                className={subtleButtonClass}
+              >
                 {isEnglishRoute ? "My Page" : "마이페이지"}
               </ReliableLink>
               <ReliableLink
-                href={isEnglishRoute ? "/en/apply" : "/dashboard/new"}
+                href={isEnglishRoute ? "/en/dashboard/new" : "/dashboard/new"}
                 className={primaryButtonClass}
               >
                 {isEnglishRoute ? "Apply Now" : "지금 신청"}
@@ -191,11 +194,14 @@ export function SiteHeader() {
             </>
           ) : (
             <>
-              <ReliableLink href="/login" className={subtleButtonClass}>
+              <ReliableLink
+                href={isEnglishRoute ? "/en/login" : "/login"}
+                className={subtleButtonClass}
+              >
                 {isEnglishRoute ? "Login" : "로그인"}
               </ReliableLink>
               <ReliableLink
-                href={isEnglishRoute ? "/en/apply" : "/dashboard/new"}
+                href={isEnglishRoute ? "/en/dashboard/new" : "/dashboard/new"}
                 className={primaryButtonClass}
               >
                 {isEnglishRoute ? "Apply Now" : "지금 신청"}
