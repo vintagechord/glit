@@ -3,6 +3,7 @@
 import Link from "next/link";
 import * as React from "react";
 
+import { normalizeStationReviewStatus } from "@/constants/review-status";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 
 type StationReview = {
@@ -91,7 +92,7 @@ const paymentMethodLabels: Record<string, string> = {
 
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
-    label: "대기",
+    label: "접수대기",
     tone: "bauhaus-status-chip--waiting",
   },
   SENT: {
@@ -143,11 +144,16 @@ const resultStatusMap: Record<string, { label: string; tone: string }> = {
   },
 };
 
-const getReceptionStatus = (status: string) =>
-  receptionStatusMap[status] ?? {
+const getReceptionStatus = (status: string) => {
+  const normalized = normalizeStationReviewStatus(status);
+  if (normalized === "NOT_SENT") {
+    return receptionStatusMap.NOT_SENT;
+  }
+  return receptionStatusMap.SENT ?? {
     label: "접수",
     tone: "bauhaus-status-chip--neutral",
   };
+};
 
 const getResultStatus = (status: string) =>
   resultStatusMap[status] ?? {

@@ -50,7 +50,7 @@ type TrackResultModalState = {
 
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
-    label: "대기",
+    label: "접수대기",
     tone: "bauhaus-status-chip--waiting",
   },
   SENT: {
@@ -129,12 +129,14 @@ const stageStatusMap = {
 };
 
 function getReceptionStatus(status: string) {
-  return (
-    receptionStatusMap[normalizeStationReviewStatus(status)] ?? {
-      label: "접수",
-      tone: "bauhaus-status-chip--neutral",
-    }
-  );
+  const normalized = normalizeStationReviewStatus(status);
+  if (normalized === "NOT_SENT") {
+    return receptionStatusMap.NOT_SENT;
+  }
+  return receptionStatusMap.SENT ?? {
+    label: "접수",
+    tone: "bauhaus-status-chip--neutral",
+  };
 }
 
 function buildTrackSummaryText(

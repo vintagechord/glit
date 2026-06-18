@@ -247,7 +247,7 @@ const mvRatingLabel = (code?: string | null) => {
 
 const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
-    label: "대기",
+    label: "접수대기",
     tone: "bg-[#f6d64a] text-black dark:text-black",
   },
   SENT: {
@@ -298,11 +298,16 @@ const stationResultFallbackMap: Record<string, { label: string; tone: string }> 
   },
 };
 
-const getReviewReception = (status: string) =>
-  reviewReceptionMap[normalizeStationReviewStatus(status)] ?? {
+const getReviewReception = (status: string) => {
+  const normalized = normalizeStationReviewStatus(status);
+  if (normalized === "NOT_SENT") {
+    return reviewReceptionMap.NOT_SENT;
+  }
+  return reviewReceptionMap.SENT ?? {
     label: "접수",
     tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
   };
+};
 
 const getReviewResult = (status: string) =>
   stationResultFallbackMap[status] ?? {
