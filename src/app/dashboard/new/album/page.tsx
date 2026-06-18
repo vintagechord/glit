@@ -127,7 +127,7 @@ const preparationChecklist = [
 const resultBenefits = [
   "로그인 접수는 마이페이지에 자동 저장됩니다.",
   "비회원 접수도 조회 코드로 진행 상황과 결과를 확인할 수 있습니다.",
-  "방송국별 접수 상태, 트랙 결과, 수정 요청 여부를 한 번에 확인할 수 있습니다.",
+  "방송국별 접수 상태, 적격/부적격 결과, 수정 요청 여부를 한 번에 확인할 수 있습니다.",
 ];
 
 const isTestPackage = (name?: string | null) => name?.startsWith("[테스트]") ?? false;

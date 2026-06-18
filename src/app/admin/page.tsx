@@ -18,7 +18,7 @@ export default function AdminPage() {
       </p>
       <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Link
-          href="/admin/submissions"
+          href="/admin/submissions?type=ALBUM"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">

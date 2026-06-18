@@ -138,9 +138,9 @@ const buildTrackSummaryText = (
   counts: { approved: number; rejected: number; pending: number },
   separator: string,
 ) => {
-  const parts = [`${counts.approved}곡 통과`];
+  const parts = [`${counts.approved}곡 적격`];
   if (counts.rejected > 0) {
-    parts.push(`${counts.rejected}곡 불통과`);
+    parts.push(`${counts.rejected}곡 부적격`);
   }
   if (counts.pending > 0) {
     parts.push(`${counts.pending}곡 대기`);
@@ -247,7 +247,7 @@ const mvRatingLabel = (code?: string | null) => {
 
 const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
-    label: "접수대기",
+    label: "대기",
     tone: "bg-[#f6d64a] text-black dark:text-black",
   },
   SENT: {
@@ -255,15 +255,15 @@ const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
     tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   },
   RECEIVED: {
-    label: "심의진행중",
-    tone: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
+    label: "접수완료",
+    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   },
   APPROVED: {
-    label: "결과통보",
+    label: "적격",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   REJECTED: {
-    label: "결과통보",
+    label: "부적격",
     tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
   NEEDS_FIX: {
@@ -274,22 +274,22 @@ const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
 
 const reviewResultMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
-    label: "통과",
+    label: "적격",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   REJECTED: {
-    label: "불통과",
+    label: "부적격",
     tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
 };
 
 const stationResultFallbackMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
-    label: "결과통보",
+    label: "적격",
     tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
   },
   REJECTED: {
-    label: "결과통보",
+    label: "부적격",
     tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
   },
   NEEDS_FIX: {
@@ -432,29 +432,41 @@ export function SubmissionDetailClient({
     if (submission.status === "IN_PROGRESS") return 2;
     return 1;
   })();
-  const isReviewComplete =
-    (isMvDistribution && Boolean(submission.mv_desired_rating) && hasResultSignal) ||
-    (isMvBroadcast && hasResultSignal);
-  const canDownloadMvReviewAssets =
+  const hasMvRatingResult =
     isMvDistribution && Boolean(submission.mv_desired_rating) && hasResultSignal;
+  const hasMvCertificate =
+    isMvDistribution && Boolean(submission.certificate_b2_path);
+  const isReviewComplete =
+    (isMvDistribution && hasMvRatingResult && hasMvCertificate) ||
+    (isMvBroadcast && hasResultSignal);
+  const canDownloadMvReviewAssets = hasMvRatingResult;
   const flowStatusNotice = (() => {
     if (isReviewComplete) {
       return {
-        message: "모든 심의 절차가 완료되었습니다.",
+        message: "심의 절차가 완료되었습니다.",
         label: "완료",
         tone: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100",
       };
     }
+    if (hasMvRatingResult) {
+      return {
+        message: "심의 등급이 확정되었고 필증 업로드를 기다리고 있습니다.",
+        label: "필증",
+        tone: "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
+      };
+    }
     if (flowIndex === 3) {
       return {
-        message: "심의 결과 통보가 진행 중입니다.",
+        message: isMvSubmission
+          ? "방송국별 심의 등급 또는 결과가 반영되고 있습니다."
+          : "방송국별 적격/부적격 결과가 반영되고 있습니다.",
         label: "결과",
         tone: "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
       };
     }
     if (isPaymentDone) {
       return {
-        message: "결제가 확인되었고 심의 절차가 진행됩니다.",
+        message: "결제가 확인되었고 방송사 접수와 심의가 진행됩니다.",
         label: "진행",
         tone: "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
       };
@@ -534,7 +546,7 @@ export function SubmissionDetailClient({
       return;
     }
     if (!canDownloadMvReviewAssets) {
-      alert("심의 결과 통지 후 다운로드할 수 있습니다.");
+      alert("심의 등급 확정 후 다운로드할 수 있습니다.");
       return;
     }
     try {
@@ -550,7 +562,7 @@ export function SubmissionDetailClient({
       return;
     }
     if (!canDownloadMvReviewAssets) {
-      alert("심의 결과 통지 후 다운로드할 수 있습니다.");
+      alert("심의 등급 확정 후 다운로드할 수 있습니다.");
       return;
     }
     if (!submission.certificate_b2_path) {
@@ -659,30 +671,43 @@ export function SubmissionDetailClient({
       const normalizedStatus = normalizeStationReviewStatus(review.status);
       const hasDelivery =
         normalizedStatus === "APPROVED" ||
+        normalizedStatus === "REJECTED" ||
         normalizedStatus === "NEEDS_FIX" ||
         summary.counts.approved > 0 ||
         summary.counts.rejected > 0;
+      const hasSubmission =
+        normalizedStatus === "SENT" || hasDelivery;
       const isProcessing =
-        normalizedStatus === "SENT" || normalizedStatus === "RECEIVED";
+        normalizedStatus === "SENT";
       const hasActionNeeded =
+        normalizedStatus === "REJECTED" ||
         normalizedStatus === "NEEDS_FIX" ||
         summary.counts.rejected > 0;
       const hasApproved =
         normalizedStatus === "APPROVED" || summary.counts.approved > 0;
 
       acc.total += 1;
+      if (hasSubmission) acc.submitted += 1;
       if (hasDelivery) acc.delivered += 1;
       if (isProcessing) acc.processing += 1;
       if (hasActionNeeded) acc.actionNeeded += 1;
       if (hasApproved) acc.approved += 1;
       return acc;
     },
-    { total: 0, delivered: 0, processing: 0, actionNeeded: 0, approved: 0 },
+    {
+      total: 0,
+      submitted: 0,
+      delivered: 0,
+      processing: 0,
+      actionNeeded: 0,
+      approved: 0,
+    },
   );
-  const isMvResultDelivered =
-    isMvSubmission &&
-    (isReviewComplete ||
-      (stationSummary.total > 0 && stationSummary.delivered >= stationSummary.total));
+  const isMvResultDelivered = isMvDistribution
+    ? canDownloadMvReviewAssets
+    : isMvBroadcast &&
+      (isReviewComplete ||
+        (stationSummary.total > 0 && stationSummary.delivered >= stationSummary.total));
   const summaryCards = [
     {
       label: "접수 상태",
@@ -711,24 +736,40 @@ export function SubmissionDetailClient({
             : undefined,
     },
     {
-      label: isMvSubmission ? "결과 통보" : "방송국 진행",
+      label: isMvDistribution
+        ? "등급/필증"
+        : isMvBroadcast
+          ? "방송국 결과"
+          : "방송국 결과",
       value: isMvSubmission
-        ? isMvResultDelivered
-          ? "결과 통보 완료"
-          : "결과 통보 대기"
+        ? isMvDistribution
+          ? canDownloadMvReviewAssets
+            ? hasMvCertificate
+              ? "등급/필증 완료"
+              : "등급 확정"
+            : "등급 대기"
+          : isMvResultDelivered
+            ? "결과 반영 완료"
+            : "결과 반영 대기"
         : stationSummary.total > 0
           ? `${stationSummary.delivered}/${stationSummary.total} 결과 반영`
           : "진행 정보 대기",
       tone:
-        isMvResultDelivered || (!isMvSubmission && stationSummary.delivered > 0)
+        isMvResultDelivered ||
+          canDownloadMvReviewAssets ||
+          (!isMvSubmission && stationSummary.delivered > 0)
           ? "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]"
           : "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white",
       description: isMvSubmission
-        ? isMvResultDelivered
-          ? isMvDistribution
-            ? "심의 등급과 결과가 확정되었습니다."
-            : "심의 결과가 확정되었습니다."
-          : "관리자 결과 저장 후 진행표가 마감됩니다."
+        ? isMvDistribution
+          ? canDownloadMvReviewAssets
+            ? hasMvCertificate
+              ? "등급 이미지, 가이드, 필증 다운로드 가능"
+              : "등급 이미지와 가이드는 가능, 필증은 업로드 대기"
+            : "관리자가 등급을 확정하면 다운로드가 열립니다."
+          : isMvResultDelivered
+            ? "방송사별 심의 결과가 반영되었습니다."
+            : "방송사별 심의 결과 등록 후 진행표가 마감됩니다."
         : stationSummary.actionNeeded > 0
           ? `확인 필요 ${stationSummary.actionNeeded}곳`
           : stationSummary.processing > 0
@@ -738,6 +779,131 @@ export function SubmissionDetailClient({
               : "결제 확인 후 방송국 진행 정보가 표시됩니다.",
     },
   ];
+  const finalProcessLabel = isMvSubmission
+    ? isMvDistribution
+      ? "심의 등급 및 필증 발급"
+      : "방송사 심의 결과 통보"
+    : "적격/부적격 통보";
+  const finalProcessValue = isMvDistribution
+    ? canDownloadMvReviewAssets
+      ? hasMvCertificate
+        ? `${mvRatingLabel(submission.mv_desired_rating)} / 필증 다운로드 가능`
+        : `${mvRatingLabel(submission.mv_desired_rating)} / 필증 준비 중`
+      : "등급 확정 대기"
+    : stationSummary.total > 0
+      ? `${stationSummary.delivered}/${stationSummary.total} 결과 반영`
+      : "방송사 접수 후 반영";
+  const finalProcessState =
+    isMvDistribution
+      ? canDownloadMvReviewAssets && hasMvCertificate
+        ? "done"
+        : canDownloadMvReviewAssets || stationSummary.delivered > 0
+          ? "active"
+          : "pending"
+      : stationSummary.total > 0 && stationSummary.delivered >= stationSummary.total
+        ? "done"
+        : stationSummary.delivered > 0
+          ? "active"
+          : "pending";
+  const processSteps: Array<{
+    label: string;
+    value: string;
+    state: "done" | "active" | "pending";
+  }> = [
+    {
+      label: "신청서 작성 및 결제",
+      value: isPaymentDone
+        ? "신청서 제출 및 결제 완료"
+        : isPaymentPending
+          ? "신청서 제출, 결제 대기"
+          : "신청서 확인 중",
+      state: isPaymentDone ? "done" : "active",
+    },
+    {
+      label: "결제 확인",
+      value: paymentStatusLabel,
+      state: isPaymentDone
+        ? "done"
+        : submission.status === "DRAFT"
+          ? "pending"
+          : "active",
+    },
+    {
+      label: "방송사 접수 완료",
+      value:
+        stationSummary.total > 0
+          ? `${stationSummary.submitted}/${stationSummary.total} 접수`
+          : "결제 확인 후 생성",
+      state:
+        stationSummary.total > 0 &&
+        stationSummary.submitted >= stationSummary.total
+          ? "done"
+          : stationSummary.submitted > 0 || isPaymentDone
+            ? "active"
+            : "pending",
+    },
+    {
+      label: finalProcessLabel,
+      value: finalProcessValue,
+      state: finalProcessState,
+    },
+  ];
+  const processDescription = isMvDistribution
+    ? "온라인 업로드용 뮤직비디오는 등급 확정 후 등급 이미지와 가이드를 제공하고, 필증은 관리자 업로드 후 다운로드됩니다."
+    : isMvBroadcast
+      ? "방송용 뮤직비디오는 방송사별 심의 결과만 진행표에 반영됩니다."
+      : "음반 심의는 방송사별 접수 완료 후 적격/부적격 결과가 순차 반영됩니다.";
+  const renderProcessSection = () => (
+    <div className={detailPanelClass}>
+      <div>
+        <p className={detailKickerClass}>
+          심의 진행 단계
+        </p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          {processDescription}
+        </p>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {processSteps.map((step, index) => (
+          <div
+            key={step.label}
+            className={[
+              "min-h-[128px] rounded-[8px] border-2 px-4 py-3 text-sm shadow-[3px_3px_0_#111111] dark:shadow-[3px_3px_0_#f2cf27]",
+              step.state === "done"
+                ? "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]"
+                : step.state === "active"
+                  ? "border-[#111111] bg-[#f2cf27] text-[#111111] dark:border-[#f2cf27]"
+                  : "border-border bg-background text-muted-foreground",
+            ].join(" ")}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span
+                className={[
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-black",
+                  step.state === "done"
+                    ? "border-white/70 bg-white/20 text-white dark:border-[#06111f]/40 dark:text-[#06111f]"
+                    : step.state === "active"
+                      ? "border-[#111111] bg-[#111111] text-[#f2cf27]"
+                      : "border-border bg-muted text-muted-foreground",
+                ].join(" ")}
+              >
+                {index + 1}
+              </span>
+              <span className="text-[11px] font-black uppercase tracking-normal opacity-80">
+                {step.state === "done"
+                  ? "완료"
+                  : step.state === "active"
+                    ? "진행"
+                    : "대기"}
+              </span>
+            </div>
+            <p className="mt-4 font-black tracking-normal">{step.label}</p>
+            <p className="mt-2 text-xs leading-5 opacity-85">{step.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
   const renderStationReviewSection = () => (
     <div className={detailPanelClass}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -754,7 +920,7 @@ export function SubmissionDetailClient({
                 : "bauhaus-status-chip--waiting"
             } bauhaus-status-chip--compact`}
           >
-            {isMvResultDelivered ? "결과 통보 완료" : "결과 통보 대기"}
+            {isMvResultDelivered ? "결과 반영 완료" : "결과 반영 대기"}
           </span>
         ) : (
           <>
@@ -765,7 +931,7 @@ export function SubmissionDetailClient({
               결과 반영 {stationSummary.delivered}곳
             </span>
             <span className="bauhaus-status-chip bauhaus-status-chip--success bauhaus-status-chip--compact">
-              통과 반영 {stationSummary.approved}곳
+              적격 반영 {stationSummary.approved}곳
             </span>
             <span className="bauhaus-status-chip bauhaus-status-chip--waiting bauhaus-status-chip--compact">
               확인 필요 {stationSummary.actionNeeded}곳
@@ -785,10 +951,10 @@ export function SubmissionDetailClient({
                   <span className="justify-self-center text-center">접수 상태</span>
                   <span className="justify-self-center text-center">
                     {isMvDistribution
-                      ? "등급 분류"
+                      ? "심의 등급"
                       : isMvBroadcast
                         ? "심의 결과"
-                        : "트랙 결과"}
+                        : "적격/부적격"}
                   </span>
                   <span className="hidden justify-self-center text-center sm:block">
                     최근 업데이트
@@ -798,13 +964,7 @@ export function SubmissionDetailClient({
                   {renderStationReviews.map((review) => {
                     const showReviewUpdate =
                       latestStationReviewUpdate?.id === review.id;
-                    const reception = isReviewComplete
-                      ? {
-                        label: "결과 통보",
-                        tone:
-                          "bg-[#1f7a5a] text-white dark:bg-[#46b783] dark:text-[#06111f]",
-                      }
-                      : getReviewReception(review.status);
+                    const reception = getReviewReception(review.status);
                     const trackInfo = buildTrackSummary(review.track_results);
                     const note = review.result_note?.trim() || null;
                     const hasApprovedTrack = trackInfo.counts.approved > 0;
@@ -833,7 +993,7 @@ export function SubmissionDetailClient({
                       pending: pendingCount,
                     };
                     const resultTone =
-                      isMvDistribution && isReviewComplete && submission.mv_desired_rating
+                      isMvDistribution && canDownloadMvReviewAssets && submission.mv_desired_rating
                         ? {
                           label: mvRatingLabel(submission.mv_desired_rating),
                           tone:
@@ -845,7 +1005,7 @@ export function SubmissionDetailClient({
                             ? reviewResultMap.REJECTED
                             : trackInfo.outcome === "PARTIAL"
                               ? {
-                                label: "부분 통과",
+                                label: "부분 적격",
                                 tone:
                                   "bg-[#f6d64a] text-black dark:text-black",
                               }
@@ -962,7 +1122,7 @@ export function SubmissionDetailClient({
             </div>
           ) : (
             <div className="rounded-[8px] border-2 border-dashed border-border bg-background px-4 py-3 text-[13px] text-muted-foreground">
-              심의 등급과 결과 파일은 결과 통지 후 제공됩니다.
+              심의 등급 확정 후 등급 이미지와 가이드가 제공됩니다. 필증은 관리자 업로드 후 다운로드할 수 있습니다.
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
@@ -977,7 +1137,7 @@ export function SubmissionDetailClient({
             >
               {canDownloadMvReviewAssets
                 ? `${mvRatingLabel(submission.mv_desired_rating)} 이미지 다운로드`
-                : "결과 통지 후 다운로드"}
+                : "등급 확정 후 다운로드"}
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -992,7 +1152,7 @@ export function SubmissionDetailClient({
             >
               {canDownloadMvReviewAssets
                 ? "가이드 PDF 다운로드"
-                : "결과 통지 후 다운로드"}
+                : "등급 확정 후 다운로드"}
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1009,7 +1169,7 @@ export function SubmissionDetailClient({
                 ? submission.certificate_original_name
                 : canDownloadMvReviewAssets
                   ? "필증 미등록"
-                  : "결과 통지 후 다운로드"}
+                  : "등급 확정 후 다운로드"}
             </button>
             {!submission.certificate_b2_path ? (
               <span className="text-xs text-muted-foreground">
@@ -1193,7 +1353,7 @@ export function SubmissionDetailClient({
         throw new Error("온라인 업로드용 뮤직비디오 심의만 등급표를 다운로드할 수 있습니다.");
       }
       if (!canDownloadMvReviewAssets) {
-        throw new Error("심의 결과 통지 후 다운로드할 수 있습니다.");
+        throw new Error("심의 등급 확정 후 다운로드할 수 있습니다.");
       }
       if (!submission.mv_desired_rating) {
         throw new Error("등급이 설정되지 않았습니다.");
@@ -1371,7 +1531,8 @@ export function SubmissionDetailClient({
         </div>
       </section>
 
-      <div className="mt-8">{renderStationReviewSection()}</div>
+      <div className="mt-8">{renderProcessSection()}</div>
+      <div className="mt-6">{renderStationReviewSection()}</div>
       <div className="mt-6">{renderMvReviewAssetsSection()}</div>
 
       {/* 관리자용 등급/필증 편집 UI는 관리자 페이지에서만 제공 */}
@@ -1746,7 +1907,7 @@ export function SubmissionDetailClient({
               결과 반영 {stationSummary.delivered}곳
             </span>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200">
-              통과 반영 {stationSummary.approved}곳
+              적격 반영 {stationSummary.approved}곳
             </span>
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 dark:border-white/15 dark:bg-white/8 dark:text-white/80">
               확인 필요 {stationSummary.actionNeeded}곳
@@ -1764,10 +1925,10 @@ export function SubmissionDetailClient({
                       <span className="justify-self-center text-center">접수 상태</span>
                       <span className="justify-self-center text-center">
                         {isMvDistribution
-                          ? "등급 분류"
+                          ? "심의 등급"
                           : isMvBroadcast
                             ? "심의 결과"
-                            : "트랙 결과"}
+                            : "적격/부적격"}
                       </span>
                       <span className="hidden justify-self-center text-center sm:block">
                         최근 업데이트
@@ -1777,9 +1938,7 @@ export function SubmissionDetailClient({
                       {renderStationReviews.map((review) => {
                         const showReviewUpdate =
                           latestStationReviewUpdate?.id === review.id;
-                        const reception = isReviewComplete
-                          ? { label: "결과 통보", tone: "bg-emerald-500/15 text-emerald-800" }
-                          : getReviewReception(review.status);
+                        const reception = getReviewReception(review.status);
                         const trackInfo = buildTrackSummary(review.track_results);
                         const note = review.result_note?.trim() || null;
                         const hasApprovedTrack = trackInfo.counts.approved > 0;
@@ -1808,7 +1967,7 @@ export function SubmissionDetailClient({
                           pending: pendingCount,
                         };
                         const resultTone =
-                          isMvDistribution && isReviewComplete && submission.mv_desired_rating
+                          isMvDistribution && canDownloadMvReviewAssets && submission.mv_desired_rating
                             ? {
                               label: mvRatingLabel(submission.mv_desired_rating),
                               tone: "bg-emerald-500/15 text-emerald-800",
@@ -1819,7 +1978,7 @@ export function SubmissionDetailClient({
                                 ? reviewResultMap.REJECTED
                                 : trackInfo.outcome === "PARTIAL"
                                   ? {
-                                    label: "부분 통과",
+                                    label: "부분 적격",
                                     tone:
                                       "bg-[#f6d64a] text-black dark:text-black",
                                   }
@@ -1943,9 +2102,9 @@ export function SubmissionDetailClient({
                 {trackResultModal.summary.results.map((track, index) => {
                   const status =
                     track.status === "APPROVED"
-                      ? { label: "통과", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200" }
+                      ? { label: "적격", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200" }
                       : track.status === "REJECTED"
-                        ? { label: "불통과", tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200" }
+                        ? { label: "부적격", tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200" }
                         : { label: "대기", tone: "bg-slate-500/10 text-slate-600 dark:text-slate-300" };
                   const trackLabel =
                     track.title ||
@@ -1980,7 +2139,7 @@ export function SubmissionDetailClient({
             {trackResultModal.resultNote ? (
               <div className="mt-4 rounded-[8px] border-2 border-[#d9362c] bg-rose-50 p-4 dark:bg-[#2a1111]">
                 <p className="text-xs font-black uppercase tracking-normal text-[#d9362c] dark:text-[#ff6258]">
-                  불통과 사유
+                  부적격 사유
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-rose-700 dark:text-rose-100">
                   {trackResultModal.resultNote}
@@ -2025,8 +2184,8 @@ export function SubmissionDetailClient({
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
               {radioLinksModal.stationName
-                ? `${radioLinksModal.stationName} 통과/부분통과 · 라디오 신청곡 올리기`
-                : "통과/부분통과 · 라디오 신청곡 올리기"}
+                ? `${radioLinksModal.stationName} 적격/부분 적격 · 라디오 신청곡 올리기`
+                : "적격/부분 적격 · 라디오 신청곡 올리기"}
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
               방송사별 라디오 신청곡/사연 접수 페이지로 이동합니다.

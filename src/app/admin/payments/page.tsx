@@ -72,7 +72,7 @@ export default async function AdminPaymentsPage() {
           </p>
         </div>
         <Link
-          href="/admin/submissions"
+          href="/admin/submissions?type=ALBUM"
           className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
         >
           접수 관리로 이동

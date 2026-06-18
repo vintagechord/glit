@@ -170,7 +170,7 @@ export default function Home() {
             href="/forms"
             className="self-end text-sm font-semibold text-muted-foreground transition hover:text-foreground md:self-auto"
           >
-            온라인 접수가 어렵다면 구버전 신청서 작성 방식 안내 →
+            구버전 사이트 접수 →
           </ReliableLink>
         </div>
 

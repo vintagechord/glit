@@ -2,6 +2,7 @@
 
 import React from "react";
 
+import { AdminSaveToast } from "@/components/admin/save-toast";
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 
 type UploadedAttachment = {
@@ -23,6 +24,10 @@ export default function AdminFilesPage() {
   const [kind, setKind] = React.useState(kindOptions[0]?.value ?? "MV_RATING_FILE_ALL");
   const [files, setFiles] = React.useState<FileList | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [savePopup, setSavePopup] = React.useState<{
+    id: number;
+    message: string;
+  } | null>(null);
   const [isUploading, setIsUploading] = React.useState(false);
   const [uploaded, setUploaded] = React.useState<UploadedAttachment[]>([]);
   const [freeUploaded, setFreeUploaded] = React.useState<
@@ -102,7 +107,9 @@ export default function AdminFilesPage() {
           ]);
         }
         resetForm();
-        setNotice("업로드 완료되었습니다.");
+        const successMessage = "업로드 완료되었습니다.";
+        setNotice(successMessage);
+        setSavePopup({ id: Date.now(), message: successMessage });
       } else {
         const uploadedFree: { objectKey: string; url?: string | null }[] = [];
         for (const fileItem of Array.from(files)) {
@@ -142,7 +149,10 @@ export default function AdminFilesPage() {
         }
         setFreeUploaded((prev) => [...uploadedFree, ...prev]);
         resetForm();
-        setNotice("자유 업로드 완료. objectKey를 복사해 접수에 연결하거나 결과에 사용하세요.");
+        const successMessage =
+          "자유 업로드가 완료되었습니다. objectKey를 복사해 접수에 연결하거나 결과에 사용하세요.";
+        setNotice(successMessage);
+        setSavePopup({ id: Date.now(), message: successMessage });
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "업로드에 실패했습니다.");
@@ -153,6 +163,9 @@ export default function AdminFilesPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10">
+      {savePopup ? (
+        <AdminSaveToast key={savePopup.id} message={savePopup.message} />
+      ) : null}
       <PendingOverlay show={isUploading} label="파일 업로드 중..." />
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
         관리자 · 파일 업로드

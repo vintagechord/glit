@@ -50,7 +50,7 @@ type TrackResultModalState = {
 
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
-    label: "접수대기",
+    label: "대기",
     tone: "bauhaus-status-chip--waiting",
   },
   SENT: {
@@ -58,15 +58,15 @@ const receptionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bauhaus-status-chip--info",
   },
   RECEIVED: {
-    label: "심의진행중",
-    tone: "bauhaus-status-chip--progress",
+    label: "접수완료",
+    tone: "bauhaus-status-chip--info",
   },
   APPROVED: {
-    label: "결과통보",
+    label: "적격",
     tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
-    label: "결과통보",
+    label: "부적격",
     tone: "bauhaus-status-chip--danger",
   },
   NEEDS_FIX: {
@@ -77,22 +77,22 @@ const receptionStatusMap: Record<string, { label: string; tone: string }> = {
 
 const trackResultStatusMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
-    label: "통과",
+    label: "적격",
     tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
-    label: "불통과",
+    label: "부적격",
     tone: "bauhaus-status-chip--danger",
   },
 };
 
 const stationResultFallbackMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
-    label: "결과통보",
+    label: "적격",
     tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
-    label: "결과통보",
+    label: "부적격",
     tone: "bauhaus-status-chip--danger",
   },
   NEEDS_FIX: {
@@ -141,9 +141,9 @@ function buildTrackSummaryText(
   counts: { approved: number; rejected: number; pending: number },
   separator: string,
 ) {
-  const parts = [`${counts.approved}곡 통과`];
+  const parts = [`${counts.approved}곡 적격`];
   if (counts.rejected > 0) {
-    parts.push(`${counts.rejected}곡 불통과`);
+    parts.push(`${counts.rejected}곡 부적격`);
   }
   if (counts.pending > 0) {
     parts.push(`${counts.pending}곡 대기`);
@@ -163,7 +163,7 @@ function getResultStatus(
         ? trackResultStatusMap.REJECTED
         : summary.outcome === "PARTIAL"
           ? {
-            label: "부분통과",
+            label: "부분 적격",
             tone: "bauhaus-status-chip--waiting",
           }
           : stationResultFallbackMap[review.status] ?? {
@@ -173,7 +173,7 @@ function getResultStatus(
 
   const summaryText =
     summary.outcome === "PARTIAL" && showPartialTrackBreakdown
-      ? `${summary.counts.approved}곡 통과 / ${summary.counts.rejected}곡 불통과`
+      ? `${summary.counts.approved}곡 적격 / ${summary.counts.rejected}곡 부적격`
       : null;
 
   return { ...base, summaryText };
@@ -492,10 +492,10 @@ export function HomeReviewPanel({
   const submissionLabels = getSubmissionLabels(activeSubmission);
   const trackResultLabel =
     activeSubmission?.type === "MV_DISTRIBUTION"
-      ? "등급 분류"
+      ? "심의 등급"
       : activeSubmission?.type === "MV_BROADCAST"
         ? "심의 결과"
-        : "트랙 결과";
+        : "적격/부적격";
   const isLive =
     (forceLiveBadge && isLoggedIn) ||
     (isLoggedIn &&
@@ -1251,12 +1251,12 @@ export function HomeReviewPanel({
                 const status =
                   track.status === "APPROVED"
                     ? {
-                      label: "통과",
+                      label: "적격",
                       tone: "bauhaus-status-chip--success",
                     }
                     : track.status === "REJECTED"
                       ? {
-                        label: "불통과",
+                        label: "부적격",
                         tone: "bauhaus-status-chip--danger",
                       }
                       : {

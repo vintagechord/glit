@@ -891,7 +891,7 @@ export function AlbumWizard({
     });
     if (hasProfanity) {
       const shouldProceed = window.confirm(
-        "욕설이 감지되었습니다. 욕설이 있는 경우 심의 불통과 확률이 높습니다",
+        "욕설이 감지되었습니다. 욕설이 있는 경우 심의 부적격 가능성이 높습니다",
       );
       if (!shouldProceed) return;
     }

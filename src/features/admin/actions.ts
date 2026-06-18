@@ -17,7 +17,6 @@ import {
   type ReviewStatus,
   stationReviewStatusEnum,
   stationReviewStatusOptions,
-  stationReviewStatusValues,
 } from "@/constants/review-status";
 import {
   areTrackResultsEquivalent,
@@ -733,11 +732,11 @@ export async function updateSubmissionMvRatingAction(
 
   await insertEvent(
     parsed.data.submissionId,
-    `MV 등급 설정 및 결과통보 완료: ${parsed.data.rating}`,
+    `MV 등급 설정 완료: ${parsed.data.rating}`,
     "RESULT_UPDATE",
   );
 
-  return { message: "MV 등급과 결과통보 상태가 저장되었습니다." };
+  return { message: "MV 등급이 저장되었습니다." };
 }
 
 export async function updateSubmissionMvRatingFormAction(
@@ -1300,7 +1299,7 @@ export async function updateStationReviewAction(
     if (trackError) {
       const fallbackMessage = trackError.message ?? "track_results_json update error";
       warning = isMissingTrackResultsColumn(trackError)
-        ? "TRACK_RESULTS_COLUMN_MISSING: station_reviews.track_results_json 컬럼이 없어 트랙 결과를 저장하지 못했습니다. 최신 DB 마이그레이션을 적용하세요."
+        ? "TRACK_RESULTS_COLUMN_MISSING: station_reviews.track_results_json 컬럼이 없어 트랙별 적격/부적격 결과를 저장하지 못했습니다. 최신 DB 마이그레이션을 적용하세요."
         : `TRACK_RESULTS_SAVE_FAILED: ${fallbackMessage}`;
       console.error("[station_review][save][track_results][update][error]", {
         ...logContext,
@@ -1471,9 +1470,14 @@ export async function updateStationReviewFormAction(
     stationId = fallback.stationId;
   }
 
-  const status = stationReviewStatusValues.includes(statusRaw as typeof stationReviewStatusValues[number])
-    ? (statusRaw as typeof stationReviewStatusValues[number])
-    : "NOT_SENT";
+  const selectableStationStatusValues = stationReviewStatusOptions.map(
+    (option) => option.value,
+  );
+  const status = selectableStationStatusValues.includes(
+    statusRaw as (typeof selectableStationStatusValues)[number],
+  )
+    ? (statusRaw as (typeof selectableStationStatusValues)[number])
+    : "SENT";
 
   let trackResults: Array<z.infer<typeof trackResultSchema>> | undefined = undefined;
   const trackResultsWarnings: string[] = [];
@@ -2451,39 +2455,18 @@ export async function deleteArtistsFormAction(formData: FormData): Promise<void>
 export async function saveSubmissionAdminFormAction(
   formData: FormData,
 ): Promise<void> {
-  const submissionId = String(formData.get("submissionId") ?? "");
+  const submissionId = String(formData.get("submissionId") ?? "").trim();
   if (!submissionId) {
     return;
   }
 
-  const supabase = await createAdminClient();
-  const { data: existingReviewsData, error: existingReviewsError } = await supabase
-    .from("station_reviews")
-    .select(
-      `id, status, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, station_id, station:stations ( code )`,
-    )
-    .eq("submission_id", submissionId);
-  let existingReviews = existingReviewsData ?? [];
-
-  const missingJsonColumn =
-    existingReviewsError?.code === "42703" ||
-    existingReviewsError?.message?.toLowerCase().includes("track_results_json");
-  if (existingReviewsError && missingJsonColumn) {
-    const fallback = await supabase
-      .from("station_reviews")
-      .select(`id, status, ${LEGACY_TRACK_RESULTS_SELECT}, station_id, station:stations ( code )`)
-      .eq("submission_id", submissionId);
-    existingReviews = fallback.data ?? existingReviews;
-  }
-
-  const reviewMap = new Map(
-    (existingReviews ?? []).map((review) => [review.id, review]),
-  );
-
-  console.info("[admin save] start", {
-    submissionId,
-    reviewCount: reviewMap.size,
-  });
+  const redirectWithError = (message: string): never => {
+    redirect(
+      `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
+        message,
+      )}`,
+    );
+  };
 
   const status = String(formData.get("status") ?? "").trim();
   const adminMemo = String(formData.get("adminMemo") ?? "").trim();
@@ -2491,245 +2474,145 @@ export async function saveSubmissionAdminFormAction(
   const title = String(formData.get("title") ?? "").trim();
   const artistName = String(formData.get("artistName") ?? "").trim();
 
+  const parsedSubmissionId = uuidValueSchema.safeParse(submissionId);
+  const parsedStatus = reviewStatusEnum.safeParse(status);
+  const parsedPaymentStatus = paymentStatusEnum.safeParse(paymentStatus);
+
+  if (!parsedSubmissionId.success) {
+    redirectWithError("접수 ID가 유효하지 않습니다.");
+  }
+  if (!parsedStatus.success) {
+    redirectWithError("접수 상태 값을 확인해주세요.");
+  }
+  if (!parsedPaymentStatus.success) {
+    redirectWithError("결제 상태 값을 확인해주세요.");
+  }
+
+  const supabase = createAdminClient();
+  const { data: currentSubmission, error: currentSubmissionError } = await supabase
+    .from("submissions")
+    .select("id, status, payment_status, title, artist_name, admin_memo")
+    .eq("id", submissionId)
+    .maybeSingle();
+
+  if (currentSubmissionError) {
+    console.error("admin save submission load error", currentSubmissionError, {
+      submissionId,
+    });
+    redirectWithError(currentSubmissionError.message ?? "submission load error");
+  }
+
+  if (!currentSubmission) {
+    redirectWithError("접수를 찾을 수 없습니다.");
+  }
+
+  const currentSubmissionRow = currentSubmission as NonNullable<
+    typeof currentSubmission
+  >;
+  const currentStatus = currentSubmissionRow.status as ReviewStatus;
+  const currentPaymentStatus = currentSubmissionRow.payment_status as PaymentStatus;
+  let nextStatus = parsedStatus.data as ReviewStatus;
+  const nextPaymentStatus = parsedPaymentStatus.data as PaymentStatus;
+
+  if (
+    nextPaymentStatus === "PAID" &&
+    (currentStatus === "WAITING_PAYMENT" || currentStatus === "SUBMITTED") &&
+    status === currentStatus
+  ) {
+    nextStatus = "IN_PROGRESS";
+  }
+
   const submissionUpdate: Record<string, unknown> = {};
-  if (status) submissionUpdate.status = status;
+  submissionUpdate.status = nextStatus;
   submissionUpdate.admin_memo = adminMemo || null;
-  if (paymentStatus) submissionUpdate.payment_status = paymentStatus;
+  submissionUpdate.payment_status = nextPaymentStatus;
   if (title) submissionUpdate.title = title;
   if (artistName) submissionUpdate.artist_name = artistName;
 
-  if (Object.keys(submissionUpdate).length > 0) {
-    const { error: submissionError } = await supabase
-      .from("submissions")
-      .update(submissionUpdate)
-      .eq("id", submissionId);
-    if (submissionError) {
-      console.error("admin save submission status error", submissionError, {
-        submissionId,
-        update: submissionUpdate,
-      });
-      redirect(
-        `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
-          submissionError.message ?? "submission update error",
-        )}`,
-      );
-    }
-  }
+  const { data: updatedSubmission, error: submissionError } = await supabase
+    .from("submissions")
+    .update(submissionUpdate)
+    .eq("id", submissionId)
+    .select("id, status, payment_status, title, artist_name, admin_memo")
+    .maybeSingle();
 
-  const entries = Array.from(formData.entries());
-  let reviewIds = Array.from(reviewMap.keys());
-  if (!reviewIds.length) {
-    reviewIds = formData
-      .getAll("reviewIds")
-      .map((value) => String(value))
-      .filter((id) => id.length > 0 && z.string().uuid().safeParse(id).success);
-  }
-
-  let lastError: { message: string; code?: string } | null = null;
-
-  const updateStationReview = async (
-    reviewId: string,
-    stationCode: string | null,
-    payload: {
-      status: z.infer<typeof stationReviewStatusEnum>;
-      result_note: string | null;
-      track_results: unknown;
-      station_id?: string | null;
-    },
-  ) => {
-    const logPrefix = `[admin save] review ${reviewId} (${stationCode ?? "unknown"})`;
-    const attempt = async (includeTracks: boolean) => {
-      const upsertPayload = includeTracks
-        ? {
-            status: payload.status,
-            result_note: payload.result_note,
-            station_id: payload.station_id,
-            [STATION_REVIEW_TRACK_RESULTS_COLUMN]: payload.track_results,
-          }
-        : {
-            status: payload.status,
-            result_note: payload.result_note,
-            station_id: payload.station_id,
-          };
-      const { data, error } = await supabase
-        .from("station_reviews")
-        .update(upsertPayload)
-        .eq("id", reviewId)
-        .select(`id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, station_id`);
-      if (!error && (!data || data.length === 0)) {
-        const insertResult = await supabase
-          .from("station_reviews")
-          .insert({ id: reviewId, submission_id: submissionId, ...upsertPayload })
-          .select(`id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, station_id`);
-        return insertResult;
-      }
-      return { data, error };
-    };
-
-    let columnMissing = false;
-    let { data, error } = await attempt(true);
-    if (error && isMissingTrackResultsColumn(error)) {
-      console.warn(`${logPrefix} track_results_json column missing`, { error });
-      columnMissing = true;
-
-      const fallbackPayload = {
-        status: payload.status,
-        result_note: payload.result_note,
-        station_id: payload.station_id,
-        [LEGACY_TRACK_RESULTS_COLUMN]: payload.track_results,
-      };
-      const fallback = await supabase
-        .from("station_reviews")
-        .update(fallbackPayload)
-        .eq("id", reviewId)
-        .select(`id, status, result_note, ${LEGACY_TRACK_RESULTS_SELECT}, station_id`);
-      if (!fallback.error && (!fallback.data || fallback.data.length === 0)) {
-        const inserted = await supabase
-          .from("station_reviews")
-          .insert({ id: reviewId, submission_id: submissionId, ...fallbackPayload })
-          .select(`id, status, result_note, ${LEGACY_TRACK_RESULTS_SELECT}, station_id`);
-        data = inserted.data;
-        error = inserted.error;
-      } else {
-        data = fallback.data;
-        error = fallback.error;
-      }
-    }
-
-    console.info(`${logPrefix} update result`, {
-      payload,
-      dataLength: data?.length ?? 0,
-      error,
+  if (submissionError) {
+    console.error("admin save submission status error", submissionError, {
+      submissionId,
+      update: submissionUpdate,
     });
-
-    if (!error && data && data.length > 0) {
-      const refreshed = await supabase
-        .from("station_reviews")
-        .select(
-          columnMissing
-            ? `id, status, result_note, ${LEGACY_TRACK_RESULTS_SELECT}, station_id`
-            : `id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, station_id`,
-        )
-        .eq("id", reviewId)
-        .maybeSingle();
-      console.info(`${logPrefix} refreshed`, { refreshed: refreshed.data, error: refreshed.error });
-    }
-
-    if (columnMissing && !error) {
-      console.warn(`${logPrefix} legacy track_results column used`, {
-        message:
-          "TRACK_RESULTS_LEGACY_COLUMN_USED: station_reviews.track_results 컬럼을 사용 중입니다. 최신 DB 마이그레이션을 적용하세요.",
-      });
-    }
-
-    return { data, error };
-  };
-
-  type StationValue = { code?: unknown } | Array<{ code?: unknown }> | null | undefined;
-  const getStationCode = (value: StationValue): string | null => {
-    if (Array.isArray(value)) {
-      const first = value[0];
-      return typeof first?.code === "string" ? first.code : null;
-    }
-    if (value && typeof value === "object" && "code" in value) {
-      const code = (value as { code?: unknown }).code;
-      return typeof code === "string" ? code : null;
-    }
-    return null;
-  };
-
-  for (const reviewId of reviewIds) {
-    const current = reviewMap.get(reviewId);
-    const stationCode = getStationCode((current as { station?: StationValue })?.station);
-    const stationIdFromForm = String(formData.get(`stationId-${reviewId}`) ?? "") || null;
-    const stationId =
-      stationIdFromForm ||
-      (current && typeof current.station_id === "string" ? current.station_id : null);
-    const stationStatusRaw = String(formData.get(`stationStatus-${reviewId}`) ?? "").trim();
-    const stationStatus = stationReviewStatusEnum.safeParse(stationStatusRaw).success
-      ? (stationStatusRaw as z.infer<typeof stationReviewStatusEnum>)
-      : (current?.status as z.infer<typeof stationReviewStatusEnum>) ?? "NOT_SENT";
-    const resultNote = String(formData.get(`stationResultNote-${reviewId}`) ?? "").trim();
-
-    const trackResults: Array<{
-      track_id?: string | null;
-      track_no?: number | null;
-      title?: string | null;
-      status: z.infer<typeof trackResultStatusEnum>;
-    }> = [];
-
-    const trackStatusEntries = entries.filter(([key]) =>
-      key.startsWith(`trackStatus-${reviewId}-`),
-    );
-
-    for (const [key, value] of trackStatusEntries) {
-      const index = key.split("-").pop() ?? "";
-      const statusValue = String(value || "PENDING") as z.infer<typeof trackResultStatusEnum>;
-      const trackId = String(formData.get(`trackId-${reviewId}-${index}`) ?? "") || null;
-      const trackNoRaw = String(formData.get(`trackNo-${reviewId}-${index}`) ?? "");
-      const trackNo = trackNoRaw ? Number(trackNoRaw) : null;
-      const trackTitle =
-        String(formData.get(`trackTitle-${reviewId}-${index}`) ?? "").trim() || null;
-
-      if (!trackResultStatusEnum.safeParse(statusValue).success) continue;
-      trackResults.push({
-        track_id: trackId || null,
-        track_no: Number.isFinite(trackNo) ? (trackNo as number) : null,
-        title: trackTitle,
-        status: statusValue,
-      });
-    }
-
-    const nextTrackResults =
-      trackResults.length > 0
-        ? trackResults
-        : current?.track_results && Array.isArray(current.track_results)
-          ? current.track_results
-          : null;
-
-    const payload = {
-      status: stationStatus || "NOT_SENT",
-      result_note: resultNote || null,
-      track_results: nextTrackResults,
-    };
-
-    const { error: stationError } = await updateStationReview(reviewId, stationCode, {
-      ...payload,
-      station_id: stationId,
-    });
-
-    if (stationError) {
-      console.error("admin save station review error", stationError, {
-        reviewId,
-        payload,
-      });
-      lastError = { message: stationError.message ?? "error", code: stationError.code };
-    }
+    redirectWithError(submissionError.message ?? "submission update error");
   }
 
-  if (Object.keys(submissionUpdate).length > 0) {
+  if (
+    !updatedSubmission ||
+    updatedSubmission.status !== nextStatus ||
+    updatedSubmission.payment_status !== nextPaymentStatus
+  ) {
+    console.error("admin save submission status mismatch", {
+      submissionId,
+      expected: {
+        status: nextStatus,
+        payment_status: nextPaymentStatus,
+      },
+      received: updatedSubmission,
+    });
+    redirectWithError("저장 결과가 DB에 반영되지 않았습니다.");
+  }
+
+  const changes = [
+    currentStatus !== nextStatus
+      ? `접수 상태: ${reviewStatusLabelMap[nextStatus] ?? nextStatus}`
+      : null,
+    currentPaymentStatus !== nextPaymentStatus
+      ? `결제 상태: ${
+          paymentStatusLabelMap[nextPaymentStatus] ?? nextPaymentStatus
+        }`
+      : null,
+    title && currentSubmissionRow.title !== title ? "작품명이 정리되었습니다." : null,
+    artistName && currentSubmissionRow.artist_name !== artistName
+      ? "아티스트명이 정리되었습니다."
+      : null,
+    (currentSubmissionRow.admin_memo ?? "") !== adminMemo
+      ? "관리자 메모가 업데이트되었습니다."
+      : null,
+  ].filter(Boolean);
+
+  let savedWarning = "";
+  if (changes.length > 0) {
     const changeSummary = [
-      status
-        ? `접수 상태: ${reviewStatusLabelMap[status as ReviewStatus] ?? status}`
+      ...changes,
+      nextPaymentStatus === "PAID" && status === currentStatus && nextStatus === "IN_PROGRESS"
+        ? "결제 완료 처리에 따라 접수 상태를 심의 진행으로 전환했습니다."
         : null,
-      paymentStatus
-        ? `결제 상태: ${
-            paymentStatusLabelMap[paymentStatus as PaymentStatus] ?? paymentStatus
-          }`
-        : null,
-      title ? "작품명이 정리되었습니다." : null,
-      artistName ? "아티스트명이 정리되었습니다." : null,
-      adminMemo ? "관리자 메모가 업데이트되었습니다." : null,
     ]
       .filter(Boolean)
       .join("\n");
 
-    await sendSubmissionUpdateNotificationById({
-      submissionId,
-      headline: "접수 정보가 업데이트되었습니다.",
-      summary: changeSummary || "관리자가 접수 정보를 업데이트했습니다.",
-      subject: "[onside] 접수 정보 업데이트 안내",
-    });
+    try {
+      await insertEvent(submissionId, changeSummary, "ADMIN_STATUS");
+    } catch (error) {
+      console.warn("[admin save] event insert failed", {
+        submissionId,
+        error,
+      });
+      savedWarning = "상태는 저장됐지만 처리 기록 저장은 실패했습니다.";
+    }
+
+    try {
+      await sendSubmissionUpdateNotificationById({
+        submissionId,
+        headline: "접수 정보가 업데이트되었습니다.",
+        summary: changeSummary,
+        subject: "[onside] 접수 정보 업데이트 안내",
+      });
+    } catch (error) {
+      console.warn("[admin save] notification failed", {
+        submissionId,
+        error,
+      });
+      savedWarning = "상태는 저장됐지만 알림 발송은 실패했습니다.";
+    }
   }
 
   revalidatePath("/admin/submissions");
@@ -2745,13 +2628,13 @@ export async function saveSubmissionAdminFormAction(
   revalidatePath("/mypage");
   revalidatePath("/");
 
-  if (lastError) {
+  if (savedWarning) {
     redirect(
-      `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
-        `${lastError.code ?? ""} ${lastError.message}`,
+      `/admin/submissions/${submissionId}?saved=status_warning&savedWarning=${encodeURIComponent(
+        savedWarning,
       )}`,
     );
   } else {
-    redirect(`/admin/submissions/${submissionId}?saved=station`);
+    redirect(`/admin/submissions/${submissionId}?saved=status`);
   }
 }

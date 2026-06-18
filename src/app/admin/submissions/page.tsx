@@ -31,10 +31,29 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE = 20;
 
 const typeOptions = [
-  { value: "ALBUM", label: "음반 심의" },
-  { value: "MV_DISTRIBUTION", label: "뮤직비디오 심의 (유통/온라인)" },
-  { value: "MV_BROADCAST", label: "뮤직비디오 심의 (TV 송출)" },
-];
+  {
+    value: "ALBUM",
+    label: "앨범 심의",
+    description: "방송국별 음반 접수",
+  },
+  {
+    value: "MV_DISTRIBUTION",
+    label: "뮤비 온라인 심의",
+    description: "유통사 제출, 온라인 업로드용",
+  },
+  {
+    value: "MV_BROADCAST",
+    label: "뮤비 방송용 심의",
+    description: "TV 송출 목적 접수",
+  },
+] as const;
+
+type SubmissionTypeFilter = (typeof typeOptions)[number]["value"];
+
+const defaultSubmissionType: SubmissionTypeFilter = "ALBUM";
+
+const isSubmissionTypeFilter = (value: string): value is SubmissionTypeFilter =>
+  typeOptions.some((option) => option.value === value);
 
 const typeLabelMap: Record<string, string> = Object.fromEntries(
   typeOptions.map((option) => [option.value, option.label]),
@@ -155,10 +174,14 @@ export default async function AdminSubmissionsPage({
   searchParams?: Promise<AdminSubmissionsSearchParamsInput> | AdminSubmissionsSearchParamsInput;
 }) {
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const requestedType = toSingle(resolvedSearchParams.type);
+  const activeType = isSubmissionTypeFilter(requestedType)
+    ? requestedType
+    : defaultSubmissionType;
   const filters = {
     status: toSingle(resolvedSearchParams.status),
     payment: toSingle(resolvedSearchParams.payment),
-    type: toSingle(resolvedSearchParams.type),
+    type: activeType,
     origin: toSingle(resolvedSearchParams.origin),
     q: toSingle(resolvedSearchParams.q),
     from: toDateInputValue(toSingle(resolvedSearchParams.from)),
@@ -196,9 +219,7 @@ export default async function AdminSubmissionsPage({
     if (filters.payment) {
       query = query.eq("payment_status", filters.payment);
     }
-    if (filters.type) {
-      query = query.eq("type", filters.type);
-    }
+    query = query.eq("type", activeType);
     if (includeGlobalColumns && filters.origin === "global") {
       query = query.eq("created_from", "global");
     } else if (includeGlobalColumns && filters.origin === "domestic") {
@@ -252,6 +273,19 @@ export default async function AdminSubmissionsPage({
 
   const totalPages =
     totalCount > 0 ? Math.max(1, Math.ceil(totalCount / PAGE_SIZE)) : 1;
+  const activeTypeLabel = typeLabelMap[activeType] ?? activeType;
+
+  const buildTypeHref = (type: SubmissionTypeFilter) => {
+    const params = new URLSearchParams(
+      Object.entries(filters).filter(
+        ([key, value]) =>
+          key !== "type" && typeof value === "string" && value.length > 0,
+      ) as Array<[string, string]>,
+    );
+    params.delete("page");
+    params.set("type", type);
+    return `/admin/submissions?${params.toString()}`;
+  };
 
   const buildStatusHref = (status?: string) => {
     const params = new URLSearchParams(
@@ -291,7 +325,7 @@ export default async function AdminSubmissionsPage({
               접수 관리
             </h1>
             <p className="mt-2 text-sm font-semibold text-muted-foreground">
-              총 {totalCount.toLocaleString()}건 · 페이지 {page} / {totalPages}
+              {activeTypeLabel} · 총 {totalCount.toLocaleString()}건 · 페이지 {page} / {totalPages}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -317,10 +351,43 @@ export default async function AdminSubmissionsPage({
         </div>
       </div>
 
+      <nav
+        aria-label="심의 유형"
+        className="mt-5 grid gap-3 md:grid-cols-3"
+      >
+        {typeOptions.map((option) => {
+          const isActive = option.value === activeType;
+          return (
+            <Link
+              key={option.value}
+              href={buildTypeHref(option.value)}
+              aria-current={isActive ? "page" : undefined}
+              className={[
+                "min-h-[96px] rounded-[10px] border-2 p-4 text-left transition",
+                isActive
+                  ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
+                  : "border-border bg-card text-foreground hover:border-[#111111] dark:hover:border-[#f2cf27]",
+              ].join(" ")}
+            >
+              <span className="text-[11px] font-black uppercase tracking-normal opacity-70">
+                접수 관리
+              </span>
+              <span className="mt-2 block text-base font-black leading-6">
+                {option.label}
+              </span>
+              <span className="mt-1 block text-xs font-semibold opacity-75">
+                {option.description}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+
       <form
         method="get"
         className="mt-5 rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]"
       >
+        <input type="hidden" name="type" value={activeType} />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <FieldLabel label="검색">
             <div className="relative min-w-0">
@@ -351,20 +418,6 @@ export default async function AdminSubmissionsPage({
               defaultValue={filters.to}
               className="h-11 w-full min-w-0 rounded-[8px] border-2 border-border bg-background px-3 text-sm font-semibold text-foreground outline-none transition focus:border-[#1556a4]"
             />
-          </FieldLabel>
-          <FieldLabel label="유형">
-            <select
-              name="type"
-              defaultValue={filters.type}
-              className="h-11 w-full min-w-0 rounded-[8px] border-2 border-border bg-background px-3 text-sm font-semibold text-foreground outline-none transition focus:border-[#1556a4]"
-            >
-              <option value="">전체 유형</option>
-              {typeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
           </FieldLabel>
           <FieldLabel label="접수">
             <select
@@ -417,7 +470,7 @@ export default async function AdminSubmissionsPage({
 
       <div className="mt-4 flex flex-col gap-3 text-xs font-bold text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <span>
-          {isDraftView ? "임시 저장 항목 표시 중" : "제출된 항목 표시 중"}
+          {activeTypeLabel} · {isDraftView ? "임시 저장 항목 표시 중" : "제출된 항목 표시 중"}
         </span>
         <div className="flex items-center gap-2 sm:justify-end">
           <Link

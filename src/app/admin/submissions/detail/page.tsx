@@ -5,20 +5,16 @@ import {
   normalizeStationReviewStatus,
   paymentStatusLabelMap,
   paymentStatusOptions,
-  resultStatusLabelMap,
-  resultStatusOptions,
   reviewStatusLabelMap,
   reviewStatusOptions,
   stationReviewStatusOptions,
   type PaymentStatus,
-  type ResultStatus,
   type ReviewStatus,
 } from "@/constants/review-status";
 import {
   createTrackForSubmissionAction,
   deleteTrackForSubmissionAction,
   saveSubmissionAdminFormAction,
-  updateSubmissionResultFormAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
@@ -119,7 +115,7 @@ type SubmissionRow = {
   karaoke_requested: boolean | null;
   bank_depositor_name: string | null;
   admin_memo: string | null;
-  result_status?: ResultStatus | null;
+  result_status?: string | null;
   result_memo?: string | null;
   result_notified_at?: string | null;
   applicant_email?: string | null;
@@ -224,9 +220,12 @@ export default async function AdminSubmissionDetailPage({
         return "저장되었습니다.";
       case "station_error":
         return "방송국 상태 저장 중 오류가 발생했습니다.";
+      case "status":
+      case "status_warning":
+        return "접수/결제 상태가 저장되었습니다.";
       case "result":
       case "result_warning":
-        return "심의 결과가 저장되었습니다.";
+        return "최종 통보 정보가 저장되었습니다.";
       case "error":
         return "저장 중 오류가 발생했습니다. 다시 시도해주세요.";
       default:
@@ -237,6 +236,7 @@ export default async function AdminSubmissionDetailPage({
     savedFlag === "error" || savedFlag === "station_error" || Boolean(savedErrorParam);
   const isSaveWarning =
     savedFlag === "station_warning" ||
+    savedFlag === "status_warning" ||
     savedFlag === "result_warning" ||
     Boolean(savedWarningParam);
   const errorMessage =
@@ -429,16 +429,14 @@ export default async function AdminSubmissionDetailPage({
   const isMvDistribution = submission.type === "MV_DISTRIBUTION";
   const isMvBroadcast = submission.type === "MV_BROADCAST";
   const isMvSubmission = isMvDistribution || isMvBroadcast;
+  const adminSubmissionListHref = typeLabels[submission.type]
+    ? `/admin/submissions?type=${encodeURIComponent(submission.type)}`
+    : "/admin/submissions?type=ALBUM";
   const statusLabel = reviewStatusLabelMap[submission.status] ?? submission.status;
   const paymentLabel =
     submission.payment_status && paymentStatusLabelMap[submission.payment_status]
       ? paymentStatusLabelMap[submission.payment_status]
       : submission.payment_status ?? "미결제";
-  const resultStatusLabel =
-    submission.result_status && resultStatusLabelMap[submission.result_status]
-      ? resultStatusLabelMap[submission.result_status]
-      : submission.result_status ?? "미입력";
-
   const memberProfile =
     submission.user_id && !submission.guest_name
       ? (
@@ -576,9 +574,15 @@ export default async function AdminSubmissionDetailPage({
       Boolean(submission.result_status));
 
   if (hasMvFinalResultForDisplay && stationReviews && stationReviews.length > 0) {
+    const mvStationFinalStatus =
+      submission.result_status === "REJECTED"
+        ? "REJECTED"
+        : submission.result_status === "NEEDS_FIX"
+          ? "NEEDS_FIX"
+          : "APPROVED";
     stationReviews = stationReviews.map((review) => ({
       ...review,
-      status: "APPROVED",
+      status: mvStationFinalStatus,
       result_note: review.result_note ?? submission.result_memo ?? null,
       updated_at: review.updated_at ?? submission.updated_at,
     }));
@@ -598,25 +602,65 @@ export default async function AdminSubmissionDetailPage({
 
   const files = submissionFiles ?? [];
   const reviews = stationReviews ?? [];
-  const completedReviewCount = reviews.filter((review) => {
-    const status = normalizeStationReviewStatus(review.status);
+  const isStationSubmittedStatus = (status?: string | null) => {
+    const normalized = normalizeStationReviewStatus(status);
     return (
-      status === "APPROVED" ||
-      status === "NEEDS_FIX" ||
-      review.status === "COMPLETED" ||
-      review.status === "RESULT_READY"
+      normalized === "SENT" ||
+      normalized === "APPROVED" ||
+      normalized === "REJECTED" ||
+      normalized === "NEEDS_FIX"
     );
+  };
+  const isStationResultStatus = (status?: string | null) => {
+    const normalized = normalizeStationReviewStatus(status);
+    return (
+      normalized === "APPROVED" ||
+      normalized === "REJECTED" ||
+      normalized === "NEEDS_FIX"
+    );
+  };
+  const stationSubmittedCount = reviews.filter((review) =>
+    isStationSubmittedStatus(review.status),
+  ).length;
+  const completedReviewCount = reviews.filter((review) => {
+    return isStationResultStatus(review.status);
   }).length;
   const hasRequiredBasics = Boolean(submission.title && submission.artist_name);
   const hasPaymentComplete = submission.payment_status === "PAID";
-  const hasFiles = files.length > 0;
+  const hasAllStationsSubmitted =
+    reviews.length > 0 && stationSubmittedCount === reviews.length;
   const hasAllReviewsCompleted =
     reviews.length > 0 && completedReviewCount === reviews.length;
-  const hasResultReady = Boolean(
-    submission.result_status ||
-      submission.result_notified_at ||
-      (isMvDistribution && submission.certificate_b2_path),
-  );
+  const hasMvRating = Boolean(submission.mv_desired_rating);
+  const hasMvCertificate = Boolean(submission.certificate_b2_path);
+  const stationResultProgressLabel =
+    reviews.length > 0
+      ? `${completedReviewCount}/${reviews.length} 결과`
+      : "결과 대기";
+  const finalReviewStepLabel = isMvSubmission
+    ? isMvDistribution
+      ? "심의 등급/필증 발급"
+      : "방송사 심의 결과 통보"
+    : "적격/부적격 통보";
+  const finalReviewStepValue = isMvDistribution
+    ? hasAllReviewsCompleted && hasMvRating && hasMvCertificate
+      ? "등급·필증 완료"
+      : hasAllReviewsCompleted && hasMvRating
+        ? "필증 대기"
+        : hasAllReviewsCompleted
+          ? "등급 대기"
+          : stationResultProgressLabel
+    : reviews.length > 0
+      ? stationResultProgressLabel
+      : "결과 대기";
+  const finalReviewStepState =
+    isMvDistribution && hasAllReviewsCompleted && hasMvRating && hasMvCertificate
+      ? "done"
+      : !isMvDistribution && hasAllReviewsCompleted
+        ? "done"
+        : hasAllStationsSubmitted || completedReviewCount > 0
+          ? "active"
+          : "pending";
   const latestEvent = events?.[0] ?? null;
   const workflowSteps: Array<{
     label: string;
@@ -624,40 +668,31 @@ export default async function AdminSubmissionDetailPage({
     state: "done" | "active" | "pending";
   }> = [
     {
-      label: "접수 확인",
-      value: hasRequiredBasics ? "기본 정보 확인" : "정보 보완 필요",
+      label: "신청서 작성 및 결제",
+      value: hasRequiredBasics ? "신청서 접수" : "정보 보완 필요",
       state: hasRequiredBasics ? "done" : "active",
     },
     {
-      label: "결제/상태",
+      label: "결제 확인",
       value: paymentLabel,
       state: hasPaymentComplete ? "done" : "active",
     },
     {
-      label: "제출 파일",
-      value: `${files.length}개`,
-      state: hasFiles ? "done" : "active",
-    },
-    {
-      label: "방송국 진행",
+      label: "방송사 접수 완료",
       value:
         reviews.length > 0
-          ? `${completedReviewCount}/${reviews.length} 완료`
-          : "진행 없음",
-      state: hasAllReviewsCompleted
+          ? `${stationSubmittedCount}/${reviews.length} 접수`
+          : "방송사 대기",
+      state: hasAllStationsSubmitted
         ? "done"
-        : hasPaymentComplete || completedReviewCount > 0
+        : hasPaymentComplete || stationSubmittedCount > 0
           ? "active"
           : "pending",
     },
     {
-      label: "결과 안내",
-      value: resultStatusLabel,
-      state: hasResultReady
-        ? "done"
-        : hasAllReviewsCompleted || submission.status === "RESULT_READY"
-          ? "active"
-          : "pending",
+      label: finalReviewStepLabel,
+      value: finalReviewStepValue,
+      state: finalReviewStepState,
     },
   ];
 
@@ -692,9 +727,6 @@ export default async function AdminSubmissionDetailPage({
               <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-foreground">
                 결제: {paymentLabel}
               </span>
-              <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-foreground">
-                결과: {resultStatusLabel}
-              </span>
               <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-muted-foreground">
                 ID: {submission.id.slice(0, 8)}
               </span>
@@ -704,7 +736,7 @@ export default async function AdminSubmissionDetailPage({
           <span className="text-muted-foreground">
             Updated {formatDateTime(submission.updated_at ?? submission.created_at)}
           </span>
-          <AdminDeleteButton ids={[submission.id]} redirectTo="/admin/submissions" className="rounded-full border border-rose-200/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700" />
+          <AdminDeleteButton ids={[submission.id]} redirectTo={adminSubmissionListHref} className="rounded-full border border-rose-200/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700" />
         </div>
       </div>
 
@@ -715,17 +747,17 @@ export default async function AdminSubmissionDetailPage({
               심의 흐름
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              접수부터 결과 안내까지 현재 처리 위치를 먼저 확인합니다.
+              신청서 작성/결제, 결제 확인, 방송사 접수 완료, 최종 통보 순서로 관리합니다.
             </p>
           </div>
           <Link
-            href="/admin/submissions"
+            href={adminSubmissionListHref}
             className="rounded-full border border-border/70 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
             목록으로
           </Link>
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-5">
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
           {workflowSteps.map((step, index) => (
             <div
               key={step.label}
@@ -777,7 +809,7 @@ export default async function AdminSubmissionDetailPage({
         <div className="space-y-6">
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              1. 접수 확인
+              1. 신청서 작성 및 결제
             </p>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <DetailRow
@@ -856,10 +888,10 @@ export default async function AdminSubmissionDetailPage({
 
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                2. 결제/접수 상태
+                2. 결제 확인 및 전체 상태
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                입금 확인, 접수 단계, 관리자 메모를 한 번에 저장합니다.
+                결제 확인과 전체 접수 상태는 이 영역에서만 관리합니다.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -986,7 +1018,7 @@ export default async function AdminSubmissionDetailPage({
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              3. 제출 파일
+              제출 자료
             </p>
             <div className="mt-4">
               <SubmissionFilesPanel submissionId={submission.id} files={files} />
@@ -996,10 +1028,10 @@ export default async function AdminSubmissionDetailPage({
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                4. 방송국별 진행
+                3. 방송사 접수 완료 / 4. 적격·부적격 또는 등급 통보
               </p>
               <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground">
-                {completedReviewCount}/{reviews.length} 완료
+                {completedReviewCount}/{reviews.length} 결과
               </span>
             </div>
             <div className="mt-4 space-y-4">
@@ -1084,7 +1116,10 @@ export default async function AdminSubmissionDetailPage({
           {isMvDistribution ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                5. MV 등급/필증
+                온라인 업로드용 등급 이미지/영등위 필증
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                온라인 업로드용 뮤직비디오 심의에서 등급 이미지·표기 가이드를 열고, 영등위 필증을 사용자 다운로드용으로 업로드합니다.
               </p>
               <div className="mt-4">
                 <MvRatingControl
@@ -1106,75 +1141,6 @@ export default async function AdminSubmissionDetailPage({
             </div>
           ) : null}
 
-          <ConfirmForm
-            action={updateSubmissionResultFormAction}
-            method="post"
-            className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm"
-            message="심의 결과를 저장하고 사용자에게 안내 메일을 보내시겠습니까?"
-          >
-            <input type="hidden" name="submissionId" value={submission.id} />
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              {isMvDistribution ? "6. 결과 안내" : "5. 결과 안내"}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              저장한 결과 상태와 메모는 사용자 상세 화면에 반영되고, 수신 가능한 이메일로 결과 안내가 발송됩니다.
-            </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  결과 상태
-                </label>
-                <select
-                  name="resultStatus"
-                  required
-                  defaultValue={submission.result_status ?? ""}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                >
-                  <option value="" disabled>
-                    결과 선택
-                  </option>
-                  {resultStatusOptions.map((status) => (
-                    <option key={status.value} value={status.value}>
-                      {status.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  최근 안내
-                </label>
-                <input
-                  readOnly
-                  value={
-                    submission.result_notified_at
-                      ? formatDateTime(submission.result_notified_at)
-                      : "아직 발송 기록 없음"
-                  }
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  결과 메모
-                </label>
-                <textarea
-                  name="resultMemo"
-                  defaultValue={submission.result_memo ?? ""}
-                  className="h-28 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                  placeholder="사용자에게 안내할 결과 메모를 입력하세요."
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button
-                type="submit"
-                className="rounded-full bg-foreground px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-background"
-              >
-                결과 저장 및 안내
-              </button>
-            </div>
-          </ConfirmForm>
         </div>
 
         <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
@@ -1200,10 +1166,6 @@ export default async function AdminSubmissionDetailPage({
                 <span className="font-semibold">
                   {completedReviewCount}/{reviews.length}
                 </span>
-              </div>
-              <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
-                <span className="text-muted-foreground">결과</span>
-                <span className="font-semibold">{resultStatusLabel}</span>
               </div>
             </div>
             {latestEvent ? (
@@ -1443,7 +1405,7 @@ export default async function AdminSubmissionDetailPage({
                 원클릭 트랙 추가
               </p>
               <p className="text-xs text-muted-foreground">
-                원클릭 접수에는 트랙 정보가 없어 관리자 등록이 필요합니다. 추가 후 방송국별 진행 관리에서 트랙별 통과/불통과를 설정하세요.
+                원클릭 접수에는 트랙 정보가 없어 관리자 등록이 필요합니다. 추가 후 방송국별 진행 관리에서 트랙별 적격/부적격을 설정하세요.
               </p>
               <ConfirmForm
                 action={createTrackForSubmissionAction}

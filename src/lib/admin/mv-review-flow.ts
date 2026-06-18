@@ -176,8 +176,15 @@ export async function completeMvReviewFlow(
     };
   }
 
+  const stationReviewStatus =
+    resultStatus === "REJECTED"
+      ? "REJECTED"
+      : resultStatus === "NEEDS_FIX"
+        ? "NEEDS_FIX"
+        : "APPROVED";
+
   const reviewPayload = {
-    status: "APPROVED",
+    status: stationReviewStatus,
     result_note: resultNote,
     updated_at: now,
   };

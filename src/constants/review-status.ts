@@ -76,19 +76,18 @@ export const stationReviewStatusOptions: Array<{
   value: StationReviewStatus;
   label: string;
 }> = [
-  { value: "NOT_SENT", label: "접수대기" },
   { value: "SENT", label: "접수완료" },
-  { value: "RECEIVED", label: "심의진행중" },
-  { value: "APPROVED", label: "결과통보" },
+  { value: "APPROVED", label: "적격" },
+  { value: "REJECTED", label: "부적격" },
   { value: "NEEDS_FIX", label: "수정요청" },
 ];
 
 export const stationReviewStatusLabelMap: Record<StationReviewStatus, string> = {
-  NOT_SENT: "접수대기",
+  NOT_SENT: "대기",
   SENT: "접수완료",
-  RECEIVED: "심의진행중",
-  APPROVED: "결과통보",
-  REJECTED: "결과통보",
+  RECEIVED: "접수완료",
+  APPROVED: "적격",
+  REJECTED: "부적격",
   NEEDS_FIX: "수정요청",
 };
 
@@ -96,19 +95,18 @@ export const normalizeStationReviewStatus = (
   status?: string | null,
 ): StationReviewStatus => {
   switch (status) {
-    case "REJECTED":
-      return "APPROVED";
     case "NOT_SENT":
     case "SENT":
-    case "RECEIVED":
     case "APPROVED":
+    case "REJECTED":
     case "NEEDS_FIX":
       return status;
+    case "RECEIVED":
+    case "IN_PROGRESS":
+      return "SENT";
     case "RESULT_READY":
     case "COMPLETED":
       return "APPROVED";
-    case "IN_PROGRESS":
-      return "RECEIVED";
     default:
       return "NOT_SENT";
   }
@@ -121,7 +119,7 @@ export const resultStatusEnum = z.enum(resultStatusValues);
 export const resultStatusOptions: Array<{ value: ResultStatus; label: string }> =
   [
     { value: "APPROVED", label: "적격" },
-    { value: "REJECTED", label: "불통과" },
+    { value: "REJECTED", label: "부적격" },
     { value: "NEEDS_FIX", label: "수정 요청" },
   ];
 export const resultStatusLabelMap: Record<ResultStatus, string> =

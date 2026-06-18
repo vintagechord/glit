@@ -3,6 +3,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
+import { AdminSaveToast } from "@/components/admin/save-toast";
+
 const ratingOptions = [
   { value: "", label: "결과 미입력" },
   { value: "ALL", label: "전체연령" },
@@ -28,6 +30,10 @@ export function MvRatingControl({
   const [savedRating, setSavedRating] = React.useState(initialRating ?? "");
   const [loading, setLoading] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [savePopup, setSavePopup] = React.useState<{
+    id: number;
+    message: string;
+  } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const hasChanges = rating !== savedRating;
 
@@ -60,7 +66,9 @@ export function MvRatingControl({
         throw new Error(json?.error || `저장 실패 (status ${res.status})`);
       }
       setSavedRating(json?.rating ?? rating);
-      setNotice("MV 등급과 결과통보 상태가 저장되었습니다.");
+      const successMessage = "MV 등급이 저장되었습니다.";
+      setNotice(successMessage);
+      setSavePopup({ id: Date.now(), message: successMessage });
       setError(null);
       router.refresh();
     } catch (err) {
@@ -75,6 +83,12 @@ export function MvRatingControl({
 
   return (
     <div className="space-y-3">
+      {savePopup ? (
+        <AdminSaveToast
+          key={savePopup.id}
+          message={savePopup.message}
+        />
+      ) : null}
       <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-muted-foreground">
         현재 저장된 등급:{" "}
         <span className="font-semibold text-foreground">
@@ -104,7 +118,7 @@ export function MvRatingControl({
         </select>
       </label>
       <p className="text-xs text-muted-foreground">
-        저장하면 사용자 상세의 진행표가 결과통보 상태로 마감되고, 등급 이미지·가이드·필증 다운로드에 사용됩니다.
+        저장한 등급은 사용자 상세의 등급 이미지·가이드·필증 다운로드에 사용됩니다.
       </p>
       <div className="flex gap-2">
         <button

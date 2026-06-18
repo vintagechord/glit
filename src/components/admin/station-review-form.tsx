@@ -38,7 +38,12 @@ export function StationReviewForm({
   statusOptions,
   action,
 }: StationReviewFormProps) {
-  const [stationStatus, setStationStatus] = React.useState(initialStatus);
+  const normalizedInitialStatus = statusOptions.some(
+    (option) => option.value === initialStatus,
+  )
+    ? initialStatus
+    : "SENT";
+  const [stationStatus, setStationStatus] = React.useState(normalizedInitialStatus);
   const [stationMemo, setStationMemo] = React.useState(initialMemo ?? "");
   const [trackStates, setTrackStates] = React.useState(
     trackResults.map((track) => ({
@@ -108,8 +113,8 @@ export function StationReviewForm({
               트랙별 결과
             </p>
             <p className="text-[11px] text-muted-foreground">
-              {trackStates.filter((t) => t.status === "APPROVED").length}곡 통과 ·{" "}
-              {trackStates.filter((t) => t.status === "REJECTED").length}곡 불통과 ·{" "}
+              {trackStates.filter((t) => t.status === "APPROVED").length}곡 적격 ·{" "}
+              {trackStates.filter((t) => t.status === "REJECTED").length}곡 부적격 ·{" "}
               {trackStates.filter((t) => t.status === "PENDING").length}곡 대기
             </p>
           </div>
@@ -138,8 +143,8 @@ export function StationReviewForm({
                     className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-[11px]"
                   >
                     <option value="PENDING">대기</option>
-                    <option value="APPROVED">통과</option>
-                    <option value="REJECTED">불통과</option>
+                    <option value="APPROVED">적격</option>
+                    <option value="REJECTED">부적격</option>
                   </select>
                 </div>
               );

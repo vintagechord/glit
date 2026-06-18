@@ -91,7 +91,7 @@ const paymentMethodLabels: Record<string, string> = {
 
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
-    label: "접수대기",
+    label: "대기",
     tone: "bauhaus-status-chip--waiting",
   },
   SENT: {
@@ -99,15 +99,15 @@ const receptionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bauhaus-status-chip--info",
   },
   RECEIVED: {
-    label: "심의진행중",
-    tone: "bauhaus-status-chip--progress",
+    label: "접수완료",
+    tone: "bauhaus-status-chip--info",
   },
   APPROVED: {
-    label: "결과통보",
+    label: "적격",
     tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
-    label: "결과통보",
+    label: "부적격",
     tone: "bauhaus-status-chip--danger",
   },
   NEEDS_FIX: {
@@ -130,11 +130,11 @@ const resultStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bauhaus-status-chip--neutral",
   },
   APPROVED: {
-    label: "통과",
+    label: "적격",
     tone: "bauhaus-status-chip--success",
   },
   REJECTED: {
-    label: "불통과",
+    label: "부적격",
     tone: "bauhaus-status-chip--danger",
   },
   NEEDS_FIX: {
@@ -538,10 +538,10 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                 <span className="justify-self-center text-center">접수 상태</span>
                 <span className="justify-self-center text-center">
                   {activeSubmission.type === "MV_DISTRIBUTION"
-                    ? "등급 분류"
+                    ? "심의 등급"
                     : activeSubmission.type === "MV_BROADCAST"
                       ? "심의 결과"
-                      : "트랙 결과"}
+                      : "적격/부적격"}
                 </span>
                 <span className="text-right">접수 날짜</span>
               </div>

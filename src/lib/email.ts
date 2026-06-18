@@ -289,7 +289,7 @@ export async function sendResultEmail(
       ? "적격"
       : payload.resultStatus === "NEEDS_FIX"
         ? "수정 요청"
-        : "불통과";
+        : "부적격";
   const memo = payload.resultMemo?.trim();
   const safeTitle = escapeHtml(payload.title?.trim() || "제목 미입력");
   const safeArtist = escapeHtml(payload.artist?.trim() || "");

@@ -3,6 +3,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
+import { AdminSaveToast } from "@/components/admin/save-toast";
+
 type Props = {
   submissionId: string;
   currentObjectKey?: string | null;
@@ -72,6 +74,10 @@ export function CertificateUploader({
   });
   const [isUploading, setIsUploading] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [savePopup, setSavePopup] = React.useState<{
+    id: number;
+    message: string;
+  } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const router = useRouter();
 
@@ -121,7 +127,9 @@ export function CertificateUploader({
           uploadedAt: json.certificate.uploadedAt,
         });
       }
-      setNotice("필증 업로드가 완료되었습니다.");
+      const successMessage = "필증 업로드가 완료되었습니다.";
+      setNotice(successMessage);
+      setSavePopup({ id: Date.now(), message: successMessage });
       setFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -146,6 +154,9 @@ export function CertificateUploader({
 
   return (
     <div className="space-y-3">
+      {savePopup ? (
+        <AdminSaveToast key={savePopup.id} message={savePopup.message} />
+      ) : null}
       <div className="text-xs text-muted-foreground">
         현재 파일: {currentFile.name ?? "없음"}
         {currentFile.uploadedAt
