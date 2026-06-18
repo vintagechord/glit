@@ -392,9 +392,11 @@ export function SubmissionStatusList({
                 <span>방송국</span>
                 <span className="justify-self-center text-center">접수 상태</span>
                 <span className="justify-self-center text-center">
-                  {activeSubmission.type?.startsWith("MV")
+                  {activeSubmission.type === "MV_DISTRIBUTION"
                     ? "등급 분류"
-                    : "트랙 결과"}
+                    : activeSubmission.type === "MV_BROADCAST"
+                      ? "심의 결과"
+                      : "트랙 결과"}
                 </span>
                 <span className="text-right">접수 날짜</span>
               </div>

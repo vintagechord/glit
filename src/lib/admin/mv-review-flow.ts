@@ -109,12 +109,15 @@ export async function completeMvReviewFlow(
     return { completed: false };
   }
 
+  const isMvDistribution = row.type === "MV_DISTRIBUTION";
   const now = new Date().toISOString();
-  const rating = options.rating ?? row.mv_desired_rating ?? null;
+  const rating = isMvDistribution
+    ? options.rating ?? row.mv_desired_rating ?? null
+    : null;
   const resultStatus =
     normalizeResultStatus(options.resultStatus) ??
     normalizeResultStatus(row.result_status) ??
-    deriveResultStatusFromRating(rating);
+    (isMvDistribution ? deriveResultStatusFromRating(rating) : null);
   const resultMemo =
     options.resultMemo !== undefined ? options.resultMemo : row.result_memo ?? null;
   const resultNote = resultMemo?.trim() || null;
@@ -123,8 +126,10 @@ export async function completeMvReviewFlow(
     status: "RESULT_READY",
     updated_at: now,
   };
-  if (rating && isRatingCode(rating)) {
+  if (isMvDistribution && rating && isRatingCode(rating)) {
     submissionUpdate.mv_desired_rating = rating;
+  } else if (!isMvDistribution && row.mv_desired_rating) {
+    submissionUpdate.mv_desired_rating = null;
   }
   if (resultStatus) {
     submissionUpdate.result_status = resultStatus;

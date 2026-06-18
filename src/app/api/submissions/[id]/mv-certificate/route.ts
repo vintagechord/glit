@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type CertificateFields = {
+  type?: string | null;
   certificate_b2_path?: string | null;
   certificate_original_name?: string | null;
   certificate_mime?: string | null;
@@ -37,13 +38,18 @@ export async function GET(
   if (!submission) {
     return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
   }
+  if (submission.type !== "MV_DISTRIBUTION") {
+    return NextResponse.json(
+      { error: "온라인 업로드용 뮤직비디오 심의만 필증을 다운로드할 수 있습니다." },
+      { status: 404 },
+    );
+  }
 
   const cert = submission as CertificateFields;
   const key = cert.certificate_b2_path?.trim();
   const hasResultSignal = Boolean(
     cert.result_status ||
       cert.result_notified_at ||
-      key ||
       (submission.status && ["RESULT_READY", "COMPLETED"].includes(submission.status)),
   );
 

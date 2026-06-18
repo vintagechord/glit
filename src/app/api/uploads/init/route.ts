@@ -5,6 +5,12 @@ import { z } from "zod";
 
 import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import {
+  isApplicationFormFile,
+  isApplicationFormMime,
+  isAudioUploadFile,
+  isVideoUploadFile,
+} from "@/lib/submission-files";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,25 +29,24 @@ const schema = z.object({
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const EXPIRES_SECONDS = Number(process.env.B2_PRESIGN_EXPIRES_SECONDS ?? "900");
-const audioUploadPattern = /\.(wav|zip)$/i;
-const videoUploadPattern = /\.(mp4|mov|wmv|mpg|mpeg|m4v)$/i;
 
 const isAllowedUploadFile = (
   kind: "audio" | "video",
   filename: string,
   mimeType: string,
 ) => {
-  const mime = mimeType.toLowerCase();
   if (kind === "audio") {
     return (
-      audioUploadPattern.test(filename) ||
-      mime === "audio/wav" ||
-      mime === "audio/x-wav" ||
-      mime === "application/zip" ||
-      mime === "application/x-zip-compressed"
+      isAudioUploadFile(filename, mimeType) ||
+      isApplicationFormFile(filename) ||
+      isApplicationFormMime(mimeType)
     );
   }
-  return videoUploadPattern.test(filename) || mime.startsWith("video/");
+  return (
+    isVideoUploadFile(filename, mimeType) ||
+    isApplicationFormFile(filename) ||
+    isApplicationFormMime(mimeType)
+  );
 };
 
 export async function POST(request: Request) {
@@ -76,8 +81,8 @@ export async function POST(request: Request) {
       {
         error:
           kind === "audio"
-            ? "음원 파일은 WAV 또는 ZIP만 업로드할 수 있습니다."
-            : "영상 파일은 MP4/MOV/WMV/MPG만 업로드할 수 있습니다.",
+            ? "음원 파일은 WAV/MP3/ZIP 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다."
+            : "영상 파일은 MP4/MOV/WMV/MPG 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다.",
       },
       { status: 400 },
     );

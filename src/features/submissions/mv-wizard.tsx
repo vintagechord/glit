@@ -12,6 +12,12 @@ import {
   collectForeignLyricsSegments,
   requestLyricsTranslations,
 } from "@/lib/lyrics-tools";
+import {
+  isApplicationFormFile,
+  isApplicationFormMime,
+  isVideoUploadFile,
+  mvApplicationForms,
+} from "@/lib/submission-files";
 import { runProfanityCheck } from "@/lib/profanity/check";
 import {
   buildProfanityExtraRules,
@@ -58,6 +64,8 @@ type UploadResult = {
   durationSeconds?: number;
   accessUrl?: string;
 };
+
+type ApplicationFormMode = "online" | "upload";
 
 type PaymentDocumentType = "" | "CASH_RECEIPT" | "TAX_INVOICE";
 type CashReceiptPurpose =
@@ -268,6 +276,8 @@ export function MvWizard({
     userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
+  const [applicationFormMode, setApplicationFormMode] =
+    React.useState<ApplicationFormMode>("online");
   const requestedType = searchParams?.get("type");
   const [mvType, setMvType] = React.useState<"MV_DISTRIBUTION" | "MV_BROADCAST">(
     requestedType === "broadcast" ? "MV_BROADCAST" : "MV_DISTRIBUTION",
@@ -573,8 +583,11 @@ export function MvWizard({
   }, []);
 
   const createDraft = React.useCallback(async (options?: { force?: boolean }) => {
-    if (isPreparingDraft || submissionIdRef.current) return;
-    if (!options?.force && draftInitAttemptedRef.current) return;
+    if (submissionIdRef.current) return submissionIdRef.current;
+    if (isPreparingDraft) return null;
+    if (!options?.force && draftInitAttemptedRef.current) {
+      return submissionIdRef.current || null;
+    }
     draftInitAttemptedRef.current = true;
     setIsPreparingDraft(true);
     setDraftError(null);
@@ -593,7 +606,7 @@ export function MvWizard({
       };
       if (res.ok && json?.submissionId) {
         submissionIdRef.current = json.submissionId;
-        return;
+        return json.submissionId;
       }
       setDraftError(
         json?.error ||
@@ -608,6 +621,7 @@ export function MvWizard({
     } finally {
       setIsPreparingDraft(false);
     }
+    return null;
   }, [isGuest, isPreparingDraft, mvType]);
 
   React.useEffect(() => {
@@ -644,6 +658,7 @@ export function MvWizard({
     mvType === "MV_BROADCAST"
       ? tvStations.length > 0
       : onlineBaseSelected || onlineOptions.length > 0;
+  const isDownloadedApplicationFlow = applicationFormMode === "upload";
   const uploadHintTitle =
     mvType === "MV_DISTRIBUTION" ? "파일 포맷" : "방송국별 제출 규격";
   const uploadChips = React.useMemo(() => {
@@ -801,27 +816,19 @@ export function MvWizard({
       void createDraft({ force: true });
       return;
     }
-    const allowedTypes = new Set([
-      "video/mp4",
-      "video/quicktime",
-      "video/x-ms-wmv",
-      "video/mpeg",
-    ]);
-    const allowedExtensions = [".mp4", ".mov", ".wmv", ".mpg", ".mpeg", ".m4v"];
     let invalidNotice: string | null = null;
     const filtered = selected.filter((file) => {
       if (file.size > uploadMaxBytes) {
         invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
         return false;
       }
-      const lowerName = file.name.toLowerCase();
-      const hasAllowedExtension = allowedExtensions.some((ext) =>
-        lowerName.endsWith(ext),
-      );
-      const hasAllowedMime =
-        file.type.startsWith("video/") || allowedTypes.has(file.type);
-      if (!hasAllowedExtension && !hasAllowedMime) {
-        invalidNotice = "영상 파일(MP4/MOV/WMV/MPG)만 업로드할 수 있습니다.";
+      const isAllowed =
+        isVideoUploadFile(file.name, file.type) ||
+        isApplicationFormFile(file.name) ||
+        isApplicationFormMime(file.type);
+      if (!isAllowed) {
+        invalidNotice =
+          "영상 파일(MP4/MOV/WMV/MPG) 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다.";
         return false;
       }
       return true;
@@ -1534,7 +1541,9 @@ export function MvWizard({
     setDistributionCompany(String(draft.mv_distribution_company ?? ""));
     setBusinessRegNo(String(draft.mv_business_reg_no ?? ""));
     setUsage(String(draft.mv_usage ?? ""));
-    setDesiredRating(String(draft.mv_desired_rating ?? ""));
+    setDesiredRating(
+      draftType === "MV_DISTRIBUTION" ? String(draft.mv_desired_rating ?? "") : "",
+    );
     setMemo(String(draft.mv_memo ?? ""));
     setSongTitleKr(String(draft.mv_song_title_kr ?? ""));
     setSongTitleEn(String(draft.mv_song_title_en ?? ""));
@@ -1936,6 +1945,37 @@ export function MvWizard({
       return true;
     }
 
+    if (isDownloadedApplicationFlow) {
+      if (mvType === "MV_BROADCAST" && tvStations.length === 0) {
+        setNotice({ error: "TV 송출 심의를 원하는 방송국을 선택해주세요." });
+        return false;
+      }
+      if (
+        mvType === "MV_DISTRIBUTION" &&
+        !onlineBaseSelected &&
+        onlineOptions.length === 0
+      ) {
+        setNotice({ error: "온라인 심의 옵션을 선택해주세요." });
+        return false;
+      }
+      if (
+        requirePayment &&
+        paymentMethod === "BANK" &&
+        !bankDepositorName.trim()
+      ) {
+        setNotice({ error: "입금자명을 입력해주세요." });
+        return false;
+      }
+      if (
+        requirePayment &&
+        paymentMethod === "BANK" &&
+        !validatePaymentDocument()
+      ) {
+        return false;
+      }
+      return true;
+    }
+
     if (!titleValue || !artistNameValue) {
       setNotice({ error: "제목과 아티스트명을 입력해주세요." });
       return false;
@@ -2014,9 +2054,13 @@ export function MvWizard({
 
   const validateMvUploads = () => {
     if (isAdminReviewer) return true;
-    if (emailSubmitConfirmed) return true;
+    if (emailSubmitConfirmed && !isDownloadedApplicationFlow) return true;
     if (uploads.length === 0) {
-      setNotice({ error: "영상 파일을 업로드해주세요." });
+      setNotice({
+        error: isDownloadedApplicationFlow
+          ? "작성한 신청서 파일(HWP/DOC/DOCX)과 영상 파일을 업로드해주세요."
+          : "영상 파일을 업로드해주세요.",
+      });
       return false;
     }
     if (uploads.some((upload) => upload.status === "error")) {
@@ -2025,6 +2069,21 @@ export function MvWizard({
     }
     if (uploads.some((upload) => upload.status !== "done")) {
       setNotice({ error: "파일 업로드가 완료될 때까지 기다려주세요." });
+      return false;
+    }
+    if (
+      !uploadedFiles.some((file) => isVideoUploadFile(file.originalName, file.mime))
+    ) {
+      setNotice({ error: "영상 파일을 업로드해주세요." });
+      return false;
+    }
+    if (
+      isDownloadedApplicationFlow &&
+      !uploadedFiles.some((file) => isApplicationFormFile(file.originalName))
+    ) {
+      setNotice({
+        error: "작성한 신청서 파일(HWP/DOC/DOCX)을 함께 업로드해주세요.",
+      });
       return false;
     }
     return true;
@@ -2075,7 +2134,8 @@ export function MvWizard({
         distributionCompany: distributionCompany.trim() || undefined,
         businessRegNo: businessRegNo.trim() || undefined,
         usage: usage.trim() || undefined,
-        desiredRating: desiredRating.trim() || undefined,
+        desiredRating:
+          mvType === "MV_DISTRIBUTION" ? desiredRating.trim() || undefined : undefined,
         memo: memo.trim() || undefined,
         songTitle: songTitleOfficialValue || undefined,
         songTitleKr: songTitleKrValue || undefined,
@@ -2198,7 +2258,8 @@ export function MvWizard({
         distributionCompany: distributionCompany.trim() || undefined,
         businessRegNo: businessRegNo.trim() || undefined,
         usage: usage.trim() || undefined,
-        desiredRating: desiredRating.trim() || undefined,
+        desiredRating:
+          mvType === "MV_DISTRIBUTION" ? desiredRating.trim() || undefined : undefined,
         memo: memo.trim() || undefined,
         songTitle: songTitleOfficialValue || undefined,
         songTitleKr: songTitleKrValue || undefined,
@@ -2297,7 +2358,38 @@ export function MvWizard({
   };
 
   const handleStep2Next = async () => {
+    if (isDownloadedApplicationFlow) {
+      await handleDownloadedApplicationContinue();
+      return;
+    }
     if (!validateMvForm()) return;
+    const saved = await saveMvDraft({ includeFiles: false });
+    if (saved) {
+      setStep(3);
+    }
+  };
+
+  const handleDownloadedApplicationContinue = async () => {
+    if (!canProceed) {
+      setNotice({
+        error:
+          mvType === "MV_BROADCAST"
+            ? "TV 송출 심의를 원하는 방송국을 선택해주세요."
+            : "온라인 심의 옵션을 선택해주세요.",
+      });
+      return;
+    }
+    const submissionId =
+      submissionIdRef.current ?? (await createDraft({ force: true }));
+    if (!submissionId) {
+      setNotice({
+        error:
+          draftError ||
+          "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      });
+      return;
+    }
+    submissionIdRef.current = submissionId;
     const saved = await saveMvDraft({ includeFiles: false });
     if (saved) {
       setStep(3);
@@ -2391,7 +2483,7 @@ export function MvWizard({
     <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving}
-        label={step <= 2 ? "신청서 저장" : "심의 저장/결제 처리 중..."}
+        label={step <= 3 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
       />
 
       {isDraggingOver && (
@@ -2524,9 +2616,15 @@ export function MvWizard({
                 <button
                   key={item.value}
                   type="button"
-                  onClick={() =>
-                    setMvType(item.value as "MV_DISTRIBUTION" | "MV_BROADCAST")
-                  }
+                  onClick={() => {
+                    const nextMvType = item.value as
+                      | "MV_DISTRIBUTION"
+                      | "MV_BROADCAST";
+                    setMvType(nextMvType);
+                    if (nextMvType === "MV_BROADCAST") {
+                      setDesiredRating("");
+                    }
+                  }}
                   className={`text-left rounded-[28px] border p-6 transition ${active
                       ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
                       : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
@@ -2726,6 +2824,87 @@ export function MvWizard({
               </p>
             </div>
           </div>
+
+          <div className="grid gap-2 rounded-[18px] border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setApplicationFormMode("online")}
+              className={`rounded-[14px] px-4 py-3 text-sm font-black transition ${applicationFormMode === "online"
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                }`}
+            >
+              온라인 신청서 작성하기
+            </button>
+            <button
+              type="button"
+              onClick={() => setApplicationFormMode("upload")}
+              className={`rounded-[14px] px-4 py-3 text-sm font-black transition ${isDownloadedApplicationFlow
+                  ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                }`}
+            >
+              신청서 다운로드 & 업로드하기
+            </button>
+          </div>
+
+          {isDownloadedApplicationFlow ? (
+            <div className="rounded-[28px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-muted-foreground">
+                신청서 파일 작성
+              </p>
+              <h3 className="mt-3 text-xl font-black text-foreground">
+                신청서를 내려받아 작성한 뒤 다음 단계에서 업로드하세요.
+              </h3>
+              <p className="mt-2 text-sm font-semibold leading-6 text-muted-foreground">
+                HWP 또는 Word 파일 중 편한 형식을 선택하세요. 다운로드를 누르면
+                파일 업로드 단계로 이동합니다.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {mvApplicationForms.map((form) => (
+                  <a
+                    key={form.href}
+                    href={form.href}
+                    download={form.downloadName}
+                    onClick={() => {
+                      void handleDownloadedApplicationContinue();
+                    }}
+                    className="inline-flex rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27]"
+                  >
+                    {form.label} 다운로드
+                  </a>
+                ))}
+              </div>
+              <div className="mt-5 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                다음 단계 파일 업로드에서 작성한 신청서(HWP/DOC/DOCX)와 영상
+                파일을 함께 첨부해주세요.
+              </div>
+              {notice.error && (
+                <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                  {notice.error}
+                </div>
+              )}
+              <div className="mt-6 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  disabled={isSaving}
+                  className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+                >
+                  이전 단계
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadedApplicationContinue}
+                  disabled={isSaving}
+                  className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
+                >
+                  파일 업로드로 이동
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
 
           <div className="rounded-[28px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]">
             <p className="text-xs font-black uppercase tracking-[0.22em]">
@@ -2951,16 +3130,18 @@ export function MvWizard({
                   className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  희망등급 (선택)
-                </label>
-                <input
-                  value={desiredRating}
-                  onChange={(event) => setDesiredRating(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
+              {mvType === "MV_DISTRIBUTION" ? (
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    희망등급 (선택)
+                  </label>
+                  <input
+                    value={desiredRating}
+                    onChange={(event) => setDesiredRating(event.target.value)}
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  />
+                </div>
+              ) : null}
               <div className="space-y-2 md:col-span-2">
                 <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   메모 (선택)
@@ -3267,6 +3448,8 @@ export function MvWizard({
               다음 단계
             </button>
           </div>
+            </>
+          )}
         </div>
       )}
 
@@ -3281,7 +3464,7 @@ export function MvWizard({
                 파일 업로드
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                방송국 심의 규격에 맞는 파일을 업로드해주세요.
+                방송국 심의 규격에 맞는 영상과 작성한 신청서 파일을 업로드해주세요.
               </p>
             </div>
           </div>
@@ -3290,7 +3473,7 @@ export function MvWizard({
             {[
               {
                 title: "1. 최종본 확인",
-                body: "심의에 사용할 최종 영상 파일만 업로드하세요.",
+                body: "심의에 사용할 최종 영상 파일과 작성한 신청서 파일을 업로드하세요.",
               },
               {
                 title: "2. 권장 규격",
@@ -3327,6 +3510,9 @@ export function MvWizard({
               {mvType === "MV_BROADCAST"
                 ? `시스템 업로드 한도: 최대 ${uploadMaxLabel}까지 업로드할 수 있습니다.`
                 : `최대 ${uploadMaxLabel}까지 업로드할 수 있습니다.`}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-foreground">
+              허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX
             </p>
             {mvType === "MV_BROADCAST" ? (
               renderBroadcastSpecs()
@@ -3411,7 +3597,7 @@ export function MvWizard({
                     <input
                       type="file"
                       multiple
-                      accept=".mp4,.mov,.wmv,.mpg,.mpeg,.m4v,video/*"
+                      accept=".mp4,.mov,.wmv,.mpg,.mpeg,.m4v,.hwp,.doc,.docx,video/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                       onChange={onFileChange}
                       className="hidden"
                     />
@@ -3442,7 +3628,7 @@ export function MvWizard({
                 </div>
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground">
                   <p>
-                    영상 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 신청서를 먼저 제출한 뒤 영상 파일만 이메일로 보내주세요.
+                    영상 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 신청서를 먼저 제출한 뒤 영상 파일만 이메일로 보내주세요. 다운로드 방식은 작성한 신청서 파일(HWP/DOC/DOCX)을 함께 첨부해주세요.
                   </p>
                   <p className="font-semibold text-foreground">{APP_CONFIG.supportEmail}</p>
                 </div>

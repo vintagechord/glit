@@ -29,6 +29,8 @@ export const LABEL_GUIDE_KEY = getEnvKey(
 
 export type RatingCode = keyof typeof RATING_IMAGE_MAP;
 
+const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
+
 export const isRatingCode = (value: unknown): value is RatingCode =>
   value === "ALL" ||
   value === "12" ||
@@ -41,6 +43,9 @@ export const getRatingObjectKey = (rating: RatingCode | null | undefined) =>
   rating ? RATING_IMAGE_MAP[rating] ?? null : null;
 
 export const getRatingSignedUrl = async (rating: RatingCode) =>
-  presignGetUrl(RATING_IMAGE_MAP[rating]);
+  isHttpUrl(RATING_IMAGE_MAP[rating])
+    ? RATING_IMAGE_MAP[rating]
+    : presignGetUrl(RATING_IMAGE_MAP[rating]);
 
-export const getGuideSignedUrl = async () => presignGetUrl(LABEL_GUIDE_KEY);
+export const getGuideSignedUrl = async () =>
+  isHttpUrl(LABEL_GUIDE_KEY) ? LABEL_GUIDE_KEY : presignGetUrl(LABEL_GUIDE_KEY);

@@ -35,6 +35,7 @@ const exactTranslations: Record<string, string> = {
   "뮤직비디오 TV 송출 심의": "Music Video TV Broadcast Review",
   "방송국별 조건 확인 후 접수.": "Submit after checking broadcaster requirements.",
   "시작": "Start",
+  "접수": "Submit",
   "무엇을 신청하시나요?": "What would you like to submit?",
   "비회원도 접수할 수 있습니다.": "Guest submissions are available.",
   "로그인하면 접수 내역이 마이페이지에 저장됩니다.":
@@ -118,6 +119,39 @@ const exactTranslations: Record<string, string> = {
   "극동방송: CCM 음원만 가능": "FEBC: CCM music only",
   "국악방송: 국악 장르만 가능": "Gugak FM: Korean traditional music only",
   "다음 단계": "Next Step",
+  "온라인 신청서 작성하기": "Fill Out Online Application",
+  "신청서 다운로드 & 업로드하기": "Download & Upload Application",
+  "신청서 파일 작성": "Application File",
+  "신청서를 내려받아 작성한 뒤 다음 단계에서 업로드하세요.":
+    "Download and complete the application, then upload it in the next step.",
+  "HWP 또는 Word 파일 중 편한 형식을 선택하세요. 다운로드를 누르면 파일 업로드 단계로 이동합니다.":
+    "Choose HWP or Word. After downloading, you will move to the file upload step.",
+  "HWP 다운로드": "Download HWP",
+  "Word 다운로드": "Download Word",
+  "파일 업로드로 이동": "Go to File Upload",
+  "다음 단계 파일 업로드에서 작성한 신청서(HWP/DOC/DOCX)와 음원 파일을 함께 첨부해주세요.":
+    "In the next file upload step, attach the completed application (HWP/DOC/DOCX) and audio files.",
+  "다음 단계 파일 업로드에서 작성한 신청서(HWP/DOC/DOCX)와 영상 파일을 함께 첨부해주세요.":
+    "In the next file upload step, attach the completed application (HWP/DOC/DOCX) and video files.",
+  "심의 받을 음원과 작성한 신청서 파일을 업로드해주세요.":
+    "Upload the audio files for review and the completed application file.",
+  "음원은 WAV/MP3 또는 ZIP, 신청서는 HWP/DOC/DOCX로 첨부하세요.":
+    "Attach audio as WAV/MP3 or ZIP, and the application as HWP/DOC/DOCX.",
+  "허용 형식: WAV/MP3/ZIP/HWP/DOC/DOCX":
+    "Allowed formats: WAV/MP3/ZIP/HWP/DOC/DOCX",
+  "방송국 심의 규격에 맞는 영상과 작성한 신청서 파일을 업로드해주세요.":
+    "Upload the video that meets broadcaster requirements and the completed application file.",
+  "심의에 사용할 최종 영상 파일과 작성한 신청서 파일을 업로드하세요.":
+    "Upload the final video for review and the completed application file.",
+  "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX":
+    "Allowed formats: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX",
+  "작성한 신청서 파일(HWP/DOC/DOCX)을 함께 업로드해주세요.":
+    "Please also upload the completed application file (HWP/DOC/DOCX).",
+  "음원 파일(WAV/MP3/ZIP)을 업로드하거나 이메일 제출을 선택해주세요.":
+    "Upload audio files (WAV/MP3/ZIP) or choose email submission.",
+  "작성한 신청서 파일(HWP/DOC/DOCX)과 영상 파일을 업로드해주세요.":
+    "Upload the completed application file (HWP/DOC/DOCX) and video file.",
+  "신청서 저장 중...": "Saving application...",
   "비회원도 Submission할 수 있으며, 로그인 시 마이페이지에서 진행 상황을 확인할 수 있습니다.":
     "Guest submission is available. If you log in, you can check progress from My Page.",
   "비회원도 접수할 수 있으며, 로그인 시 마이페이지에서 진행 상황을 확인할 수 있습니다.":
@@ -232,7 +266,8 @@ const exactTranslations: Record<string, string> = {
   "접수 현황": "Submission Status",
   "작성중 신청서": "Draft Application Forms",
   "나의 심의 내역": "My Review History",
-  "크레딧": "Credits",
+  // 크레딧 운영 보류: 메뉴/페이지 번역 숨김
+  // "크레딧": "Credits",
   "계정정보": "Account Info",
   "접수한 심의의 현재 상태를 확인할 수 있습니다.":
     "Check the current status of your submitted reviews.",

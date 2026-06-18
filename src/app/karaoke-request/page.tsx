@@ -11,53 +11,58 @@ export default async function KaraokeRequestPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: promotions } = await supabase
-    .from("karaoke_promotions")
-    .select(
-      "id, credits_balance, credits_required, tj_enabled, ky_enabled, reference_url, submission:submissions ( id, title, artist_name, melon_url ), request:karaoke_requests ( id, title, artist, recommendation_public )",
-    )
-    .eq("status", "ACTIVE")
-    .gt("credits_balance", 0)
-    .order("credits_balance", { ascending: false })
-    .limit(12);
+  // 크레딧 운영 보류: 추천 공개/적립용 프로모션 조회 숨김
+  // const { data: promotions } = await supabase
+  //   .from("karaoke_promotions")
+  //   .select(
+  //     "id, credits_balance, credits_required, tj_enabled, ky_enabled, reference_url, submission:submissions ( id, title, artist_name, melon_url ), request:karaoke_requests ( id, title, artist, recommendation_public )",
+  //   )
+  //   .eq("status", "ACTIVE")
+  //   .gt("credits_balance", 0)
+  //   .order("credits_balance", { ascending: false })
+  //   .limit(12);
 
-  let creditBalance = 0;
+  // 크레딧 운영 보류: 보유 크레딧 조회 숨김
+  // let creditBalance = 0;
   let requests: Array<{
     id: string;
     title: string;
     artist: string | null;
-	    file_path?: string | null;
-	    recommendation_public?: boolean | null;
-	    status: string;
+    file_path?: string | null;
+    // 크레딧 운영 보류: 추천 공개 상태 숨김
+    // recommendation_public?: boolean | null;
+    status: string;
     created_at: string;
     updated_at: string | null;
   }> = [];
   if (user) {
-    const { data: creditRow } = await supabase
-      .from("karaoke_credits")
-      .select("balance")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    creditBalance = creditRow?.balance ?? 0;
+    // 크레딧 운영 보류: 보유 크레딧 조회 숨김
+    // const { data: creditRow } = await supabase
+    //   .from("karaoke_credits")
+    //   .select("balance")
+    //   .eq("user_id", user.id)
+    //   .maybeSingle();
+    // creditBalance = creditRow?.balance ?? 0;
 
-	    const { data: requestRows } = await supabase
-	      .from("karaoke_requests")
-	      .select("id, title, artist, file_path, recommendation_public, status, created_at, updated_at")
-	      .eq("user_id", user.id)
+    const { data: requestRows } = await supabase
+      .from("karaoke_requests")
+      .select("id, title, artist, file_path, status, created_at, updated_at")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     requests = requestRows ?? [];
   }
 
-  const normalizedPromotions =
-    promotions?.map((promotion) => ({
-      ...promotion,
-      submission: Array.isArray(promotion.submission)
-        ? promotion.submission[0]
-        : promotion.submission,
-      request: Array.isArray(promotion.request)
-        ? promotion.request[0]
-        : promotion.request,
-    })) ?? [];
+  // 크레딧 운영 보류: 추천 공개/적립용 프로모션 정규화 숨김
+  // const normalizedPromotions =
+  //   promotions?.map((promotion) => ({
+  //     ...promotion,
+  //     submission: Array.isArray(promotion.submission)
+  //       ? promotion.submission[0]
+  //       : promotion.submission,
+  //     request: Array.isArray(promotion.request)
+  //       ? promotion.request[0]
+  //       : promotion.request,
+  //   })) ?? [];
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
@@ -68,14 +73,13 @@ export default async function KaraokeRequestPage() {
         노래방 등록
       </h1>
       <p className="mt-3 text-sm font-semibold text-muted-foreground">
-        비회원도 요청할 수 있으며, 추천 참여로 크레딧을 적립할 수 있습니다.
+        비회원도 요청할 수 있으며, 진행상황 탭에서 접수 내역을 확인할 수 있습니다.
       </p>
 
       <div className="mt-8 rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+        {/* 크레딧 운영 보류: 추천 공개/적립 탭 props 숨김 */}
         <KaraokeTabs
           userId={user?.id ?? null}
-          promotions={normalizedPromotions}
-          creditBalance={creditBalance}
           requests={requests}
         />
       </div>

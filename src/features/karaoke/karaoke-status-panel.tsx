@@ -11,7 +11,8 @@ type KaraokeRequest = {
   title: string;
   artist: string | null;
   file_path?: string | null;
-  recommendation_public?: boolean | null;
+  // 크레딧 운영 보류: 추천 공개 상태 숨김
+  // recommendation_public?: boolean | null;
   status: string;
   created_at: string;
   updated_at?: string | null;
@@ -48,7 +49,7 @@ export function KaraokeStatusPanel({
     if (!supabase || !userId) return;
     const { data } = await supabase
       .from("karaoke_requests")
-      .select("id, title, artist, file_path, recommendation_public, status, created_at, updated_at")
+      .select("id, title, artist, file_path, status, created_at, updated_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
     if (data) {
@@ -120,9 +121,11 @@ export function KaraokeStatusPanel({
                   {statusLabelMap[request.status] ?? request.status}
                 </span>
               </div>
+              {/* 크레딧 운영 보류: 추천 공개 상태 배지 숨김
               <p className="mt-3 inline-flex rounded-full border border-border/70 px-3 py-1 text-xs font-semibold text-muted-foreground">
                 추천 요청 {request.recommendation_public ? "공개" : "비공개"}
               </p>
+              */}
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {steps.map((step, index) => {
                   const active = index <= currentIndex;

@@ -2,10 +2,13 @@
 
 import * as React from "react";
 
-import { KaraokeCreditPanel } from "@/features/karaoke/karaoke-credit-panel";
+// 크레딧 운영 보류: 크레딧 적립 패널 연결 숨김
+// import { KaraokeCreditPanel } from "@/features/karaoke/karaoke-credit-panel";
 import { KaraokeForm } from "@/features/karaoke/karaoke-form";
 import { KaraokeStatusPanel } from "@/features/karaoke/karaoke-status-panel";
 
+/*
+크레딧 운영 보류: 추천 공개/적립 탭 재개 시 복구
 type PromotionSummary = {
   id: string;
   credits_balance: number;
@@ -24,6 +27,7 @@ type PromotionSummary = {
     recommendation_public?: boolean | null;
   } | null;
 };
+*/
 
 type KaraokeRequest = {
   id: string;
@@ -36,17 +40,18 @@ type KaraokeRequest = {
   updated_at?: string | null;
 };
 
-type TabKey = "apply" | "credit" | "status";
+type TabKey = "apply" | "status";
 
 export function KaraokeTabs({
   userId,
-  promotions,
-  creditBalance,
+  // 크레딧 운영 보류: 추천 공개/적립 탭 재개 시 복구
+  // promotions,
+  // creditBalance,
   requests,
 }: {
   userId?: string | null;
-  promotions: PromotionSummary[];
-  creditBalance: number;
+  // promotions: PromotionSummary[];
+  // creditBalance: number;
   requests: KaraokeRequest[];
 }) {
   const [tab, setTab] = React.useState<TabKey>("apply");
@@ -65,6 +70,7 @@ export function KaraokeTabs({
         >
           노래방 등록 신청하기
         </button>
+        {/* 크레딧 운영 보류: 적립 탭 숨김
         <button
           type="button"
           onClick={() => setTab("credit")}
@@ -76,6 +82,7 @@ export function KaraokeTabs({
         >
           크레딧 적립하기
         </button>
+        */}
         <button
           type="button"
           onClick={() => setTab("status")}
@@ -90,8 +97,9 @@ export function KaraokeTabs({
       </div>
 
       {tab === "apply" && (
-        <KaraokeForm userId={userId ?? null} creditBalance={creditBalance} />
+        <KaraokeForm userId={userId ?? null} />
       )}
+      {/* 크레딧 운영 보류: 적립 패널 숨김
       {tab === "credit" && (
         <KaraokeCreditPanel
           userId={userId ?? null}
@@ -99,6 +107,7 @@ export function KaraokeTabs({
           creditBalance={creditBalance}
         />
       )}
+      */}
       {tab === "status" && (
         <KaraokeStatusPanel
           userId={userId ?? null}

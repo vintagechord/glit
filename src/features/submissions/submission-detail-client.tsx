@@ -24,12 +24,6 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { APP_CONFIG } from "@/lib/config";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
-import {
-  RATING_IMAGE_MAP,
-  LABEL_GUIDE_KEY,
-  isRatingCode,
-  type RatingCode,
-} from "@/lib/mv-assets";
 
 type Submission = {
   id: string;
@@ -105,6 +99,7 @@ type Submission = {
     title_role?: string | null;
     broadcast_selected?: boolean | null;
   }> | null;
+  result_notified_at?: string | null;
 };
 
 type StationReview = {
@@ -119,6 +114,11 @@ type StationReview = {
     code: string | null;
     logo_url?: string | null;
   } | null;
+};
+
+type DownloadLinkResponse = {
+  url?: string;
+  error?: string;
 };
 
 const fallbackStationLogo = "/station-logos/default.svg";
@@ -323,6 +323,13 @@ const getSubmissionTypeLabel = (type: string) => {
   }
 };
 
+const openDownloadUrl = (url: string) => {
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    window.location.href = url;
+  }
+};
+
 export function SubmissionDetailClient({
   submissionId,
   initialSubmission,
@@ -374,10 +381,14 @@ export function SubmissionDetailClient({
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
-  const isMvSubmission =
-    submission.type === "MV_BROADCAST" || submission.type === "MV_DISTRIBUTION";
+  const isMvDistribution = submission.type === "MV_DISTRIBUTION";
+  const isMvBroadcast = submission.type === "MV_BROADCAST";
+  const isMvSubmission = isMvDistribution || isMvBroadcast;
   const isResultReady =
     submission.status === "RESULT_READY" || submission.status === "COMPLETED";
+  const hasResultSignal = Boolean(
+    isResultReady || submission.result_status || submission.result_notified_at,
+  );
   const isPaymentDone =
     submission.payment_status === "PAID" || submission.status === "COMPLETED";
   const isPaymentPending =
@@ -422,9 +433,10 @@ export function SubmissionDetailClient({
     return 1;
   })();
   const isReviewComplete =
-    isMvSubmission &&
-    Boolean(submission.mv_desired_rating) &&
-    isResultReady;
+    (isMvDistribution && Boolean(submission.mv_desired_rating) && hasResultSignal) ||
+    (isMvBroadcast && hasResultSignal);
+  const canDownloadMvReviewAssets =
+    isMvDistribution && Boolean(submission.mv_desired_rating) && hasResultSignal;
   const flowStatusNotice = (() => {
     if (isReviewComplete) {
       return {
@@ -465,17 +477,17 @@ export function SubmissionDetailClient({
 
   const mvOptions = React.useMemo(() => {
     if (!isMvSubmission) return null;
-    if (submission.type === "MV_DISTRIBUTION") {
+    if (isMvDistribution) {
       // 온라인 유통 심의 기본 옵션은 영상물등급위원회로 표기
-      return ["영상물등급위원회", ...stationNames];
+      return Array.from(new Set(["영상물등급위원회", ...stationNames]));
     }
     return stationNames;
-  }, [isMvSubmission, stationNames, submission.type]);
+  }, [isMvDistribution, isMvSubmission, stationNames]);
 
   const renderStationReviews =
     stationReviews.length > 0
       ? stationReviews
-      : submission.type === "MV_DISTRIBUTION"
+      : isMvDistribution
         ? [
           {
             id: `fallback-${submission.id}`,
@@ -499,26 +511,57 @@ export function SubmissionDetailClient({
     return latest;
   }, null);
 
+  const openSubmissionDownload = React.useCallback(
+    async (assetPath: "mv-rating-image" | "mv-guide" | "mv-certificate") => {
+      const params = new URLSearchParams();
+      if (guestToken) params.set("guestToken", guestToken);
+      const query = params.toString();
+      const res = await fetch(
+        `/api/submissions/${submission.id}/${assetPath}${query ? `?${query}` : ""}`,
+      );
+      const json = (await res.json().catch(() => null)) as DownloadLinkResponse | null;
+      if (!res.ok || !json?.url) {
+        throw new Error(json?.error || "다운로드 링크를 생성하지 못했습니다.");
+      }
+      openDownloadUrl(json.url);
+    },
+    [guestToken, submission.id],
+  );
+
   const handleGuideDownload = async () => {
-    if (LABEL_GUIDE_KEY.startsWith("http")) {
-      window.open(LABEL_GUIDE_KEY, "_blank", "noopener,noreferrer");
+    if (!isMvDistribution) {
+      alert("온라인 업로드용 뮤직비디오 심의만 가이드를 다운로드할 수 있습니다.");
       return;
     }
-    const params = new URLSearchParams();
-    params.set("filePath", LABEL_GUIDE_KEY);
-    if (guestToken) params.set("guestToken", guestToken);
-    window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
+    if (!canDownloadMvReviewAssets) {
+      alert("심의 결과 통지 후 다운로드할 수 있습니다.");
+      return;
+    }
+    try {
+      await openSubmissionDownload("mv-guide");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "가이드를 불러오지 못했습니다.");
+    }
   };
 
   const handleCertificateDownload = async () => {
+    if (!isMvDistribution) {
+      alert("온라인 업로드용 뮤직비디오 심의만 필증을 다운로드할 수 있습니다.");
+      return;
+    }
+    if (!canDownloadMvReviewAssets) {
+      alert("심의 결과 통지 후 다운로드할 수 있습니다.");
+      return;
+    }
     if (!submission.certificate_b2_path) {
       alert("필증이 아직 업로드되지 않았습니다.");
       return;
     }
-    const params = new URLSearchParams();
-    params.set("filePath", submission.certificate_b2_path);
-    if (guestToken) params.set("guestToken", guestToken);
-    window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
+    try {
+      await openSubmissionDownload("mv-certificate");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "필증을 불러오지 못했습니다.");
+    }
   };
 
   const buildTrackSummary = React.useCallback(
@@ -682,7 +725,9 @@ export function SubmissionDetailClient({
           : "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white",
       description: isMvSubmission
         ? isMvResultDelivered
-          ? "심의 등급과 결과가 확정되었습니다."
+          ? isMvDistribution
+            ? "심의 등급과 결과가 확정되었습니다."
+            : "심의 결과가 확정되었습니다."
           : "관리자 결과 저장 후 진행표가 마감됩니다."
         : stationSummary.actionNeeded > 0
           ? `확인 필요 ${stationSummary.actionNeeded}곳`
@@ -739,7 +784,11 @@ export function SubmissionDetailClient({
                   <span className="hidden text-left sm:block">방송국</span>
                   <span className="justify-self-center text-center">접수 상태</span>
                   <span className="justify-self-center text-center">
-                    {isMvSubmission ? "등급 분류" : "트랙 결과"}
+                    {isMvDistribution
+                      ? "등급 분류"
+                      : isMvBroadcast
+                        ? "심의 결과"
+                        : "트랙 결과"}
                   </span>
                   <span className="hidden justify-self-center text-center sm:block">
                     최근 업데이트
@@ -784,7 +833,7 @@ export function SubmissionDetailClient({
                       pending: pendingCount,
                     };
                     const resultTone =
-                      isReviewComplete && submission.mv_desired_rating
+                      isMvDistribution && isReviewComplete && submission.mv_desired_rating
                         ? {
                           label: mvRatingLabel(submission.mv_desired_rating),
                           tone:
@@ -898,13 +947,13 @@ export function SubmissionDetailClient({
   );
 
   const renderMvReviewAssetsSection = () =>
-    isMvSubmission ? (
+    isMvDistribution ? (
       <div className={detailPanelClass}>
         <p className={detailKickerClass}>
           심의 등급 / 가이드 / 필증
         </p>
         <div className="mt-4 space-y-3 text-sm">
-          {submission.mv_desired_rating ? (
+          {canDownloadMvReviewAssets ? (
             <div className="rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-[13px] font-black text-black dark:border-[#f2cf27]">
               심의 등급: {mvRatingLabel(submission.mv_desired_rating)} (설정 완료)
               <span className="ml-2 text-xs font-normal text-black/80">
@@ -913,7 +962,7 @@ export function SubmissionDetailClient({
             </div>
           ) : (
             <div className="rounded-[8px] border-2 border-dashed border-border bg-background px-4 py-3 text-[13px] text-muted-foreground">
-              심의 등급이 아직 설정되지 않았습니다.
+              심의 등급과 결과 파일은 결과 통지 후 제공됩니다.
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
@@ -923,12 +972,12 @@ export function SubmissionDetailClient({
             <button
               type="button"
               onClick={handleRatingDownload}
-              disabled={!submission.mv_desired_rating || isRatingDownloading}
+              disabled={!canDownloadMvReviewAssets || isRatingDownloading}
               className={detailActionButtonClass}
             >
-              {submission.mv_desired_rating
+              {canDownloadMvReviewAssets
                 ? `${mvRatingLabel(submission.mv_desired_rating)} 이미지 다운로드`
-                : "등급 미설정"}
+                : "결과 통지 후 다운로드"}
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -938,9 +987,12 @@ export function SubmissionDetailClient({
             <button
               type="button"
               onClick={handleGuideDownload}
+              disabled={!canDownloadMvReviewAssets}
               className={detailActionButtonClass}
             >
-              가이드 PDF 다운로드
+              {canDownloadMvReviewAssets
+                ? "가이드 PDF 다운로드"
+                : "결과 통지 후 다운로드"}
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -950,12 +1002,14 @@ export function SubmissionDetailClient({
             <button
               type="button"
               onClick={handleCertificateDownload}
-              disabled={!submission.certificate_b2_path}
+              disabled={!canDownloadMvReviewAssets || !submission.certificate_b2_path}
               className={detailActionButtonClass}
             >
               {submission.certificate_original_name
                 ? submission.certificate_original_name
-                : "필증 미등록"}
+                : canDownloadMvReviewAssets
+                  ? "필증 미등록"
+                  : "결과 통지 후 다운로드"}
             </button>
             {!submission.certificate_b2_path ? (
               <span className="text-xs text-muted-foreground">
@@ -1135,21 +1189,16 @@ export function SubmissionDetailClient({
   const handleRatingDownload = async () => {
     setIsRatingDownloading(true);
     try {
-      const rating = submission.mv_desired_rating;
-      const code: RatingCode | null =
-        rating && isRatingCode(rating) ? rating : null;
-      const path = code ? RATING_IMAGE_MAP[code] : null;
-      if (!code || !path) {
+      if (!isMvDistribution) {
+        throw new Error("온라인 업로드용 뮤직비디오 심의만 등급표를 다운로드할 수 있습니다.");
+      }
+      if (!canDownloadMvReviewAssets) {
+        throw new Error("심의 결과 통지 후 다운로드할 수 있습니다.");
+      }
+      if (!submission.mv_desired_rating) {
         throw new Error("등급이 설정되지 않았습니다.");
       }
-      if (path.startsWith("http")) {
-        window.open(path, "_blank", "noopener,noreferrer");
-      } else {
-        const params = new URLSearchParams();
-        params.set("filePath", path);
-        if (guestToken) params.set("guestToken", guestToken);
-        window.open(`/api/b2/download?${params.toString()}`, "_blank", "noopener,noreferrer");
-      }
+      await openSubmissionDownload("mv-rating-image");
     } catch (error) {
       alert(error instanceof Error ? error.message : "등급 이미지를 불러오지 못했습니다.");
     } finally {
@@ -1562,10 +1611,12 @@ export function SubmissionDetailClient({
                       <p className="text-xs text-muted-foreground">용도</p>
                       <p className="mt-1 font-semibold">{submission.mv_usage || "-"}</p>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">심의 등급</p>
-                      <p className="mt-1 font-semibold">{submission.mv_desired_rating || "-"}</p>
-                    </div>
+                    {isMvDistribution ? (
+                      <div>
+                        <p className="text-xs text-muted-foreground">심의 등급</p>
+                        <p className="mt-1 font-semibold">{submission.mv_desired_rating || "-"}</p>
+                      </div>
+                    ) : null}
                     <div>
                       <p className="text-xs text-muted-foreground">곡 제목</p>
                       <p className="mt-1 font-semibold">{mvSongTitleDisplay}</p>
@@ -1712,7 +1763,11 @@ export function SubmissionDetailClient({
                       <span className="hidden text-left sm:block">방송국</span>
                       <span className="justify-self-center text-center">접수 상태</span>
                       <span className="justify-self-center text-center">
-                        {isMvSubmission ? "등급 분류" : "트랙 결과"}
+                        {isMvDistribution
+                          ? "등급 분류"
+                          : isMvBroadcast
+                            ? "심의 결과"
+                            : "트랙 결과"}
                       </span>
                       <span className="hidden justify-self-center text-center sm:block">
                         최근 업데이트
@@ -1753,7 +1808,7 @@ export function SubmissionDetailClient({
                           pending: pendingCount,
                         };
                         const resultTone =
-                          isReviewComplete && submission.mv_desired_rating
+                          isMvDistribution && isReviewComplete && submission.mv_desired_rating
                             ? {
                               label: mvRatingLabel(submission.mv_desired_rating),
                               tone: "bg-emerald-500/15 text-emerald-800",

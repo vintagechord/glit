@@ -12,6 +12,7 @@ import { APP_CONFIG } from "@/lib/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
+import { isApplicationFormFile } from "@/lib/submission-files";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 
 export type SubmissionActionState = {
@@ -750,6 +751,9 @@ export async function saveAlbumSubmissionAction(
   const bankDepositorNameValue = parsed.data.bankDepositorName?.trim() ?? "";
   const paymentDocumentType = parsed.data.paymentDocumentType;
   const cashReceiptPurpose = parsed.data.cashReceiptPurpose;
+  const hasApplicationFormAttachment =
+    parsed.data.files?.some((file) => isApplicationFormFile(file.originalName)) ??
+    false;
   const cashReceiptPhoneValue = parsed.data.cashReceiptPhone?.trim() ?? "";
   const cashReceiptBusinessNumberDigits = normalizeDigits(
     parsed.data.cashReceiptBusinessNumber,
@@ -765,17 +769,35 @@ export async function saveAlbumSubmissionAction(
   if (
     isSubmitted &&
     isGuest &&
+    !hasApplicationFormAttachment &&
     (!guestNameValue || !guestEmailValue || !guestPhoneValue)
   ) {
     return { error: "비회원 정보(담당자, 연락처, 이메일)를 입력해주세요." };
   }
-  if (isSubmitted && isGuest && !isValidEmailFormat(guestEmailValue)) {
+  if (
+    isSubmitted &&
+    isGuest &&
+    guestEmailValue &&
+    !isValidEmailFormat(guestEmailValue)
+  ) {
     return { error: "비회원 이메일 형식을 확인해주세요." };
   }
-  if (isSubmitted && !isAdminReviewer && !isOneClick && !artistNameValue) {
+  if (
+    isSubmitted &&
+    !isAdminReviewer &&
+    !isOneClick &&
+    !hasApplicationFormAttachment &&
+    !artistNameValue
+  ) {
     return { error: "아티스트명을 입력해주세요." };
   }
-  if (isSubmitted && !isAdminReviewer && !isOneClick && !titleValue) {
+  if (
+    isSubmitted &&
+    !isAdminReviewer &&
+    !isOneClick &&
+    !hasApplicationFormAttachment &&
+    !titleValue
+  ) {
     return { error: "앨범 제목을 입력해주세요." };
   }
 
@@ -1294,6 +1316,9 @@ export async function saveMvSubmissionAction(
   const bankDepositorNameValue = parsed.data.bankDepositorName?.trim() ?? "";
   const paymentDocumentType = parsed.data.paymentDocumentType;
   const cashReceiptPurpose = parsed.data.cashReceiptPurpose;
+  const hasApplicationFormAttachment =
+    parsed.data.files?.some((file) => isApplicationFormFile(file.originalName)) ??
+    false;
   const cashReceiptPhoneValue = parsed.data.cashReceiptPhone?.trim() ?? "";
   const cashReceiptBusinessNumberDigits = normalizeDigits(
     parsed.data.cashReceiptBusinessNumber,
@@ -1308,17 +1333,33 @@ export async function saveMvSubmissionAction(
   if (
     isSubmitted &&
     isGuest &&
+    !hasApplicationFormAttachment &&
     (!guestNameValue || !guestEmailValue || !guestPhoneValue)
   ) {
     return { error: "비회원 정보(담당자, 연락처, 이메일)를 입력해주세요." };
   }
-  if (isSubmitted && isGuest && !isValidEmailFormat(guestEmailValue)) {
+  if (
+    isSubmitted &&
+    isGuest &&
+    guestEmailValue &&
+    !isValidEmailFormat(guestEmailValue)
+  ) {
     return { error: "비회원 이메일 형식을 확인해주세요." };
   }
-  if (isSubmitted && !isAdminReviewer && !titleValue) {
+  if (
+    isSubmitted &&
+    !isAdminReviewer &&
+    !hasApplicationFormAttachment &&
+    !titleValue
+  ) {
     return { error: "제목을 입력해주세요." };
   }
-  if (isSubmitted && !isAdminReviewer && !artistNameValue) {
+  if (
+    isSubmitted &&
+    !isAdminReviewer &&
+    !hasApplicationFormAttachment &&
+    !artistNameValue
+  ) {
     return { error: "아티스트명을 입력해주세요." };
   }
 
@@ -1390,11 +1431,17 @@ export async function saveMvSubmissionAction(
   if (
     isSubmitted &&
     !isAdminReviewer &&
+    !hasApplicationFormAttachment &&
     !parsed.data.artistNameOfficial?.trim()
   ) {
     return { error: "아티스트명 공식 표기를 입력해주세요." };
   }
-  if (isSubmitted && !isAdminReviewer && !parsed.data.lyrics?.trim()) {
+  if (
+    isSubmitted &&
+    !isAdminReviewer &&
+    !hasApplicationFormAttachment &&
+    !parsed.data.lyrics?.trim()
+  ) {
     return { error: "가사를 입력해주세요." };
   }
 
@@ -1425,7 +1472,10 @@ export async function saveMvSubmissionAction(
     mv_distribution_company: parsed.data.distributionCompany?.trim() || null,
     mv_business_reg_no: parsed.data.businessRegNo?.trim() || null,
     mv_usage: parsed.data.usage?.trim() || null,
-    mv_desired_rating: parsed.data.desiredRating?.trim() || null,
+    mv_desired_rating:
+      parsed.data.mvType === "MV_DISTRIBUTION"
+        ? parsed.data.desiredRating?.trim() || null
+        : null,
     mv_memo: parsed.data.memo?.trim() || null,
     mv_song_title: songTitleValue,
     mv_song_title_kr: songTitleKrValue,

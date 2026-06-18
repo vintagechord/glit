@@ -23,10 +23,11 @@ const uploadMaxBytes = APP_CONFIG.uploadMaxMb * 1024 * 1024;
 
 export function KaraokeForm({
   userId,
-  creditBalance = 0,
+  // 크레딧 운영 보류: 추천 공개/예치 기능 재개 시 복구
+  // creditBalance = 0,
 }: {
   userId?: string | null;
-  creditBalance?: number;
+  // creditBalance?: number;
 }) {
   const isGuest = !userId;
   const [title, setTitle] = React.useState("");
@@ -41,10 +42,11 @@ export function KaraokeForm({
   const [bankDepositorName, setBankDepositorName] = React.useState("");
   const [tjRequested, setTjRequested] = React.useState(true);
   const [kyRequested, setKyRequested] = React.useState(true);
-  const [recommendationPublic, setRecommendationPublic] = React.useState(false);
-  const [promotionCredits, setPromotionCredits] = React.useState(() =>
-    Math.min(10, Math.max(0, creditBalance)),
-  );
+  // 크레딧 운영 보류: 추천 공개/예치 기능 숨김
+  // const [recommendationPublic, setRecommendationPublic] = React.useState(false);
+  // const [promotionCredits, setPromotionCredits] = React.useState(() =>
+  //   Math.min(10, Math.max(0, creditBalance)),
+  // );
   const [file, setFile] = React.useState<File | null>(null);
   const [upload, setUpload] = React.useState<UploadState>({
     name: "",
@@ -166,18 +168,19 @@ export function KaraokeForm({
       setNotice({ error: "입금자명을 입력해주세요." });
       return;
     }
-    if (recommendationPublic && isGuest) {
-      setNotice({ error: "추천 공개는 로그인 후 이용할 수 있습니다." });
-      return;
-    }
-    if (recommendationPublic && promotionCredits < 1) {
-      setNotice({ error: "추천 공개에는 최소 1크레딧이 필요합니다." });
-      return;
-    }
-    if (recommendationPublic && promotionCredits > creditBalance) {
-      setNotice({ error: "보유한 크레딧보다 많이 사용할 수 없습니다." });
-      return;
-    }
+    // 크레딧 운영 보류: 추천 공개/예치 검증 숨김
+    // if (recommendationPublic && isGuest) {
+    //   setNotice({ error: "추천 공개는 로그인 후 이용할 수 있습니다." });
+    //   return;
+    // }
+    // if (recommendationPublic && promotionCredits < 1) {
+    //   setNotice({ error: "추천 공개에는 최소 1크레딧이 필요합니다." });
+    //   return;
+    // }
+    // if (recommendationPublic && promotionCredits > creditBalance) {
+    //   setNotice({ error: "보유한 크레딧보다 많이 사용할 수 없습니다." });
+    //   return;
+    // }
 
     setIsSubmitting(true);
     setNotice({});
@@ -218,8 +221,9 @@ export function KaraokeForm({
           paymentMethod === "BANK" ? bankDepositorName.trim() : undefined,
         tjRequested,
         kyRequested,
-        recommendationPublic,
-        promotionCredits: recommendationPublic ? promotionCredits : 0,
+        // 크레딧 운영 보류: 추천 공개/예치 기능 비활성
+        recommendationPublic: false,
+        promotionCredits: 0,
         guestName: isGuest ? guestName : undefined,
         guestEmail: isGuest ? guestEmail : undefined,
         guestPhone: isGuest ? contact : undefined,
@@ -264,8 +268,9 @@ export function KaraokeForm({
       setBankDepositorName("");
       setTjRequested(true);
       setKyRequested(true);
-      setRecommendationPublic(false);
-      setPromotionCredits(Math.min(10, Math.max(0, creditBalance)));
+      // 크레딧 운영 보류: 추천 공개/예치 상태 초기화 숨김
+      // setRecommendationPublic(false);
+      // setPromotionCredits(Math.min(10, Math.max(0, creditBalance)));
       setFile(null);
       setUpload({ name: "", progress: 0, status: "idle" });
     } catch {
@@ -313,12 +318,14 @@ export function KaraokeForm({
         <p className="mt-3 text-xs text-muted-foreground">
           기본 신청 비용 {formatCurrency(APP_CONFIG.karaokeFeeKrw)}원
         </p>
+        {/* 크레딧 운영 보류: 추천 구조 안내 숨김
         <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary shadow-sm dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
           <p className="text-xs font-semibold uppercase tracking-[0.25em]">추천 구조</p>
           <p className="mt-1">
             추천 공개를 켜면 보유 크레딧을 예치하고, 다른 회원이 추천 인증을 완료할 때마다 1크레딧이 지급됩니다.
           </p>
         </div>
+        */}
       </div>
 
       <div className="grid gap-6">
@@ -458,6 +465,7 @@ export function KaraokeForm({
           </div>
         </div>
 
+        {/* 크레딧 운영 보류: 추천 공개/예치 섹션 숨김
         <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             추천 요청 공개
@@ -520,6 +528,7 @@ export function KaraokeForm({
             </div>
           ) : null}
         </div>
+        */}
 
         <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">

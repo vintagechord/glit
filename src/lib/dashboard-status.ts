@@ -437,9 +437,12 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
       }
 
       if (rows.length === 0) {
-        const fallbackStationName = submissionType.startsWith("MV")
-          ? "영상물등급위원회"
-          : "방송국 확인 중";
+        const fallbackStationName =
+          submissionType === "MV_DISTRIBUTION"
+            ? "영상물등급위원회"
+            : submissionType === "MV_BROADCAST"
+              ? "신청 방송국"
+              : "방송국 확인 중";
         rows.push({
           id: `placeholder-${submission.id}`,
           submission_id: submission.id,

@@ -198,7 +198,7 @@ export default function Home() {
                   {card.description}
                 </p>
                 <div className={`mt-auto inline-flex w-fit items-center gap-2 px-4 py-3 text-sm font-black tracking-normal transition group-hover:translate-x-1 ${card.actionClass}`}>
-                  시작 <span aria-hidden="true">→</span>
+                  접수 <span aria-hidden="true">→</span>
                 </div>
               </div>
             </ReliableLink>

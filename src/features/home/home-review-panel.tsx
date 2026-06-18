@@ -26,6 +26,7 @@ type SubmissionSummary = {
   id: string;
   title: string | null;
   artist_name?: string | null;
+  type?: string | null;
   status: string;
   updated_at: string;
   payment_status?: string | null;
@@ -489,7 +490,12 @@ export function HomeReviewPanel({
     ? activeStationsMap[activeSubmissionId] ?? []
     : [];
   const submissionLabels = getSubmissionLabels(activeSubmission);
-  const trackResultLabel = tab === "mv" ? "등급 분류" : "트랙 결과";
+  const trackResultLabel =
+    activeSubmission?.type === "MV_DISTRIBUTION"
+      ? "등급 분류"
+      : activeSubmission?.type === "MV_BROADCAST"
+        ? "심의 결과"
+        : "트랙 결과";
   const isLive =
     (forceLiveBadge && isLoggedIn) ||
     (isLoggedIn &&
@@ -762,9 +768,11 @@ export function HomeReviewPanel({
     <div className={`min-w-0 w-full rounded-[10px] border-2 border-[#111111] bg-card ${shellPaddingClass} ${shellLayoutClass} shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] ${panelMinHeightClassName}`}>
       <div className="flex items-center justify-between text-xs font-black uppercase tracking-normal text-foreground/72 sm:text-sm dark:text-white/82">
         <span>
-          {activeSubmission
+          {isLoggedIn && activeSubmission
             ? `${submissionLabels.summary} 심의`
-            : "나의 심의"}
+            : isLoggedIn
+              ? "나의 심의"
+              : ""}
         </span>
         <span className="inline-flex items-center gap-2">
           {isLoggedIn ? (

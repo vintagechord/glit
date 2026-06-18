@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { headObject, presignGetUrl, getB2Config, B2ConfigError } from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
   } else if (certMatch) {
     const submissionId = certMatch[1];
     const { submission, error } = await ensureSubmissionOwner(submissionId, guestToken);
+    let certificateSubmissionType = submission?.type ?? null;
     if (error === "UNAUTHORIZED") {
       return NextResponse.json({ error: "로그인 또는 조회코드가 필요합니다." }, { status: 401 });
     }
@@ -59,8 +61,21 @@ export async function GET(req: NextRequest) {
       if (isAdmin !== true) {
         return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
       }
+      const admin = createAdminClient();
+      const { data: adminSubmission } = await admin
+        .from("submissions")
+        .select("type")
+        .eq("id", submissionId)
+        .maybeSingle();
+      certificateSubmissionType = adminSubmission?.type ?? null;
     }
-    if (submission || certMatch) {
+    if (certificateSubmissionType !== "MV_DISTRIBUTION") {
+      return NextResponse.json(
+        { error: "온라인 업로드용 뮤직비디오 심의 필증만 다운로드할 수 있습니다." },
+        { status: 403 },
+      );
+    }
+    if (submission || certificateSubmissionType) {
       allowed = true;
     }
   }

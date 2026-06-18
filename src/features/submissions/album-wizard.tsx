@@ -14,6 +14,12 @@ import {
   requestLyricsTranslations,
 } from "@/lib/lyrics-tools";
 import {
+  albumApplicationForms,
+  isApplicationFormFile,
+  isApplicationFormMime,
+  isAudioUploadFile,
+} from "@/lib/submission-files";
+import {
   buildProfanityExtraRules,
   buildLegacyProfanityMatchers,
   extractProfanityWords,
@@ -88,6 +94,8 @@ type UploadResult = {
   durationSeconds?: number;
   accessUrl?: string;
 };
+
+type ApplicationFormMode = "online" | "upload";
 
 type DraftSnapshot = {
   draft: AlbumDraft;
@@ -266,6 +274,8 @@ export function AlbumWizard({
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
   const [isOneClick, setIsOneClick] = React.useState(false);
+  const [applicationFormMode, setApplicationFormMode] =
+    React.useState<ApplicationFormMode>("online");
   const [selectedPackage, setSelectedPackage] =
     React.useState<PackageOption | null>(packages[0] ?? null);
   const [tracks, setTracks] = React.useState<TrackInput[]>([initialTrack]);
@@ -378,6 +388,7 @@ export function AlbumWizard({
   const profanityPattern = profanityMatchers?.pattern ?? null;
   const profanityTestPattern = profanityMatchers?.testPattern ?? null;
   const activeTrack = tracks[activeTrackIndex] ?? tracks[0];
+  const isDownloadedApplicationFlow = applicationFormMode === "upload";
   const profanityWords = extractProfanityWords(
     activeTrack.lyrics,
     profanityPattern,
@@ -487,8 +498,8 @@ export function AlbumWizard({
   ];
   const albumPaymentReady = albumPaymentReadiness.every((item) => item.ready);
   const albumQuickSteps = isOneClick
-    ? ["담당자 정보", "멜론 링크", "음원 WAV/ZIP", "결제"]
-    : ["담당자 정보", "앨범·트랙 정보", "음원 WAV/ZIP", "결제"];
+    ? ["담당자 정보", "멜론 링크", "음원 WAV/MP3/ZIP", "결제"]
+    : ["담당자 정보", "앨범·트랙 정보", "음원 WAV/MP3/ZIP", "결제"];
 
   React.useEffect(() => {
     if (additionalAlbumCount > 0 && paymentMethod === "CARD") {
@@ -588,8 +599,11 @@ export function AlbumWizard({
   }, [currentGuestToken, isGuest]);
 
   const createDraft = React.useCallback(async (options?: { force?: boolean }) => {
-    if (isPreparingDraft) return;
-    if (!options?.force && draftInitAttemptedRef.current) return;
+    if (currentSubmissionId) return currentSubmissionId;
+    if (isPreparingDraft) return null;
+    if (!options?.force && draftInitAttemptedRef.current) {
+      return currentSubmissionId;
+    }
     draftInitAttemptedRef.current = true;
     setIsPreparingDraft(true);
     setDraftError(null);
@@ -608,7 +622,7 @@ export function AlbumWizard({
       };
       if (res.ok && json?.submissionId) {
         setCurrentSubmissionId(json.submissionId);
-        return;
+        return json.submissionId;
       }
       setDraftError(json?.error || "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.");
     } catch (error) {
@@ -620,7 +634,8 @@ export function AlbumWizard({
     } finally {
       setIsPreparingDraft(false);
     }
-  }, [currentGuestToken, isGuest, isPreparingDraft]);
+    return null;
+  }, [currentGuestToken, currentSubmissionId, isGuest, isPreparingDraft]);
 
   React.useEffect(() => {
     if (!resumeChecked) return;
@@ -1045,24 +1060,19 @@ export function AlbumWizard({
       void createDraft({ force: true });
       return;
     }
-    const allowedTypes = new Set([
-      "audio/wav",
-      "audio/x-wav",
-      "application/zip",
-      "application/x-zip-compressed",
-    ]);
     let invalidNotice: string | null = null;
     const filtered = selected.filter((file) => {
       if (file.size > uploadMaxBytes) {
         invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
         return false;
       }
-      const lowerName = file.name.toLowerCase();
-      const hasAllowedExtension =
-        lowerName.endsWith(".wav") || lowerName.endsWith(".zip");
-      const hasAllowedMime = allowedTypes.has(file.type);
-      if (!hasAllowedExtension && !hasAllowedMime) {
-        invalidNotice = "WAV 또는 ZIP 파일만 업로드할 수 있습니다.";
+      const isAllowed =
+        isAudioUploadFile(file.name, file.type) ||
+        isApplicationFormFile(file.name) ||
+        isApplicationFormMime(file.type);
+      if (!isAllowed) {
+        invalidNotice =
+          "WAV, MP3, ZIP 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다.";
         return false;
       }
       return true;
@@ -1458,8 +1468,10 @@ export function AlbumWizard({
     [],
   );
 
-  const captureCurrentDraft = (): AlbumDraft => ({
-    submissionId: requireSubmissionId(),
+  const captureCurrentDraft = (
+    submissionId: string = requireSubmissionId(),
+  ): AlbumDraft => ({
+    submissionId,
     guestToken: currentGuestToken,
     title: title.trim(),
     artistName: artistName.trim(),
@@ -1982,6 +1994,35 @@ export function AlbumWizard({
       return false;
     }
 
+    if (!isAdminReviewer) {
+      const missingAudioFiles = drafts.filter(
+        (draft) =>
+          !draft.emailSubmitConfirmed &&
+          !draft.files.some((file) =>
+            isAudioUploadFile(file.originalName, file.mime),
+          ),
+      );
+      if (missingAudioFiles.length > 0) {
+        setNotice({
+          error: "음원 파일(WAV/MP3/ZIP)을 업로드하거나 이메일 제출을 선택해주세요.",
+        });
+        return false;
+      }
+    }
+
+    if (isDownloadedApplicationFlow && !isAdminReviewer) {
+      const missingApplicationForms = drafts.filter(
+        (draft) =>
+          !draft.files.some((file) => isApplicationFormFile(file.originalName)),
+      );
+      if (missingApplicationForms.length > 0) {
+        setNotice({
+          error: "작성한 신청서 파일(HWP/DOC/DOCX)을 함께 업로드해주세요.",
+        });
+        return false;
+      }
+    }
+
     return true;
   };
 
@@ -2140,7 +2181,10 @@ export function AlbumWizard({
               ? taxInvoiceBusinessNumber.trim() || undefined
               : undefined,
           status: saveStatus,
-          tracks: isOneClick ? undefined : mapTracksForSave(draft.tracks),
+          tracks:
+            isOneClick || isDownloadedApplicationFlow
+              ? undefined
+              : mapTracksForSave(draft.tracks),
           files: options.includeFiles ? draft.files : undefined,
         });
 
@@ -2220,6 +2264,10 @@ export function AlbumWizard({
   };
 
   const handleStep2Next = async () => {
+    if (isDownloadedApplicationFlow) {
+      await handleDownloadedApplicationContinue();
+      return;
+    }
     if (editingIndex !== null) {
       setNotice({ error: "수정 중인 앨범을 저장한 뒤 진행해주세요." });
       return;
@@ -2251,6 +2299,36 @@ export function AlbumWizard({
     setUploadDraftIndex(0);
     applyDraftToForm(allDrafts[0], {
       emailSubmitConfirmed: allDrafts[0].emailSubmitConfirmed,
+    });
+    setStep(3);
+  };
+
+  const handleDownloadedApplicationContinue = async () => {
+    if (!selectedPackage) {
+      setNotice({ error: "패키지를 선택해주세요." });
+      return;
+    }
+    const submissionId =
+      currentSubmissionId ?? (await createDraft({ force: true }));
+    if (!submissionId) {
+      setNotice({
+        error:
+          draftError ||
+          "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      });
+      return;
+    }
+    const currentDraft = captureCurrentDraft(submissionId);
+    const allDrafts = [currentDraft, ...albumDrafts];
+    const saved = await saveAlbumDrafts(allDrafts, {
+      includeFiles: false,
+      status: "PRE_REVIEW",
+    });
+    if (!saved) return;
+    setUploadDrafts(allDrafts);
+    setUploadDraftIndex(0);
+    applyDraftToForm(allDrafts[0], {
+      emailSubmitConfirmed: false,
     });
     setStep(3);
   };
@@ -2312,10 +2390,19 @@ export function AlbumWizard({
       setNotice({ error: "수정 중인 앨범을 저장한 뒤 진행해주세요." });
       return;
     }
-    if (status === "SUBMITTED" && !validateFormStep()) {
+    if (
+      status === "SUBMITTED" &&
+      !isDownloadedApplicationFlow &&
+      !validateFormStep()
+    ) {
       return;
     }
-    if (status === "SUBMITTED" && !isOneClick && !validateTranslatedLyrics()) {
+    if (
+      status === "SUBMITTED" &&
+      !isDownloadedApplicationFlow &&
+      !isOneClick &&
+      !validateTranslatedLyrics()
+    ) {
       return;
     }
     if (
@@ -2446,7 +2533,10 @@ export function AlbumWizard({
               ? taxInvoiceBusinessNumber.trim() || undefined
               : undefined,
           status,
-          tracks: isOneClick ? undefined : mapTracksForSave(draft.tracks),
+          tracks:
+            isOneClick || isDownloadedApplicationFlow
+              ? undefined
+              : mapTracksForSave(draft.tracks),
           files: status === "SUBMITTED" ? draft.files : undefined,
         });
 
@@ -2516,7 +2606,7 @@ export function AlbumWizard({
     <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving || isAddingAlbum}
-        label="심의 저장/결제 처리 중..."
+        label={step <= 3 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
       />
       {resumePrompt && !isFromDraftsTab ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
@@ -2777,6 +2867,87 @@ export function AlbumWizard({
               </p>
             </div>
           </div>
+
+          <div className="grid gap-2 rounded-[18px] border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setApplicationFormMode("online")}
+              className={`rounded-[14px] px-4 py-3 text-sm font-black transition ${applicationFormMode === "online"
+                ? "bg-foreground text-background shadow-sm"
+                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                }`}
+            >
+              온라인 신청서 작성하기
+            </button>
+            <button
+              type="button"
+              onClick={() => setApplicationFormMode("upload")}
+              className={`rounded-[14px] px-4 py-3 text-sm font-black transition ${isDownloadedApplicationFlow
+                ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
+                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                }`}
+            >
+              신청서 다운로드 & 업로드하기
+            </button>
+          </div>
+
+          {isDownloadedApplicationFlow ? (
+            <div className="rounded-[28px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-muted-foreground">
+                신청서 파일 작성
+              </p>
+              <h3 className="mt-3 text-xl font-black text-foreground">
+                신청서를 내려받아 작성한 뒤 다음 단계에서 업로드하세요.
+              </h3>
+              <p className="mt-2 text-sm font-semibold leading-6 text-muted-foreground">
+                HWP 또는 Word 파일 중 편한 형식을 선택하세요. 다운로드를 누르면
+                파일 업로드 단계로 이동합니다.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {albumApplicationForms.map((form) => (
+                  <a
+                    key={form.href}
+                    href={form.href}
+                    download={form.downloadName}
+                    onClick={() => {
+                      void handleDownloadedApplicationContinue();
+                    }}
+                    className="inline-flex rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27]"
+                  >
+                    {form.label} 다운로드
+                  </a>
+                ))}
+              </div>
+              <div className="mt-5 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                다음 단계 파일 업로드에서 작성한 신청서(HWP/DOC/DOCX)와 음원 파일을
+                함께 첨부해주세요.
+              </div>
+              {notice.error && (
+                <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                  {notice.error}
+                </div>
+              )}
+              <div className="mt-6 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  disabled={isSaving || isAddingAlbum}
+                  className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+                >
+                  이전 단계
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadedApplicationContinue}
+                  disabled={isSaving || isAddingAlbum}
+                  className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
+                >
+                  파일 업로드로 이동
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
 
           <div className="rounded-[28px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]">
             <p className="text-xs font-black uppercase tracking-[0.22em]">
@@ -3539,6 +3710,8 @@ export function AlbumWizard({
               다음 단계
             </button>
           </div>
+            </>
+          )}
         </div>
       )}
 
@@ -3556,7 +3729,7 @@ export function AlbumWizard({
                 파일 업로드
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                심의 받을 음원을 신청서의 트랙 순서에 맞춰 WAV 또는 ZIP 파일로 업로드해주세요.
+                심의 받을 음원과 작성한 신청서 파일을 업로드해주세요.
               </p>
             </div>
           </div>
@@ -3565,7 +3738,7 @@ export function AlbumWizard({
             {[
               {
                 title: "1. 파일 형식",
-                body: "WAV 파일 또는 여러 음원을 묶은 ZIP 파일만 첨부하세요.",
+                body: "음원은 WAV/MP3 또는 ZIP, 신청서는 HWP/DOC/DOCX로 첨부하세요.",
               },
               {
                 title: "2. 트랙 순서",
@@ -3721,7 +3894,7 @@ export function AlbumWizard({
                     <input
                       type="file"
                       multiple
-                      accept=".wav,.zip,application/zip"
+                      accept=".wav,.mp3,.zip,.hwp,.doc,.docx,audio/wav,audio/mpeg,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                       onChange={onFileChange}
                       className="hidden"
                       disabled={!currentSubmissionId || isPreparingDraft}
@@ -3735,7 +3908,7 @@ export function AlbumWizard({
                             : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
                       </span>
                       <span className="inline-flex items-center gap-2 rounded-full border border-black bg-gradient-to-br from-black to-slate-900 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm">
-                        허용 형식: <span className="font-mono text-[12px]">WAV/ZIP</span>
+                        허용 형식: <span className="font-mono text-[12px]">WAV/MP3/ZIP/HWP/DOC/DOCX</span>
                         <span className="text-white/70">·</span>
                         최대 <span className="font-mono text-[12px]">{uploadMaxLabel}</span>
                       </span>

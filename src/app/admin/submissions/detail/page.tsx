@@ -426,8 +426,9 @@ export default async function AdminSubmissionDetailPage({
   const packageInfo = Array.isArray(submission.package)
     ? submission.package[0]
     : submission.package;
-  const isMvSubmission =
-    submission.type === "MV_BROADCAST" || submission.type === "MV_DISTRIBUTION";
+  const isMvDistribution = submission.type === "MV_DISTRIBUTION";
+  const isMvBroadcast = submission.type === "MV_BROADCAST";
+  const isMvSubmission = isMvDistribution || isMvBroadcast;
   const statusLabel = reviewStatusLabelMap[submission.status] ?? submission.status;
   const paymentLabel =
     submission.payment_status && paymentStatusLabelMap[submission.payment_status]
@@ -568,7 +569,7 @@ export default async function AdminSubmissionDetailPage({
   }
 
   const hasMvFinalResultForDisplay =
-    submission.type?.startsWith("MV_") &&
+    isMvDistribution &&
     Boolean(submission.mv_desired_rating) &&
     (submission.status === "RESULT_READY" ||
       submission.status === "COMPLETED" ||
@@ -614,7 +615,7 @@ export default async function AdminSubmissionDetailPage({
   const hasResultReady = Boolean(
     submission.result_status ||
       submission.result_notified_at ||
-      (isMvSubmission && submission.certificate_b2_path),
+      (isMvDistribution && submission.certificate_b2_path),
   );
   const latestEvent = events?.[0] ?? null;
   const workflowSteps: Array<{
@@ -1080,7 +1081,7 @@ export default async function AdminSubmissionDetailPage({
             </div>
           </div>
 
-          {isMvSubmission ? (
+          {isMvDistribution ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 5. MV 등급/필증
@@ -1113,7 +1114,7 @@ export default async function AdminSubmissionDetailPage({
           >
             <input type="hidden" name="submissionId" value={submission.id} />
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              {isMvSubmission ? "6. 결과 안내" : "5. 결과 안내"}
+              {isMvDistribution ? "6. 결과 안내" : "5. 결과 안내"}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               저장한 결과 상태와 메모는 사용자 상세 화면에 반영되고, 수신 가능한 이메일로 결과 안내가 발송됩니다.
@@ -1351,7 +1352,9 @@ export default async function AdminSubmissionDetailPage({
                 <DetailRow label="제작사" value={submission.mv_production_company || "-"} />
                 <DetailRow label="배급사" value={submission.mv_distribution_company || "-"} />
                 <DetailRow label="용도" value={submission.mv_usage || "-"} />
-                <DetailRow label="심의 등급" value={submission.mv_desired_rating || "-"} />
+                {isMvDistribution ? (
+                  <DetailRow label="심의 등급" value={submission.mv_desired_rating || "-"} />
+                ) : null}
                 <DetailRow
                   label="곡 제목"
                   value={

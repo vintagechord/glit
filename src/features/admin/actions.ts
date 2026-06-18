@@ -705,6 +705,21 @@ export async function updateSubmissionMvRatingAction(
   }
 
   const supabase = createAdminClient();
+  const { data: submission } = await supabase
+    .from("submissions")
+    .select("type")
+    .eq("id", parsed.data.submissionId)
+    .maybeSingle();
+
+  if (!submission) {
+    return { error: "접수를 찾을 수 없습니다." };
+  }
+  if (submission.type !== "MV_DISTRIBUTION") {
+    return {
+      error: "온라인 업로드용 뮤직비디오 심의만 등급을 설정할 수 있습니다.",
+    };
+  }
+
   const completion = await completeMvReviewFlow(supabase, parsed.data.submissionId, {
     rating: parsed.data.rating,
   });

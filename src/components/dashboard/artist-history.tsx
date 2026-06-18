@@ -23,6 +23,12 @@ type ArtistGroup = {
   submissions: SubmissionItem[];
 };
 
+type DeletePayload = {
+  ok?: boolean;
+  deletedIds?: string[];
+  error?: string;
+};
+
 const stageTone: Record<string, string> = {
   "결제 대기": "bg-[#f6d64a] text-black dark:text-black",
   "접수 완료": "bg-sky-500/15 text-sky-700 dark:text-sky-200",
@@ -78,7 +84,23 @@ function Thumbnail({ name, src }: { name: string; src: string | null }) {
   );
 }
 
-function ArtistCard({ group }: { group: ArtistGroup }) {
+const removeSubmissionFromGroups = (groups: ArtistGroup[], submissionId: string) =>
+  groups
+    .map((group) => ({
+      ...group,
+      submissions: group.submissions.filter((item) => item.id !== submissionId),
+    }))
+    .filter((group) => group.submissions.length > 0);
+
+function ArtistCard({
+  group,
+  deletingIds,
+  onDelete,
+}: {
+  group: ArtistGroup;
+  deletingIds: Set<string>;
+  onDelete: (item: SubmissionItem) => void;
+}) {
   const [open, setOpen] = React.useState(false);
   return (
     <div className="overflow-hidden rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.12)] transition hover:border-foreground/70">
@@ -114,22 +136,35 @@ function ArtistCard({ group }: { group: ArtistGroup }) {
         <div className="mt-3 space-y-2 rounded-2xl border border-border/60 bg-background/70 p-3">
           {group.submissions.map((item) => (
             item.id ? (
-              <Link
+              <div
                 key={item.id}
-                href={`/dashboard/submissions/${encodeURIComponent(item.id)}`}
-                prefetch={false}
                 className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/80 px-3 py-2 text-sm transition hover:border-foreground"
               >
-                <div className="min-w-0">
+                <Link
+                  href={`/dashboard/submissions/${encodeURIComponent(item.id)}`}
+                  prefetch={false}
+                  className="min-w-0 flex-1"
+                >
                   <p className="truncate font-semibold text-foreground">
                     {item.title || "제목 미입력"}
                   </p>
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className="truncate text-xs text-muted-foreground">
                     접수일 {formatDate(item.created_at)}
                   </p>
+                </Link>
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  <StatusChip label={getStageLabel(item)} />
+                  <button
+                    type="button"
+                    onClick={() => onDelete(item)}
+                    disabled={deletingIds.has(item.id)}
+                    className="rounded-full border border-red-500/40 px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:border-red-600 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={`${item.title || "제목 미입력"} 심의 내역 삭제`}
+                  >
+                    {deletingIds.has(item.id) ? "삭제 중" : "삭제"}
+                  </button>
                 </div>
-                <StatusChip label={getStageLabel(item)} />
-              </Link>
+              </div>
             ) : (
               <div
                 key={`${group.artistName}-${item.title ?? "unknown"}`}
@@ -156,21 +191,85 @@ export function ArtistHistoryTabs({
 }) {
   const initialTab =
     albumGroups.length > 0 ? "ALBUM" : mvGroups.length > 0 ? "MV" : "ALBUM";
+  const [albumItems, setAlbumItems] = React.useState<ArtistGroup[]>(albumGroups);
+  const [mvItems, setMvItems] = React.useState<ArtistGroup[]>(mvGroups);
   const [tab, setTab] = React.useState<"ALBUM" | "MV">(initialTab);
+  const [deletingIds, setDeletingIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  const [notice, setNotice] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setAlbumItems(albumGroups);
+  }, [albumGroups]);
+
+  React.useEffect(() => {
+    setMvItems(mvGroups);
+  }, [mvGroups]);
 
   React.useEffect(() => {
     setTab((prev) => {
-      if (prev === "ALBUM" && albumGroups.length === 0 && mvGroups.length > 0) {
+      if (prev === "ALBUM" && albumItems.length === 0 && mvItems.length > 0) {
         return "MV";
       }
-      if (prev === "MV" && mvGroups.length === 0 && albumGroups.length > 0) {
+      if (prev === "MV" && mvItems.length === 0 && albumItems.length > 0) {
         return "ALBUM";
       }
       return prev;
     });
-  }, [albumGroups.length, mvGroups.length]);
+  }, [albumItems.length, mvItems.length]);
 
-  const groups = tab === "ALBUM" ? albumGroups : mvGroups;
+  const handleDelete = React.useCallback(async (item: SubmissionItem) => {
+    if (!item.id || deletingIds.has(item.id)) return;
+    const label = item.title || "제목 미입력";
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`"${label}" 심의 내역을 삭제할까요?`)
+    ) {
+      return;
+    }
+
+    setNotice(null);
+    setDeletingIds((prev) => {
+      const next = new Set(prev);
+      next.add(item.id);
+      return next;
+    });
+
+    try {
+      const response = await fetch("/api/submissions/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids: [item.id] }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as DeletePayload;
+
+      if (!response.ok || !payload.deletedIds?.includes(item.id)) {
+        setNotice(
+          payload.error ??
+            "심의 내역 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.",
+        );
+        return;
+      }
+
+      setAlbumItems((prev) => removeSubmissionFromGroups(prev, item.id));
+      setMvItems((prev) => removeSubmissionFromGroups(prev, item.id));
+      setNotice("심의 내역을 삭제했습니다.");
+    } catch (error) {
+      console.error(error);
+      setNotice("심의 내역 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  }, [deletingIds]);
+
+  const groups = tab === "ALBUM" ? albumItems : mvItems;
 
   return (
     <div className="space-y-4">
@@ -199,6 +298,15 @@ export function ArtistHistoryTabs({
         </button>
       </div>
 
+      {notice ? (
+        <div
+          className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-sm font-semibold text-muted-foreground"
+          role="status"
+        >
+          {notice}
+        </div>
+      ) : null}
+
       {groups.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
           아직 접수된 내역이 없습니다.
@@ -206,7 +314,12 @@ export function ArtistHistoryTabs({
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {groups.map((group) => (
-            <ArtistCard key={`${group.artistId ?? group.artistName}`} group={group} />
+            <ArtistCard
+              key={`${group.artistId ?? group.artistName}`}
+              group={group}
+              deletingIds={deletingIds}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
       )}

@@ -1,6 +1,7 @@
 import {
   updateKaraokeStatusFormAction,
-  updateKaraokePromotionRecommendationStatusFormAction,
+  // 크레딧 운영 보류: 추천 인증 상태 변경 숨김
+  // updateKaraokePromotionRecommendationStatusFormAction,
 } from "@/features/karaoke/actions";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { KaraokeFileButton } from "@/features/karaoke/karaoke-file-button";
@@ -13,7 +14,8 @@ export const metadata = {
 
 const statusOptions = ["REQUESTED", "IN_REVIEW", "COMPLETED"];
 const paymentStatusOptions = ["UNPAID", "PAYMENT_PENDING", "PAID", "REFUNDED"];
-const recommendationStatusOptions = ["PENDING", "APPROVED", "REJECTED"];
+// 크레딧 운영 보류: 추천 인증 상태 옵션 숨김
+// const recommendationStatusOptions = ["PENDING", "APPROVED", "REJECTED"];
 
 type KaraokeRequestRow = {
   id: string;
@@ -97,13 +99,14 @@ export default async function AdminKaraokePage({
     requestsError = fallback.error ?? null;
   }
 
-  const { data: recommendations } = await supabase
-    .from("karaoke_promotion_recommendations")
-    .select(
-      "id, status, created_at, proof_path, recommender_user_id, promotion:karaoke_promotions ( id, credits_balance, submission:submissions ( title, artist_name ), request:karaoke_requests ( title, artist ) )",
-    )
-    .order("created_at", { ascending: false })
-    .limit(30);
+  // 크레딧 운영 보류: 추천 인증 관리 조회 숨김
+  // const { data: recommendations } = await supabase
+  //   .from("karaoke_promotion_recommendations")
+  //   .select(
+  //     "id, status, created_at, proof_path, recommender_user_id, promotion:karaoke_promotions ( id, credits_balance, submission:submissions ( title, artist_name ), request:karaoke_requests ( title, artist ) )",
+  //   )
+  //   .order("created_at", { ascending: false })
+  //   .limit(30);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -170,9 +173,11 @@ export default async function AdminKaraokePage({
 	                    태진 {request.tj_requested ? "요청" : "미요청"} · 금영{" "}
 	                    {request.ky_requested ? "요청" : "미요청"}
 	                  </p>
-	                  <p className="mt-1 text-xs text-muted-foreground">
-	                    추천 요청 {request.recommendation_public ? "공개" : "비공개"}
-	                  </p>
+                    {/* 크레딧 운영 보류: 추천 공개 상태 숨김
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      추천 요청 {request.recommendation_public ? "공개" : "비공개"}
+                    </p>
+                    */}
 	                </div>
                 <p className="text-xs text-muted-foreground">
                   {formatDateTime(request.created_at)}
@@ -240,6 +245,7 @@ export default async function AdminKaraokePage({
         )}
       </div>
 
+      {/* 크레딧 운영 보류: 추천 인증 관리 섹션 숨김
       <div className="mt-10">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           추천 관리
@@ -330,6 +336,7 @@ export default async function AdminKaraokePage({
           )}
         </div>
       </div>
+      */}
     </div>
   );
 }

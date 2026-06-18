@@ -78,12 +78,18 @@ export async function POST(
   const admin = createAdminClient();
   const { data: submission } = await admin
     .from("submissions")
-    .select("id")
+    .select("id, type")
     .eq("id", submissionId)
     .maybeSingle();
 
   if (!submission) {
     return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
+  }
+  if (submission.type !== "MV_DISTRIBUTION") {
+    return NextResponse.json(
+      { error: "온라인 업로드용 뮤직비디오 심의만 필증을 업로드할 수 있습니다." },
+      { status: 400 },
+    );
   }
 
   const formData = await req.formData().catch((error) => {
