@@ -150,14 +150,14 @@ const packageGuidance: Record<
     recommendation: "지상파 핵심만 빠르게 확인하고 싶은 경우",
   },
   7: {
-    recommendation: "기본 방송 홍보용으로 가장 많이 선택",
-    badge: "가장 많이 선택",
+    recommendation: "기본 방송 홍보용으로 부담 없이 시작하는 경우",
   },
   10: {
     recommendation: "전국·종교·교통방송까지 포함하는 기본 확장",
   },
   13: {
     recommendation: "라디오와 지역 방송까지 넓게 송출하려는 경우",
+    badge: "가장 많이 선택",
   },
   15: {
     recommendation: "CCM·국악 등 특수 방송국까지 필요한 경우",
