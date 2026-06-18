@@ -2868,27 +2868,35 @@ export function AlbumWizard({
             </div>
           </div>
 
-          <div className="grid gap-2 rounded-[18px] border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setApplicationFormMode("online")}
-              className={`rounded-[14px] px-4 py-3 text-sm font-black transition ${applicationFormMode === "online"
-                ? "bg-foreground text-background shadow-sm"
-                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                }`}
-            >
-              온라인 신청서 작성하기
-            </button>
-            <button
-              type="button"
-              onClick={() => setApplicationFormMode("upload")}
-              className={`rounded-[14px] px-4 py-3 text-sm font-black transition ${isDownloadedApplicationFlow
-                ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
-                : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                }`}
-            >
-              신청서 다운로드 & 업로드하기
-            </button>
+          <div className="rounded-[18px] border border-border/70 bg-background/70 p-3">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-foreground">
+              신청서 접수 방식 · 택 1
+            </p>
+            <p className="mt-1 text-sm font-semibold leading-6 text-muted-foreground">
+              아래 두 방식 중 하나만 선택해서 진행하세요. 온라인 작성과 신청서 파일 업로드를 동시에 진행할 필요는 없습니다.
+            </p>
+            <div className="mt-3 grid gap-2 rounded-[14px] bg-background/70 p-1 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setApplicationFormMode("online")}
+                className={`rounded-[12px] px-4 py-3 text-sm font-black transition ${applicationFormMode === "online"
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  }`}
+              >
+                온라인 신청서로 접수
+              </button>
+              <button
+                type="button"
+                onClick={() => setApplicationFormMode("upload")}
+                className={`rounded-[12px] px-4 py-3 text-sm font-black transition ${isDownloadedApplicationFlow
+                  ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  }`}
+              >
+                신청서 다운로드하여 업로드
+              </button>
+            </div>
           </div>
 
           {isDownloadedApplicationFlow ? (
