@@ -272,25 +272,30 @@ const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
   },
 };
 
+const approvedDetailResultTone =
+  "bg-[#1f7a5a] text-white dark:bg-[#1f7a5a] dark:text-white";
+const rejectedDetailResultTone =
+  "bg-[#d9362c] text-white dark:bg-[#d9362c] dark:text-white";
+
 const reviewResultMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
     label: "적격",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: approvedDetailResultTone,
   },
   REJECTED: {
     label: "부적격",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    tone: rejectedDetailResultTone,
   },
 };
 
 const stationResultFallbackMap: Record<string, { label: string; tone: string }> = {
   APPROVED: {
     label: "적격",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    tone: approvedDetailResultTone,
   },
   REJECTED: {
     label: "부적격",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    tone: rejectedDetailResultTone,
   },
   NEEDS_FIX: {
     label: "수정요청",
@@ -516,18 +521,6 @@ export function SubmissionDetailClient({
           },
         ]
         : stationReviews;
-  const latestStationReviewUpdate = renderStationReviews.reduce<{
-    id: string;
-    timestamp: number;
-  } | null>((latest, review) => {
-    const timestamp = Date.parse(review.updated_at ?? "");
-    if (!Number.isFinite(timestamp)) return latest;
-    if (!latest || timestamp > latest.timestamp) {
-      return { id: review.id, timestamp };
-    }
-    return latest;
-  }, null);
-
   const openSubmissionDownload = React.useCallback(
     async (assetPath: "mv-rating-image" | "mv-guide" | "mv-certificate") => {
       const params = new URLSearchParams();
@@ -965,8 +958,6 @@ export function SubmissionDetailClient({
                 </div>
                 <div className="divide-y divide-border/60">
                   {renderStationReviews.map((review) => {
-                    const showReviewUpdate =
-                      latestStationReviewUpdate?.id === review.id;
                     const reception = getReviewReception(review.status);
                     const trackInfo = buildTrackSummary(review.track_results);
                     const note = review.result_note?.trim() || null;
@@ -1091,7 +1082,7 @@ export function SubmissionDetailClient({
                           ) : null}
                         </button>
                         <span className="hidden justify-self-center text-center text-xs text-muted-foreground sm:block">
-                          {showReviewUpdate ? formatDateTime(review.updated_at) : "-"}
+                          {formatDateTime(review.updated_at)}
                         </span>
                       </div>
                     );
@@ -1937,8 +1928,6 @@ export function SubmissionDetailClient({
                     </div>
                     <div className="divide-y divide-border/60">
                       {renderStationReviews.map((review) => {
-                        const showReviewUpdate =
-                          latestStationReviewUpdate?.id === review.id;
                         const reception = getReviewReception(review.status);
                         const trackInfo = buildTrackSummary(review.track_results);
                         const note = review.result_note?.trim() || null;
@@ -2062,7 +2051,7 @@ export function SubmissionDetailClient({
                               ) : null}
                             </button>
                             <span className="hidden justify-self-center text-center text-xs text-muted-foreground sm:block">
-                              {showReviewUpdate ? formatDateTime(review.updated_at) : "-"}
+                              {formatDateTime(review.updated_at)}
                             </span>
                           </div>
                         );
@@ -2103,9 +2092,9 @@ export function SubmissionDetailClient({
                 {trackResultModal.summary.results.map((track, index) => {
                   const status =
                     track.status === "APPROVED"
-                      ? { label: "적격", tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200" }
+                      ? { label: "적격", tone: approvedDetailResultTone }
                       : track.status === "REJECTED"
-                        ? { label: "부적격", tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200" }
+                        ? { label: "부적격", tone: rejectedDetailResultTone }
                         : { label: "대기", tone: "bg-slate-500/10 text-slate-600 dark:text-slate-300" };
                   const trackLabel =
                     track.title ||
