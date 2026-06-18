@@ -603,7 +603,7 @@ export function HomeReviewPanel({
     totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   const progressText =
     needsPayment
-      ? "결제 완료 후 방송국 진행 정보가 표시됩니다."
+      ? "방송국 진행 대기"
       : totalCount > 0
         ? `진행률 : 총 ${totalCount}곳 중 ${completedCount}곳 완료`
         : "진행률 : 방송국 결과가 등록되면 진행률이 표시됩니다.";
@@ -1216,9 +1216,7 @@ export function HomeReviewPanel({
               </>
             ) : (
               <div className={stationEmptyClass}>
-                {needsPayment
-                  ? "결제 완료 후 방송국 진행 정보를 확인할 수 있습니다."
-                  : "접수 후 방송국 진행 정보를 확인할 수 있습니다."}
+                {needsPayment ? "대기" : "접수 후 진행 정보가 표시됩니다."}
               </div>
             )}
           </div>

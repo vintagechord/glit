@@ -121,7 +121,7 @@ export default function Home() {
                   음반·뮤직비디오 심의를 온라인으로 접수하고, 진행 현황과 결과 파일을 한 곳에서 확인하세요.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:max-w-[540px]">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:mt-auto lg:max-w-[540px]">
                 {heroCtas.map((cta) => {
                   const Icon = cta.icon;
                   return (

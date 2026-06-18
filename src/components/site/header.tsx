@@ -6,23 +6,19 @@ import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 import { ReliableLink } from "./reliable-link";
-import { ThemeToggle } from "./theme-toggle";
+// import { ThemeToggle } from "./theme-toggle";
 import { SiteLogo } from "./site-logo";
 
 const navLinks = [
   { label: "심의 신청", href: "/dashboard/new", match: "prefix" as const },
   { label: "진행/결과 조회", href: "/track", match: "prefix" as const },
   { label: "이용가이드", href: "/guide", match: "prefix" as const },
-  { label: "FAQ", href: "/faq", match: "prefix" as const },
-  { label: "고객센터", href: "/support", match: "prefix" as const },
 ];
 
 const englishNavLinks = [
   { label: "Apply", href: "/en/dashboard/new", match: "prefix" as const },
   { label: "Results", href: "/en/track", match: "prefix" as const },
   { label: "Guide", href: "/en/guide", match: "prefix" as const },
-  { label: "FAQ", href: "/en/faq", match: "prefix" as const },
-  { label: "Support", href: "/en/support", match: "prefix" as const },
 ];
 
 const authStorageKey = "onside:header-auth-state";
@@ -35,8 +31,6 @@ const mobileNavLinkClass =
   "inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-transparent px-2 py-2 text-center text-[12px] font-black leading-tight tracking-normal transition";
 const subtleButtonClass =
   "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-3 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
-const primaryButtonClass =
-  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-3 text-[12px] font-black tracking-normal text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f478a] hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ffd93c] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 
 const isActivePath = (
   pathname: string,
@@ -192,7 +186,7 @@ export function SiteHeader() {
           >
             {isEnglishRoute ? "KR" : "EN"}
           </a>
-          <ThemeToggle />
+          {/* <ThemeToggle /> */}
           {authState === "authenticated" ? (
             <>
               <form action="/logout" method="post">
@@ -206,12 +200,6 @@ export function SiteHeader() {
               >
                 {isEnglishRoute ? "My Page" : "마이페이지"}
               </ReliableLink>
-              <ReliableLink
-                href={isEnglishRoute ? "/en/dashboard/new" : "/dashboard/new"}
-                className={primaryButtonClass}
-              >
-                {isEnglishRoute ? "Apply Now" : "지금 신청"}
-              </ReliableLink>
             </>
           ) : (
             <>
@@ -221,19 +209,13 @@ export function SiteHeader() {
               >
                 {isEnglishRoute ? "Login" : "로그인"}
               </ReliableLink>
-              <ReliableLink
-                href={isEnglishRoute ? "/en/dashboard/new" : "/dashboard/new"}
-                className={primaryButtonClass}
-              >
-                {isEnglishRoute ? "Apply Now" : "지금 신청"}
-              </ReliableLink>
             </>
           )}
         </div>
       </div>
 
       <nav className="border-t-2 border-[#111111] px-3 py-2.5 lg:hidden dark:border-[#f2cf27]">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-5 gap-1.5 sm:gap-2">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-3 gap-1.5 sm:gap-2">
           {activeNavLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
             return (
