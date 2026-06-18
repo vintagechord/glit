@@ -259,16 +259,16 @@ const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
     tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   },
   APPROVED: {
-    label: "적격",
-    tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+    label: "접수완료",
+    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   },
   REJECTED: {
-    label: "부적격",
-    tone: "bg-rose-500/15 text-rose-700 dark:text-rose-200",
+    label: "접수완료",
+    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   },
   NEEDS_FIX: {
-    label: "수정요청",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    label: "접수완료",
+    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
   },
 };
 
@@ -952,9 +952,7 @@ export function SubmissionDetailClient({
                   <span className="justify-self-center text-center">
                     {isMvDistribution
                       ? "심의 등급"
-                      : isMvBroadcast
-                        ? "심의 결과"
-                        : "적격/부적격"}
+                      : "심의 결과"}
                   </span>
                   <span className="hidden justify-self-center text-center sm:block">
                     최근 업데이트
@@ -1926,9 +1924,7 @@ export function SubmissionDetailClient({
                       <span className="justify-self-center text-center">
                         {isMvDistribution
                           ? "심의 등급"
-                          : isMvBroadcast
-                            ? "심의 결과"
-                            : "적격/부적격"}
+                          : "심의 결과"}
                       </span>
                       <span className="hidden justify-self-center text-center sm:block">
                         최근 업데이트

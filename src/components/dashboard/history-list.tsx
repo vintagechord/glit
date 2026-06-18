@@ -103,16 +103,16 @@ const receptionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bauhaus-status-chip--info",
   },
   APPROVED: {
-    label: "적격",
-    tone: "bauhaus-status-chip--success",
+    label: "접수완료",
+    tone: "bauhaus-status-chip--info",
   },
   REJECTED: {
-    label: "부적격",
-    tone: "bauhaus-status-chip--danger",
+    label: "접수완료",
+    tone: "bauhaus-status-chip--info",
   },
   NEEDS_FIX: {
-    label: "수정요청",
-    tone: "bauhaus-status-chip--waiting",
+    label: "접수완료",
+    tone: "bauhaus-status-chip--info",
   },
 };
 
@@ -539,9 +539,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                 <span className="justify-self-center text-center">
                   {activeSubmission.type === "MV_DISTRIBUTION"
                     ? "심의 등급"
-                    : activeSubmission.type === "MV_BROADCAST"
-                      ? "심의 결과"
-                      : "적격/부적격"}
+                    : "심의 결과"}
                 </span>
                 <span className="text-right">접수 날짜</span>
               </div>
