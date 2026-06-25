@@ -1054,7 +1054,12 @@ export async function saveAlbumSubmissionAction(
       broadcast_selected: Boolean(track.broadcastSelected),
     })) ?? [];
 
-  if (isSubmitted && !isAdminReviewer && !isOneClick) {
+  if (
+    isSubmitted &&
+    !isAdminReviewer &&
+    !isOneClick &&
+    !hasApplicationFormAttachment
+  ) {
     if (trackRows.length === 0) {
       return { error: "트랙 정보를 입력해주세요." };
     }

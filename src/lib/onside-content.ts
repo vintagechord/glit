@@ -85,7 +85,6 @@ export const albumPreparationItems = [
   "외국어 가사 번역",
   "앨범명, 아티스트명, 발매일, 장르, 유통사, 제작사",
   "트랙 순서와 실제 발매 앨범의 CD/유통 순서 일치",
-  "INST 트랙 포함 여부 확인",
 ];
 
 export const mvPreparationItems = [
@@ -93,6 +92,5 @@ export const mvPreparationItems = [
   "해상도: 1920×1080 권장",
   "프레임레이트: 29.97fps 권장",
   "온라인 유통용/TV 송출용 목적 구분",
-  "등급분류·방송사 로고 삽입 필요 여부",
   "TV 송출용은 방송국별 제출 규격과 편성 조건 확인",
 ];

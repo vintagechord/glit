@@ -162,10 +162,6 @@ const exactTranslations: Record<string, string> = {
   "해상도: 1920×1080 권장": "Resolution: 1920x1080 recommended",
   "프레임: 29.97fps 권장": "Frame rate: 29.97 fps recommended",
   "프레임레이트: 29.97fps 권장": "Frame rate: 29.97 fps recommended",
-  "등급분류/방송사 로고 삽입 필요 여부 확인":
-    "Check whether rating marks or broadcaster logos are required",
-  "등급분류·방송사 로고 삽입 필요 여부":
-    "Whether rating marks or broadcaster logos are required",
   "TV 송출용은 Broadcaster 제출 조건 확인":
     "For TV broadcast, check broadcaster submission requirements",
   "TV Broadcast용은 Broadcaster 제출 조건 확인":
@@ -632,7 +628,6 @@ const exactTranslations: Record<string, string> = {
     "Album title, artist name, release date, genre, distributor, production company",
   "트랙 순서와 실제 발매 앨범의 CD/유통 순서 일치":
     "Track order must match the actual CD/distribution release order",
-  "INST 트랙 포함 여부 확인": "Check whether INST tracks are included",
   "Music Video Review 준비물": "Music Video Review Materials",
   "온라인 유통용/TV 송출용 목적 구분":
     "Separate online distribution and TV broadcast purposes",
