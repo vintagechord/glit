@@ -2026,6 +2026,7 @@ export function AlbumWizard({
     if (isDownloadedApplicationFlow && !isAdminReviewer) {
       const missingApplicationForms = drafts.filter(
         (draft) =>
+          !draft.emailSubmitConfirmed &&
           !draft.files.some((file) => isApplicationFormFile(file.originalName)),
       );
       if (missingApplicationForms.length > 0) {
@@ -2165,6 +2166,8 @@ export function AlbumWizard({
               ? draft.artistMembers || undefined
               : undefined,
           isOneClick,
+          filesSubmittedByEmail:
+            isDownloadedApplicationFlow && draft.emailSubmitConfirmed,
           melonUrl: isOneClick ? draft.melonUrl || undefined : undefined,
           guestToken: draft.guestToken,
           guestName: applicantNameValue,
@@ -2513,6 +2516,8 @@ export function AlbumWizard({
               ? draft.artistMembers || undefined
               : undefined,
           isOneClick,
+          filesSubmittedByEmail:
+            isDownloadedApplicationFlow && draft.emailSubmitConfirmed,
           melonUrl: isOneClick ? draft.melonUrl || undefined : undefined,
           guestToken: draft.guestToken,
           guestName: applicantNameValue,

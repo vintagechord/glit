@@ -547,6 +547,7 @@ const albumSubmissionSchema = z.object({
   status: z.enum(["DRAFT", "PRE_REVIEW", "SUBMITTED"]),
   tracks: z.array(trackSchema).optional(),
   files: z.array(fileSchema).optional(),
+  filesSubmittedByEmail: z.boolean().optional(),
 });
 
 const mvSubmissionSchema = z.object({
@@ -754,6 +755,8 @@ export async function saveAlbumSubmissionAction(
   const hasApplicationFormAttachment =
     parsed.data.files?.some((file) => isApplicationFormFile(file.originalName)) ??
     false;
+  const usesExternalApplicationForm =
+    hasApplicationFormAttachment || Boolean(parsed.data.filesSubmittedByEmail);
   const cashReceiptPhoneValue = parsed.data.cashReceiptPhone?.trim() ?? "";
   const cashReceiptBusinessNumberDigits = normalizeDigits(
     parsed.data.cashReceiptBusinessNumber,
@@ -769,7 +772,7 @@ export async function saveAlbumSubmissionAction(
   if (
     isSubmitted &&
     isGuest &&
-    !hasApplicationFormAttachment &&
+    !usesExternalApplicationForm &&
     (!guestNameValue || !guestEmailValue || !guestPhoneValue)
   ) {
     return { error: "비회원 정보(담당자, 연락처, 이메일)를 입력해주세요." };
@@ -786,7 +789,7 @@ export async function saveAlbumSubmissionAction(
     isSubmitted &&
     !isAdminReviewer &&
     !isOneClick &&
-    !hasApplicationFormAttachment &&
+    !usesExternalApplicationForm &&
     !artistNameValue
   ) {
     return { error: "아티스트명을 입력해주세요." };
@@ -795,7 +798,7 @@ export async function saveAlbumSubmissionAction(
     isSubmitted &&
     !isAdminReviewer &&
     !isOneClick &&
-    !hasApplicationFormAttachment &&
+    !usesExternalApplicationForm &&
     !titleValue
   ) {
     return { error: "앨범 제목을 입력해주세요." };
@@ -1058,7 +1061,7 @@ export async function saveAlbumSubmissionAction(
     isSubmitted &&
     !isAdminReviewer &&
     !isOneClick &&
-    !hasApplicationFormAttachment
+    !usesExternalApplicationForm
   ) {
     if (trackRows.length === 0) {
       return { error: "트랙 정보를 입력해주세요." };
