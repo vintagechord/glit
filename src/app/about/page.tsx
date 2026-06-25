@@ -34,10 +34,6 @@ export default function AboutPage() {
               <h1 className="font-display mt-4 text-2xl font-black leading-tight text-[var(--about-ink)] sm:text-3xl md:text-4xl">
                 온사이드(onside)
               </h1>
-              <p className="mt-3 text-base font-semibold leading-relaxed text-[var(--about-ink)]/80 md:text-lg">
-                온사이드는 음반·뮤직비디오 심의를 온라인으로 간편하게 접수하고, 방송 가능 상태까지 빠르고 안전하게 진행할 수 있도록 도와줍니다.
-                심의 진행 현황부터 승인 결과, 접수 기록까지 한 곳에서 관리하세요.
-              </p>
               <p className="mt-3 text-sm font-semibold leading-6 text-[var(--about-ink)]/70">
                 2017년부터 운영된 온사이드 심의 대행 서비스는 현재 (주)빈티지하우스에서 운영합니다.
               </p>
