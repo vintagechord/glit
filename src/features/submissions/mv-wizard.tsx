@@ -72,6 +72,27 @@ type CashReceiptPurpose =
   | ""
   | "PERSONAL_INCOME_DEDUCTION"
   | "BUSINESS_EXPENSE_PROOF";
+type MvValidationField =
+  | "title"
+  | "artistName"
+  | "artistNameOfficial"
+  | "releaseDate"
+  | "director"
+  | "leadActor"
+  | "productionCompany"
+  | "agency"
+  | "albumTitle"
+  | "distributionCompany"
+  | "usage"
+  | "songTitleKr"
+  | "songTitleEn"
+  | "songTitleOfficial"
+  | "composer"
+  | "storyline"
+  | "lyrics"
+  | "guestName"
+  | "guestEmail"
+  | "guestPhone";
 
 const steps = [
   "목적 선택",
@@ -294,9 +315,7 @@ export function MvWizard({
   const [productionCompany, setProductionCompany] = React.useState("");
   const [agency, setAgency] = React.useState("");
   const [albumTitle, setAlbumTitle] = React.useState("");
-  const [productionDate, setProductionDate] = React.useState("");
   const [distributionCompany, setDistributionCompany] = React.useState("");
-  const [businessRegNo, setBusinessRegNo] = React.useState("");
   const [usage, setUsage] = React.useState("");
   const [desiredRating, setDesiredRating] = React.useState("");
   const [memo, setMemo] = React.useState("");
@@ -361,6 +380,8 @@ export function MvWizard({
   );
 
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
+  const [invalidField, setInvalidField] =
+    React.useState<MvValidationField | null>(null);
   const lyricsOverlayRef = React.useRef<HTMLDivElement | null>(null);
   const lyricsTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const [lyricsToolApplied, setLyricsToolApplied] = React.useState(false);
@@ -405,6 +426,35 @@ export function MvWizard({
   const showLyricsToolNotice = lyricsToolApplied;
   const showProfanityOverlay =
     profanityChecked && profanityHighlight && profanityWords.length > 0;
+  const clearInvalidField = React.useCallback((field: MvValidationField) => {
+    setInvalidField((current) => (current === field ? null : current));
+  }, []);
+  const markInvalidField = React.useCallback(
+    (field: MvValidationField, message: string) => {
+      setInvalidField(field);
+      setNotice({ error: message });
+      if (typeof window !== "undefined") {
+        window.requestAnimationFrame(() => {
+          const element = document.querySelector<HTMLElement>(
+            `[data-mv-field="${field}"]`,
+          );
+          element?.scrollIntoView({ behavior: "smooth", block: "center" });
+          element?.focus({ preventScroll: true });
+        });
+      }
+      return false;
+    },
+    [],
+  );
+  const requiredFieldClass = React.useCallback(
+    (field: MvValidationField) =>
+      `w-full rounded-2xl border bg-background px-4 py-3 text-sm text-foreground outline-none transition ${
+        invalidField === field
+          ? "border-red-500 ring-2 ring-red-500/20 focus:border-red-500"
+          : "border-border/70 focus:border-foreground"
+      }`,
+    [invalidField],
+  );
 
   if (!guestTokenRef.current) {
     guestTokenRef.current = safeRandomUUID();
@@ -707,53 +757,7 @@ export function MvWizard({
     return items;
   }, [mvType, onlineBaseSelected, onlineOptions, tvStations, stationMap]);
   const mvUploadReady = emailSubmitConfirmed || uploadedFiles.length > 0;
-  const mvUploadStatusLabel = emailSubmitConfirmed
-    ? "이메일 전송 선택"
-    : uploads.some((upload) => upload.status === "uploading")
-      ? "업로드 진행 중"
-      : uploads.some((upload) => upload.status === "error")
-        ? "업로드 실패 확인 필요"
-        : uploadedFiles.length > 0
-          ? `${uploadedFiles.length}개 업로드 완료`
-          : "영상 파일 필요";
-  const mvSelectionLabel =
-    mvType === "MV_BROADCAST"
-      ? tvStations.length > 0
-        ? `${tvStations.length}개 방송국 선택`
-        : "방송국 선택 필요"
-      : onlineBaseSelected || onlineOptions.length > 0
-        ? `${paymentItems.length}개 옵션 선택`
-        : "옵션 선택 필요";
-  const mvPaymentReadiness = [
-    {
-      label: "심의 목적",
-      value:
-        mvType === "MV_BROADCAST"
-          ? "TV 송출 목적"
-          : "온라인 유통/업로드",
-      ready: true,
-    },
-    {
-      label: "선택 옵션",
-      value: mvSelectionLabel,
-      ready: canProceed,
-    },
-    {
-      label: "파일",
-      value: mvUploadStatusLabel,
-      ready: mvUploadReady,
-    },
-    {
-      label: "결제 금액",
-      value: `${formatCurrency(totalAmount)}원`,
-      ready: totalAmount > 0,
-    },
-  ];
-  const mvPaymentReady = mvPaymentReadiness.every((item) => item.ready);
-  const mvQuickSteps =
-    mvType === "MV_BROADCAST"
-      ? ["방송국 선택", "영상·곡 정보", "방송국 규격 파일", "결제"]
-      : ["온라인 심의 선택", "영상·곡 정보", "최종 영상 파일", "결제"];
+  const mvPaymentReady = canProceed && mvUploadReady && totalAmount > 0;
 
   const selectedStepTone = React.useMemo(() => {
     if (mvType === "MV_BROADCAST") {
@@ -1537,9 +1541,7 @@ export function MvWizard({
     setProductionCompany(String(draft.mv_production_company ?? ""));
     setAgency(String(draft.mv_agency ?? ""));
     setAlbumTitle(String(draft.mv_album_title ?? ""));
-    setProductionDate(normalizeDateValue(draft.mv_production_date));
     setDistributionCompany(String(draft.mv_distribution_company ?? ""));
-    setBusinessRegNo(String(draft.mv_business_reg_no ?? ""));
     setUsage(String(draft.mv_usage ?? ""));
     setDesiredRating(
       draftType === "MV_DISTRIBUTION" ? String(draft.mv_desired_rating ?? "") : "",
@@ -1553,7 +1555,9 @@ export function MvWizard({
     setArranger(String(draft.mv_arranger ?? ""));
     setSongMemo(String(draft.mv_song_memo ?? ""));
     setLyrics(String(draft.mv_lyrics ?? ""));
-    setReleaseDate(normalizeDateValue(draft.release_date));
+    setReleaseDate(
+      normalizeDateValue(draft.release_date ?? draft.mv_production_date),
+    );
     setGenre(String(draft.genre ?? ""));
     setRuntime(String(draft.mv_runtime ?? ""));
     setFormat(String(draft.mv_format ?? ""));
@@ -1942,6 +1946,7 @@ export function MvWizard({
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
     if (isAdminReviewer) {
+      setInvalidField(null);
       return true;
     }
 
@@ -1976,47 +1981,65 @@ export function MvWizard({
       return true;
     }
 
-    if (!titleValue || !artistNameValue) {
-      setNotice({ error: "제목과 아티스트명을 입력해주세요." });
-      return false;
+    if (!titleValue) {
+      return markInvalidField("title", "뮤직비디오 제목을 입력해주세요.");
+    }
+    if (!artistNameValue) {
+      return markInvalidField("artistName", "아티스트명을 입력해주세요.");
     }
     if (!artistNameOfficial.trim()) {
-      setNotice({ error: "아티스트명 공식 표기를 입력해주세요." });
-      return false;
+      return markInvalidField(
+        "artistNameOfficial",
+        "아티스트명 공식 표기를 입력해주세요.",
+      );
     }
-    if (!director.trim() || !leadActor.trim() || !storyline.trim()) {
-      setNotice({ error: "감독, 주연, 줄거리 정보를 입력해주세요." });
-      return false;
+    if (!releaseDate) {
+      return markInvalidField("releaseDate", "영상 공개일자를 입력해주세요.");
     }
-    if (
-      !productionCompany.trim() ||
-      !agency.trim() ||
-      !albumTitle.trim() ||
-      !productionDate ||
-      !distributionCompany.trim() ||
-      !usage.trim()
-    ) {
-      setNotice({
-        error:
-          "제작 정보(제작사/소속사/앨범명/공개일/유통사/용도)를 입력해주세요.",
-      });
-      return false;
+    if (!director.trim()) {
+      return markInvalidField("director", "감독 정보를 입력해주세요.");
     }
-    if (!songTitleKrValue || !songTitleEnValue) {
-      setNotice({ error: "곡명(한글/영문)을 모두 입력해주세요." });
-      return false;
+    if (!leadActor.trim()) {
+      return markInvalidField("leadActor", "주연 정보를 입력해주세요.");
     }
-    if (!lyrics.trim()) {
-      setNotice({ error: "가사를 입력해주세요." });
-      return false;
+    if (!productionCompany.trim()) {
+      return markInvalidField(
+        "productionCompany",
+        "뮤직비디오 제작사를 입력해주세요.",
+      );
+    }
+    if (!agency.trim()) {
+      return markInvalidField("agency", "소속사를 입력해주세요.");
+    }
+    if (!albumTitle.trim()) {
+      return markInvalidField("albumTitle", "앨범명을 입력해주세요.");
+    }
+    if (!distributionCompany.trim()) {
+      return markInvalidField("distributionCompany", "유통사를 입력해주세요.");
+    }
+    if (!usage.trim()) {
+      return markInvalidField("usage", "용도를 입력해주세요.");
+    }
+    if (!songTitleKrValue) {
+      return markInvalidField("songTitleKr", "곡명(한글)을 입력해주세요.");
+    }
+    if (!songTitleEnValue) {
+      return markInvalidField("songTitleEn", "곡명(영문)을 입력해주세요.");
     }
     if (!songTitleOfficial.trim()) {
-      setNotice({ error: "곡 정보 공식 표기를 입력해주세요." });
-      return false;
+      return markInvalidField(
+        "songTitleOfficial",
+        "곡 정보 공식 표기를 입력해주세요.",
+      );
     }
     if (!composer.trim()) {
-      setNotice({ error: "작곡자 정보를 입력해주세요." });
-      return false;
+      return markInvalidField("composer", "작곡자 정보를 입력해주세요.");
+    }
+    if (!storyline.trim()) {
+      return markInvalidField("storyline", "줄거리 정보를 입력해주세요.");
+    }
+    if (!lyrics.trim()) {
+      return markInvalidField("lyrics", "가사를 입력해주세요.");
     }
     if (mvType === "MV_BROADCAST" && tvStations.length === 0) {
       setNotice({ error: "TV 송출 심의를 원하는 방송국을 선택해주세요." });
@@ -2030,13 +2053,17 @@ export function MvWizard({
       setNotice({ error: "온라인 심의 옵션을 선택해주세요." });
       return false;
     }
-    if (isGuest && (!guestNameValue || !guestEmailValue || !guestPhoneValue)) {
-      setNotice({ error: "비회원 담당자 정보(이름/연락처/이메일)를 입력해주세요." });
-      return false;
+    if (isGuest && !guestNameValue) {
+      return markInvalidField("guestName", "비회원 담당자명을 입력해주세요.");
+    }
+    if (isGuest && !guestEmailValue) {
+      return markInvalidField("guestEmail", "비회원 이메일을 입력해주세요.");
+    }
+    if (isGuest && !guestPhoneValue) {
+      return markInvalidField("guestPhone", "비회원 연락처를 입력해주세요.");
     }
     if (isGuest && guestEmailValue && !isValidEmail(guestEmailValue)) {
-      setNotice({ error: "비회원 이메일 형식을 확인해주세요." });
-      return false;
+      return markInvalidField("guestEmail", "비회원 이메일 형식을 확인해주세요.");
     }
     if (
       requirePayment &&
@@ -2049,6 +2076,7 @@ export function MvWizard({
     if (requirePayment && paymentMethod === "BANK" && !validatePaymentDocument()) {
       return false;
     }
+    setInvalidField(null);
     return true;
   };
 
@@ -2130,9 +2158,7 @@ export function MvWizard({
         productionCompany: productionCompany.trim() || undefined,
         agency: agency.trim() || undefined,
         albumTitle: albumTitle.trim() || undefined,
-        productionDate: productionDate || undefined,
         distributionCompany: distributionCompany.trim() || undefined,
-        businessRegNo: businessRegNo.trim() || undefined,
         usage: usage.trim() || undefined,
         desiredRating:
           mvType === "MV_DISTRIBUTION" ? desiredRating.trim() || undefined : undefined,
@@ -2254,9 +2280,7 @@ export function MvWizard({
         productionCompany: productionCompany.trim() || undefined,
         agency: agency.trim() || undefined,
         albumTitle: albumTitle.trim() || undefined,
-        productionDate: productionDate || undefined,
         distributionCompany: distributionCompany.trim() || undefined,
-        businessRegNo: businessRegNo.trim() || undefined,
         usage: usage.trim() || undefined,
         desiredRating:
           mvType === "MV_DISTRIBUTION" ? desiredRating.trim() || undefined : undefined,
@@ -2819,9 +2843,6 @@ export function MvWizard({
               <h2 className="font-display mt-2 text-2xl text-foreground">
                 뮤직비디오 신청서 정보를 입력하세요.
               </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                제목/러닝타임/포맷 등 기본 정보를 입력합니다.
-              </p>
             </div>
           </div>
 
@@ -2883,10 +2904,6 @@ export function MvWizard({
                   </a>
                 ))}
               </div>
-              <div className="mt-5 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs leading-5 text-muted-foreground">
-                다음 단계 파일 업로드에서 작성한 신청서(HWP/DOC/DOCX)와 영상
-                파일을 함께 첨부해주세요.
-              </div>
               {notice.error && (
                 <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
                   {notice.error}
@@ -2913,29 +2930,6 @@ export function MvWizard({
             </div>
           ) : (
             <>
-
-          <div className="rounded-[28px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]">
-            <p className="text-xs font-black uppercase tracking-[0.22em]">
-              빠른 접수 순서
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-4">
-              {mvQuickSteps.map((item, index) => (
-                <div
-                  key={item}
-                  className="rounded-xl border border-[#111111]/30 bg-white/45 px-3 py-2 text-sm font-black"
-                >
-                  <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-[5px] bg-[#111111] text-[11px] text-white">
-                    {index + 1}
-                  </span>
-                  {item}
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-xs font-semibold leading-5">
-              정보가 많아 보여도 심의 목적, 곡 정보, 최종 영상 파일, 결제만 완료하면 접수됩니다. 영상 용량이 크면 이메일 제출로 전환할 수 있습니다.
-            </p>
-          </div>
-
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               뮤직비디오 기본 정보
@@ -2946,9 +2940,14 @@ export function MvWizard({
                   뮤직비디오 제목 *
                 </label>
                 <input
+                  data-mv-field="title"
+                  aria-invalid={invalidField === "title"}
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setTitle(event.target.value);
+                    clearInvalidField("title");
+                  }}
+                  className={requiredFieldClass("title")}
                 />
               </div>
               <div className="space-y-2">
@@ -2956,9 +2955,14 @@ export function MvWizard({
                   아티스트명 (한글/영문) *
                 </label>
                 <input
+                  data-mv-field="artistName"
+                  aria-invalid={invalidField === "artistName"}
                   value={artistName}
-                  onChange={(event) => setArtistName(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setArtistName(event.target.value);
+                    clearInvalidField("artistName");
+                  }}
+                  className={requiredFieldClass("artistName")}
                 />
                 <p className="text-[11px] text-muted-foreground">
                   아티스트명과 국문표기용 영문도 써주세요. 예: 싸이(PSY) / PSY
@@ -2970,9 +2974,14 @@ export function MvWizard({
                   아티스트명 공식 표기 *
                 </label>
                 <input
+                  data-mv-field="artistNameOfficial"
+                  aria-invalid={invalidField === "artistNameOfficial"}
                   value={artistNameOfficial}
-                  onChange={(event) => setArtistNameOfficial(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setArtistNameOfficial(event.target.value);
+                    clearInvalidField("artistNameOfficial");
+                  }}
+                  className={requiredFieldClass("artistNameOfficial")}
                 />
                 <p className="text-[11px] text-muted-foreground whitespace-pre-line">
                   실제 음원사이트 표기법을 적용한 공식 표기를 적어주세요.
@@ -2981,13 +2990,18 @@ export function MvWizard({
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  영상 공개일자
+                  영상 공개일자 *
                 </label>
                 <input
+                  data-mv-field="releaseDate"
+                  aria-invalid={invalidField === "releaseDate"}
                   type="date"
                   value={releaseDate}
-                  onChange={(event) => setReleaseDate(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setReleaseDate(event.target.value);
+                    clearInvalidField("releaseDate");
+                  }}
+                  className={requiredFieldClass("releaseDate")}
                 />
               </div>
               <div className="space-y-2">
@@ -3027,9 +3041,14 @@ export function MvWizard({
                   감독 *
                 </label>
                 <input
+                  data-mv-field="director"
+                  aria-invalid={invalidField === "director"}
                   value={director}
-                  onChange={(event) => setDirector(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setDirector(event.target.value);
+                    clearInvalidField("director");
+                  }}
+                  className={requiredFieldClass("director")}
                 />
               </div>
               <div className="space-y-2">
@@ -3037,9 +3056,14 @@ export function MvWizard({
                   주연 *
                 </label>
                 <input
+                  data-mv-field="leadActor"
+                  aria-invalid={invalidField === "leadActor"}
                   value={leadActor}
-                  onChange={(event) => setLeadActor(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setLeadActor(event.target.value);
+                    clearInvalidField("leadActor");
+                  }}
+                  className={requiredFieldClass("leadActor")}
                 />
               </div>
             </div>
@@ -3055,9 +3079,14 @@ export function MvWizard({
                   뮤직비디오 제작사 *
                 </label>
                 <input
+                  data-mv-field="productionCompany"
+                  aria-invalid={invalidField === "productionCompany"}
                   value={productionCompany}
-                  onChange={(event) => setProductionCompany(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setProductionCompany(event.target.value);
+                    clearInvalidField("productionCompany");
+                  }}
+                  className={requiredFieldClass("productionCompany")}
                 />
               </div>
               <div className="space-y-2">
@@ -3079,9 +3108,14 @@ export function MvWizard({
                   </div>
                 </div>
                 <input
+                  data-mv-field="agency"
+                  aria-invalid={invalidField === "agency"}
                   value={agency}
-                  onChange={(event) => setAgency(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setAgency(event.target.value);
+                    clearInvalidField("agency");
+                  }}
+                  className={requiredFieldClass("agency")}
                 />
               </div>
               <div className="space-y-2">
@@ -3089,20 +3123,14 @@ export function MvWizard({
                   앨범명 *
                 </label>
                 <input
+                  data-mv-field="albumTitle"
+                  aria-invalid={invalidField === "albumTitle"}
                   value={albumTitle}
-                  onChange={(event) => setAlbumTitle(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
-	              <div className="space-y-2">
-	                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-	                  공개일 *
-	                </label>
-                <input
-                  type="date"
-                  value={productionDate}
-                  onChange={(event) => setProductionDate(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setAlbumTitle(event.target.value);
+                    clearInvalidField("albumTitle");
+                  }}
+                  className={requiredFieldClass("albumTitle")}
                 />
               </div>
               <div className="space-y-2">
@@ -3110,21 +3138,14 @@ export function MvWizard({
                   유통사 *
                 </label>
                 <input
+                  data-mv-field="distributionCompany"
+                  aria-invalid={invalidField === "distributionCompany"}
                   value={distributionCompany}
-                  onChange={(event) =>
-                    setDistributionCompany(event.target.value)
-                  }
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  사업자등록번호 (선택)
-                </label>
-                <input
-                  value={businessRegNo}
-                  onChange={(event) => setBusinessRegNo(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setDistributionCompany(event.target.value);
+                    clearInvalidField("distributionCompany");
+                  }}
+                  className={requiredFieldClass("distributionCompany")}
                 />
               </div>
               <div className="space-y-2">
@@ -3132,10 +3153,15 @@ export function MvWizard({
                   용도 *
                 </label>
                 <input
+                  data-mv-field="usage"
+                  aria-invalid={invalidField === "usage"}
                   placeholder="예: 음악사이트 기재"
                   value={usage}
-                  onChange={(event) => setUsage(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setUsage(event.target.value);
+                    clearInvalidField("usage");
+                  }}
+                  className={requiredFieldClass("usage")}
                 />
               </div>
               {mvType === "MV_DISTRIBUTION" ? (
@@ -3173,9 +3199,14 @@ export function MvWizard({
                   곡명 (한글) *
                 </label>
                 <input
+                  data-mv-field="songTitleKr"
+                  aria-invalid={invalidField === "songTitleKr"}
                   value={songTitleKr}
-                  onChange={(event) => setSongTitleKr(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setSongTitleKr(event.target.value);
+                    clearInvalidField("songTitleKr");
+                  }}
+                  className={requiredFieldClass("songTitleKr")}
                 />
               </div>
               <div className="space-y-2">
@@ -3183,9 +3214,14 @@ export function MvWizard({
                   곡명 (영문) *
                 </label>
                 <input
+                  data-mv-field="songTitleEn"
+                  aria-invalid={invalidField === "songTitleEn"}
                   value={songTitleEn}
-                  onChange={(event) => setSongTitleEn(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setSongTitleEn(event.target.value);
+                    clearInvalidField("songTitleEn");
+                  }}
+                  className={requiredFieldClass("songTitleEn")}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
@@ -3193,9 +3229,14 @@ export function MvWizard({
                   곡 정보 공식 표기 *
                 </label>
                 <input
+                  data-mv-field="songTitleOfficial"
+                  aria-invalid={invalidField === "songTitleOfficial"}
                   value={songTitleOfficial}
-                  onChange={(event) => setSongTitleOfficial(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setSongTitleOfficial(event.target.value);
+                    clearInvalidField("songTitleOfficial");
+                  }}
+                  className={requiredFieldClass("songTitleOfficial")}
                 />
                 <p className="text-[11px] text-muted-foreground whitespace-pre-line">
                   실제 공개되는 곡의 표기법을 적용한 공식 표기를 적어주세요.
@@ -3207,9 +3248,14 @@ export function MvWizard({
                   작곡자 *
                 </label>
                 <input
+                  data-mv-field="composer"
+                  aria-invalid={invalidField === "composer"}
                   value={composer}
-                  onChange={(event) => setComposer(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  onChange={(event) => {
+                    setComposer(event.target.value);
+                    clearInvalidField("composer");
+                  }}
+                  className={requiredFieldClass("composer")}
                 />
               </div>
               <div className="space-y-2">
@@ -3250,9 +3296,14 @@ export function MvWizard({
               줄거리 / 작품내용 *
             </p>
             <textarea
+              data-mv-field="storyline"
+              aria-invalid={invalidField === "storyline"}
               value={storyline}
-              onChange={(event) => setStoryline(event.target.value)}
-              className="mt-4 h-32 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+              onChange={(event) => {
+                setStoryline(event.target.value);
+                clearInvalidField("storyline");
+              }}
+              className={`${requiredFieldClass("storyline")} mt-4 h-32`}
             />
             <p className="mt-2 text-xs text-muted-foreground">
               줄거리는 결말까지 작성하셔야 합니다.
@@ -3302,7 +3353,13 @@ export function MvWizard({
 	                {lyricsToolNotice.message}
 	              </div>
 	            )}
-	            <div className="relative isolate mt-4 overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
+	            <div
+	              className={`relative isolate mt-4 overflow-hidden rounded-2xl border bg-background transition ${
+	                invalidField === "lyrics"
+	                  ? "border-red-500 ring-2 ring-red-500/20 focus-within:border-red-500"
+	                  : "border-border/70 focus-within:border-foreground"
+	              }`}
+	            >
               {showProfanityOverlay && (
                 <div
                   ref={lyricsOverlayRef}
@@ -3319,9 +3376,14 @@ export function MvWizard({
                 </div>
               )}
               <textarea
+                data-mv-field="lyrics"
+                aria-invalid={invalidField === "lyrics"}
                 ref={lyricsTextareaRef}
                 value={lyrics}
-                onChange={(event) => setLyrics(event.target.value)}
+                onChange={(event) => {
+                  setLyrics(event.target.value);
+                  clearInvalidField("lyrics");
+                }}
                 onScroll={handleLyricsScroll}
                 className={`relative z-0 min-h-[8rem] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${showProfanityOverlay
                     ? "text-transparent caret-foreground"
@@ -3373,10 +3435,15 @@ export function MvWizard({
                     담당자명 *
                   </label>
                   <input
+                    data-mv-field="guestName"
+                    aria-invalid={invalidField === "guestName"}
                     value={guestName}
-                    onChange={(event) => setGuestName(event.target.value)}
+                    onChange={(event) => {
+                      setGuestName(event.target.value);
+                      clearInvalidField("guestName");
+                    }}
                     required
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    className={requiredFieldClass("guestName")}
                   />
                 </div>
                 <div className="space-y-2">
@@ -3394,11 +3461,16 @@ export function MvWizard({
                     이메일 *
                   </label>
                   <input
+                    data-mv-field="guestEmail"
+                    aria-invalid={invalidField === "guestEmail"}
                     type="email"
                     value={guestEmail}
-                    onChange={(event) => setGuestEmail(event.target.value)}
+                    onChange={(event) => {
+                      setGuestEmail(event.target.value);
+                      clearInvalidField("guestEmail");
+                    }}
                     required
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    className={requiredFieldClass("guestEmail")}
                   />
                 </div>
                 <div className="space-y-2">
@@ -3406,10 +3478,15 @@ export function MvWizard({
                     연락처 *
                   </label>
                   <input
+                    data-mv-field="guestPhone"
+                    aria-invalid={invalidField === "guestPhone"}
                     value={guestPhone}
-                    onChange={(event) => setGuestPhone(event.target.value)}
+                    onChange={(event) => {
+                      setGuestPhone(event.target.value);
+                      clearInvalidField("guestPhone");
+                    }}
                     required
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    className={requiredFieldClass("guestPhone")}
                   />
                 </div>
               </div>
@@ -3475,36 +3552,6 @@ export function MvWizard({
                 방송국 심의 규격에 맞는 영상과 작성한 신청서 파일을 업로드해주세요.
               </p>
             </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            {[
-              {
-                title: "1. 최종본 확인",
-                body: "심의에 사용할 최종 영상 파일과 작성한 신청서 파일을 업로드하세요.",
-              },
-              {
-                title: "2. 권장 규격",
-                body:
-                  mvType === "MV_BROADCAST"
-                    ? "방송국별 MOV/MP4/WMV 규격과 용량 제한을 확인하세요."
-                    : "MOV 또는 MP4, 1920×1080, 29.97fps 파일을 권장합니다.",
-              },
-              {
-                title: "3. 업로드가 어려울 때",
-                body: `이메일 전송을 선택하고 ${APP_CONFIG.supportEmail}로 파일만 보내면 됩니다.`,
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="rounded-2xl border border-border/60 bg-background/70 px-4 py-4 text-sm"
-              >
-                <p className="font-semibold text-foreground">{item.title}</p>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {item.body}
-                </p>
-              </div>
-            ))}
           </div>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -3778,33 +3825,6 @@ export function MvWizard({
             </div>
           </div>
 
-          <div className="rounded-[28px] border-2 border-[#111111] bg-background p-5 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              결제 전 확인
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
-              {mvPaymentReadiness.map((item) => (
-                <div
-                  key={item.label}
-                  className={`rounded-2xl border px-4 py-3 text-sm ${item.ready
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100"
-                    : "border-[#f2cf27] bg-[#f2cf27]/18 text-foreground"
-                    }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
-                      {item.label}
-                    </p>
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] border border-current text-[11px] font-black">
-                      {item.ready ? "✓" : "!"}
-                    </span>
-                  </div>
-                  <p className="mt-2 font-semibold leading-5">{item.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               선택한 옵션
@@ -3831,12 +3851,6 @@ export function MvWizard({
             <div className="mt-4 flex items-center justify-between text-sm font-semibold text-foreground">
               <span>총 결제 금액</span>
               <span>{formatCurrency(totalAmount)}원</span>
-            </div>
-            <div className="mt-4 grid gap-2 border-t border-border/60 pt-4 text-xs font-semibold text-muted-foreground sm:grid-cols-2">
-              <span>예상 진행 기간: 목적/방송국별 상이</span>
-              <span>부가세 및 증빙 요청은 결제 방식 선택 후 확인</span>
-              <span>조건부 방송국은 담당자 확인 후 진행</span>
-              <span>영상 파일 누락 또는 규격 문제 시 보완 요청</span>
             </div>
           </div>
 

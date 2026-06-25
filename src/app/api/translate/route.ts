@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { translateLyricsWithOpenAI } from "@/lib/openai-translation";
+
 type TranslateRequest = {
   lines?: string[];
   source?: string;
@@ -223,19 +225,38 @@ const translateBatch = async (
   }
 
   if (uniqueTexts.length > 0) {
-    let nextIndex = 0;
-    const workers = Array.from(
-      { length: Math.min(translateConcurrency, uniqueTexts.length) },
-      async () => {
-        while (nextIndex < uniqueTexts.length) {
-          const text = uniqueTexts[nextIndex];
-          nextIndex += 1;
-          const translated = await translateLine(text, source, target);
-          normalizedCache.set(text, translated);
-        }
-      },
+    try {
+      const openAITranslations = await translateLyricsWithOpenAI(uniqueTexts, {
+        source,
+        target,
+      });
+      openAITranslations?.forEach((translation, index) => {
+        const text = uniqueTexts[index];
+        if (!text) return;
+        normalizedCache.set(text, normalizeTranslationOutput(translation));
+      });
+    } catch (error) {
+      console.error("[translate] openai provider failed", error);
+    }
+
+    const fallbackTexts = uniqueTexts.filter(
+      (text) => !normalizedCache.get(text)?.trim(),
     );
-    await Promise.all(workers);
+    if (fallbackTexts.length > 0) {
+      let nextIndex = 0;
+      const workers = Array.from(
+        { length: Math.min(translateConcurrency, fallbackTexts.length) },
+        async () => {
+          while (nextIndex < fallbackTexts.length) {
+            const text = fallbackTexts[nextIndex];
+            nextIndex += 1;
+            const translated = await translateLine(text, source, target);
+            normalizedCache.set(text, translated);
+          }
+        },
+      );
+      await Promise.all(workers);
+    }
   }
 
   return lines.map((line) => {

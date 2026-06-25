@@ -38,6 +38,11 @@ NEXT_PUBLIC_VIDEO_UPLOAD_MAX_MB=4096
 SPELLCHECK_SERVICE_URL=https://glit-spellcheck.onrender.com
 SPELLCHECK_SHARED_SECRET=optional-shared-secret
 
+# Optional OpenAI-backed lyric translation
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_TRANSLATION_MODEL=gpt-5.5
+OPENAI_TRANSLATION_TIMEOUT_MS=15000
+
 # Optional (welcome email)
 RESEND_API_KEY=your_resend_key
 RESEND_FROM="onside <onside2017@daum.net>"

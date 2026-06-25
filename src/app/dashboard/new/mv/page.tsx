@@ -10,9 +10,7 @@ const mvChecklist = [
   "영상 파일: MOV 또는 MP4 권장",
   "해상도: 1920×1080 권장",
   "프레임: 29.97fps 권장",
-  "등급분류/방송사 로고 삽입 필요 여부 확인",
   "TV 송출용은 방송국별 제출 조건 확인",
-  "티저·쇼츠·퍼포먼스 비디오는 목적에 따라 별도 확인",
 ];
 
 const purposeNotes = [
@@ -25,11 +23,6 @@ const purposeNotes = [
     title: "TV 송출",
     description:
       "방송국 송출 목적은 KBS, MBC, SBS 등 방송국별 조건과 편성 여부를 확인한 뒤 접수합니다.",
-  },
-  {
-    title: "조건부 방송국",
-    description:
-      "MBC M, Mnet, ETN은 방송 일정·아티스트 조건·온라인 심의 완료 여부에 따라 별도 확인이 필요합니다.",
   },
 ];
 
@@ -89,7 +82,7 @@ export default async function MvSubmissionPage() {
               ))}
             </ul>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3 lg:h-full lg:grid-cols-1 lg:auto-rows-fr">
+          <div className="grid gap-3 sm:grid-cols-2 lg:h-full lg:grid-cols-1 lg:auto-rows-fr">
             {purposeNotes.map((item) => (
               <div
                 key={item.title}
