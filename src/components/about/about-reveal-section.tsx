@@ -103,7 +103,6 @@ export function AboutRevealSection() {
             <div className="space-y-3 text-base font-semibold leading-relaxed text-white/80">
               <p>통신판매업, 대중문화예술기획업, 음반·음악영상물제작업 등록 업체</p>
               <p>세금계산서·현금영수증·거래내역서 등 각종 증빙 서류 발급 가능</p>
-              <p>사업자 및 등록 증빙 정보는 고객센터 요청 시 확인할 수 있습니다.</p>
               <div className="pt-1 space-y-1">
                 <p className="font-semibold text-white/90">함께하는 브랜드 :</p>
                 <p>
