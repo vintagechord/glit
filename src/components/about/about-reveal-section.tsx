@@ -5,7 +5,7 @@ import * as React from "react";
 import { APP_CONFIG } from "@/lib/config";
 
 const services = [
-  "온라인으로 모든게 가능한 심의 절차",
+  "온라인으로 음반/뮤비 심의 모두 가능",
   "최종 결과까지 개별 실시간 업데이트",
   "카드·모바일 등 온라인 결제",
   "CD/가사집/DVD 무료 제작",
