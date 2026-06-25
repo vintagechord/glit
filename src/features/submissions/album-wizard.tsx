@@ -336,6 +336,7 @@ export function AlbumWizard({
   >({});
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
+  const draftErrorRef = React.useRef<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
   const [resumeChecked, setResumeChecked] = React.useState(false);
@@ -371,6 +372,7 @@ export function AlbumWizard({
   const [currentGuestToken, setCurrentGuestToken] = React.useState(() =>
     safeRandomUUID(),
   );
+  const currentGuestTokenRef = React.useRef(currentGuestToken);
   const draftStorageKey = React.useMemo(
     () => `onside:draft:album:${userId ?? "guest"}`,
     [userId],
@@ -612,6 +614,7 @@ export function AlbumWizard({
     draftInitAttemptedRef.current = true;
     const draftPromise = (async () => {
       setIsPreparingDraft(true);
+      draftErrorRef.current = null;
       setDraftError(null);
       try {
         const res = await fetch("/api/submissions/draft", {
@@ -619,27 +622,34 @@ export function AlbumWizard({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             type: "ALBUM",
-            guestToken: isGuest ? currentGuestToken : undefined,
+            guestToken: isGuest ? currentGuestTokenRef.current : undefined,
           }),
         });
         const json = (await res.json().catch(() => null)) as {
           submissionId?: string;
+          guestToken?: string;
           error?: string;
         };
         if (res.ok && json?.submissionId) {
+          if (isGuest && json.guestToken) {
+            currentGuestTokenRef.current = json.guestToken;
+            setCurrentGuestToken(json.guestToken);
+          }
           setCurrentSubmissionId(json.submissionId);
           return json.submissionId;
         }
-        setDraftError(
+        const message =
           json?.error ||
-            "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
-        );
+          "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.";
+        draftErrorRef.current = message;
+        setDraftError(message);
       } catch (error) {
-        setDraftError(
+        const message =
           error instanceof Error
             ? error.message
-            : "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
-        );
+            : "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.";
+        draftErrorRef.current = message;
+        setDraftError(message);
       } finally {
         setIsPreparingDraft(false);
       }
@@ -653,7 +663,11 @@ export function AlbumWizard({
         draftCreationPromiseRef.current = null;
       }
     }
-  }, [currentGuestToken, currentSubmissionId, isGuest]);
+  }, [currentSubmissionId, isGuest]);
+
+  React.useEffect(() => {
+    currentGuestTokenRef.current = currentGuestToken;
+  }, [currentGuestToken]);
 
   React.useEffect(() => {
     if (!resumeChecked) return;
@@ -737,6 +751,7 @@ export function AlbumWizard({
     try {
       const stored = window.localStorage.getItem(guestTokenStorageKey);
       if (stored && stored !== currentGuestToken) {
+        currentGuestTokenRef.current = stored;
         setCurrentGuestToken(stored);
         return;
       }
@@ -1182,7 +1197,7 @@ export function AlbumWizard({
           filename: file.name,
           mimeType,
           sizeBytes: file.size,
-          guestToken: isGuest ? currentGuestToken : undefined,
+          guestToken: isGuest ? currentGuestTokenRef.current : undefined,
         }),
       });
       const completeJson = (await completeRes.json().catch(() => ({}))) as {
@@ -1202,7 +1217,9 @@ export function AlbumWizard({
         formData.append("mimeType", mimeType);
         formData.append("sizeBytes", String(file.size));
         formData.append("kind", "audio");
-        if (isGuest && currentGuestToken) formData.append("guestToken", currentGuestToken);
+        if (isGuest && currentGuestTokenRef.current) {
+          formData.append("guestToken", currentGuestTokenRef.current);
+        }
         if (title.trim()) formData.append("title", title.trim());
         formData.append("file", file);
 
@@ -1251,7 +1268,7 @@ export function AlbumWizard({
         filename: file.name,
         mimeType,
         sizeBytes: file.size,
-        guestToken: isGuest ? currentGuestToken : undefined,
+        guestToken: isGuest ? currentGuestTokenRef.current : undefined,
         title: title.trim() || undefined,
       }),
     });
@@ -1415,9 +1432,12 @@ export function AlbumWizard({
     setEmailSubmitConfirmed(false);
     setNotice({});
     setCurrentSubmissionId(null);
+    draftErrorRef.current = null;
     setDraftError(null);
     void createDraft();
-    setCurrentGuestToken(safeRandomUUID());
+    const nextGuestToken = safeRandomUUID();
+    currentGuestTokenRef.current = nextGuestToken;
+    setCurrentGuestToken(nextGuestToken);
   };
 
   const buildUploadsFromFiles = React.useCallback(
@@ -1485,7 +1505,7 @@ export function AlbumWizard({
     submissionId: string = requireSubmissionId(),
   ): AlbumDraft => ({
     submissionId,
-    guestToken: currentGuestToken,
+    guestToken: currentGuestTokenRef.current,
     title: title.trim(),
     artistName: artistName.trim(),
     artistNameKr: artistNameKr.trim(),
@@ -1538,6 +1558,7 @@ export function AlbumWizard({
     );
     setNotice({});
     setCurrentSubmissionId(draft.submissionId);
+    currentGuestTokenRef.current = draft.guestToken;
     setCurrentGuestToken(draft.guestToken);
   }, [buildUploadsFromFiles]);
 
@@ -1776,7 +1797,7 @@ export function AlbumWizard({
     const uploaded = includeUpload ? await uploadFiles() : uploadedFiles;
     return {
       submissionId: requireSubmissionId(),
-      guestToken: currentGuestToken,
+      guestToken: currentGuestTokenRef.current,
       title: title.trim(),
       artistName: artistName.trim(),
       artistNameKr: artistNameKr.trim(),
@@ -2218,7 +2239,7 @@ export function AlbumWizard({
       const storedIds = submissionIds.length > 0 ? submissionIds : fallbackIds;
       writeDraftStorage({
         ids: storedIds,
-        guestToken: isGuest ? currentGuestToken : null,
+        guestToken: isGuest ? currentGuestTokenRef.current : null,
       });
       setNotice({ submissionId: submissionIds[0] ?? currentSubmissionId });
       return true;
@@ -2298,6 +2319,7 @@ export function AlbumWizard({
       setNotice({
         error:
           draftError ||
+          draftErrorRef.current ||
           (error instanceof Error
             ? error.message
             : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
@@ -2329,6 +2351,7 @@ export function AlbumWizard({
     if (!submissionId) {
       setNotice({
         error:
+          draftErrorRef.current ||
           draftError ||
           "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.",
       });
@@ -2338,7 +2361,7 @@ export function AlbumWizard({
     const allDrafts = [currentDraft, ...albumDrafts];
     writeDraftStorage({
       ids: allDrafts.map((draft) => draft.submissionId),
-      guestToken: isGuest ? currentGuestToken : null,
+      guestToken: isGuest ? currentGuestTokenRef.current : null,
     });
     setUploadDrafts(allDrafts);
     setUploadDraftIndex(0);
@@ -2379,6 +2402,7 @@ export function AlbumWizard({
       setNotice({
         error:
           draftError ||
+          draftErrorRef.current ||
           (error instanceof Error
             ? error.message
             : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),

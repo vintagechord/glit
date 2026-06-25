@@ -652,9 +652,20 @@ export function MvWizard({
       });
       const json = (await res.json().catch(() => null)) as {
         submissionId?: string;
+        guestToken?: string;
         error?: string;
       };
       if (res.ok && json?.submissionId) {
+        if (isGuest && json.guestToken) {
+          guestTokenRef.current = json.guestToken;
+          if (typeof window !== "undefined") {
+            try {
+              window.localStorage.setItem(guestTokenStorageKey, json.guestToken);
+            } catch {
+              // ignore storage errors
+            }
+          }
+        }
         submissionIdRef.current = json.submissionId;
         return json.submissionId;
       }
@@ -672,7 +683,7 @@ export function MvWizard({
       setIsPreparingDraft(false);
     }
     return null;
-  }, [isGuest, isPreparingDraft, mvType]);
+  }, [guestTokenStorageKey, isGuest, isPreparingDraft, mvType]);
 
   React.useEffect(() => {
     if (!resumeChecked) return;

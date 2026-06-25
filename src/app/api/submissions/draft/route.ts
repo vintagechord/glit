@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -68,17 +69,60 @@ export async function POST(request: Request) {
     amount_krw: 0,
   };
 
-  const insertQuery = isGuest
-    ? admin
+  if (isGuest) {
+    const fallbackId = await findExistingDraftId(admin, {
+      type: parsed.data.type,
+      guestToken: parsed.data.guestToken,
+    });
+    if (fallbackId) {
+      return NextResponse.json({
+        ok: true,
+        submissionId: fallbackId,
+        guestToken: parsed.data.guestToken,
+      });
+    }
+
+    let guestToken = parsed.data.guestToken;
+    let lastError: { code?: string; message?: string } | null = null;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const { data, error } = await admin
         .from("submissions")
-        .upsert(payload, { onConflict: "guest_token" })
-        .select("id")
-        .maybeSingle()
-    : supabase
-        .from("submissions")
-        .insert(payload)
-        .select("id")
+        .insert({
+          ...payload,
+          guest_token: guestToken,
+        })
+        .select("id, guest_token")
         .maybeSingle();
+
+      if (data?.id) {
+        return NextResponse.json({
+          ok: true,
+          submissionId: data.id,
+          guestToken: data.guest_token ?? guestToken,
+        });
+      }
+
+      lastError = error as { code?: string; message?: string } | null;
+      if (lastError?.code === "23505") {
+        guestToken = randomUUID();
+        continue;
+      }
+      break;
+    }
+
+    console.error("[Draft] failed to create guest submission draft", {
+      type: parsed.data.type,
+      code: lastError?.code,
+      message: lastError?.message,
+    });
+    return NextResponse.json({ error: "초안 생성을 실패했습니다." }, { status: 500 });
+  }
+
+  const insertQuery = supabase
+    .from("submissions")
+    .insert(payload)
+    .select("id")
+    .maybeSingle();
 
   const { data, error } = await insertQuery;
   if (error || !data?.id) {
