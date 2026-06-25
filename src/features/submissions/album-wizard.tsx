@@ -1168,12 +1168,38 @@ export function AlbumWizard({
     onProgress: (percent: number) => void,
   ) => {
     const submissionId = requireSubmissionId();
+    const mimeType = file.type || "application/octet-stream";
+    const isApplicationFormUpload =
+      isApplicationFormFile(file.name) || isApplicationFormMime(file.type);
+    const completeUpload = async (objectKey: string) => {
+      const completeRes = await fetch("/api/uploads/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId,
+          kind: "audio",
+          key: objectKey,
+          filename: file.name,
+          mimeType,
+          sizeBytes: file.size,
+          guestToken: isGuest ? currentGuestToken : undefined,
+        }),
+      });
+      const completeJson = (await completeRes.json().catch(() => ({}))) as {
+        key?: string;
+        error?: string;
+      };
+      if (!completeRes.ok || !completeJson.key) {
+        throw new Error(completeJson.error || "업로드 확인에 실패했습니다.");
+      }
+      return { objectKey: completeJson.key };
+    };
     const directUploadFallback = () =>
       new Promise<{ objectKey: string }>((resolve, reject) => {
         const formData = new FormData();
         formData.append("submissionId", submissionId);
         formData.append("filename", file.name);
-        formData.append("mimeType", file.type || "application/octet-stream");
+        formData.append("mimeType", mimeType);
         formData.append("sizeBytes", String(file.size));
         formData.append("kind", "audio");
         if (isGuest && currentGuestToken) formData.append("guestToken", currentGuestToken);
@@ -1187,25 +1213,34 @@ export function AlbumWizard({
           onProgress(percent);
         };
         xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const json = JSON.parse(xhr.responseText) as { objectKey?: string; error?: string };
-              if (json.objectKey) {
-                resolve({ objectKey: json.objectKey });
-                return;
-              }
-              reject(new Error(json.error || "Upload failed"));
-            } catch {
-              reject(new Error("Upload failed (응답 해석 실패)"));
-            }
-          } else {
-            reject(new Error(`Upload failed (status ${xhr.status})`));
+          let json: { objectKey?: string; error?: string } | null = null;
+          try {
+            json = JSON.parse(xhr.responseText) as {
+              objectKey?: string;
+              error?: string;
+            };
+          } catch {
+            json = null;
           }
+          if (xhr.status >= 200 && xhr.status < 300) {
+            if (json?.objectKey) {
+              resolve({ objectKey: json.objectKey });
+              return;
+            }
+            reject(new Error(json?.error || "Upload failed"));
+            return;
+          }
+          reject(new Error(json?.error || `Upload failed (status ${xhr.status})`));
         };
         xhr.onerror = () => reject(new Error("Upload failed (network/CORS)"));
         xhr.open("POST", "/api/uploads/direct");
         xhr.send(formData);
       });
+
+    if (isApplicationFormUpload) {
+      const directUpload = await directUploadFallback();
+      return completeUpload(directUpload.objectKey);
+    }
 
     const initRes = await fetch("/api/uploads/init", {
       method: "POST",
@@ -1214,7 +1249,7 @@ export function AlbumWizard({
         submissionId,
         kind: "audio",
         filename: file.name,
-        mimeType: file.type || "application/octet-stream",
+        mimeType,
         sizeBytes: file.size,
         guestToken: isGuest ? currentGuestToken : undefined,
         title: title.trim() || undefined,
@@ -1233,24 +1268,11 @@ export function AlbumWizard({
         error: initJson.error,
       });
       const fallback = await directUploadFallback();
-      await fetch("/api/uploads/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId,
-          kind: "audio",
-          key: fallback.objectKey,
-          filename: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-          guestToken: isGuest ? currentGuestToken : undefined,
-        }),
-      }).catch(() => null);
-      return { objectKey: fallback.objectKey };
+      return completeUpload(fallback.objectKey);
     }
 
     const { key, uploadUrl, headers } = initJson;
-    const contentType = headers?.["Content-Type"] || file.type || "application/octet-stream";
+    const contentType = headers?.["Content-Type"] || mimeType;
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -1275,37 +1297,10 @@ export function AlbumWizard({
     } catch (error) {
       console.warn("[Upload][album] presigned PUT failed, fallback to direct", error);
       const fallback = await directUploadFallback();
-      await fetch("/api/uploads/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId,
-          kind: "audio",
-          key: fallback.objectKey,
-          filename: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-          guestToken: isGuest ? currentGuestToken : undefined,
-        }),
-      }).catch(() => null);
-      return { objectKey: fallback.objectKey };
+      return completeUpload(fallback.objectKey);
     }
 
-    await fetch("/api/uploads/complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        submissionId,
-        kind: "audio",
-        key,
-        filename: file.name,
-        mimeType: file.type || "application/octet-stream",
-        sizeBytes: file.size,
-        guestToken: isGuest ? currentGuestToken : undefined,
-      }),
-    }).catch(() => null);
-
-    return { objectKey: key };
+    return completeUpload(key);
   };
 
   const uploadFiles = async (
