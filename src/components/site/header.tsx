@@ -31,6 +31,8 @@ const mobileNavLinkClass =
   "inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-transparent px-2 py-2 text-center text-[12px] font-black leading-tight tracking-normal transition";
 const subtleButtonClass =
   "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-3 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
+const primaryButtonClass =
+  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-white dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 
 const isActivePath = (
   pathname: string,
@@ -208,6 +210,12 @@ export function SiteHeader() {
                 className={subtleButtonClass}
               >
                 {isEnglishRoute ? "Login" : "로그인"}
+              </ReliableLink>
+              <ReliableLink
+                href={isEnglishRoute ? "/en/signup" : "/signup"}
+                className={primaryButtonClass}
+              >
+                {isEnglishRoute ? "Sign Up" : "회원가입"}
               </ReliableLink>
             </>
           )}

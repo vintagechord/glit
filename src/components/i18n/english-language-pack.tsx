@@ -318,6 +318,7 @@ const exactTranslations: Record<string, string> = {
   "진행률 : 총 1곳 중 0곳 완료": "Progress: 0 of 1 completed",
   "온사이드 로그인": "Onside Login",
   "온사이드 회원가입": "Onside Sign Up",
+  "계정이 없으신가요?": "Don't have an account?",
   "회원가입": "Sign Up",
   "회원가입이 완료되었습니다. 로그인 후 접수와 결과 확인을 이어서 진행할 수 있습니다.":
     "Sign up is complete. Log in to continue submission and result checking.",

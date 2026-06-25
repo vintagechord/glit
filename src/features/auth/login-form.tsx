@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -13,6 +14,9 @@ const initialState: ActionState = {};
 export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
   const [state, formAction] = useActionState(loginAction, initialState);
   const [emailValue, setEmailValue] = useState("");
+  const pathname = usePathname();
+  const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
+  const signupHref = isEnglishRoute ? "/en/signup" : "/signup";
 
   const SubmitButton = () => {
     const { pending } = useFormStatus();
@@ -88,6 +92,15 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
             비밀번호 찾기
           </Link>
         </div>
+      </div>
+      <div className="rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-center text-sm font-semibold text-[#111111] dark:border-[#f2cf27]">
+        계정이 없으신가요?{" "}
+        <Link
+          href={signupHref}
+          className="inline-flex rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-xs font-black text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5"
+        >
+          회원가입
+        </Link>
       </div>
       <div className="grid gap-2 text-center text-sm text-muted-foreground sm:grid-cols-2">
         <TrackLookupModalTrigger
