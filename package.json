@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test --import tsx",
+    "email:smoke": "tsx scripts/email-smoke.ts",
     "health": "tsx scripts/health.ts",
     "test:e2e": "playwright test --config=playwright.config.ts",
     "spellcheck:smoke": "node --import tsx scripts/spellcheck_smoke.ts"

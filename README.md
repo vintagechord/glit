@@ -43,9 +43,10 @@ OPENAI_API_KEY=your_openai_api_key
 OPENAI_TRANSLATION_MODEL=gpt-5.5
 OPENAI_TRANSLATION_TIMEOUT_MS=15000
 
-# Optional (welcome email)
+# Email notifications (Resend)
 RESEND_API_KEY=your_resend_key
 RESEND_FROM="onside <onside2017@daum.net>"
+RESEND_TEST_TO=you@example.com
 
 # Optional (official Kakao/Alimtalk notification webhook)
 KAKAO_ALIMTALK_WEBHOOK_URL=https://your-kakao-provider-webhook
@@ -128,9 +129,28 @@ SUPABASE_SERVICE_ROLE_KEY
 NEXT_PUBLIC_APP_URL
 ```
 
+### Render Free keep-alive
+
+GitHub Actions가 10분마다 Render 앱의 `/healthz`를 호출하도록
+`.github/workflows/render-keepalive.yml`에 cron을 추가했습니다.
+
+- 기본 URL: `https://glit-b1yn.onrender.com/healthz`
+- 운영 URL을 바꾸려면 GitHub Repository Variables에
+  `RENDER_KEEPALIVE_URL=https://your-render-app.onrender.com/healthz`를 설정하세요.
+- 여러 Render 서비스를 깨워야 하면 `RENDER_KEEPALIVE_URLS`에 URL을 한 줄씩 넣으세요.
+- GitHub Actions 탭에서 `Render Keepalive` workflow를 수동 실행해 응답을 확인할 수 있습니다.
+
 ## Health Check
 
-`/api/health`
+- `/healthz`: lightweight liveness endpoint for Render keep-alive
+- `/api/health`: runtime configuration check
+
+For a real email send test, configure `RESEND_API_KEY`, `RESEND_FROM`, and a
+verified Resend sender/domain, then run:
+
+```bash
+npm run email:smoke -- --to you@example.com
+```
 
 ## Notes
 

@@ -231,6 +231,7 @@ const footerLegalButtonClass =
 export function SiteFooter() {
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
+  const siteLinkPrefix = isEnglishRoute ? "/en" : "";
   const contactPhone = APP_CONFIG.supportPhone;
   const contactEmail = APP_CONFIG.supportEmail;
   const bankName = APP_CONFIG.bankName;
@@ -370,19 +371,19 @@ export function SiteFooter() {
               <span className="hidden text-xs text-white/46 group-open:inline">접기</span>
             </summary>
             <div className={footerPanelClass}>
-              <Link href="/about" className={footerLinkClass}>
+              <Link href={`${siteLinkPrefix}/about`} className={footerLinkClass}>
                 회사소개
               </Link>
-              <Link href="/guide" className={footerLinkClass}>
+              <Link href={`${siteLinkPrefix}/guide`} className={footerLinkClass}>
                 심의 안내
               </Link>
-              <Link href="/faq" className={footerLinkClass}>
+              <Link href={`${siteLinkPrefix}/faq`} className={footerLinkClass}>
                 FAQ
               </Link>
-              <Link href="/support" className={footerLinkClass}>
+              <Link href={`${siteLinkPrefix}/support`} className={footerLinkClass}>
                 고객센터
               </Link>
-              <Link href="/forms" className={footerLinkClass}>
+              <Link href={`${siteLinkPrefix}/forms`} className={footerLinkClass}>
                 신청서 작성
               </Link>
             </div>

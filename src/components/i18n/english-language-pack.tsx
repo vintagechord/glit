@@ -23,7 +23,7 @@ const exactTranslations: Record<string, string> = {
     "Submit album and music video reviews online, then check progress and result files in one place.",
   "신청 유형": "Review Type",
   "필요한 심의만 선택하세요": "Choose the Review You Need",
-  "구버전 사이트 접수 →": "Legacy site submission →",
+  "구버전 방식 접수 →": "Legacy submission method →",
   "방송국별 음반 심의": "Broadcaster Album Review",
   "음반 심의": "Album Review",
   "TV·라디오 송출용 음원 심의.": "For TV and radio broadcast music review.",
@@ -144,12 +144,18 @@ const exactTranslations: Record<string, string> = {
     "Upload the final video for review and the completed application file.",
   "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX":
     "Allowed formats: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX",
+  "2GB 이상의 영상은 이메일 접수":
+    "For videos over 2 GB, submit by email:",
   "작성한 신청서 파일(HWP/DOC/DOCX)을 함께 업로드해주세요.":
     "Please also upload the completed application file (HWP/DOC/DOCX).",
   "음원 파일(WAV/MP3/ZIP)을 업로드하거나 이메일 제출을 선택해주세요.":
     "Upload audio files (WAV/MP3/ZIP) or choose email submission.",
   "작성한 신청서 파일(HWP/DOC/DOCX)과 영상 파일을 업로드해주세요.":
     "Upload the completed application file (HWP/DOC/DOCX) and video file.",
+  "영상 파일 첨부가 정상적으로 완료되지 않는 경우, 이메일 전송을 선택 후 영상 파일만 이메일로 보내주세요.":
+    "If the video upload does not complete normally, choose email submission and send only the video file by email.",
+  "신청서 다운로드하여 직접 작성한 경우 신청서도 영상과 함께 첨부해주세요.":
+    "If you downloaded and completed the application form manually, attach the application form with the video as well.",
   "신청서 저장 중...": "Saving application...",
   "비회원도 Submission할 수 있으며, 로그인 시 마이페이지에서 진행 상황을 확인할 수 있습니다.":
     "Guest submission is available. If you log in, you can check progress from My Page.",

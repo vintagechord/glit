@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,19 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const serverSupabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await serverSupabase.auth.getUser();
+  const { data: isAdmin } = await serverSupabase.rpc("is_admin");
+
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+  if (isAdmin !== true) {
+    return NextResponse.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
+  }
+
   const { id: submissionId } = await params;
   if (!submissionId) {
     return NextResponse.json({ error: "Submission ID missing" }, { status: 400 });

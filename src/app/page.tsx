@@ -170,7 +170,7 @@ export default function Home() {
             href="/forms"
             className="self-end text-sm font-semibold text-muted-foreground transition hover:text-foreground md:self-auto"
           >
-            구버전 사이트 접수 →
+            구버전 방식 접수 →
           </ReliableLink>
         </div>
 

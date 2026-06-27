@@ -3674,6 +3674,9 @@ export function MvWizard({
                           ? "접수 ID 준비 중... 잠시 후 첨부 가능"
                           : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
                     </span>
+                    <span className="mt-3 block rounded-xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100">
+                      2GB 이상의 영상은 이메일 접수 {APP_CONFIG.supportEmail}
+                    </span>
                     {!submissionIdRef.current && !isPreparingDraft ? (
                       <button
                         type="button"
@@ -3694,8 +3697,13 @@ export function MvWizard({
                 </div>
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground">
                   <p>
-                    영상 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 신청서를 먼저 제출한 뒤 영상 파일만 이메일로 보내주세요. 다운로드 방식은 작성한 신청서 파일(HWP/DOC/DOCX)을 함께 첨부해주세요.
+                    영상 파일 첨부가 정상적으로 완료되지 않는 경우, 이메일 전송을 선택 후 영상 파일만 이메일로 보내주세요.
                   </p>
+                  {isDownloadedApplicationFlow ? (
+                    <p>
+                      신청서 다운로드하여 직접 작성한 경우 신청서도 영상과 함께 첨부해주세요.
+                    </p>
+                  ) : null}
                   <p className="font-semibold text-foreground">{APP_CONFIG.supportEmail}</p>
                 </div>
                 <div className="mt-4 space-y-3">
