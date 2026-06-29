@@ -7,6 +7,7 @@ const exactTranslations: Record<string, string> = {
   "심의 신청": "Apply",
   "진행/결과 조회": "Progress / Results",
   "매거진 발행": "Magazine",
+  "크레딧": "Credits",
   "이용가이드": "Guide",
   "고객센터": "Support",
   "로그인": "Login",
@@ -269,8 +270,25 @@ const exactTranslations: Record<string, string> = {
   "접수 현황": "Submission Status",
   "작성중 신청서": "Draft Application Forms",
   "나의 심의 내역": "My Review History",
-  // 크레딧 운영 보류: 메뉴/페이지 번역 숨김
-  // "크레딧": "Credits",
+  "음반심의 결제 완료 건으로 발급되는 온사이드 크레딧을 확인하고 사용하세요.":
+    "Check and use Onside credits issued from completed album review payments.",
+  "앨범심의 1건 = 1크레딧": "1 album review = 1 credit",
+  "매거진 1회 발행 요청": "1 magazine request",
+  "국내뉴스 / 미디어 선택": "Domestic News / Media",
+  "4개 언어 발행": "Published in 4 languages",
+  "발매 후 신청 가능": "Available after release",
+  "발매일 기준 3일 내 목표": "Targeted within 3 days of release",
+  "음반심의 1건으로 크레딧을 받고, 필요한 서비스를 이용하세요.":
+    "Earn credits from album reviews and use them for services.",
+  "앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 워터멜론 매거진 발행 요청과 온사이드 연계 서비스 이용에 사용할 수 있습니다.":
+    "Each completed album review payment issues 1 credit. Credits can be used for Watermelon magazine requests and Onside partner services.",
+  "매거진 바로가기": "Open Magazine",
+  "발행 요청하기": "Request Publication",
+  "회원가입 후 크레딧 사용": "Sign Up to Use Credits",
+  "앨범심의 결제 완료 1건당 크레딧 1개가 발급됩니다.":
+    "1 credit is issued for each completed album review payment.",
+  "크레딧으로 워터멜론 매거진 발행 요청과 온사이드 연계 다양한 서비스를 이용할 수 있습니다.":
+    "Use credits for Watermelon magazine requests and various Onside partner services.",
   "계정정보": "Account Info",
   "접수한 심의의 현재 상태를 확인할 수 있습니다.":
     "Check the current status of your submitted reviews.",

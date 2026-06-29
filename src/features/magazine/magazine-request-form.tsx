@@ -174,17 +174,6 @@ export function MagazineRequestForm({
           </span>
         </div>
 
-        <div className="mt-5 rounded-[8px] border-2 border-border bg-background/70 p-4 text-sm text-muted-foreground">
-          <p className="flex gap-2 font-semibold text-foreground">
-            <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            음반심의 결제 완료 1건당 매거진 발행 크레딧 1개가 제공됩니다.
-          </p>
-          <p className="mt-2 text-xs leading-5">
-            회원은 로그인 후 보유 크레딧을 선택하고, 비회원은 접수 시 받은 조회
-            코드로 결제 완료 건을 확인해 신청합니다.
-          </p>
-        </div>
-
         {notice ? (
           <div
             className={`mt-5 rounded-[8px] border-2 px-4 py-3 text-sm font-semibold ${
@@ -436,9 +425,7 @@ export function MagazineRequestForm({
             </div>
           </div>
           <p className="mt-4 text-xs leading-5 text-muted-foreground">
-            크레딧은 결제 완료된 음반심의 접수 1건마다 1개로 계산됩니다.
-            매거진 발행 1회 또는 서비스 이용권 교환에 사용한 크레딧은 잔여
-            수량에서 차감됩니다.
+            매거진 발행 1회 또는 서비스 이용권 교환 시 잔여 크레딧에서 차감됩니다.
           </p>
         </section>
 

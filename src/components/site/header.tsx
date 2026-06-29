@@ -12,14 +12,14 @@ import { SiteLogo } from "./site-logo";
 const navLinks = [
   { label: "심의 신청", href: "/dashboard/new", match: "prefix" as const },
   { label: "진행/결과 조회", href: "/track", match: "prefix" as const },
-  { label: "매거진 발행", href: "/magazine", match: "prefix" as const },
+  { label: "크레딧", href: "/magazine", match: "prefix" as const },
   { label: "이용가이드", href: "/guide", match: "prefix" as const },
 ];
 
 const englishNavLinks = [
   { label: "Apply", href: "/en/dashboard/new", match: "prefix" as const },
   { label: "Results", href: "/en/track", match: "prefix" as const },
-  { label: "Magazine", href: "/en/magazine", match: "prefix" as const },
+  { label: "Credits", href: "/en/magazine", match: "prefix" as const },
   { label: "Guide", href: "/en/guide", match: "prefix" as const },
 ];
 
