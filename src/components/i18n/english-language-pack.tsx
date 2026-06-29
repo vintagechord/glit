@@ -282,6 +282,7 @@ const exactTranslations: Record<string, string> = {
     "Each completed album review payment issues 1 credit. Credits can be used for Watermelon magazine requests and Onside partner services.",
   "매거진 바로가기": "Open Magazine",
   "발행 요청하기": "Request Publication",
+  "워터멜론 매거진 발행 요청": "Watermelon Magazine Publication Request",
   "회원가입 후 크레딧 사용": "Sign Up to Use Credits",
   "앨범심의 결제 완료 1건당 크레딧 1개가 발급됩니다.":
     "1 credit is issued for each completed album review payment.",

@@ -165,7 +165,7 @@ export function MagazineRequestForm({
           <div>
             <p className="bauhaus-kicker">Request</p>
             <h2 className="mt-3 text-2xl font-black text-foreground">
-              매거진 발행 요청 폼
+              워터멜론 매거진 발행 요청
             </h2>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-[11px] font-black text-[#111111]">
