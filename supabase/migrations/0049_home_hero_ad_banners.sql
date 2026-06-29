@@ -16,7 +16,7 @@ insert into public.ad_banners (
   is_active
 )
 select
-  '리오픈 기념 음반심의 50% 할인',
+  '리뉴얼 기념 음반심의 50% 할인',
   '할인 금액으로 바로 접수하세요.',
   '/media/banners/home-hero/album-discount.svg',
   '/dashboard/new/album',
@@ -26,7 +26,7 @@ select
 where not exists (
   select 1 from public.ad_banners
   where placement = 'HOME_HERO'
-    and title = '리오픈 기념 음반심의 50% 할인'
+    and title = '리뉴얼 기념 음반심의 50% 할인'
 );
 
 insert into public.ad_banners (

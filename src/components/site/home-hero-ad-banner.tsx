@@ -15,7 +15,7 @@ type HomeHeroAdBannerItem = {
 const fallbackBanners: HomeHeroAdBannerItem[] = [
   {
     id: "home-hero-album-discount",
-    title: "리오픈 기념 음반심의 50% 할인",
+    title: "리뉴얼 기념 음반심의 50% 할인",
     description: "할인 금액으로 바로 접수하세요.",
     image_url: "/media/banners/home-hero/album-discount.svg",
     link_url: "/dashboard/new/album",
