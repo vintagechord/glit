@@ -33,6 +33,10 @@ import {
   resolveMvFallbackStationId,
 } from "@/lib/admin/mv-review-flow";
 import { buildUrl, getBaseUrl } from "@/lib/url";
+import {
+  ALBUM_REVIEW_DISCOUNT_SETTING_KEY,
+  normalizeAlbumDiscountPercent,
+} from "@/lib/album-pricing";
 
 export type AdminActionState = {
   error?: string;
@@ -520,6 +524,10 @@ const stationSchema = z.object({
 const packageStationsSchema = z.object({
   packageId: z.string().uuid(),
   stationCodes: z.string().min(1),
+});
+
+const albumReviewDiscountSchema = z.object({
+  discountPercent: z.number().min(0).max(100),
 });
 
 const adBannerSchema = z.object({
@@ -2064,6 +2072,52 @@ export async function updatePackageStationsFormAction(
     return;
   }
   revalidatePath("/admin/config");
+  redirect(withSavedQuery("/admin/config"));
+}
+
+export async function updateAlbumReviewDiscountAction(
+  payload: z.infer<typeof albumReviewDiscountSchema>,
+): Promise<AdminActionState> {
+  const parsed = albumReviewDiscountSchema.safeParse({
+    discountPercent: normalizeAlbumDiscountPercent(payload.discountPercent),
+  });
+  if (!parsed.success) {
+    return { error: "음반 할인율은 0~100 사이 숫자로 입력해주세요." };
+  }
+
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.from("site_settings").upsert({
+    key: ALBUM_REVIEW_DISCOUNT_SETTING_KEY,
+    value: { discountPercent: parsed.data.discountPercent },
+    description: "음반 심의 일괄 할인율(%)",
+  });
+
+  if (error) {
+    console.error("updateAlbumReviewDiscountAction failed", error);
+    return {
+      error:
+        "음반 할인율 저장에 실패했습니다. site_settings 마이그레이션 적용 여부를 확인해주세요.",
+    };
+  }
+
+  return { message: "음반 할인율이 저장되었습니다." };
+}
+
+export async function updateAlbumReviewDiscountFormAction(
+  formData: FormData,
+): Promise<void> {
+  const submittedPercent =
+    formData.get("quickDiscountPercent") ?? formData.get("discountPercent");
+  const result = await updateAlbumReviewDiscountAction({
+    discountPercent: Number(submittedPercent ?? 0),
+  });
+  if (result.error) {
+    console.error(result.error);
+    return;
+  }
+  revalidatePath("/admin/config");
+  revalidatePath("/dashboard/new/album");
+  revalidatePath("/en/dashboard/new/album");
   redirect(withSavedQuery("/admin/config"));
 }
 

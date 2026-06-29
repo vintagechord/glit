@@ -4,6 +4,11 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { PendingOverlay } from "@/components/ui/pending-overlay";
+import {
+  getAlbumDiscountAmount,
+  getDiscountedAlbumPrice,
+  normalizeAlbumDiscountPercent,
+} from "@/lib/album-pricing";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { openInicisCardPopup } from "@/lib/inicis/popup";
@@ -259,12 +264,14 @@ export function AlbumWizard({
   userEmail,
   profanityTerms = [],
   profanityFilterV2Enabled = false,
+  albumDiscountPercent = 0,
 }: {
   packages: PackageOption[];
   userId?: string | null;
   userEmail?: string | null;
   profanityTerms?: ProfanityTerm[];
   profanityFilterV2Enabled?: boolean;
+  albumDiscountPercent?: number;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -432,22 +439,34 @@ export function AlbumWizard({
   const broadcastCount = tracks.filter((track) => track.broadcastSelected)
     .length;
   const requiresBroadcastSelection = tracks.length >= 4;
-  const basePriceKrw = selectedPackage
+  const normalizedAlbumDiscountPercent =
+    normalizeAlbumDiscountPercent(albumDiscountPercent);
+  const hasAlbumEventDiscount = normalizedAlbumDiscountPercent > 0;
+  const originalBasePriceKrw = selectedPackage
     ? isOneClick
       ? oneClickPriceMap[selectedPackage.stationCount] ??
       selectedPackage.priceKrw
       : selectedPackage.priceKrw
     : 0;
+  const basePriceKrw = getDiscountedAlbumPrice(
+    originalBasePriceKrw,
+    normalizedAlbumDiscountPercent,
+  );
+  const eventDiscountPerAlbumKrw = getAlbumDiscountAmount(
+    originalBasePriceKrw,
+    normalizedAlbumDiscountPercent,
+  );
   const additionalPriceKrw = Math.round(basePriceKrw * 0.5);
   const additionalAlbumCount = albumDrafts.length;
   const totalAlbumCount = additionalAlbumCount + 1;
   const additionalAlbumTotalKrw = additionalAlbumCount * additionalPriceKrw;
-  const undiscountedTotalPriceKrw = totalAlbumCount * basePriceKrw;
+  const originalTotalPriceKrw = totalAlbumCount * originalBasePriceKrw;
+  const eventDiscountTotalKrw = totalAlbumCount * eventDiscountPerAlbumKrw;
   const additionalDiscountPerAlbumKrw = Math.max(
     0,
     basePriceKrw - additionalPriceKrw,
   );
-  const totalDiscountKrw =
+  const additionalDiscountTotalKrw =
     additionalAlbumCount * additionalDiscountPerAlbumKrw;
   const totalPriceKrw =
     basePriceKrw + additionalAlbumTotalKrw;
@@ -2786,6 +2805,13 @@ export function AlbumWizard({
               const displayPrice = isOneClick
                 ? oneClickPriceMap[pkg.stationCount] ?? pkg.priceKrw
                 : pkg.priceKrw;
+              const discountedDisplayPrice = getDiscountedAlbumPrice(
+                displayPrice,
+                normalizedAlbumDiscountPercent,
+              );
+              const hasDisplayDiscount =
+                normalizedAlbumDiscountPercent > 0 &&
+                discountedDisplayPrice < displayPrice;
               const guidance = packageGuidance[pkg.stationCount];
               return (
                 <button
@@ -2819,14 +2845,26 @@ export function AlbumWizard({
                         {getPackageDisplayName(pkg, isOneClick)}
                       </h3>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
+                    <div className="flex flex-col items-end gap-2 text-right">
                       {isActive ? (
                         <span className={selectedBadgeClass}>
                           ✓ 선택됨
                         </span>
                       ) : null}
-                      <span className="text-sm font-semibold">
-                        {formatCurrency(displayPrice)}원
+                      {hasDisplayDiscount ? (
+                        <span className="rounded-[6px] border border-[#111111]/20 bg-white/70 px-2 py-0.5 text-[10px] font-black text-[#111111]">
+                          {normalizedAlbumDiscountPercent}% 할인
+                        </span>
+                      ) : null}
+                      <span className="flex flex-col items-end gap-0.5">
+                        {hasDisplayDiscount ? (
+                          <span className="text-xs font-semibold opacity-60 line-through">
+                            {formatCurrency(displayPrice)}원
+                          </span>
+                        ) : null}
+                        <span className="text-base font-black">
+                          {formatCurrency(discountedDisplayPrice)}원
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -4199,17 +4237,61 @@ export function AlbumWizard({
                       </p>
                     </div>
                     <span className="text-sm font-semibold">
-                      {formatCurrency(basePriceKrw)}원
+                      {hasAlbumEventDiscount ? (
+                        <span className="flex flex-col items-end gap-0.5 text-right">
+                          <span className="text-xs text-muted-foreground line-through">
+                            {formatCurrency(originalBasePriceKrw)}원
+                          </span>
+                          <span>{formatCurrency(basePriceKrw)}원</span>
+                        </span>
+                      ) : (
+                        `${formatCurrency(basePriceKrw)}원`
+                      )}
                     </span>
                   </div>
+                  {hasAlbumEventDiscount ? (
+                    <div className="rounded-[18px] border border-[#f2cf27] bg-[#f2cf27]/20 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#1556a4] dark:text-[#8bc3ff]">
+                            오픈 기념 할인
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-foreground">
+                            음반 심의 {normalizedAlbumDiscountPercent}% 할인 적용 중
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-[#111111] px-3 py-1 text-xs font-black text-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]">
+                          -{formatCurrency(eventDiscountPerAlbumKrw)}원 / 앨범
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="rounded-[18px] border border-border/60 bg-background/70 p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       결제 금액 계산
                     </p>
                     <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                      {hasAlbumEventDiscount ? (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span>할인 전 정상 금액</span>
+                            <span>
+                              {formatCurrency(originalBasePriceKrw)}원 ×{" "}
+                              {totalAlbumCount}건 ={" "}
+                              {formatCurrency(originalTotalPriceKrw)}원
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-[#1f7a5a] dark:text-emerald-300">
+                            <span>오픈 기념 {normalizedAlbumDiscountPercent}% 할인</span>
+                            <span className="font-semibold">
+                              -{formatCurrency(eventDiscountTotalKrw)}원
+                            </span>
+                          </div>
+                        </>
+                      ) : null}
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span>
-                          1번째 앨범 정상가격
+                          1번째 앨범 적용가격
                         </span>
                         <span className="font-semibold text-foreground">
                           {formatCurrency(basePriceKrw)}원 × 1 ={" "}
@@ -4220,7 +4302,7 @@ export function AlbumWizard({
                         <>
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <span>
-                              2번째~{totalAlbumCount}번째 앨범 50% 할인
+                              2번째~{totalAlbumCount}번째 앨범 추가 50% 할인
                             </span>
                             <span className="font-semibold text-foreground">
                               {formatCurrency(basePriceKrw)}원 × 50% ={" "}
@@ -4229,24 +4311,16 @@ export function AlbumWizard({
                               {formatCurrency(additionalAlbumTotalKrw)}원
                             </span>
                           </div>
-                          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2">
-                            <span>할인 전 금액</span>
-                            <span>
-                              {formatCurrency(basePriceKrw)}원 ×{" "}
-                              {totalAlbumCount}건 ={" "}
-                              {formatCurrency(undiscountedTotalPriceKrw)}원
-                            </span>
-                          </div>
                           <div className="flex flex-wrap items-center justify-between gap-2 text-[#1f7a5a] dark:text-emerald-300">
                             <span>추가 앨범 할인 금액</span>
                             <span className="font-semibold">
-                              -{formatCurrency(totalDiscountKrw)}원
+                              -{formatCurrency(additionalDiscountTotalKrw)}원
                             </span>
                           </div>
                         </>
                       ) : (
                         <p>
-                          앨범을 추가하면 2번째 앨범부터 같은 패키지 정상가격의 50%로 계산됩니다.
+                          앨범을 추가하면 2번째 앨범부터 같은 패키지 적용가격의 50%로 계산됩니다.
                         </p>
                       )}
                     </div>

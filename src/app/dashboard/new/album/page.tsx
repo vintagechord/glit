@@ -1,5 +1,6 @@
 import { AlbumIntroPanel } from "@/features/submissions/album-intro-panel";
 import { AlbumWizard } from "@/features/submissions/album-wizard";
+import { getAlbumReviewDiscountPercent } from "@/lib/album-discount-server";
 import { APP_CONFIG } from "@/lib/config";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
@@ -148,6 +149,7 @@ export default async function AlbumSubmissionPage() {
   const supabase = await createServerSupabase();
   const profanityFilterV2Enabled = process.env.PROFANITY_FILTER_V2 !== "false";
   const user = await getServerSessionUser(supabase);
+  const albumDiscountPercent = await getAlbumReviewDiscountPercent(supabase);
 
   const { data: joinedPackageRows, error: packageJoinError } = await supabase
     .from("packages")
@@ -225,6 +227,7 @@ export default async function AlbumSubmissionPage() {
           userEmail={user?.email ?? null}
           profanityTerms={profanityTerms}
           profanityFilterV2Enabled={profanityFilterV2Enabled}
+          albumDiscountPercent={albumDiscountPercent}
         />
       </div>
     </div>

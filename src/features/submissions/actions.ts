@@ -3,6 +3,8 @@
 import { z } from "zod";
 
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { getAlbumReviewDiscountPercent } from "@/lib/album-discount-server";
+import { getDiscountedAlbumPrice } from "@/lib/album-pricing";
 import {
   sendSubmissionBankRequestEmail,
   sendSubmissionReceiptEmail,
@@ -806,6 +808,7 @@ export async function saveAlbumSubmissionAction(
 
   const adminDb = createAdminClient();
   let db = isGuest ? adminDb : supabase;
+  const albumDiscountPercent = await getAlbumReviewDiscountPercent(adminDb);
 
   const hasPackage = Boolean(parsed.data.packageId);
   let amountKrw = parsed.data.amountKrw ?? 0;
@@ -825,7 +828,7 @@ export async function saveAlbumSubmissionAction(
     }
     packageStationCount = selectedPackage.station_count ?? null;
     packageName = selectedPackage.name ?? null;
-    serverBasePriceKrw = Math.max(
+    const serverOriginalBasePriceKrw = Math.max(
       0,
       Math.round(
         Number(
@@ -835,6 +838,10 @@ export async function saveAlbumSubmissionAction(
             : selectedPackage.price_krw,
         ),
       ),
+    );
+    serverBasePriceKrw = getDiscountedAlbumPrice(
+      serverOriginalBasePriceKrw,
+      albumDiscountPercent,
     );
 
     if (isSubmitted) {

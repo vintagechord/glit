@@ -666,6 +666,8 @@ const exactTranslations: Record<string, string> = {
     "Is there a discount for two or more albums?",
   "동일 접수에서 여러 앨범을 진행하면 2번째 앨범부터 기준 금액의 50%로 접수됩니다. 최종 확인 화면에서 총액을 확인하세요.":
     "When multiple albums are submitted in the same request, the second album and onward are charged at 50% of the base amount. Check the total on the final confirmation screen.",
+  "동일 접수에서 여러 앨범을 진행하면 2번째 앨범부터 현재 적용가격의 50%로 접수됩니다. 최종 확인 화면에서 총액을 확인하세요.":
+    "When multiple albums are submitted in the same request, the second album and onward are charged at 50% of the currently applied price. Check the total on the final confirmation screen.",
   "동일 Submission에서 여러 앨범을 진행하면 2번째 앨범부터 기준 금액의 50%로 Submission됩니다. 최종 확인 화면에서 총액을 확인하세요.":
     "When multiple albums are submitted in the same request, the second album and onward are charged at 50% of the base amount. Check the total on the final confirmation screen.",
   "Review Result는 어떻게 확인하나요?": "How do I check review results?",
