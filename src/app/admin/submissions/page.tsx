@@ -21,6 +21,11 @@ import {
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
+import {
+  ReviewDocsBulkToolbar,
+  ReviewDocsRowCheckbox,
+  ReviewDocsSelectionProvider,
+} from "@/components/admin/review-docs-download";
 
 export const metadata = {
   title: "접수 관리",
@@ -304,6 +309,8 @@ export default async function AdminSubmissionsPage({
   };
 
   const isDraftView = filters.status === "DRAFT";
+  const reviewDocSelectableIds =
+    activeType === "ALBUM" ? submissions.map((submission) => submission.id) : [];
 
   const buildPageHref = (targetPage: number) => {
     const params = new URLSearchParams(
@@ -503,6 +510,9 @@ export default async function AdminSubmissionsPage({
         </div>
       </div>
 
+      <ReviewDocsSelectionProvider ids={reviewDocSelectableIds}>
+      {activeType === "ALBUM" ? <ReviewDocsBulkToolbar /> : null}
+
       <div className="mt-6 space-y-3">
         {submissionsError && (
           <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
@@ -537,7 +547,20 @@ export default async function AdminSubmissionsPage({
                 key={submission.id}
                 className="rounded-[10px] border-2 border-border bg-card p-4 text-sm transition hover:border-[#111111] dark:hover:border-[#f2cf27]"
               >
-                <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(190px,0.75fr)_minmax(190px,0.75fr)_auto] lg:items-center">
+                <div
+                  className={[
+                    "grid min-w-0 gap-4 lg:items-center",
+                    activeType === "ALBUM"
+                      ? "lg:grid-cols-[auto_minmax(0,1.45fr)_minmax(190px,0.75fr)_minmax(190px,0.75fr)_auto]"
+                      : "lg:grid-cols-[minmax(0,1.45fr)_minmax(190px,0.75fr)_minmax(190px,0.75fr)_auto]",
+                  ].join(" ")}
+                >
+                  {activeType === "ALBUM" ? (
+                    <ReviewDocsRowCheckbox
+                      id={submission.id}
+                      label={submission.title || "제목 미입력"}
+                    />
+                  ) : null}
                   <div className="min-w-0">
                     <Link
                       prefetch={false}
@@ -631,6 +654,7 @@ export default async function AdminSubmissionsPage({
           </div>
         )}
       </div>
+      </ReviewDocsSelectionProvider>
     </div>
   );
 }

@@ -30,6 +30,7 @@ import { ConfirmForm } from "@/components/admin/confirm-form";
 import { StationReviewForm } from "@/components/admin/station-review-form";
 import { updateStationReviewFormAction } from "@/features/admin/actions";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
+import { ReviewDocsSingleDownloadButton } from "@/components/admin/review-docs-download";
 
 export const metadata = {
   title: "접수 상세 관리",
@@ -736,6 +737,12 @@ export default async function AdminSubmissionDetailPage({
           <span className="text-muted-foreground">
             Updated {formatDateTime(submission.updated_at ?? submission.created_at)}
           </span>
+          {submission.type === "ALBUM" ? (
+            <ReviewDocsSingleDownloadButton
+              id={submission.id}
+              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-white transition hover:bg-[#1556a4] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
+            />
+          ) : null}
           <AdminDeleteButton ids={[submission.id]} redirectTo={adminSubmissionListHref} className="rounded-full border border-rose-200/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700" />
         </div>
       </div>
