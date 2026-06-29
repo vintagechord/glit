@@ -2751,7 +2751,14 @@ export function MvWizard({
                 >
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <p className="text-sm font-semibold">일반 뮤직비디오 심의</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold">일반 뮤직비디오 심의</p>
+                        <span
+                          className={`rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${onlineBaseSelected ? "border-[#111111]/30 bg-white/45 text-[#111111]" : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}
+                        >
+                          가장 많이 선택
+                        </span>
+                      </div>
                       {onlineBaseSelected ? (
                         <span className={selectedBadgeClass}>
                           ✓ 선택됨
