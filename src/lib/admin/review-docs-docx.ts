@@ -119,8 +119,48 @@ const multilineParagraphs = (text: DocText | DocText[], options?: ParagraphOptio
     .map((line) => paragraph(line, options))
     .join("");
 
-const cell = (text: DocText | DocText[], options?: CellOptions) => {
-  const width = options?.width ? `<w:tcW w:w="${options.width}" w:type="dxa"/>` : "";
+const cellSpan = (item: TableCell) => Math.max(1, item.options?.colspan ?? 1);
+
+const getColumnCount = (rows: TableCell[][]) =>
+  Math.max(
+    1,
+    ...rows.map((cells) =>
+      cells.reduce((sum, item) => sum + cellSpan(item), 0),
+    ),
+  );
+
+const getTableColumns = (width: number, columnCount: number, columns?: number[]) => {
+  if (columns?.length) {
+    const normalized = columns.slice(0, columnCount);
+    if (normalized.length < columnCount) {
+      const usedWidth = normalized.reduce((sum, col) => sum + col, 0);
+      const fallbackWidth = Math.max(
+        1,
+        Math.floor((width - usedWidth) / (columnCount - normalized.length)),
+      );
+      while (normalized.length < columnCount) normalized.push(fallbackWidth);
+    }
+    return normalized;
+  }
+
+  const baseWidth = Math.max(1, Math.floor(width / columnCount));
+  const normalized = Array.from({ length: columnCount }, () => baseWidth);
+  normalized[normalized.length - 1] += width - baseWidth * columnCount;
+  return normalized;
+};
+
+const widthForSpan = (columns: number[], start: number, span: number) =>
+  columns
+    .slice(start, start + span)
+    .reduce((sum, col) => sum + col, 0);
+
+const cell = (
+  text: DocText | DocText[],
+  options?: CellOptions,
+  computedWidth?: number,
+) => {
+  const widthValue = options?.width ?? computedWidth;
+  const width = widthValue ? `<w:tcW w:w="${widthValue}" w:type="dxa"/>` : "";
   const colspan = options?.colspan ? `<w:gridSpan w:val="${options.colspan}"/>` : "";
   const fill = options?.fill ? `<w:shd w:fill="${options.fill}"/>` : "";
   return `<w:tc><w:tcPr>${width}${colspan}<w:vAlign w:val="center"/>${fill}</w:tcPr>${multilineParagraphs(
@@ -129,22 +169,27 @@ const cell = (text: DocText | DocText[], options?: CellOptions) => {
   )}</w:tc>`;
 };
 
-const row = (cells: TableCell[], height?: number) => {
+const row = (cells: TableCell[], columns: number[], height?: number) => {
   const trPr = height ? `<w:trPr><w:trHeight w:val="${height}"/></w:trPr>` : "";
+  let columnIndex = 0;
   return `<w:tr>${trPr}${cells
-    .map((item) => cell(item.text, item.options))
+    .map((item) => {
+      const span = cellSpan(item);
+      const computedWidth = widthForSpan(columns, columnIndex, span);
+      columnIndex += span;
+      return cell(item.text, item.options, computedWidth);
+    })
     .join("")}</w:tr>`;
 };
 
 const table = (rows: TableCell[][], options?: TableOptions) => {
   const width = options?.width ?? 9300;
-  const grid = options?.columns?.length
-    ? `<w:tblGrid>${options.columns
-        .map((col) => `<w:gridCol w:w="${col}"/>`)
-        .join("")}</w:tblGrid>`
-    : "";
-  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="6"/><w:left w:val="single" w:sz="6"/><w:bottom w:val="single" w:sz="6"/><w:right w:val="single" w:sz="6"/><w:insideH w:val="single" w:sz="6"/><w:insideV w:val="single" w:sz="6"/></w:tblBorders><w:tblCellMar><w:top w:w="90" w:type="dxa"/><w:left w:w="90" w:type="dxa"/><w:bottom w:w="90" w:type="dxa"/><w:right w:w="90" w:type="dxa"/></w:tblCellMar></w:tblPr>${grid}${rows
-    .map((cells) => row(cells))
+  const columns = getTableColumns(width, getColumnCount(rows), options?.columns);
+  const grid = `<w:tblGrid>${columns
+    .map((col) => `<w:gridCol w:w="${col}"/>`)
+    .join("")}</w:tblGrid>`;
+  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="single" w:sz="6"/><w:left w:val="single" w:sz="6"/><w:bottom w:val="single" w:sz="6"/><w:right w:val="single" w:sz="6"/><w:insideH w:val="single" w:sz="6"/><w:insideV w:val="single" w:sz="6"/></w:tblBorders><w:tblCellMar><w:top w:w="90" w:type="dxa"/><w:left w:w="90" w:type="dxa"/><w:bottom w:w="90" w:type="dxa"/><w:right w:w="90" w:type="dxa"/></w:tblCellMar></w:tblPr>${grid}${rows
+    .map((cells) => row(cells, columns))
     .join("")}</w:tbl>`;
 };
 
@@ -289,7 +334,10 @@ export function createSongReviewRequestDocx(data: SubmissionDocData) {
         `접수일자 :  ${data.today_long}                                                                       음반접수용(KBS가요심의곡)`,
         { size: 10, spacingAfter: 140 },
       ),
-      table(rows, { width: 15000 }),
+      table(rows, {
+        width: 15000,
+        columns: [900, 3000, 1500, 1700, 1500, 1500, 1500, 1500, 1900],
+      }),
       paragraph(""),
       paragraph(
         "※ 저작권법에서는 저작물(음반)에 대한 저작자(작곡자, 작사자)와 실연자(가수, 연주자, 지휘자)의 성명을 표시하도록 하고 있습니다.(저작권법 제12조, 제66조)",
@@ -309,16 +357,24 @@ export function createSongReviewRequestDocx(data: SubmissionDocData) {
 
 export function createReviewFormDocx(data: SubmissionDocData, title: string) {
   const body: string[] = [
-    table([
-      [{ text: data.album_title, options: { colspan: 2, bold: true, align: "center", size: 18 } }],
-      ...fieldRows([
-        ["가수명", data.artist_name],
-        ["발매일", data.release_date_short],
-        ["제작일", data.production_date_short],
-        ["기획사", data.company_name as string],
-        ["유통사", data.distributor],
-      ]),
-    ]),
+    table(
+      [
+        [
+          {
+            text: data.album_title,
+            options: { colspan: 2, bold: true, align: "center", size: 18 },
+          },
+        ],
+        ...fieldRows([
+          ["가수명", data.artist_name],
+          ["발매일", data.release_date_short],
+          ["제작일", data.production_date_short],
+          ["기획사", data.company_name as string],
+          ["유통사", data.distributor],
+        ]),
+      ],
+      { columns: [1800, 7500] },
+    ),
     paragraph(""),
     table(
       fieldRows([
@@ -326,7 +382,7 @@ export function createReviewFormDocx(data: SubmissionDocData, title: string) {
         ["연락처", data.contact_phone],
         ["e-mail", data.contact_email],
       ]),
-      { width: 5000 },
+      { width: 5000, columns: [1500, 3500] },
     ),
     paragraph(title, { bold: true, size: 12, spacingBefore: 220 }),
   ];
@@ -334,18 +390,21 @@ export function createReviewFormDocx(data: SubmissionDocData, title: string) {
   data.tracks.forEach((track, index) => {
     if (index > 0) body.push(paragraph(""));
     body.push(
-      table([
+      table(
         [
-          headerCell("트랙번호"),
-          valueCell(track.track_no_padded),
-          valueCell(track.track_title_for_docs, 2, 11),
+          [
+            headerCell("트랙번호"),
+            valueCell(track.track_no_padded),
+            valueCell(track.track_title_for_docs, 2, 11),
+          ],
+          [headerCell("작사", 2), valueCell(track.lyricist_display, 2, 11)],
+          [headerCell("작곡", 2), valueCell(track.composer, 2, 11)],
+          [headerCell("편곡", 2), valueCell(track.arranger, 2, 11)],
+          [headerCell("실연", 2), valueCell(track.performer, 2, 11)],
+          [{ text: lyricText(track), options: { colspan: 4, size: 11 } }],
         ],
-        [headerCell("작사", 2), valueCell(track.lyricist_display, 2, 11)],
-        [headerCell("작곡", 2), valueCell(track.composer, 2, 11)],
-        [headerCell("편곡", 2), valueCell(track.arranger, 2, 11)],
-        [headerCell("실연", 2), valueCell(track.performer, 2, 11)],
-        [{ text: lyricText(track), options: { colspan: 4, size: 11 } }],
-      ]),
+        { columns: [1400, 1100, 1800, 5000] },
+      ),
     );
   });
 
@@ -425,7 +484,10 @@ export function createTbsIntegratedDocx(submissions: SubmissionDocData[]) {
   return makeDocx(
     [
       paragraph("심의 음반 접수 목록", { align: "center", bold: true, size: 16 }),
-      table(rows, { width: 9300 }),
+      table(rows, {
+        width: 9300,
+        columns: [900, 2800, 800, 1900, 1400, 1500],
+      }),
     ],
     { margin: { top: 1100, right: 1200, bottom: 900, left: 1200 } },
   );
@@ -471,7 +533,10 @@ export function createWbsIntegratedDocx(submissions: SubmissionDocData[]) {
         "※ 심의 신청 양식 빠짐 없이 기재 부탁드립니다. 심의받을 곡(최대3곡) 누락 시 트랙 1,2,3번으로 심의하겠습니다.",
         { size: 9 },
       ),
-      table(rows, { width: 9800 }),
+      table(rows, {
+        width: 15000,
+        columns: [700, 1100, 1600, 1900, 1600, 3100, 1300, 1600, 2100],
+      }),
     ],
     { landscape: true, margin: { top: 700, right: 700, bottom: 700, left: 700 } },
   );
@@ -501,7 +566,10 @@ export function createPbcIntegratedDocx(submissions: SubmissionDocData[]) {
   return makeDocx(
     [
       paragraph("음원심의신청서", { align: "center", bold: true, size: 16 }),
-      table(rows, { width: 9300 }),
+      table(rows, {
+        width: 9300,
+        columns: [900, 1400, 1300, 2200, 1600, 1000, 900],
+      }),
     ],
     { margin: { top: 1100, right: 1200, bottom: 900, left: 1200 } },
   );
