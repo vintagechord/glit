@@ -86,12 +86,12 @@ export default async function MvSubmissionPage() {
             {purposeNotes.map((item) => (
               <div
                 key={item.title}
-                className="flex min-h-[92px] flex-col justify-center rounded-[8px] border-2 border-border bg-background px-4 py-3 lg:min-h-0"
+                className="flex min-h-[112px] flex-col justify-center rounded-[8px] border-2 border-border bg-background px-4 py-4 lg:min-h-0"
               >
-                <p className="text-sm font-black text-foreground">
+                <p className="text-base font-black text-foreground">
                   {item.title}
                 </p>
-                <p className="mt-1 text-xs font-semibold leading-5 text-muted-foreground">
+                <p className="mt-2 break-keep text-sm font-semibold leading-6 text-muted-foreground sm:text-[15px]">
                   {item.description}
                 </p>
               </div>
