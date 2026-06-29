@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 import {
   getAlbumDiscountAmount,
+  getAlbumReviewDiscountPercentForPackage,
   getDiscountedAlbumPrice,
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
@@ -444,7 +445,6 @@ export function AlbumWizard({
   const requiresBroadcastSelection = tracks.length >= 4;
   const normalizedAlbumDiscountPercent =
     normalizeAlbumDiscountPercent(albumDiscountPercent);
-  const hasAlbumEventDiscount = normalizedAlbumDiscountPercent > 0;
   const originalBasePriceKrw = selectedPackage
     ? isOneClick
       ? oneClickPriceMap[selectedPackage.stationCount] ??
@@ -454,11 +454,18 @@ export function AlbumWizard({
   const basePriceKrw = getDiscountedAlbumPrice(
     originalBasePriceKrw,
     normalizedAlbumDiscountPercent,
+    selectedPackage?.stationCount ?? null,
+  );
+  const selectedAlbumDiscountPercent = getAlbumReviewDiscountPercentForPackage(
+    normalizedAlbumDiscountPercent,
+    selectedPackage?.stationCount ?? null,
   );
   const eventDiscountPerAlbumKrw = getAlbumDiscountAmount(
     originalBasePriceKrw,
     normalizedAlbumDiscountPercent,
+    selectedPackage?.stationCount ?? null,
   );
+  const hasAlbumEventDiscount = selectedAlbumDiscountPercent > 0;
   const additionalPriceKrw = Math.round(basePriceKrw * 0.5);
   const additionalAlbumCount = albumDrafts.length;
   const totalAlbumCount = additionalAlbumCount + 1;
@@ -2825,12 +2832,17 @@ export function AlbumWizard({
               const displayPrice = isOneClick
                 ? oneClickPriceMap[pkg.stationCount] ?? pkg.priceKrw
                 : pkg.priceKrw;
+              const packageDiscountPercent = getAlbumReviewDiscountPercentForPackage(
+                normalizedAlbumDiscountPercent,
+                pkg.stationCount,
+              );
               const discountedDisplayPrice = getDiscountedAlbumPrice(
                 displayPrice,
                 normalizedAlbumDiscountPercent,
+                pkg.stationCount,
               );
               const hasDisplayDiscount =
-                normalizedAlbumDiscountPercent > 0 &&
+                packageDiscountPercent > 0 &&
                 discountedDisplayPrice < displayPrice;
               const guidance = packageGuidance[pkg.stationCount];
               return (
@@ -2873,7 +2885,7 @@ export function AlbumWizard({
                       ) : null}
                       {hasDisplayDiscount ? (
                         <span className="rounded-[6px] border border-[#111111]/20 bg-white/70 px-2 py-0.5 text-[10px] font-black text-[#111111]">
-                          {normalizedAlbumDiscountPercent}% 할인
+                          {packageDiscountPercent}% 할인
                         </span>
                       ) : null}
                       <span className="flex flex-col items-end gap-0.5">
@@ -4298,7 +4310,7 @@ export function AlbumWizard({
                             오픈 기념 할인
                           </p>
                           <p className="mt-1 text-sm font-semibold text-foreground">
-                            음반 심의 {normalizedAlbumDiscountPercent}% 할인 적용 중
+                            음반 심의 {selectedAlbumDiscountPercent}% 할인 적용 중
                           </p>
                         </div>
                         <span className="rounded-full bg-[#111111] px-3 py-1 text-xs font-black text-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]">
@@ -4323,7 +4335,7 @@ export function AlbumWizard({
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center justify-between gap-2 text-[#1f7a5a] dark:text-emerald-300">
-                            <span>오픈 기념 {normalizedAlbumDiscountPercent}% 할인</span>
+                            <span>오픈 기념 {selectedAlbumDiscountPercent}% 할인</span>
                             <span className="font-semibold">
                               -{formatCurrency(eventDiscountTotalKrw)}원
                             </span>

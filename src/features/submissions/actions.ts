@@ -847,6 +847,7 @@ export async function saveAlbumSubmissionAction(
     serverBasePriceKrw = getDiscountedAlbumPrice(
       serverOriginalBasePriceKrw,
       albumDiscountPercent,
+      packageStationCount,
     );
 
     if (isSubmitted) {

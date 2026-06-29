@@ -2100,7 +2100,7 @@ export async function updateAlbumReviewDiscountAction(
   const { error } = await supabase.from("site_settings").upsert({
     key: ALBUM_REVIEW_DISCOUNT_SETTING_KEY,
     value: { discountPercent: parsed.data.discountPercent },
-    description: "음반 심의 일괄 할인율(%)",
+    description: "음반 심의 기본 할인율(%), 3곳/7곳 패키지는 40% 우선 적용",
   });
 
   if (error) {

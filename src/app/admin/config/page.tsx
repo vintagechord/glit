@@ -10,7 +10,10 @@ import {
 } from "@/features/admin/actions";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { getAlbumReviewDiscountPercent } from "@/lib/album-discount-server";
-import { getDiscountedAlbumPrice } from "@/lib/album-pricing";
+import {
+  getAlbumReviewDiscountPercentForPackage,
+  getDiscountedAlbumPrice,
+} from "@/lib/album-pricing";
 import { formatCurrency } from "@/lib/format";
 import { syncAlbumStationCatalog } from "@/lib/station-reviews";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -110,9 +113,14 @@ export default async function AdminConfigPage({
     .order("created_at", { ascending: false });
   const samplePackage = packages?.find((pkg) => !pkg.name?.startsWith("[테스트]"));
   const sampleOriginalPrice = samplePackage?.price_krw ?? 0;
+  const sampleDiscountPercent = getAlbumReviewDiscountPercentForPackage(
+    albumDiscountPercent,
+    samplePackage?.station_count ?? null,
+  );
   const sampleDiscountedPrice = getDiscountedAlbumPrice(
     sampleOriginalPrice,
     albumDiscountPercent,
+    samplePackage?.station_count ?? null,
   );
 
   return (
@@ -134,10 +142,11 @@ export default async function AdminConfigPage({
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 패키지 원래 금액은 유지하고, 사용자 화면과 실제 결제/입금 요청 금액에만 할인율을 적용합니다.
+                3곳·7곳 패키지는 기본 할인율과 관계없이 40% 할인을 우선 적용합니다.
               </p>
             </div>
             <span className="rounded-full border border-[#1556a4]/30 bg-[#1556a4]/10 px-3 py-1 text-xs font-black text-[#1556a4] dark:border-[#3f8ad8]/40 dark:bg-[#3f8ad8]/15 dark:text-[#8bc3ff]">
-              현재 {albumDiscountPercent}% 할인
+              기본 {albumDiscountPercent}% · 3곳/7곳 40%
             </span>
           </div>
 
@@ -195,9 +204,9 @@ export default async function AdminConfigPage({
                 <span className="text-lg font-black text-foreground">
                   {formatCurrency(sampleDiscountedPrice)}원
                 </span>
-                {albumDiscountPercent > 0 ? (
+                {sampleDiscountPercent > 0 ? (
                   <span className="rounded-full bg-[#f2cf27] px-3 py-1 text-xs font-black text-[#111111]">
-                    {albumDiscountPercent}% 할인
+                    {sampleDiscountPercent}% 할인
                   </span>
                 ) : null}
               </div>
