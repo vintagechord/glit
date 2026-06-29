@@ -273,6 +273,7 @@ const exactTranslations: Record<string, string> = {
   "접수 현황": "Submission Status",
   "작성중 신청서": "Draft Application Forms",
   "나의 심의 내역": "My Review History",
+  "보유 크레딧": "Available Credits",
   "음반심의 결제 완료 건으로 발급되는 온사이드 크레딧을 확인하고 사용하세요.":
     "Check and use Onside credits issued from completed album review payments.",
   "앨범심의 1건 = 1크레딧": "1 album review = 1 credit",

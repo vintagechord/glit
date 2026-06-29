@@ -408,7 +408,7 @@ export function MagazineRequestForm({
         <section className="rounded-[10px] border-2 border-[#111111] bg-background p-5 dark:border-[#f2cf27]">
           <p className="bauhaus-kicker">Credits</p>
           <h2 className="mt-3 text-xl font-black text-foreground">
-            내 매거진 크레딧
+            보유 크레딧
           </h2>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-[8px] border-2 border-border bg-card p-4">
