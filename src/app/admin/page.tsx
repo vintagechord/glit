@@ -237,6 +237,20 @@ export default async function AdminPage() {
           </p>
         </Link>
         <Link
+          href="/admin/magazine"
+          className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            매거진
+          </p>
+          <h2 className="mt-3 text-xl font-semibold text-foreground">
+            매거진 발행 요청
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            음반심의 크레딧으로 접수된 매거진 요청을 관리합니다.
+          </p>
+        </Link>
+        <Link
           href="/admin/banners"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >

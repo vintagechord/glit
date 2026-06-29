@@ -32,6 +32,7 @@ function englishPathFor(pathname: string) {
     "/signup",
     "/forgot-password",
     "/reset-password",
+    "/magazine",
     "/guide",
     "/faq",
     "/support",

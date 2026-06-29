@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const exactTranslations: Record<string, string> = {
   "심의 신청": "Apply",
   "진행/결과 조회": "Progress / Results",
+  "매거진 발행": "Magazine",
   "이용가이드": "Guide",
   "고객센터": "Support",
   "로그인": "Login",
@@ -1106,6 +1107,7 @@ function englishPathFor(pathname: string) {
     "/signup",
     "/forgot-password",
     "/reset-password",
+    "/magazine",
     "/guide",
     "/faq",
     "/support",
