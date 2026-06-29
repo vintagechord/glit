@@ -23,6 +23,7 @@ export async function LeftAdBanner() {
     .from("ad_banners")
     .select("id, title, image_url, link_url, starts_at, ends_at")
     .eq("is_active", true)
+    .eq("placement", "LEFT")
     .order("created_at", { ascending: false });
 
   if (!data || data.length === 0) return null;

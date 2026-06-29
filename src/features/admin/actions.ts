@@ -533,8 +533,11 @@ const albumReviewDiscountSchema = z.object({
 const adBannerSchema = z.object({
   id: z.string().uuid().optional(),
   title: z.string().min(1),
+  description: z.string().optional(),
   imageUrl: z.string().optional(),
   linkUrl: z.string().optional(),
+  placement: z.enum(["STRIP", "HOME_HERO", "LEFT"]).optional(),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
   isActive: z.boolean(),
 });
 
@@ -558,7 +561,11 @@ const deleteArtistsSchema = z.object({
 });
 
 const bannerBucket = "banners";
-const bannerFolder = "strip";
+const bannerFolders = {
+  STRIP: "strip",
+  HOME_HERO: "home-hero",
+  LEFT: "left",
+} as const;
 
 const sanitizeFileName = (name: string) =>
   name
@@ -589,13 +596,17 @@ const isLikelyImageFile = (file: File) => {
   return /\.(png|jpe?g|gif|webp|svg)$/i.test(lowerName);
 };
 
-const uploadBannerImage = async (file: File) => {
+const uploadBannerImage = async (
+  file: File,
+  placement: keyof typeof bannerFolders = "STRIP",
+) => {
   if (!isLikelyImageFile(file)) {
     return { error: "이미지 파일만 업로드 가능합니다." };
   }
 
   const admin = await createServerSupabase();
   const safeName = sanitizeFileName(file.name || "banner.jpg");
+  const bannerFolder = bannerFolders[placement] ?? bannerFolders.STRIP;
   const path = `${bannerFolder}/${Date.now()}-${safeName}`;
   const arrayBuffer = await file.arrayBuffer();
 
@@ -2191,8 +2202,11 @@ export async function upsertAdBannerAction(
   const { error } = await supabase.from("ad_banners").upsert({
     id: parsed.data.id,
     title: parsed.data.title,
+    description: parsed.data.description || null,
     image_url: parsed.data.imageUrl,
     link_url: parsed.data.linkUrl || null,
+    placement: parsed.data.placement ?? "STRIP",
+    sort_order: parsed.data.sortOrder ?? 0,
     is_active: parsed.data.isActive,
   });
 
@@ -2214,11 +2228,16 @@ export async function upsertAdBannerFormAction(
   formData: FormData,
 ): Promise<void> {
   const id = String(formData.get("id") ?? "");
+  const placementValue = String(formData.get("placement") ?? "STRIP");
+  const placement =
+    placementValue === "HOME_HERO" || placementValue === "LEFT"
+      ? placementValue
+      : "STRIP";
   const imageFile = formData.get("imageFile");
   let imageUrl = String(formData.get("imageUrl") ?? "");
 
   if (imageFile instanceof File && imageFile.size > 0) {
-    const uploadResult = await uploadBannerImage(imageFile);
+    const uploadResult = await uploadBannerImage(imageFile, placement);
     if (uploadResult.error) {
       console.error(uploadResult.error);
       return;
@@ -2229,8 +2248,11 @@ export async function upsertAdBannerFormAction(
   const result = await upsertAdBannerAction({
     id: id ? id : undefined,
     title: String(formData.get("title") ?? ""),
+    description: String(formData.get("description") ?? "") || undefined,
     imageUrl: imageUrl || undefined,
     linkUrl: String(formData.get("linkUrl") ?? "") || undefined,
+    placement,
+    sortOrder: Number.parseInt(String(formData.get("sortOrder") ?? "0"), 10) || 0,
     isActive: formData.get("isActive") === "on",
   });
   if (result.error) {

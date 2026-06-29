@@ -25,6 +25,7 @@ export async function StripAdBanner() {
       .from("ad_banners")
       .select("id, title, image_url, link_url, starts_at, ends_at")
       .eq("is_active", true)
+      .eq("placement", "STRIP")
       .order("created_at", { ascending: false });
     if (error) {
       console.error("[StripAdBanner] Failed to fetch banners:", error.message);

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="Magazine credit">
+  <rect width="320" height="180" fill="#1556a4"/>
+  <rect x="26" y="22" width="190" height="132" rx="16" fill="#fffaf0" stroke="#111111" stroke-width="6"/>
+  <rect x="56" y="48" width="88" height="12" rx="6" fill="#111111"/>
+  <rect x="56" y="75" width="128" height="8" rx="4" fill="#1556a4"/>
+  <rect x="56" y="96" width="112" height="8" rx="4" fill="#1556a4"/>
+  <rect x="56" y="117" width="132" height="8" rx="4" fill="#1556a4"/>
+  <circle cx="226" cy="112" r="42" fill="#f2cf27" stroke="#111111" stroke-width="6"/>
+  <path d="M226 82v60M196 112h60" stroke="#111111" stroke-width="10" stroke-linecap="round"/>
+  <path d="M237 32h44v44h-44z" fill="#d9362c" stroke="#111111" stroke-width="6" transform="rotate(8 259 54)"/>
+</svg>
