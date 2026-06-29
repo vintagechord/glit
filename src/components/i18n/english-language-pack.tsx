@@ -46,9 +46,10 @@ const exactTranslations: Record<string, string> = {
   "방송국별 조건을 확인한 뒤 접수합니다.":
     "Submit after checking each broadcaster's requirements.",
   "바로 시작": "Start",
-  "파일 업로드가 안 될 경우, 신청은 사이트에서 진행하고 파일만 이메일로 보내주세요.":
-    "If file upload does not work, submit the application on the site and send only the files by email.",
-  "구버전 신청서 작성 방식 안내": "Legacy form guide",
+  "이전 버전의 온사이드 사이트가 편하신 경우 이전 사이트에서 접수해주셔도 심의는 동일하게 진행이 됩니다.":
+    "If the previous Onside site is more convenient, you may submit there and the review will proceed the same way.",
+  "예전 온사이드 주소 바로가기": "Open Previous Onside Site",
+  "예전 온사이드 주소 바로가기 →": "Open Previous Onside Site →",
   "ALBUM REVIEW 신청": "Album Review Application",
   "MUSIC VIDEO REVIEW 신청": "Music Video Review Application",
   "Album Review 신청": "Album Review Application",

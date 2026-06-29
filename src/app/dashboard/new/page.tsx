@@ -67,10 +67,15 @@ export default function NewSubmissionPage() {
         </div>
       </section>
       <div className="mt-5 rounded-[10px] border-2 border-[#111111] bg-white px-5 py-4 text-sm font-semibold text-muted-foreground shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27]">
-        파일 업로드가 안 될 경우, 신청은 사이트에서 진행하고 파일만 이메일로 보내주세요.
+        이전 버전의 온사이드 사이트가 편하신 경우 이전 사이트에서 접수해주셔도 심의는 동일하게 진행이 됩니다.
         <p className="mt-2 font-semibold text-foreground">{APP_CONFIG.supportEmail}</p>
-        <ReliableLink href="/forms" className="mt-3 inline-flex text-xs font-black text-foreground underline underline-offset-4">
-          구버전 신청서 작성 방식 안내
+        <ReliableLink
+          href="https://onside17.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-xs font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
+        >
+          예전 온사이드 주소 바로가기
         </ReliableLink>
       </div>
     </div>

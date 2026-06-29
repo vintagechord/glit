@@ -167,10 +167,12 @@ export default function Home() {
             </h2>
           </div>
           <ReliableLink
-            href="/forms"
+            href="https://onside17.com/"
+            target="_blank"
+            rel="noopener noreferrer"
             className="self-end text-sm font-semibold text-muted-foreground transition hover:text-foreground md:self-auto"
           >
-            구버전 방식 접수 →
+            예전 온사이드 주소 바로가기 →
           </ReliableLink>
         </div>
 

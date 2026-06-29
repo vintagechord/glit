@@ -60,7 +60,7 @@ export default function FormsPage() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-2 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27]"
         >
-          구버전 사이트에서 접수
+          예전 온사이드 주소 바로가기
           <span aria-hidden>↗</span>
         </Link>
         <span className="text-xs text-muted-foreground">
