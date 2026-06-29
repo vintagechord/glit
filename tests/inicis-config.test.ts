@@ -4,6 +4,14 @@ import test from "node:test";
 import { getInicisMode } from "../src/lib/inicis/config";
 
 const originalEnv = { ...process.env };
+const inicisEnvKeys = [
+  "INICIS_ENV",
+  "NEXT_PUBLIC_INICIS_ENV",
+  "INICIS_MID_PROD",
+  "INICIS_SIGN_KEY_PROD",
+  "INICIS_MID_STG",
+  "INICIS_SIGN_KEY_STG",
+];
 
 const restoreEnv = () => {
   for (const key of Object.keys(process.env)) {
@@ -18,6 +26,9 @@ const restoreEnv = () => {
 
 const setEnv = (env: Record<string, string | undefined>) => {
   restoreEnv();
+  for (const key of inicisEnvKeys) {
+    delete process.env[key];
+  }
   for (const [key, value] of Object.entries(env)) {
     if (value === undefined) {
       delete process.env[key];
