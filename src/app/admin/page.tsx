@@ -3,8 +3,121 @@ export const metadata = {
 };
 
 import Link from "next/link";
+import {
+  ClipboardList,
+  CreditCard,
+  SendHorizontal,
+  type LucideIcon,
+} from "lucide-react";
 
-export default function AdminPage() {
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export const dynamic = "force-dynamic";
+
+type DashboardSummary = {
+  received: number;
+  paid: number;
+  resultNotified: number;
+  hasError: boolean;
+};
+
+const isMissingResultNotifiedAtError = (
+  error: { code?: string; message?: string } | null,
+) =>
+  error?.code === "42703" ||
+  error?.code === "PGRST204" ||
+  Boolean(error?.message?.toLowerCase().includes("result_notified_at"));
+
+async function getDashboardSummary(): Promise<DashboardSummary> {
+  const admin = createAdminClient();
+  const [receivedResult, paidResult, resultNotifiedResult] = await Promise.all([
+    admin
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "SUBMITTED"),
+    admin
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("payment_status", "PAID"),
+    admin
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .not("result_notified_at", "is", null),
+  ]);
+
+  let resultNotifiedCount = resultNotifiedResult.count ?? 0;
+  let resultNotifiedError = resultNotifiedResult.error ?? null;
+
+  if (isMissingResultNotifiedAtError(resultNotifiedError)) {
+    const fallback = await admin
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["RESULT_READY", "COMPLETED"]);
+    resultNotifiedCount = fallback.count ?? 0;
+    resultNotifiedError = fallback.error ?? null;
+  }
+
+  return {
+    received: receivedResult.count ?? 0,
+    paid: paidResult.count ?? 0,
+    resultNotified: resultNotifiedCount,
+    hasError: Boolean(
+      receivedResult.error || paidResult.error || resultNotifiedError,
+    ),
+  };
+}
+
+function SummaryCard({
+  title,
+  description,
+  count,
+  href,
+  icon: Icon,
+  tone,
+}: {
+  title: string;
+  description: string;
+  count: number;
+  href: string;
+  icon: LucideIcon;
+  tone: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex min-h-[112px] items-center justify-between gap-4 border-b border-border/70 bg-card/85 p-5 transition last:border-b-0 hover:bg-background md:border-b-0 md:border-r md:last:border-r-0"
+    >
+      <div className="flex min-w-0 items-center gap-4">
+        <span
+          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border-2 shadow-[3px_3px_0_#111111] ${tone}`}
+        >
+          <Icon className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[11px] font-black uppercase tracking-[0.22em] text-muted-foreground">
+            전체 유형 합산
+          </span>
+          <span className="mt-1 block text-base font-black text-foreground">
+            {title}
+          </span>
+          <span className="mt-1 block text-xs font-semibold text-muted-foreground">
+            {description}
+          </span>
+        </span>
+      </div>
+      <span className="shrink-0 text-right">
+        <span className="text-3xl font-black leading-none text-foreground">
+          {count.toLocaleString()}
+        </span>
+        <span className="ml-1 text-sm font-black text-muted-foreground">건</span>
+      </span>
+    </Link>
+  );
+}
+
+export default async function AdminPage() {
+  const summary = await getDashboardSummary();
+
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -16,6 +129,56 @@ export default function AdminPage() {
       <p className="mt-3 text-sm text-muted-foreground">
         접수 리스트, 결제 승인, 방송국 상태 관리를 진행하세요.
       </p>
+
+      <section
+        aria-label="관리자 처리 요약"
+        className="mt-8 overflow-hidden rounded-[18px] border-2 border-[#111111] bg-card shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]"
+      >
+        <div className="border-b border-border/70 bg-background/80 px-5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-muted-foreground">
+                처리 현황
+              </p>
+              <h2 className="mt-1 text-base font-black text-foreground">
+                접수 · 결제 · 결과통보 요약
+              </h2>
+            </div>
+            {summary.hasError ? (
+              <span className="rounded-[6px] border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-600">
+                일부 집계 확인 필요
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className="grid md:grid-cols-3">
+          <SummaryCard
+            title="접수"
+            description="접수 완료 상태"
+            count={summary.received}
+            href="/admin/submissions?type=ALBUM&status=SUBMITTED"
+            icon={ClipboardList}
+            tone="border-[#111111] bg-[#2f8cff] text-white"
+          />
+          <SummaryCard
+            title="결제 완료"
+            description="결제 승인/완료 건"
+            count={summary.paid}
+            href="/admin/submissions?type=ALBUM&payment=PAID"
+            icon={CreditCard}
+            tone="border-[#111111] bg-[#5aa832] text-white"
+          />
+          <SummaryCard
+            title="결과통보 완료"
+            description="결과 안내 발송 완료"
+            count={summary.resultNotified}
+            href="/admin/submissions?type=ALBUM&status=RESULT_READY"
+            icon={SendHorizontal}
+            tone="border-[#111111] bg-[#f2cf27] text-[#111111]"
+          />
+        </div>
+      </section>
+
       <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Link
           href="/admin/submissions?type=ALBUM"
