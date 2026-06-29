@@ -1,12 +1,19 @@
-import { access, readFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import path from "node:path";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import Docxtemplater from "docxtemplater";
-import PizZip from "pizzip";
 import { ZipFile } from "yazl";
 
 import { formatDate, formatDateTime } from "@/lib/format";
+import {
+  createLyricsAllDocx,
+  createLyricsTrackDocx,
+  createPbcIntegratedDocx,
+  createReviewFormDocx,
+  createSongReviewRequestDocx,
+  createTbsIntegratedDocx,
+  createWbsIntegratedDocx,
+} from "@/lib/admin/review-docs-docx";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "templates", "review-docs");
 
@@ -20,8 +27,15 @@ export const REVIEW_DOC_TEMPLATE_FILES = {
   pbcIntegrated: "pbc-integrated.docx",
 } as const;
 
-type TemplateKey = keyof typeof REVIEW_DOC_TEMPLATE_FILES;
 type DbRecord = Record<string, unknown>;
+
+const FIXED_CONTACT = {
+  name: "정준영",
+  phone: "010-9068-9035",
+  email: "vintagechord@daum.net",
+} as const;
+
+const REVIEW_COMPANY = "빈티지코드";
 
 export type ReviewDocSubmissionBundle = {
   submission: DbRecord;
@@ -101,19 +115,6 @@ async function assertTemplatesAvailable() {
   }
 }
 
-async function loadTemplates(): Promise<Record<TemplateKey, Buffer>> {
-  await assertTemplatesAvailable();
-
-  const entries = await Promise.all(
-    Object.entries(REVIEW_DOC_TEMPLATE_FILES).map(async ([key, filename]) => {
-      const filePath = path.join(TEMPLATE_DIR, filename);
-      return [key, await readFile(filePath)] as const;
-    }),
-  );
-
-  return Object.fromEntries(entries) as Record<TemplateKey, Buffer>;
-}
-
 const valueToText = (value: unknown) => {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value.trim();
@@ -135,6 +136,105 @@ const getNumber = (record: DbRecord, key: string) => {
 const getBoolean = (record: DbRecord, key: string) => record[key] === true;
 
 const booleanLabel = (value: boolean) => (value ? "예" : "아니오");
+
+const toDateParts = (value?: string | null) => {
+  if (!value) return null;
+  const text = value.trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return {
+      year: Number(match[1]),
+      month: Number(match[2]),
+      day: Number(match[3]),
+    };
+  }
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+  };
+};
+
+const seoulTodayParts = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value ?? "0");
+  return {
+    year: value("year"),
+    month: value("month"),
+    day: value("day"),
+  };
+};
+
+const two = (value: number) => String(value).padStart(2, "0");
+
+const formatLongKorean = (parts: ReturnType<typeof seoulTodayParts>) =>
+  `${parts.year}년  ${two(parts.month)}월  ${two(parts.day)}일`;
+
+const formatLongDot = (parts: ReturnType<typeof seoulTodayParts> | null) =>
+  parts ? `${parts.year}. ${two(parts.month)}. ${two(parts.day)}.` : "";
+
+const formatShortDot = (parts: ReturnType<typeof seoulTodayParts> | null) =>
+  parts ? `${String(parts.year).slice(-2)}.${two(parts.month)}.${two(parts.day)}` : "";
+
+const formatMonthDay = (parts: ReturnType<typeof seoulTodayParts> | null) =>
+  parts ? `${two(parts.month)}/${two(parts.day)}` : "";
+
+const isInstrumentalTitle = (title: string) =>
+  /\b(inst|instrumental|mr)\b/i.test(title) || /반주|가사\s*없음/i.test(title);
+
+const compactLyrics = (value: string) =>
+  value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .reduce<string[]>((lines, line) => {
+      if (!line.trim() && !lines[lines.length - 1]?.trim()) return lines;
+      lines.push(line);
+      return lines;
+    }, [])
+    .join("\n")
+    .trim();
+
+const appendTranslatedLyrics = (lyrics: string, translatedLyrics: string) => {
+  const base = compactLyrics(lyrics);
+  const translated = compactLyrics(translatedLyrics);
+  if (!base && !translated) return "";
+  if (!translated) return base;
+  if (!base) return translated;
+  if (base.includes("번역 :") || base.includes("번역:")) return base;
+  return `${base}\n\n번역 가사\n${translated}`;
+};
+
+const getGenreCheckboxLine = (genre: string) => {
+  const normalized = genre.toLowerCase();
+  const labels = [
+    ["댄스", /dance|댄스/],
+    ["발라드", /ballad|발라드/],
+    ["성인가요", /성인가요|트로트/],
+    ["락", /rock|록|락/],
+    ["일렉트로닉", /electronic|일렉트로닉|전자/],
+    ["R&B", /r&b|알앤비/],
+    ["O.S.T", /ost|o\.s\.t|오에스티/],
+    ["포크", /folk|포크/],
+    ["힙합", /hiphop|hip-hop|힙합/],
+    ["모던락", /모던락|modern rock/],
+    ["락발라드", /락발라드|록발라드/],
+    ["레게", /reggae|레게/],
+  ] as const;
+  const matched = labels.find(([, pattern]) => pattern.test(normalized));
+  return labels
+    .map(([label]) => `${label}${matched?.[0] === label ? "■" : "□"}`)
+    .join("  ")
+    .concat(matched ? "" : `  기타: ${genre}`);
+};
 
 const normalizeRecord = (record: DbRecord) =>
   Object.fromEntries(
@@ -177,6 +277,13 @@ const normalizeTrack = (track: DbRecord, index: number) => {
     `트랙 ${trackNo}`;
   const isTitle = getBoolean(track, "is_title");
   const broadcastSelected = getBoolean(track, "broadcast_selected");
+  const lyrics = getText(track, "lyrics");
+  const translatedLyrics = getText(track, "translated_lyrics");
+  const isInstrumental = isInstrumentalTitle(title) || !lyrics.trim();
+  const lyricist = getText(track, "lyricist");
+  const lyricsDisplay = isInstrumental
+    ? "가사 없음 / Instrumental"
+    : appendTranslatedLyrics(lyrics, translatedLyrics);
 
   return {
     ...normalizeRecord(track),
@@ -184,14 +291,19 @@ const normalizeTrack = (track: DbRecord, index: number) => {
     track_no: trackNo,
     track_no_padded: String(trackNo).padStart(2, "0"),
     track_title: title,
+    track_title_for_docs: isTitle ? `${title} (타이틀)` : title,
+    track_title_for_filename: title,
     title,
     display_title: title,
     featuring: getText(track, "featuring"),
     composer: getText(track, "composer"),
-    lyricist: getText(track, "lyricist"),
+    lyricist,
+    lyricist_display: isInstrumental ? "" : lyricist,
     arranger: getText(track, "arranger"),
-    lyrics: getText(track, "lyrics"),
-    translated_lyrics: getText(track, "translated_lyrics"),
+    performer: getText(track, "performer") || getText(track, "performers"),
+    lyrics,
+    lyrics_display: lyricsDisplay,
+    translated_lyrics: translatedLyrics,
     notes: getText(track, "notes"),
     is_title: isTitle,
     is_title_label: booleanLabel(isTitle),
@@ -199,6 +311,7 @@ const normalizeTrack = (track: DbRecord, index: number) => {
     title_role: getText(track, "title_role"),
     broadcast_selected: broadcastSelected,
     broadcast_selected_label: booleanLabel(broadcastSelected),
+    is_instrumental: isInstrumental,
   };
 };
 
@@ -217,8 +330,7 @@ function buildSubmissionTemplateData(
     "아티스트 미입력";
   const productionCompany = getText(submission, "production_company");
   const distributor = getText(submission, "distributor");
-  const guestCompany = getText(submission, "guest_company");
-  const defaultCompany = productionCompany || distributor || guestCompany;
+  const actualCompany = productionCompany;
   const tracks = bundle.tracks
     .slice()
     .sort((a, b) => {
@@ -233,8 +345,28 @@ function buildSubmissionTemplateData(
   const applicantEmail = getText(submission, "applicant_email");
   const applicantPhone = getText(submission, "applicant_phone");
   const guestName = getText(submission, "guest_name");
+  const guestCompany = getText(submission, "guest_company");
   const guestEmail = getText(submission, "guest_email");
   const guestPhone = getText(submission, "guest_phone");
+  const todayParts = seoulTodayParts();
+  const releaseParts = toDateParts(rawReleaseDate);
+  const productionParts =
+    toDateParts(getText(submission, "production_date")) ?? releaseParts;
+  const titleTracks = tracks.filter((track) => track.is_title);
+  const integratedTitleTrack = titleTracks[0] ?? tracks[0] ?? null;
+  const integratedSongTracks =
+    titleTracks.length > 0
+      ? [
+          ...titleTracks,
+          ...tracks.filter(
+            (track) => !titleTracks.some((titleTrack) => titleTrack.track_no === track.track_no),
+          ),
+        ]
+      : tracks;
+  const integratedSongTitles = integratedSongTracks
+    .slice(0, 3)
+    .map((track) => track.track_title)
+    .join(", ");
 
   const data = {
     ...normalizeRecord(submission),
@@ -249,15 +381,26 @@ function buildSubmissionTemplateData(
     artist_name: artistName,
     artist_name_kr: getText(submission, "artist_name_kr"),
     artist_name_en: getText(submission, "artist_name_en"),
+    today_long: formatLongKorean(todayParts),
+    today_year: String(todayParts.year),
+    today_mmdd: formatMonthDay(todayParts),
     release_date: rawReleaseDate ? formatDate(rawReleaseDate) : "",
+    release_date_long: formatLongDot(releaseParts),
+    release_date_short: formatShortDot(releaseParts),
+    release_date_mmdd: formatMonthDay(releaseParts),
+    production_date_long: formatLongDot(productionParts),
+    production_date_short: formatShortDot(productionParts),
     release_date_raw: rawReleaseDate,
     genre: getText(submission, "genre"),
+    genre_checkbox_line: getGenreCheckboxLine(getText(submission, "genre")),
     distributor,
     production_company: productionCompany,
-    company_name: defaultCompany,
-    planning_company: distributor || defaultCompany,
-    agency_company: productionCompany || defaultCompany,
-    label_company: productionCompany || distributor || defaultCompany,
+    actual_company: actualCompany,
+    review_company: REVIEW_COMPANY,
+    company_name: actualCompany,
+    planning_company: actualCompany,
+    agency_company: actualCompany,
+    label_company: actualCompany,
     applicant_name: applicantName,
     applicant_email: applicantEmail,
     applicant_phone: applicantPhone,
@@ -266,13 +409,19 @@ function buildSubmissionTemplateData(
     guest_company: guestCompany,
     guest_email: guestEmail,
     guest_phone: guestPhone,
-    contact_name: applicantName || guestName,
-    contact_email: applicantEmail || guestEmail,
-    contact_phone: applicantPhone || guestPhone,
+    original_contact_name: applicantName || guestName,
+    original_contact_email: applicantEmail || guestEmail,
+    original_contact_phone: applicantPhone || guestPhone,
+    contact_name: FIXED_CONTACT.name,
+    contact_email: FIXED_CONTACT.email,
+    contact_phone: FIXED_CONTACT.phone,
     tracks,
-    title_tracks: tracks.filter((track) => track.is_title),
+    title_tracks: titleTracks,
     broadcast_tracks: tracks.filter((track) => track.broadcast_selected),
     track_count: tracks.length,
+    track_count_label: `${tracks.length}곡`,
+    title_track_title: integratedTitleTrack?.track_title ?? "",
+    integrated_song_titles: integratedSongTitles,
     files,
     file_count: files.length,
     events,
@@ -293,55 +442,6 @@ const withDocumentContext = (
     ...overrides,
   },
 });
-
-function buildIntegratedTemplateData(
-  bundles: ReviewDocSubmissionBundle[],
-  stationCode: string,
-  stationName: string,
-) {
-  const submissions = bundles.map((bundle, index) =>
-    buildSubmissionTemplateData(bundle, index, bundles.length),
-  );
-  const tracks = submissions.flatMap((submission) =>
-    submission.tracks.map((track) => ({
-      ...track,
-      submission_id: submission.id,
-      album_title: submission.album_title,
-      artist_name: submission.artist_name,
-    })),
-  );
-
-  return {
-    generated_at: formatDateTime(new Date().toISOString()),
-    station_code: stationCode,
-    station_name: stationName,
-    submission_count: submissions.length,
-    album_count: submissions.length,
-    track_count: tracks.length,
-    submissions,
-    albums: submissions,
-    tracks,
-  };
-}
-
-function renderDocx(template: Buffer, data: DbRecord) {
-  try {
-    const zip = new PizZip(template);
-    const doc = new Docxtemplater(zip, {
-      paragraphLoop: true,
-      linebreaks: true,
-      nullGetter: () => "",
-    });
-    doc.render(data);
-    return doc.toBuffer({ compression: "DEFLATE" });
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "DOCX 템플릿 렌더링 중 오류가 발생했습니다.";
-    throw new ReviewDocsRenderError(`심의자료 DOCX 생성에 실패했습니다. ${message}`);
-  }
-}
 
 async function zipToBuffer(zip: ZipFile) {
   const chunks: Buffer[] = [];
@@ -464,92 +564,104 @@ export async function buildReviewDocsZip(bundles: ReviewDocSubmissionBundle[]) {
     throw new ReviewDocsNotFoundError("선택된 접수가 없습니다.");
   }
 
-  const templates = await loadTemplates();
+  await assertTemplatesAvailable();
   const zip = new ZipFile();
   const usedPaths = new Set<string>();
 
   bundles.forEach((bundle, index) => {
     const base = buildSubmissionTemplateData(bundle, index, bundles.length);
     const folder = uniquePath(
-      `${String(index + 1).padStart(2, "0")}_${sanitizeFilenamePart(
-        `${base.artist_name}_${base.album_title}`,
+      sanitizeFilenamePart(
+        `${base.artist_name} - ${base.album_title}`,
         "album",
-      )}`,
+      ),
       usedPaths,
     );
     const reviewFormData = withDocumentContext(base, {
       document_title: "심의자료",
       document_kind: "review-form",
-      company_name: base.company_name,
-      planning_company: base.distributor || base.company_name,
-      production_company: base.production_company,
-      agency_company: base.production_company || base.company_name,
-      label_company: base.production_company || base.distributor || base.company_name,
+      company_name: REVIEW_COMPANY,
+      planning_company: REVIEW_COMPANY,
+      production_company: REVIEW_COMPANY,
+      agency_company: REVIEW_COMPANY,
+      label_company: REVIEW_COMPANY,
     });
     const albumInfoData = withDocumentContext(base, {
       document_title: "앨범정보",
       document_kind: "album-info",
-      company_name: base.production_company || base.distributor || base.company_name,
-      planning_company: base.production_company || base.distributor || base.company_name,
-      production_company: base.production_company || base.company_name,
-      agency_company: base.guest_company || base.production_company || base.company_name,
-      label_company: base.production_company || base.distributor || base.company_name,
+      company_name: base.actual_company,
+      planning_company: base.actual_company,
+      production_company: base.actual_company,
+      agency_company: base.actual_company,
+      label_company: base.actual_company,
     });
+    const fileBase = sanitizeFilenamePart(
+      `${base.artist_name} - ${base.album_title}`,
+      "album",
+    );
 
     zip.addBuffer(
-      renderDocx(templates.songReviewRequest, base),
-      uniquePath(`${folder}/음원심의신청서.docx`, usedPaths),
+      createSongReviewRequestDocx(base as Parameters<typeof createSongReviewRequestDocx>[0]),
+      uniquePath(`${folder}/가요심의요청서_${fileBase}.docx`, usedPaths),
     );
     zip.addBuffer(
-      renderDocx(templates.reviewForm, reviewFormData),
-      uniquePath(`${folder}/심의자료.docx`, usedPaths),
+      createReviewFormDocx(
+        reviewFormData as Parameters<typeof createReviewFormDocx>[0],
+        "심의폼",
+      ),
+      uniquePath(`${folder}/심의폼_${fileBase}.docx`, usedPaths),
     );
     zip.addBuffer(
-      renderDocx(templates.reviewForm, albumInfoData),
-      uniquePath(`${folder}/앨범정보.docx`, usedPaths),
+      createReviewFormDocx(
+        albumInfoData as Parameters<typeof createReviewFormDocx>[0],
+        "앨범정보",
+      ),
+      uniquePath(`${folder}/앨범정보_${fileBase}.docx`, usedPaths),
     );
     zip.addBuffer(
-      renderDocx(templates.lyricsAll, base),
-      uniquePath(`${folder}/전체가사.docx`, usedPaths),
+      createLyricsAllDocx(base as Parameters<typeof createLyricsAllDocx>[0]),
+      uniquePath(`${folder}/가사전체파일_${fileBase}.docx`, usedPaths),
     );
 
     base.tracks.forEach((track) => {
-      const trackData = {
-        ...base,
-        track,
-        ...track,
-      };
       const trackTitle = sanitizeFilenamePart(
-        `${track.track_no_padded}_${track.track_title}`,
+        `${track.track_no_padded}_${track.track_title_for_filename}`,
         `track_${track.track_no_padded}`,
       );
       zip.addBuffer(
-        renderDocx(templates.lyricsTrack, trackData),
-        uniquePath(`${folder}/가사_${trackTitle}.docx`, usedPaths),
+        createLyricsTrackDocx(
+          base as Parameters<typeof createLyricsTrackDocx>[0],
+          track as Parameters<typeof createLyricsTrackDocx>[1],
+        ),
+        uniquePath(`${folder}/${trackTitle}.docx`, usedPaths),
       );
     });
   });
 
   const integratedFolder = "통합신청서";
-  const integratedTemplates = [
-    ["TBS", "TBS", templates.tbsIntegrated],
-    ["WBS", "WBS", templates.wbsIntegrated],
-    ["PBC", "PBC", templates.pbcIntegrated],
-  ] as const;
+  const integratedData = bundles.map((bundle, index) =>
+    buildSubmissionTemplateData(bundle, index, bundles.length),
+  ) as Array<Parameters<typeof createTbsIntegratedDocx>[0][number]>;
 
-  integratedTemplates.forEach(([stationCode, stationName, template]) => {
-    const data = buildIntegratedTemplateData(bundles, stationCode, stationName);
-    zip.addBuffer(
-      renderDocx(template, data),
-      uniquePath(`${integratedFolder}/${stationCode}_통합신청서.docx`, usedPaths),
-    );
-  });
+  zip.addBuffer(
+    createTbsIntegratedDocx(integratedData),
+    uniquePath(`${integratedFolder}/TBS신청서_통합.docx`, usedPaths),
+  );
+  zip.addBuffer(
+    createWbsIntegratedDocx(integratedData),
+    uniquePath(`${integratedFolder}/WBS신청서_통합.docx`, usedPaths),
+  );
+  zip.addBuffer(
+    createPbcIntegratedDocx(integratedData),
+    uniquePath(`${integratedFolder}/PBC신청서_통합.docx`, usedPaths),
+  );
 
   return zipToBuffer(zip);
 }
 
 export function buildReviewDocsZipFilename(bundles: ReviewDocSubmissionBundle[]) {
-  const date = new Date().toISOString().slice(0, 10);
+  const today = seoulTodayParts();
+  const date = `${today.year}-${two(today.month)}-${two(today.day)}`;
   if (bundles.length === 1) {
     const submission = bundles[0].submission;
     const title = sanitizeFilenamePart(getText(submission, "title"), "submission");
