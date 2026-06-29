@@ -280,14 +280,37 @@ const exactTranslations: Record<string, string> = {
     "Use Onside credits for the services you need.",
   "앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 워터멜론 매거진 발행 요청과 온사이드 연계 서비스 이용에 사용할 수 있습니다.":
     "Each completed album review payment issues 1 credit. Credits can be used for Watermelon magazine requests and Onside partner services.",
+  "앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 매거진 발행, 녹음실 이용권 등 관리자가 등록한 온사이드 연계 서비스에 사용할 수 있습니다.":
+    "Each completed album review payment issues 1 credit. Credits can be used for magazine publication, studio vouchers, and other Onside partner services registered by admins.",
   "매거진 바로가기": "Open Magazine",
   "발행 요청하기": "Request Publication",
+  "크레딧 사용하기": "Use Credits",
   "워터멜론 매거진 발행 요청": "Watermelon Magazine Publication Request",
   "회원가입 후 크레딧 사용": "Sign Up to Use Credits",
   "앨범심의 결제 완료 1건당 크레딧 1개가 발급됩니다.":
     "1 credit is issued for each completed album review payment.",
   "크레딧으로 워터멜론 매거진 발행 요청과 온사이드 연계 다양한 서비스를 이용할 수 있습니다.":
     "Use credits for Watermelon magazine requests and various Onside partner services.",
+  "크레딧으로 워터멜론 매거진 발행 요청, 녹음실 이용권, 관리자가 추가하는 온사이드 연계 서비스를 이용할 수 있습니다.":
+    "Use credits for Watermelon magazine requests, studio vouchers, and Onside partner services added by admins.",
+  "크레딧 이용권이 발행되었습니다. 쿠폰코드는 보유 크레딧 페이지에서도 확인할 수 있습니다.":
+    "Your credit voucher has been issued. You can also find the coupon code on the Available Credits page.",
+  "사용처 선택": "Choose How to Use Credits",
+  "워터멜론 매거진": "Watermelon Magazine",
+  "1크레딧으로 발행 요청": "Request publication with 1 credit",
+  "서비스 이용권": "Service Vouchers",
+  "녹음실 등 관리자 등록 서비스": "Admin-registered services such as studios",
+  "크레딧으로 이용 가능한 서비스": "Services Available with Credits",
+  "관리자가 등록한 녹음실 이용권과 온사이드 연계 서비스를 크레딧으로 교환할 수 있습니다. 새 서비스가 추가되면 이 탭에 자동으로 노출됩니다.":
+    "Redeem credits for admin-registered studio vouchers and Onside partner services. New services appear in this tab automatically.",
+  "사용 가능": "Available",
+  "로그인 필요": "Login Required",
+  "로그인 후 이용": "Log In to Use",
+  "크레딧으로 이용권 발행": "Issue Voucher with Credits",
+  "크레딧 부족": "Not Enough Credits",
+  "현재 교환 가능한 서비스 이용권이 없습니다. 관리자 등록 후 이 탭에 서비스가 표시됩니다.":
+    "There are no service vouchers available right now. Services will appear here after an admin registers them.",
+  "보유 크레딧에서 발행 내역 보기": "View Issued Vouchers in Available Credits",
   "계정정보": "Account Info",
   "접수한 심의의 현재 상태를 확인할 수 있습니다.":
     "Check the current status of your submitted reviews.",

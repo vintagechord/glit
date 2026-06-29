@@ -51,6 +51,24 @@ const safeAdminCreditsPath = (redirectTo?: string) => {
   return raw;
 };
 
+const safeUserCreditsPath = (redirectTo?: string) => {
+  const raw = redirectTo?.trim();
+  if (!raw) return "/mypage/credits";
+
+  try {
+    const base = "https://onside.local";
+    const url = new URL(raw, base);
+    if (url.origin !== base) return "/mypage/credits";
+
+    const allowedPaths = ["/mypage/credits", "/dashboard/credits", "/magazine"];
+    if (!allowedPaths.includes(url.pathname)) return "/mypage/credits";
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/mypage/credits";
+  }
+};
+
 async function requireAdminUser() {
   const supabase = await createServerSupabase();
   const {
@@ -92,9 +110,12 @@ const normalizeRpcError = (message?: string | null) => {
 export async function redeemCreditRewardFormAction(
   formData: FormData,
 ): Promise<void> {
+  const redirectPath = safeUserCreditsPath(
+    String(formData.get("redirectTo") ?? ""),
+  );
   const parsed = rewardIdSchema.safeParse(formData.get("rewardId"));
   if (!parsed.success) {
-    redirect(withQuery("/mypage/credits", { error: "invalid_reward" }));
+    redirect(withQuery(redirectPath, { error: "invalid_reward" }));
   }
 
   const supabase = await createServerSupabase();
@@ -103,7 +124,7 @@ export async function redeemCreditRewardFormAction(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/mypage/credits");
+    redirect(`/login?next=${encodeURIComponent(redirectPath)}`);
   }
 
   const { error } = await supabase.rpc("redeem_credit_reward", {
@@ -112,7 +133,7 @@ export async function redeemCreditRewardFormAction(
 
   if (error) {
     redirect(
-      withQuery("/mypage/credits", {
+      withQuery(redirectPath, {
         error: encodeURIComponent(normalizeRpcError(error.message)),
       }),
     );
@@ -123,7 +144,7 @@ export async function redeemCreditRewardFormAction(
   revalidatePath("/magazine");
   revalidatePath("/admin/credits");
 
-  redirect(withQuery("/mypage/credits", { redeemed: "1" }));
+  redirect(withQuery(redirectPath, { redeemed: "1" }));
 }
 
 export async function upsertCreditRewardFormAction(
