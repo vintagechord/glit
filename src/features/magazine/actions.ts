@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getUserCreditSummary } from "@/lib/credits";
 
 export type MagazineRequestActionState = {
   error?: string;
@@ -175,6 +176,16 @@ export async function createMagazineRequestAction(
   }
 
   const admin = createAdminClient();
+  if (user) {
+    const creditSummary = await getUserCreditSummary(admin, user.id);
+    if (creditSummary.available < 1) {
+      return {
+        error:
+          "사용 가능한 크레딧이 없습니다. 나의 크레딧에서 적립/사용 내역을 확인해주세요.",
+      };
+    }
+  }
+
   const { data: existingRequest, error: existingError } = await admin
     .from("magazine_requests")
     .select("id")

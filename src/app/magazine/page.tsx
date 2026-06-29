@@ -7,6 +7,7 @@ import {
   type MagazineCreditOption,
   type MagazineExistingRequest,
 } from "@/features/magazine/magazine-request-form";
+import { getUserCreditSummary, type CreditSummary } from "@/lib/credits";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -40,15 +41,25 @@ type MagazineRequestRow = {
   published_url: string | null;
 };
 
+const emptyCreditSummary: CreditSummary = {
+  earned: 0,
+  magazineUsed: 0,
+  rewardUsed: 0,
+  used: 0,
+  available: 0,
+};
+
 async function loadMagazineCreditData(userId?: string | null) {
   if (!userId) {
     return {
       creditOptions: [] as MagazineCreditOption[],
       existingRequests: [] as MagazineExistingRequest[],
+      creditSummary: emptyCreditSummary,
     };
   }
 
   const admin = createAdminClient();
+  const creditSummary = await getUserCreditSummary(admin, userId);
   const { data: paidSubmissions, error: submissionError } = await admin
     .from("submissions")
     .select(
@@ -101,6 +112,7 @@ async function loadMagazineCreditData(userId?: string | null) {
   );
 
   return {
+    creditSummary,
     creditOptions: paidRows
       .filter((submission) => !usedSubmissionIds.has(submission.id))
       .map((submission) => ({
@@ -155,7 +167,7 @@ export default async function MagazinePage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { creditOptions, existingRequests } = await loadMagazineCreditData(
+  const { creditOptions, existingRequests, creditSummary } = await loadMagazineCreditData(
     user?.id,
   );
 
@@ -285,6 +297,7 @@ export default async function MagazinePage() {
             userEmail={user?.email ?? null}
             creditOptions={creditOptions}
             existingRequests={existingRequests}
+            availableCredits={creditSummary.available}
           />
         </div>
       </div>

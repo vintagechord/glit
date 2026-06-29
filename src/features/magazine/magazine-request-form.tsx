@@ -73,11 +73,13 @@ export function MagazineRequestForm({
   userEmail,
   creditOptions,
   existingRequests,
+  availableCredits,
 }: {
   isAuthenticated: boolean;
   userEmail?: string | null;
   creditOptions: MagazineCreditOption[];
   existingRequests: MagazineExistingRequest[];
+  availableCredits: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
@@ -95,7 +97,9 @@ export function MagazineRequestForm({
     creditOptions.find((option) => option.id === selectedSubmissionId) ??
     creditOptions[0] ??
     null;
-  const canSubmit = isAuthenticated ? Boolean(selectedCredit) : true;
+  const canSubmit = isAuthenticated
+    ? Boolean(selectedCredit) && availableCredits > 0
+    : true;
 
   React.useEffect(() => {
     if (!selectedSubmissionId && creditOptions[0]?.id) {
@@ -228,7 +232,7 @@ export function MagazineRequestForm({
           {isAuthenticated ? (
             <div className="grid gap-2">
               <label htmlFor="magazine-submission-id" className={labelClass}>
-                사용할 매거진 크레딧
+                매거진을 발행할 음반심의 건
               </label>
               <select
                 id="magazine-submission-id"
@@ -254,8 +258,11 @@ export function MagazineRequestForm({
               </select>
               {selectedCredit ? (
                 <p className="text-xs text-muted-foreground">
-                  선택한 크레딧: {selectedCredit.artistName ?? "-"} ·{" "}
+                  선택한 음반: {selectedCredit.artistName ?? "-"} ·{" "}
                   {selectedCredit.title ?? "-"}
+                  {availableCredits <= 0
+                    ? " · 사용 가능한 잔여 크레딧이 없습니다."
+                    : ""}
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
@@ -418,7 +425,7 @@ export function MagazineRequestForm({
             <div className="rounded-[8px] border-2 border-border bg-card p-4">
               <p className={labelClass}>사용 가능</p>
               <p className="mt-2 text-3xl font-black text-foreground">
-                {isAuthenticated ? creditOptions.length : "-"}
+                {isAuthenticated ? availableCredits : "-"}
               </p>
             </div>
             <div className="rounded-[8px] border-2 border-border bg-card p-4">
@@ -429,8 +436,9 @@ export function MagazineRequestForm({
             </div>
           </div>
           <p className="mt-4 text-xs leading-5 text-muted-foreground">
-            크레딧은 결제 완료된 음반심의 접수 1건마다 1개로 계산됩니다. 이미
-            매거진 요청에 사용한 접수 건은 다시 사용할 수 없습니다.
+            크레딧은 결제 완료된 음반심의 접수 1건마다 1개로 계산됩니다.
+            매거진 발행 1회 또는 서비스 이용권 교환에 사용한 크레딧은 잔여
+            수량에서 차감됩니다.
           </p>
         </section>
 
