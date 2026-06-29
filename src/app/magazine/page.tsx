@@ -165,7 +165,7 @@ export default async function MagazinePage() {
             Onside Credits
           </p>
           <h1 className="font-display mt-5 max-w-3xl text-4xl font-black leading-tight sm:text-5xl">
-            음반심의 1건으로 크레딧을 받고, 필요한 서비스를 이용하세요.
+            온사이드의 크레딧으로 필요한 서비스를 이용하세요.
           </h1>
           <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-white/82">
             앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은

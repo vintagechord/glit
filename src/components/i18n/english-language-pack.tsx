@@ -276,8 +276,8 @@ const exactTranslations: Record<string, string> = {
   "보유 크레딧": "Available Credits",
   "음반심의 결제 완료 건으로 발급되는 온사이드 크레딧을 확인하고 사용하세요.":
     "Check and use Onside credits issued from completed album review payments.",
-  "음반심의 1건으로 크레딧을 받고, 필요한 서비스를 이용하세요.":
-    "Earn credits from album reviews and use them for services.",
+  "온사이드의 크레딧으로 필요한 서비스를 이용하세요.":
+    "Use Onside credits for the services you need.",
   "앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 워터멜론 매거진 발행 요청과 온사이드 연계 서비스 이용에 사용할 수 있습니다.":
     "Each completed album review payment issues 1 credit. Credits can be used for Watermelon magazine requests and Onside partner services.",
   "매거진 바로가기": "Open Magazine",
