@@ -20,12 +20,10 @@ export function AlbumIntroPanel({
   processHighlights,
   preparationChecklist,
   resultBenefits,
-  supportEmail,
 }: {
   processHighlights: ProcessHighlight[];
   preparationChecklist: string[];
   resultBenefits: string[];
-  supportEmail: string;
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
 
@@ -94,10 +92,10 @@ export function AlbumIntroPanel({
                   파일 업로드 안내
                 </p>
                 <p className="mt-3 text-sm font-semibold leading-6 text-white/92">
-                  음원 파일 업로드가 완료되지 않으면 파일 첨부 없이 다음 단계로 진행해
-                  신청서를 먼저 제출한 뒤, 음원 파일만 이메일로 보내주세요.
+                  음원 파일 업로드가 완료되지 않으면 파일 첨부 없이 다음 단계로 진행하거나
+                  예전 온사이드 사이트에서 동일하게 접수할 수 있습니다.
                 </p>
-                <p className="mt-4 text-sm font-semibold">{supportEmail}</p>
+                <p className="mt-4 text-sm font-semibold">onside17.com</p>
               </div>
 
               <div className="rounded-[10px] border-2 border-border bg-background p-6">

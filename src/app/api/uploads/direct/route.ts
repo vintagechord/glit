@@ -6,6 +6,12 @@ import { z } from "zod";
 
 import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
 import { ensureSubmissionOwner, findSubmissionById } from "@/lib/payments/submission";
+import {
+  isApplicationFormFile,
+  isApplicationFormMime,
+  isAudioUploadFile,
+  isVideoUploadFile,
+} from "@/lib/submission-files";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { Upload } from "@aws-sdk/lib-storage";
 
@@ -24,6 +30,33 @@ const schema = z.object({
 
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
+
+const resultAttachmentPattern = /\.(pdf|jpg|jpeg|png|webp|txt)$/i;
+
+const isResultAttachmentFile = (
+  filename?: string | null,
+  mimeType?: string | null,
+) => {
+  const mime = (mimeType ?? "").toLowerCase();
+  return (
+    resultAttachmentPattern.test(filename ?? "") ||
+    mime === "application/pdf" ||
+    mime === "text/plain" ||
+    mime === "image/jpeg" ||
+    mime === "image/png" ||
+    mime === "image/webp"
+  );
+};
+
+const isAllowedDirectUploadFile = (
+  filename?: string | null,
+  mimeType?: string | null,
+) =>
+  isAudioUploadFile(filename, mimeType) ||
+  isVideoUploadFile(filename, mimeType) ||
+  isApplicationFormFile(filename) ||
+  isApplicationFormMime(mimeType) ||
+  isResultAttachmentFile(filename, mimeType);
 
 class UploadRequestError extends Error {
   status: number;
@@ -262,6 +295,20 @@ export async function POST(request: Request) {
       parseErrorStatus = 400;
       parseErrorBody = {
         error: "파일 용량이 허용 한도(4GB)를 초과했습니다.",
+      };
+      filePart.stream.resume();
+      return;
+    }
+    if (
+      !isAllowedDirectUploadFile(
+        filePart.filename || parsed.data.filename,
+        filePart.mimeType || parsed.data.mimeType,
+      )
+    ) {
+      parseErrorStatus = 400;
+      parseErrorBody = {
+        error:
+          "업로드 가능한 파일 형식이 아닙니다. 음원/영상/신청서/심의 결과 파일만 업로드할 수 있습니다.",
       };
       filePart.stream.resume();
       return;

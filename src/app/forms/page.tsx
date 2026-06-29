@@ -1,55 +1,20 @@
 import Link from "next/link";
 
-import { APP_CONFIG } from "@/lib/config";
-
 export const metadata = {
-  title: "구버전 신청서 작성",
+  title: "예전 온사이드 바로가기",
 };
 
 export default function FormsPage() {
-  const albumForms = [
-    {
-      label: "HWP",
-      title: "음반 심의 신청서 (한글)",
-      href:
-        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_music_application_hangul_form(2026).hwp",
-    },
-    {
-      label: "Word",
-      title: "음반 심의 신청서 (Word)",
-      href:
-        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_music_application_word_form(2026).doc",
-    },
-  ];
-
-  const mvForms = [
-    {
-      label: "HWP",
-      title: "뮤직비디오 심의 신청서 (한글)",
-      href:
-        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_MVapplication_hangul_form(2026).hwp",
-    },
-    {
-      label: "Word",
-      title: "뮤직비디오 심의 신청서 (Word)",
-      href:
-        "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/file/Onside_MVapplication_word_form(2026).doc",
-    },
-  ];
-
   return (
     <div className="page-centered mx-auto w-full max-w-5xl px-6 py-12">
-      <p className="bauhaus-kicker">이메일 접수</p>
+      <p className="bauhaus-kicker">Old Onside</p>
       <h1 className="font-display mt-4 text-3xl font-black text-foreground">
-        구버전 신청서 작성 방식
+        예전 온사이드 주소 바로가기
       </h1>
       <p className="mt-4 max-w-3xl text-base font-semibold leading-relaxed text-muted-foreground">
-        온라인 접수가 어려울 때 신청서 파일을 작성해 이메일로 보내는 대체 접수입니다.
+        이전 버전의 온사이드 사이트가 편하신 경우 예전 사이트에서 접수해주셔도 심의는 동일하게 진행됩니다.
         <span className="mt-2 block">
-          온라인 신청과 중복으로 진행하지 말고, 작성한 신청서와 음원/영상을{" "}
-          <span className="font-semibold text-foreground">
-            이메일로 보내주세요.
-          </span>{" "}
+          구버전과 신버전은 오픈 후 1년간 동시에 운영됩니다.
         </span>
       </p>
 
@@ -68,56 +33,6 @@ export default function FormsPage() {
         </span>
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <section className="group relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-6 text-foreground shadow-[6px_6px_0_#111111] transition hover:-translate-y-1 dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-          <div aria-hidden="true" className="absolute right-0 top-0 h-12 w-12 bg-[#f2cf27]" />
-          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-            음반 심의
-          </p>
-          <h2 className="mt-3 text-xl font-black">
-            음반 심의 신청서
-          </h2>
-          <p className="mt-2 text-sm font-semibold text-muted-foreground">
-            신청서 파일을 받아 작성하세요.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            {albumForms.map((form) => (
-              <Link
-                key={form.href}
-                href={form.href}
-                className="inline-flex rounded-[8px] border-2 border-[#111111] bg-white px-5 py-2 text-xs font-black uppercase tracking-normal text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
-              >
-                {form.label} 다운로드
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="group relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-6 text-foreground shadow-[6px_6px_0_#111111] transition hover:-translate-y-1 dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-          <div aria-hidden="true" className="absolute right-0 top-0 h-12 w-12 bg-[#1556a4]" />
-          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-            뮤직비디오 심의
-          </p>
-          <h2 className="mt-3 text-xl font-black">
-            뮤직비디오 심의 신청서
-          </h2>
-          <p className="mt-2 text-sm font-semibold text-muted-foreground">
-            신청서 파일을 받아 작성하세요.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            {mvForms.map((form) => (
-              <Link
-                key={form.href}
-                href={form.href}
-                className="inline-flex rounded-[8px] border-2 border-[#111111] bg-white px-5 py-2 text-xs font-black uppercase tracking-normal text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
-              >
-                {form.label} 다운로드
-              </Link>
-            ))}
-          </div>
-        </section>
-      </div>
-
       <div className="mt-8 rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-6 text-sm text-black shadow-[6px_6px_0_#111111] dark:shadow-[6px_6px_0_#f2cf27]">
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex h-11 w-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white text-base font-black text-black live-blink">
@@ -128,52 +43,22 @@ export default function FormsPage() {
               필독
             </p>
             <p className="text-sm font-semibold text-slate-900">
-              작성 완료된 신청서와 음원/영상 파일을 이메일{" "}
-              <span className="font-bold text-slate-900">
-                {APP_CONFIG.supportEmail}
-              </span>
-              로 보내주시면 접수 안내를 드립니다.
+              예전 온사이드 사이트에서도 음반·뮤직비디오 심의 접수가 가능합니다.
             </p>
             <p className="text-xs text-black/80">
-              신청서와 음원/영상 파일을 모두 보내셔야 접수가 가능합니다.
+              접수 방식만 다르고 심의 진행은 동일하게 처리됩니다.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] lg:grid-cols-2">
-        <div>
-          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-            메일 제목 템플릿
-          </p>
-          <div className="mt-3 space-y-2 text-sm font-semibold text-foreground">
-            <p>[음반심의 신청] 아티스트명 / 앨범명 / 신청자명</p>
-            <p>[뮤직비디오심의 신청] 아티스트명 / 곡명 / 온라인용 또는 TV송출용</p>
-          </div>
-        </div>
-        <div>
-          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-            첨부 체크리스트
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs font-black text-foreground">
-            {[
-              "신청서",
-              "음원 WAV",
-              "가사",
-              "번역 가사",
-              "영상 파일",
-              "사업자등록증/세금계산서 정보",
-              "연락처",
-            ].map((item) => (
-              <span
-                key={item}
-                className="rounded-[6px] border-2 border-border bg-background px-3 py-1"
-              >
-                {item}
-              </span>
-            ))}
-          </div>
-        </div>
+      <div className="mt-6 rounded-[10px] border-2 border-[#111111] bg-card p-6 text-sm font-semibold text-foreground shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+        <p>
+          새 온사이드에서는 신청, 결제, 진행 현황, 결과 확인을 한 곳에서 처리할 수 있습니다.
+        </p>
+        <p className="mt-2 text-muted-foreground">
+          예전 사이트 이용이 더 편하신 경우에만 위 바로가기 버튼을 사용해주세요.
+        </p>
       </div>
     </div>
   );

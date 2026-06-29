@@ -491,7 +491,7 @@ export function AlbumWizard({
     )
     : uploadedFiles.length > 0 || emailSubmitConfirmed;
   const uploadStatusLabel = emailSubmitConfirmed
-    ? "이메일 전송 선택"
+    ? "파일 없이 진행 선택"
     : uploads.some((upload) => upload.status === "uploading")
       ? "업로드 진행 중"
       : uploads.some((upload) => upload.status === "error")
@@ -1110,7 +1110,7 @@ export function AlbumWizard({
       setNotice({
         error:
           draftError ||
-          "신청 정보를 준비하는 중입니다. 잠시 후 다시 시도해주세요. 업로드가 계속 어려우면 신청서는 이어서 작성하고 파일만 이메일로 보내주세요.",
+          "신청 정보를 준비하는 중입니다. 잠시 후 다시 시도해주세요. 업로드가 계속 어려우면 예전 온사이드 사이트에서도 동일하게 접수할 수 있습니다.",
       });
       void createDraft({ force: true });
       return;
@@ -1847,7 +1847,7 @@ export function AlbumWizard({
 
   const confirmEmailSubmission = React.useCallback(() => {
     const message =
-      "음원 파일 첨부가 완료되지 않으면 파일 없이 다음 단계로 진행해 신청서를 먼저 제출하고, 음원 파일만 이메일로 보내주세요.\n이 방식으로 계속하시겠습니까?";
+      "음원 파일 첨부가 완료되지 않으면 파일 없이 다음 단계로 진행할 수 있습니다. 예전 온사이드 사이트에서도 동일하게 접수할 수 있습니다.\n파일 없이 계속 진행하시겠습니까?";
     const confirmed =
       typeof window !== "undefined" ? window.confirm(message) : false;
     if (confirmed) {
@@ -3084,7 +3084,7 @@ export function AlbumWizard({
               ))}
             </div>
             <p className="mt-3 text-xs font-semibold leading-5">
-              헷갈리면 필수 항목만 먼저 입력하고 다음 단계로 이동하세요. 파일이 크거나 업로드가 불안정하면 신청서를 먼저 제출한 뒤 이메일 전송으로 이어갈 수 있습니다.
+              헷갈리면 필수 항목만 먼저 입력하고 다음 단계로 이동하세요. 파일이 크거나 업로드가 불안정하면 파일 없이 먼저 진행하거나 예전 온사이드 사이트에서 접수할 수 있습니다.
             </p>
           </div>
 
@@ -3874,7 +3874,7 @@ export function AlbumWizard({
               },
               {
                 title: "3. 업로드가 어려울 때",
-                body: `이메일 전송을 선택하고 ${APP_CONFIG.supportEmail}로 파일만 보내면 됩니다.`,
+                body: "파일 없이 다음 단계로 진행하거나 예전 온사이드 사이트에서 접수할 수 있습니다.",
               },
             ].map((item) => (
               <div
@@ -3979,7 +3979,7 @@ export function AlbumWizard({
                   >
                     {emailSubmitConfirmed ? "✓" : ""}
                   </span>
-                  이메일 전송
+                  파일 없이 진행
                 </span>
               </button>
             </div>
@@ -4128,7 +4128,7 @@ export function AlbumWizard({
                           onClick={() => selectUploadDeliveryMode("email")}
                           className="rounded-full border border-border/70 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
                         >
-                          이메일 전송으로 진행
+                          파일 없이 진행
                         </button>
                       </div>
                     </div>
@@ -4138,10 +4138,10 @@ export function AlbumWizard({
             )}
             <div className="mt-4 space-y-1 text-xs text-muted-foreground">
               <p>
-                음원 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 신청서를 먼저 제출한 뒤 음원 파일만 이메일로 보내주세요.
+                음원 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 다음 단계로 진행하거나 예전 온사이드 사이트에서 접수해주세요.
               </p>
               {isOneClick && (
-                <p>원클릭 접수도 동일하게 신청서 제출 후 음원 파일을 이메일로 보내주시면 됩니다.</p>
+                <p>원클릭 접수도 동일하게 파일 없이 다음 단계로 진행할 수 있습니다.</p>
               )}
               {!emailSubmitConfirmed ? (
                 <p className="font-semibold text-foreground">
@@ -4692,7 +4692,7 @@ export function AlbumWizard({
               <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
                 <p className="font-semibold">3. 업로드 이슈 대응</p>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  파일 업로드가 잘 안 되면 신청서는 그대로 진행하고, 파일만 이메일로 보내주세요.
+                  파일 업로드가 잘 안 되면 파일 없이 진행하거나 예전 온사이드 사이트에서 동일하게 접수할 수 있습니다.
                 </p>
               </div>
             </div>

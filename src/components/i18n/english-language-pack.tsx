@@ -146,16 +146,16 @@ const exactTranslations: Record<string, string> = {
     "Upload the final video for review and the completed application file.",
   "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX":
     "Allowed formats: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX",
-  "2GB 이상의 영상은 이메일 접수":
-    "For videos over 2 GB, submit by email:",
+  "2GB 이상의 영상도 최대 4GB까지 업로드 가능하며, 어려우면 예전 온사이드 사이트에서 접수해주세요.":
+    "Videos over 2 GB can be uploaded up to 4 GB. If upload is difficult, submit on the legacy Onside site.",
   "작성한 신청서 파일(HWP/DOC/DOCX)을 함께 업로드해주세요.":
     "Please also upload the completed application file (HWP/DOC/DOCX).",
-  "음원 파일(WAV/MP3/ZIP)을 업로드하거나 이메일 제출을 선택해주세요.":
-    "Upload audio files (WAV/MP3/ZIP) or choose email submission.",
+  "음원 파일(WAV/MP3/ZIP)을 업로드하거나 파일 없이 진행을 선택해주세요.":
+    "Upload audio files (WAV/MP3/ZIP) or choose to continue without files.",
   "작성한 신청서 파일(HWP/DOC/DOCX)과 영상 파일을 업로드해주세요.":
     "Upload the completed application file (HWP/DOC/DOCX) and video file.",
-  "영상 파일 첨부가 정상적으로 완료되지 않는 경우, 이메일 전송을 선택 후 영상 파일만 이메일로 보내주세요.":
-    "If the video upload does not complete normally, choose email submission and send only the video file by email.",
+  "영상 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 다음 단계로 진행하거나 예전 온사이드 사이트에서 접수해주세요.":
+    "If the video upload does not complete normally, continue without files or submit on the legacy Onside site.",
   "신청서 다운로드하여 직접 작성한 경우 신청서도 영상과 함께 첨부해주세요.":
     "If you downloaded and completed the application form manually, attach the application form with the video as well.",
   "신청서 저장 중...": "Saving application...",
@@ -740,12 +740,12 @@ const exactTranslations: Record<string, string> = {
     "Find pre- and post-submission support in one place.",
   "접수 전후로 필요한 문의를 한 곳에서 확인하세요":
     "Find pre- and post-submission support in one place.",
-  "온라인 Submission를 기본으로 운영하며, 파일 업로드가 어려운 경우 구버전 신청서 작성 방식도 안내합니다.":
-    "Online submission is the default. If file upload is difficult, we also guide you through the legacy form method.",
-  "Online Submission를 기본으로 운영하며, 파일 업로드가 어려운 경우 Legacy Application Form 작성 방식도 안내합니다.":
-    "Online submission is the default. If file upload is difficult, we also guide you through the legacy form method.",
-  "온라인 접수를 기본으로 운영하며, 파일 업로드가 어려운 경우 구버전 신청서 작성 방식도 안내합니다.":
-    "Online submission is the default. If file upload is difficult, we also guide you through the legacy form method.",
+  "온라인 Submission를 기본으로 운영하며, 파일 업로드가 어려운 경우 예전 온사이드 사이트도 안내합니다.":
+    "Online submission is the default. If file upload is difficult, we also guide users to the legacy Onside site.",
+  "Online Submission를 기본으로 운영하며, 파일 업로드가 어려운 경우 Legacy Onside 사이트도 안내합니다.":
+    "Online submission is the default. If file upload is difficult, we also guide users to the legacy Onside site.",
+  "온라인 접수를 기본으로 운영하며, 파일 업로드가 어려운 경우 예전 온사이드 사이트도 안내합니다.":
+    "Online submission is the default. If file upload is difficult, we also guide users to the legacy Onside site.",
   "신청 전 상담": "Pre-Submission Consultation",
   "목적과 송출처에 맞는 Review 유형을 확인합니다.":
     "Confirm the review type that matches your purpose and broadcast destination.",
@@ -763,47 +763,31 @@ const exactTranslations: Record<string, string> = {
   "빠른 이동": "Quick Links",
   "온라인 Review 신청": "Online Review Application",
   "Online Review 신청": "Online Review Application",
-  "구버전 신청서 작성": "Legacy Form",
-  "이메일 SUBMISSION": "Email Submission",
-  "이메일 Submission": "Email Submission",
-  "구버전 신청서 작성 방식": "Legacy Form Submission",
-  "온라인 Submission가 어려울 때 신청서 파일을 작성해 이메일로 보내는 대체 Submission입니다.":
-    "If online submission is difficult, fill out the application file and send it by email.",
-  "Online Submission가 어려울 때 Application Form 파일을 작성해 이메일로 보내는 대체 Submission입니다.":
-    "If online submission is difficult, fill out the application file and send it by email.",
-  "온라인 접수가 어려울 때 신청서 파일을 작성해 이메일로 보내는 대체 접수입니다.":
-    "If online submission is difficult, fill out the application file and send it by email.",
-  "Online Submission가 어려울 때 Application Form files을 작성해 이메일로 보내는 대체 Submission입니다.":
-    "If online submission is difficult, fill out the application file and send it by email.",
-  "온라인 신청과 중복으로 진행하지 말고, 작성한 신청서와 음원/영상을 이메일로 보내주세요.":
-    "Do not submit both online and by email. Send the completed form and audio/video files by email.",
-  "Online 신청과 중복으로 진행하지 말고, 작성한 Application Form와 Audio/Video을 이메일로 보내주세요.":
-    "Do not submit both online and by email. Send the completed form and audio/video files by email.",
-  "온라인 신청과 중복으로 진행하지 말고, 작성한 신청서와 음원/영상을":
-    "Do not submit both online and by email. Send the completed form and audio/video files",
-  "Online 신청과 중복으로 진행하지 말고, 작성한 Application Form와 음원/Video을":
-    "Do not submit both online and by email. Send the completed form and audio/video files",
-  "이메일로 보내주세요.": "Send it by email.",
-  "구버전 사이트에서 SUBMISSION": "Submit on the Legacy Site",
-  "Legacy 사이트에서 Submission": "Submit on the Legacy Site",
+  "예전 온사이드 바로가기": "Legacy Onside",
+  "Old Onside": "Old Onside",
+  "온라인 신청과 중복으로 진행하지 말고, 예전 온사이드 사이트에서 접수해주세요.":
+    "Do not submit twice. Submit on the legacy Onside site if you prefer the old flow.",
+  "Online 신청과 중복으로 진행하지 말고, Legacy Onside 사이트에서 Submission해주세요.":
+    "Do not submit twice. Submit on the legacy Onside site if you prefer the old flow.",
+  "예전 온사이드 사이트에서 접수해주세요.": "Submit on the legacy Onside site.",
+  "예전 온사이드 사이트에서 SUBMISSION": "Submit on the Legacy Site",
+  "Legacy Onside 사이트에서 Submission": "Submit on the Legacy Site",
   "진행 현황과 Payment 기록 관리는 온라인 Submission가 더 빠릅니다.":
     "Online submission is faster for progress tracking and payment records.",
   "진행 현황과 Payment 기록 관리는 Online Submission가 더 빠릅니다.":
     "Online submission is faster for progress tracking and payment records.",
-  "Album Review 신청서": "Album Review Form",
-  "신청서 파일을 받아 작성하세요.": "Download and complete the form file.",
-  "Music Video Review 신청서": "Music Video Review Form",
+  "Album Review 접수": "Album Review Submission",
+  "예전 사이트에서 동일하게 접수할 수 있습니다.": "You can submit through the legacy site as well.",
+  "Music Video Review 접수": "Music Video Review Submission",
   "필독": "Required Reading",
-  "작성 완료된 신청서와 음원/영상 파일을 이메일 myonside@daum.net로 보내주시면 Submission 안내를 드립니다.":
-    "Send the completed application and audio/video files to myonside@daum.net for submission guidance.",
-  "작성 완료된 Application Form와 Audio/Video 파일을 이메일로 보내주시면 Submission 안내를 드립니다.":
-    "Send the completed application and audio/video files by email for submission guidance.",
-  "작성 완료된 Application Form와 Audio/Video 파일을 이메일 myonside@daum.net로 보내주시면 Submission 안내를 드립니다.":
-    "Send the completed application and audio/video files to myonside@daum.net for submission guidance.",
-  "작성 완료된 신청서와 음원/영상 파일을 이메일":
-    "Send the completed application and audio/video files by email",
-  "작성 완료된 Application Form와 음원/Video files을 이메일":
-    "Send the completed application and audio/video files by email",
+  "예전 온사이드 사이트에서도 음반·뮤직비디오 심의 접수가 가능합니다.":
+    "Album and music video review submissions are also available on the legacy Onside site.",
+  "접수 방식만 다르고 심의 진행은 동일하게 처리됩니다.":
+    "Only the submission flow differs; the review process is handled the same way.",
+  "새 온사이드에서는 신청, 결제, 진행 현황, 결과 확인을 한 곳에서 처리할 수 있습니다.":
+    "The new Onside handles application, payment, progress, and result checks in one place.",
+  "예전 사이트 이용이 더 편하신 경우에만 위 바로가기 버튼을 사용해주세요.":
+    "Use the button above only if the legacy site is more comfortable for you.",
   "로 보내주시면 접수 안내를 드립니다.":
     "for submission guidance.",
   "로 보내주시면 Submission 안내를 드립니다.":

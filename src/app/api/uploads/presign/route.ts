@@ -3,6 +3,12 @@ import { z } from "zod";
 
 import { B2ConfigError, buildObjectKey, presignPutUrl } from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import {
+  isApplicationFormFile,
+  isApplicationFormMime,
+  isAudioUploadFile,
+  isVideoUploadFile,
+} from "@/lib/submission-files";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 const schema = z.object({
@@ -21,6 +27,25 @@ const schema = z.object({
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_GENERIC_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
+
+const isAllowedSubmissionUploadFile = (
+  kind: "audio" | "video",
+  filename: string,
+  mimeType?: string | null,
+) => {
+  if (kind === "audio") {
+    return (
+      isAudioUploadFile(filename, mimeType) ||
+      isApplicationFormFile(filename) ||
+      isApplicationFormMime(mimeType)
+    );
+  }
+  return (
+    isVideoUploadFile(filename, mimeType) ||
+    isApplicationFormFile(filename) ||
+    isApplicationFormMime(mimeType)
+  );
+};
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabase();
@@ -70,6 +95,20 @@ export async function POST(request: Request) {
             : "파일 용량이 허용 한도를 초과했습니다.",
       },
       { status: 413 },
+    );
+  }
+  if (
+    scope === "submission" &&
+    !isAllowedSubmissionUploadFile(inferredKind, filename, mimeType)
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          inferredKind === "video"
+            ? "영상 파일은 MP4/MOV/WMV/MPG 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다."
+            : "음원 파일은 WAV/MP3/ZIP 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다.",
+      },
+      { status: 400 },
     );
   }
 

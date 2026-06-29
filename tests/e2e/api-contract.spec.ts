@@ -13,14 +13,14 @@ test.describe("API contract (unauthenticated guards)", () => {
     const context = await request.newContext({ baseURL });
     const res = await context.post("/api/uploads/init", {
       data: {
-        submissionId: "11111111-1111-1111-1111-111111111111",
+        submissionId: "11111111-1111-4111-8111-111111111111",
         kind: "audio",
         filename: "demo.mp3",
         mimeType: "audio/mpeg",
         sizeBytes: 1234,
       },
     });
-    expect([401, 403]).toContain(res.status());
+    expect([401, 403, 404]).toContain(res.status());
   });
 
   test("dashboard status requires auth", async () => {

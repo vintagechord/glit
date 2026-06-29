@@ -1,7 +1,6 @@
 import { AlbumIntroPanel } from "@/features/submissions/album-intro-panel";
 import { AlbumWizard } from "@/features/submissions/album-wizard";
 import { getAlbumReviewDiscountPercent } from "@/lib/album-discount-server";
-import { APP_CONFIG } from "@/lib/config";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 
@@ -217,7 +216,6 @@ export default async function AlbumSubmissionPage() {
         processHighlights={processHighlights}
         preparationChecklist={preparationChecklist}
         resultBenefits={resultBenefits}
-        supportEmail={APP_CONFIG.supportEmail}
       />
 
       <div className="mt-8">

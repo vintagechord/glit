@@ -6,7 +6,9 @@ import {
 } from "@/lib/runtime-health";
 
 export function GET() {
-  const checks = runRuntimeConfigChecks();
+  const checks = runRuntimeConfigChecks({
+    includeOptionalNotifications: true,
+  });
   const summary = summarizeRuntimeHealth(checks);
   return NextResponse.json(
     {

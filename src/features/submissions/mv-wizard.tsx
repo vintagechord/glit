@@ -829,7 +829,7 @@ export function MvWizard({
       setNotice({
         error:
           draftError ||
-          "신청 정보를 준비하는 중입니다. 잠시 후 다시 시도해주세요. 업로드가 계속 어려우면 신청서는 이어서 작성하고 파일만 이메일로 보내주세요.",
+          "신청 정보를 준비하는 중입니다. 잠시 후 다시 시도해주세요. 업로드가 계속 어려우면 예전 온사이드 사이트에서도 동일하게 접수할 수 있습니다.",
       });
       void createDraft({ force: true });
       return;
@@ -3666,7 +3666,7 @@ export function MvWizard({
                   >
                     {emailSubmitConfirmed ? "✓" : ""}
                   </span>
-                  이메일 전송
+                  파일 없이 진행
                 </span>
               </button>
             </div>
@@ -3718,7 +3718,7 @@ export function MvWizard({
                           : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
                     </span>
                     <span className="mt-3 block rounded-xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100">
-                      2GB 이상의 영상은 이메일 접수 {APP_CONFIG.supportEmail}
+                      2GB 이상의 영상도 최대 4GB까지 업로드 가능하며, 어려우면 예전 온사이드 사이트에서 접수해주세요.
                     </span>
                     {!submissionIdRef.current && !isPreparingDraft ? (
                       <button
@@ -3740,7 +3740,7 @@ export function MvWizard({
                 </div>
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground">
                   <p>
-                    영상 파일 첨부가 정상적으로 완료되지 않는 경우, 이메일 전송을 선택 후 영상 파일만 이메일로 보내주세요.
+                    영상 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 다음 단계로 진행하거나 예전 온사이드 사이트에서 접수해주세요.
                   </p>
                   {isDownloadedApplicationFlow ? (
                     <p>
@@ -3815,7 +3815,7 @@ export function MvWizard({
                           onClick={() => selectUploadDeliveryMode("email")}
                           className="rounded-full border border-border/70 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
                         >
-                          이메일 전송으로 진행
+                          파일 없이 진행
                         </button>
                       </div>
                     </div>
