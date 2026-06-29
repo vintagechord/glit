@@ -276,12 +276,6 @@ const exactTranslations: Record<string, string> = {
   "보유 크레딧": "Available Credits",
   "음반심의 결제 완료 건으로 발급되는 온사이드 크레딧을 확인하고 사용하세요.":
     "Check and use Onside credits issued from completed album review payments.",
-  "앨범심의 1건 = 1크레딧": "1 album review = 1 credit",
-  "매거진 1회 발행 요청": "1 magazine request",
-  "국내뉴스 / 미디어 선택": "Domestic News / Media",
-  "4개 언어 발행": "Published in 4 languages",
-  "발매 후 신청 가능": "Available after release",
-  "발매일 기준 3일 내 목표": "Targeted within 3 days of release",
   "음반심의 1건으로 크레딧을 받고, 필요한 서비스를 이용하세요.":
     "Earn credits from album reviews and use them for services.",
   "앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 워터멜론 매거진 발행 요청과 온사이드 연계 서비스 이용에 사용할 수 있습니다.":

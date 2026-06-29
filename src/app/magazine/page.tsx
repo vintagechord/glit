@@ -139,15 +139,6 @@ async function loadMagazineCreditData(userId?: string | null) {
   };
 }
 
-const heroBadges = [
-  "앨범심의 1건 = 1크레딧",
-  "매거진 1회 발행 요청",
-  "국내뉴스 / 미디어 선택",
-  "4개 언어 발행",
-  "발매 후 신청 가능",
-  "발매일 기준 3일 내 목표",
-];
-
 export default async function MagazinePage() {
   const supabase = await createServerSupabase();
   const {
@@ -180,16 +171,6 @@ export default async function MagazinePage() {
             앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은
             워터멜론 매거진 발행 요청과 온사이드 연계 서비스 이용에 사용할 수 있습니다.
           </p>
-          <div className="mt-6 flex max-w-3xl flex-wrap gap-2">
-            {heroBadges.map((badge) => (
-              <span
-                key={badge}
-                className="rounded-[8px] border-2 border-white/35 bg-white/12 px-3 py-2 text-xs font-black text-white"
-              >
-                {badge}
-              </span>
-            ))}
-          </div>
           <div className="mt-7 flex flex-wrap gap-3">
             <a
               href="https://www.iamwatermelon.com/ko/service/magazine/list/1/1"
