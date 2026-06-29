@@ -156,7 +156,7 @@ export default async function AdminPage() {
             title="접수"
             description="접수 완료 상태"
             count={summary.received}
-            href="/admin/submissions?type=ALBUM&status=SUBMITTED"
+            href="/admin/submissions?type=ALL&status=SUBMITTED"
             icon={ClipboardList}
             tone="border-[#111111] bg-[#2f8cff] text-white"
           />
@@ -164,7 +164,7 @@ export default async function AdminPage() {
             title="결제 완료"
             description="결제 승인/완료 건"
             count={summary.paid}
-            href="/admin/submissions?type=ALBUM&payment=PAID"
+            href="/admin/submissions?type=ALL&payment=PAID"
             icon={CreditCard}
             tone="border-[#111111] bg-[#5aa832] text-white"
           />
@@ -172,7 +172,7 @@ export default async function AdminPage() {
             title="결과통보 완료"
             description="결과 안내 발송 완료"
             count={summary.resultNotified}
-            href="/admin/submissions?type=ALBUM&status=RESULT_READY"
+            href="/admin/submissions?type=ALL&status=RESULT_READY"
             icon={SendHorizontal}
             tone="border-[#111111] bg-[#f2cf27] text-[#111111]"
           />

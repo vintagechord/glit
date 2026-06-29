@@ -37,6 +37,11 @@ const PAGE_SIZE = 20;
 
 const typeOptions = [
   {
+    value: "ALL",
+    label: "전체 접수",
+    description: "음반·뮤직비디오 전체",
+  },
+  {
     value: "ALBUM",
     label: "앨범 심의",
     description: "방송국별 음반 접수",
@@ -224,7 +229,9 @@ export default async function AdminSubmissionsPage({
     if (filters.payment) {
       query = query.eq("payment_status", filters.payment);
     }
-    query = query.eq("type", activeType);
+    if (activeType !== "ALL") {
+      query = query.eq("type", activeType);
+    }
     if (includeGlobalColumns && filters.origin === "global") {
       query = query.eq("created_from", "global");
     } else if (includeGlobalColumns && filters.origin === "domestic") {
@@ -360,7 +367,7 @@ export default async function AdminSubmissionsPage({
 
       <nav
         aria-label="심의 유형"
-        className="mt-5 grid gap-3 md:grid-cols-3"
+        className="mt-5 grid gap-3 md:grid-cols-4"
       >
         {typeOptions.map((option) => {
           const isActive = option.value === activeType;
