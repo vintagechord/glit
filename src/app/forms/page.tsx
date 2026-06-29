@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "예전 온사이드 바로가기",
+  title: "예전 온사이드 페이지에서 접수하기",
 };
 
 export default function FormsPage() {
@@ -9,7 +9,7 @@ export default function FormsPage() {
     <div className="page-centered mx-auto w-full max-w-5xl px-6 py-12">
       <p className="bauhaus-kicker">Old Onside</p>
       <h1 className="font-display mt-4 text-3xl font-black text-foreground">
-        예전 온사이드 주소 바로가기
+        예전 온사이드 페이지에서 접수하기
       </h1>
       <p className="mt-4 max-w-3xl text-base font-semibold leading-relaxed text-muted-foreground">
         이전 버전의 온사이드 사이트가 편하신 경우 예전 사이트에서 접수해주셔도 심의는 동일하게 진행됩니다.
@@ -25,8 +25,7 @@ export default function FormsPage() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-2 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27]"
         >
-          예전 온사이드 주소 바로가기
-          <span aria-hidden>↗</span>
+          예전 온사이드 페이지에서 접수하기 -&gt;
         </Link>
         <span className="text-xs text-muted-foreground">
           진행 현황과 결제 기록 관리는 온라인 접수가 더 빠릅니다.

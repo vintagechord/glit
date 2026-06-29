@@ -52,8 +52,8 @@ const exactTranslations: Record<string, string> = {
   "바로 시작": "Start",
   "이전 버전의 온사이드 사이트가 편하신 경우 이전 사이트에서 접수해주셔도 심의는 동일하게 진행이 됩니다.":
     "If the previous Onside site is more convenient, you may submit there and the review will proceed the same way.",
-  "예전 온사이드 주소 바로가기": "Open Previous Onside Site",
-  "예전 온사이드 주소 바로가기 →": "Open Previous Onside Site →",
+  "예전 온사이드 페이지에서 접수하기": "Submit on Previous Onside Page",
+  "예전 온사이드 페이지에서 접수하기 ->": "Submit on Previous Onside Page ->",
   "ALBUM REVIEW 신청": "Album Review Application",
   "MUSIC VIDEO REVIEW 신청": "Music Video Review Application",
   "Album Review 신청": "Album Review Application",

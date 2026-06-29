@@ -75,7 +75,7 @@ export default function NewSubmissionPage() {
           rel="noopener noreferrer"
           className="mt-3 inline-flex rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-xs font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
         >
-          예전 온사이드 주소 바로가기
+          예전 온사이드 페이지에서 접수하기 -&gt;
         </ReliableLink>
       </div>
     </div>
