@@ -11,6 +11,9 @@ type AdBanner = {
   ends_at: string | null;
 };
 
+const noStoreFetch: typeof fetch = (input, init) =>
+  fetch(input, { ...init, cache: "no-store" });
+
 function isBannerActive(banner: AdBanner, now: Date) {
   const startsOk = !banner.starts_at || new Date(banner.starts_at) <= now;
   const endsOk = !banner.ends_at || new Date(banner.ends_at) >= now;
@@ -20,7 +23,9 @@ function isBannerActive(banner: AdBanner, now: Date) {
 export async function StripAdBanner() {
   let data: AdBanner[] | null = null;
   try {
-    const supabase = createAdminClient();
+    const supabase = createAdminClient({
+      global: { fetch: noStoreFetch },
+    });
     const { data: queryData, error } = await supabase
       .from("ad_banners")
       .select("id, title, image_url, link_url, starts_at, ends_at")
@@ -28,6 +33,9 @@ export async function StripAdBanner() {
       .eq("placement", "STRIP")
       .order("created_at", { ascending: false });
     if (error) {
+      if (isDynamicServerUsageError(error)) {
+        throw error;
+      }
       console.error("[StripAdBanner] Failed to fetch banners:", error.message);
     }
     data = queryData;

@@ -23,6 +23,9 @@ const exactTranslations: Record<string, string> = {
   "TEST - TEST 심의": "TEST - TEST Review",
   "음반·뮤직비디오 심의를 온라인으로 접수하고, 진행 현황과 결과 파일을 한 곳에서 확인하세요.":
     "Submit album and music video reviews online, then check progress and result files in one place.",
+  "이전 온사이드도 페이지도 접속가능": "Previous Onside Site Still Available",
+  "이전 사이트 사용이 편하시면 구버전에서 신청 가능합니다.":
+    "If the previous site is easier for you, you can apply through the legacy version.",
   "신청 유형": "Review Type",
   "필요한 심의만 선택하세요": "Choose the Review You Need",
   "구버전 방식 접수 →": "Legacy submission method →",

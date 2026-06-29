@@ -33,14 +33,17 @@ const fallbackBanners: HomeHeroAdBannerItem[] = [
   },
   {
     id: "home-hero-legacy-site",
-    title: "이전 온사이드도 1년간 운영",
-    description: "기존 사이트가 편하면 같은 방식으로 접수 가능합니다.",
+    title: "이전 온사이드도 페이지도 접속가능",
+    description: "이전 사이트 사용이 편하시면 구버전에서 신청 가능합니다.",
     image_url: "/media/banners/home-hero/legacy-site.svg",
     link_url: "https://onside17.com/",
     starts_at: null,
     ends_at: null,
   },
 ];
+
+const noStoreFetch: typeof fetch = (input, init) =>
+  fetch(input, { ...init, cache: "no-store" });
 
 function isBannerActive(banner: HomeHeroAdBannerItem, now: Date) {
   const startsOk = !banner.starts_at || new Date(banner.starts_at) <= now;
@@ -52,7 +55,9 @@ export async function HomeHeroAdBanner() {
   let data: HomeHeroAdBannerItem[] | null = null;
 
   try {
-    const supabase = createAdminClient();
+    const supabase = createAdminClient({
+      global: { fetch: noStoreFetch },
+    });
     const { data: queryData, error } = await supabase
       .from("ad_banners")
       .select("id, title, description, image_url, link_url, starts_at, ends_at")
@@ -62,6 +67,9 @@ export async function HomeHeroAdBanner() {
       .order("created_at", { ascending: false });
 
     if (error) {
+      if (isDynamicServerUsageError(error)) {
+        throw error;
+      }
       console.error("[HomeHeroAdBanner] Failed to fetch banners:", error.message);
     }
 

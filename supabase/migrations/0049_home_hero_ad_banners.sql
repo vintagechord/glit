@@ -62,8 +62,8 @@ insert into public.ad_banners (
   is_active
 )
 select
-  '이전 온사이드도 1년간 운영',
-  '기존 사이트가 편하면 같은 방식으로 접수 가능합니다.',
+  '이전 온사이드도 페이지도 접속가능',
+  '이전 사이트 사용이 편하시면 구버전에서 신청 가능합니다.',
   '/media/banners/home-hero/legacy-site.svg',
   'https://onside17.com/',
   'HOME_HERO',
@@ -72,5 +72,5 @@ select
 where not exists (
   select 1 from public.ad_banners
   where placement = 'HOME_HERO'
-    and title = '이전 온사이드도 1년간 운영'
+    and title = '이전 온사이드도 페이지도 접속가능'
 );
