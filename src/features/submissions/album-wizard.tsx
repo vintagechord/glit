@@ -36,6 +36,7 @@ import {
   saveAlbumSubmissionAction,
   type SubmissionActionState,
 } from "./actions";
+import { AiUsageSelector } from "./ai-usage-selector";
 import { safeRandomUUID } from "@/lib/uuid";
 
 declare global {
@@ -253,6 +254,7 @@ type AlbumDraft = {
   artistGender: string;
   artistMembers: string;
   melonUrl: string;
+  aiUsed: boolean | null;
   tracks: TrackInput[];
   files: UploadResult[];
   emailSubmitConfirmed: boolean;
@@ -304,6 +306,7 @@ export function AlbumWizard({
   const [artistGender, setArtistGender] = React.useState("");
   const [artistMembers, setArtistMembers] = React.useState("");
   const [melonUrl, setMelonUrl] = React.useState("");
+  const [aiUsed, setAiUsed] = React.useState<boolean | null>(null);
   const [paymentMethod, setPaymentMethod] = React.useState<"CARD" | "BANK">(
     "BANK",
   );
@@ -1441,6 +1444,7 @@ export function AlbumWizard({
     setArtistGender("");
     setArtistMembers("");
     setMelonUrl("");
+    setAiUsed(null);
     setTracks([initialTrack]);
     setActiveTrackIndex(0);
     setTranslationPanelOpenMap({});
@@ -1538,6 +1542,7 @@ export function AlbumWizard({
     artistGender,
     artistMembers: artistMembers.trim(),
     melonUrl: melonUrl.trim(),
+    aiUsed,
     tracks: tracks.map((track) => ({ ...track })),
     files: uploadedFiles,
     emailSubmitConfirmed,
@@ -1563,6 +1568,7 @@ export function AlbumWizard({
     setArtistGender(draft.artistGender);
     setArtistMembers(draft.artistMembers);
     setMelonUrl(draft.melonUrl);
+    setAiUsed(draft.aiUsed ?? null);
     setTracks(draft.tracks.map((track) => ({ ...track })));
     setActiveTrackIndex(0);
     setTranslationPanelOpenMap({});
@@ -1618,6 +1624,8 @@ export function AlbumWizard({
         artistGender: String(row.artist_gender ?? ""),
         artistMembers: String(row.artist_members ?? ""),
         melonUrl: String(row.melon_url ?? ""),
+        aiUsed:
+          typeof row.ai_used === "boolean" ? row.ai_used : null,
         tracks: tracks.length > 0 ? tracks : [initialTrack],
         files,
         emailSubmitConfirmed: files.length === 0,
@@ -1830,6 +1838,7 @@ export function AlbumWizard({
       artistGender,
       artistMembers: artistMembers.trim(),
       melonUrl: melonUrl.trim(),
+      aiUsed,
       tracks: tracks.map((track) => ({ ...track })),
       files: uploaded,
       emailSubmitConfirmed,
@@ -1923,6 +1932,11 @@ export function AlbumWizard({
 
     if (!applicantName.trim() || !applicantEmail.trim() || !applicantPhone.trim()) {
       setNotice({ error: "접수자 정보(이름/이메일/연락처)를 입력해주세요." });
+      return false;
+    }
+
+    if (aiUsed === null) {
+      setNotice({ error: "AI 활용 여부를 선택해주세요." });
       return false;
     }
 
@@ -2206,6 +2220,7 @@ export function AlbumWizard({
               ? draft.artistMembers || undefined
               : undefined,
           isOneClick,
+          aiUsed: draft.aiUsed ?? undefined,
           filesSubmittedByEmail:
             isDownloadedApplicationFlow && draft.emailSubmitConfirmed,
           melonUrl: isOneClick ? draft.melonUrl || undefined : undefined,
@@ -2363,6 +2378,10 @@ export function AlbumWizard({
   const handleDownloadedApplicationContinue = async () => {
     if (!selectedPackage) {
       setNotice({ error: "패키지를 선택해주세요." });
+      return;
+    }
+    if (!isAdminReviewer && aiUsed === null) {
+      setNotice({ error: "AI 활용 여부를 선택해주세요." });
       return;
     }
     const submissionId =
@@ -2559,6 +2578,7 @@ export function AlbumWizard({
               ? draft.artistMembers || undefined
               : undefined,
           isOneClick,
+          aiUsed: draft.aiUsed ?? undefined,
           filesSubmittedByEmail:
             isDownloadedApplicationFlow && draft.emailSubmitConfirmed,
           melonUrl: isOneClick ? draft.melonUrl || undefined : undefined,
@@ -3009,6 +3029,16 @@ export function AlbumWizard({
                 다음 단계 파일 업로드에서 작성한 신청서(HWP/DOC/DOCX)와 음원 파일을
                 함께 첨부해주세요.
               </div>
+              <div className="mt-5">
+                <AiUsageSelector
+                  value={aiUsed}
+                  onChange={(nextValue) => {
+                    setAiUsed(nextValue);
+                    setNotice({});
+                  }}
+                  context="album"
+                />
+              </div>
               {notice.error && (
                 <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
                   {notice.error}
@@ -3245,6 +3275,17 @@ export function AlbumWizard({
                 </div>
               </div>
             )}
+
+            <div className="mt-6">
+              <AiUsageSelector
+                value={aiUsed}
+                onChange={(nextValue) => {
+                  setAiUsed(nextValue);
+                  setNotice({});
+                }}
+                context="album"
+              />
+            </div>
 
             <div className="mt-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">

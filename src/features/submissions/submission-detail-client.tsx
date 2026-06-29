@@ -36,6 +36,7 @@ type Submission = {
   payment_status: string;
   payment_method?: string | null;
   amount_krw: number | null;
+  ai_used?: boolean | null;
   created_at: string;
   updated_at: string;
   certificate_b2_path?: string | null;
@@ -243,6 +244,12 @@ const mvRatingLabel = (code?: string | null) => {
     default:
       return "등급 미설정";
   }
+};
+
+const aiUsageLabel = (value?: boolean | null) => {
+  if (value === true) return "AI 활용함";
+  if (value === false) return "AI 사용 안 함";
+  return "미입력";
 };
 
 const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
@@ -1640,6 +1647,12 @@ export function SubmissionDetailClient({
                     {submission.artist_name || "-"}
                     {submission.artist_name_kr ? ` / ${submission.artist_name_kr}` : ""}
                     {submission.artist_name_en ? ` / ${submission.artist_name_en}` : ""}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">AI 활용 여부</p>
+                  <p className="mt-1 font-semibold">
+                    {aiUsageLabel(submission.ai_used)}
                   </p>
                 </div>
                 {showApplicantInfo ? (

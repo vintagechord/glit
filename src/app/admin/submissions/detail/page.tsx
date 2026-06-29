@@ -52,6 +52,7 @@ type SubmissionRow = {
   user_id?: string | null;
   title: string | null;
   artist_name: string | null;
+  ai_used?: boolean | null;
   release_date?: string | null;
   genre?: string | null;
   distributor?: string | null;
@@ -146,6 +147,12 @@ type PaymentDocumentRow = {
 const paymentMethodLabels: Record<string, string> = {
   BANK: "무통장",
   CARD: "카드",
+};
+
+const aiUsageLabel = (value?: boolean | null) => {
+  if (value === true) return "AI 활용함";
+  if (value === false) return "AI 사용 안 함";
+  return "미입력";
 };
 
 const paymentDocumentLabels: Record<string, string> = {
@@ -823,6 +830,10 @@ export default async function AdminSubmissionDetailPage({
                 label="유형"
                 value={typeLabels[submission.type] ?? submission.type}
               />
+              <DetailRow
+                label="AI 활용 여부"
+                value={aiUsageLabel(submission.ai_used)}
+              />
               <DetailRow label="패키지" value={packageInfo?.name ?? "-"} />
               <DetailRow
                 label="금액"
@@ -1292,6 +1303,10 @@ export default async function AdminSubmissionDetailPage({
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <DetailRow label="발매일" value={submission.release_date || "-"} />
             <DetailRow label="장르" value={submission.genre || "-"} />
+            <DetailRow
+              label="AI 활용 여부"
+              value={aiUsageLabel(submission.ai_used)}
+            />
             <DetailRow
               label="유통사"
               value={submission.distributor || submission.mv_distribution_company || "-"}

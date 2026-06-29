@@ -32,6 +32,7 @@ type SubmissionRow = {
   artist_name: string | null;
   artist_name_kr?: string | null;
   artist_name_en?: string | null;
+  ai_used?: boolean | null;
   type: string;
   status: string;
   payment_status: string | null;

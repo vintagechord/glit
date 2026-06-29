@@ -532,6 +532,7 @@ const albumSubmissionSchema = z.object({
   artistMembers: z.string().optional(),
   isOneClick: z.boolean().optional(),
   melonUrl: z.string().optional(),
+  aiUsed: z.boolean().optional(),
   guestToken: z.string().min(8).optional(),
   guestName: z.string().optional(),
   guestCompany: z.string().optional(),
@@ -588,6 +589,7 @@ const mvSubmissionSchema = z.object({
   runtime: z.string().optional(),
   format: z.string().optional(),
   mvBaseSelected: z.boolean().optional(),
+  aiUsed: z.boolean().optional(),
   guestToken: z.string().min(8).optional(),
   guestName: z.string().optional(),
   guestCompany: z.string().optional(),
@@ -805,6 +807,9 @@ export async function saveAlbumSubmissionAction(
   ) {
     return { error: "앨범 제목을 입력해주세요." };
   }
+  if (isSubmitted && !isAdminReviewer && typeof parsed.data.aiUsed !== "boolean") {
+    return { error: "AI 활용 여부를 선택해주세요." };
+  }
 
   const adminDb = createAdminClient();
   let db = isGuest ? adminDb : supabase;
@@ -940,6 +945,8 @@ export async function saveAlbumSubmissionAction(
     artist_members: parsed.data.artistMembers?.trim() || null,
     is_oneclick: isOneClick,
     melon_url: parsed.data.melonUrl?.trim() || null,
+    ai_used:
+      typeof parsed.data.aiUsed === "boolean" ? parsed.data.aiUsed : null,
     package_id: parsed.data.packageId ?? null,
     amount_krw: amountKrw,
     guest_name: isGuest ? guestNameValue || null : null,
@@ -1377,6 +1384,9 @@ export async function saveMvSubmissionAction(
   ) {
     return { error: "아티스트명을 입력해주세요." };
   }
+  if (isSubmitted && !isAdminReviewer && typeof parsed.data.aiUsed !== "boolean") {
+    return { error: "AI 활용 여부를 선택해주세요." };
+  }
 
   const adminDb = createAdminClient();
   let db = isGuest ? adminDb : supabase;
@@ -1501,6 +1511,8 @@ export async function saveMvSubmissionAction(
     mv_arranger: parsed.data.arranger?.trim() || null,
     mv_song_memo: parsed.data.songMemo?.trim() || null,
     mv_lyrics: parsed.data.lyrics?.trim() || null,
+    ai_used:
+      typeof parsed.data.aiUsed === "boolean" ? parsed.data.aiUsed : null,
     package_id: parsed.data.packageId ?? null,
     amount_krw: amountKrw,
     applicant_email: applicantEmailValue || null,

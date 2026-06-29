@@ -31,6 +31,7 @@ import {
   saveMvSubmissionAction,
   type SubmissionActionState,
 } from "./actions";
+import { AiUsageSelector } from "./ai-usage-selector";
 
 declare global {
   interface Window {
@@ -90,6 +91,7 @@ type MvValidationField =
   | "composer"
   | "storyline"
   | "lyrics"
+  | "aiUsed"
   | "guestName"
   | "guestEmail"
   | "guestPhone";
@@ -331,6 +333,7 @@ export function MvWizard({
   const [genre, setGenre] = React.useState("");
   const [runtime, setRuntime] = React.useState("");
   const [format, setFormat] = React.useState("");
+  const [aiUsed, setAiUsed] = React.useState<boolean | null>(null);
   const [guestName, setGuestName] = React.useState("");
   const [guestCompany, setGuestCompany] = React.useState("");
   const [guestEmail, setGuestEmail] = React.useState("");
@@ -1572,6 +1575,7 @@ export function MvWizard({
     setGenre(String(draft.genre ?? ""));
     setRuntime(String(draft.mv_runtime ?? ""));
     setFormat(String(draft.mv_format ?? ""));
+    setAiUsed(typeof draft.ai_used === "boolean" ? draft.ai_used : null);
 
     if (draft.payment_method === "CARD" || draft.payment_method === "BANK") {
       setPaymentMethod(draft.payment_method);
@@ -1989,6 +1993,9 @@ export function MvWizard({
       ) {
         return false;
       }
+      if (aiUsed === null) {
+        return markInvalidField("aiUsed", "AI 활용 여부를 선택해주세요.");
+      }
       return true;
     }
 
@@ -2051,6 +2058,9 @@ export function MvWizard({
     }
     if (!lyrics.trim()) {
       return markInvalidField("lyrics", "가사를 입력해주세요.");
+    }
+    if (aiUsed === null) {
+      return markInvalidField("aiUsed", "AI 활용 여부를 선택해주세요.");
     }
     if (mvType === "MV_BROADCAST" && tvStations.length === 0) {
       setNotice({ error: "TV 송출 심의를 원하는 방송국을 선택해주세요." });
@@ -2191,6 +2201,7 @@ export function MvWizard({
         format: format || undefined,
         mvBaseSelected:
           mvType === "MV_DISTRIBUTION" ? onlineBaseSelected : false,
+        aiUsed: aiUsed ?? undefined,
         guestToken: isGuest ? guestToken : undefined,
         guestName: isGuest ? guestNameValue || undefined : undefined,
         guestCompany: isGuest ? guestCompanyValue || undefined : undefined,
@@ -2313,6 +2324,7 @@ export function MvWizard({
         format: format || undefined,
         mvBaseSelected:
           mvType === "MV_DISTRIBUTION" ? onlineBaseSelected : false,
+        aiUsed: aiUsed ?? undefined,
         guestToken: isGuest ? guestToken : undefined,
         guestName: isGuest ? guestNameValue || undefined : undefined,
         guestCompany: isGuest ? guestCompanyValue || undefined : undefined,
@@ -2414,6 +2426,7 @@ export function MvWizard({
       });
       return;
     }
+    if (!validateMvForm()) return;
     const submissionId =
       submissionIdRef.current ?? (await createDraft({ force: true }));
     if (!submissionId) {
@@ -2922,6 +2935,17 @@ export function MvWizard({
                   </a>
                 ))}
               </div>
+              <div data-mv-field="aiUsed" tabIndex={-1} className="mt-5">
+                <AiUsageSelector
+                  value={aiUsed}
+                  onChange={(nextValue) => {
+                    setAiUsed(nextValue);
+                    clearInvalidField("aiUsed");
+                    setNotice({});
+                  }}
+                  context="mv"
+                />
+              </div>
               {notice.error && (
                 <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
                   {notice.error}
@@ -3205,6 +3229,18 @@ export function MvWizard({
                 />
               </div>
             </div>
+          </div>
+
+          <div data-mv-field="aiUsed" tabIndex={-1}>
+            <AiUsageSelector
+              value={aiUsed}
+              onChange={(nextValue) => {
+                setAiUsed(nextValue);
+                clearInvalidField("aiUsed");
+                setNotice({});
+              }}
+              context="mv"
+            />
           </div>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
