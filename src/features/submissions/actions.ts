@@ -606,6 +606,7 @@ const mvSubmissionSchema = z.object({
   taxInvoiceBusinessNumber: z.string().optional(),
   status: z.enum(["DRAFT", "PRE_REVIEW", "SUBMITTED"]),
   files: z.array(fileSchema).optional(),
+  filesSubmittedByEmail: z.boolean().optional(),
 });
 
 const submissionFileUrlSchema = z.object({
@@ -1342,6 +1343,8 @@ export async function saveMvSubmissionAction(
   const hasApplicationFormAttachment =
     parsed.data.files?.some((file) => isApplicationFormFile(file.originalName)) ??
     false;
+  const usesExternalApplicationForm =
+    hasApplicationFormAttachment || Boolean(parsed.data.filesSubmittedByEmail);
   const cashReceiptPhoneValue = parsed.data.cashReceiptPhone?.trim() ?? "";
   const cashReceiptBusinessNumberDigits = normalizeDigits(
     parsed.data.cashReceiptBusinessNumber,
@@ -1356,7 +1359,7 @@ export async function saveMvSubmissionAction(
   if (
     isSubmitted &&
     isGuest &&
-    !hasApplicationFormAttachment &&
+    !usesExternalApplicationForm &&
     (!guestNameValue || !guestEmailValue || !guestPhoneValue)
   ) {
     return { error: "비회원 정보(담당자, 연락처, 이메일)를 입력해주세요." };
@@ -1372,7 +1375,7 @@ export async function saveMvSubmissionAction(
   if (
     isSubmitted &&
     !isAdminReviewer &&
-    !hasApplicationFormAttachment &&
+    !usesExternalApplicationForm &&
     !titleValue
   ) {
     return { error: "제목을 입력해주세요." };
@@ -1380,7 +1383,7 @@ export async function saveMvSubmissionAction(
   if (
     isSubmitted &&
     !isAdminReviewer &&
-    !hasApplicationFormAttachment &&
+    !usesExternalApplicationForm &&
     !artistNameValue
   ) {
     return { error: "아티스트명을 입력해주세요." };
@@ -1457,7 +1460,7 @@ export async function saveMvSubmissionAction(
   if (
     isSubmitted &&
     !isAdminReviewer &&
-    !hasApplicationFormAttachment &&
+    !usesExternalApplicationForm &&
     !parsed.data.artistNameOfficial?.trim()
   ) {
     return { error: "아티스트명 공식 표기를 입력해주세요." };
@@ -1465,7 +1468,7 @@ export async function saveMvSubmissionAction(
   if (
     isSubmitted &&
     !isAdminReviewer &&
-    !hasApplicationFormAttachment &&
+    !usesExternalApplicationForm &&
     !parsed.data.lyrics?.trim()
   ) {
     return { error: "가사를 입력해주세요." };

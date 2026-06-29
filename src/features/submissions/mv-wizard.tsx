@@ -2103,7 +2103,7 @@ export function MvWizard({
 
   const validateMvUploads = () => {
     if (isAdminReviewer) return true;
-    if (emailSubmitConfirmed && !isDownloadedApplicationFlow) return true;
+    if (emailSubmitConfirmed) return true;
     if (uploads.length === 0) {
       setNotice({
         error: isDownloadedApplicationFlow
@@ -2231,6 +2231,7 @@ export function MvWizard({
             : undefined,
         status: "DRAFT",
         files: uploaded,
+        filesSubmittedByEmail: emailSubmitConfirmed,
       });
 
       if (result.error) {
@@ -2354,6 +2355,7 @@ export function MvWizard({
             : undefined,
         status: "SUBMITTED",
         files: uploaded,
+        filesSubmittedByEmail: emailSubmitConfirmed,
       });
 
       if (result.error) {
