@@ -25,7 +25,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Optional (UI/config)
-NEXT_PUBLIC_SUPPORT_EMAIL=onside2017@daum.net
+NEXT_PUBLIC_SUPPORT_EMAIL=myonside@daum.net
 NEXT_PUBLIC_SUPPORT_PHONE=010-8436-9035
 NEXT_PUBLIC_BANK_NAME=국민은행
 NEXT_PUBLIC_BANK_ACCOUNT=073001-04-276967
@@ -45,7 +45,7 @@ OPENAI_TRANSLATION_TIMEOUT_MS=15000
 
 # Email notifications (Resend)
 RESEND_API_KEY=your_resend_key
-RESEND_FROM="onside <onside2017@daum.net>"
+RESEND_FROM="onside <myonside@daum.net>"
 RESEND_TEST_TO=you@example.com
 
 # Optional (official Kakao/Alimtalk notification webhook)

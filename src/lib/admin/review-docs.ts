@@ -32,7 +32,7 @@ type DbRecord = Record<string, unknown>;
 const FIXED_CONTACT = {
   name: "정준영",
   phone: "010-9068-9035",
-  email: "vintagechord@daum.net",
+  email: "myonside@daum.net",
 } as const;
 
 const REVIEW_COMPANY = "빈티지코드";

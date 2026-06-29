@@ -793,12 +793,12 @@ const exactTranslations: Record<string, string> = {
   "신청서 파일을 받아 작성하세요.": "Download and complete the form file.",
   "Music Video Review 신청서": "Music Video Review Form",
   "필독": "Required Reading",
-  "작성 완료된 신청서와 음원/영상 파일을 이메일 onside2017@daum.net로 보내주시면 Submission 안내를 드립니다.":
-    "Send the completed application and audio/video files to onside2017@daum.net for submission guidance.",
+  "작성 완료된 신청서와 음원/영상 파일을 이메일 myonside@daum.net로 보내주시면 Submission 안내를 드립니다.":
+    "Send the completed application and audio/video files to myonside@daum.net for submission guidance.",
   "작성 완료된 Application Form와 Audio/Video 파일을 이메일로 보내주시면 Submission 안내를 드립니다.":
     "Send the completed application and audio/video files by email for submission guidance.",
-  "작성 완료된 Application Form와 Audio/Video 파일을 이메일 onside2017@daum.net로 보내주시면 Submission 안내를 드립니다.":
-    "Send the completed application and audio/video files to onside2017@daum.net for submission guidance.",
+  "작성 완료된 Application Form와 Audio/Video 파일을 이메일 myonside@daum.net로 보내주시면 Submission 안내를 드립니다.":
+    "Send the completed application and audio/video files to myonside@daum.net for submission guidance.",
   "작성 완료된 신청서와 음원/영상 파일을 이메일":
     "Send the completed application and audio/video files by email",
   "작성 완료된 Application Form와 음원/Video files을 이메일":
