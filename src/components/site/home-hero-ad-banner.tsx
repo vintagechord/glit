@@ -22,24 +22,6 @@ const fallbackBanners: HomeHeroAdBannerItem[] = [
     starts_at: null,
     ends_at: null,
   },
-  {
-    id: "home-hero-magazine-credit",
-    title: "심의 1건당 매거진 1크레딧",
-    description: "워터멜론 매거진 발행 요청에 사용할 수 있어요.",
-    image_url: "/media/banners/home-hero/magazine-credit.svg",
-    link_url: "/magazine",
-    starts_at: null,
-    ends_at: null,
-  },
-  {
-    id: "home-hero-legacy-site",
-    title: "이전 온사이드도 페이지도 접속가능",
-    description: "이전 사이트 사용이 편하시면 구버전에서 신청 가능합니다.",
-    image_url: "/media/banners/home-hero/legacy-site.svg",
-    link_url: "https://onside17.com/",
-    starts_at: null,
-    ends_at: null,
-  },
 ];
 
 const noStoreFetch: typeof fetch = (input, init) =>

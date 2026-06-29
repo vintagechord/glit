@@ -45,7 +45,7 @@ select
   '/magazine',
   'HOME_HERO',
   20,
-  true
+  false
 where not exists (
   select 1 from public.ad_banners
   where placement = 'HOME_HERO'
@@ -68,7 +68,7 @@ select
   'https://onside17.com/',
   'HOME_HERO',
   30,
-  true
+  false
 where not exists (
   select 1 from public.ad_banners
   where placement = 'HOME_HERO'

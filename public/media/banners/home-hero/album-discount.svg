@@ -1,11 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="Album review discount">
-  <rect width="320" height="180" fill="#f2cf27"/>
-  <rect x="18" y="18" width="284" height="144" rx="18" fill="#fffaf0" stroke="#111111" stroke-width="6"/>
-  <circle cx="102" cy="92" r="48" fill="#111111"/>
-  <circle cx="102" cy="92" r="16" fill="#f2cf27"/>
-  <circle cx="102" cy="92" r="6" fill="#fffaf0"/>
-  <path d="M192 50h52l-58 82h-52z" fill="#1556a4" stroke="#111111" stroke-width="6" stroke-linejoin="round"/>
-  <circle cx="185" cy="70" r="9" fill="#fffaf0"/>
-  <circle cx="193" cy="112" r="9" fill="#fffaf0"/>
-  <path d="M173 124 233 58" stroke="#fffaf0" stroke-width="8" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="Album review fifty percent discount">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f2cf27"/>
+      <stop offset="0.58" stop-color="#ffd94d"/>
+      <stop offset="1" stop-color="#fff3a6"/>
+    </linearGradient>
+    <linearGradient id="record" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#232323"/>
+      <stop offset="0.55" stop-color="#050505"/>
+      <stop offset="1" stop-color="#323232"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" fill="url(#bg)"/>
+  <path d="M-12 132 132-12h60L48 180h-60z" fill="#fffaf0" opacity=".72"/>
+  <path d="M122 22h34v34z" fill="#1556a4"/>
+  <circle cx="75" cy="90" r="58" fill="url(#record)" stroke="#111111" stroke-width="5"/>
+  <circle cx="75" cy="90" r="46" fill="none" stroke="#ffffff" stroke-opacity=".16" stroke-width="3"/>
+  <circle cx="75" cy="90" r="34" fill="none" stroke="#ffffff" stroke-opacity=".13" stroke-width="2"/>
+  <circle cx="75" cy="90" r="23" fill="#f2cf27" stroke="#111111" stroke-width="4"/>
+  <circle cx="75" cy="90" r="7" fill="#fffaf0" stroke="#111111" stroke-width="2"/>
+  <path d="M128 52 158 82l-46 46-30-30z" fill="#d9362c" stroke="#111111" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="128" cy="68" r="5" fill="#fffaf0" stroke="#111111" stroke-width="2"/>
+  <text x="120" y="95" fill="#fffaf0" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="900" letter-spacing="-1" transform="rotate(-45 120 95)">50%</text>
+  <path d="M126 134h34" stroke="#111111" stroke-width="6" stroke-linecap="round"/>
+  <path d="M133 147h20" stroke="#111111" stroke-width="6" stroke-linecap="round"/>
 </svg>
