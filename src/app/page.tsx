@@ -121,7 +121,7 @@ export default function Home() {
                   결과 확인까지
                 </h1>
                 <p className="max-w-xl break-keep text-base font-semibold leading-7 text-foreground/74 dark:text-white/76">
-                  음반·뮤직비디오 심의를 온라인으로 접수하고, 진행 현황과 결과 파일을 한 곳에서 확인하세요.
+                  나의 모든 음반·뮤직비디오 심의를 관리하고, 진행 현황을 실시간으로 확인하세요.
                 </p>
               </div>
               <HomeHeroAdBanner />

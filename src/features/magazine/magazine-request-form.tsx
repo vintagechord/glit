@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Info, SendHorizontal } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, ImageUp, Info, SendHorizontal } from "lucide-react";
 
 import { createMagazineRequestAction } from "./actions";
 
@@ -92,14 +93,13 @@ export function MagazineRequestForm({
   const [selectedSubmissionId, setSelectedSubmissionId] = React.useState(
     creditOptions[0]?.id ?? "",
   );
+  const [artworkFileName, setArtworkFileName] = React.useState("");
 
   const selectedCredit =
     creditOptions.find((option) => option.id === selectedSubmissionId) ??
     creditOptions[0] ??
     null;
-  const canSubmit = isAuthenticated
-    ? Boolean(selectedCredit) && availableCredits > 0
-    : true;
+  const canSubmit = isAuthenticated && Boolean(selectedCredit) && availableCredits > 0;
 
   React.useEffect(() => {
     if (!selectedSubmissionId && creditOptions[0]?.id) {
@@ -111,36 +111,11 @@ export function MagazineRequestForm({
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
+    formData.set("targetChannel", targetChannel);
 
     setNotice(null);
     startTransition(async () => {
-      const submissionIdValue = String(
-        formData.get("submissionId") ?? "",
-      ).trim();
-      const guestLookupCodeValue = String(
-        formData.get("guestLookupCode") ?? "",
-      ).trim();
-      const result = await createMagazineRequestAction({
-        submissionId:
-          isAuthenticated && submissionIdValue ? submissionIdValue : undefined,
-        guestLookupCode:
-          !isAuthenticated && guestLookupCodeValue
-            ? guestLookupCodeValue
-            : undefined,
-        targetChannel,
-        requesterName: String(formData.get("requesterName") ?? ""),
-        requesterEmail: String(formData.get("requesterEmail") ?? ""),
-        requesterPhone: String(formData.get("requesterPhone") ?? ""),
-        albumTitle: String(formData.get("albumTitle") ?? ""),
-        artistName: String(formData.get("artistName") ?? ""),
-        releaseDate: String(formData.get("releaseDate") ?? ""),
-        artworkUrl: String(formData.get("artworkUrl") ?? ""),
-        albumUrl: String(formData.get("albumUrl") ?? ""),
-        videoUrl: String(formData.get("videoUrl") ?? ""),
-        articleBody: String(formData.get("articleBody") ?? ""),
-        creditsText: String(formData.get("creditsText") ?? ""),
-        notes: String(formData.get("notes") ?? ""),
-      });
+      const result = await createMagazineRequestAction(formData);
 
       if (result.error) {
         setNotice({ type: "error", text: result.error });
@@ -148,6 +123,7 @@ export function MagazineRequestForm({
       }
 
       form.reset();
+      setArtworkFileName("");
       setNotice({
         type: "success",
         text:
@@ -160,7 +136,7 @@ export function MagazineRequestForm({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_0.88fr]">
-      <section className="rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27] sm:p-6">
+      <section className="rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#111111] dark:border-white/70 dark:shadow-[5px_5px_0_#1556a4] sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="bauhaus-kicker">Request</p>
@@ -168,7 +144,7 @@ export function MagazineRequestForm({
               워터멜론 매거진 발행 요청
             </h2>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-[11px] font-black text-[#111111]">
+          <span className="inline-flex items-center gap-1.5 rounded-[8px] border-2 border-[#1556a4] bg-[#eaf2fb] px-3 py-1 text-[11px] font-black text-[#1556a4] dark:border-[#8bc3ff] dark:bg-[#102033] dark:text-[#8bc3ff]">
             <Info className="h-3.5 w-3.5" aria-hidden="true" />
             1크레딧 사용
           </span>
@@ -186,7 +162,28 @@ export function MagazineRequestForm({
           </div>
         ) : null}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+        {!isAuthenticated ? (
+          <div className="mt-5 rounded-[8px] border-2 border-[#111111] bg-background p-5">
+            <p className="text-sm font-black text-foreground">
+              크레딧 사용은 회원만 가능합니다.
+            </p>
+            <p className="mt-2 text-xs font-semibold leading-5 text-muted-foreground">
+              로그인 후 결제 완료된 음반심의 건으로 매거진 발행을 요청할 수 있습니다.
+            </p>
+            <Link
+              href={`/login?next=${encodeURIComponent("/magazine#credit-use")}`}
+              className="mt-4 inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black text-white transition hover:-translate-y-0.5"
+            >
+              로그인 후 크레딧 사용
+            </Link>
+          </div>
+        ) : null}
+
+        <form
+          onSubmit={handleSubmit}
+          encType="multipart/form-data"
+          className="mt-6 space-y-6"
+        >
           <div className="space-y-3">
             <p className={labelClass}>발행 위치 선택</p>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -199,8 +196,8 @@ export function MagazineRequestForm({
                     onClick={() => setTargetChannel(option.value)}
                     className={`min-h-[94px] rounded-[8px] border-2 p-4 text-left transition ${
                       selected
-                        ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[4px_4px_0_#111111]"
-                        : "border-border bg-background text-foreground hover:border-[#111111]"
+                        ? "border-[#111111] bg-[#111111] text-white shadow-[4px_4px_0_#1556a4]"
+                        : "border-border bg-background text-foreground hover:border-[#1556a4]"
                     }`}
                   >
                     <span className="flex items-center justify-between gap-3">
@@ -218,67 +215,51 @@ export function MagazineRequestForm({
             </div>
           </div>
 
-          {isAuthenticated ? (
-            <div className="grid gap-2">
-              <label htmlFor="magazine-submission-id" className={labelClass}>
-                매거진을 발행할 음반심의 건
-              </label>
-              <select
-                id="magazine-submission-id"
-                name="submissionId"
-                value={selectedSubmissionId}
-                onChange={(event) => setSelectedSubmissionId(event.target.value)}
-                disabled={creditOptions.length === 0}
-                className={fieldClass}
-              >
-                {creditOptions.length === 0 ? (
-                  <option value="">사용 가능한 크레딧이 없습니다</option>
-                ) : null}
-                {creditOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {(option.artistName || "아티스트 미입력") +
-                      " · " +
-                      (option.title || "앨범명 미입력") +
-                      (option.releaseDate
-                        ? ` · 발매일 ${option.releaseDate}`
-                        : "")}
-                  </option>
-                ))}
-              </select>
-              {selectedCredit ? (
-                <p className="text-xs text-muted-foreground">
-                  선택한 음반: {selectedCredit.artistName ?? "-"} ·{" "}
-                  {selectedCredit.title ?? "-"}
-                  {availableCredits <= 0
-                    ? " · 사용 가능한 잔여 크레딧이 없습니다."
-                    : ""}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  음반심의 결제 완료 후 이곳에서 무료 발행 크레딧을 사용할 수 있습니다.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="grid gap-2">
-              <label htmlFor="guestLookupCode" className={labelClass}>
-                비회원 조회 코드
-              </label>
-              <input
-                id="guestLookupCode"
-                name="guestLookupCode"
-                placeholder="음반심의 접수 시 발급된 조회 코드"
-                className={fieldClass}
-              />
+          <div className="grid gap-2">
+            <label htmlFor="magazine-submission-id" className={labelClass}>
+              매거진을 발행할 음반심의 건
+            </label>
+            <select
+              id="magazine-submission-id"
+              name="submissionId"
+              value={selectedSubmissionId}
+              onChange={(event) => setSelectedSubmissionId(event.target.value)}
+              disabled={!isAuthenticated || creditOptions.length === 0}
+              className={fieldClass}
+            >
+              {creditOptions.length === 0 ? (
+                <option value="">
+                  {isAuthenticated
+                    ? "사용 가능한 크레딧이 없습니다"
+                    : "로그인 후 선택할 수 있습니다"}
+                </option>
+              ) : null}
+              {creditOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {(option.artistName || "아티스트 미입력") +
+                    " · " +
+                    (option.title || "앨범명 미입력") +
+                    (option.releaseDate ? ` · 발매일 ${option.releaseDate}` : "")}
+                </option>
+              ))}
+            </select>
+            {selectedCredit ? (
               <p className="text-xs text-muted-foreground">
-                발매 후 매거진 발행 신청을 해도 괜찮습니다. 조회 코드로 결제 완료
-                음반심의 건과 남은 크레딧을 확인합니다.
+                선택한 음반: {selectedCredit.artistName ?? "-"} ·{" "}
+                {selectedCredit.title ?? "-"}
+                {availableCredits <= 0
+                  ? " · 사용 가능한 잔여 크레딧이 없습니다."
+                  : ""}
               </p>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                회원 계정으로 결제 완료된 음반심의 건만 크레딧으로 사용할 수 있습니다.
+              </p>
+            )}
+          </div>
 
           <div
-            key={selectedCredit?.id ?? "guest-request-fields"}
+            key={selectedCredit?.id ?? "member-request-fields"}
             className="grid gap-4 sm:grid-cols-2"
           >
             <label className="grid gap-2">
@@ -286,6 +267,7 @@ export function MagazineRequestForm({
               <input
                 name="requesterName"
                 required
+                disabled={!isAuthenticated}
                 defaultValue={selectedCredit?.applicantName ?? ""}
                 className={fieldClass}
               />
@@ -296,6 +278,7 @@ export function MagazineRequestForm({
                 name="requesterEmail"
                 type="email"
                 required
+                disabled={!isAuthenticated}
                 defaultValue={selectedCredit?.applicantEmail ?? userEmail ?? ""}
                 className={fieldClass}
               />
@@ -304,6 +287,7 @@ export function MagazineRequestForm({
               <span className={labelClass}>연락처</span>
               <input
                 name="requesterPhone"
+                disabled={!isAuthenticated}
                 defaultValue={selectedCredit?.applicantPhone ?? ""}
                 className={fieldClass}
               />
@@ -313,6 +297,7 @@ export function MagazineRequestForm({
               <input
                 name="releaseDate"
                 type="date"
+                disabled={!isAuthenticated}
                 defaultValue={selectedCredit?.releaseDate ?? ""}
                 className={fieldClass}
               />
@@ -321,6 +306,7 @@ export function MagazineRequestForm({
               <span className={labelClass}>앨범명</span>
               <input
                 name="albumTitle"
+                disabled={!isAuthenticated}
                 defaultValue={selectedCredit?.title ?? ""}
                 placeholder="심의 신청 정보와 다르면 수정"
                 className={fieldClass}
@@ -330,6 +316,7 @@ export function MagazineRequestForm({
               <span className={labelClass}>아티스트명</span>
               <input
                 name="artistName"
+                disabled={!isAuthenticated}
                 defaultValue={selectedCredit?.artistName ?? ""}
                 className={fieldClass}
               />
@@ -338,26 +325,51 @@ export function MagazineRequestForm({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <label className="grid gap-2">
-              <span className={labelClass}>아트워크 URL</span>
+              <span className={labelClass}>아트워크 파일</span>
               <input
-                name="artworkUrl"
-                placeholder="https://..."
-                className={fieldClass}
+                id="magazine-artwork-file"
+                name="artworkFile"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                disabled={!isAuthenticated}
+                onChange={(event) =>
+                  setArtworkFileName(event.target.files?.[0]?.name ?? "")
+                }
+                className="sr-only"
               />
+              <span
+                className={`flex min-h-[50px] items-center gap-3 rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground transition ${
+                  isAuthenticated
+                    ? "cursor-pointer hover:border-[#1556a4]"
+                    : "cursor-not-allowed opacity-60"
+                }`}
+              >
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#111111] text-white">
+                  <ImageUp className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 truncate font-semibold text-muted-foreground">
+                  {artworkFileName || "선택된 파일 없음"}
+                </span>
+              </span>
+              <span className="text-[11px] font-semibold text-muted-foreground">
+                JPG, PNG, WEBP, GIF · 20MB 이하
+              </span>
             </label>
             <label className="grid gap-2">
-              <span className={labelClass}>발매 앨범 링크</span>
+              <span className={labelClass}>멜론 또는 지니 링크</span>
               <input
                 name="albumUrl"
-                placeholder="멜론/유통 링크"
+                disabled={!isAuthenticated}
+                placeholder="멜론 또는 지니 링크"
                 className={fieldClass}
               />
             </label>
             <label className="grid gap-2">
-              <span className={labelClass}>영상 링크</span>
+              <span className={labelClass}>유튜브 영상 주소</span>
               <input
                 name="videoUrl"
-                placeholder="MV/라이브/티저 링크"
+                disabled={!isAuthenticated}
+                placeholder="유튜브 영상 주소"
                 className={fieldClass}
               />
             </label>
@@ -368,6 +380,7 @@ export function MagazineRequestForm({
             <textarea
               name="articleBody"
               rows={6}
+              disabled={!isAuthenticated}
               placeholder="원하는 기사 톤, 소개 문장, 강조하고 싶은 포인트를 자유롭게 적어주세요."
               className={fieldClass}
             />
@@ -378,6 +391,7 @@ export function MagazineRequestForm({
             <textarea
               name="creditsText"
               rows={4}
+              disabled={!isAuthenticated}
               placeholder="작사, 작곡, 편곡, 프로듀서, 연주자, 출연진 등"
               className={fieldClass}
             />
@@ -388,6 +402,7 @@ export function MagazineRequestForm({
             <textarea
               name="notes"
               rows={4}
+              disabled={!isAuthenticated}
               placeholder="발행 희망일, 참고 링크, 언론자료 메모 등"
               className={fieldClass}
             />
@@ -396,16 +411,20 @@ export function MagazineRequestForm({
           <button
             type="submit"
             disabled={isPending || !canSubmit}
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#111111] px-5 py-3 text-sm font-black text-white shadow-[4px_4px_0_#f2cf27] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#111111] px-5 py-3 text-sm font-black text-white shadow-[4px_4px_0_#1556a4] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
           >
             <SendHorizontal className="h-4 w-4" aria-hidden="true" />
-            {isPending ? "요청 접수 중..." : "크레딧 사용해서 발행 요청"}
+            {!isAuthenticated
+              ? "로그인 후 이용"
+              : isPending
+                ? "요청 접수 중..."
+                : "크레딧 사용해서 발행 요청"}
           </button>
         </form>
       </section>
 
       <aside className="space-y-5">
-        <section className="rounded-[10px] border-2 border-[#111111] bg-background p-5 dark:border-[#f2cf27]">
+        <section className="rounded-[10px] border-2 border-[#111111] bg-background p-5 dark:border-white/70">
           <p className="bauhaus-kicker">Credits</p>
           <h2 className="mt-3 text-xl font-black text-foreground">
             보유 크레딧
@@ -445,7 +464,7 @@ export function MagazineRequestForm({
                     <p className="font-black text-foreground">
                       {request.albumTitle ?? "앨범명 미입력"}
                     </p>
-                    <span className="rounded-[6px] bg-[#f2cf27] px-2 py-1 text-[10px] font-black text-[#111111]">
+                    <span className="rounded-[6px] bg-[#eaf2fb] px-2 py-1 text-[10px] font-black text-[#1556a4] dark:bg-[#102033] dark:text-[#8bc3ff]">
                       {statusLabels[request.status ?? ""] ?? request.status}
                     </span>
                   </div>
@@ -463,7 +482,7 @@ export function MagazineRequestForm({
                       href={request.publishedUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-3 inline-flex rounded-[8px] border-2 border-[#111111] px-3 py-2 text-xs font-black text-foreground transition hover:bg-[#f2cf27]"
+                      className="mt-3 inline-flex rounded-[8px] border-2 border-[#111111] px-3 py-2 text-xs font-black text-foreground transition hover:border-[#1556a4] hover:bg-[#eaf2fb] dark:hover:bg-[#102033]"
                     >
                       발행 페이지 보기
                     </a>
@@ -475,7 +494,7 @@ export function MagazineRequestForm({
             <p className="mt-4 rounded-[8px] border-2 border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
               {isAuthenticated
                 ? "아직 접수한 매거진 발행 요청이 없습니다."
-                : "비회원 요청 내역은 조회 코드로 개별 확인됩니다."}
+                : "로그인 후 크레딧 사용 요청 내역을 확인할 수 있습니다."}
             </p>
           )}
         </section>

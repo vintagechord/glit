@@ -2,196 +2,391 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
+import {
+  Loader2,
+  MessageCircle,
+  SendHorizontal,
+  X,
+} from "lucide-react";
 
-import { APP_CONFIG } from "@/lib/config";
+import {
+  supportChatChannelName,
+  supportChatStatusLabels,
+  supportChatStorageKey,
+  type SupportChatConversation,
+  type SupportChatMessage,
+} from "@/lib/support-chat";
+import { createClient } from "@/lib/supabase/client";
 
-const faqItems = [
-  {
-    question: "[주문결제] 결제는 어떻게 하나요?",
-    answer: "본 홈페이지에서 카드 결제 또는 무통장 입금으로 가능합니다.",
-  },
-  {
-    question: "[심의신청] 이미 발매된 앨범 심의 가능한가요?",
-    answer: "네. 오래전에 발매된 앨범도 모두 음반심의가 가능합니다.",
-  },
-  {
-    question: "[심의신청] 발매 예정인 앨범인데, 심의 가능한가요?",
-    answer:
-      "네. 다만 유통사를 통한 발매 날짜가 정해진 후 심의신청이 가능합니다. 발매일이 없는 경우 임의 날짜로 진행할 수 있으나 일부 방송사는 심의가 지연될 수 있습니다.",
-  },
-  {
-    question: "[심의신청] 심의 신청은 언제 이루어지나요?",
-    answer:
-      "보통 심의자료 전달 후 3일 내 서울권, 1주일 내 경기권 접수가 이뤄집니다(주말/공휴일 제외). 긴급 심의는 1일 내 가능하며 추가금이 발생합니다.",
-  },
-  {
-    question: "[심의신청] CD로 발매된 앨범의 경우 꼭 CD를 보내야 하나요?",
-    answer:
-      "네. 정식 CD 발매 앨범은 실제 CD 제출이 필요합니다. 보유 CD가 없으면 임의 제작이 가능하나 일부 방송사에서 인정되지 않을 수 있으며 실비 비용이 발생할 수 있습니다.",
-  },
-  {
-    question: "[심의신청] 국악방송, 국방방송 신청도 가능한가요?",
-    answer:
-      `네. 기본 옵션에 포함되지 않아 추가금이 발생합니다. 해당 방송국에 적합한 앨범일 경우 진행 가능하며, 문의는 ${APP_CONFIG.supportPhone} 또는 ${APP_CONFIG.supportEmail} 입니다.`,
-  },
-  {
-    question: "[심의결과] 심의 결과는 어떻게 확인하나요?",
-    answer: "개별 심의확인 페이지에서 실시간 진행 상황을 확인할 수 있습니다.",
-  },
-  {
-    question: "[심의결과] 심의 결과가 늦어지는 이유는 무엇인가요?",
-    answer:
-      "방송사 내부 일정과 업무량에 따라 지연될 수 있습니다. 온사이드는 주기적으로 확인하며 개별 페이지로 결과를 실시간 업데이트합니다.",
-  },
-  {
-    question: "[주문결제] 2장 이상의 앨범은 할인 혜택이 있나요?",
-    answer:
-      "네. 첫 번째 앨범은 현재 적용가격으로, 두 번째부터는 같은 패키지 적용가격의 50%로 접수됩니다.",
-  },
-  {
-    question: "[onside] 온사이드는 정식 업체인가요?",
-    answer:
-      "네. 빈티지하우스가 운영하는 정식 등록 업체이며 세금계산서/현금영수증 발급이 가능합니다.",
-  },
-  {
-    question: "비회원 접수도 가능한가요?",
-    answer:
-      "가능합니다. 비회원 접수 시 발급되는 조회 코드로 진행 상황을 확인할 수 있습니다.",
-  },
-  {
-    question: "파일 형식 제한이 있나요?",
-    answer:
-      "음원은 WAV/ZIP, 영상은 MP4/MOV 형식을 권장합니다. 용량 제한은 안내된 기준을 확인해주세요.",
-  },
-  {
-    question: "추가 문의",
-    answer:
-      `${APP_CONFIG.supportEmail} 또는 ${APP_CONFIG.supportPhone} 으로 문의주시면 자세한 상담이 가능합니다.`,
-  },
-];
+type ChatApiPayload = {
+  conversation: SupportChatConversation | null;
+  messages: SupportChatMessage[];
+  error?: string;
+};
+
+type SendApiPayload = {
+  conversation?: SupportChatConversation;
+  message?: SupportChatMessage;
+  error?: string;
+};
+
+const formatMessageTime = (value?: string | null) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Seoul",
+  }).format(date);
+};
+
+const mergeMessage = (
+  messages: SupportChatMessage[],
+  nextMessage: SupportChatMessage,
+) => {
+  if (messages.some((message) => message.id === nextMessage.id)) {
+    return messages;
+  }
+  return [...messages, nextMessage].sort(
+    (a, b) =>
+      new Date(a.createdAt ?? 0).getTime() -
+      new Date(b.createdAt ?? 0).getTime(),
+  );
+};
 
 export function ChatbotWidget() {
   const pathname = usePathname();
+  const supabase = React.useMemo(() => createClient(), []);
   const [open, setOpen] = React.useState(false);
-  const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
-  const [pageIndex, setPageIndex] = React.useState(0);
-  const pageSize = 5;
-  const pageCount = Math.ceil(faqItems.length / pageSize);
-  const startIndex = pageIndex * pageSize;
-  const visibleItems = faqItems.slice(startIndex, startIndex + pageSize);
-  const isCoreReviewFlow =
-    pathname === "/" || pathname === "/login" || pathname.startsWith("/dashboard");
+  const [loading, setLoading] = React.useState(false);
+  const [sending, setSending] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [accessToken, setAccessToken] = React.useState<string | null>(null);
+  const [conversation, setConversation] =
+    React.useState<SupportChatConversation | null>(null);
+  const [messages, setMessages] = React.useState<SupportChatMessage[]>([]);
+  const [draft, setDraft] = React.useState("");
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const channelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(
+    null,
+  );
 
-  const goToPage = (nextPage: number) => {
-    const clamped = Math.min(Math.max(nextPage, 0), pageCount - 1);
-    setPageIndex(clamped);
-    setActiveIndex(null);
-  };
+  const hiddenRoute =
+    pathname.startsWith("/admin") || pathname.startsWith("/pay/inicis");
+
+  const loadConversation = React.useCallback(
+    async (
+      token?: string | null,
+      options?: { quiet?: boolean; markRead?: boolean },
+    ) => {
+      if (!options?.quiet) {
+        setLoading(true);
+      }
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        if (token) {
+          params.set("accessToken", token);
+        }
+        if (options?.markRead) {
+          params.set("markRead", "visitor");
+        }
+        const query = params.toString();
+        const response = await fetch(`/api/chat${query ? `?${query}` : ""}`, {
+          cache: "no-store",
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | ChatApiPayload
+          | null;
+        if (!response.ok || !payload) {
+          throw new Error(payload?.error ?? "채팅 내역을 불러오지 못했습니다.");
+        }
+        if (payload.conversation) {
+          setConversation(payload.conversation);
+          setAccessToken(payload.conversation.accessToken);
+          window.localStorage.setItem(
+            supportChatStorageKey,
+            payload.conversation.accessToken,
+          );
+        } else if (token) {
+          setConversation(null);
+          setAccessToken(null);
+          window.localStorage.removeItem(supportChatStorageKey);
+        }
+        setMessages(payload.messages ?? []);
+      } catch (loadError) {
+        if (!options?.quiet) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "채팅 내역을 불러오지 못했습니다.",
+          );
+        }
+      } finally {
+        if (!options?.quiet) {
+          setLoading(false);
+        }
+      }
+    },
+    [],
+  );
 
   React.useEffect(() => {
-    if (open) {
-      setActiveIndex(null);
+    if (hiddenRoute) return;
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(supportChatStorageKey);
+    } catch {
+      // Ignore storage failures.
     }
-  }, [open]);
+    if (stored) {
+      setAccessToken(stored);
+    }
+    void loadConversation(stored, { quiet: true });
+  }, [hiddenRoute, loadConversation]);
+
+  React.useEffect(() => {
+    if (!conversation || !accessToken) return;
+    const channel = supabase
+      .channel(supportChatChannelName(conversation.id, accessToken), {
+        config: { broadcast: { self: false } },
+      })
+      .on("broadcast", { event: "message" }, () => {
+        void loadConversation(accessToken, {
+          quiet: true,
+          markRead: open,
+        });
+      })
+      .subscribe();
+    channelRef.current = channel;
+    return () => {
+      channelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [accessToken, conversation, loadConversation, open, supabase]);
+
+  React.useEffect(() => {
+    if (!accessToken || hiddenRoute) return;
+    const intervalId = window.setInterval(() => {
+      void loadConversation(accessToken, { quiet: true });
+    }, 15000);
+    return () => window.clearInterval(intervalId);
+  }, [accessToken, hiddenRoute, loadConversation]);
+
+  React.useEffect(() => {
+    listRef.current?.scrollTo({
+      top: listRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages.length, open]);
 
   React.useEffect(() => {
     setOpen(false);
-    setActiveIndex(null);
   }, [pathname]);
 
-  if (isCoreReviewFlow) {
+  const toggleOpen = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        void loadConversation(accessToken, {
+          quiet: true,
+          markRead: true,
+        });
+      }
+      return next;
+    });
+  };
+
+  const sendMessage = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const body = draft.trim();
+    if (!body || sending) return;
+
+    setSending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accessToken,
+          body,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | SendApiPayload
+        | null;
+      if (!response.ok || !payload?.conversation || !payload.message) {
+        throw new Error(payload?.error ?? "메시지를 보내지 못했습니다.");
+      }
+
+      setConversation(payload.conversation);
+      setAccessToken(payload.conversation.accessToken);
+      window.localStorage.setItem(
+        supportChatStorageKey,
+        payload.conversation.accessToken,
+      );
+      setMessages((current) => mergeMessage(current, payload.message!));
+      setDraft("");
+
+      await channelRef.current?.send({
+        type: "broadcast",
+        event: "message",
+        payload,
+      });
+    } catch (sendError) {
+      setError(
+        sendError instanceof Error
+          ? sendError.message
+          : "메시지를 보내지 못했습니다.",
+      );
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (hiddenRoute) {
     return null;
   }
 
+  const statusLabel = conversation
+    ? supportChatStatusLabels[conversation.status] ?? conversation.status
+    : "상담 가능";
+
   return (
     <>
-      {open && (
+      {open ? (
         <div
-          className="fixed inset-x-0 bottom-0 z-40"
-          style={{ top: "var(--site-header-height, 76px)" }}
-          onClick={() => setOpen(false)}
+          className="fixed bottom-5 right-4 z-50 flex max-h-[calc(100vh-var(--site-header-height,76px)-24px)] w-[min(380px,calc(100vw-32px))] flex-col overflow-hidden rounded-[12px] border-2 border-[#111111] bg-card shadow-[7px_7px_0_#111111] dark:border-[#f2cf27] dark:shadow-[7px_7px_0_#f2cf27] sm:bottom-6 sm:right-6"
+          role="dialog"
+          aria-label="실시간 채팅"
         >
+          <div className="flex items-center justify-between gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-3 text-white dark:border-[#f2cf27]">
+            <div className="min-w-0">
+              <p className="text-sm font-black">온사이드 실시간 채팅</p>
+              <p className="mt-0.5 text-[11px] font-semibold text-white/70">
+                관리자와 바로 대화할 수 있습니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-white/30 text-white transition hover:bg-white hover:text-[#111111]"
+              aria-label="채팅 닫기"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-background px-4 py-2">
+            <span className="inline-flex items-center gap-2 text-xs font-black text-foreground">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              {statusLabel}
+            </span>
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              보통 영업시간 내 답변
+            </span>
+          </div>
+
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="자주 묻는 질문"
-            className="absolute bottom-6 right-6 w-[320px] rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]"
-            onClick={(event) => event.stopPropagation()}
+            ref={listRef}
+            className="min-h-[300px] flex-1 space-y-3 overflow-y-auto bg-background/60 px-4 py-4"
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-black text-foreground">
-                  자주 묻는 질문
-                </p>
+            {loading ? (
+              <div className="flex h-32 items-center justify-center text-sm font-semibold text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                채팅을 불러오는 중입니다.
               </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-[8px] border-2 border-border px-2 py-1 text-xs font-black text-muted-foreground transition hover:text-foreground"
-              >
-                닫기
-              </button>
-            </div>
-            <div className="mt-4 space-y-2">
-              {visibleItems.map((item, index) => {
-                const itemIndex = startIndex + index;
+            ) : messages.length > 0 ? (
+              messages.map((message) => {
+                const mine = message.senderType === "VISITOR";
                 return (
-                  <button
-                    key={item.question}
-                    type="button"
-                    onClick={() => setActiveIndex(itemIndex)}
-                    className={`w-full rounded-[8px] border-2 px-3 py-2 text-left text-xs font-semibold transition ${activeIndex === itemIndex
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border/60 bg-background text-muted-foreground hover:border-foreground"
-                      }`}
+                  <div
+                    key={message.id}
+                    className={`flex ${mine ? "justify-end" : "justify-start"}`}
                   >
-                    {item.question}
-                  </button>
+                    <div
+                      className={`max-w-[82%] rounded-[10px] border-2 px-3 py-2 text-sm shadow-[3px_3px_0_rgba(17,17,17,0.18)] ${
+                        mine
+                          ? "border-[#111111] bg-[#f2cf27] text-[#111111]"
+                          : "border-border bg-card text-foreground"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap break-words font-semibold leading-5">
+                        {message.body}
+                      </p>
+                      <p
+                        className={`mt-1 text-right text-[10px] font-semibold ${
+                          mine ? "text-[#111111]/62" : "text-muted-foreground"
+                        }`}
+                      >
+                        {formatMessageTime(message.createdAt)}
+                      </p>
+                    </div>
+                  </div>
                 );
-              })}
-              <div className="flex items-center justify-between pt-1 text-xs text-muted-foreground">
-                <button
-                  type="button"
-                  onClick={() => goToPage(pageIndex - 1)}
-                  disabled={pageIndex === 0}
-                  className="rounded-[8px] border-2 border-border px-3 py-1 font-black uppercase tracking-normal transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  이전
-                </button>
-                <span>
-                  {pageIndex + 1} / {pageCount}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => goToPage(pageIndex + 1)}
-                  disabled={pageIndex >= pageCount - 1}
-                  className="rounded-[8px] border-2 border-border px-3 py-1 font-black uppercase tracking-normal transition hover:border-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  다음
-                </button>
-              </div>
-            </div>
-            {activeIndex === null ? (
-              <div className="mt-4 rounded-[8px] border-2 border-border bg-background/80 px-3 py-3 text-sm font-semibold leading-relaxed text-muted-foreground">
-                질문을 선택해주세요.
-              </div>
+              })
             ) : (
-              <div className="mt-4 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-3 text-sm font-semibold leading-relaxed text-black shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-black dark:shadow-none">
-                {faqItems[activeIndex]?.answer}
+              <div className="space-y-3">
+                <div className="w-fit max-w-[88%] rounded-[10px] border-2 border-border bg-card px-3 py-2 text-sm shadow-[3px_3px_0_rgba(17,17,17,0.12)]">
+                  <p className="font-black text-foreground">온사이드 상담</p>
+                  <p className="mt-1 font-semibold leading-6 text-muted-foreground">
+                    문의 내용을 바로 남겨주세요. 로그인 상태라면 이후에도 대화
+                    내역을 이어서 확인할 수 있습니다.
+                  </p>
+                </div>
               </div>
             )}
           </div>
+
+          {error ? (
+            <div className="border-t border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-600">
+              {error}
+            </div>
+          ) : null}
+
+          <form onSubmit={sendMessage} className="border-t-2 border-[#111111] bg-card p-3">
+            <div className="flex items-end gap-2">
+              <textarea
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                rows={2}
+                placeholder="메시지를 입력하세요."
+                className="max-h-28 min-h-12 flex-1 resize-none rounded-[8px] border-2 border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-[#1556a4]"
+              />
+              <button
+                type="submit"
+                disabled={sending || !draft.trim()}
+                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+                aria-label="메시지 보내기"
+              >
+                {sending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <SendHorizontal className="h-4 w-4" aria-hidden="true" />
+                )}
+              </button>
+            </div>
+          </form>
         </div>
-      )}
-      <div className="fixed bottom-6 right-6 z-50 hidden sm:block">
+      ) : null}
+
+      {!open ? (
         <button
           type="button"
-          onClick={() => setOpen((prev) => !prev)}
-          className="flex h-12 w-12 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] text-sm font-black text-[#111111] shadow-[4px_4px_0_#111111] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]"
+          onClick={toggleOpen}
+          className="fixed bottom-5 right-4 z-50 inline-flex min-h-12 items-center gap-2 rounded-[12px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-sm font-black text-[#111111] shadow-[5px_5px_0_#111111] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27] sm:bottom-6 sm:right-6"
         >
-          FAQ
+          {conversation?.unreadVisitorCount ? (
+            <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#111111] bg-[#d9362c] px-1 text-[10px] font-black text-white">
+              {conversation.unreadVisitorCount}
+            </span>
+          ) : null}
+          <MessageCircle className="h-5 w-5" aria-hidden="true" />
+          실시간 채팅
         </button>
-      </div>
+      ) : null}
     </>
   );
 }

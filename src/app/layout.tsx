@@ -5,6 +5,10 @@ import { NavigationLatencyLogger } from "@/components/perf/navigation-latency-lo
 import { AppShell } from "@/components/site/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 
+const enableNavigationLatencyLogger =
+  process.env.NODE_ENV !== "production" ||
+  process.env.NEXT_PUBLIC_NAV_PERF_DEBUG === "true";
+
 export const metadata: Metadata = {
   title: {
     default: "온사이드",
@@ -23,9 +27,11 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
         <ThemeProvider>
-          <Suspense fallback={null}>
-            <NavigationLatencyLogger />
-          </Suspense>
+          {enableNavigationLatencyLogger ? (
+            <Suspense fallback={null}>
+              <NavigationLatencyLogger />
+            </Suspense>
+          ) : null}
           <AppShell>{children}</AppShell>
         </ThemeProvider>
       </body>

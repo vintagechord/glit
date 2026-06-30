@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type CreditSummary = {
   earned: number;
+  adminGranted: number;
   magazineUsed: number;
   rewardUsed: number;
   used: number;
@@ -37,6 +38,52 @@ export type CreditRewardRedemption = {
   created_at: string | null;
 };
 
+export type StudioReservationStatus = "REQUESTED" | "APPROVED" | "CANCELED";
+
+export type StudioReservationRequest = {
+  id: string;
+  user_id: string;
+  redemption_id: string;
+  reward_id: string | null;
+  reward_title: string;
+  service_location: string | null;
+  status: StudioReservationStatus | string;
+  preferred_date: string;
+  preferred_time: string;
+  duration_hours: number;
+  contact_name: string;
+  contact_phone: string;
+  contact_email: string | null;
+  notes: string | null;
+  approved_message: string | null;
+  admin_memo: string | null;
+  approved_at: string | null;
+  canceled_at: string | null;
+  created_at: string | null;
+  updated_at?: string | null;
+};
+
+export const VINTAGE_HOUSE_STUDIO_URL = "https://naver.me/GjyIilET";
+
+const vintageHouseStudioRewardTitles = new Set([
+  "빈티지하우스 메인 녹음실 1시간 권",
+  "빈티지하우스 셀프 녹음실 1시간 권",
+]);
+
+export function isStudioCreditRewardTitle(
+  rewardTitle: string | null | undefined,
+) {
+  return Boolean(rewardTitle && vintageHouseStudioRewardTitles.has(rewardTitle));
+}
+
+export function getCreditRewardStudioUrl(rewardTitle: string | null | undefined) {
+  if (!isStudioCreditRewardTitle(rewardTitle)) {
+    return null;
+  }
+
+  return VINTAGE_HOUSE_STUDIO_URL;
+}
+
 const countOrZero = (count?: number | null) => count ?? 0;
 
 export async function getUserCreditSummary(
@@ -61,9 +108,18 @@ export async function getUserCreditSummary(
       .eq("user_id", userId)
       .neq("status", "CANCELED"),
   ]);
-
+  const [profileResult, grantResult] = await Promise.all([
+    client.from("profiles").select("role").eq("user_id", userId).maybeSingle(),
+    client.from("credit_grants").select("amount").eq("user_id", userId),
+  ]);
   if (earnedResult.error) {
     throw new Error(`Failed to load earned credits: ${earnedResult.error.message}`);
+  }
+  if (profileResult.error) {
+    throw new Error(`Failed to load credit profile: ${profileResult.error.message}`);
+  }
+  if (grantResult.error) {
+    throw new Error(`Failed to load admin credits: ${grantResult.error.message}`);
   }
   if (magazineResult.error) {
     throw new Error(
@@ -80,15 +136,24 @@ export async function getUserCreditSummary(
     (redemptionResult.data ?? []) as Array<{ credits_spent?: number | null }>
   ).reduce((total, row) => total + (row.credits_spent ?? 0), 0);
   const earned = countOrZero(earnedResult.count);
+  const adminGranted =
+    profileResult.data?.role === "admin"
+      ? ((grantResult.data ?? []) as Array<{ amount?: number | null }>).reduce(
+          (total, row) => total + (row.amount ?? 0),
+          0,
+        )
+      : 0;
   const magazineUsed = countOrZero(magazineResult.count);
   const used = magazineUsed + rewardUsed;
+  const totalEarned = earned + adminGranted;
 
   return {
-    earned,
+    earned: totalEarned,
+    adminGranted,
     magazineUsed,
     rewardUsed,
     used,
-    available: Math.max(earned - used, 0),
+    available: Math.max(totalEarned - used, 0),
   };
 }
 

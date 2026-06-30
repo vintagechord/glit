@@ -34,6 +34,11 @@ type SubmissionSummary = {
 
 type TabKey = "album" | "mv";
 
+const getPreferredReviewTab = (albumCount: number, mvCount: number): TabKey => {
+  if (albumCount === 0 && mvCount > 0) return "mv";
+  return "album";
+};
+
 type DashboardStatusResponse = {
   albumSubmissions: SubmissionSummary[];
   mvSubmissions: SubmissionSummary[];
@@ -399,11 +404,9 @@ export function HomeReviewPanel({
   const albumList = albumSubmissions;
   const mvList = mvSubmissions;
   const [tab, setTab] = React.useState<TabKey>(() => {
-    if (!hideEmptyTabs) return "album";
-    if (albumList.length > 0) return "album";
-    if (mvList.length > 0) return "mv";
-    return "album";
+    return getPreferredReviewTab(albumList.length, mvList.length);
   });
+  const hasManualTabSelection = React.useRef(false);
   const normalizeStations = React.useCallback((rows?: StationItem[] | null) => {
     return (rows ?? []).map((row) => ({
       ...row,
@@ -434,10 +437,27 @@ export function HomeReviewPanel({
   }, [albumState.submissions.length, hideEmptyTabs, mvState.submissions.length]);
 
   React.useEffect(() => {
-    if (!availableTabs.includes(tab)) {
-      setTab(availableTabs[0] ?? "album");
-    }
-  }, [availableTabs, tab]);
+    const preferredTab = getPreferredReviewTab(
+      albumState.submissions.length,
+      mvState.submissions.length,
+    );
+    setTab((currentTab) => {
+      if (!availableTabs.includes(currentTab)) {
+        return availableTabs.includes(preferredTab)
+          ? preferredTab
+          : availableTabs[0] ?? "album";
+      }
+      if (!hasManualTabSelection.current && currentTab !== preferredTab) {
+        return availableTabs.includes(preferredTab) ? preferredTab : currentTab;
+      }
+      return currentTab;
+    });
+  }, [albumState.submissions.length, availableTabs, mvState.submissions.length]);
+
+  const handleTabChange = React.useCallback((nextTab: TabKey) => {
+    hasManualTabSelection.current = true;
+    setTab(nextTab);
+  }, []);
 
   React.useEffect(() => {
     if (!enableRemoteSync || !isLoggedIn) return;
@@ -792,7 +812,7 @@ export function HomeReviewPanel({
         {availableTabs.includes("album") ? (
           <button
             type="button"
-            onClick={() => setTab("album")}
+            onClick={() => handleTabChange("album")}
             className={`flex-1 rounded-[8px] border-2 px-3 py-2 transition ${tab === "album"
                 ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
                 : "border-border bg-background text-foreground/72 hover:border-[#111111] hover:text-foreground dark:text-white/76 dark:hover:border-[#f2cf27] dark:hover:text-white"
@@ -804,7 +824,7 @@ export function HomeReviewPanel({
         {availableTabs.includes("mv") ? (
           <button
             type="button"
-            onClick={() => setTab("mv")}
+            onClick={() => handleTabChange("mv")}
             className={`flex-1 rounded-[8px] border-2 px-3 py-2 transition ${tab === "mv"
                 ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
                 : "border-border bg-background text-foreground/72 hover:border-[#111111] hover:text-foreground dark:text-white/76 dark:hover:border-[#f2cf27] dark:hover:text-white"
@@ -908,11 +928,11 @@ export function HomeReviewPanel({
                   />
                 </div>
                 {needsPayment && activeSubmission ? (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/8 px-3 py-2 text-xs font-semibold text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#111111] bg-white px-3 py-2 text-xs font-semibold text-[#111111] shadow-[3px_3px_0_#111111] dark:border-white dark:bg-[#111111] dark:text-white dark:shadow-[3px_3px_0_rgba(255,255,255,0.55)]">
                     <span>결제 완료 후 심의가 진행됩니다.</span>
                     <Link
                       href={`/dashboard/pay/${activeSubmission.id}`}
-                      className="rounded-full border border-[#111111] bg-[#111111] px-3 py-1.5 text-[11px] font-black uppercase tracking-normal text-[#f6d64a] transition hover:-translate-y-0.5 dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-[#111111]"
+                      className="rounded-full border border-[#111111] bg-[#111111] px-3 py-1.5 text-[11px] font-black uppercase tracking-normal text-white transition hover:-translate-y-0.5 hover:bg-white hover:text-[#111111] dark:border-white dark:bg-white dark:text-[#111111] dark:hover:bg-[#111111] dark:hover:text-white"
                     >
                       결제하기
                     </Link>

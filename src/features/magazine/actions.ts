@@ -38,9 +38,17 @@ const optionalUrl = z.preprocess((value) => {
   return /^https?:\/\//i.test(text) ? text : `https://${text}`;
 }, z.string().url().optional());
 
+const magazineArtworkBucket = "magazine-artwork";
+const maxArtworkBytes = 20 * 1024 * 1024;
+const artworkImageTypes = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+
 const magazineRequestSchema = z.object({
   submissionId: z.string().uuid().optional(),
-  guestLookupCode: z.string().min(8).optional(),
   targetChannel: targetChannelSchema,
   requesterName: z.string().trim().min(1),
   requesterEmail: z.string().trim().email(),
@@ -67,7 +75,6 @@ const magazineStatusUpdateSchema = z.object({
 type SubmissionForMagazine = {
   id: string;
   user_id: string | null;
-  guest_token: string | null;
   type: string | null;
   payment_status: string | null;
   title: string | null;
@@ -76,24 +83,136 @@ type SubmissionForMagazine = {
   applicant_name?: string | null;
   applicant_email?: string | null;
   applicant_phone?: string | null;
-  guest_name?: string | null;
-  guest_email?: string | null;
-  guest_phone?: string | null;
 };
 
 const submissionSelect =
-  "id, user_id, guest_token, type, payment_status, title, artist_name, release_date, applicant_name, applicant_email, applicant_phone, guest_name, guest_email, guest_phone";
+  "id, user_id, type, payment_status, title, artist_name, release_date, applicant_name, applicant_email, applicant_phone";
+
+const sanitizeStorageFileName = (name: string) =>
+  name
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 120);
+
+const isUploadedFile = (value: unknown): value is File => {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as {
+    arrayBuffer?: unknown;
+    name?: unknown;
+    size?: unknown;
+  };
+  return (
+    typeof candidate.arrayBuffer === "function" &&
+    typeof candidate.name === "string" &&
+    typeof candidate.size === "number" &&
+    candidate.size > 0
+  );
+};
+
+const isValidArtworkFile = (file: File) => {
+  const mimeType = file.type.toLowerCase();
+  if (mimeType && artworkImageTypes.has(mimeType)) return true;
+  return /\.(jpe?g|png|webp|gif)$/i.test(file.name);
+};
+
+const getArtworkContentType = (file: File) => {
+  const mimeType = file.type.toLowerCase();
+  if (artworkImageTypes.has(mimeType)) return mimeType;
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".png")) return "image/png";
+  if (lowerName.endsWith(".webp")) return "image/webp";
+  if (lowerName.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+};
+
+const getMagazinePayload = (
+  payload: z.infer<typeof magazineRequestSchema> | FormData,
+) => {
+  if (typeof FormData !== "undefined" && payload instanceof FormData) {
+    const artworkEntry = payload.get("artworkFile");
+    return {
+      values: {
+        submissionId: payload.get("submissionId"),
+        targetChannel: payload.get("targetChannel"),
+        requesterName: payload.get("requesterName"),
+        requesterEmail: payload.get("requesterEmail"),
+        requesterPhone: payload.get("requesterPhone"),
+        albumTitle: payload.get("albumTitle"),
+        artistName: payload.get("artistName"),
+        releaseDate: payload.get("releaseDate"),
+        artworkUrl: payload.get("artworkUrl"),
+        albumUrl: payload.get("albumUrl"),
+        videoUrl: payload.get("videoUrl"),
+        articleBody: payload.get("articleBody"),
+        creditsText: payload.get("creditsText"),
+        notes: payload.get("notes"),
+      },
+      artworkFile: isUploadedFile(artworkEntry) ? artworkEntry : undefined,
+    };
+  }
+
+  return {
+    values: payload,
+    artworkFile: undefined,
+  };
+};
+
+async function uploadMagazineArtworkFile({
+  admin,
+  file,
+  submissionId,
+  userId,
+}: {
+  admin: ReturnType<typeof createAdminClient>;
+  file: File;
+  submissionId: string;
+  userId: string;
+}) {
+  if (!isValidArtworkFile(file)) {
+    return { error: "아트워크는 JPG, PNG, WEBP, GIF 이미지 파일만 첨부할 수 있습니다." };
+  }
+  if (file.size > maxArtworkBytes) {
+    return { error: "아트워크 파일은 20MB 이하로 첨부해주세요." };
+  }
+
+  const safeName = sanitizeStorageFileName(file.name || "artwork.jpg");
+  const path = `${userId}/${submissionId}/${Date.now()}-${safeName}`;
+  const arrayBuffer = await file.arrayBuffer();
+
+  const { error } = await admin.storage
+    .from(magazineArtworkBucket)
+    .upload(path, arrayBuffer, {
+      contentType: getArtworkContentType(file),
+      upsert: false,
+    });
+
+  if (error) {
+    console.error("[magazine] artwork upload failed", error);
+    return { error: "아트워크 파일 업로드에 실패했습니다." };
+  }
+
+  const { data } = admin.storage.from(magazineArtworkBucket).getPublicUrl(path);
+  return { publicUrl: data.publicUrl };
+}
 
 const withSavedQuery = (path: string) => {
-  const [pathname, query] = path.split("?");
+  const [baseWithQuery, hash] = path.split("#");
+  const [pathname, query] = baseWithQuery.split("?");
   const params = new URLSearchParams(query ?? "");
   params.set("saved", "1");
-  return `${pathname}?${params.toString()}`;
+  const nextPath = `${pathname}?${params.toString()}`;
+  return hash ? `${nextPath}#${hash}` : nextPath;
 };
 
 const safeAdminRedirectPath = (redirectTo?: string) => {
   const raw = redirectTo?.trim();
-  if (!raw || !raw.startsWith("/admin/magazine")) return "/admin/magazine";
+  if (
+    !raw ||
+    (!raw.startsWith("/admin/magazine") &&
+      !raw.startsWith("/admin/credits/requests"))
+  ) {
+    return "/admin/magazine";
+  }
   return raw;
 };
 
@@ -109,16 +228,12 @@ async function isAdminUser(userId: string) {
 
 async function findSubmissionForMagazine({
   submissionId,
-  guestLookupCode,
 }: {
   submissionId?: string;
-  guestLookupCode?: string;
 }) {
   const admin = createAdminClient();
   const query = admin.from("submissions").select(submissionSelect);
-  const result = submissionId
-    ? await query.eq("id", submissionId).maybeSingle()
-    : await query.eq("guest_token", guestLookupCode ?? "").maybeSingle();
+  const result = await query.eq("id", submissionId ?? "").maybeSingle();
 
   return {
     submission: result.data as SubmissionForMagazine | null,
@@ -127,9 +242,10 @@ async function findSubmissionForMagazine({
 }
 
 export async function createMagazineRequestAction(
-  payload: z.infer<typeof magazineRequestSchema>,
+  payload: z.infer<typeof magazineRequestSchema> | FormData,
 ): Promise<MagazineRequestActionState> {
-  const parsed = magazineRequestSchema.safeParse(payload);
+  const { values, artworkFile } = getMagazinePayload(payload);
+  const parsed = magazineRequestSchema.safeParse(values);
   if (!parsed.success) {
     return { error: "입력값을 확인해주세요. URL은 https:// 형식으로 입력해주세요." };
   }
@@ -144,18 +260,16 @@ export async function createMagazineRequestAction(
     return { error: "로그인 정보를 확인할 수 없습니다." };
   }
 
-  const isGuest = !user;
-  if (!isGuest && !parsed.data.submissionId) {
-    return { error: "사용할 매거진 크레딧을 선택해주세요." };
+  if (!user) {
+    return { error: "로그인한 회원만 크레딧을 사용할 수 있습니다." };
   }
-  if (isGuest && !parsed.data.guestLookupCode?.trim()) {
-    return { error: "비회원은 음반심의 조회 코드를 입력해주세요." };
+  if (!parsed.data.submissionId) {
+    return { error: "사용할 매거진 크레딧을 선택해주세요." };
   }
 
   const { submission, error: submissionError } =
     await findSubmissionForMagazine({
       submissionId: parsed.data.submissionId,
-      guestLookupCode: parsed.data.guestLookupCode?.trim(),
     });
 
   if (submissionError || !submission) {
@@ -168,22 +282,17 @@ export async function createMagazineRequestAction(
   if (submission.payment_status !== "PAID") {
     return { error: "음반심의 결제 완료 후 매거진 발행 요청이 가능합니다." };
   }
-  if (user && submission.user_id !== user.id) {
+  if (submission.user_id !== user.id) {
     return { error: "본인 음반심의 접수만 사용할 수 있습니다." };
-  }
-  if (isGuest && submission.guest_token !== parsed.data.guestLookupCode?.trim()) {
-    return { error: "조회 코드와 일치하는 비회원 접수를 확인할 수 없습니다." };
   }
 
   const admin = createAdminClient();
-  if (user) {
-    const creditSummary = await getUserCreditSummary(admin, user.id);
-    if (creditSummary.available < 1) {
-      return {
-        error:
-          "사용 가능한 크레딧이 없습니다. 나의 크레딧에서 적립/사용 내역을 확인해주세요.",
-      };
-    }
+  const creditSummary = await getUserCreditSummary(admin, user.id);
+  if (creditSummary.available < 1) {
+    return {
+      error:
+        "사용 가능한 크레딧이 없습니다. 나의 크레딧에서 적립/사용 내역을 확인해주세요.",
+    };
   }
 
   const { data: existingRequest, error: existingError } = await admin
@@ -200,12 +309,24 @@ export async function createMagazineRequestAction(
     return { error: "이미 이 음반심의 건으로 매거진 발행 요청이 접수되었습니다." };
   }
 
+  const uploadedArtwork = artworkFile
+    ? await uploadMagazineArtworkFile({
+        admin,
+        file: artworkFile,
+        submissionId: submission.id,
+        userId: user.id,
+      })
+    : null;
+
+  if (uploadedArtwork?.error) {
+    return { error: uploadedArtwork.error };
+  }
+
   const { data: request, error: insertError } = await admin
     .from("magazine_requests")
     .insert({
       submission_id: submission.id,
-      user_id: user?.id ?? null,
-      guest_token: isGuest ? submission.guest_token : null,
+      user_id: user.id,
       target_channel: parsed.data.targetChannel,
       requester_name: parsed.data.requesterName,
       requester_email: parsed.data.requesterEmail,
@@ -213,7 +334,7 @@ export async function createMagazineRequestAction(
       album_title: parsed.data.albumTitle ?? submission.title ?? null,
       artist_name: parsed.data.artistName ?? submission.artist_name ?? null,
       release_date: parsed.data.releaseDate ?? submission.release_date ?? null,
-      artwork_url: parsed.data.artworkUrl ?? null,
+      artwork_url: uploadedArtwork?.publicUrl ?? parsed.data.artworkUrl ?? null,
       album_url: parsed.data.albumUrl ?? null,
       video_url: parsed.data.videoUrl ?? null,
       article_body: parsed.data.articleBody ?? null,
@@ -286,5 +407,9 @@ export async function updateMagazineRequestStatusFormAction(
   }
 
   revalidatePath("/admin/magazine");
+  revalidatePath("/admin/credits");
+  revalidatePath("/admin/credits/requests");
+  revalidatePath("/magazine");
+  revalidatePath("/mypage/credits");
   redirect(withSavedQuery(redirectPath));
 }

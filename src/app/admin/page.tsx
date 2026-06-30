@@ -6,6 +6,8 @@ import Link from "next/link";
 import {
   ClipboardList,
   CreditCard,
+  MessageCircle,
+  MessageSquareText,
   SendHorizontal,
   type LucideIcon,
 } from "lucide-react";
@@ -261,7 +263,37 @@ export default async function AdminPage() {
             크레딧/쿠폰 관리
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            크레딧으로 교환 가능한 서비스 이용권과 발행 쿠폰을 관리합니다.
+            크레딧 이용권, 매거진 발행 요청, 녹음실 예약 요청을 관리합니다.
+          </p>
+        </Link>
+        <Link
+          href="/admin/chat"
+          className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            실시간 상담
+          </p>
+          <h2 className="mt-3 flex items-center gap-2 text-xl font-semibold text-foreground">
+            <MessageCircle className="h-5 w-5" aria-hidden="true" />
+            실시간 채팅
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            사이트 우측 하단 채팅으로 들어온 문의에 답변합니다.
+          </p>
+        </Link>
+        <Link
+          href="/admin/inquiries"
+          className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            고객 문의
+          </p>
+          <h2 className="mt-3 flex items-center gap-2 text-xl font-semibold text-foreground">
+            <MessageSquareText className="h-5 w-5" aria-hidden="true" />
+            1:1 문의
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            고객센터 모달로 접수된 제목, 내용, 연락처를 확인합니다.
           </p>
         </Link>
         <Link

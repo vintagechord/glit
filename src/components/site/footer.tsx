@@ -383,8 +383,13 @@ export function SiteFooter() {
               <Link href={`${siteLinkPrefix}/support`} className={footerLinkClass}>
                 고객센터
               </Link>
-              <Link href={`${siteLinkPrefix}/forms`} className={footerLinkClass}>
-                신청서 작성
+              <Link
+                href="https://onside17.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={footerLinkClass}
+              >
+                Legacy
               </Link>
             </div>
           </details>

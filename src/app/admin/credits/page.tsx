@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import {
   updateCreditRedemptionStatusFormAction,
@@ -207,10 +209,18 @@ export default async function AdminCreditsPage({
       <h1 className="font-display mt-2 text-3xl text-foreground">
         크레딧/쿠폰 관리
       </h1>
-      <p className="mt-3 text-sm text-muted-foreground">
-        음반심의 결제 크레딧으로 교환 가능한 서비스 이용권을 등록하고, 발행된
-        쿠폰의 사용 상태를 관리합니다.
-      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          음반심의 결제 크레딧으로 교환 가능한 서비스 이용권을 등록하고, 발행된
+          쿠폰의 사용 상태를 관리합니다.
+        </p>
+        <Link
+          href="/admin/credits/requests"
+          className="rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold text-foreground transition hover:border-foreground"
+        >
+          크레딧 요청 관리
+        </Link>
+      </div>
 
       {errorFlag ? (
         <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">

@@ -303,7 +303,7 @@ export default async function PayPage({
               </div>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              입금 후 문의하기로 알려주시면 확인을 빠르게 도와드립니다.
+              입금 후 24시간 내에 결제완료로 전환됩니다.
             </p>
           </div>
         )}

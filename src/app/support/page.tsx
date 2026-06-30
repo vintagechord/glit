@@ -1,6 +1,5 @@
-import Link from "next/link";
-
 import { APP_CONFIG } from "@/lib/config";
+import { SupportInquiryModal } from "@/features/support/support-inquiry-modal";
 
 export const metadata = {
   title: "고객센터",
@@ -46,50 +45,37 @@ export default function SupportPage() {
         ))}
       </section>
 
-      <section className="mt-8 grid gap-5 rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] lg:grid-cols-[0.9fr_1.1fr]">
-        <div>
-          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-            연락처
-          </p>
-          <div className="mt-4 space-y-2 text-base font-semibold text-foreground">
-            <p>
-              전화{" "}
-              <a href={`tel:${APP_CONFIG.supportPhone}`} className="underline-offset-2 hover:underline">
-                {APP_CONFIG.supportPhone}
-              </a>
+      <section className="mt-8 rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+        <div className="flex flex-wrap items-start justify-between gap-6">
+          <div>
+            <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
+              연락처
             </p>
-            <p>
-              이메일{" "}
-              <a href={`mailto:${APP_CONFIG.supportEmail}`} className="underline-offset-2 hover:underline">
-                {APP_CONFIG.supportEmail}
-              </a>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              상담시간 {APP_CONFIG.supportHours}
-            </p>
+            <div className="mt-4 space-y-2 text-base font-semibold text-foreground">
+              <p>
+                전화{" "}
+                <a
+                  href={`tel:${APP_CONFIG.supportPhone}`}
+                  className="underline-offset-2 hover:underline"
+                >
+                  {APP_CONFIG.supportPhone}
+                </a>
+              </p>
+              <p>
+                이메일{" "}
+                <a
+                  href={`mailto:${APP_CONFIG.supportEmail}`}
+                  className="underline-offset-2 hover:underline"
+                >
+                  {APP_CONFIG.supportEmail}
+                </a>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                상담시간 {APP_CONFIG.supportHours}
+              </p>
+            </div>
           </div>
-        </div>
-        <div>
-          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-            빠른 이동
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Link href="/dashboard/new" className="bauhaus-button px-5 py-3 text-sm">
-              온라인 심의 신청
-            </Link>
-            <Link
-              href="/track"
-              className="inline-flex items-center rounded-[8px] border-2 border-[#111111] bg-background px-5 py-3 text-sm font-black text-foreground shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
-            >
-              진행/결과 조회
-            </Link>
-            <Link
-              href="/forms"
-              className="inline-flex items-center rounded-[8px] border-2 border-[#111111] bg-background px-5 py-3 text-sm font-black text-foreground shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
-            >
-              구버전 신청서 작성
-            </Link>
-          </div>
+          <SupportInquiryModal className="inline-flex h-11 items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-5 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5" />
         </div>
       </section>
     </div>

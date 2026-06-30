@@ -28,7 +28,6 @@ type MagazineAdminRow = {
   id: string;
   submission_id: string;
   user_id: string | null;
-  guest_token: string | null;
   target_channel: string | null;
   status: string | null;
   requester_name: string | null;
@@ -83,7 +82,7 @@ export default async function AdminMagazinePage({
   let query = supabase
     .from("magazine_requests")
     .select(
-      "id, submission_id, user_id, guest_token, target_channel, status, requester_name, requester_email, requester_phone, album_title, artist_name, release_date, artwork_url, album_url, video_url, article_body, credits_text, notes, published_url, admin_memo, created_at, submission:submissions ( id, title, artist_name, payment_status, type )",
+      "id, submission_id, user_id, target_channel, status, requester_name, requester_email, requester_phone, album_title, artist_name, release_date, artwork_url, album_url, video_url, article_body, credits_text, notes, published_url, admin_memo, created_at, submission:submissions ( id, title, artist_name, payment_status, type )",
     )
     .order("created_at", { ascending: false });
 
@@ -150,15 +149,9 @@ export default async function AdminMagazinePage({
                       {channelLabels[request.target_channel ?? ""] ??
                         request.target_channel}
                     </span>
-                    {request.user_id ? (
-                      <span className="rounded-[6px] border border-[#1556a4]/30 bg-[#1556a4]/10 px-2 py-1 text-[10px] font-black text-[#1556a4]">
-                        회원
-                      </span>
-                    ) : (
-                      <span className="rounded-[6px] border border-border px-2 py-1 text-[10px] font-black text-muted-foreground">
-                        비회원
-                      </span>
-                    )}
+                    <span className="rounded-[6px] border border-[#1556a4]/30 bg-[#1556a4]/10 px-2 py-1 text-[10px] font-black text-[#1556a4]">
+                      회원 크레딧
+                    </span>
                   </div>
                   <h2 className="mt-3 text-lg font-black text-foreground">
                     {request.artist_name ?? request.submission?.artist_name ?? "-"} ·{" "}
@@ -197,8 +190,8 @@ export default async function AdminMagazinePage({
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {[
                   ["아트워크", request.artwork_url],
-                  ["앨범 링크", request.album_url],
-                  ["영상 링크", request.video_url],
+                  ["멜론 또는 지니 링크", request.album_url],
+                  ["유튜브 영상 주소", request.video_url],
                 ].map(([label, value]) => (
                   <div
                     key={label}

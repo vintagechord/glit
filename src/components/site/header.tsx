@@ -96,7 +96,7 @@ export function SiteHeader() {
       observer.disconnect();
       window.removeEventListener("resize", updateHeight);
     };
-  }, [pathname]);
+  }, []);
 
   React.useEffect(() => {
     const supabase = createClient();
@@ -152,7 +152,7 @@ export function SiteHeader() {
       active = false;
       subscription.unsubscribe();
     };
-  }, [pathname]);
+  }, []);
 
   return (
     <header
@@ -199,7 +199,7 @@ export function SiteHeader() {
                 </button>
               </form>
               <ReliableLink
-                href={isEnglishRoute ? "/en/mypage" : "/mypage"}
+                href={isEnglishRoute ? "/en/mypage/history" : "/mypage/history"}
                 className={subtleButtonClass}
               >
                 {isEnglishRoute ? "My Page" : "마이페이지"}

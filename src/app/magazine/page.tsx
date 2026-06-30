@@ -5,17 +5,22 @@ import {
   ExternalLink,
   Gift,
   Info,
-  Newspaper,
   Ticket,
 } from "lucide-react";
 
+import { CreditUseTabs, type CreditUseTab } from "./credit-use-tabs";
 import {
   MagazineRequestForm,
   type MagazineCreditOption,
   type MagazineExistingRequest,
 } from "@/features/magazine/magazine-request-form";
+import {
+  StudioReservationForm,
+  type StudioReservationContactDefaults,
+} from "@/features/credits/studio-reservation-form";
 import { redeemCreditRewardFormAction } from "@/features/credits/actions";
 import {
+  getCreditRewardStudioUrl,
   getUserCreditSummary,
   listActiveCreditRewards,
   type CreditReward,
@@ -54,16 +59,16 @@ type MagazineRequestRow = {
   published_url: string | null;
 };
 
-type CreditUseTab = "magazine" | "services";
-
 type MagazinePageSearchParams = {
   tab?: string | string[];
   error?: string | string[];
   redeemed?: string | string[];
+  studioRequested?: string | string[];
 };
 
 const emptyCreditSummary: CreditSummary = {
   earned: 0,
+  adminGranted: 0,
   magazineUsed: 0,
   rewardUsed: 0,
   used: 0,
@@ -76,6 +81,7 @@ const firstParam = (value?: string | string[]) =>
 const noticeText = (
   error?: string | string[],
   redeemed?: string | string[],
+  studioRequested?: string | string[],
 ) => {
   const rawError = firstParam(error);
   if (rawError) {
@@ -90,6 +96,13 @@ const noticeText = (
     return {
       type: "success" as const,
       text: "크레딧 이용권이 발행되었습니다. 쿠폰코드는 보유 크레딧 페이지에서도 확인할 수 있습니다.",
+    };
+  }
+
+  if (firstParam(studioRequested)) {
+    return {
+      type: "success" as const,
+      text: "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.",
     };
   }
 
@@ -195,70 +208,28 @@ async function loadActiveRewards() {
   }
 }
 
-function CreditUseTabLink({
-  tab,
-  activeTab,
-  title,
-  description,
-  icon: Icon,
-}: {
-  tab: CreditUseTab;
-  activeTab: CreditUseTab;
-  title: string;
-  description: string;
-  icon: typeof Newspaper;
-}) {
-  const selected = activeTab === tab;
-
-  return (
-    <Link
-      href={`/magazine?tab=${tab}#credit-use`}
-      role="tab"
-      aria-selected={selected}
-      className={`flex min-h-[88px] items-center gap-4 rounded-[10px] border-2 p-4 text-left transition ${
-        selected
-          ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[5px_5px_0_#111111]"
-          : "border-border bg-card text-foreground hover:border-[#111111] hover:-translate-y-0.5"
-      }`}
-    >
-      <span
-        className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-2 ${
-          selected
-            ? "border-[#111111] bg-[#111111] text-white"
-            : "border-border bg-background text-[#1556a4]"
-        }`}
-      >
-        <Icon className="h-5 w-5" aria-hidden="true" />
-      </span>
-      <span>
-        <span className="block text-lg font-black">{title}</span>
-        <span className="mt-1 block text-xs font-semibold opacity-75">
-          {description}
-        </span>
-      </span>
-    </Link>
-  );
-}
-
 function CreditServiceRewardCard({
   reward,
   availableCredits,
   isAuthenticated,
+  contactDefaults,
 }: {
   reward: CreditReward;
   availableCredits: number;
   isAuthenticated: boolean;
+  contactDefaults?: StudioReservationContactDefaults;
 }) {
   const canRedeem = isAuthenticated && availableCredits >= reward.credits_required;
+  const studioUrl = getCreditRewardStudioUrl(reward.title);
 
   return (
-    <article className="flex min-h-[238px] flex-col justify-between rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
+    <article className="flex min-h-[238px] flex-col justify-between rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#111111] dark:border-white/70 dark:shadow-[5px_5px_0_#1556a4]">
       <div>
         <div className="flex items-start justify-between gap-4">
-          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] text-[#111111]">
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border-2 border-[#111111] bg-[#111111] text-white">
             <Gift className="h-5 w-5" aria-hidden="true" />
           </span>
-          <span className="rounded-[8px] border-2 border-[#111111] bg-background px-3 py-1 text-sm font-black text-foreground">
+          <span className="rounded-[8px] border-2 border-[#1556a4] bg-[#eaf2fb] px-3 py-1 text-sm font-black text-[#1556a4] dark:border-[#8bc3ff] dark:bg-[#102033] dark:text-[#8bc3ff]">
             {reward.credits_required.toLocaleString()} 크레딧
           </span>
         </div>
@@ -284,37 +255,58 @@ function CreditServiceRewardCard({
         </div>
       </div>
 
-      {!isAuthenticated ? (
-        <Link
-          href={`/login?next=${encodeURIComponent("/magazine?tab=services#credit-use")}`}
-          className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5"
-        >
-          로그인 후 이용
-        </Link>
-      ) : canRedeem ? (
-        <form action={redeemCreditRewardFormAction} className="mt-5">
-          <input type="hidden" name="rewardId" value={reward.id} />
-          <input
-            type="hidden"
-            name="redirectTo"
-            value="/magazine?tab=services#credit-use"
-          />
-          <button
-            type="submit"
+      <div className="mt-5 space-y-2">
+        {studioUrl ? (
+          <a
+            href={studioUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-4 py-3 text-sm font-black text-foreground transition hover:-translate-y-0.5 hover:border-[#1556a4] hover:bg-[#eaf2fb] dark:hover:bg-[#102033]"
+          >
+            녹음실 살펴보기
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+          </a>
+        ) : null}
+
+        {!isAuthenticated ? (
+          <Link
+            href={`/login?next=${encodeURIComponent("/magazine?tab=services#credit-use")}`}
             className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5"
           >
-            크레딧으로 이용권 발행
+            로그인 후 이용
+          </Link>
+        ) : studioUrl ? (
+          <StudioReservationForm
+            reward={reward}
+            canRedeem={canRedeem}
+            redirectTo="/magazine?tab=services#credit-use"
+            contactDefaults={contactDefaults}
+          />
+        ) : canRedeem ? (
+          <form action={redeemCreditRewardFormAction}>
+            <input type="hidden" name="rewardId" value={reward.id} />
+            <input
+              type="hidden"
+              name="redirectTo"
+              value="/magazine?tab=services#credit-use"
+            />
+            <button
+              type="submit"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5"
+            >
+              크레딧으로 이용권 발행
+            </button>
+          </form>
+        ) : (
+          <button
+            type="button"
+            disabled
+            className="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-[8px] border-2 border-border bg-muted px-4 py-3 text-sm font-black text-muted-foreground"
+          >
+            크레딧 부족
           </button>
-        </form>
-      ) : (
-        <button
-          type="button"
-          disabled
-          className="mt-5 inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-[8px] border-2 border-border bg-muted px-4 py-3 text-sm font-black text-muted-foreground"
-        >
-          크레딧 부족
-        </button>
-      )}
+        )}
+      </div>
     </article>
   );
 }
@@ -323,26 +315,27 @@ function CreditServiceRewardsPanel({
   rewards,
   creditSummary,
   isAuthenticated,
+  contactDefaults,
 }: {
   rewards: CreditReward[];
   creditSummary: CreditSummary;
   isAuthenticated: boolean;
+  contactDefaults?: StudioReservationContactDefaults;
 }) {
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="bauhaus-kicker">Service Coupon</p>
-          <h2 className="mt-3 text-2xl font-black text-foreground">
-            크레딧으로 이용 가능한 서비스
+          <h2 className="text-2xl font-black text-foreground">
+            서비스 이용권 목록
           </h2>
           <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
-            관리자가 등록한 녹음실 이용권과 온사이드 연계 서비스를 크레딧으로
-            교환할 수 있습니다. 새 서비스가 추가되면 이 탭에 자동으로 노출됩니다.
+            녹음실 예약 등 현재 신청 가능한 이용권입니다. 새 서비스가 추가되면
+            이 목록에 표시됩니다.
           </p>
         </div>
-        <div className="rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-[#111111] shadow-[4px_4px_0_#111111]">
-          <p className="text-[11px] font-black uppercase tracking-normal">
+        <div className="rounded-[10px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-white shadow-[4px_4px_0_#1556a4]">
+          <p className="text-[11px] font-black uppercase tracking-normal text-white/68">
             사용 가능
           </p>
           <p className="mt-1 flex items-center gap-2 text-2xl font-black">
@@ -362,6 +355,7 @@ function CreditServiceRewardsPanel({
               reward={reward}
               availableCredits={creditSummary.available}
               isAuthenticated={isAuthenticated}
+              contactDefaults={contactDefaults}
             />
           ))
         ) : (
@@ -375,7 +369,7 @@ function CreditServiceRewardsPanel({
       {isAuthenticated ? (
         <Link
           href="/mypage/credits"
-          className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-5 py-3 text-sm font-black text-foreground transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
+          className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-5 py-3 text-sm font-black text-foreground transition hover:-translate-y-0.5 hover:border-[#1556a4] hover:bg-[#eaf2fb] dark:hover:bg-[#102033]"
         >
           <Ticket className="h-4 w-4" aria-hidden="true" />
           보유 크레딧에서 발행 내역 보기
@@ -383,8 +377,8 @@ function CreditServiceRewardsPanel({
       ) : (
         <p className="flex max-w-2xl gap-2 text-xs font-semibold leading-5 text-muted-foreground">
           <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          서비스 이용권 발행은 회원 크레딧 기준으로 처리됩니다. 비회원 접수 건은
-          회원가입 후 관리자 확인을 통해 크레딧 연결이 필요할 수 있습니다.
+          크레딧 사용은 회원 계정으로 결제 완료된 음반심의 건에 대해서만
+          가능합니다. 로그인 후 이용해주세요.
         </p>
       )}
     </section>
@@ -408,9 +402,25 @@ export default async function MagazinePage({
   const notice = noticeText(
     resolvedSearchParams?.error,
     resolvedSearchParams?.redeemed,
+    resolvedSearchParams?.studioRequested,
   );
-  const [{ creditOptions, existingRequests, creditSummary }, rewards] =
-    await Promise.all([loadMagazineCreditData(user?.id), loadActiveRewards()]);
+  const admin = createAdminClient();
+  const [{ creditOptions, existingRequests, creditSummary }, rewards, profileResult] =
+    await Promise.all([
+      loadMagazineCreditData(user?.id),
+      loadActiveRewards(),
+      user
+        ? admin
+            .from("profiles")
+            .select("name, phone")
+            .eq("user_id", user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+  const profile = profileResult.data as {
+    name?: string | null;
+    phone?: string | null;
+  } | null;
 
   return (
     <div className="bg-background">
@@ -425,16 +435,12 @@ export default async function MagazinePage({
         />
         <div className="absolute inset-0 bg-[#111111]/68" />
         <div className="relative mx-auto flex min-h-[500px] w-full max-w-6xl flex-col justify-end px-6 pb-10 pt-24 text-white">
-          <p className="w-fit bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-[#111111]">
-            Onside Credits
-          </p>
-          <h1 className="font-display mt-5 max-w-3xl text-4xl font-black leading-tight sm:text-5xl">
-            온사이드의 크레딧으로 필요한 서비스를 이용하세요.
+          <h1 className="font-display max-w-3xl text-4xl font-black leading-tight sm:text-5xl">
+            크레딧으로 온사이드 연계 서비스를 이용하세요
           </h1>
           <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-white/82">
-            앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 매거진
-            발행, 녹음실 이용권 등 관리자가 등록한 온사이드 연계 서비스에 사용할 수
-            있습니다.
+            앨범심의 신청 후 지급된 크레딧으로 매거진 발행 요청, 녹음실 이용권 등
+            다양한 연계 서비스를 선택할 수 있습니다.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <a
@@ -446,27 +452,27 @@ export default async function MagazinePage({
               매거진 바로가기
               <ExternalLink className="h-4 w-4" aria-hidden="true" />
             </a>
-            <Link
+            <a
               href="#credit-use"
               className="inline-flex min-h-11 items-center rounded-[8px] border-2 border-white bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-white hover:text-[#111111]"
             >
               크레딧 사용하기
-            </Link>
+            </a>
           </div>
         </div>
       </section>
 
       <div className="mx-auto w-full max-w-6xl px-6 py-12">
-        <section className="rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[5px_5px_0_#111111] md:p-6">
-          <p className="text-xs font-black uppercase tracking-normal">
-            Credit
+        <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#1556a4] md:p-6">
+          <p className="relative w-fit rounded-[6px] border-2 border-[#111111] bg-white px-2.5 py-1 text-xs font-black text-[#111111]">
+            크레딧 안내
           </p>
-          <h2 className="mt-3 text-2xl font-black">
-            앨범심의 결제 완료 1건당 크레딧 1개가 발급됩니다.
+          <h2 className="relative mt-3 text-2xl font-black">
+            앨범심의 결제 완료 1건당 크레딧 1개가 지급됩니다.
           </h2>
-          <p className="mt-3 max-w-3xl text-sm font-semibold leading-6">
-            크레딧으로 워터멜론 매거진 발행 요청, 녹음실 이용권, 관리자가 추가하는
-            온사이드 연계 서비스를 이용할 수 있습니다.
+          <p className="relative mt-3 max-w-3xl text-sm font-semibold leading-6 text-[#111111]/78">
+            지급된 크레딧은 온사이드가 제공하는 연계 서비스 신청에 사용할 수
+            있습니다.
           </p>
         </section>
 
@@ -483,48 +489,30 @@ export default async function MagazinePage({
             </div>
           ) : null}
 
-          <div className="mb-6">
-            <p className="bauhaus-kicker">Credit Use</p>
-            <h2 className="mt-3 text-2xl font-black text-foreground">
-              사용처 선택
-            </h2>
-            <div
-              role="tablist"
-              aria-label="크레딧 사용처"
-              className="mt-4 grid gap-3 md:grid-cols-2"
-            >
-              <CreditUseTabLink
-                tab="magazine"
-                activeTab={activeTab}
-                title="워터멜론 매거진"
-                description="1크레딧으로 발행 요청"
-                icon={Newspaper}
+          <CreditUseTabs
+            initialTab={activeTab}
+            magazinePanel={
+              <MagazineRequestForm
+                isAuthenticated={Boolean(user)}
+                userEmail={user?.email ?? null}
+                creditOptions={creditOptions}
+                existingRequests={existingRequests}
+                availableCredits={creditSummary.available}
               />
-              <CreditUseTabLink
-                tab="services"
-                activeTab={activeTab}
-                title="서비스 이용권"
-                description="녹음실 등 관리자 등록 서비스"
-                icon={Gift}
+            }
+            servicesPanel={
+              <CreditServiceRewardsPanel
+                rewards={rewards}
+                creditSummary={creditSummary}
+                isAuthenticated={Boolean(user)}
+                contactDefaults={{
+                  name: profile?.name,
+                  phone: profile?.phone,
+                  email: user?.email,
+                }}
               />
-            </div>
-          </div>
-
-          {activeTab === "magazine" ? (
-            <MagazineRequestForm
-              isAuthenticated={Boolean(user)}
-              userEmail={user?.email ?? null}
-              creditOptions={creditOptions}
-              existingRequests={existingRequests}
-              availableCredits={creditSummary.available}
-            />
-          ) : (
-            <CreditServiceRewardsPanel
-              rewards={rewards}
-              creditSummary={creditSummary}
-              isAuthenticated={Boolean(user)}
-            />
-          )}
+            }
+          />
         </div>
       </div>
     </div>
