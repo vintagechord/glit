@@ -73,6 +73,24 @@ const checkEnv = (
   };
 };
 
+const checkEmail = (
+  severity: RuntimeHealthCheck["severity"] = "error",
+): RuntimeHealthCheck => {
+  const missing = [
+    !truthy(process.env.RESEND_API_KEY) ? "RESEND_API_KEY" : null,
+    !truthy(process.env.RESEND_FROM) && !truthy(APP_CONFIG.supportEmail)
+      ? "RESEND_FROM"
+      : null,
+  ].filter((key): key is string => Boolean(key));
+
+  return {
+    name: "email env",
+    ok: missing.length === 0,
+    severity,
+    detail: missing.length ? `missing: ${missing.join(", ")}` : undefined,
+  };
+};
+
 const checkConfiguredValues = (
   entries: Array<[string, string | number | undefined | null]>,
   label: string,
@@ -221,7 +239,7 @@ export const runRuntimeConfigChecks = (
 
   if (includeOptionalNotifications) {
     checks.push(
-      checkEnv(["RESEND_API_KEY", "RESEND_FROM"], "email", optionalSeverity),
+      checkEmail(optionalSeverity),
       checkEnv(
         ["KAKAO_ALIMTALK_WEBHOOK_URL"],
         "kakao notification",

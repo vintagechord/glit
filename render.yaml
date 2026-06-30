@@ -21,7 +21,7 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM
-        sync: false
+        value: onside <myonside@daum.net>
       - key: B2_S3_ENDPOINT
         sync: false
       - key: B2_REGION

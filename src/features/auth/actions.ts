@@ -273,9 +273,10 @@ export async function resetPasswordAction(
             };
           }
 
-          customMailError =
-            emailResult.message ??
-            "비밀번호 재설정 메일 발송에 실패했습니다.";
+          customMailError = emailResult.skipped
+            ? undefined
+            : emailResult.message ??
+              "비밀번호 재설정 메일 발송에 실패했습니다.";
         }
       }
     } catch (error) {

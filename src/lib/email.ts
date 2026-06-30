@@ -58,6 +58,15 @@ type EmailSendResult = {
   message?: string;
 };
 
+const getEmailFrom = () =>
+  process.env.RESEND_FROM?.trim() ||
+  `onside <${APP_CONFIG.supportEmail || "myonside@daum.net"}>`;
+
+const getResendConfig = () => ({
+  apiKey: process.env.RESEND_API_KEY?.trim() || "",
+  from: getEmailFrom(),
+});
+
 const escapeHtml = (value: string) =>
   value
     .replace(/&/g, "&amp;")
@@ -67,10 +76,9 @@ const escapeHtml = (value: string) =>
     .replace(/'/g, "&#39;");
 
 export async function sendWelcomeEmail(payload: WelcomeEmailPayload) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM;
+  const { apiKey, from } = getResendConfig();
 
-  if (!apiKey || !from) {
+  if (!apiKey) {
     return { ok: false, skipped: true } as const;
   }
 
@@ -114,15 +122,14 @@ const normalizeAbsoluteUrl = (value?: string) => {
 export async function sendPasswordResetEmail(
   payload: PasswordResetEmailPayload,
 ): Promise<EmailSendResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM;
+  const { apiKey, from } = getResendConfig();
 
-  if (!apiKey || !from) {
+  if (!apiKey) {
     return {
       ok: false,
       skipped: true,
       message:
-        "이메일 발송 설정이 되어 있지 않아 비밀번호 재설정 메일을 보내지 못했습니다.",
+        "RESEND_API_KEY가 설정되어 있지 않아 온사이드 발신 메일을 보내지 못했습니다.",
     };
   }
 
@@ -176,10 +183,9 @@ export async function sendPasswordResetEmail(
 export async function sendSubmissionReceiptEmail(
   payload: SubmissionReceiptPayload,
 ): Promise<EmailSendResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM;
+  const { apiKey, from } = getResendConfig();
 
-  if (!apiKey || !from) {
+  if (!apiKey) {
     return {
       ok: false,
       skipped: true,
@@ -273,10 +279,9 @@ export async function sendSubmissionReceiptEmail(
 export async function sendResultEmail(
   payload: ResultEmailPayload,
 ): Promise<EmailSendResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM;
+  const { apiKey, from } = getResendConfig();
 
-  if (!apiKey || !from) {
+  if (!apiKey) {
     return {
       ok: false,
       skipped: true,
@@ -353,10 +358,9 @@ export async function sendResultEmail(
 export async function sendSubmissionBankRequestEmail(
   payload: SubmissionBankRequestEmailPayload,
 ): Promise<EmailSendResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM;
+  const { apiKey, from } = getResendConfig();
 
-  if (!apiKey || !from) {
+  if (!apiKey) {
     return {
       ok: false,
       skipped: true,
@@ -468,10 +472,9 @@ export async function sendSubmissionBankRequestEmail(
 export async function sendSubmissionUpdateEmail(
   payload: SubmissionUpdateEmailPayload,
 ): Promise<EmailSendResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM;
+  const { apiKey, from } = getResendConfig();
 
-  if (!apiKey || !from) {
+  if (!apiKey) {
     return {
       ok: false,
       skipped: true,
