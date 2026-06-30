@@ -7,10 +7,12 @@ import {
   MessageCircle,
   RefreshCw,
   SendHorizontal,
+  Trash2,
   XCircle,
 } from "lucide-react";
 
 import {
+  supportChatAdminChannelName,
   supportChatChannelName,
   supportChatStatusLabels,
   type SupportChatConversation,
@@ -37,6 +39,12 @@ type ConversationThreadPayload = {
 type ReplyPayload = {
   conversation?: SupportChatConversation;
   message?: SupportChatMessage;
+  error?: string;
+};
+
+type DeletePayload = {
+  ok?: boolean;
+  deletedId?: string;
   error?: string;
 };
 
@@ -125,6 +133,7 @@ export function AdminChatClient({
   const [refreshing, setRefreshing] = React.useState(false);
   const [sending, setSending] = React.useState(false);
   const [savingStatus, setSavingStatus] = React.useState(false);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
@@ -235,6 +244,23 @@ export function AdminChatClient({
     }, 10000);
     return () => window.clearInterval(intervalId);
   }, [loadList]);
+
+  React.useEffect(() => {
+    const channel = supabase
+      .channel(supportChatAdminChannelName, {
+        config: { broadcast: { self: false } },
+      })
+      .on("broadcast", { event: "message" }, () => {
+        void loadList({ quiet: true });
+        if (selectedId) {
+          void loadConversation(selectedId, { quiet: true });
+        }
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadConversation, loadList, selectedId, supabase]);
 
   React.useEffect(() => {
     if (!selectedConversation) return;
@@ -349,6 +375,50 @@ export function AdminChatClient({
     }
   };
 
+  const deleteConversation = async (conversation: SupportChatConversation) => {
+    if (deletingId) return;
+
+    const confirmed = window.confirm(
+      `${getConversationTitle(conversation)} 상담을 삭제할까요?\n삭제한 상담과 메시지는 복구할 수 없습니다.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(conversation.id);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/chat", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: conversation.id }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | DeletePayload
+        | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error ?? "상담을 삭제하지 못했습니다.");
+      }
+
+      const nextConversations = conversations.filter(
+        (item) => item.id !== conversation.id,
+      );
+      setConversations(nextConversations);
+      if (selectedId === conversation.id) {
+        setSelectedId(nextConversations[0]?.id ?? null);
+        if (nextConversations.length === 0) {
+          setMessages([]);
+        }
+      }
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "상담을 삭제하지 못했습니다.",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const totalUnread = conversations.reduce(
     (sum, conversation) => sum + conversation.unreadAdminCount,
     0,
@@ -390,42 +460,62 @@ export function AdminChatClient({
             conversations.map((conversation) => {
               const active = conversation.id === selectedId;
               return (
-                <button
+                <div
                   key={conversation.id}
-                  type="button"
-                  onClick={() => setSelectedId(conversation.id)}
-                  className={`block w-full border-b border-border/60 px-4 py-3 text-left transition hover:bg-background ${
+                  className={`flex items-stretch border-b border-border/60 transition hover:bg-background ${
                     active ? "bg-[#f2cf27]/18" : "bg-card"
                   }`}
                 >
-                  <span className="flex items-start justify-between gap-3">
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-black text-foreground">
-                        {getConversationTitle(conversation)}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(conversation.id)}
+                    className="min-w-0 flex-1 px-4 py-3 text-left"
+                  >
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-black text-foreground">
+                          {getConversationTitle(conversation)}
+                        </span>
+                        <span className="mt-1 block truncate text-xs font-semibold text-muted-foreground">
+                          {conversation.lastMessagePreview || "새 상담"}
+                        </span>
                       </span>
-                      <span className="mt-1 block truncate text-xs font-semibold text-muted-foreground">
-                        {conversation.lastMessagePreview || "새 상담"}
+                      {conversation.unreadAdminCount > 0 ? (
+                        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#d9362c] px-1 text-[10px] font-black text-white">
+                          {conversation.unreadAdminCount}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="mt-3 flex items-center justify-between gap-2">
+                      <span
+                        className={`rounded-[6px] border px-2 py-1 text-[10px] font-black ${
+                          statusTone[conversation.status]
+                        }`}
+                      >
+                        {supportChatStatusLabels[conversation.status]}
+                      </span>
+                      <span className="text-[10px] font-semibold text-muted-foreground">
+                        {formatDateTime(conversation.lastMessageAt)}
                       </span>
                     </span>
-                    {conversation.unreadAdminCount > 0 ? (
-                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#d9362c] px-1 text-[10px] font-black text-white">
-                        {conversation.unreadAdminCount}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="mt-3 flex items-center justify-between gap-2">
-                    <span
-                      className={`rounded-[6px] border px-2 py-1 text-[10px] font-black ${
-                        statusTone[conversation.status]
-                      }`}
+                  </button>
+                  <div className="flex items-center border-l border-border/60 px-2">
+                    <button
+                      type="button"
+                      onClick={() => void deleteConversation(conversation)}
+                      disabled={deletingId === conversation.id}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-border bg-background text-muted-foreground transition hover:border-[#d9362c] hover:bg-[#d9362c]/10 hover:text-[#d9362c] disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`${getConversationTitle(conversation)} 상담 삭제`}
+                      title="상담 삭제"
                     >
-                      {supportChatStatusLabels[conversation.status]}
-                    </span>
-                    <span className="text-[10px] font-semibold text-muted-foreground">
-                      {formatDateTime(conversation.lastMessageAt)}
-                    </span>
-                  </span>
-                </button>
+                      {deletingId === conversation.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               );
             })
           ) : (

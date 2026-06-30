@@ -39,6 +39,8 @@ export type SupportChatPayload = {
 
 export const supportChatStorageKey = "onside:support-chat:v1";
 
+export const supportChatAdminChannelName = "support-chat:admin";
+
 export const supportChatChannelName = (
   conversationId: string,
   accessToken: string,

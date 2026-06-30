@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import {
+  supportChatAdminChannelName,
   supportChatChannelName,
   supportChatStatusLabels,
   supportChatStorageKey,
@@ -69,6 +70,9 @@ export function ChatbotWidget() {
   const [draft, setDraft] = React.useState("");
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const channelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(
+    null,
+  );
+  const adminChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(
     null,
   );
 
@@ -147,6 +151,19 @@ export function ChatbotWidget() {
   }, [hiddenRoute, loadConversation]);
 
   React.useEffect(() => {
+    if (hiddenRoute) return;
+    const channel = supabase.channel(supportChatAdminChannelName, {
+      config: { broadcast: { self: false } },
+    });
+    channel.subscribe();
+    adminChannelRef.current = channel;
+    return () => {
+      adminChannelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [hiddenRoute, supabase]);
+
+  React.useEffect(() => {
     if (!conversation || !accessToken) return;
     const channel = supabase
       .channel(supportChatChannelName(conversation.id, accessToken), {
@@ -210,7 +227,7 @@ export function ChatbotWidget() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          accessToken,
+          ...(accessToken ? { accessToken } : {}),
           body,
         }),
       });
@@ -230,11 +247,17 @@ export function ChatbotWidget() {
       setMessages((current) => mergeMessage(current, payload.message!));
       setDraft("");
 
-      await channelRef.current?.send({
-        type: "broadcast",
+      const broadcasts: Array<Promise<unknown>> = [];
+      const broadcast = {
+        type: "broadcast" as const,
         event: "message",
         payload,
-      });
+      };
+      if (channelRef.current) broadcasts.push(channelRef.current.send(broadcast));
+      if (adminChannelRef.current) {
+        broadcasts.push(adminChannelRef.current.send(broadcast));
+      }
+      await Promise.allSettled(broadcasts);
     } catch (sendError) {
       setError(
         sendError instanceof Error

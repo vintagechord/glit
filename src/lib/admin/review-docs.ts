@@ -6,6 +6,12 @@ import { ZipFile } from "yazl";
 
 import { formatDate, formatDateTime } from "@/lib/format";
 import {
+  MelonReviewDataError,
+  fetchMelonAlbumReviewData,
+  type MelonFetchOptions,
+  type MelonTrackReviewData,
+} from "@/lib/melon";
+import {
   createLyricsAllDocx,
   createLyricsTrackDocx,
   createPbcIntegratedDocx,
@@ -73,6 +79,15 @@ export class ReviewDocsNotFoundError extends Error {
   }
 }
 
+export class ReviewDocsInputError extends Error {
+  status = 400 as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ReviewDocsInputError";
+  }
+}
+
 export class ReviewDocsUnsupportedTypeError extends Error {
   status = 400 as const;
 
@@ -136,6 +151,8 @@ const getNumber = (record: DbRecord, key: string) => {
 const getBoolean = (record: DbRecord, key: string) => record[key] === true;
 
 const booleanLabel = (value: boolean) => (value ? "예" : "아니오");
+
+const hasText = (value: unknown) => valueToText(value).length > 0;
 
 const toDateParts = (value?: string | null) => {
   if (!value) return null;
@@ -443,6 +460,163 @@ const withDocumentContext = (
   },
 });
 
+const shouldHydrateFromMelon = (bundle: ReviewDocSubmissionBundle) => {
+  const submission = bundle.submission;
+  if (!getBoolean(submission, "is_oneclick")) return false;
+  if (!getText(submission, "melon_url")) return false;
+
+  const missingSubmissionBasics = [
+    "title",
+    "artist_name",
+    "release_date",
+    "genre",
+    "distributor",
+    "production_company",
+  ].some((key) => !hasText(submission[key]));
+  const missingTrackData =
+    bundle.tracks.length === 0 ||
+    bundle.tracks.some(
+      (track) =>
+        !hasText(track.track_title) ||
+        !hasText(track.composer) ||
+        !hasText(track.lyricist) ||
+        !hasText(track.arranger) ||
+        !hasText(track.lyrics),
+    );
+
+  return missingSubmissionBasics || missingTrackData;
+};
+
+const withFallback = (value: unknown, fallback: string) =>
+  hasText(value) ? value : fallback || value;
+
+const melonTrackToRecord = (
+  submissionId: string,
+  track: MelonTrackReviewData,
+  existing?: DbRecord,
+): DbRecord => ({
+  ...(existing ?? {}),
+  submission_id: getText(existing ?? {}, "submission_id") || submissionId,
+  track_no: getNumber(existing ?? {}, "track_no") ?? track.trackNo,
+  track_title: withFallback(existing?.track_title, track.trackTitle),
+  composer: withFallback(existing?.composer, track.composer),
+  lyricist: withFallback(existing?.lyricist, track.lyricist),
+  arranger: withFallback(existing?.arranger, track.arranger),
+  performer: withFallback(existing?.performer ?? existing?.performers, track.artistName),
+  lyrics: withFallback(existing?.lyrics, track.lyrics),
+  notes: getText(existing ?? {}, "notes") || `멜론 곡 ID: ${track.songId}`,
+  is_title: existing?.is_title === true || track.isTitle,
+  title_role:
+    getText(existing ?? {}, "title_role") || (track.isTitle ? "MAIN" : null),
+  broadcast_selected: existing?.broadcast_selected === true || track.isTitle,
+});
+
+async function hydrateOneClickMelonBundle(
+  bundle: ReviewDocSubmissionBundle,
+): Promise<ReviewDocSubmissionBundle> {
+  if (!shouldHydrateFromMelon(bundle)) return bundle;
+
+  const melonUrl = getText(bundle.submission, "melon_url");
+  try {
+    const melonAlbum = await fetchMelonAlbumReviewData(melonUrl, {
+      requireLyrics: true,
+    });
+    const submissionId = getText(bundle.submission, "id");
+    const existingByTrackNo = new Map(
+      bundle.tracks.map((track, index) => [
+        getNumber(track, "track_no") ?? index + 1,
+        track,
+      ]),
+    );
+
+    return {
+      ...bundle,
+      submission: {
+        ...bundle.submission,
+        title: withFallback(bundle.submission.title, melonAlbum.albumTitle),
+        artist_name: withFallback(
+          bundle.submission.artist_name,
+          melonAlbum.artistName,
+        ),
+        release_date: withFallback(
+          bundle.submission.release_date,
+          melonAlbum.releaseDate,
+        ),
+        genre: withFallback(bundle.submission.genre, melonAlbum.genre),
+        distributor: withFallback(
+          bundle.submission.distributor,
+          melonAlbum.distributor,
+        ),
+        production_company: withFallback(
+          bundle.submission.production_company,
+          melonAlbum.productionCompany,
+        ),
+      },
+      tracks: melonAlbum.tracks.map((track) =>
+        melonTrackToRecord(submissionId, track, existingByTrackNo.get(track.trackNo)),
+      ),
+    };
+  } catch (error) {
+    if (error instanceof MelonReviewDataError) {
+      throw new ReviewDocsDataError(error.message);
+    }
+    throw error;
+  }
+}
+
+export async function buildMelonReviewDocSubmissionBundles(
+  melonUrls: string[],
+  options: MelonFetchOptions = {},
+): Promise<ReviewDocSubmissionBundle[]> {
+  const uniqueUrls = Array.from(
+    new Set(melonUrls.map((url) => url.trim()).filter(Boolean)),
+  );
+  if (uniqueUrls.length === 0) {
+    throw new ReviewDocsInputError("멜론 링크를 1개 이상 입력해주세요.");
+  }
+
+  const albums = await Promise.all(
+    uniqueUrls.map(async (melonUrl, index) => {
+      try {
+        return await fetchMelonAlbumReviewData(melonUrl, {
+          ...options,
+          requireLyrics: true,
+        });
+      } catch (error) {
+        if (error instanceof MelonReviewDataError) {
+          throw new ReviewDocsInputError(
+            `${index + 1}번째 멜론 링크: ${error.message}`,
+          );
+        }
+        throw error;
+      }
+    }),
+  );
+
+  return albums.map((album) => {
+    const submissionId = `melon-${album.albumId}`;
+    return {
+      submission: {
+        id: submissionId,
+        type: "ALBUM",
+        is_oneclick: false,
+        melon_url: album.albumUrl,
+        title: album.albumTitle,
+        artist_name: album.artistName,
+        release_date: album.releaseDate,
+        genre: album.genre,
+        distributor: album.distributor,
+        production_company: album.productionCompany,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      tracks: album.tracks.map((track) => melonTrackToRecord(submissionId, track)),
+      files: [],
+      events: [],
+    };
+  });
+}
+
 async function zipToBuffer(zip: ZipFile) {
   const chunks: Buffer[] = [];
   return new Promise<Buffer>((resolve, reject) => {
@@ -565,11 +739,14 @@ export async function buildReviewDocsZip(bundles: ReviewDocSubmissionBundle[]) {
   }
 
   await assertTemplatesAvailable();
+  const hydratedBundles = await Promise.all(
+    bundles.map((bundle) => hydrateOneClickMelonBundle(bundle)),
+  );
   const zip = new ZipFile();
   const usedPaths = new Set<string>();
 
-  bundles.forEach((bundle, index) => {
-    const base = buildSubmissionTemplateData(bundle, index, bundles.length);
+  hydratedBundles.forEach((bundle, index) => {
+    const base = buildSubmissionTemplateData(bundle, index, hydratedBundles.length);
     const folder = uniquePath(
       sanitizeFilenamePart(
         `${base.artist_name} - ${base.album_title}`,
@@ -639,8 +816,8 @@ export async function buildReviewDocsZip(bundles: ReviewDocSubmissionBundle[]) {
   });
 
   const integratedFolder = "통합신청서";
-  const integratedData = bundles.map((bundle, index) =>
-    buildSubmissionTemplateData(bundle, index, bundles.length),
+  const integratedData = hydratedBundles.map((bundle, index) =>
+    buildSubmissionTemplateData(bundle, index, hydratedBundles.length),
   ) as Array<Parameters<typeof createTbsIntegratedDocx>[0][number]>;
 
   zip.addBuffer(
@@ -682,6 +859,7 @@ export function getReviewDocsErrorPayload(error: unknown) {
     error instanceof ReviewDocsTemplateMissingError ||
     error instanceof ReviewDocsDataError ||
     error instanceof ReviewDocsNotFoundError ||
+    error instanceof ReviewDocsInputError ||
     error instanceof ReviewDocsUnsupportedTypeError ||
     error instanceof ReviewDocsRenderError
   ) {

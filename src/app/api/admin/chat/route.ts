@@ -22,6 +22,10 @@ const statusSchema = z.object({
   markRead: z.boolean().optional(),
 });
 
+const deleteSchema = z.object({
+  conversationId: z.string().uuid(),
+});
+
 type ConversationRow = {
   id: string;
   access_token: string;
@@ -279,4 +283,38 @@ export async function PATCH(request: NextRequest) {
   }
 
   return NextResponse.json({ conversation: mapConversation(data as ConversationRow) });
+}
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAdmin();
+  if (auth.error) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "삭제할 상담을 확인해주세요." },
+      { status: 400 },
+    );
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("support_chat_conversations")
+    .delete()
+    .eq("id", parsed.data.conversationId);
+
+  if (error) {
+    console.error("[admin-chat][delete] error", error);
+    return NextResponse.json(
+      { error: "상담을 삭제하지 못했습니다." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    deletedId: parsed.data.conversationId,
+  });
 }

@@ -1,21 +1,16 @@
 import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 
 import {
   type SupportChatConversation,
   type SupportChatMessage,
   type SupportChatPayload,
 } from "@/lib/support-chat";
+import { parseVisitorChatMessagePayload } from "@/lib/support-chat-request";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
-const messageSchema = z.object({
-  accessToken: z.string().trim().min(20).optional(),
-  body: z.string().trim().min(1).max(2000),
-});
 
 type ConversationRow = {
   id: string;
@@ -180,7 +175,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const parsed = messageSchema.safeParse(await request.json().catch(() => null));
+  const parsed = parseVisitorChatMessagePayload(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) {
     return NextResponse.json(
       { error: "메시지 내용을 확인해주세요." },

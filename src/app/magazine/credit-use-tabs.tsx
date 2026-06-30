@@ -34,6 +34,26 @@ const tabs: Array<{
   },
 ];
 
+const selectedTabTone: Record<
+  CreditUseTab,
+  {
+    card: string;
+    icon: string;
+    meta: string;
+  }
+> = {
+  magazine: {
+    card: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[5px_5px_0_#1556a4]",
+    icon: "border-[#111111] bg-white text-[#111111]",
+    meta: "border-[#111111]/25 text-[#111111]/78",
+  },
+  services: {
+    card: "border-[#111111] bg-[#1556a4] text-white shadow-[5px_5px_0_#f2cf27]",
+    icon: "border-white bg-white text-[#1556a4]",
+    meta: "border-white/35 text-white/85",
+  },
+};
+
 function updateTabUrl(tab: CreditUseTab) {
   const url = new URL(window.location.href);
 
@@ -79,6 +99,7 @@ export function CreditUseTabs({
         >
           {tabs.map((tab) => {
             const selected = activeTab === tab.key;
+            const selectedTone = selectedTabTone[tab.key];
             const Icon = tab.icon;
 
             return (
@@ -92,14 +113,14 @@ export function CreditUseTabs({
                 onClick={() => selectTab(tab.key)}
                 className={`flex min-h-[116px] items-stretch gap-4 rounded-[10px] border-2 p-4 text-left transition-[background-color,border-color,color,box-shadow,transform] duration-75 ${
                   selected
-                    ? "border-[#111111] bg-[#111111] text-white shadow-[5px_5px_0_#1556a4]"
+                    ? selectedTone.card
                     : "border-border bg-card text-foreground hover:-translate-y-0.5 hover:border-[#1556a4]"
                 }`}
               >
                 <span
                   className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-2 transition-[background-color,border-color,color] duration-75 ${
                     selected
-                      ? "border-white bg-white text-[#1556a4]"
+                      ? selectedTone.icon
                       : "border-border bg-background text-[#1556a4]"
                   }`}
                 >
@@ -113,7 +134,7 @@ export function CreditUseTabs({
                   <span
                     className={`mt-auto w-fit rounded-[6px] border px-2 py-1 text-[10px] font-black ${
                       selected
-                        ? "border-white/28 text-white/78"
+                        ? selectedTone.meta
                         : "border-border text-muted-foreground"
                     }`}
                   >

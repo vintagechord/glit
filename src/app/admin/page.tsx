@@ -6,12 +6,14 @@ import Link from "next/link";
 import {
   ClipboardList,
   CreditCard,
+  FileArchive,
   MessageCircle,
   MessageSquareText,
   SendHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
+import { MelonReviewDocsDownloadForm } from "@/components/admin/review-docs-download";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -179,6 +181,33 @@ export default async function AdminPage() {
             tone="border-[#111111] bg-[#f2cf27] text-[#111111]"
           />
         </div>
+      </section>
+
+      <section
+        aria-labelledby="melon-review-docs-title"
+        className="mt-6 rounded-[18px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#1556a4] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]"
+      >
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#1556a4] dark:text-[#8bc3ff]">
+              REVIEW DOCS
+            </p>
+            <h2
+              id="melon-review-docs-title"
+              className="mt-1 text-base font-black text-foreground"
+            >
+              멜론 링크 심의자료 생성
+            </h2>
+            <p className="mt-1 text-xs font-semibold leading-5 text-muted-foreground">
+              멜론 앨범 링크만 입력하면 신청서, 심의폼, 앨범정보, 가사 파일,
+              방송국 통합신청서를 ZIP으로 생성합니다.
+            </p>
+          </div>
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111]">
+            <FileArchive className="h-5 w-5" aria-hidden="true" />
+          </span>
+        </div>
+        <MelonReviewDocsDownloadForm />
       </section>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
