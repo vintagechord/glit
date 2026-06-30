@@ -14,6 +14,7 @@ import {
   supportChatChannelName,
   supportChatStatusLabels,
   supportChatStorageKey,
+  type SupportChatBroadcastPayload,
   type SupportChatConversation,
   type SupportChatMessage,
 } from "@/lib/support-chat";
@@ -56,6 +57,9 @@ const mergeMessage = (
   );
 };
 
+const isDocumentVisible = () =>
+  typeof document === "undefined" || document.visibilityState === "visible";
+
 export function ChatbotWidget() {
   const pathname = usePathname();
   const supabase = React.useMemo(() => createClient(), []);
@@ -75,15 +79,18 @@ export function ChatbotWidget() {
   const adminChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(
     null,
   );
+  const loadRequestIdRef = React.useRef(0);
 
   const hiddenRoute =
     pathname.startsWith("/admin") || pathname.startsWith("/pay/inicis");
+  const activeConversationId = conversation?.id ?? null;
 
   const loadConversation = React.useCallback(
     async (
       token?: string | null,
       options?: { quiet?: boolean; markRead?: boolean },
     ) => {
+      const requestId = ++loadRequestIdRef.current;
       if (!options?.quiet) {
         setLoading(true);
       }
@@ -106,6 +113,7 @@ export function ChatbotWidget() {
         if (!response.ok || !payload) {
           throw new Error(payload?.error ?? "채팅 내역을 불러오지 못했습니다.");
         }
+        if (requestId !== loadRequestIdRef.current) return;
         if (payload.conversation) {
           setConversation(payload.conversation);
           setAccessToken(payload.conversation.accessToken);
@@ -120,7 +128,7 @@ export function ChatbotWidget() {
         }
         setMessages(payload.messages ?? []);
       } catch (loadError) {
-        if (!options?.quiet) {
+        if (!options?.quiet && requestId === loadRequestIdRef.current) {
           setError(
             loadError instanceof Error
               ? loadError.message
@@ -128,12 +136,80 @@ export function ChatbotWidget() {
           );
         }
       } finally {
-        if (!options?.quiet) {
+        if (!options?.quiet && requestId === loadRequestIdRef.current) {
           setLoading(false);
         }
       }
     },
     [],
+  );
+
+  const clearConversation = React.useCallback(() => {
+    setConversation(null);
+    setAccessToken(null);
+    setMessages([]);
+    try {
+      window.localStorage.removeItem(supportChatStorageKey);
+    } catch {
+      // Ignore storage failures.
+    }
+  }, []);
+
+  const applyBroadcastPayload = React.useCallback(
+    (payload?: SupportChatBroadcastPayload | null) => {
+      if (!payload) return false;
+
+      if (payload.deletedId) {
+        if (payload.deletedId === conversation?.id) {
+          clearConversation();
+        }
+        return true;
+      }
+
+      const nextConversation = payload.conversation;
+      if (
+        nextConversation &&
+        (nextConversation.id === conversation?.id ||
+          nextConversation.accessToken === accessToken)
+      ) {
+        setConversation(nextConversation);
+        setAccessToken(nextConversation.accessToken);
+        try {
+          window.localStorage.setItem(
+            supportChatStorageKey,
+            nextConversation.accessToken,
+          );
+        } catch {
+          // Ignore storage failures.
+        }
+      }
+
+      if (
+        payload.message &&
+        (payload.message.conversationId === conversation?.id ||
+          nextConversation?.accessToken === accessToken)
+      ) {
+        setMessages((current) => mergeMessage(current, payload.message!));
+      }
+
+      return Boolean(payload.conversation || payload.message);
+    },
+    [accessToken, clearConversation, conversation?.id],
+  );
+
+  const handleConversationBroadcast = React.useCallback(
+    (payload?: SupportChatBroadcastPayload | null) => {
+      const handled = applyBroadcastPayload(payload);
+      if (open && accessToken && isDocumentVisible()) {
+        void loadConversation(accessToken, {
+          quiet: true,
+          markRead: true,
+        });
+      } else if (!handled && accessToken && isDocumentVisible()) {
+        void loadConversation(accessToken, { quiet: true });
+      }
+    },
+    [accessToken, applyBroadcastPayload, loadConversation, open],
   );
 
   React.useEffect(() => {
@@ -164,16 +240,15 @@ export function ChatbotWidget() {
   }, [hiddenRoute, supabase]);
 
   React.useEffect(() => {
-    if (!conversation || !accessToken) return;
+    if (!activeConversationId || !accessToken) return;
     const channel = supabase
-      .channel(supportChatChannelName(conversation.id, accessToken), {
+      .channel(supportChatChannelName(activeConversationId, accessToken), {
         config: { broadcast: { self: false } },
       })
-      .on("broadcast", { event: "message" }, () => {
-        void loadConversation(accessToken, {
-          quiet: true,
-          markRead: open,
-        });
+      .on("broadcast", { event: "message" }, (event) => {
+        handleConversationBroadcast(
+          event.payload as SupportChatBroadcastPayload | undefined,
+        );
       })
       .subscribe();
     channelRef.current = channel;
@@ -181,15 +256,34 @@ export function ChatbotWidget() {
       channelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [accessToken, conversation, loadConversation, open, supabase]);
+  }, [
+    accessToken,
+    activeConversationId,
+    handleConversationBroadcast,
+    supabase,
+  ]);
 
   React.useEffect(() => {
     if (!accessToken || hiddenRoute) return;
     const intervalId = window.setInterval(() => {
-      void loadConversation(accessToken, { quiet: true });
-    }, 15000);
-    return () => window.clearInterval(intervalId);
-  }, [accessToken, hiddenRoute, loadConversation]);
+      if (isDocumentVisible()) {
+        void loadConversation(accessToken, { quiet: true });
+      }
+    }, 30000);
+    const handleVisibilityChange = () => {
+      if (isDocumentVisible()) {
+        void loadConversation(accessToken, {
+          quiet: true,
+          markRead: open,
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [accessToken, hiddenRoute, loadConversation, open]);
 
   React.useEffect(() => {
     listRef.current?.scrollTo({

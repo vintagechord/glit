@@ -37,6 +37,12 @@ export type SupportChatPayload = {
   messages: SupportChatMessage[];
 };
 
+export type SupportChatBroadcastPayload = {
+  conversation?: SupportChatConversation;
+  message?: SupportChatMessage;
+  deletedId?: string;
+};
+
 export const supportChatStorageKey = "onside:support-chat:v1";
 
 export const supportChatAdminChannelName = "support-chat:admin";

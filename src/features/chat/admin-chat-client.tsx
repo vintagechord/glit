@@ -15,6 +15,7 @@ import {
   supportChatAdminChannelName,
   supportChatChannelName,
   supportChatStatusLabels,
+  type SupportChatBroadcastPayload,
   type SupportChatConversation,
   type SupportChatMessage,
   type SupportChatStatus,
@@ -117,6 +118,9 @@ const getConversationTitle = (conversation: SupportChatConversation) =>
   conversation.guestPhone ||
   "방문자";
 
+const isDocumentVisible = () =>
+  typeof document === "undefined" || document.visibilityState === "visible";
+
 export function AdminChatClient({
   initialConversations,
 }: AdminChatClientProps) {
@@ -137,9 +141,14 @@ export function AdminChatClient({
   const [error, setError] = React.useState<string | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
+  const adminChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(
+    null,
+  );
   const channelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(
     null,
   );
+  const listRequestIdRef = React.useRef(0);
+  const threadRequestIdRef = React.useRef(0);
 
   const selectedConversation = React.useMemo(
     () =>
@@ -149,8 +158,12 @@ export function AdminChatClient({
         : null,
     [conversations, selectedId],
   );
+  const selectedConversationId = selectedConversation?.id ?? null;
+  const selectedConversationAccessToken =
+    selectedConversation?.accessToken ?? null;
 
   const loadList = React.useCallback(async (options?: { quiet?: boolean }) => {
+    const requestId = ++listRequestIdRef.current;
     if (!options?.quiet) {
       setRefreshing(true);
     }
@@ -162,9 +175,10 @@ export function AdminChatClient({
       if (!response.ok || !payload) {
         throw new Error(payload?.error ?? "채팅 목록을 불러오지 못했습니다.");
       }
+      if (requestId !== listRequestIdRef.current) return;
       setConversations(sortConversations(payload.conversations ?? []));
     } catch (listError) {
-      if (!options?.quiet) {
+      if (!options?.quiet && requestId === listRequestIdRef.current) {
         setError(
           listError instanceof Error
             ? listError.message
@@ -172,20 +186,27 @@ export function AdminChatClient({
         );
       }
     } finally {
-      if (!options?.quiet) {
+      if (!options?.quiet && requestId === listRequestIdRef.current) {
         setRefreshing(false);
       }
     }
   }, []);
 
   const loadConversation = React.useCallback(
-    async (conversationId: string, options?: { quiet?: boolean }) => {
+    async (
+      conversationId: string,
+      options?: { quiet?: boolean; markRead?: boolean },
+    ) => {
+      const requestId = ++threadRequestIdRef.current;
       if (!options?.quiet) {
         setLoadingThread(true);
       }
       setError(null);
       try {
         const params = new URLSearchParams({ conversationId });
+        if (options?.markRead ?? isDocumentVisible()) {
+          params.set("markRead", "admin");
+        }
         const response = await fetch(`/api/admin/chat?${params.toString()}`, {
           cache: "no-store",
         });
@@ -195,12 +216,13 @@ export function AdminChatClient({
         if (!response.ok || !payload?.conversation) {
           throw new Error(payload?.error ?? "대화를 불러오지 못했습니다.");
         }
+        if (requestId !== threadRequestIdRef.current) return;
         setConversations((current) =>
           upsertConversation(current, payload.conversation!),
         );
         setMessages(payload.messages ?? []);
       } catch (loadError) {
-        if (!options?.quiet) {
+        if (!options?.quiet && requestId === threadRequestIdRef.current) {
           setError(
             loadError instanceof Error
               ? loadError.message
@@ -208,10 +230,83 @@ export function AdminChatClient({
           );
         }
       } finally {
-        if (!options?.quiet) {
+        if (!options?.quiet && requestId === threadRequestIdRef.current) {
           setLoadingThread(false);
         }
       }
+    },
+    [],
+  );
+
+  const applyBroadcastPayload = React.useCallback(
+    (payload?: SupportChatBroadcastPayload | null) => {
+      if (!payload) return false;
+
+      if (payload.deletedId) {
+        setConversations((current) =>
+          current.filter((item) => item.id !== payload.deletedId),
+        );
+        if (selectedId === payload.deletedId) {
+          setSelectedId(null);
+          setMessages([]);
+        }
+        return true;
+      }
+
+      if (payload.conversation) {
+        setConversations((current) =>
+          upsertConversation(current, payload.conversation!),
+        );
+      }
+      if (payload.message?.conversationId === selectedId) {
+        setMessages((current) => mergeMessage(current, payload.message!));
+      }
+
+      return Boolean(payload.conversation || payload.message);
+    },
+    [selectedId],
+  );
+
+  const handleBroadcastPayload = React.useCallback(
+    (payload?: SupportChatBroadcastPayload | null) => {
+      const handled = applyBroadcastPayload(payload);
+      const conversationId =
+        payload?.message?.conversationId ?? payload?.conversation?.id ?? null;
+
+      if (!handled) {
+        void loadList({ quiet: true });
+      }
+      if (conversationId && conversationId === selectedId) {
+        void loadConversation(conversationId, {
+          quiet: true,
+          markRead: isDocumentVisible(),
+        });
+      }
+    },
+    [applyBroadcastPayload, loadConversation, loadList, selectedId],
+  );
+
+  const broadcastChatUpdate = React.useCallback(
+    async (
+      payload: SupportChatBroadcastPayload,
+      options?: { conversationChannel?: boolean },
+    ) => {
+      const broadcast = {
+        type: "broadcast" as const,
+        event: "message",
+        payload,
+      };
+      const channels = [
+        ...(options?.conversationChannel === false
+          ? []
+          : [channelRef.current]),
+        adminChannelRef.current,
+      ];
+      await Promise.allSettled(
+        channels
+          .filter(Boolean)
+          .map((channel) => channel!.send(broadcast)),
+      );
     },
     [],
   );
@@ -240,9 +335,20 @@ export function AdminChatClient({
 
   React.useEffect(() => {
     const intervalId = window.setInterval(() => {
-      void loadList({ quiet: true });
-    }, 10000);
-    return () => window.clearInterval(intervalId);
+      if (isDocumentVisible()) {
+        void loadList({ quiet: true });
+      }
+    }, 30000);
+    const handleVisibilityChange = () => {
+      if (isDocumentVisible()) {
+        void loadList({ quiet: true });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [loadList]);
 
   React.useEffect(() => {
@@ -250,39 +356,38 @@ export function AdminChatClient({
       .channel(supportChatAdminChannelName, {
         config: { broadcast: { self: false } },
       })
-      .on("broadcast", { event: "message" }, () => {
-        void loadList({ quiet: true });
-        if (selectedId) {
-          void loadConversation(selectedId, { quiet: true });
-        }
+      .on("broadcast", { event: "message" }, (event) => {
+        handleBroadcastPayload(
+          event.payload as SupportChatBroadcastPayload | undefined,
+        );
       })
       .subscribe();
+    adminChannelRef.current = channel;
     return () => {
+      adminChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [loadConversation, loadList, selectedId, supabase]);
+  }, [handleBroadcastPayload, supabase]);
 
   React.useEffect(() => {
-    if (!selectedConversation) return;
+    if (!selectedConversationId || !selectedConversationAccessToken) return;
+    const channelName = supportChatChannelName(
+      selectedConversationId,
+      selectedConversationAccessToken,
+    );
     const channel = supabase
-      .channel(
-        supportChatChannelName(
-          selectedConversation.id,
-          selectedConversation.accessToken,
-        ),
-        { config: { broadcast: { self: false } } },
-      )
-      .on("broadcast", { event: "message" }, () => {
-        void loadConversation(selectedConversation.id, { quiet: true });
-        void loadList({ quiet: true });
-      })
+      .channel(channelName, { config: { broadcast: { self: false } } })
       .subscribe();
     channelRef.current = channel;
     return () => {
       channelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [loadConversation, loadList, selectedConversation, supabase]);
+  }, [
+    selectedConversationAccessToken,
+    selectedConversationId,
+    supabase,
+  ]);
 
   React.useEffect(() => {
     threadRef.current?.scrollTo({
@@ -320,11 +425,7 @@ export function AdminChatClient({
       );
       setMessages((current) => mergeMessage(current, payload.message!));
       setDraft("");
-      await channelRef.current?.send({
-        type: "broadcast",
-        event: "message",
-        payload,
-      });
+      await broadcastChatUpdate(payload);
     } catch (replyError) {
       setError(
         replyError instanceof Error
@@ -359,11 +460,7 @@ export function AdminChatClient({
       setConversations((current) =>
         upsertConversation(current, payload.conversation!),
       );
-      await channelRef.current?.send({
-        type: "broadcast",
-        event: "message",
-        payload,
-      });
+      await broadcastChatUpdate(payload);
     } catch (statusError) {
       setError(
         statusError instanceof Error
@@ -408,6 +505,10 @@ export function AdminChatClient({
           setMessages([]);
         }
       }
+      await broadcastChatUpdate(
+        { deletedId: conversation.id },
+        { conversationChannel: selectedId === conversation.id },
+      );
     } catch (deleteError) {
       setError(
         deleteError instanceof Error

@@ -52,6 +52,12 @@ type MessageRow = {
   created_at: string | null;
 };
 
+const conversationSelect =
+  "id, access_token, user_id, guest_name, guest_email, guest_phone, status, last_message_preview, last_message_at, unread_admin_count, unread_visitor_count, created_at, updated_at";
+
+const messageSelect =
+  "id, conversation_id, sender_type, sender_user_id, sender_name, body, created_at";
+
 const mapConversation = (row: ConversationRow): SupportChatConversation => ({
   id: row.id,
   accessToken: row.access_token,
@@ -109,7 +115,7 @@ async function listConversations() {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("support_chat_conversations")
-    .select("*")
+    .select(conversationSelect)
     .order("last_message_at", { ascending: false })
     .limit(120);
 
@@ -121,7 +127,7 @@ async function loadMessages(conversationId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("support_chat_messages")
-    .select("id, conversation_id, sender_type, sender_user_id, sender_name, body, created_at")
+    .select(messageSelect)
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .limit(300);
@@ -137,6 +143,7 @@ export async function GET(request: NextRequest) {
   }
 
   const conversationId = request.nextUrl.searchParams.get("conversationId");
+  const markRead = request.nextUrl.searchParams.get("markRead") === "admin";
   const admin = createAdminClient();
 
   try {
@@ -144,12 +151,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ conversations: await listConversations() });
     }
 
-    const { data, error } = await admin
-      .from("support_chat_conversations")
-      .update({ unread_admin_count: 0 })
-      .eq("id", conversationId)
-      .select("*")
-      .maybeSingle();
+    const query = markRead
+      ? admin
+          .from("support_chat_conversations")
+          .update({ unread_admin_count: 0 })
+          .eq("id", conversationId)
+          .select(conversationSelect)
+      : admin
+          .from("support_chat_conversations")
+          .select(conversationSelect)
+          .eq("id", conversationId);
+
+    const { data, error } = await query.maybeSingle();
 
     if (error || !data) {
       throw error ?? new Error("conversation missing");
@@ -185,7 +198,7 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   const { data: conversation, error: conversationError } = await admin
     .from("support_chat_conversations")
-    .select("*")
+    .select(conversationSelect)
     .eq("id", parsed.data.conversationId)
     .maybeSingle();
 
@@ -205,7 +218,7 @@ export async function POST(request: NextRequest) {
       sender_name: auth.user.name || auth.user.email || "관리자",
       body: parsed.data.body,
     })
-    .select("id, conversation_id, sender_type, sender_user_id, sender_name, body, created_at")
+    .select(messageSelect)
     .maybeSingle();
 
   if (messageError || !message) {
@@ -228,7 +241,7 @@ export async function POST(request: NextRequest) {
       unread_admin_count: 0,
     })
     .eq("id", parsed.data.conversationId)
-    .select("*")
+    .select(conversationSelect)
     .maybeSingle();
 
   if (updateError || !updated) {
@@ -271,7 +284,7 @@ export async function PATCH(request: NextRequest) {
     .from("support_chat_conversations")
     .update(updatePayload)
     .eq("id", parsed.data.conversationId)
-    .select("*")
+    .select(conversationSelect)
     .maybeSingle();
 
   if (error || !data) {

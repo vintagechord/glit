@@ -38,6 +38,12 @@ type MessageRow = {
   created_at: string | null;
 };
 
+const conversationSelect =
+  "id, access_token, user_id, guest_name, guest_email, guest_phone, status, last_message_preview, last_message_at, unread_admin_count, unread_visitor_count, created_at, updated_at";
+
+const messageSelect =
+  "id, conversation_id, sender_type, sender_user_id, sender_name, body, created_at";
+
 const mapConversation = (row: ConversationRow): SupportChatConversation => ({
   id: row.id,
   accessToken: row.access_token,
@@ -89,7 +95,7 @@ async function loadMessages(conversationId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("support_chat_messages")
-    .select("id, conversation_id, sender_type, sender_user_id, sender_name, body, created_at")
+    .select(messageSelect)
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .limit(200);
@@ -119,13 +125,13 @@ export async function GET(request: NextRequest) {
   if (token) {
     conversationResult = await admin
       .from("support_chat_conversations")
-      .select("*")
+      .select(conversationSelect)
       .eq("access_token", token)
       .maybeSingle();
   } else if (user) {
     conversationResult = await admin
       .from("support_chat_conversations")
-      .select("*")
+      .select(conversationSelect)
       .eq("user_id", user.id)
       .neq("status", "CLOSED")
       .order("last_message_at", { ascending: false })
@@ -154,7 +160,7 @@ export async function GET(request: NextRequest) {
         .from("support_chat_conversations")
         .update({ unread_visitor_count: 0 })
         .eq("id", conversation.id)
-        .select("*")
+        .select(conversationSelect)
         .maybeSingle();
 
       if (updateError) {
@@ -193,7 +199,7 @@ export async function POST(request: NextRequest) {
   if (accessToken) {
     const { data, error } = await admin
       .from("support_chat_conversations")
-      .select("*")
+      .select(conversationSelect)
       .eq("access_token", accessToken)
       .maybeSingle();
     if (error) {
@@ -217,7 +223,7 @@ export async function POST(request: NextRequest) {
         guest_phone: profile?.phone || null,
         status: "WAITING_ADMIN",
       })
-      .select("*")
+      .select(conversationSelect)
       .maybeSingle();
 
     if (error || !data) {
@@ -245,7 +251,7 @@ export async function POST(request: NextRequest) {
       sender_name: senderName,
       body: parsed.data.body,
     })
-    .select("id, conversation_id, sender_type, sender_user_id, sender_name, body, created_at")
+    .select(messageSelect)
     .maybeSingle();
 
   if (messageError || !message) {
@@ -271,7 +277,7 @@ export async function POST(request: NextRequest) {
       unread_visitor_count: 0,
     })
     .eq("id", conversation.id)
-    .select("*")
+    .select(conversationSelect)
     .maybeSingle();
 
   if (updateError || !updated) {
