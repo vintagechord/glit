@@ -299,6 +299,7 @@ export async function createMagazineRequestAction(
     .from("magazine_requests")
     .select("id")
     .eq("submission_id", submission.id)
+    .neq("status", "CANCELED")
     .maybeSingle();
 
   if (existingError) {

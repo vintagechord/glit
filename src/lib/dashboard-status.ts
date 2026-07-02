@@ -63,7 +63,9 @@ export type DashboardStatusResult = {
   error?: string;
 };
 
-const configuredStatusCacheMs = Number(process.env.DASHBOARD_STATUS_CACHE_MS ?? "0");
+const configuredStatusCacheMs = Number(
+  process.env.DASHBOARD_STATUS_CACHE_MS ?? "8000",
+);
 const dashboardStatusCacheTtlMs = Number.isFinite(configuredStatusCacheMs)
   ? Math.max(0, Math.trunc(configuredStatusCacheMs))
   : 8000;
@@ -123,10 +125,18 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
     : 400;
   const queryEnd = maxRows - 1;
 
-  let albumResult = await buildAlbumBase()
-    .or(recentWindowOr)
-    .order("updated_at", { ascending: false })
-    .range(0, queryEnd);
+  const [initialAlbumResult, initialMvResult] = await Promise.all([
+    buildAlbumBase()
+      .or(recentWindowOr)
+      .order("updated_at", { ascending: false })
+      .range(0, queryEnd),
+    buildMvBase()
+      .or(recentWindowOr)
+      .order("updated_at", { ascending: false })
+      .range(0, queryEnd),
+  ]);
+
+  let albumResult = initialAlbumResult;
 
   if (albumResult.error && isResultNotifiedMissing(albumResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
@@ -139,10 +149,7 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
     return { error: "ALBUM_QUERY_FAILED" };
   }
 
-  let mvResult = await buildMvBase()
-    .or(recentWindowOr)
-    .order("updated_at", { ascending: false })
-    .range(0, queryEnd);
+  let mvResult = initialMvResult;
 
   if (mvResult.error && isResultNotifiedMissing(mvResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);

@@ -144,6 +144,7 @@ async function loadMagazineCreditData(userId?: string | null) {
           .from("magazine_requests")
           .select("submission_id")
           .in("submission_id", paidIds)
+          .neq("status", "CANCELED")
       : Promise.resolve({ data: [], error: null }),
     admin
       .from("magazine_requests")

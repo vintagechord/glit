@@ -90,33 +90,28 @@ export async function getUserCreditSummary(
   client: SupabaseClient,
   userId: string,
 ): Promise<CreditSummary> {
-  const [earnedResult, magazineResult, redemptionResult] = await Promise.all([
-    client
-      .from("submissions")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("type", "ALBUM")
-      .eq("payment_status", "PAID"),
-    client
-      .from("magazine_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .neq("status", "CANCELED"),
-    client
-      .from("credit_reward_redemptions")
-      .select("credits_spent")
-      .eq("user_id", userId)
-      .neq("status", "CANCELED"),
-  ]);
-  const [profileResult, grantResult] = await Promise.all([
-    client.from("profiles").select("role").eq("user_id", userId).maybeSingle(),
-    client.from("credit_grants").select("amount").eq("user_id", userId),
-  ]);
+  const [earnedResult, magazineResult, redemptionResult, grantResult] =
+    await Promise.all([
+      client
+        .from("submissions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("type", "ALBUM")
+        .eq("payment_status", "PAID"),
+      client
+        .from("magazine_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .neq("status", "CANCELED"),
+      client
+        .from("credit_reward_redemptions")
+        .select("credits_spent")
+        .eq("user_id", userId)
+        .neq("status", "CANCELED"),
+      client.from("credit_grants").select("amount").eq("user_id", userId),
+    ]);
   if (earnedResult.error) {
     throw new Error(`Failed to load earned credits: ${earnedResult.error.message}`);
-  }
-  if (profileResult.error) {
-    throw new Error(`Failed to load credit profile: ${profileResult.error.message}`);
   }
   if (grantResult.error) {
     throw new Error(`Failed to load admin credits: ${grantResult.error.message}`);
@@ -136,13 +131,9 @@ export async function getUserCreditSummary(
     (redemptionResult.data ?? []) as Array<{ credits_spent?: number | null }>
   ).reduce((total, row) => total + (row.credits_spent ?? 0), 0);
   const earned = countOrZero(earnedResult.count);
-  const adminGranted =
-    profileResult.data?.role === "admin"
-      ? ((grantResult.data ?? []) as Array<{ amount?: number | null }>).reduce(
-          (total, row) => total + (row.amount ?? 0),
-          0,
-        )
-      : 0;
+  const adminGranted = (
+    (grantResult.data ?? []) as Array<{ amount?: number | null }>
+  ).reduce((total, row) => total + (row.amount ?? 0), 0);
   const magazineUsed = countOrZero(magazineResult.count);
   const used = magazineUsed + rewardUsed;
   const totalEarned = earned + adminGranted;

@@ -44,10 +44,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
     if (scheduleIdle) {
       idleId = window.requestIdleCallback(() => setLoadChatbot(true), {
-        timeout: 2200,
+        timeout: 4200,
       });
     } else {
-      timeoutId = window.setTimeout(() => setLoadChatbot(true), 1200);
+      timeoutId = window.setTimeout(() => setLoadChatbot(true), 2600);
     }
 
     return () => {

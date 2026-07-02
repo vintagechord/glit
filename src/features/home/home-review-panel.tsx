@@ -381,6 +381,7 @@ export function HomeReviewPanel({
   showDetailLink = true,
   panelMinHeightClassName = "lg:min-h-[520px]",
   compact = false,
+  isLoading = false,
 }: {
   isLoggedIn: boolean;
   albumSubmissions: SubmissionSummary[];
@@ -396,6 +397,7 @@ export function HomeReviewPanel({
   showDetailLink?: boolean;
   panelMinHeightClassName?: string;
   compact?: boolean;
+  isLoading?: boolean;
 }) {
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
@@ -788,14 +790,18 @@ export function HomeReviewPanel({
     <div className={`min-w-0 w-full rounded-[10px] border-2 border-[#111111] bg-card ${shellPaddingClass} ${shellLayoutClass} shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] ${panelMinHeightClassName}`}>
       <div className="flex items-center justify-between text-xs font-black uppercase tracking-normal text-foreground/72 sm:text-sm dark:text-white/82">
         <span>
-          {isLoggedIn && activeSubmission
+          {isLoading
+            ? "심의 현황"
+            : isLoggedIn && activeSubmission
             ? `${submissionLabels.summary} 심의`
             : isLoggedIn
               ? "나의 심의"
               : ""}
         </span>
         <span className="inline-flex items-center gap-2">
-          {isLoggedIn ? (
+          {isLoading ? (
+            "불러오는 중"
+          ) : isLoggedIn ? (
             <>
               {isLive ? (
                 <span className="h-2 w-2 rounded-full bg-rose-500 live-blink" />
@@ -942,7 +948,7 @@ export function HomeReviewPanel({
             </div>
           ) : (
             <p className="mt-2 text-sm font-semibold text-foreground">
-              {enableRemoteSync && remoteStatus === "loading"
+              {isLoading || (enableRemoteSync && remoteStatus === "loading")
                 ? "불러오는 중..."
                 : "아직 접수된 내역이 없습니다."}
             </p>

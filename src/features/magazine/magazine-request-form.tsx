@@ -99,7 +99,8 @@ export function MagazineRequestForm({
     creditOptions.find((option) => option.id === selectedSubmissionId) ??
     creditOptions[0] ??
     null;
-  const canSubmit = isAuthenticated && Boolean(selectedCredit) && availableCredits > 0;
+  const hasAvailableCredits = availableCredits > 0;
+  const canSubmit = isAuthenticated && Boolean(selectedCredit) && hasAvailableCredits;
 
   React.useEffect(() => {
     if (!selectedSubmissionId && creditOptions[0]?.id) {
@@ -230,7 +231,9 @@ export function MagazineRequestForm({
               {creditOptions.length === 0 ? (
                 <option value="">
                   {isAuthenticated
-                    ? "사용 가능한 크레딧이 없습니다"
+                    ? hasAvailableCredits
+                      ? "매거진에 연결할 음반심의 건이 없습니다"
+                      : "사용 가능한 크레딧이 없습니다"
                     : "로그인 후 선택할 수 있습니다"}
                 </option>
               ) : null}
@@ -253,7 +256,9 @@ export function MagazineRequestForm({
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                회원 계정으로 결제 완료된 음반심의 건만 크레딧으로 사용할 수 있습니다.
+                {isAuthenticated && hasAvailableCredits
+                  ? `보유 크레딧은 ${availableCredits.toLocaleString()}개입니다. 매거진 발행은 결제 완료된 음반심의 건을 연결해야 합니다.`
+                  : "회원 계정으로 결제 완료된 음반심의 건만 크레딧으로 사용할 수 있습니다."}
               </p>
             )}
           </div>
@@ -416,6 +421,8 @@ export function MagazineRequestForm({
             <SendHorizontal className="h-4 w-4" aria-hidden="true" />
             {!isAuthenticated
               ? "로그인 후 이용"
+              : !selectedCredit && hasAvailableCredits
+                ? "사용할 음반심의 건 없음"
               : isPending
                 ? "요청 접수 중..."
                 : "크레딧 사용해서 발행 요청"}

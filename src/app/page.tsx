@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import {
   Clapperboard,
   Disc3,
@@ -10,7 +11,10 @@ import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { HomeHeroAdBanner } from "@/components/site/home-hero-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { ReliableLink } from "@/components/site/reliable-link";
-import { HomeSessionPanel } from "@/features/home/home-session-panel";
+import {
+  HomeSessionPanel,
+  HomeSessionPanelFallback,
+} from "@/features/home/home-session-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -148,7 +152,9 @@ export default function Home() {
               </div>
             </div>
 
-            <HomeSessionPanel />
+            <Suspense fallback={<HomeSessionPanelFallback />}>
+              <HomeSessionPanel />
+            </Suspense>
           </div>
         </div>
       </section>

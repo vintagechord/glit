@@ -25,8 +25,8 @@ const adminCheckedCookieName = "glit_admin_checked_at";
 const adminCheckedUserCookieName = "glit_admin_checked_user";
 const adminRoleCheckedCookieName = "glit_admin_role_checked_at";
 const adminRoleCheckedUserCookieName = "glit_admin_role_checked_user";
-const authCheckBypassTtlMs = 20_000;
-const adminCheckBypassTtlMs = 45_000;
+const authCheckBypassTtlMs = 60_000;
+const adminCheckBypassTtlMs = 300_000;
 const adminRoleCheckBypassTtlMs = 300_000;
 
 function hasSupabaseAuthCookie(request: NextRequest) {

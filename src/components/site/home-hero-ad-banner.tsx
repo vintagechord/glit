@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
 import { HomeHeroAdBannerClient } from "@/components/site/home-hero-ad-banner-client";
@@ -24,23 +26,16 @@ const fallbackBanners: HomeHeroAdBannerItem[] = [
   },
 ];
 
-const noStoreFetch: typeof fetch = (input, init) =>
-  fetch(input, { ...init, cache: "no-store" });
-
 function isBannerActive(banner: HomeHeroAdBannerItem, now: Date) {
   const startsOk = !banner.starts_at || new Date(banner.starts_at) <= now;
   const endsOk = !banner.ends_at || new Date(banner.ends_at) >= now;
   return startsOk && endsOk;
 }
 
-export async function HomeHeroAdBanner() {
-  let data: HomeHeroAdBannerItem[] | null = null;
-
-  try {
-    const supabase = createAdminClient({
-      global: { fetch: noStoreFetch },
-    });
-    const { data: queryData, error } = await supabase
+const loadHomeHeroBanners = unstable_cache(
+  async () => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
       .from("ad_banners")
       .select("id, title, description, image_url, link_url, starts_at, ends_at")
       .eq("is_active", true)
@@ -55,7 +50,17 @@ export async function HomeHeroAdBanner() {
       console.error("[HomeHeroAdBanner] Failed to fetch banners:", error.message);
     }
 
-    data = queryData;
+    return data;
+  },
+  ["home-hero-ad-banners"],
+  { revalidate: 60 },
+);
+
+export async function HomeHeroAdBanner() {
+  let data: HomeHeroAdBannerItem[] | null = null;
+
+  try {
+    data = await loadHomeHeroBanners();
   } catch (error) {
     if (isDynamicServerUsageError(error)) {
       throw error;

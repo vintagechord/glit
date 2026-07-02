@@ -222,12 +222,12 @@ export function ChatbotWidget() {
     }
     if (stored) {
       setAccessToken(stored);
+      void loadConversation(stored, { quiet: true });
     }
-    void loadConversation(stored, { quiet: true });
   }, [hiddenRoute, loadConversation]);
 
   React.useEffect(() => {
-    if (hiddenRoute) return;
+    if (hiddenRoute || (!open && !accessToken)) return;
     const channel = supabase.channel(supportChatAdminChannelName, {
       config: { broadcast: { self: false } },
     });
@@ -237,7 +237,7 @@ export function ChatbotWidget() {
       adminChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [hiddenRoute, supabase]);
+  }, [accessToken, hiddenRoute, open, supabase]);
 
   React.useEffect(() => {
     if (!activeConversationId || !accessToken) return;

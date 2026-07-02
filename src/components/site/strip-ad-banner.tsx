@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { StripAdBannerClient } from "@/components/site/strip-ad-banner-client";
 import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
@@ -11,34 +13,39 @@ type AdBanner = {
   ends_at: string | null;
 };
 
-const noStoreFetch: typeof fetch = (input, init) =>
-  fetch(input, { ...init, cache: "no-store" });
-
 function isBannerActive(banner: AdBanner, now: Date) {
   const startsOk = !banner.starts_at || new Date(banner.starts_at) <= now;
   const endsOk = !banner.ends_at || new Date(banner.ends_at) >= now;
   return startsOk && endsOk;
 }
 
-export async function StripAdBanner() {
-  let data: AdBanner[] | null = null;
-  try {
-    const supabase = createAdminClient({
-      global: { fetch: noStoreFetch },
-    });
-    const { data: queryData, error } = await supabase
+const loadStripBanners = unstable_cache(
+  async () => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
       .from("ad_banners")
       .select("id, title, image_url, link_url, starts_at, ends_at")
       .eq("is_active", true)
       .eq("placement", "STRIP")
       .order("created_at", { ascending: false });
+
     if (error) {
       if (isDynamicServerUsageError(error)) {
         throw error;
       }
       console.error("[StripAdBanner] Failed to fetch banners:", error.message);
     }
-    data = queryData;
+
+    return data;
+  },
+  ["strip-ad-banners"],
+  { revalidate: 60 },
+);
+
+export async function StripAdBanner() {
+  let data: AdBanner[] | null = null;
+  try {
+    data = await loadStripBanners();
   } catch (error) {
     if (isDynamicServerUsageError(error)) {
       throw error;

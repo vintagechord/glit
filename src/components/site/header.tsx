@@ -123,9 +123,9 @@ export function SiteHeader() {
 
     const syncSession = async () => {
       const {
-        data: { user },
+        data: { session },
         error,
-      } = await supabase.auth.getUser();
+      } = await supabase.auth.getSession();
 
       if (!active) return;
 
@@ -137,7 +137,7 @@ export function SiteHeader() {
         return;
       }
 
-      persist(user ? "authenticated" : "unauthenticated");
+      persist(session?.user ? "authenticated" : "unauthenticated");
     };
 
     void syncSession();

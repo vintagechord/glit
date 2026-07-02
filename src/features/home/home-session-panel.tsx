@@ -1,14 +1,14 @@
-"use client";
+import type { ComponentProps } from "react";
 
-import * as React from "react";
-
-import { createClient } from "@/lib/supabase/client";
+import { getDashboardStatusData } from "@/lib/dashboard-status";
+import { createServerSupabase } from "@/lib/supabase/server";
 
 import { HomeReviewPanel } from "./home-review-panel";
 
-type HomeReviewPanelProps = React.ComponentProps<typeof HomeReviewPanel>;
+type HomeReviewPanelProps = ComponentProps<typeof HomeReviewPanel>;
 type SubmissionSummary = HomeReviewPanelProps["albumSubmissions"][number];
 type StationItem = HomeReviewPanelProps["albumStationsMap"][string][number];
+type StationMap = HomeReviewPanelProps["albumStationsMap"];
 
 function buildExampleState() {
   const now = Date.now();
@@ -77,60 +77,100 @@ function buildExampleState() {
   };
 }
 
-export function HomeSessionPanel() {
-  const [isLoggedIn, setIsLoggedIn] = React.useState(false);
-  const [exampleState] = React.useState(() => buildExampleState());
+const panelProps = {
+  stationRowsPerPage: 3,
+  showPartialTrackBreakdown: false,
+  mobileStationLayout: "table" as const,
+  showDetailLink: false,
+  panelMinHeightClassName: "h-full lg:min-h-0",
+  compact: true,
+};
 
-  React.useEffect(() => {
-    const supabase = createClient();
-    let active = true;
+function normalizeStationsMap(
+  map:
+    | Record<
+        string,
+        Array<
+          Omit<StationItem, "station"> & {
+            station?: StationItem["station"] | StationItem["station"][] | null;
+          }
+        >
+      >
+    | undefined,
+): StationMap {
+  return Object.fromEntries(
+    Object.entries(map ?? {}).map(([submissionId, rows]) => [
+      submissionId,
+      rows.map((row) => ({
+        ...row,
+        station: Array.isArray(row.station)
+          ? (row.station[0] ?? null)
+          : (row.station ?? null),
+      })),
+    ]),
+  );
+}
 
-    const syncSession = async () => {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
+export function HomeSessionPanelFallback() {
+  return (
+    <HomeReviewPanel
+      isLoggedIn={false}
+      albumSubmissions={[]}
+      mvSubmissions={[]}
+      albumStationsMap={{}}
+      mvStationsMap={{}}
+      enableRemoteSync={false}
+      isLoading
+      {...panelProps}
+    />
+  );
+}
 
-      if (!active) return;
-      if (error) {
-        if (!error.message.toLowerCase().includes("auth session missing")) {
-          console.error("[HomeSessionPanel] Failed to read session:", error.message);
-        }
-        setIsLoggedIn(false);
-        return;
-      }
-      setIsLoggedIn(Boolean(user));
-    };
+export async function HomeSessionPanel() {
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-    void syncSession();
+  if (error) {
+    if (!error.message.toLowerCase().includes("auth session missing")) {
+      console.error("[HomeSessionPanel] Failed to read session:", error.message);
+    }
+  }
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!active) return;
-      setIsLoggedIn(Boolean(session?.user));
-    });
+  if (!user) {
+    const exampleState = buildExampleState();
+    return (
+      <HomeReviewPanel
+        isLoggedIn={false}
+        albumSubmissions={exampleState.albumSubmissions}
+        mvSubmissions={exampleState.mvSubmissions}
+        albumStationsMap={exampleState.albumStationsMap}
+        mvStationsMap={exampleState.mvStationsMap}
+        enableRemoteSync={false}
+        {...panelProps}
+      />
+    );
+  }
 
-    return () => {
-      active = false;
-      subscription.unsubscribe();
-    };
-  }, []);
+  const result = await getDashboardStatusData(user.id);
+  if (result.error || !result.data) {
+    console.error(
+      "[HomeSessionPanel] Failed to load dashboard status:",
+      result.error ?? "empty dashboard status",
+    );
+  }
 
   return (
     <HomeReviewPanel
-      isLoggedIn={isLoggedIn}
-      albumSubmissions={isLoggedIn ? [] : exampleState.albumSubmissions}
-      mvSubmissions={isLoggedIn ? [] : exampleState.mvSubmissions}
-      albumStationsMap={isLoggedIn ? {} : exampleState.albumStationsMap}
-      mvStationsMap={isLoggedIn ? {} : exampleState.mvStationsMap}
-      enableRemoteSync={isLoggedIn}
-      stationRowsPerPage={3}
-      showPartialTrackBreakdown={false}
-      mobileStationLayout="table"
-      showDetailLink={false}
-      panelMinHeightClassName="h-full lg:min-h-0"
-      compact
+      isLoggedIn
+      albumSubmissions={result.data?.albumSubmissions ?? []}
+      mvSubmissions={result.data?.mvSubmissions ?? []}
+      albumStationsMap={normalizeStationsMap(result.data?.albumStationsMap)}
+      mvStationsMap={normalizeStationsMap(result.data?.mvStationsMap)}
+      enableRemoteSync={Boolean(result.error || !result.data)}
+      {...panelProps}
     />
   );
 }
