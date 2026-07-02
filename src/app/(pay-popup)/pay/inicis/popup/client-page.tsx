@@ -159,7 +159,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
       const rawParams = Object.fromEntries(
         Object.entries(searchParams).map(([key, value]) => [key, firstParam(value)]),
       );
-      console.error("[Inicis][STDPay][popup] invalid context", { ctxValue, rawParams });
+      console.warn("[Inicis][STDPay][popup] invalid context", { ctxValue, rawParams });
       setError("알 수 없는 결제 컨텍스트입니다.");
       setLoadingBarVisible(false);
       return;

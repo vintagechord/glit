@@ -29,6 +29,10 @@ const authCheckBypassTtlMs = 60_000;
 const adminCheckBypassTtlMs = 300_000;
 const adminRoleCheckBypassTtlMs = 300_000;
 
+function secondsFromMs(ms: number) {
+  return Math.max(1, Math.ceil(ms / 1000));
+}
+
 function hasSupabaseAuthCookie(request: NextRequest) {
   return request.cookies
     .getAll()
@@ -38,7 +42,7 @@ function hasSupabaseAuthCookie(request: NextRequest) {
 function withAuthCheckedCookie(response: NextResponse) {
   response.cookies.set(authCheckedCookieName, String(Date.now()), {
     path: "/",
-    maxAge: 60,
+    maxAge: secondsFromMs(authCheckBypassTtlMs),
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -49,14 +53,14 @@ function withAuthCheckedCookie(response: NextResponse) {
 function withAdminCheckedCookie(response: NextResponse, userId: string) {
   response.cookies.set(adminCheckedCookieName, String(Date.now()), {
     path: "/",
-    maxAge: 90,
+    maxAge: secondsFromMs(adminCheckBypassTtlMs),
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
   });
   response.cookies.set(adminCheckedUserCookieName, userId, {
     path: "/",
-    maxAge: 90,
+    maxAge: secondsFromMs(adminCheckBypassTtlMs),
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -67,14 +71,14 @@ function withAdminCheckedCookie(response: NextResponse, userId: string) {
 function withAdminRoleCheckedCookie(response: NextResponse, userId: string) {
   response.cookies.set(adminRoleCheckedCookieName, String(Date.now()), {
     path: "/",
-    maxAge: 300,
+    maxAge: secondsFromMs(adminRoleCheckBypassTtlMs),
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
   });
   response.cookies.set(adminRoleCheckedUserCookieName, userId, {
     path: "/",
-    maxAge: 300,
+    maxAge: secondsFromMs(adminRoleCheckBypassTtlMs),
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -116,17 +120,22 @@ function clearAdminCheckedCookies(response: NextResponse) {
 
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
+  const authPathname =
+    isEnglishRoute && pathname !== "/en"
+      ? pathname.replace(/^\/en(?=\/)/, "")
+      : pathname;
   const isDev = process.env.NODE_ENV !== "production";
   const isDevStdPayPath =
     pathname === "/dev/inicis-stdpay" ||
     pathname.startsWith("/api/dev/inicis/stdpay") ||
     pathname.startsWith("/api/dev/inicis/stdpay-return");
-  const isAdminRoute = pathname.startsWith("/admin");
-  const isDashboardRoute = pathname.startsWith("/dashboard");
-  const isMypageRoute = pathname.startsWith("/mypage");
+  const isAdminRoute = authPathname.startsWith("/admin");
+  const isDashboardRoute = authPathname.startsWith("/dashboard");
+  const isMypageRoute = authPathname.startsWith("/mypage");
   const isPublicDashboardRoute =
-    pathname.startsWith("/dashboard/new") ||
-    (pathname.startsWith("/dashboard/pay/") &&
+    authPathname.startsWith("/dashboard/new") ||
+    (authPathname.startsWith("/dashboard/pay/") &&
       Boolean(request.nextUrl.searchParams.get("guestToken")));
   const isUserProtectedRoute =
     (isDashboardRoute && !isPublicDashboardRoute) || isMypageRoute;
@@ -144,7 +153,7 @@ export default async function proxy(request: NextRequest) {
   if (!hasSupabaseAuthCookie(request)) {
     const redirectUrl = request.nextUrl.clone();
     const nextPath = `${pathname}${request.nextUrl.search}`;
-    redirectUrl.pathname = "/login";
+    redirectUrl.pathname = isEnglishRoute ? "/en/login" : "/login";
     redirectUrl.search = "";
     redirectUrl.searchParams.set("next", nextPath);
     const redirectRes = NextResponse.redirect(redirectUrl);
@@ -225,8 +234,9 @@ export default async function proxy(request: NextRequest) {
 
   if (!user) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/login";
-    redirectUrl.searchParams.set("next", pathname);
+    const nextPath = `${pathname}${request.nextUrl.search}`;
+    redirectUrl.pathname = isEnglishRoute ? "/en/login" : "/login";
+    redirectUrl.searchParams.set("next", nextPath);
     const redirectRes = clearAdminCheckedCookies(
       withCookies(NextResponse.redirect(redirectUrl), response),
     );
@@ -278,7 +288,7 @@ export default async function proxy(request: NextRequest) {
 
       if (!profile || profile.role !== "admin") {
         const redirectUrl = request.nextUrl.clone();
-        redirectUrl.pathname = "/dashboard";
+        redirectUrl.pathname = isEnglishRoute ? "/en/dashboard" : "/dashboard";
         const redirectRes = clearAdminCheckedCookies(
           withCookies(NextResponse.redirect(redirectUrl), response),
         );
@@ -289,7 +299,7 @@ export default async function proxy(request: NextRequest) {
       }
     } else {
       const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/dashboard";
+      redirectUrl.pathname = isEnglishRoute ? "/en/dashboard" : "/dashboard";
       const redirectRes = clearAdminCheckedCookies(
         withCookies(NextResponse.redirect(redirectUrl), response),
       );
@@ -315,6 +325,8 @@ export const config = {
     "/admin/:path*",
     "/dashboard/:path*",
     "/mypage/:path*",
+    "/en/dashboard/:path*",
+    "/en/mypage/:path*",
     "/dev/inicis-stdpay",
     "/api/dev/inicis/stdpay/:path*",
     "/api/dev/inicis/stdpay-return/:path*",

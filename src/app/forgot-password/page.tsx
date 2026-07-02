@@ -38,8 +38,8 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="relative mx-auto flex w-full max-w-5xl flex-1 items-center justify-center px-6 py-16">
-      <div aria-hidden="true" className="absolute left-6 top-10 h-8 w-32 bg-[#1556a4]" />
-      <div aria-hidden="true" className="absolute bottom-6 right-6 h-16 w-16 bg-[#f2cf27]" />
+      <div aria-hidden="true" className="absolute left-6 top-10 hidden h-8 w-32 bg-[#1556a4] sm:block" />
+      <div aria-hidden="true" className="absolute bottom-6 right-6 hidden h-16 w-16 bg-[#f2cf27] sm:block" />
 
       <div className="relative w-full max-w-xl rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-10">
         <div className="space-y-3 text-center">

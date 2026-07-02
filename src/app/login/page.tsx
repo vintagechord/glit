@@ -25,8 +25,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <div className="relative mx-auto flex w-full max-w-5xl flex-1 items-center justify-center px-4 py-10 sm:px-6 sm:py-16">
-      <div aria-hidden="true" className="absolute left-8 top-10 h-8 w-32 bg-[#1556a4]" />
-      <div aria-hidden="true" className="absolute right-12 bottom-12 h-16 w-16 bg-[#d9362c]" />
+      <div aria-hidden="true" className="absolute left-8 top-10 hidden h-8 w-32 bg-[#1556a4] sm:block" />
+      <div aria-hidden="true" className="absolute right-12 bottom-12 hidden h-16 w-16 bg-[#d9362c] sm:block" />
       <div className="grid w-full max-w-3xl gap-7 rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:gap-10 sm:p-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-3 sm:space-y-4">
           {showSignupSuccess ? (

@@ -81,8 +81,16 @@ export function ChatbotWidget() {
   );
   const loadRequestIdRef = React.useRef(0);
 
+  const normalizedPathname = pathname.startsWith("/en/")
+    ? pathname.replace(/^\/en(?=\/)/, "")
+    : pathname;
   const hiddenRoute =
-    pathname.startsWith("/admin") || pathname.startsWith("/pay/inicis");
+    normalizedPathname.startsWith("/admin") ||
+    normalizedPathname.startsWith("/pay/inicis") ||
+    normalizedPathname === "/login" ||
+    normalizedPathname === "/signup" ||
+    normalizedPathname === "/forgot-password" ||
+    normalizedPathname === "/reset-password";
   const activeConversationId = conversation?.id ?? null;
 
   const loadConversation = React.useCallback(
@@ -493,7 +501,8 @@ export function ChatbotWidget() {
         <button
           type="button"
           onClick={toggleOpen}
-          className="fixed bottom-5 right-4 z-50 inline-flex min-h-12 items-center gap-2 rounded-[12px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-sm font-black text-[#111111] shadow-[5px_5px_0_#111111] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27] sm:bottom-6 sm:right-6"
+          className="fixed bottom-5 right-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#111111] bg-[#f2cf27] p-0 text-sm font-black text-[#111111] shadow-[5px_5px_0_#111111] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27] sm:bottom-6 sm:right-6 sm:w-auto sm:gap-2 sm:rounded-[12px] sm:px-4 sm:py-3"
+          aria-label="실시간 채팅 열기"
         >
           {conversation?.unreadVisitorCount ? (
             <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#111111] bg-[#d9362c] px-1 text-[10px] font-black text-white">
@@ -501,7 +510,7 @@ export function ChatbotWidget() {
             </span>
           ) : null}
           <MessageCircle className="h-5 w-5" aria-hidden="true" />
-          실시간 채팅
+          <span className="hidden sm:inline">실시간 채팅</span>
         </button>
       ) : null}
     </>

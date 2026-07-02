@@ -44,6 +44,10 @@ const exactTranslations: Record<string, string> = {
   "심의 신청부터": "From Submission",
   "결과 확인까지": "to Result Check",
   "TEST - TEST 심의": "TEST - TEST Review",
+  "리뉴얼 기념 음반심의 50% 할인": "Renewal Special: 50% Off Album Review",
+  "리뉴얼 기념 AlbumReview 50% Discount": "Renewal Special: 50% Off Album Review",
+  "할인 금액으로 바로 접수하세요.": "Submit now at the discounted price.",
+  "Discount 금액으로 바로 Submission하세요.": "Submit now at the discounted price.",
   "나의 모든 음반·뮤직비디오 심의를 관리하고, 진행 현황을 실시간으로 확인하세요.":
     "Manage all of your album and music video reviews, and check progress in real time.",
   "이전 온사이드도 페이지도 접속가능": "Previous Onside Site Still Available",
@@ -1220,7 +1224,6 @@ export function EnglishLanguagePack() {
       localizeLinks(root);
     };
 
-    apply();
     const observeOptions: MutationObserverInit = {
       childList: true,
       subtree: true,
@@ -1230,6 +1233,7 @@ export function EnglishLanguagePack() {
     };
     const pendingRoots = new Set<ParentNode>();
     let animationFrameId: number | null = null;
+    let timeoutId: number | null = null;
     let observer: MutationObserver | null = null;
 
     const flush = () => {
@@ -1247,6 +1251,12 @@ export function EnglishLanguagePack() {
       pendingRoots.add(root);
       if (animationFrameId !== null) return;
       animationFrameId = window.requestAnimationFrame(flush);
+    };
+
+    const startTranslation = () => {
+      timeoutId = null;
+      apply();
+      observer?.observe(document.body, observeOptions);
     };
 
     observer = new MutationObserver((mutations) => {
@@ -1272,7 +1282,9 @@ export function EnglishLanguagePack() {
       }
     });
 
-    observer.observe(document.body, observeOptions);
+    // This mutates text nodes outside React. Wait long enough for streamed
+    // client islands to hydrate first, otherwise React reports text mismatches.
+    timeoutId = window.setTimeout(startTranslation, 2500);
 
     const handleClick = (event: MouseEvent) => {
       if (
@@ -1310,6 +1322,9 @@ export function EnglishLanguagePack() {
     return () => {
       if (animationFrameId !== null) {
         window.cancelAnimationFrame(animationFrameId);
+      }
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
       }
       observer?.disconnect();
       document.removeEventListener("click", handleClick, true);
