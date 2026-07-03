@@ -1185,7 +1185,7 @@ export function ChatbotWidget() {
         <button
           type="button"
           onClick={toggleOpen}
-          className="fixed bottom-5 right-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#111111] bg-[#f2cf27] p-0 text-sm font-black text-[#111111] shadow-[5px_5px_0_#111111] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27] sm:bottom-6 sm:right-6 sm:w-auto sm:gap-2 sm:rounded-[12px] sm:px-4 sm:py-3"
+          className="fixed bottom-5 right-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#111111] bg-[#111111] p-0 text-sm font-black text-white shadow-[5px_5px_0_rgba(17,17,17,0.28)] transition hover:-translate-y-0.5 hover:bg-white hover:text-[#111111] dark:border-white dark:bg-white dark:text-[#111111] dark:shadow-[5px_5px_0_rgba(255,255,255,0.22)] dark:hover:bg-[#111111] dark:hover:text-white sm:bottom-6 sm:right-6 sm:w-auto sm:gap-2 sm:rounded-[12px] sm:px-4 sm:py-3"
           aria-label="실시간 채팅 열기"
         >
           {totalUnread > 0 ? (

@@ -6,7 +6,6 @@ import * as React from "react";
 import {
   normalizeStationReviewStatus,
   paymentStatusLabelMap,
-  reviewStatusLabelMap,
 } from "@/constants/review-status";
 import {
   SubmissionFilesPanel,
@@ -199,34 +198,6 @@ const paymentMethodLabels: Record<string, string> = {
   CARD: "카드",
 };
 
-const submissionStatusToneMap: Record<string, string> = {
-  DRAFT:
-    "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white",
-  SUBMITTED:
-    "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]",
-  PRE_REVIEW:
-    "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]",
-  WAITING_PAYMENT:
-    "border-[#111111] bg-[#f2cf27] text-[#111111] dark:border-[#f2cf27]",
-  IN_PROGRESS:
-    "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]",
-  RESULT_READY:
-    "border-[#111111] bg-[#1f7a5a] text-white dark:border-[#f2cf27] dark:bg-[#46b783] dark:text-[#06111f]",
-  COMPLETED:
-    "border-[#111111] bg-[#1f7a5a] text-white dark:border-[#f2cf27] dark:bg-[#46b783] dark:text-[#06111f]",
-};
-
-const paymentStatusToneMap: Record<string, string> = {
-  UNPAID:
-    "border-[#111111] bg-[#f2cf27] text-[#111111] dark:border-[#f2cf27]",
-  PAYMENT_PENDING:
-    "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]",
-  PAID:
-    "border-[#111111] bg-[#1f7a5a] text-white dark:border-[#f2cf27] dark:bg-[#46b783] dark:text-[#06111f]",
-  REFUNDED:
-    "border-[#111111] bg-[#d9362c] text-white dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111]",
-};
-
 const mvRatingLabel = (code?: string | null) => {
   switch (code) {
     case "ALL":
@@ -254,7 +225,7 @@ const aiUsageLabel = (value?: boolean | null) => {
 
 const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
   NOT_SENT: {
-    label: "접수대기",
+    label: "접수 대기",
     tone: "bg-[#f6d64a] text-black dark:text-black",
   },
   SENT: {
@@ -338,6 +309,155 @@ const getSubmissionTypeLabel = (type: string) => {
     default:
       return type;
   }
+};
+
+type DetailPrimaryAction = "payment-info" | "retry-payment" | "station-review" | null;
+
+const normalizePaymentStatusLabel = (
+  paymentStatus?: string | null,
+  isPaymentDone?: boolean,
+  isPaymentPending?: boolean,
+) => {
+  if (isPaymentDone || paymentStatus === "PAID") return "결제 완료";
+  if (paymentStatus === "REFUNDED") return "환불";
+  if (
+    isPaymentPending ||
+    paymentStatus === "PAYMENT_PENDING" ||
+    paymentStatus === "UNPAID" ||
+    paymentStatus === "WAITING_PAYMENT"
+  ) {
+    return "입금 확인 대기";
+  }
+  return paymentStatus
+    ? paymentStatusLabelMap[paymentStatus as keyof typeof paymentStatusLabelMap] ??
+        paymentStatus
+    : "-";
+};
+
+const buildSubmissionDisplayStatus = ({
+  submissionStatus,
+  paymentStatus,
+  paymentMethod,
+  isPaymentDone,
+  isPaymentPending,
+  stationTotal,
+  stationSubmitted,
+  stationDelivered,
+  isMvSubmission,
+}: {
+  submissionStatus: string;
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+  isPaymentDone: boolean;
+  isPaymentPending: boolean;
+  stationTotal: number;
+  stationSubmitted: number;
+  stationDelivered: number;
+  isMvSubmission: boolean;
+}) => {
+  const isDraft = submissionStatus === "DRAFT";
+  const safeStationTotal = Math.max(stationTotal, 0);
+  const submissionLabel = isDraft ? "임시 저장" : "신청서 제출 완료";
+  const paymentLabel = normalizePaymentStatusLabel(
+    paymentStatus,
+    isPaymentDone,
+    isPaymentPending,
+  );
+  const broadcastLabel = isPaymentDone
+    ? safeStationTotal > 0
+      ? `${Math.min(stationSubmitted, safeStationTotal)}/${safeStationTotal} 접수`
+      : "접수 준비"
+    : "접수 대기";
+  const resultLabel =
+    safeStationTotal > 0
+      ? `${Math.min(stationDelivered, safeStationTotal)}/${safeStationTotal} 결과 반영`
+      : "0/0 결과 반영";
+
+  if (isDraft) {
+    return {
+      submissionLabel,
+      paymentLabel,
+      broadcastLabel,
+      resultLabel,
+      primaryMessage: "신청서 작성이 아직 완료되지 않았습니다.",
+      secondaryMessage: "작성 내용을 확인한 뒤 제출을 완료해주세요.",
+      primaryAction: null as DetailPrimaryAction,
+      primaryActionLabel: null,
+    };
+  }
+
+  if (!isPaymentDone) {
+    return {
+      submissionLabel,
+      paymentLabel,
+      broadcastLabel,
+      resultLabel,
+      primaryMessage:
+        "결제 확인을 기다리고 있습니다. 결제가 확인되면 방송사 접수가 시작됩니다.",
+      secondaryMessage: "현재 입금 확인 전 단계입니다.",
+      primaryAction:
+        paymentMethod && paymentMethod !== "BANK"
+          ? ("retry-payment" as DetailPrimaryAction)
+          : ("payment-info" as DetailPrimaryAction),
+      primaryActionLabel:
+        paymentMethod && paymentMethod !== "BANK" ? "결제하기" : "입금 안내 보기",
+    };
+  }
+
+  if (safeStationTotal > 0 && stationDelivered >= safeStationTotal) {
+    return {
+      submissionLabel,
+      paymentLabel,
+      broadcastLabel,
+      resultLabel,
+      primaryMessage: isMvSubmission
+        ? "심의 결과가 모두 반영되었습니다."
+        : "방송사별 적격/부적격 결과가 모두 반영되었습니다.",
+      secondaryMessage: "방송국별 진행표에서 결과와 최근 업데이트를 확인할 수 있습니다.",
+      primaryAction: "station-review" as DetailPrimaryAction,
+      primaryActionLabel: "진행표 보기",
+    };
+  }
+
+  if (stationDelivered > 0) {
+    return {
+      submissionLabel,
+      paymentLabel,
+      broadcastLabel,
+      resultLabel,
+      primaryMessage: "방송사별 결과가 순차적으로 반영되고 있습니다.",
+      secondaryMessage: "결과가 도착하는 대로 방송국별 진행표에 업데이트됩니다.",
+      primaryAction: "station-review" as DetailPrimaryAction,
+      primaryActionLabel: "진행표 보기",
+    };
+  }
+
+  if (isPaymentDone) {
+    return {
+      submissionLabel,
+      paymentLabel,
+      broadcastLabel,
+      resultLabel,
+      primaryMessage: "결제가 확인되었습니다. 방송사 접수가 진행됩니다.",
+      secondaryMessage:
+        safeStationTotal > 0
+          ? "방송사별 접수 상태가 진행표에 순차 반영됩니다."
+          : "관리자 확인 후 방송사 접수 정보가 생성됩니다.",
+      primaryAction: "station-review" as DetailPrimaryAction,
+      primaryActionLabel: "진행표 보기",
+    };
+  }
+
+  return {
+    submissionLabel,
+    paymentLabel,
+    broadcastLabel,
+    resultLabel,
+    primaryMessage: "접수 상태를 확인하고 있습니다.",
+    secondaryMessage: "상세 진행 상황은 아래 진행표에서 확인할 수 있습니다.",
+    primaryAction: null as DetailPrimaryAction,
+    primaryActionLabel: null,
+  };
 };
 
 const openDownloadUrl = (url: string) => {
@@ -442,13 +562,6 @@ export function SubmissionDetailClient({
       : submission.artist_gender === "FEMALE"
         ? "여"
         : submission.artist_gender || "-";
-  const flowIndex = (() => {
-    if (submission.status === "DRAFT") return 0;
-    if (!isPaymentDone) return 0;
-    if (hasResultDeliverySignal) return 3;
-    if (submission.status === "IN_PROGRESS") return 2;
-    return 1;
-  })();
   const hasMvRatingResult =
     isMvDistribution && Boolean(submission.mv_desired_rating) && hasResultSignal;
   const hasMvCertificate =
@@ -457,43 +570,6 @@ export function SubmissionDetailClient({
     (isMvDistribution && hasMvRatingResult && hasMvCertificate) ||
     (isMvBroadcast && hasResultSignal);
   const canDownloadMvReviewAssets = hasMvRatingResult;
-  const flowStatusNotice = (() => {
-    if (isReviewComplete) {
-      return {
-        message: "심의 절차가 완료되었습니다.",
-        label: "완료",
-        tone: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100",
-      };
-    }
-    if (hasMvRatingResult) {
-      return {
-        message: "심의 등급이 확정되었고 필증 업로드를 기다리고 있습니다.",
-        label: "필증",
-        tone: "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
-      };
-    }
-    if (flowIndex === 3) {
-      return {
-        message: isMvSubmission
-          ? "방송국별 심의 등급 또는 결과가 반영되고 있습니다."
-          : "방송국별 적격/부적격 결과가 반영되고 있습니다.",
-        label: "결과",
-        tone: "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
-      };
-    }
-    if (isPaymentDone) {
-      return {
-        message: "결제가 확인되었고 방송사 접수와 심의가 진행됩니다.",
-        label: "진행",
-        tone: "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
-      };
-    }
-    return {
-      message: "현재 결제 대기 상태입니다. 결제 확인 후 심의가 시작됩니다.",
-      label: "대기",
-      tone: "border-slate-200 bg-slate-50 text-slate-700 dark:border-white/15 dark:bg-white/8 dark:text-white/80",
-    };
-  })();
   const ratingReason = submission.result_memo?.trim() || null;
 
 
@@ -613,20 +689,12 @@ export function SubmissionDetailClient({
     },
     [albumTracks],
   );
-  const submissionStatusLabel =
-    reviewStatusLabelMap[submission.status as keyof typeof reviewStatusLabelMap] ??
-    submission.status;
-  const displaySubmissionStatusLabel =
-    isPaymentPending
-      ? "결제 대기"
-      : submissionStatusLabel;
   const paymentStatusLabel =
-    paymentStatusLabelMap[
-    submission.payment_status as keyof typeof paymentStatusLabelMap
-    ] ??
-    (submission.payment_status === "UNPAID"
-      ? "미결제"
-      : submission.payment_status ?? "-");
+    normalizePaymentStatusLabel(
+      submission.payment_status,
+      isPaymentDone,
+      isPaymentPending,
+    );
   const canRetryCardPayment =
     submission.payment_method !== "BANK" && submission.payment_status !== "PAID";
   const retryPaymentHref = guestToken
@@ -663,12 +731,6 @@ export function SubmissionDetailClient({
               "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-100",
           }
           : null;
-  const submissionStatusTone =
-    submissionStatusToneMap[submission.status] ??
-    "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white";
-  const paymentStatusTone =
-    paymentStatusToneMap[submission.payment_status] ??
-    "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white";
   const submissionTypeLabel = getSubmissionTypeLabel(submission.type);
   const stationSummary = renderStationReviews.reduce(
     (acc, review) => {
@@ -713,120 +775,96 @@ export function SubmissionDetailClient({
     : isMvBroadcast &&
       (isReviewComplete ||
         (stationSummary.total > 0 && stationSummary.delivered >= stationSummary.total));
-  const summaryCards = [
+  const expectedStationTotal = Math.max(
+    stationSummary.total,
+    mvOptions?.length ?? 0,
+    packageInfo?.station_count ?? 0,
+  );
+  const displayStatus = buildSubmissionDisplayStatus({
+    submissionStatus: submission.status,
+    paymentStatus: submission.payment_status,
+    paymentMethod: submission.payment_method,
+    isPaymentDone,
+    isPaymentPending,
+    stationTotal: expectedStationTotal,
+    stationSubmitted: stationSummary.submitted,
+    stationDelivered: stationSummary.delivered,
+    isMvSubmission,
+  });
+  const heroSummaryItems = [
     {
       label: "접수 상태",
-      value: displaySubmissionStatusLabel,
-      tone: submissionStatusTone,
-      description: flowStatusNotice.message,
+      value: displayStatus.submissionLabel,
     },
     {
       label: "결제 상태",
-      value: paymentStatusLabel,
-      tone: paymentStatusTone,
-      description: submission.payment_method
-        ? `${paymentMethodLabels[submission.payment_method] ?? submission.payment_method} 결제`
-        : "결제 방식 미입력",
-      onClick:
-        canRetryCardPayment
-          ? () => router.push(retryPaymentHref)
-          : submission.payment_method === "BANK" && isPaymentPending
-            ? () => setShowPaymentInfo(true)
-            : undefined,
-      actionLabel:
-        canRetryCardPayment
-          ? "결제하기"
-          : submission.payment_method === "BANK" && isPaymentPending
-            ? "입금 안내 보기"
-            : undefined,
+      value: displayStatus.paymentLabel,
     },
     {
-      label: isMvDistribution
-        ? "등급/필증"
-        : isMvBroadcast
-          ? "방송국 결과"
-          : "방송국 결과",
-      value: isMvSubmission
-        ? isMvDistribution
-          ? canDownloadMvReviewAssets
-            ? hasMvCertificate
-              ? "등급/필증 완료"
-              : "등급 확정"
-            : "등급 대기"
-          : isMvResultDelivered
-            ? "결과 반영 완료"
-            : "결과 반영 대기"
-        : stationSummary.total > 0
-          ? `${stationSummary.delivered}/${stationSummary.total} 결과 반영`
-          : "진행 정보 대기",
-      tone:
-        isMvResultDelivered ||
-          canDownloadMvReviewAssets ||
-          (!isMvSubmission && stationSummary.delivered > 0)
-          ? "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]"
-          : "border-[#111111] bg-white text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white",
-      description: isMvSubmission
-        ? isMvDistribution
-          ? canDownloadMvReviewAssets
-            ? hasMvCertificate
-              ? "등급 이미지, 가이드, 필증 다운로드 가능"
-              : "등급 이미지와 가이드는 가능, 필증은 업로드 대기"
-            : "관리자가 등급을 확정하면 다운로드가 열립니다."
-          : isMvResultDelivered
-            ? "방송사별 심의 결과가 반영되었습니다."
-            : "방송사별 심의 결과 등록 후 진행표가 마감됩니다."
-        : stationSummary.actionNeeded > 0
-          ? `확인 필요 ${stationSummary.actionNeeded}곳`
-          : stationSummary.processing > 0
-            ? `진행 중 ${stationSummary.processing}곳`
-            : stationSummary.total > 0
-              ? "방송국별 결과가 순차 반영됩니다."
-              : "결제 확인 후 방송국 진행 정보가 표시됩니다.",
+      label: isMvSubmission ? "심의 접수" : "방송사 접수",
+      value: displayStatus.broadcastLabel,
+    },
+    {
+      label: "결과 반영",
+      value: displayStatus.resultLabel,
+    },
+    {
+      label: "최근 업데이트",
+      value: formatDateTime(submission.updated_at),
     },
   ];
-  const finalProcessLabel = isMvSubmission
-    ? isMvDistribution
-      ? "심의 등급 및 필증 발급"
-      : "방송사 심의 결과 통보"
-    : "적격/부적격 통보";
-  const finalProcessValue = isMvDistribution
+  const handlePrimaryStatusAction = () => {
+    if (displayStatus.primaryAction === "payment-info") {
+      setShowPaymentInfo(true);
+      return;
+    }
+    if (displayStatus.primaryAction === "retry-payment" && canRetryCardPayment) {
+      router.push(retryPaymentHref);
+      return;
+    }
+    if (displayStatus.primaryAction === "station-review") {
+      document
+        .getElementById("station-review-section")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+  const handleOpenSubmissionForm = () => {
+    setIsSubmissionFormOpen(true);
+    window.setTimeout(() => {
+      document
+        .getElementById("submission-form-section")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  };
+  const hasFinalResultStarted = isMvDistribution
     ? canDownloadMvReviewAssets
-      ? hasMvCertificate
-        ? `${mvRatingLabel(submission.mv_desired_rating)} / 필증 다운로드 가능`
-        : `${mvRatingLabel(submission.mv_desired_rating)} / 필증 준비 중`
-      : "등급 확정 대기"
-    : stationSummary.total > 0
-      ? `${stationSummary.delivered}/${stationSummary.total} 결과 반영`
-      : "방송사 접수 후 반영";
-  const finalProcessState =
-    isMvDistribution
-      ? canDownloadMvReviewAssets && hasMvCertificate
-        ? "done"
-        : canDownloadMvReviewAssets || stationSummary.delivered > 0
-          ? "active"
-          : "pending"
-      : stationSummary.total > 0 && stationSummary.delivered >= stationSummary.total
-        ? "done"
-        : stationSummary.delivered > 0
-          ? "active"
-          : "pending";
+    : stationSummary.delivered > 0 || hasResultDeliverySignal;
+  const hasFinalResultDone = isMvDistribution
+    ? canDownloadMvReviewAssets && hasMvCertificate
+    : expectedStationTotal > 0 && stationSummary.delivered >= expectedStationTotal;
+  const hasStationSubmissionDone =
+    isPaymentDone &&
+    ((expectedStationTotal > 0 && stationSummary.submitted >= expectedStationTotal) ||
+      hasFinalResultStarted);
+  const stepThreeState: "done" | "active" | "pending" = !isPaymentDone
+    ? "pending"
+    : hasStationSubmissionDone
+      ? "done"
+      : "active";
+  const finalProcessLabel = isMvSubmission ? "심의 결과 통보" : "적격/부적격 통보";
   const processSteps: Array<{
     label: string;
     value: string;
     state: "done" | "active" | "pending";
   }> = [
     {
-      label: "신청서 작성 및 결제",
-      value: isPaymentDone
-        ? "신청서 제출 및 결제 완료"
-        : isPaymentPending
-          ? "신청서 제출, 결제 대기"
-          : "신청서 확인 중",
-      state: isPaymentDone ? "done" : "active",
+      label: "신청서 작성 및 제출",
+      value: submission.status === "DRAFT" ? "신청서 작성 중" : "신청서 제출 완료",
+      state: submission.status === "DRAFT" ? "active" : "done",
     },
     {
       label: "결제 확인",
-      value: paymentStatusLabel,
+      value: isPaymentDone ? "결제 확인 완료" : "입금 확인 대기",
       state: isPaymentDone
         ? "done"
         : submission.status === "DRAFT"
@@ -834,57 +872,53 @@ export function SubmissionDetailClient({
           : "active",
     },
     {
-      label: "방송사 접수 완료",
-      value:
-        stationSummary.total > 0
-          ? `${stationSummary.submitted}/${stationSummary.total} 접수`
-          : "결제 확인 후 생성",
-      state:
-        stationSummary.total > 0 &&
-        stationSummary.submitted >= stationSummary.total
-          ? "done"
-          : stationSummary.submitted > 0 || isPaymentDone
-            ? "active"
-            : "pending",
+      label: "방송사 접수",
+      value: !isPaymentDone
+        ? "결제 확인 후 접수 시작"
+        : stepThreeState === "done"
+          ? "방송사 접수 완료"
+          : "방송사별 접수 진행 중",
+      state: stepThreeState,
     },
     {
       label: finalProcessLabel,
-      value: finalProcessValue,
-      state: finalProcessState,
+      value: hasFinalResultDone
+        ? "방송사별 결과 반영 완료"
+        : "방송사별 결과 순차 반영",
+      state: hasFinalResultDone
+        ? "done"
+        : hasFinalResultStarted
+          ? "active"
+          : "pending",
     },
   ];
-  const processDescription = isMvDistribution
-    ? "온라인 업로드용 뮤직비디오는 등급 확정 후 등급 이미지와 가이드를 제공하고, 필증은 관리자 업로드 후 다운로드됩니다."
-    : isMvBroadcast
-      ? "방송용 뮤직비디오는 방송사별 심의 결과만 진행표에 반영됩니다."
-      : "음반 심의는 방송사별 접수 완료 후 적격/부적격 결과가 순차 반영됩니다.";
   const renderProcessSection = () => (
-    <div className={detailPanelClass}>
-      <div>
+    <div className="rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className={detailKickerClass}>
           심의 진행 단계
         </p>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          {processDescription}
+        <p className="text-xs font-semibold text-muted-foreground">
+          전체 흐름에서 현재 위치를 보여줍니다.
         </p>
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
         {processSteps.map((step, index) => (
           <div
             key={step.label}
             className={[
-              "min-h-[128px] rounded-[8px] border-2 px-4 py-3 text-sm shadow-[3px_3px_0_#111111] dark:shadow-[3px_3px_0_#f2cf27]",
+              "rounded-[8px] border-2 px-4 py-3 text-sm transition",
               step.state === "done"
                 ? "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]"
                 : step.state === "active"
-                  ? "border-[#111111] bg-[#f2cf27] text-[#111111] dark:border-[#f2cf27]"
+                  ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
                   : "border-border bg-background text-muted-foreground",
             ].join(" ")}
           >
             <div className="flex items-center justify-between gap-3">
               <span
                 className={[
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-black",
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-black",
                   step.state === "done"
                     ? "border-white/70 bg-white/20 text-white dark:border-[#06111f]/40 dark:text-[#06111f]"
                     : step.state === "active"
@@ -894,15 +928,15 @@ export function SubmissionDetailClient({
               >
                 {index + 1}
               </span>
-              <span className="text-[11px] font-black uppercase tracking-normal opacity-80">
+              <span className="rounded-[6px] border border-current/30 px-2 py-0.5 text-[11px] font-black uppercase tracking-normal">
                 {step.state === "done"
                   ? "완료"
                   : step.state === "active"
                     ? "진행"
                     : "대기"}
-              </span>
+                </span>
             </div>
-            <p className="mt-4 font-black tracking-normal">{step.label}</p>
+            <p className="mt-3 font-black tracking-normal">{step.label}</p>
             <p className="mt-2 text-xs leading-5 opacity-85">{step.value}</p>
           </div>
         ))}
@@ -910,7 +944,7 @@ export function SubmissionDetailClient({
     </div>
   );
   const renderStationReviewSection = () => (
-    <div className={detailPanelClass}>
+    <div id="station-review-section" className={detailPanelClass}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className={detailKickerClass}>
           방송국별 진행표
@@ -930,10 +964,10 @@ export function SubmissionDetailClient({
         ) : (
           <>
             <span className="bauhaus-status-chip bauhaus-status-chip--neutral bauhaus-status-chip--compact">
-              전체 {stationSummary.total}곳
+              전체 {expectedStationTotal}곳
             </span>
             <span className="bauhaus-status-chip bauhaus-status-chip--info bauhaus-status-chip--compact">
-              결과 반영 {stationSummary.delivered}곳
+              {stationSummary.delivered}/{expectedStationTotal} 결과 반영
             </span>
             <span className="bauhaus-status-chip bauhaus-status-chip--success bauhaus-status-chip--compact">
               적격 반영 {stationSummary.approved}곳
@@ -1398,7 +1432,7 @@ export function SubmissionDetailClient({
                   {packageInfo?.name ?? submission.title ?? "신청 상품"}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  결제 대기 상태입니다. 아래 계좌로 입금 후 알려주세요.
+                  입금 확인 대기 상태입니다. 아래 계좌로 입금 후 알려주세요.
                 </p>
               </div>
               <button
@@ -1459,7 +1493,7 @@ export function SubmissionDetailClient({
                 </div>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                입금 후 24시간 내에 결제완료로 전환됩니다.
+                입금 후 24시간 내에 결제 완료로 전환됩니다.
               </p>
             </div>
           </div>
@@ -1469,8 +1503,8 @@ export function SubmissionDetailClient({
         <div className="pointer-events-none absolute right-0 top-0 h-6 w-32 bg-[#1556a4] dark:bg-[#3f8ad8]" />
         <div className="pointer-events-none absolute bottom-0 left-0 h-4 w-24 bg-[#d9362c] dark:bg-[#ff6258]" />
         <div className="pointer-events-none absolute bottom-0 right-0 h-4 w-40 bg-[#f2cf27]" />
-        <div className="relative z-10 flex flex-wrap items-start justify-between gap-8">
-          <div className="max-w-3xl flex-1">
+        <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="min-w-0">
             <p className="bauhaus-kicker">
               Submission Detail
             </p>
@@ -1484,51 +1518,64 @@ export function SubmissionDetailClient({
               <span className="rounded-[6px] border-2 border-[#111111] bg-[#1556a4] px-3 py-1.5 text-white dark:border-[#f2cf27]">
                 {submissionTypeLabel}
               </span>
-              {submission.genre ? (
-                <span className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white">
-                  {submission.genre}
-                </span>
-              ) : null}
-              {!isMvSubmission && albumTracks.length > 0 ? (
-                <span className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white">
-                  {albumTracks.length}곡
-                </span>
-              ) : null}
               <span className="rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1.5 text-[#111111] dark:border-[#f2cf27]">
                 {guestToken ? "비회원 접수" : "회원 접수"}
               </span>
             </div>
+            <div className="mt-6 max-w-3xl rounded-[8px] border-2 border-[#111111] bg-white/85 p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#111111]/55 dark:shadow-[4px_4px_0_#f2cf27]">
+              <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                현재 상태
+              </p>
+              <h2 className="mt-2 text-2xl font-black text-foreground">
+                {displayStatus.paymentLabel}
+              </h2>
+              <p className="mt-3 text-sm font-semibold leading-6 text-foreground/85">
+                {displayStatus.primaryMessage}
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-muted-foreground">
+                {displayStatus.secondaryMessage}
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {displayStatus.primaryActionLabel ? (
+                  <button
+                    type="button"
+                    onClick={handlePrimaryStatusAction}
+                    className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-5 py-2 text-sm font-black text-white shadow-[3px_3px_0_#1556a4] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[3px_3px_0_#3f8ad8]"
+                  >
+                    {displayStatus.primaryActionLabel}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleOpenSubmissionForm}
+                  className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-5 py-2 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
+                >
+                  신청서 확인
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-3 lg:w-auto lg:min-w-[520px]">
-            {summaryCards.map((card) => (
-              <button
-                key={card.label}
-                type="button"
-                onClick={card.onClick}
-                disabled={!card.onClick}
-                className={`rounded-[8px] border-2 px-5 py-4 text-left shadow-[4px_4px_0_#111111] transition dark:shadow-[4px_4px_0_#f2cf27] ${card.onClick
-                  ? "cursor-pointer hover:-translate-y-0.5"
-                  : "cursor-default"
-                  } ${card.tone}`}
-              >
-                <p className="text-[11px] font-black uppercase tracking-normal opacity-75">
-                  {card.label}
-                </p>
-                <p className="mt-3 text-lg font-black tracking-normal">
-                  {card.value}
-                </p>
-                <p className="mt-2 text-xs leading-5 opacity-80">
-                  {card.description}
-                </p>
-                {card.actionLabel ? (
-                  <p className="mt-3 text-[11px] font-black uppercase tracking-normal opacity-90">
-                    {card.actionLabel}
+          <aside className="rounded-[8px] border-2 border-[#111111] bg-white/75 p-4 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#111111]/50 dark:shadow-[4px_4px_0_#f2cf27]">
+            <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+              핵심 요약
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+              {heroSummaryItems.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-[6px] border-2 border-border bg-background px-3 py-2"
+                >
+                  <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                    {item.label}
                   </p>
-                ) : null}
-              </button>
-            ))}
-          </div>
+                  <p className="mt-1 break-keep text-sm font-black text-foreground">
+                    {item.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -1628,7 +1675,7 @@ export function SubmissionDetailClient({
             </div>
           </div>
         </div>
-        <div className={`order-4 ${detailPanelClass}`}>
+        <div id="submission-form-section" className={`order-4 ${detailPanelClass}`}>
           <p className={detailKickerClass}>
             작성 신청서
           </p>

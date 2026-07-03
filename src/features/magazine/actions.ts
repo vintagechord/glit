@@ -72,22 +72,6 @@ const magazineStatusUpdateSchema = z.object({
   redirectTo: optionalText,
 });
 
-type SubmissionForMagazine = {
-  id: string;
-  user_id: string | null;
-  type: string | null;
-  payment_status: string | null;
-  title: string | null;
-  artist_name: string | null;
-  release_date: string | null;
-  applicant_name?: string | null;
-  applicant_email?: string | null;
-  applicant_phone?: string | null;
-};
-
-const submissionSelect =
-  "id, user_id, type, payment_status, title, artist_name, release_date, applicant_name, applicant_email, applicant_phone";
-
 const sanitizeStorageFileName = (name: string) =>
   name
     .replace(/[^a-zA-Z0-9._-]/g, "_")
@@ -132,7 +116,7 @@ const getMagazinePayload = (
     const artworkEntry = payload.get("artworkFile");
     return {
       values: {
-        submissionId: payload.get("submissionId"),
+        submissionId: payload.get("submissionId") || undefined,
         targetChannel: payload.get("targetChannel"),
         requesterName: payload.get("requesterName"),
         requesterEmail: payload.get("requesterEmail"),
@@ -160,12 +144,12 @@ const getMagazinePayload = (
 async function uploadMagazineArtworkFile({
   admin,
   file,
-  submissionId,
+  scopeId,
   userId,
 }: {
   admin: ReturnType<typeof createAdminClient>;
   file: File;
-  submissionId: string;
+  scopeId: string;
   userId: string;
 }) {
   if (!isValidArtworkFile(file)) {
@@ -176,7 +160,7 @@ async function uploadMagazineArtworkFile({
   }
 
   const safeName = sanitizeStorageFileName(file.name || "artwork.jpg");
-  const path = `${userId}/${submissionId}/${Date.now()}-${safeName}`;
+  const path = `${userId}/${scopeId}/${Date.now()}-${safeName}`;
   const arrayBuffer = await file.arrayBuffer();
 
   const { error } = await admin.storage
@@ -192,7 +176,7 @@ async function uploadMagazineArtworkFile({
   }
 
   const { data } = admin.storage.from(magazineArtworkBucket).getPublicUrl(path);
-  return { publicUrl: data.publicUrl };
+  return { publicUrl: data.publicUrl, path };
 }
 
 const withSavedQuery = (path: string) => {
@@ -226,20 +210,25 @@ async function isAdminUser(userId: string) {
   return data?.role === "admin";
 }
 
-async function findSubmissionForMagazine({
-  submissionId,
-}: {
-  submissionId?: string;
-}) {
-  const admin = createAdminClient();
-  const query = admin.from("submissions").select(submissionSelect);
-  const result = await query.eq("id", submissionId ?? "").maybeSingle();
-
-  return {
-    submission: result.data as SubmissionForMagazine | null,
-    error: result.error,
-  };
-}
+const normalizeMagazineRpcError = (message?: string | null) => {
+  const raw = message ?? "";
+  if (raw.includes("LOGIN_REQUIRED")) {
+    return "로그인 후 매거진 등록을 신청할 수 있습니다.";
+  }
+  if (raw.includes("INSUFFICIENT_CREDITS")) {
+    return "사용 가능한 크레딧이 없습니다. 나의 크레딧에서 적립/사용 내역을 확인해주세요.";
+  }
+  if (raw.includes("INVALID_SUBMISSION")) {
+    return "연결할 수 없는 음반심의 접수입니다.";
+  }
+  if (raw.includes("DUPLICATE_SUBMISSION")) {
+    return "이미 이 음반심의 건으로 매거진 발행 요청이 접수되었습니다.";
+  }
+  if (raw.includes("INVALID_TARGET_CHANNEL")) {
+    return "발행 위치를 다시 선택해주세요.";
+  }
+  return "매거진 발행 요청을 저장하지 못했습니다.";
+};
 
 export async function createMagazineRequestAction(
   payload: z.infer<typeof magazineRequestSchema> | FormData,
@@ -263,28 +252,6 @@ export async function createMagazineRequestAction(
   if (!user) {
     return { error: "로그인한 회원만 크레딧을 사용할 수 있습니다." };
   }
-  if (!parsed.data.submissionId) {
-    return { error: "사용할 매거진 크레딧을 선택해주세요." };
-  }
-
-  const { submission, error: submissionError } =
-    await findSubmissionForMagazine({
-      submissionId: parsed.data.submissionId,
-    });
-
-  if (submissionError || !submission) {
-    return { error: "결제 완료된 음반심의 접수를 찾을 수 없습니다." };
-  }
-
-  if (submission.type !== "ALBUM") {
-    return { error: "매거진 발행 요청은 음반심의 결제 건만 사용할 수 있습니다." };
-  }
-  if (submission.payment_status !== "PAID") {
-    return { error: "음반심의 결제 완료 후 매거진 발행 요청이 가능합니다." };
-  }
-  if (submission.user_id !== user.id) {
-    return { error: "본인 음반심의 접수만 사용할 수 있습니다." };
-  }
 
   const admin = createAdminClient();
   const creditSummary = await getUserCreditSummary(admin, user.id);
@@ -295,26 +262,11 @@ export async function createMagazineRequestAction(
     };
   }
 
-  const { data: existingRequest, error: existingError } = await admin
-    .from("magazine_requests")
-    .select("id")
-    .eq("submission_id", submission.id)
-    .neq("status", "CANCELED")
-    .maybeSingle();
-
-  if (existingError) {
-    console.error("[magazine] duplicate check failed", existingError);
-    return { error: "매거진 크레딧 사용 여부를 확인하지 못했습니다." };
-  }
-  if (existingRequest?.id) {
-    return { error: "이미 이 음반심의 건으로 매거진 발행 요청이 접수되었습니다." };
-  }
-
   const uploadedArtwork = artworkFile
     ? await uploadMagazineArtworkFile({
         admin,
         file: artworkFile,
-        submissionId: submission.id,
+        scopeId: parsed.data.submissionId ?? "general",
         userId: user.id,
       })
     : null;
@@ -323,43 +275,51 @@ export async function createMagazineRequestAction(
     return { error: uploadedArtwork.error };
   }
 
-  const { data: request, error: insertError } = await admin
-    .from("magazine_requests")
-    .insert({
-      submission_id: submission.id,
-      user_id: user.id,
-      target_channel: parsed.data.targetChannel,
-      requester_name: parsed.data.requesterName,
-      requester_email: parsed.data.requesterEmail,
-      requester_phone: parsed.data.requesterPhone ?? null,
-      album_title: parsed.data.albumTitle ?? submission.title ?? null,
-      artist_name: parsed.data.artistName ?? submission.artist_name ?? null,
-      release_date: parsed.data.releaseDate ?? submission.release_date ?? null,
-      artwork_url: uploadedArtwork?.publicUrl ?? parsed.data.artworkUrl ?? null,
-      album_url: parsed.data.albumUrl ?? null,
-      video_url: parsed.data.videoUrl ?? null,
-      article_body: parsed.data.articleBody ?? null,
-      credits_text: parsed.data.creditsText ?? null,
-      notes: parsed.data.notes ?? null,
-    })
-    .select("id")
-    .maybeSingle();
+  const { data: requestData, error: insertError } = await supabase.rpc(
+    "create_magazine_request",
+    {
+      p_submission_id: parsed.data.submissionId ?? null,
+      p_target_channel: parsed.data.targetChannel,
+      p_requester_name: parsed.data.requesterName,
+      p_requester_email: parsed.data.requesterEmail,
+      p_requester_phone: parsed.data.requesterPhone ?? null,
+      p_album_title: parsed.data.albumTitle ?? null,
+      p_artist_name: parsed.data.artistName ?? null,
+      p_release_date: parsed.data.releaseDate ?? null,
+      p_artwork_url: uploadedArtwork?.publicUrl ?? parsed.data.artworkUrl ?? null,
+      p_album_url: parsed.data.albumUrl ?? null,
+      p_video_url: parsed.data.videoUrl ?? null,
+      p_article_body: parsed.data.articleBody ?? null,
+      p_credits_text: parsed.data.creditsText ?? null,
+      p_notes: parsed.data.notes ?? null,
+    },
+  );
 
   if (insertError) {
-    if (insertError.code === "23505") {
-      return { error: "이미 이 음반심의 건으로 매거진 발행 요청이 접수되었습니다." };
+    if (uploadedArtwork?.path) {
+      const { error: cleanupError } = await admin.storage
+        .from(magazineArtworkBucket)
+        .remove([uploadedArtwork.path]);
+      if (cleanupError) {
+        console.error("[magazine] artwork cleanup failed", cleanupError);
+      }
     }
     console.error("[magazine] request insert failed", insertError);
-    return { error: "매거진 발행 요청을 저장하지 못했습니다." };
+    return { error: normalizeMagazineRpcError(insertError.message) };
   }
 
   revalidatePath("/magazine");
   revalidatePath("/en/magazine");
+  revalidatePath("/mypage/credits");
+  revalidatePath("/dashboard/credits");
   revalidatePath("/admin/magazine");
+  revalidatePath("/admin/credits/requests");
+
+  const request = requestData as { id?: string } | null;
 
   return {
     message:
-      "매거진 발행 요청이 접수되었습니다. 발매일 기준 3일 내 공개를 목표로 확인하겠습니다.",
+      "매거진 등록 신청이 접수되었습니다. 관리자가 내용을 확인합니다.",
     requestId: request?.id ?? undefined,
   };
 }

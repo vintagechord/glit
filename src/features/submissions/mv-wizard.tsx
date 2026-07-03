@@ -2365,7 +2365,7 @@ export function MvWizard({
 
       if (result.submissionId) {
         if (paymentMethod === "CARD") {
-          setNotice(result.emailWarning ? { emailWarning: result.emailWarning } : {});
+          setNotice(result.emailNotice ? { emailNotice: result.emailNotice } : {});
           const { ok, error } = await openInicisCardPopup({
             context: "mv",
             submissionId: result.submissionId,
@@ -2382,7 +2382,7 @@ export function MvWizard({
         }
         if (paymentMethod === "BANK") {
           clearDraftStorage();
-          setNotice(result.emailWarning ? { emailWarning: result.emailWarning } : {});
+          setNotice(result.emailNotice ? { emailNotice: result.emailNotice } : {});
           setCompletionId(result.submissionId);
           if (result.guestToken) {
             setCompletionGuestToken(result.guestToken);
@@ -4194,9 +4194,9 @@ export function MvWizard({
           <p className="mt-3 text-sm text-muted-foreground">
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
-	          {notice.emailWarning ? (
+	          {notice.emailNotice ? (
 	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
-	              {notice.emailWarning}
+	              {notice.emailNotice}
 	            </div>
           ) : null}
           {completionId && !shouldShowGuestLookup && (

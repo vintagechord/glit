@@ -452,13 +452,17 @@ export async function updateStudioReservationStatusFormAction(
   }
 
   const redemptionStatus =
-    parsed.data.status === "CANCELED" ? "CANCELED" : "ISSUED";
+    parsed.data.status === "APPROVED"
+      ? "USED"
+      : parsed.data.status === "CANCELED"
+        ? "CANCELED"
+        : "ISSUED";
   const { error: redemptionError } = await admin
     .from("credit_reward_redemptions")
     .update({
       status: redemptionStatus,
       canceled_at: parsed.data.status === "CANCELED" ? now : null,
-      used_at: null,
+      used_at: parsed.data.status === "APPROVED" ? now : null,
     })
     .eq("id", reservation.redemption_id);
 

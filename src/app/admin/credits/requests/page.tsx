@@ -28,7 +28,7 @@ type ProfileRow = {
 
 type MagazineRequestRow = {
   id: string;
-  submission_id: string;
+  submission_id: string | null;
   user_id: string | null;
   target_channel: string | null;
   status: string | null;
@@ -219,7 +219,7 @@ export default async function AdminCreditRequestsPage({
                       </div>
                       <h3 className="mt-3 text-base font-black text-foreground">
                         {request.artist_name ?? "-"} ·{" "}
-                        {request.album_title ?? "앨범명 미입력"}
+                        {request.album_title ?? "제목 미입력"}
                       </h3>
                       <p className="mt-1 text-xs text-muted-foreground">
                         요청일 {formatDateTime(request.created_at)} · 발매일{" "}

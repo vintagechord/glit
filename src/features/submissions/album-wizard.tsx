@@ -2546,7 +2546,7 @@ export function AlbumWizard({
       const applicantPhoneValue = applicantPhone.trim();
       const submissionIds: string[] = [];
       const guestTokens: Array<{ token: string; title: string }> = [];
-      let emailWarning: string | undefined;
+      let emailNotice: string | undefined;
 
       for (let index = 0; index < draftsForSubmit.length; index += 1) {
         const draft = draftsForSubmit[index];
@@ -2641,14 +2641,14 @@ export function AlbumWizard({
             title: draft.title.trim() || "제목 미입력",
           });
         }
-        if (result.emailWarning && !emailWarning) {
-          emailWarning = result.emailWarning;
+        if (result.emailNotice && !emailNotice) {
+          emailNotice = result.emailNotice;
         }
       }
 
       if (status === "SUBMITTED" && submissionIds.length > 0) {
         if (paymentMethod === "CARD") {
-          setNotice(emailWarning ? { emailWarning } : {});
+          setNotice(emailNotice ? { emailNotice } : {});
           const { ok, error } = await openInicisCardPopup({
             context: isOneClick ? "oneclick" : "music",
             submissionId: submissionIds[0],
@@ -2664,7 +2664,7 @@ export function AlbumWizard({
           return;
         } else if (paymentMethod === "BANK") {
           clearDraftStorage();
-          setNotice(emailWarning ? { emailWarning } : {});
+          setNotice(emailNotice ? { emailNotice } : {});
           setCompletionId(submissionIds[0]);
           setCompletionSubmissionIds(submissionIds);
           if (guestTokens.length > 0) {
@@ -4709,9 +4709,9 @@ export function AlbumWizard({
               </div>
             </div>
           </div>
-	          {notice.emailWarning ? (
+	          {notice.emailNotice ? (
 	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
-	              {notice.emailWarning}
+	              {notice.emailNotice}
 	            </div>
           ) : null}
           {completionId && !shouldShowGuestLookup && (

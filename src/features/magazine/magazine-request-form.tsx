@@ -7,17 +7,6 @@ import { CheckCircle2, ImageUp, Info, SendHorizontal } from "lucide-react";
 
 import { createMagazineRequestAction } from "./actions";
 
-export type MagazineCreditOption = {
-  id: string;
-  title: string | null;
-  artistName: string | null;
-  releaseDate: string | null;
-  createdAt: string | null;
-  applicantName: string | null;
-  applicantEmail: string | null;
-  applicantPhone: string | null;
-};
-
 export type MagazineExistingRequest = {
   id: string;
   status: string | null;
@@ -72,13 +61,15 @@ const labelClass =
 export function MagazineRequestForm({
   isAuthenticated,
   userEmail,
-  creditOptions,
+  requesterName,
+  requesterPhone,
   existingRequests,
   availableCredits,
 }: {
   isAuthenticated: boolean;
   userEmail?: string | null;
-  creditOptions: MagazineCreditOption[];
+  requesterName?: string | null;
+  requesterPhone?: string | null;
   existingRequests: MagazineExistingRequest[];
   availableCredits: number;
 }) {
@@ -90,23 +81,10 @@ export function MagazineRequestForm({
   } | null>(null);
   const [targetChannel, setTargetChannel] =
     React.useState<(typeof channelOptions)[number]["value"]>("DOMESTIC_NEWS");
-  const [selectedSubmissionId, setSelectedSubmissionId] = React.useState(
-    creditOptions[0]?.id ?? "",
-  );
   const [artworkFileName, setArtworkFileName] = React.useState("");
 
-  const selectedCredit =
-    creditOptions.find((option) => option.id === selectedSubmissionId) ??
-    creditOptions[0] ??
-    null;
   const hasAvailableCredits = availableCredits > 0;
-  const canSubmit = isAuthenticated && Boolean(selectedCredit) && hasAvailableCredits;
-
-  React.useEffect(() => {
-    if (!selectedSubmissionId && creditOptions[0]?.id) {
-      setSelectedSubmissionId(creditOptions[0].id);
-    }
-  }, [creditOptions, selectedSubmissionId]);
+  const canSubmit = isAuthenticated && hasAvailableCredits;
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -169,7 +147,7 @@ export function MagazineRequestForm({
               크레딧 사용은 회원만 가능합니다.
             </p>
             <p className="mt-2 text-xs font-semibold leading-5 text-muted-foreground">
-              로그인 후 결제 완료된 음반심의 건으로 매거진 발행을 요청할 수 있습니다.
+              로그인 후 보유 크레딧으로 매거진 등록을 신청할 수 있습니다.
             </p>
             <Link
               href={`/login?next=${encodeURIComponent("/magazine#credit-use")}`}
@@ -197,7 +175,7 @@ export function MagazineRequestForm({
                     onClick={() => setTargetChannel(option.value)}
                     className={`min-h-[94px] rounded-[8px] border-2 p-4 text-left transition ${
                       selected
-                        ? "border-[#111111] bg-[#111111] text-white shadow-[4px_4px_0_#1556a4]"
+                        ? "border-[#111111] bg-[#d9362c] text-white shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[4px_4px_0_#f2cf27]"
                         : "border-border bg-background text-foreground hover:border-[#1556a4]"
                     }`}
                   >
@@ -216,64 +194,26 @@ export function MagazineRequestForm({
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <label htmlFor="magazine-submission-id" className={labelClass}>
-              매거진을 발행할 음반심의 건
-            </label>
-            <select
-              id="magazine-submission-id"
-              name="submissionId"
-              value={selectedSubmissionId}
-              onChange={(event) => setSelectedSubmissionId(event.target.value)}
-              disabled={!isAuthenticated || creditOptions.length === 0}
-              className={fieldClass}
-            >
-              {creditOptions.length === 0 ? (
-                <option value="">
-                  {isAuthenticated
-                    ? hasAvailableCredits
-                      ? "매거진에 연결할 음반심의 건이 없습니다"
-                      : "사용 가능한 크레딧이 없습니다"
-                    : "로그인 후 선택할 수 있습니다"}
-                </option>
-              ) : null}
-              {creditOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {(option.artistName || "아티스트 미입력") +
-                    " · " +
-                    (option.title || "앨범명 미입력") +
-                    (option.releaseDate ? ` · 발매일 ${option.releaseDate}` : "")}
-                </option>
-              ))}
-            </select>
-            {selectedCredit ? (
-              <p className="text-xs text-muted-foreground">
-                선택한 음반: {selectedCredit.artistName ?? "-"} ·{" "}
-                {selectedCredit.title ?? "-"}
-                {availableCredits <= 0
-                  ? " · 사용 가능한 잔여 크레딧이 없습니다."
-                  : ""}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {isAuthenticated && hasAvailableCredits
-                  ? `보유 크레딧은 ${availableCredits.toLocaleString()}개입니다. 매거진 발행은 결제 완료된 음반심의 건을 연결해야 합니다.`
-                  : "회원 계정으로 결제 완료된 음반심의 건만 크레딧으로 사용할 수 있습니다."}
-              </p>
-            )}
+          <div className="rounded-[8px] border-2 border-[#1556a4]/35 bg-[#eaf2fb] p-4 text-[#1556a4] dark:border-[#8bc3ff]/60 dark:bg-[#102033] dark:text-[#8bc3ff]">
+            <p className={labelClass}>신청 방식</p>
+            <p className="mt-2 text-sm font-black leading-6">
+              음반심의 접수건 연결 없이 보유 크레딧 1개로 매거진 등록을 신청할 수
+              있습니다.
+            </p>
+            <p className="mt-1 text-xs font-semibold leading-5 opacity-80">
+              현재 사용 가능 크레딧은{" "}
+              {isAuthenticated ? availableCredits.toLocaleString() : "-"}개입니다.
+            </p>
           </div>
 
-          <div
-            key={selectedCredit?.id ?? "member-request-fields"}
-            className="grid gap-4 sm:grid-cols-2"
-          >
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="grid gap-2">
               <span className={labelClass}>담당자명</span>
               <input
                 name="requesterName"
                 required
                 disabled={!isAuthenticated}
-                defaultValue={selectedCredit?.applicantName ?? ""}
+                defaultValue={requesterName ?? ""}
                 className={fieldClass}
               />
             </label>
@@ -284,7 +224,7 @@ export function MagazineRequestForm({
                 type="email"
                 required
                 disabled={!isAuthenticated}
-                defaultValue={selectedCredit?.applicantEmail ?? userEmail ?? ""}
+                defaultValue={userEmail ?? ""}
                 className={fieldClass}
               />
             </label>
@@ -293,7 +233,7 @@ export function MagazineRequestForm({
               <input
                 name="requesterPhone"
                 disabled={!isAuthenticated}
-                defaultValue={selectedCredit?.applicantPhone ?? ""}
+                defaultValue={requesterPhone ?? ""}
                 className={fieldClass}
               />
             </label>
@@ -303,33 +243,30 @@ export function MagazineRequestForm({
                 name="releaseDate"
                 type="date"
                 disabled={!isAuthenticated}
-                defaultValue={selectedCredit?.releaseDate ?? ""}
                 className={fieldClass}
               />
             </label>
             <label className="grid gap-2">
-              <span className={labelClass}>앨범명</span>
+              <span className={labelClass}>앨범명 / 콘텐츠명</span>
               <input
                 name="albumTitle"
                 disabled={!isAuthenticated}
-                defaultValue={selectedCredit?.title ?? ""}
-                placeholder="심의 신청 정보와 다르면 수정"
+                placeholder="매거진에 표시할 제목"
                 className={fieldClass}
               />
             </label>
             <label className="grid gap-2">
-              <span className={labelClass}>아티스트명</span>
+              <span className={labelClass}>아티스트명 / 표시명</span>
               <input
                 name="artistName"
                 disabled={!isAuthenticated}
-                defaultValue={selectedCredit?.artistName ?? ""}
                 className={fieldClass}
               />
             </label>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <label className="grid gap-2">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <label className="grid gap-2 lg:col-span-2">
               <span className={labelClass}>아트워크 파일</span>
               <input
                 id="magazine-artwork-file"
@@ -343,21 +280,23 @@ export function MagazineRequestForm({
                 className="sr-only"
               />
               <span
-                className={`flex min-h-[50px] items-center gap-3 rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground transition ${
+                className={`flex min-h-[62px] items-center gap-3 rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground transition ${
                   isAuthenticated
                     ? "cursor-pointer hover:border-[#1556a4]"
                     : "cursor-not-allowed opacity-60"
                 }`}
               >
-                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#111111] text-white">
-                  <ImageUp className="h-4 w-4" aria-hidden="true" />
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] bg-[#111111] text-white">
+                  <ImageUp className="h-5 w-5" aria-hidden="true" />
                 </span>
-                <span className="min-w-0 truncate font-semibold text-muted-foreground">
-                  {artworkFileName || "선택된 파일 없음"}
+                <span className="grid min-w-0 gap-1">
+                  <span className="truncate font-black text-foreground">
+                    {artworkFileName || "선택된 파일 없음"}
+                  </span>
+                  <span className="text-[11px] font-semibold text-muted-foreground">
+                    JPG, PNG, WEBP, GIF · 20MB 이하
+                  </span>
                 </span>
-              </span>
-              <span className="text-[11px] font-semibold text-muted-foreground">
-                JPG, PNG, WEBP, GIF · 20MB 이하
               </span>
             </label>
             <label className="grid gap-2">
@@ -421,8 +360,8 @@ export function MagazineRequestForm({
             <SendHorizontal className="h-4 w-4" aria-hidden="true" />
             {!isAuthenticated
               ? "로그인 후 이용"
-              : !selectedCredit && hasAvailableCredits
-                ? "사용할 음반심의 건 없음"
+              : !hasAvailableCredits
+                ? "사용 가능한 크레딧 없음"
               : isPending
                 ? "요청 접수 중..."
                 : "크레딧 사용해서 발행 요청"}
@@ -451,7 +390,8 @@ export function MagazineRequestForm({
             </div>
           </div>
           <p className="mt-4 text-xs leading-5 text-muted-foreground">
-            매거진 발행 1회 또는 서비스 이용권 교환 시 잔여 크레딧에서 차감됩니다.
+            매거진 등록 신청 1회 또는 서비스 이용권 교환 시 잔여 크레딧에서
+            차감됩니다.
           </p>
         </section>
 
@@ -469,7 +409,7 @@ export function MagazineRequestForm({
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-black text-foreground">
-                      {request.albumTitle ?? "앨범명 미입력"}
+                      {request.albumTitle ?? "제목 미입력"}
                     </p>
                     <span className="rounded-[6px] bg-[#eaf2fb] px-2 py-1 text-[10px] font-black text-[#1556a4] dark:bg-[#102033] dark:text-[#8bc3ff]">
                       {statusLabels[request.status ?? ""] ?? request.status}

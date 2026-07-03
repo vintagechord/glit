@@ -182,7 +182,7 @@ export default function Home() {
             rel="noopener noreferrer"
             className="self-end text-sm font-semibold text-muted-foreground transition hover:text-foreground md:self-auto"
           >
-            예전 온사이드 페이지에서 접수하기 -&gt;
+            예전 온사이드 사이트에서 접수하기 -&gt;
           </ReliableLink>
         </div>
 

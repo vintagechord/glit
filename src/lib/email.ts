@@ -67,6 +67,38 @@ const getResendConfig = () => ({
   from: getEmailFrom(),
 });
 
+const readEmailFailureMessage = async (
+  response: Response,
+  fallback: string,
+) => {
+  try {
+    const body = await response.text();
+    if (!body) {
+      return fallback;
+    }
+    try {
+      const parsed = JSON.parse(body) as {
+        message?: unknown;
+        error?: unknown;
+        name?: unknown;
+      };
+      const detail =
+        typeof parsed.message === "string"
+          ? parsed.message
+          : typeof parsed.error === "string"
+            ? parsed.error
+            : typeof parsed.name === "string"
+              ? parsed.name
+              : body;
+      return `${fallback} (${response.status}: ${detail})`;
+    } catch {
+      return `${fallback} (${response.status}: ${body})`;
+    }
+  } catch {
+    return `${fallback} (${response.status})`;
+  }
+};
+
 const escapeHtml = (value: string) =>
   value
     .replace(/&/g, "&amp;")
@@ -262,7 +294,10 @@ export async function sendSubmissionReceiptEmail(
       return {
         ok: false,
         skipped: false,
-        message: "이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.",
+        message: await readEmailFailureMessage(
+          response,
+          "접수 완료 안내 메일 발송에 실패했습니다.",
+        ),
       };
     }
     return { ok: true };
@@ -454,7 +489,10 @@ export async function sendSubmissionBankRequestEmail(
       return {
         ok: false,
         skipped: false,
-        message: "무통장 입금 안내 메일 발송에 실패했습니다.",
+        message: await readEmailFailureMessage(
+          response,
+          "무통장 입금 안내 메일 발송에 실패했습니다.",
+        ),
       };
     }
 

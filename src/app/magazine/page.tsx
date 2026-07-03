@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import {
   Coins,
   ExternalLink,
@@ -11,7 +10,6 @@ import {
 import { CreditUseTabs, type CreditUseTab } from "./credit-use-tabs";
 import {
   MagazineRequestForm,
-  type MagazineCreditOption,
   type MagazineExistingRequest,
 } from "@/features/magazine/magazine-request-form";
 import {
@@ -35,17 +33,6 @@ export const metadata = {
   title: "크레딧",
   description:
     "음반심의 결제 완료 건으로 발급되는 온사이드 크레딧을 확인하고 사용하세요.",
-};
-
-type SubmissionCreditRow = {
-  id: string;
-  title: string | null;
-  artist_name: string | null;
-  release_date: string | null;
-  created_at: string | null;
-  applicant_name: string | null;
-  applicant_email: string | null;
-  applicant_phone: string | null;
 };
 
 type MagazineRequestRow = {
@@ -112,7 +99,6 @@ const noticeText = (
 async function loadMagazineCreditData(userId?: string | null) {
   if (!userId) {
     return {
-      creditOptions: [] as MagazineCreditOption[],
       existingRequests: [] as MagazineExistingRequest[],
       creditSummary: emptyCreditSummary,
     };
@@ -120,45 +106,15 @@ async function loadMagazineCreditData(userId?: string | null) {
 
   const admin = createAdminClient();
   const creditSummary = await getUserCreditSummary(admin, userId);
-  const { data: paidSubmissions, error: submissionError } = await admin
-    .from("submissions")
+  const existingResult = await admin
+    .from("magazine_requests")
     .select(
-      "id, title, artist_name, release_date, created_at, applicant_name, applicant_email, applicant_phone",
+      "id, submission_id, status, target_channel, album_title, artist_name, created_at, published_url",
     )
     .eq("user_id", userId)
-    .eq("type", "ALBUM")
-    .eq("payment_status", "PAID")
     .order("created_at", { ascending: false })
-    .limit(80);
+    .limit(30);
 
-  if (submissionError) {
-    console.error("[magazine] failed to load credit submissions", submissionError);
-  }
-
-  const paidRows = (paidSubmissions ?? []) as SubmissionCreditRow[];
-  const paidIds = paidRows.map((submission) => submission.id);
-
-  const [usedResult, existingResult] = await Promise.all([
-    paidIds.length > 0
-      ? admin
-          .from("magazine_requests")
-          .select("submission_id")
-          .in("submission_id", paidIds)
-          .neq("status", "CANCELED")
-      : Promise.resolve({ data: [], error: null }),
-    admin
-      .from("magazine_requests")
-      .select(
-        "id, submission_id, status, target_channel, album_title, artist_name, created_at, published_url",
-      )
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(30),
-  ]);
-
-  if (usedResult.error) {
-    console.error("[magazine] failed to load used credits", usedResult.error);
-  }
   if (existingResult.error) {
     console.error(
       "[magazine] failed to load existing requests",
@@ -166,26 +122,8 @@ async function loadMagazineCreditData(userId?: string | null) {
     );
   }
 
-  const usedSubmissionIds = new Set(
-    ((usedResult.data ?? []) as Array<{ submission_id?: string | null }>)
-      .map((row) => row.submission_id)
-      .filter((id): id is string => Boolean(id)),
-  );
-
   return {
     creditSummary,
-    creditOptions: paidRows
-      .filter((submission) => !usedSubmissionIds.has(submission.id))
-      .map((submission) => ({
-        id: submission.id,
-        title: submission.title,
-        artistName: submission.artist_name,
-        releaseDate: submission.release_date,
-        createdAt: submission.created_at,
-        applicantName: submission.applicant_name,
-        applicantEmail: submission.applicant_email,
-        applicantPhone: submission.applicant_phone,
-      })),
     existingRequests: ((existingResult.data ?? []) as MagazineRequestRow[]).map(
       (request) => ({
         id: request.id,
@@ -378,8 +316,8 @@ function CreditServiceRewardsPanel({
       ) : (
         <p className="flex max-w-2xl gap-2 text-xs font-semibold leading-5 text-muted-foreground">
           <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          크레딧 사용은 회원 계정으로 결제 완료된 음반심의 건에 대해서만
-          가능합니다. 로그인 후 이용해주세요.
+          크레딧 사용은 보유 크레딧이 있는 회원만 가능합니다. 로그인 후
+          이용해주세요.
         </p>
       )}
     </section>
@@ -406,7 +344,7 @@ export default async function MagazinePage({
     resolvedSearchParams?.studioRequested,
   );
   const admin = createAdminClient();
-  const [{ creditOptions, existingRequests, creditSummary }, rewards, profileResult] =
+  const [{ existingRequests, creditSummary }, rewards, profileResult] =
     await Promise.all([
       loadMagazineCreditData(user?.id),
       loadActiveRewards(),
@@ -425,44 +363,6 @@ export default async function MagazinePage({
 
   return (
     <div className="bg-background">
-      <section className="relative min-h-[500px] overflow-hidden border-b-2 border-[#111111] dark:border-[#f2cf27]">
-        <Image
-          src="/media/hero/onside-hero-poster.jpg"
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 bg-[#111111]/68" />
-        <div className="relative mx-auto flex min-h-[500px] w-full max-w-6xl flex-col justify-end px-6 pb-10 pt-24 text-white">
-          <h1 className="font-display max-w-3xl text-4xl font-black leading-tight sm:text-5xl">
-            크레딧으로 온사이드 연계 서비스를 이용하세요
-          </h1>
-          <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-white/82">
-            앨범심의 신청 후 지급된 크레딧으로 매거진 발행 요청, 녹음실 이용권 등
-            다양한 연계 서비스를 선택할 수 있습니다.
-          </p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <a
-              href="https://www.iamwatermelon.com/ko/service/magazine/list/1/1"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border-2 border-[#f2cf27] bg-[#f2cf27] px-5 py-3 text-sm font-black text-[#111111] shadow-[4px_4px_0_#111111] transition hover:-translate-y-0.5"
-            >
-              매거진 바로가기
-              <ExternalLink className="h-4 w-4" aria-hidden="true" />
-            </a>
-            <a
-              href="#credit-use"
-              className="inline-flex min-h-11 items-center rounded-[8px] border-2 border-white bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-white hover:text-[#111111]"
-            >
-              크레딧 사용하기
-            </a>
-          </div>
-        </div>
-      </section>
-
       <div className="mx-auto w-full max-w-6xl px-6 py-12">
         <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#1556a4] md:p-6">
           <p className="relative w-fit rounded-[6px] border-2 border-[#111111] bg-white px-2.5 py-1 text-xs font-black text-[#111111]">
@@ -493,13 +393,38 @@ export default async function MagazinePage({
           <CreditUseTabs
             initialTab={activeTab}
             magazinePanel={
-              <MagazineRequestForm
-                isAuthenticated={Boolean(user)}
-                userEmail={user?.email ?? null}
-                creditOptions={creditOptions}
-                existingRequests={existingRequests}
-                availableCredits={creditSummary.available}
-              />
+              <div className="space-y-5">
+                <section className="rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#1556a4]">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-normal text-[#111111]/65">
+                        1크레딧으로 발행 요청
+                      </p>
+                      <h3 className="mt-2 text-xl font-black">워터멜론 매거진</h3>
+                      <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[#111111]/78">
+                        아티스트/앨범 소개 콘텐츠 발행 요청
+                      </p>
+                    </div>
+                    <a
+                      href="https://www.iamwatermelon.com/ko/service/magazine/list/1/1"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
+                    >
+                      매거진 바로가기
+                      <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                    </a>
+                  </div>
+                </section>
+                <MagazineRequestForm
+                  isAuthenticated={Boolean(user)}
+                  userEmail={user?.email ?? null}
+                  requesterName={profile?.name}
+                  requesterPhone={profile?.phone}
+                  existingRequests={existingRequests}
+                  availableCredits={creditSummary.available}
+                />
+              </div>
             }
             servicesPanel={
               <CreditServiceRewardsPanel

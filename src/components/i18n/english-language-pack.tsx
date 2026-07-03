@@ -79,8 +79,8 @@ const exactTranslations: Record<string, string> = {
   "바로 시작": "Start",
   "이전 버전의 온사이드 사이트가 편하신 경우 이전 사이트에서 접수해주셔도 심의는 동일하게 진행이 됩니다.":
     "If the previous Onside site is more convenient, you may submit there and the review will proceed the same way.",
-  "예전 온사이드 페이지에서 접수하기": "Submit on Previous Onside Page",
-  "예전 온사이드 페이지에서 접수하기 ->": "Submit on Previous Onside Page ->",
+  "예전 온사이드 사이트에서 접수하기": "Submit on Previous Onside Site",
+  "예전 온사이드 사이트에서 접수하기 ->": "Submit on Previous Onside Site ->",
   "ALBUM REVIEW 신청": "Album Review Application",
   "MUSIC VIDEO REVIEW 신청": "Music Video Review Application",
   "Album Review 신청": "Album Review Application",
@@ -313,11 +313,26 @@ const exactTranslations: Record<string, string> = {
   "발행 요청하기": "Request Publication",
   "크레딧 사용하기": "Use Credits",
   "워터멜론 매거진 발행 요청": "Watermelon Magazine Publication Request",
+  "신청 방식": "Request Method",
+  "로그인 후 보유 크레딧으로 매거진 등록을 신청할 수 있습니다.":
+    "Log in to request a magazine listing with your available credits.",
+  "음반심의 접수건 연결 없이 보유 크레딧 1개로 매거진 등록을 신청할 수 있습니다.":
+    "You can request a magazine listing with 1 available credit, without linking an album review submission.",
+  "현재 사용 가능 크레딧은": "Currently available credits:",
+  "앨범명 / 콘텐츠명": "Album / Content Title",
+  "매거진에 표시할 제목": "Title to display in the magazine",
+  "아티스트명 / 표시명": "Artist / Display Name",
   "아트워크 파일": "Artwork File",
   "선택된 파일 없음": "No file selected",
   "JPG, PNG, WEBP, GIF · 20MB 이하": "JPG, PNG, WEBP, GIF · up to 20MB",
   "멜론 또는 지니 링크": "Melon or Genie Link",
   "유튜브 영상 주소": "YouTube Video URL",
+  "사용 가능한 크레딧 없음": "No credits available",
+  "매거진 등록 신청이 접수되었습니다. 관리자가 내용을 확인합니다.":
+    "Your magazine listing request has been submitted. The admin will review it.",
+  "매거진 등록 신청 1회 또는 서비스 이용권 교환 시 잔여 크레딧에서 차감됩니다.":
+    "Each magazine listing request or service voucher exchange is deducted from your remaining credits.",
+  "자유 신청": "Free-form Request",
   "회원가입 후 크레딧 사용": "Sign Up to Use Credits",
   "앨범심의 결제 완료 1건당 크레딧 1개가 발급됩니다.":
     "1 credit is issued for each completed album review payment.",

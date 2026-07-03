@@ -26,7 +26,7 @@ const channelLabels: Record<string, string> = {
 
 type MagazineAdminRow = {
   id: string;
-  submission_id: string;
+  submission_id: string | null;
   user_id: string | null;
   target_channel: string | null;
   status: string | null;
@@ -103,7 +103,7 @@ export default async function AdminMagazinePage({
         매거진 발행 요청 관리
       </h1>
       <p className="mt-3 text-sm text-muted-foreground">
-        음반심의 크레딧으로 접수된 워터멜론 매거진 요청을 확인하고 발행 상태를
+        보유 크레딧으로 접수된 워터멜론 매거진 요청을 확인하고 발행 상태를
         관리합니다.
       </p>
 
@@ -167,12 +167,18 @@ export default async function AdminMagazinePage({
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link
-                    href={`/admin/submissions/${request.submission_id}`}
-                    className="rounded-[8px] border-2 border-border px-3 py-2 text-xs font-black text-foreground transition hover:border-[#111111]"
-                  >
-                    심의 접수 보기
-                  </Link>
+                  {request.submission_id ? (
+                    <Link
+                      href={`/admin/submissions/${request.submission_id}`}
+                      className="rounded-[8px] border-2 border-border px-3 py-2 text-xs font-black text-foreground transition hover:border-[#111111]"
+                    >
+                      심의 접수 보기
+                    </Link>
+                  ) : (
+                    <span className="rounded-[8px] border-2 border-border px-3 py-2 text-xs font-black text-muted-foreground">
+                      자유 신청
+                    </span>
+                  )}
                   {request.published_url ? (
                     <a
                       href={request.published_url}

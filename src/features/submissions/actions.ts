@@ -21,7 +21,7 @@ export type SubmissionActionState = {
   error?: string;
   submissionId?: string;
   guestToken?: string;
-  emailWarning?: string;
+  emailNotice?: string;
 };
 
 export type SubmissionFileUrlActionState = {
@@ -390,6 +390,60 @@ const collectRecipientEmails = (
     }
   }
   return Array.from(recipients);
+};
+
+const buildSubmissionEmailNotice = ({
+  receiptSent,
+  bankGuideSent,
+}: {
+  receiptSent: boolean;
+  bankGuideSent: boolean;
+}) => {
+  if (receiptSent && bankGuideSent) {
+    return "접수 완료 안내와 무통장 입금 안내 메일을 발송했습니다.";
+  }
+  if (receiptSent) {
+    return "접수 완료 안내 메일을 발송했습니다.";
+  }
+  if (bankGuideSent) {
+    return "무통장 입금 안내 메일을 발송했습니다.";
+  }
+  return undefined;
+};
+
+const recordEmailDeliveryIssue = async ({
+  db,
+  submissionId,
+  recipientEmail,
+  label,
+  message,
+  skipped,
+}: {
+  db: SupabaseClient;
+  submissionId: string;
+  recipientEmail: string;
+  label: string;
+  message?: string | null;
+  skipped?: boolean;
+}) => {
+  const { error } = await db.from("submission_events").insert({
+    submission_id: submissionId,
+    actor_user_id: null,
+    event_type: skipped ? "EMAIL_SEND_SKIPPED" : "EMAIL_SEND_FAILED",
+    message: `${label} 메일 발송 ${skipped ? "건너뜀" : "실패"} · ${recipientEmail}${
+      message ? ` · ${message}` : ""
+    }`,
+  });
+
+  if (error) {
+    console.warn("[Email][submission] failed to record delivery issue", {
+      submissionId,
+      recipientEmail,
+      label,
+      skipped,
+      error,
+    });
+  }
 };
 
 const loadMemberPhone = async (userId?: string | null) => {
@@ -1236,7 +1290,8 @@ export async function saveAlbumSubmissionAction(
     message: eventMessage,
   });
 
-  let emailWarning: string | undefined;
+  let receiptEmailSent = false;
+  let bankGuideEmailSent = false;
   if (parsed.data.status === "SUBMITTED") {
     const recipientEmails = collectRecipientEmails(
       applicantEmailValue,
@@ -1262,15 +1317,17 @@ export async function saveAlbumSubmissionAction(
           link,
           siteLink,
         });
-        if (emailResult.skipped) {
-          console.warn("[Email][receipt] skipped (config missing)", {
+        if (emailResult.ok) {
+          receiptEmailSent = true;
+        } else {
+          await recordEmailDeliveryIssue({
+            db,
             submissionId: parsed.data.submissionId,
-            email: recipientEmail,
+            recipientEmail,
+            label: "접수 완료 안내",
+            message: emailResult.message,
+            skipped: emailResult.skipped,
           });
-        } else if (!emailResult.ok && !emailWarning) {
-          emailWarning =
-            emailResult.message ??
-            "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
         }
 
         if (paymentMethod === "BANK" && amountKrw > 0) {
@@ -1284,10 +1341,17 @@ export async function saveAlbumSubmissionAction(
             link,
             siteLink,
           });
-          if (!bankEmailResult.ok && !bankEmailResult.skipped && !emailWarning) {
-            emailWarning =
-              bankEmailResult.message ??
-              "무통장 입금 안내 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+          if (bankEmailResult.ok) {
+            bankGuideEmailSent = true;
+          } else {
+            await recordEmailDeliveryIssue({
+              db,
+              submissionId: parsed.data.submissionId,
+              recipientEmail,
+              label: "무통장 입금 안내",
+              message: bankEmailResult.message,
+              skipped: bankEmailResult.skipped,
+            });
           }
         }
       }
@@ -1305,7 +1369,10 @@ export async function saveAlbumSubmissionAction(
   return {
     submissionId: parsed.data.submissionId,
     guestToken: isGuest ? parsed.data.guestToken : undefined,
-    emailWarning: typeof emailWarning === "string" ? emailWarning : undefined,
+    emailNotice: buildSubmissionEmailNotice({
+      receiptSent: receiptEmailSent,
+      bankGuideSent: bankGuideEmailSent,
+    }),
   };
 }
 
@@ -1702,7 +1769,8 @@ export async function saveMvSubmissionAction(
     message: eventMessage,
   });
 
-  let emailWarning: string | undefined;
+  let receiptEmailSent = false;
+  let bankGuideEmailSent = false;
   if (parsed.data.status === "SUBMITTED") {
     const recipientEmails = collectRecipientEmails(
       applicantEmailValue,
@@ -1728,15 +1796,17 @@ export async function saveMvSubmissionAction(
           link,
           siteLink,
         });
-        if (emailResult.skipped) {
-          console.warn("[Email][receipt] skipped (config missing)", {
+        if (emailResult.ok) {
+          receiptEmailSent = true;
+        } else {
+          await recordEmailDeliveryIssue({
+            db,
             submissionId: parsed.data.submissionId,
-            email: recipientEmail,
+            recipientEmail,
+            label: "접수 완료 안내",
+            message: emailResult.message,
+            skipped: emailResult.skipped,
           });
-        } else if (!emailResult.ok && !emailWarning) {
-          emailWarning =
-            emailResult.message ??
-            "접수 완료 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
         }
 
         if (paymentMethod === "BANK" && amountKrw > 0) {
@@ -1750,10 +1820,17 @@ export async function saveMvSubmissionAction(
             link,
             siteLink,
           });
-          if (!bankEmailResult.ok && !bankEmailResult.skipped && !emailWarning) {
-            emailWarning =
-              bankEmailResult.message ??
-              "무통장 입금 안내 메일을 보내지 못했습니다. 관리자에게 문의해주세요.";
+          if (bankEmailResult.ok) {
+            bankGuideEmailSent = true;
+          } else {
+            await recordEmailDeliveryIssue({
+              db,
+              submissionId: parsed.data.submissionId,
+              recipientEmail,
+              label: "무통장 입금 안내",
+              message: bankEmailResult.message,
+              skipped: bankEmailResult.skipped,
+            });
           }
         }
       }
@@ -1771,6 +1848,9 @@ export async function saveMvSubmissionAction(
   return {
     submissionId: parsed.data.submissionId,
     guestToken: isGuest ? parsed.data.guestToken : undefined,
-    emailWarning: typeof emailWarning === "string" ? emailWarning : undefined,
+    emailNotice: buildSubmissionEmailNotice({
+      receiptSent: receiptEmailSent,
+      bankGuideSent: bankGuideEmailSent,
+    }),
   };
 }
