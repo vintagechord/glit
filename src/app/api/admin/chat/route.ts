@@ -38,6 +38,7 @@ type ConversationRow = {
   last_message_at: string | null;
   unread_admin_count: number | null;
   unread_visitor_count: number | null;
+  visitor_left_at: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -53,7 +54,7 @@ type MessageRow = {
 };
 
 const conversationSelect =
-  "id, access_token, user_id, guest_name, guest_email, guest_phone, status, last_message_preview, last_message_at, unread_admin_count, unread_visitor_count, created_at, updated_at";
+  "id, access_token, user_id, guest_name, guest_email, guest_phone, status, last_message_preview, last_message_at, unread_admin_count, unread_visitor_count, visitor_left_at, created_at, updated_at";
 
 const messageSelect =
   "id, conversation_id, sender_type, sender_user_id, sender_name, body, created_at";
@@ -70,6 +71,7 @@ const mapConversation = (row: ConversationRow): SupportChatConversation => ({
   lastMessageAt: row.last_message_at,
   unreadAdminCount: row.unread_admin_count ?? 0,
   unreadVisitorCount: row.unread_visitor_count ?? 0,
+  visitorLeftAt: row.visitor_left_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

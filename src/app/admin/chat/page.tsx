@@ -26,6 +26,7 @@ type ConversationRow = {
   last_message_at: string | null;
   unread_admin_count: number | null;
   unread_visitor_count: number | null;
+  visitor_left_at: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -42,6 +43,7 @@ const mapConversation = (row: ConversationRow): SupportChatConversation => ({
   lastMessageAt: row.last_message_at,
   unreadAdminCount: row.unread_admin_count ?? 0,
   unreadVisitorCount: row.unread_visitor_count ?? 0,
+  visitorLeftAt: row.visitor_left_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

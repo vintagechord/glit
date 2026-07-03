@@ -6,7 +6,10 @@ import {
   type SupportChatMessage,
   type SupportChatPayload,
 } from "@/lib/support-chat";
-import { parseVisitorChatMessagePayload } from "@/lib/support-chat-request";
+import {
+  parseVisitorChatLeavePayload,
+  parseVisitorChatMessagePayload,
+} from "@/lib/support-chat-request";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -24,6 +27,7 @@ type ConversationRow = {
   last_message_at: string | null;
   unread_admin_count: number | null;
   unread_visitor_count: number | null;
+  visitor_left_at: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -39,7 +43,7 @@ type MessageRow = {
 };
 
 const conversationSelect =
-  "id, access_token, user_id, guest_name, guest_email, guest_phone, status, last_message_preview, last_message_at, unread_admin_count, unread_visitor_count, created_at, updated_at";
+  "id, access_token, user_id, guest_name, guest_email, guest_phone, status, last_message_preview, last_message_at, unread_admin_count, unread_visitor_count, visitor_left_at, created_at, updated_at";
 
 const messageSelect =
   "id, conversation_id, sender_type, sender_user_id, sender_name, body, created_at";
@@ -56,6 +60,7 @@ const mapConversation = (row: ConversationRow): SupportChatConversation => ({
   lastMessageAt: row.last_message_at,
   unreadAdminCount: row.unread_admin_count ?? 0,
   unreadVisitorCount: row.unread_visitor_count ?? 0,
+  visitorLeftAt: row.visitor_left_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -71,6 +76,16 @@ const mapMessage = (row: MessageRow): SupportChatMessage => ({
 });
 
 const makeAccessToken = () => randomBytes(24).toString("base64url");
+
+const normalizeAccessTokens = (values: string[]) =>
+  Array.from(
+    new Set(
+      values
+        .flatMap((value) => value.split(","))
+        .map((value) => value.trim())
+        .filter((value) => value.length >= 20),
+    ),
+  ).slice(0, 50);
 
 async function getViewer() {
   const supabase = await createServerSupabase();
@@ -114,12 +129,86 @@ async function buildPayload(row: ConversationRow): Promise<SupportChatPayload> {
   };
 }
 
+async function listVisitorConversations(params: {
+  userId?: string | null;
+  accessTokens: string[];
+}) {
+  const admin = createAdminClient();
+  const conversations = new Map<string, SupportChatConversation>();
+
+  if (params.userId) {
+    const { data, error } = await admin
+      .from("support_chat_conversations")
+      .select(conversationSelect)
+      .eq("user_id", params.userId)
+      .is("visitor_left_at", null)
+      .order("last_message_at", { ascending: false })
+      .limit(80);
+
+    if (error) {
+      throw error;
+    }
+
+    for (const row of (data ?? []) as ConversationRow[]) {
+      conversations.set(row.id, mapConversation(row));
+    }
+  }
+
+  if (params.accessTokens.length > 0) {
+    const { data, error } = await admin
+      .from("support_chat_conversations")
+      .select(conversationSelect)
+      .in("access_token", params.accessTokens)
+      .is("visitor_left_at", null)
+      .order("last_message_at", { ascending: false })
+      .limit(80);
+
+    if (error) {
+      throw error;
+    }
+
+    for (const row of (data ?? []) as ConversationRow[]) {
+      conversations.set(row.id, mapConversation(row));
+    }
+  }
+
+  return [...conversations.values()]
+    .sort(
+      (a, b) =>
+        new Date(b.lastMessageAt ?? b.updatedAt ?? 0).getTime() -
+        new Date(a.lastMessageAt ?? a.updatedAt ?? 0).getTime(),
+    )
+    .slice(0, 80);
+}
+
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("accessToken")?.trim();
+  const listMode = request.nextUrl.searchParams.get("list") === "1";
+  const accessTokens = normalizeAccessTokens([
+    ...request.nextUrl.searchParams.getAll("accessToken"),
+    request.nextUrl.searchParams.get("accessTokens") ?? "",
+  ]);
   const markVisitorRead =
     request.nextUrl.searchParams.get("markRead") === "visitor";
   const { user } = await getViewer();
   const admin = createAdminClient();
+
+  if (listMode) {
+    try {
+      return NextResponse.json({
+        conversations: await listVisitorConversations({
+          userId: user?.id ?? null,
+          accessTokens,
+        }),
+      });
+    } catch (error) {
+      console.error("[support-chat][list] conversation error", error);
+      return NextResponse.json(
+        { error: "채팅 목록을 불러오지 못했습니다." },
+        { status: 500 },
+      );
+    }
+  }
 
   let conversationResult;
   if (token) {
@@ -127,12 +216,14 @@ export async function GET(request: NextRequest) {
       .from("support_chat_conversations")
       .select(conversationSelect)
       .eq("access_token", token)
+      .is("visitor_left_at", null)
       .maybeSingle();
   } else if (user) {
     conversationResult = await admin
       .from("support_chat_conversations")
       .select(conversationSelect)
       .eq("user_id", user.id)
+      .is("visitor_left_at", null)
       .neq("status", "CLOSED")
       .order("last_message_at", { ascending: false })
       .limit(1)
@@ -201,6 +292,7 @@ export async function POST(request: NextRequest) {
       .from("support_chat_conversations")
       .select(conversationSelect)
       .eq("access_token", accessToken)
+      .is("visitor_left_at", null)
       .maybeSingle();
     if (error) {
       console.error("[support-chat][post] load conversation error", error);
@@ -289,6 +381,89 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({
+    conversation: mapConversation(updated as ConversationRow),
+    message: mapMessage(message as MessageRow),
+  });
+}
+
+export async function DELETE(request: NextRequest) {
+  const parsed = parseVisitorChatLeavePayload(
+    await request.json().catch(() => null),
+  );
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "나갈 채팅방을 확인해주세요." },
+      { status: 400 },
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data: conversation, error: conversationError } = await admin
+    .from("support_chat_conversations")
+    .select(conversationSelect)
+    .eq("access_token", parsed.data.accessToken)
+    .is("visitor_left_at", null)
+    .maybeSingle();
+
+  if (conversationError) {
+    console.error("[support-chat][delete] load conversation error", conversationError);
+    return NextResponse.json(
+      { error: "채팅방을 확인하지 못했습니다." },
+      { status: 500 },
+    );
+  }
+
+  if (!conversation) {
+    return NextResponse.json({ ok: true, leftId: null });
+  }
+
+  const systemBody = "사용자가 상담을 나갔습니다.";
+  const { data: message, error: messageError } = await admin
+    .from("support_chat_messages")
+    .insert({
+      conversation_id: (conversation as ConversationRow).id,
+      sender_type: "SYSTEM",
+      sender_user_id: null,
+      sender_name: "시스템",
+      body: systemBody,
+    })
+    .select(messageSelect)
+    .maybeSingle();
+
+  if (messageError || !message) {
+    console.error("[support-chat][delete] insert system message error", messageError);
+    return NextResponse.json(
+      { error: "채팅방 나가기를 저장하지 못했습니다." },
+      { status: 500 },
+    );
+  }
+
+  const { data: updated, error: updateError } = await admin
+    .from("support_chat_conversations")
+    .update({
+      status: "CLOSED",
+      visitor_left_at: new Date().toISOString(),
+      last_message_preview: systemBody,
+      last_message_at: message.created_at,
+      unread_admin_count:
+        ((conversation as ConversationRow).unread_admin_count ?? 0) + 1,
+      unread_visitor_count: 0,
+    })
+    .eq("id", (conversation as ConversationRow).id)
+    .select(conversationSelect)
+    .maybeSingle();
+
+  if (updateError || !updated) {
+    console.error("[support-chat][delete] update conversation error", updateError);
+    return NextResponse.json(
+      { error: "채팅방 나가기를 저장하지 못했습니다." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    leftId: (conversation as ConversationRow).id,
     conversation: mapConversation(updated as ConversationRow),
     message: mapMessage(message as MessageRow),
   });

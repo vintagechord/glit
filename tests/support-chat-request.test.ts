@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseVisitorChatMessagePayload } from "../src/lib/support-chat-request";
+import {
+  parseVisitorChatLeavePayload,
+  parseVisitorChatMessagePayload,
+} from "../src/lib/support-chat-request";
 
 test("visitor chat payload accepts first message without access token", () => {
   const parsed = parseVisitorChatMessagePayload({
@@ -32,4 +35,12 @@ test("visitor chat payload rejects malformed access token", () => {
   });
 
   assert.equal(parsed.success, false);
+});
+
+test("visitor chat leave payload requires access token", () => {
+  const parsed = parseVisitorChatLeavePayload({
+    accessToken: "visitor-access-token-with-enough-length",
+  });
+
+  assert.equal(parsed.success, true);
 });

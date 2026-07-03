@@ -18,6 +18,7 @@ export type SupportChatConversation = {
   lastMessageAt: string | null;
   unreadAdminCount: number;
   unreadVisitorCount: number;
+  visitorLeftAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -44,6 +45,9 @@ export type SupportChatBroadcastPayload = {
 };
 
 export const supportChatStorageKey = "onside:support-chat:v1";
+
+export const supportChatConversationTokensStorageKey =
+  "onside:support-chat:tokens:v1";
 
 export const supportChatAdminChannelName = "support-chat:admin";
 
