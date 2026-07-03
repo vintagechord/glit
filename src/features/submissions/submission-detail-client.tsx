@@ -11,7 +11,11 @@ import {
   SubmissionFilesPanel,
   type SubmissionFile,
 } from "@/features/submissions/submission-files-panel";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatCurrency, formatDateTime, formatShortDate } from "@/lib/format";
+import {
+  buildStationTrackSummaryText,
+  getStationReviewDisplayStatus,
+} from "@/lib/station-review-display";
 import {
   summarizeTrackResults,
   type TrackReviewResult,
@@ -138,14 +142,7 @@ const buildTrackSummaryText = (
   counts: { approved: number; rejected: number; pending: number },
   separator: string,
 ) => {
-  const parts = [`${counts.approved}곡 적격`];
-  if (counts.rejected > 0) {
-    parts.push(`${counts.rejected}곡 부적격`);
-  }
-  if (counts.pending > 0) {
-    parts.push(`${counts.pending}곡 대기`);
-  }
-  return parts.join(separator);
+  return buildStationTrackSummaryText(counts, separator);
 };
 
 function StationLogoWithFallback({
@@ -925,7 +922,7 @@ export function SubmissionDetailClient({
     <div id="station-review-section" className={detailPanelClass}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className={detailKickerClass}>
-          방송국별 진행표
+          방송국별 현황
         </p>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -961,24 +958,17 @@ export function SubmissionDetailClient({
           <div className="rounded-[8px] border-2 border-[#111111] bg-background dark:border-[#f2cf27]">
             <div className="overflow-x-auto">
               <div className="min-w-0 sm:min-w-[720px]">
-                <div className="grid grid-cols-[72px_1fr_1fr] items-center gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-normal text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]">
+                <div className="grid grid-cols-[72px_1fr_72px] items-center gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-normal text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] sm:grid-cols-[72px_1.4fr_1fr_1fr]">
                   <span className="justify-self-center text-center sm:hidden">방송국</span>
                   <span className="hidden justify-self-center text-center sm:block">로고</span>
                   <span className="hidden text-left sm:block">방송국</span>
-                  <span className="justify-self-center text-center">접수 상태</span>
-                  <span className="justify-self-center text-center">
-                    {isMvDistribution
-                      ? "심의 등급"
-                      : "심의 결과"}
-                  </span>
-                  <span className="hidden justify-self-center text-center sm:block">
-                    최근 업데이트
-                  </span>
+                  <span className="justify-self-center text-center">현재 상태</span>
+                  <span className="justify-self-center text-center">업데이트</span>
                 </div>
                 <div className="divide-y divide-border/60">
                   {renderStationReviews.map((review) => {
-                    const reception = getReviewReception(review.status);
                     const trackInfo = buildTrackSummary(review.track_results);
+                    const currentStatus = getStationReviewDisplayStatus(review);
                     const note = review.result_note?.trim() || null;
                     const hasApprovedTrack = trackInfo.counts.approved > 0;
                     const canOpenRadioLinks =
@@ -1005,30 +995,6 @@ export function SubmissionDetailClient({
                       rejected: trackInfo.counts.rejected,
                       pending: pendingCount,
                     };
-                    const resultTone =
-                      isMvDistribution && canDownloadMvReviewAssets && submission.mv_desired_rating
-                        ? {
-                          label: mvRatingLabel(submission.mv_desired_rating),
-                          tone:
-                            "bg-[#1f7a5a] text-white dark:bg-[#46b783] dark:text-[#06111f]",
-                        }
-                        : trackInfo.outcome === "APPROVED"
-                          ? reviewResultMap.APPROVED
-                          : trackInfo.outcome === "REJECTED"
-                            ? reviewResultMap.REJECTED
-                            : trackInfo.outcome === "PARTIAL"
-                              ? {
-                                label: "부분 적격",
-                                tone:
-                                  "bg-[#f6d64a] text-black dark:text-black",
-                              }
-                              : hasTrackDetails
-                                ? {
-                                  label: "대기",
-                                  tone:
-                                    "bg-slate-500/10 text-slate-500 dark:text-slate-300",
-                                }
-                                : getReviewResult(review.status);
                     const trackSummaryLine =
                       totalTracksForDisplay > 1
                         ? buildTrackSummaryText(summaryCounts, " · ")
@@ -1064,7 +1030,7 @@ export function SubmissionDetailClient({
                     return (
                       <div
                         key={review.id}
-                        className="grid grid-cols-[72px_1fr_1fr] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]"
+                        className="grid grid-cols-[72px_1fr_72px] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[72px_1.4fr_1fr_1fr]"
                       >
                         <div className="flex items-center justify-center">
                           <StationLogoWithFallback station={review.station} />
@@ -1079,29 +1045,28 @@ export function SubmissionDetailClient({
                             </p>
                           ) : null}
                         </div>
-                        <span
-                          className={`inline-flex items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-2 py-1 text-xs font-black dark:border-[#f2cf27] ${reception.tone}`}
-                        >
-                          {reception.label}
-                        </span>
                         <button
                           type="button"
                           onClick={handleResultClick}
-                          className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-2 py-1 text-xs font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${resultTone.tone
+                          className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-2 py-1 text-xs font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${currentStatus.tone
                             } ${shouldOpenResultModal
                               ? "transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0"
                               : "transition"
                             }`}
                         >
-                          <span>{resultTone.label}</span>
+                          <span>{currentStatus.label}</span>
                           {trackSummaryLine ? (
                             <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
                               {trackSummaryLine}
                             </span>
                           ) : null}
                         </button>
-                        <span className="hidden justify-self-center text-center text-xs text-muted-foreground sm:block">
-                          {formatDateTime(review.updated_at)}
+                        <span
+                          className="justify-self-center text-center text-xs text-muted-foreground"
+                          title={formatDateTime(review.updated_at)}
+                          aria-label={`업데이트 ${formatDateTime(review.updated_at)}`}
+                        >
+                          {formatShortDate(review.updated_at)}
                         </span>
                       </div>
                     );

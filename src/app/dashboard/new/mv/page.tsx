@@ -26,28 +26,18 @@ const purposeNotes = [
   },
 ];
 
+const mvStationRows = [
+  { id: "", name: "KBS", code: "KBS" },
+  { id: "", name: "MBC", code: "MBC" },
+  { id: "", name: "SBS", code: "SBS" },
+  { id: "", name: "ETN", code: "ETN" },
+  { id: "", name: "Mnet", code: "MNET" },
+];
+
 export default async function MvSubmissionPage() {
   const supabase = await createServerSupabase();
   const profanityFilterV2Enabled = process.env.PROFANITY_FILTER_V2 !== "false";
   const user = await getServerSessionUser(supabase);
-
-  const { data: stationRows } = await supabase
-    .from("stations")
-    .select("id, name, code")
-    .in("code", ["KBS", "MBC", "SBS", "ETN", "MNET"])
-    .eq("is_active", true);
-
-  const { data: profanityRows } = await supabase
-    .from("profanity_terms")
-    .select("term, language")
-    .eq("is_active", true)
-    .order("term", { ascending: true });
-
-  const profanityTerms =
-    profanityRows?.map((row) => ({
-      term: row.term,
-      language: row.language,
-    })) ?? [];
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base">
@@ -102,10 +92,9 @@ export default async function MvSubmissionPage() {
 
       <div className="mt-8">
         <MvWizard
-          stations={stationRows ?? []}
+          stations={mvStationRows}
           userId={user?.id ?? null}
           userEmail={user?.email ?? null}
-          profanityTerms={profanityTerms}
           profanityFilterV2Enabled={profanityFilterV2Enabled}
         />
       </div>

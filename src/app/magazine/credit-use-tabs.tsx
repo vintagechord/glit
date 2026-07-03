@@ -7,6 +7,7 @@ export type CreditUseTab = "magazine" | "services";
 
 type CreditUseTabsProps = {
   initialTab: CreditUseTab;
+  magazineAction?: React.ReactNode;
   magazinePanel: React.ReactNode;
   servicesPanel: React.ReactNode;
 };
@@ -73,6 +74,7 @@ function updateTabUrl(tab: CreditUseTab) {
 
 export function CreditUseTabs({
   initialTab,
+  magazineAction,
   magazinePanel,
   servicesPanel,
 }: CreditUseTabsProps) {
@@ -101,47 +103,58 @@ export function CreditUseTabs({
             const selected = activeTab === tab.key;
             const selectedTone = selectedTabTone[tab.key];
             const Icon = tab.icon;
+            const action =
+              selected && tab.key === "magazine" ? magazineAction : null;
 
             return (
-              <button
+              <div
                 key={tab.key}
-                type="button"
-                id={`credit-use-tab-${tab.key}`}
-                role="tab"
-                aria-selected={selected}
-                aria-controls={`credit-use-panel-${tab.key}`}
-                onClick={() => selectTab(tab.key)}
-                className={`flex min-h-[116px] items-stretch gap-4 rounded-[10px] border-2 p-4 text-left transition-[background-color,border-color,color,box-shadow,transform] duration-75 ${
+                className={`flex min-h-[116px] flex-col items-stretch rounded-[10px] border-2 transition-[background-color,border-color,color,box-shadow,transform] duration-75 sm:flex-row ${
                   selected
                     ? selectedTone.card
                     : "border-border bg-card text-foreground hover:-translate-y-0.5 hover:border-[#1556a4]"
                 }`}
               >
-                <span
-                  className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-2 transition-[background-color,border-color,color] duration-75 ${
-                    selected
-                      ? selectedTone.icon
-                      : "border-border bg-background text-[#1556a4]"
-                  }`}
+                <button
+                  type="button"
+                  id={`credit-use-tab-${tab.key}`}
+                  role="tab"
+                  aria-selected={selected}
+                  aria-controls={`credit-use-panel-${tab.key}`}
+                  onClick={() => selectTab(tab.key)}
+                  className="flex min-w-0 flex-1 items-stretch gap-4 p-4 text-left"
                 >
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="block text-lg font-black">{tab.title}</span>
-                  <span className="mt-1 block text-xs font-semibold leading-5 opacity-75">
-                    {tab.description}
-                  </span>
                   <span
-                    className={`mt-auto w-fit rounded-[6px] border px-2 py-1 text-[10px] font-black ${
+                    className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-2 transition-[background-color,border-color,color] duration-75 ${
                       selected
-                        ? selectedTone.meta
-                        : "border-border text-muted-foreground"
+                        ? selectedTone.icon
+                        : "border-border bg-background text-[#1556a4]"
                     }`}
                   >
-                    {tab.meta}
+                    <Icon className="h-5 w-5" aria-hidden="true" />
                   </span>
-                </span>
-              </button>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="block text-lg font-black">{tab.title}</span>
+                    <span className="mt-1 block text-xs font-semibold leading-5 opacity-75">
+                      {tab.description}
+                    </span>
+                    <span
+                      className={`mt-auto w-fit rounded-[6px] border px-2 py-1 text-[10px] font-black ${
+                        selected
+                          ? selectedTone.meta
+                          : "border-border text-muted-foreground"
+                      }`}
+                    >
+                      {tab.meta}
+                    </span>
+                  </span>
+                </button>
+                {action ? (
+                  <div className="flex shrink-0 items-center px-4 pb-4 pt-0 sm:px-4 sm:py-4 sm:pl-0">
+                    {action}
+                  </div>
+                ) : null}
+              </div>
             );
           })}
         </div>

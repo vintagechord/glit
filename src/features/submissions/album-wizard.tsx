@@ -346,6 +346,8 @@ export function AlbumWizard({
     Record<number, boolean>
   >({});
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
+  const [isContinuingDownloadedApplication, setIsContinuingDownloadedApplication] =
+    React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const draftErrorRef = React.useRef<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -2383,6 +2385,7 @@ export function AlbumWizard({
   };
 
   const handleDownloadedApplicationContinue = async () => {
+    if (isContinuingDownloadedApplication) return;
     if (!selectedPackage) {
       setNotice({ error: "패키지를 선택해주세요." });
       return;
@@ -2391,29 +2394,42 @@ export function AlbumWizard({
       setNotice({ error: "AI 활용 여부를 선택해주세요." });
       return;
     }
-    const submissionId =
-      currentSubmissionId ?? (await createDraft({ force: true }));
-    if (!submissionId) {
+    setIsContinuingDownloadedApplication(true);
+    setNotice({});
+    try {
+      const submissionId =
+        currentSubmissionId ?? (await createDraft({ force: true }));
+      if (!submissionId) {
+        setNotice({
+          error:
+            draftErrorRef.current ||
+            draftError ||
+            "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.",
+        });
+        return;
+      }
+      const currentDraft = captureCurrentDraft(submissionId);
+      const allDrafts = [currentDraft, ...albumDrafts];
+      writeDraftStorage({
+        ids: allDrafts.map((draft) => draft.submissionId),
+        guestToken: isGuest ? currentGuestTokenRef.current : null,
+      });
+      setUploadDrafts(allDrafts);
+      setUploadDraftIndex(0);
+      applyDraftToForm(allDrafts[0], {
+        emailSubmitConfirmed: false,
+      });
+      setStep(3);
+    } catch (error) {
       setNotice({
         error:
-          draftErrorRef.current ||
-          draftError ||
-          "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.",
+          error instanceof Error
+            ? error.message
+            : "파일 업로드 단계로 이동하지 못했습니다. 잠시 후 다시 시도해주세요.",
       });
-      return;
+    } finally {
+      setIsContinuingDownloadedApplication(false);
     }
-    const currentDraft = captureCurrentDraft(submissionId);
-    const allDrafts = [currentDraft, ...albumDrafts];
-    writeDraftStorage({
-      ids: allDrafts.map((draft) => draft.submissionId),
-      guestToken: isGuest ? currentGuestTokenRef.current : null,
-    });
-    setUploadDrafts(allDrafts);
-    setUploadDraftIndex(0);
-    applyDraftToForm(allDrafts[0], {
-      emailSubmitConfirmed: false,
-    });
-    setStep(3);
   };
 
   const handleSelectUploadDraft = (index: number) => {
@@ -3033,7 +3049,9 @@ export function AlbumWizard({
                     }}
                     className="inline-flex rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27]"
                   >
-                    {form.label} 다운로드
+                    {isContinuingDownloadedApplication
+                      ? "업로드 단계 준비 중..."
+                      : `${form.label} 다운로드`}
                   </a>
                 ))}
               </div>
@@ -3067,11 +3085,18 @@ export function AlbumWizard({
                 </button>
                 <button
                   type="button"
-                  onClick={handleDownloadedApplicationContinue}
-                  disabled={isSaving || isAddingAlbum}
+                  onClick={() => void handleDownloadedApplicationContinue()}
+                  disabled={
+                    isSaving ||
+                    isAddingAlbum ||
+                    isPreparingDraft ||
+                    isContinuingDownloadedApplication
+                  }
                   className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
                 >
-                  파일 업로드로 이동
+                  {isContinuingDownloadedApplication || isPreparingDraft
+                    ? "업로드 단계 준비 중..."
+                    : "파일 업로드로 이동"}
                 </button>
               </div>
             </div>
@@ -4704,7 +4729,7 @@ export function AlbumWizard({
               <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
                 <p className="font-semibold">3. 업로드 이슈 대응</p>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  파일 업로드가 잘 안 되면 파일 없이 진행하거나 예전 온사이드 사이트에서 동일하게 접수할 수 있습니다.
+                  파일 업로드가 안 되면 파일 없이 진행하거나 기존 온사이드 사이트에서 접수 가능합니다.
                 </p>
               </div>
             </div>

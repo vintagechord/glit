@@ -153,10 +153,10 @@ async function uploadMagazineArtworkFile({
   userId: string;
 }) {
   if (!isValidArtworkFile(file)) {
-    return { error: "아트워크는 JPG, PNG, WEBP, GIF 이미지 파일만 첨부할 수 있습니다." };
+    return { error: "대표 이미지는 JPG, PNG, WEBP, GIF 이미지 파일만 첨부할 수 있습니다." };
   }
   if (file.size > maxArtworkBytes) {
-    return { error: "아트워크 파일은 20MB 이하로 첨부해주세요." };
+    return { error: "대표 이미지 파일은 20MB 이하로 첨부해주세요." };
   }
 
   const safeName = sanitizeStorageFileName(file.name || "artwork.jpg");
@@ -172,7 +172,7 @@ async function uploadMagazineArtworkFile({
 
   if (error) {
     console.error("[magazine] artwork upload failed", error);
-    return { error: "아트워크 파일 업로드에 실패했습니다." };
+    return { error: "대표 이미지 파일 업로드에 실패했습니다." };
   }
 
   const { data } = admin.storage.from(magazineArtworkBucket).getPublicUrl(path);

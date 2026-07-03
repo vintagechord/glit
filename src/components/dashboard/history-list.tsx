@@ -3,8 +3,8 @@
 import Link from "next/link";
 import * as React from "react";
 
-import { normalizeStationReviewStatus } from "@/constants/review-status";
-import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime, formatShortDate } from "@/lib/format";
+import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
 
 type StationReview = {
   id: string;
@@ -89,77 +89,6 @@ const paymentMethodLabels: Record<string, string> = {
   BANK: "무통장",
   CARD: "카드",
 };
-
-const receptionStatusMap: Record<string, { label: string; tone: string }> = {
-  NOT_SENT: {
-    label: "접수대기",
-    tone: "bauhaus-status-chip--waiting",
-  },
-  SENT: {
-    label: "접수완료",
-    tone: "bauhaus-status-chip--info",
-  },
-  RECEIVED: {
-    label: "접수완료",
-    tone: "bauhaus-status-chip--info",
-  },
-  APPROVED: {
-    label: "접수완료",
-    tone: "bauhaus-status-chip--info",
-  },
-  REJECTED: {
-    label: "접수완료",
-    tone: "bauhaus-status-chip--info",
-  },
-  NEEDS_FIX: {
-    label: "접수완료",
-    tone: "bauhaus-status-chip--info",
-  },
-};
-
-const resultStatusMap: Record<string, { label: string; tone: string }> = {
-  NOT_SENT: {
-    label: "대기",
-    tone: "bauhaus-status-chip--neutral",
-  },
-  SENT: {
-    label: "대기",
-    tone: "bauhaus-status-chip--neutral",
-  },
-  RECEIVED: {
-    label: "대기",
-    tone: "bauhaus-status-chip--neutral",
-  },
-  APPROVED: {
-    label: "적격",
-    tone: "bauhaus-status-chip--success",
-  },
-  REJECTED: {
-    label: "부적격",
-    tone: "bauhaus-status-chip--danger",
-  },
-  NEEDS_FIX: {
-    label: "수정요청",
-    tone: "bauhaus-status-chip--waiting",
-  },
-};
-
-const getReceptionStatus = (status: string) => {
-  const normalized = normalizeStationReviewStatus(status);
-  if (normalized === "NOT_SENT") {
-    return receptionStatusMap.NOT_SENT;
-  }
-  return receptionStatusMap.SENT ?? {
-    label: "접수",
-    tone: "bauhaus-status-chip--neutral",
-  };
-};
-
-const getResultStatus = (status: string) =>
-  resultStatusMap[status] ?? {
-    label: "대기",
-    tone: "bauhaus-status-chip--neutral",
-  };
 
 const getSubmissionStatus = (status: string, paymentStatus?: string | null) => {
   if (
@@ -413,7 +342,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  심의 진행 상황
+                  방송국별 현황
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold text-foreground">
                   {activeSubmission.title || "제목 미입력"}
@@ -539,15 +468,10 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
             </div>
 
             <div className="mt-5 overflow-hidden rounded-2xl border border-border/60 bg-background/80">
-              <div className="grid grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 <span>방송국</span>
-                <span className="justify-self-center text-center">접수 상태</span>
-                <span className="justify-self-center text-center">
-                  {activeSubmission.type === "MV_DISTRIBUTION"
-                    ? "심의 등급"
-                    : "심의 결과"}
-                </span>
-                <span className="text-right">접수 날짜</span>
+                <span className="justify-self-center text-center">현재 상태</span>
+                <span className="text-right">업데이트</span>
               </div>
               {activeSubmission.stationReviews.length > 0 ? (
                 <div className="space-y-2 px-3 py-3 text-xs">
@@ -558,28 +482,26 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                         new Date(a.updated_at ?? 0).getTime(),
                     )
                     .map((station, index) => {
-                      const reception = getReceptionStatus(station.status);
-                      const result = getResultStatus(station.status);
+                      const currentStatus = getStationReviewDisplayStatus(station);
                       return (
                         <div
                           key={`${station.id}-${index}`}
-                          className="grid h-10 grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 text-[11px]"
+                          className="grid h-10 grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 text-[11px]"
                         >
                           <span className="truncate font-semibold text-foreground">
                             {station.station?.name ?? "-"}
                           </span>
                           <span
-                            className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${reception.tone}`}
+                            className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${currentStatus.tone}`}
                           >
-                            {reception.label}
+                            {currentStatus.label}
                           </span>
                           <span
-                            className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${result.tone}`}
+                            className="text-right text-[10px] text-muted-foreground"
+                            title={formatDate(station.updated_at)}
+                            aria-label={`업데이트 ${formatDate(station.updated_at)}`}
                           >
-                            {result.label}
-                          </span>
-                          <span className="text-right text-[10px] text-muted-foreground">
-                            {formatDate(station.updated_at)}
+                            {formatShortDate(station.updated_at)}
                           </span>
                         </div>
                       );

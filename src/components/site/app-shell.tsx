@@ -70,9 +70,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-[8px] focus:border-2 focus:border-[#111111] focus:bg-[#f2cf27] focus:px-4 focus:py-2 focus:text-sm focus:font-black focus:text-[#111111] focus:shadow-[3px_3px_0_#111111]"
+      >
+        본문으로 바로가기
+      </a>
       {isEnglishRoute ? <EnglishLanguagePack /> : null}
       <SiteHeader />
-      <main className="flex-1">{children}</main>
+      <main id="main-content" className="flex-1">
+        {children}
+      </main>
       <SiteFooter />
       {loadChatbot ? <ChatbotWidget /> : null}
     </div>

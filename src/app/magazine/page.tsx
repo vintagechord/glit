@@ -392,30 +392,19 @@ export default async function MagazinePage({
 
           <CreditUseTabs
             initialTab={activeTab}
+            magazineAction={
+              <a
+                href="https://www.iamwatermelon.com/ko/service/magazine/list/1/1"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 sm:w-auto"
+              >
+                매거진 바로가기
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+              </a>
+            }
             magazinePanel={
-              <div className="space-y-5">
-                <section className="rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#1556a4]">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-normal text-[#111111]/65">
-                        1크레딧으로 발행 요청
-                      </p>
-                      <h3 className="mt-2 text-xl font-black">워터멜론 매거진</h3>
-                      <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[#111111]/78">
-                        아티스트/앨범 소개 콘텐츠 발행 요청
-                      </p>
-                    </div>
-                    <a
-                      href="https://www.iamwatermelon.com/ko/service/magazine/list/1/1"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
-                    >
-                      매거진 바로가기
-                      <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                    </a>
-                  </div>
-                </section>
+              <div>
                 <MagazineRequestForm
                   isAuthenticated={Boolean(user)}
                   userEmail={user?.email ?? null}

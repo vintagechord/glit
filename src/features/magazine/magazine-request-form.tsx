@@ -194,18 +194,6 @@ export function MagazineRequestForm({
             </div>
           </div>
 
-          <div className="rounded-[8px] border-2 border-[#1556a4]/35 bg-[#eaf2fb] p-4 text-[#1556a4] dark:border-[#8bc3ff]/60 dark:bg-[#102033] dark:text-[#8bc3ff]">
-            <p className={labelClass}>신청 방식</p>
-            <p className="mt-2 text-sm font-black leading-6">
-              음반심의 접수건 연결 없이 보유 크레딧 1개로 매거진 등록을 신청할 수
-              있습니다.
-            </p>
-            <p className="mt-1 text-xs font-semibold leading-5 opacity-80">
-              현재 사용 가능 크레딧은{" "}
-              {isAuthenticated ? availableCredits.toLocaleString() : "-"}개입니다.
-            </p>
-          </div>
-
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="grid gap-2">
               <span className={labelClass}>담당자명</span>
@@ -267,7 +255,7 @@ export function MagazineRequestForm({
 
           <div className="grid gap-4 lg:grid-cols-2">
             <label className="grid gap-2 lg:col-span-2">
-              <span className={labelClass}>아트워크 파일</span>
+              <span className={labelClass}>대표 이미지 파일</span>
               <input
                 id="magazine-artwork-file"
                 name="artworkFile"

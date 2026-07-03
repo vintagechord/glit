@@ -4,7 +4,11 @@ import Link from "next/link";
 import Image from "next/image";
 import * as React from "react";
 import { normalizeStationReviewStatus } from "@/constants/review-status";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatShortDate } from "@/lib/format";
+import {
+  buildStationTrackSummaryText,
+  getStationReviewDisplayStatus,
+} from "@/lib/station-review-display";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { createClient } from "@/lib/supabase/client";
 
@@ -47,65 +51,14 @@ type DashboardStatusResponse = {
   error?: string;
 };
 
+const DASHBOARD_STATUS_FETCH_TIMEOUT_MS = 12_000;
+
 type TrackResultModalState = {
   stationName: string;
   summary: ReturnType<typeof summarizeTrackResults>;
   resultNote: string | null;
   resultLabel: string;
   resultTone: string;
-};
-
-const receptionStatusMap: Record<string, { label: string; tone: string }> = {
-  NOT_SENT: {
-    label: "접수대기",
-    tone: "bauhaus-status-chip--waiting",
-  },
-  SENT: {
-    label: "접수완료",
-    tone: "bauhaus-status-chip--info",
-  },
-  RECEIVED: {
-    label: "접수완료",
-    tone: "bauhaus-status-chip--info",
-  },
-  APPROVED: {
-    label: "접수완료",
-    tone: "bauhaus-status-chip--info",
-  },
-  REJECTED: {
-    label: "접수완료",
-    tone: "bauhaus-status-chip--info",
-  },
-  NEEDS_FIX: {
-    label: "접수완료",
-    tone: "bauhaus-status-chip--info",
-  },
-};
-
-const trackResultStatusMap: Record<string, { label: string; tone: string }> = {
-  APPROVED: {
-    label: "적격",
-    tone: "bauhaus-status-chip--success",
-  },
-  REJECTED: {
-    label: "부적격",
-    tone: "bauhaus-status-chip--danger",
-  },
-};
-
-const stationResultFallbackMap: Record<string, { label: string; tone: string }> = {
-  APPROVED: {
-    label: "적격",
-    tone: "bauhaus-status-chip--success",
-  },
-  REJECTED: {
-    label: "부적격",
-    tone: "bauhaus-status-chip--danger",
-  },
-  NEEDS_FIX: {
-    label: "수정요청",
-    tone: "bauhaus-status-chip--waiting",
-  },
 };
 
 const stageStatusMap = {
@@ -122,72 +75,22 @@ const stageStatusMap = {
     tone: "bauhaus-status-chip--success",
   },
   received: {
-    label: "심의 접수완료",
+    label: "진행중",
     tone: "bauhaus-status-chip--info",
   },
   progress: {
-    label: "심의 진행중",
+    label: "진행중",
     tone: "bauhaus-status-chip--progress",
   },
   completed: {
-    label: "전체 심의 완료",
+    label: "완료",
     tone: "bauhaus-status-chip--success",
   },
+  attention: {
+    label: "확인 필요",
+    tone: "bg-orange-500 text-white dark:bg-orange-300 dark:text-[#06111f]",
+  },
 };
-
-function getReceptionStatus(status: string) {
-  const normalized = normalizeStationReviewStatus(status);
-  if (normalized === "NOT_SENT") {
-    return receptionStatusMap.NOT_SENT;
-  }
-  return receptionStatusMap.SENT ?? {
-    label: "접수",
-    tone: "bauhaus-status-chip--neutral",
-  };
-}
-
-function buildTrackSummaryText(
-  counts: { approved: number; rejected: number; pending: number },
-  separator: string,
-) {
-  const parts = [`${counts.approved}곡 적격`];
-  if (counts.rejected > 0) {
-    parts.push(`${counts.rejected}곡 부적격`);
-  }
-  if (counts.pending > 0) {
-    parts.push(`${counts.pending}곡 대기`);
-  }
-  return parts.join(separator);
-}
-
-function getResultStatus(
-  review: StationItem,
-  showPartialTrackBreakdown: boolean,
-) {
-  const summary = summarizeTrackResults(review.track_results);
-  const normalizedStatus = normalizeStationReviewStatus(review.status);
-  const base =
-    summary.outcome === "APPROVED"
-      ? trackResultStatusMap.APPROVED
-      : summary.outcome === "REJECTED"
-        ? trackResultStatusMap.REJECTED
-        : summary.outcome === "PARTIAL"
-          ? {
-            label: "부분 적격",
-            tone: "bauhaus-status-chip--waiting",
-          }
-          : stationResultFallbackMap[normalizedStatus] ?? {
-            label: "대기",
-            tone: "bauhaus-status-chip--neutral",
-          };
-
-  const summaryText =
-    summary.outcome === "PARTIAL" && showPartialTrackBreakdown
-      ? `${summary.counts.approved}곡 적격 / ${summary.counts.rejected}곡 부적격`
-      : null;
-
-  return { ...base, summaryText };
-}
 
 function shouldOpenResultModal(
   review: StationItem,
@@ -320,16 +223,6 @@ const stationLogoSources: Array<{
     { patterns: ["G1", "GFM"], src: "/station-logos/g1.svg", alt: "G1" },
   ];
 
-const completionStatusSet = new Set(["APPROVED", "REJECTED", "NEEDS_FIX"]);
-
-const isStationCompleted = (review: StationItem) => {
-  const summary = summarizeTrackResults(review.track_results);
-  if (summary.outcome && summary.outcome !== "PENDING") {
-    return true;
-  }
-  return completionStatusSet.has(normalizeStationReviewStatus(review.status));
-};
-
 function StationLogo({
   station,
   hideOnMobile = false,
@@ -457,7 +350,8 @@ export function HomeReviewPanel({
   const [remoteStatus, setRemoteStatus] = React.useState<
     "idle" | "loading" | "loaded" | "error"
   >("idle");
-  const hasRequestedRemote = React.useRef(false);
+  const [remoteErrorMessage, setRemoteErrorMessage] = React.useState<string | null>(null);
+  const [remoteReloadSeq, setRemoteReloadSeq] = React.useState(0);
 
   const availableTabs = React.useMemo<TabKey[]>(() => {
     if (!hideEmptyTabs) return ["album", "mv"];
@@ -492,17 +386,26 @@ export function HomeReviewPanel({
 
   React.useEffect(() => {
     if (!enableRemoteSync || !isLoggedIn) return;
-    if (hasRequestedRemote.current) return;
-    hasRequestedRemote.current = true;
     let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, DASHBOARD_STATUS_FETCH_TIMEOUT_MS);
     setRemoteStatus("loading");
+    setRemoteErrorMessage(null);
     const fetchRemote = async () => {
       try {
-        const res = await fetch("/api/dashboard/status", { cache: "no-store" });
+        const res = await fetch("/api/dashboard/status", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
         const json = (await res.json().catch(() => null)) as DashboardStatusResponse | null;
         if (cancelled) return;
         if (!res.ok || !json || json.error) {
           setRemoteStatus("error");
+          setRemoteErrorMessage(
+            json?.error || "심의 현황을 불러오지 못했습니다. 다시 시도해주세요.",
+          );
           return;
         }
         const normalizeMap = (map: Record<string, StationItem[]>) =>
@@ -524,18 +427,33 @@ export function HomeReviewPanel({
         });
         setRemoteStatus("loaded");
       } catch {
-        if (!cancelled) setRemoteStatus("error");
+        if (!cancelled) {
+          setRemoteStatus("error");
+          setRemoteErrorMessage(
+            controller.signal.aborted
+              ? "심의 현황 응답이 지연되고 있습니다. 다시 시도해주세요."
+              : "심의 현황을 불러오지 못했습니다. 다시 시도해주세요.",
+          );
+        }
+      } finally {
+        window.clearTimeout(timeoutId);
       }
     };
     fetchRemote();
     return () => {
       cancelled = true;
+      controller.abort();
+      window.clearTimeout(timeoutId);
     };
-  }, [enableRemoteSync, isLoggedIn, normalizeStations]);
+  }, [enableRemoteSync, isLoggedIn, normalizeStations, remoteReloadSeq]);
 
   const activeList = tab === "album" ? albumState.submissions : mvState.submissions;
   const activeIndex = tab === "album" ? albumState.index : mvState.index;
   const activeStationsMap = tab === "album" ? albumState.stationsById : mvState.stationsById;
+  const isRemoteLoading = enableRemoteSync && remoteStatus === "loading";
+  const isRemoteError = enableRemoteSync && remoteStatus === "error";
+  const hasAnySubmission =
+    albumState.submissions.length > 0 || mvState.submissions.length > 0;
   const activeSubmission =
     activeList.length > 0 ? activeList[Math.min(activeIndex, activeList.length - 1)] : null;
   const activeSubmissionId = activeSubmission?.id;
@@ -543,10 +461,6 @@ export function HomeReviewPanel({
     ? activeStationsMap[activeSubmissionId] ?? []
     : [];
   const submissionLabels = getSubmissionLabels(activeSubmission);
-  const trackResultLabel =
-    activeSubmission?.type === "MV_DISTRIBUTION"
-      ? "심의 등급"
-      : "심의 결과";
   const isLive =
     (forceLiveBadge && isLoggedIn) ||
     (isLoggedIn &&
@@ -647,19 +561,22 @@ export function HomeReviewPanel({
   const needsPayment =
     Boolean(activeSubmission) && activeSubmission?.payment_status !== "PAID";
   const totalCount = needsPayment ? 0 : activeStations.length;
-  const completedCount = activeStations.filter((review) =>
-    isStationCompleted(review),
-  ).length;
+  const activeStationDisplayStatuses = activeStations.map((review) =>
+    getStationReviewDisplayStatus(review, { showPartialTrackBreakdown }),
+  );
+  const completedCount = needsPayment
+    ? 0
+    : activeStationDisplayStatuses.filter((status) => status.isComplete).length;
+  const hasAttentionStatus =
+    !needsPayment &&
+    activeStationDisplayStatuses.some((status) => status.needsAttention);
   const progressPercent =
     totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-  const progressText =
-    needsPayment
-      ? "방송국 진행 대기"
-      : totalCount > 0
-        ? `진행률 : 총 ${totalCount}곳 중 ${completedCount}곳 완료`
-        : "진행률 : 방송국 결과가 등록되면 진행률이 표시됩니다.";
+  const progressText = `${totalCount}곳 중 ${completedCount}곳 완료 · ${progressPercent}%`;
   const currentSubmissionStatus =
-    activeSubmission && !needsPayment && totalCount > 0 && completedCount === totalCount
+    hasAttentionStatus
+      ? stageStatusMap.attention
+      : activeSubmission && !needsPayment && totalCount > 0 && completedCount === totalCount
       ? stageStatusMap.completed
       : getStageStatus(activeSubmission);
 
@@ -692,20 +609,20 @@ export function HomeReviewPanel({
     ? "h-7 w-7 text-[11px]"
     : "h-8 w-8 text-xs";
   const tableHeaderClass = compact
-    ? "hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:grid"
-    : "hidden grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid";
+    ? "hidden grid-cols-[minmax(0,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:grid"
+    : "hidden grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid";
   const mobileTableHeaderClass = compact
-    ? "grid grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:hidden"
-    : "grid grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden";
+    ? "grid grid-cols-[60px_minmax(92px,1fr)_64px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:hidden"
+    : "grid grid-cols-[60px_minmax(104px,1fr)_72px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden";
   const listPaddingClass = compact
     ? "px-2 py-2"
     : "px-2.5 py-2.5 sm:px-3 sm:py-3";
   const desktopStationRowClass = compact
-    ? "grid min-h-[46px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-1.5 text-xs"
-    : "grid min-h-[52px] grid-cols-[1.1fr_0.9fr_0.9fr_1fr] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-sm";
+    ? "grid min-h-[46px] grid-cols-[minmax(0,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-1.5 text-xs"
+    : "grid min-h-[52px] grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-sm";
   const mobileStationRowClass = compact
-    ? "grid min-h-[44px] grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 px-2 py-1.5 text-xs"
-    : "grid min-h-[48px] grid-cols-[60px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 px-2 py-2 text-sm";
+    ? "grid min-h-[44px] grid-cols-[60px_minmax(92px,1fr)_64px] items-center gap-2 px-2 py-1.5 text-xs"
+    : "grid min-h-[48px] grid-cols-[60px_minmax(104px,1fr)_72px] items-center gap-2 px-2 py-2 text-sm";
   const stationListRef = React.useRef<HTMLDivElement | null>(null);
   const mouseDragPointerId = React.useRef<number | null>(null);
   const mouseDragStartY = React.useRef(0);
@@ -828,8 +745,10 @@ export function HomeReviewPanel({
               : ""}
         </span>
         <span className="inline-flex items-center gap-2">
-          {isLoading ? (
+          {isLoading || isRemoteLoading ? (
             "불러오는 중"
+          ) : isRemoteError ? (
+            "불러오기 실패"
           ) : isLoggedIn ? (
             <>
               {isLive ? (
@@ -874,7 +793,9 @@ export function HomeReviewPanel({
         <span>
           {activeList.length > 0
             ? `${activeIndex + 1}/${activeList.length}`
-            : "0/0"}
+            : isRemoteLoading
+              ? "확인 중"
+              : "표시할 내역 없음"}
           {tab === "album" && activeList.length > 0
             ? ` · 진행중 ${activeList.length}건`
             : null}
@@ -941,7 +862,7 @@ export function HomeReviewPanel({
             <div className={progressBodyClass}>
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm font-semibold text-foreground">
-                  진행 현황
+                  심의 요약
                 </p>
                 {currentSubmissionStatus ? (
                   <span
@@ -952,11 +873,17 @@ export function HomeReviewPanel({
                 ) : null}
               </div>
               <div className={`rounded-xl border border-border/60 bg-background/80 ${innerCardPaddingClass}`}>
-                <div className="flex items-center justify-between gap-3 text-sm font-semibold text-foreground">
+                <div className="text-sm font-semibold text-foreground">
                   <span className="truncate">{progressText}</span>
-                  {totalCount > 0 ? <span>{progressPercent}%</span> : null}
                 </div>
-                <div className="mt-2 h-2 w-full rounded-full bg-muted">
+                <div
+                  className="mt-2 h-2 w-full rounded-full bg-muted"
+                  role="progressbar"
+                  aria-label="심의 완료율"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={progressPercent}
+                >
                   <div
                     className="h-2 rounded-full bg-primary transition-all dark:bg-[#2997ff]"
                     style={{ width: `${progressPercent}%` }}
@@ -976,18 +903,33 @@ export function HomeReviewPanel({
               </div>
             </div>
           ) : (
-            <p className="mt-2 text-sm font-semibold text-foreground">
-              {isLoading || (enableRemoteSync && remoteStatus === "loading")
-                ? "불러오는 중..."
-                : "아직 접수된 내역이 없습니다."}
-            </p>
+            <div className="mt-2 rounded-xl border border-border/60 bg-background/80 px-3 py-3">
+              <p className="text-sm font-semibold text-foreground">
+                {isLoading || isRemoteLoading
+                  ? "심의 현황을 불러오는 중입니다."
+                  : isRemoteError
+                    ? (remoteErrorMessage ?? "심의 현황을 불러오지 못했습니다.")
+                    : hasAnySubmission
+                      ? "선택한 유형에 표시할 심의 현황이 없습니다."
+                      : "현재 표시할 심의 현황이 없습니다."}
+              </p>
+              {isRemoteError ? (
+                <button
+                  type="button"
+                  onClick={() => setRemoteReloadSeq((value) => value + 1)}
+                  className="mt-3 rounded-[8px] border-2 border-[#111111] bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27]"
+                >
+                  다시 불러오기
+                </button>
+              ) : null}
+            </div>
           )}
         </div>
 
         <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass} ${stationSectionClass}`}>
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">
-              심의 진행 상황
+              방송국별 현황
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -995,7 +937,7 @@ export function HomeReviewPanel({
                 onClick={handlePrev}
                 disabled={needsPayment || !canScrollUp}
                 className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0`}
-                aria-label="이전 심의 진행 상태"
+                aria-label="이전 방송국 상태"
               >
                 ↑
               </button>
@@ -1004,7 +946,7 @@ export function HomeReviewPanel({
                 onClick={handleNext}
                 disabled={needsPayment || !canScrollDown}
                 className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0`}
-                aria-label="다음 심의 진행 상태"
+                aria-label="다음 방송국 상태"
               >
                 ↓
               </button>
@@ -1013,8 +955,7 @@ export function HomeReviewPanel({
           <div className={stationTableShellClass}>
             <div className={tableHeaderClass}>
               <span className="pl-2 text-left">방송국</span>
-              <span className="justify-self-center text-center">접수 상태</span>
-              <span className="justify-self-center text-center">{trackResultLabel}</span>
+              <span className="justify-self-center text-center">현재 상태</span>
               <span className="text-right">업데이트</span>
             </div>
             {!needsPayment && activeStations.length > 0 ? (
@@ -1022,8 +963,8 @@ export function HomeReviewPanel({
                 {mobileStationLayout === "table" ? (
                   <div className={mobileTableHeaderClass}>
                     <span className="justify-self-center text-center">방송국</span>
-                    <span className="justify-self-center text-center">접수 상태</span>
-                    <span className="justify-self-center text-center">{trackResultLabel}</span>
+                    <span className="justify-self-center text-center">현재 상태</span>
+                    <span className="justify-self-center text-center">업데이트</span>
                   </div>
                 ) : null}
                 <div
@@ -1043,14 +984,11 @@ export function HomeReviewPanel({
                   <div className="hidden text-sm sm:block">
                     <div className="grid gap-2">
                       {activeStations.map((station, index) => {
-                        const reception = getReceptionStatus(station.status);
-                        const result = getResultStatus(
+                        const currentStatus = getStationReviewDisplayStatus(
                           station,
-                          showPartialTrackBreakdown,
+                          { showPartialTrackBreakdown },
                         );
-                        const summary = summarizeTrackResults(
-                          station.track_results,
-                        );
+                        const summary = currentStatus.summary;
                         const canOpenResultModal = shouldOpenResultModal(
                           station,
                           summary,
@@ -1075,11 +1013,6 @@ export function HomeReviewPanel({
                                 ) : null}
                               </span>
                             </span>
-                            <span
-                              className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${reception.tone}`}
-                            >
-                              {reception.label}
-                            </span>
                             <div className="flex flex-col items-center justify-center gap-1 justify-self-center">
                               {canOpenResultModal ? (
                                 <button
@@ -1090,36 +1023,40 @@ export function HomeReviewPanel({
                                       buildResultModalState(
                                         station,
                                         summary,
-                                        result,
+                                        currentStatus,
                                       ),
                                     )
                                   }
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${result.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${currentStatus.tone}`}
                                 >
-                                  <span>{result.label}</span>
-                                  {result.summaryText ? (
+                                  <span>{currentStatus.label}</span>
+                                  {currentStatus.summaryText ? (
                                     <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                      {result.summaryText}
+                                      {currentStatus.summaryText}
                                     </span>
                                   ) : null}
                                 </button>
                               ) : (
                                 <div className="flex flex-col items-center gap-1">
                                   <span
-                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${result.tone}`}
+                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${currentStatus.tone}`}
                                   >
-                                    {result.label}
+                                    {currentStatus.label}
                                   </span>
-                                  {result.summaryText ? (
+                                  {currentStatus.summaryText ? (
                                     <span className="text-[11px] leading-tight text-muted-foreground text-center">
-                                      {result.summaryText}
+                                      {currentStatus.summaryText}
                                     </span>
                                   ) : null}
                                 </div>
                               )}
                             </div>
-                            <span className="text-right text-xs text-muted-foreground">
-                              {formatDate(station.updated_at)}
+                            <span
+                              className="text-right text-xs text-muted-foreground"
+                              title={formatDate(station.updated_at)}
+                              aria-label={`업데이트 ${formatDate(station.updated_at)}`}
+                            >
+                              {formatShortDate(station.updated_at)}
                             </span>
                           </div>
                         );
@@ -1130,11 +1067,8 @@ export function HomeReviewPanel({
                   {mobileStationLayout === "table" ? (
                     <div className="divide-y divide-border/50 sm:hidden">
                       {activeStations.map((station, index) => {
-                        const reception = getReceptionStatus(station.status);
-                        const result = getResultStatus(station, false);
-                        const summary = summarizeTrackResults(
-                          station.track_results,
-                        );
+                        const currentStatus = getStationReviewDisplayStatus(station);
+                        const summary = currentStatus.summary;
                         const canOpenResultModal = shouldOpenResultModal(
                           station,
                           summary,
@@ -1156,11 +1090,6 @@ export function HomeReviewPanel({
                               <StationLogo station={station.station ?? undefined} />
                               <span className="sr-only">{stationLabel}</span>
                             </div>
-                            <span
-                              className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${reception.tone}`}
-                            >
-                              {reception.label}
-                            </span>
                             {canOpenResultModal ? (
                               <button
                                 type="button"
@@ -1170,23 +1099,30 @@ export function HomeReviewPanel({
                                     buildResultModalState(
                                       station,
                                       summary,
-                                      result,
+                                      currentStatus,
                                     ),
                                   )
                                 }
-                                className={`bauhaus-status-chip bauhaus-status-chip--compact min-w-[88px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${result.tone}`}
+                                className={`bauhaus-status-chip bauhaus-status-chip--compact min-w-[88px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${currentStatus.tone}`}
                               >
-                                <span>{result.label}</span>
+                                <span>{currentStatus.label}</span>
                               </button>
                             ) : (
                               <div className="flex items-center justify-self-center">
                                 <span
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact ${result.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact ${currentStatus.tone}`}
                                 >
-                                  {result.label}
+                                  {currentStatus.label}
                                 </span>
                               </div>
                             )}
+                            <span
+                              className="justify-self-end text-right text-[11px] text-muted-foreground"
+                              title={formatDate(station.updated_at)}
+                              aria-label={`업데이트 ${formatDate(station.updated_at)}`}
+                            >
+                              {formatShortDate(station.updated_at)}
+                            </span>
                           </div>
                         );
                       })}
@@ -1194,14 +1130,11 @@ export function HomeReviewPanel({
                   ) : (
                     <div className="space-y-2 sm:hidden">
                       {activeStations.map((station, index) => {
-                        const reception = getReceptionStatus(station.status);
-                        const result = getResultStatus(
+                        const currentStatus = getStationReviewDisplayStatus(
                           station,
-                          showPartialTrackBreakdown,
+                          { showPartialTrackBreakdown },
                         );
-                        const summary = summarizeTrackResults(
-                          station.track_results,
-                        );
+                        const summary = currentStatus.summary;
                         const canOpenResultModal = shouldOpenResultModal(
                           station,
                           summary,
@@ -1227,16 +1160,15 @@ export function HomeReviewPanel({
                                   ) : null}
                                 </span>
                               </span>
-                              <span className="text-xs text-muted-foreground">
-                                {formatDate(station.updated_at)}
+                              <span
+                                className="text-xs text-muted-foreground"
+                                title={formatDate(station.updated_at)}
+                                aria-label={`업데이트 ${formatDate(station.updated_at)}`}
+                              >
+                                {formatShortDate(station.updated_at)}
                               </span>
                             </div>
                             <div className="mt-2 flex flex-wrap gap-2">
-                              <span
-                                className={`bauhaus-status-chip bauhaus-status-chip--compact ${reception.tone}`}
-                              >
-                                {reception.label}
-                              </span>
                               {canOpenResultModal ? (
                                 <button
                                   type="button"
@@ -1246,29 +1178,29 @@ export function HomeReviewPanel({
                                       buildResultModalState(
                                         station,
                                         summary,
-                                        result,
+                                        currentStatus,
                                       ),
                                     )
                                   }
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${result.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${currentStatus.tone}`}
                                 >
-                                  <span>{result.label}</span>
-                                  {result.summaryText ? (
+                                  <span>{currentStatus.label}</span>
+                                  {currentStatus.summaryText ? (
                                     <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                      {result.summaryText}
+                                      {currentStatus.summaryText}
                                     </span>
                                   ) : null}
                                 </button>
                               ) : (
                                 <div className="flex flex-col items-center gap-1">
                                   <span
-                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${result.tone}`}
+                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${currentStatus.tone}`}
                                   >
-                                    {result.label}
+                                    {currentStatus.label}
                                   </span>
-                                  {result.summaryText ? (
+                                  {currentStatus.summaryText ? (
                                     <span className="text-[11px] leading-tight text-muted-foreground text-center">
-                                      {result.summaryText}
+                                      {currentStatus.summaryText}
                                     </span>
                                   ) : null}
                                 </div>
@@ -1283,7 +1215,11 @@ export function HomeReviewPanel({
               </>
             ) : (
               <div className={stationEmptyClass}>
-                {needsPayment ? "대기" : "접수 후 진행 정보가 표시됩니다."}
+                {isRemoteError
+                  ? "심의 현황을 불러오지 못했습니다."
+                  : needsPayment
+                    ? "입금 확인 후 방송국별 현황이 표시됩니다."
+                    : "방송국별 현황이 없습니다."}
               </div>
             )}
           </div>
@@ -1324,7 +1260,7 @@ export function HomeReviewPanel({
             </div>
             {trackResultModal.summary.counts.total > 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">
-                {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
+                {buildStationTrackSummaryText(trackResultModal.summary.counts, " · ")}
               </p>
             ) : (
               <p className="mt-2 text-sm text-muted-foreground">

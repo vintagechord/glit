@@ -376,6 +376,9 @@ export function MvWizard({
   const [isClearingResumeDrafts, setIsClearingResumeDrafts] = React.useState(false);
   const resumePromptHandledRef = React.useRef(false);
   const draftInitAttemptedRef = React.useRef(false);
+  const draftCreationPromiseRef = React.useRef<Promise<string | null> | null>(
+    null,
+  );
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [openBroadcastSpec, setOpenBroadcastSpec] = React.useState<string | null>(
@@ -395,6 +398,16 @@ export function MvWizard({
     message: string;
   } | null>(null);
   const [isTranslatingLyrics, setIsTranslatingLyrics] = React.useState(false);
+  const [isCheckingProfanity, setIsCheckingProfanity] = React.useState(false);
+  const [loadedProfanityTerms, setLoadedProfanityTerms] =
+    React.useState<ProfanityTerm[]>(profanityTerms);
+  const [profanityTermsLoaded, setProfanityTermsLoaded] = React.useState(
+    profanityTerms.length > 0,
+  );
+  const profanityTermsRef = React.useRef<ProfanityTerm[]>(profanityTerms);
+  const profanityTermsRequestRef = React.useRef<Promise<ProfanityTerm[]> | null>(
+    null,
+  );
   const [confirmModal, setConfirmModal] = React.useState<{
     code: string;
     title: string;
@@ -415,12 +428,8 @@ export function MvWizard({
     [userId],
   );
   const profanityMatchers = React.useMemo(
-    () => buildLegacyProfanityMatchers(profanityTerms),
-    [profanityTerms],
-  );
-  const profanityExtraRules = React.useMemo(
-    () => buildProfanityExtraRules(profanityTerms),
-    [profanityTerms],
+    () => buildLegacyProfanityMatchers(loadedProfanityTerms),
+    [loadedProfanityTerms],
   );
   const isProfanityFilterV2Enabled = Boolean(profanityFilterV2Enabled);
   const profanityPattern = profanityMatchers?.pattern ?? null;
@@ -429,6 +438,62 @@ export function MvWizard({
   const showLyricsToolNotice = lyricsToolApplied;
   const showProfanityOverlay =
     profanityChecked && profanityHighlight && profanityWords.length > 0;
+
+  React.useEffect(() => {
+    const nextType =
+      requestedType === "broadcast" ? "MV_BROADCAST" : "MV_DISTRIBUTION";
+    setMvType((current) => {
+      if (current === nextType) return current;
+      return nextType;
+    });
+    if (nextType === "MV_BROADCAST") {
+      setOnlineOptions([]);
+      setOnlineBaseSelected(true);
+      setDesiredRating("");
+    } else {
+      setTvStations([]);
+    }
+  }, [requestedType]);
+
+  React.useEffect(() => {
+    profanityTermsRef.current = loadedProfanityTerms;
+  }, [loadedProfanityTerms]);
+
+  React.useEffect(() => {
+    if (profanityTerms.length === 0) return;
+    setLoadedProfanityTerms(profanityTerms);
+    setProfanityTermsLoaded(true);
+    profanityTermsRef.current = profanityTerms;
+  }, [profanityTerms]);
+
+  const ensureProfanityTerms = React.useCallback(async () => {
+    if (profanityTermsLoaded) {
+      return profanityTermsRef.current;
+    }
+    if (!profanityTermsRequestRef.current) {
+      profanityTermsRequestRef.current = fetch("/api/profanity/terms", {
+        cache: "force-cache",
+      })
+        .then(async (res) => {
+          const json = (await res.json().catch(() => null)) as
+            | { terms?: ProfanityTerm[]; error?: string }
+            | null;
+          if (!res.ok || json?.error) {
+            throw new Error(json?.error || "PROFANITY_TERMS_QUERY_FAILED");
+          }
+          return Array.isArray(json?.terms) ? json.terms : [];
+        })
+        .finally(() => {
+          profanityTermsRequestRef.current = null;
+        });
+    }
+
+    const terms = await profanityTermsRequestRef.current;
+    setLoadedProfanityTerms(terms);
+    setProfanityTermsLoaded(true);
+    profanityTermsRef.current = terms;
+    return terms;
+  }, [profanityTermsLoaded]);
   const clearInvalidField = React.useCallback((field: MvValidationField) => {
     setInvalidField((current) => (current === field ? null : current));
   }, []);
@@ -637,56 +702,68 @@ export function MvWizard({
 
   const createDraft = React.useCallback(async (options?: { force?: boolean }) => {
     if (submissionIdRef.current) return submissionIdRef.current;
-    if (isPreparingDraft) return null;
+    if (draftCreationPromiseRef.current) {
+      return draftCreationPromiseRef.current;
+    }
     if (!options?.force && draftInitAttemptedRef.current) {
       return submissionIdRef.current || null;
     }
     draftInitAttemptedRef.current = true;
-    setIsPreparingDraft(true);
-    setDraftError(null);
-    try {
-      const res = await fetch("/api/submissions/draft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: mvType,
-          guestToken: isGuest ? guestTokenRef.current : undefined,
-        }),
-      });
-      const json = (await res.json().catch(() => null)) as {
-        submissionId?: string;
-        guestToken?: string;
-        error?: string;
-      };
-      if (res.ok && json?.submissionId) {
-        if (isGuest && json.guestToken) {
-          guestTokenRef.current = json.guestToken;
-          if (typeof window !== "undefined") {
-            try {
-              window.localStorage.setItem(guestTokenStorageKey, json.guestToken);
-            } catch {
-              // ignore storage errors
+    const draftPromise = (async () => {
+      setIsPreparingDraft(true);
+      setDraftError(null);
+      try {
+        const res = await fetch("/api/submissions/draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: mvType,
+            guestToken: isGuest ? guestTokenRef.current : undefined,
+          }),
+        });
+        const json = (await res.json().catch(() => null)) as {
+          submissionId?: string;
+          guestToken?: string;
+          error?: string;
+        };
+        if (res.ok && json?.submissionId) {
+          if (isGuest && json.guestToken) {
+            guestTokenRef.current = json.guestToken;
+            if (typeof window !== "undefined") {
+              try {
+                window.localStorage.setItem(guestTokenStorageKey, json.guestToken);
+              } catch {
+                // ignore storage errors
+              }
             }
           }
+          submissionIdRef.current = json.submissionId;
+          return json.submissionId;
         }
-        submissionIdRef.current = json.submissionId;
-        return json.submissionId;
+        setDraftError(
+          json?.error ||
+          "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
+        );
+      } catch (error) {
+        setDraftError(
+          error instanceof Error
+            ? error.message
+            : "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
+        );
+      } finally {
+        setIsPreparingDraft(false);
       }
-      setDraftError(
-        json?.error ||
-        "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
-      );
-    } catch (error) {
-      setDraftError(
-        error instanceof Error
-          ? error.message
-          : "접수 초안을 생성하지 못했습니다. 새로고침 후 다시 시도해주세요.",
-      );
+      return null;
+    })();
+    draftCreationPromiseRef.current = draftPromise;
+    try {
+      return await draftPromise;
     } finally {
-      setIsPreparingDraft(false);
+      if (draftCreationPromiseRef.current === draftPromise) {
+        draftCreationPromiseRef.current = null;
+      }
     }
-    return null;
-  }, [guestTokenStorageKey, isGuest, isPreparingDraft, mvType]);
+  }, [guestTokenStorageKey, isGuest, mvType]);
 
   React.useEffect(() => {
     if (!resumeChecked) return;
@@ -705,6 +782,7 @@ export function MvWizard({
   const selectedStationIds = selectedCodes
     .map((code) => stationMap.get(code)?.id)
     .filter(Boolean) as string[];
+  const selectedStationCodes = selectedCodes;
   const baseAmount =
     mvType === "MV_DISTRIBUTION" && onlineBaseSelected ? baseOnlinePrice : 0;
   const totalAmount =
@@ -1806,7 +1884,7 @@ export function MvWizard({
     });
   };
 
-  const handleProfanityCheck = () => {
+  const handleProfanityCheck = async () => {
     const currentLyrics = lyricsTextareaRef.current?.value ?? lyrics;
     if (!currentLyrics.trim()) {
       setLyricsToolNotice({
@@ -1819,31 +1897,46 @@ export function MvWizard({
       setLyrics(currentLyrics);
     }
 
-    const v1HasProfanity = profanityTestPattern
-      ? profanityTestPattern.test(currentLyrics)
-      : false;
-    const { hasProfanity } = runProfanityCheck(currentLyrics, {
-      v1HasProfanity,
-      enableV2: isProfanityFilterV2Enabled,
-      preferV2: isProfanityFilterV2Enabled,
-      v2Options: { extraRules: profanityExtraRules },
-    });
-    if (hasProfanity) {
-      const shouldProceed = window.confirm(
-        "욕설이 감지되었습니다. 욕설이 있는 경우 심의 부적격 가능성이 높습니다",
-      );
-      if (!shouldProceed) return;
-    }
+    setIsCheckingProfanity(true);
+    try {
+      const terms = await ensureProfanityTerms();
+      const matchers = buildLegacyProfanityMatchers(terms);
+      const extraRules = buildProfanityExtraRules(terms);
+      const currentTestPattern = matchers?.testPattern ?? null;
+      const v1HasProfanity = currentTestPattern
+        ? currentTestPattern.test(currentLyrics)
+        : false;
+      const { hasProfanity } = runProfanityCheck(currentLyrics, {
+        v1HasProfanity,
+        enableV2: isProfanityFilterV2Enabled,
+        preferV2: isProfanityFilterV2Enabled,
+        v2Options: { extraRules },
+      });
+      if (hasProfanity) {
+        const shouldProceed = window.confirm(
+          "욕설이 감지되었습니다. 욕설이 있는 경우 심의 부적격 가능성이 높습니다",
+        );
+        if (!shouldProceed) return;
+      }
 
-    setProfanityChecked(true);
-    setProfanityHighlight(hasProfanity);
-    markLyricsToolApplied();
-    setLyricsToolNotice({
-      type: hasProfanity ? "error" : "success",
-      message: hasProfanity
-        ? "욕설 또는 회피 패턴이 감지되었습니다."
-        : "욕설이 감지되지 않았습니다.",
-    });
+      setProfanityChecked(true);
+      setProfanityHighlight(hasProfanity);
+      markLyricsToolApplied();
+      setLyricsToolNotice({
+        type: hasProfanity ? "error" : "success",
+        message: hasProfanity
+          ? "욕설 또는 회피 패턴이 감지되었습니다."
+          : "욕설이 감지되지 않았습니다.",
+      });
+    } catch (error) {
+      console.warn("[MvProfanity] failed to load terms", error);
+      setLyricsToolNotice({
+        type: "error",
+        message: "욕설 체크 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
+      });
+    } finally {
+      setIsCheckingProfanity(false);
+    }
   };
 
   const handleTranslateLyrics = async () => {
@@ -2171,6 +2264,7 @@ export function MvWizard({
         submissionId,
         amountKrw: totalAmount,
         selectedStationIds,
+        selectedStationCodes,
         title: titleValue || undefined,
         artistName: artistNameValue || undefined,
         director: director.trim() || undefined,
@@ -2295,6 +2389,7 @@ export function MvWizard({
         submissionId,
         amountKrw: totalAmount,
         selectedStationIds,
+        selectedStationCodes,
         title: titleValue || undefined,
         artistName: artistNameValue || undefined,
         director: director.trim() || undefined,
@@ -2672,7 +2767,11 @@ export function MvWizard({
                       | "MV_BROADCAST";
                     setMvType(nextMvType);
                     if (nextMvType === "MV_BROADCAST") {
+                      setOnlineOptions([]);
+                      setOnlineBaseSelected(true);
                       setDesiredRating("");
+                    } else {
+                      setTvStations([]);
                     }
                   }}
                   className={`text-left rounded-[28px] border p-6 transition ${active
@@ -3376,9 +3475,10 @@ export function MvWizard({
                   <button
                     type="button"
                     onClick={handleProfanityCheck}
-                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer"
+                    disabled={isCheckingProfanity}
+                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    욕설 체크
+                    욕설 체크 {isCheckingProfanity ? "중..." : ""}
                   </button>
                   <button
                     type="button"

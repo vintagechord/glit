@@ -62,7 +62,7 @@ const serviceCards = [
     label: "온라인 유통/업로드",
     title: "뮤직비디오 온라인 심의",
     description: "유통사 제출·온라인 업로드용.",
-    href: "/dashboard/new/mv?type=online",
+    href: "/dashboard/new/mv?type=distribution",
     tone: "mv",
     cardClass: "border-[#111111] bg-[#1556a4] text-white",
     labelClass: "text-white/74",

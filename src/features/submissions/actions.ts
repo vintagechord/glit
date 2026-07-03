@@ -91,6 +91,45 @@ const mvStationPriceMap: Record<string, number> = {
   ETN: 30000,
   MNET: 30000,
 };
+const mvStationCodeSet = new Set(Object.keys(mvStationPriceMap));
+
+const normalizeMvStationCodes = (codes?: string[] | null) =>
+  Array.from(
+    new Set(
+      (codes ?? [])
+        .map((code) => code.trim().toUpperCase())
+        .filter((code) => mvStationCodeSet.has(code)),
+    ),
+  );
+
+const resolveMvStationIdsByCodes = async (
+  db: SupabaseClient,
+  codes: string[],
+) => {
+  const normalizedCodes = normalizeMvStationCodes(codes);
+  if (normalizedCodes.length === 0) {
+    return { stationIds: [], missingCodes: [] as string[] };
+  }
+
+  const { data: stations, error } = await db
+    .from("stations")
+    .select("id, code")
+    .in("code", normalizedCodes);
+
+  if (error) {
+    return { stationIds: [], missingCodes: normalizedCodes };
+  }
+
+  const stationMap = new Map(
+    (stations ?? []).map((station) => [station.code, station.id]),
+  );
+  return {
+    stationIds: normalizedCodes
+      .map((code) => stationMap.get(code))
+      .filter((id): id is string => Boolean(id)),
+    missingCodes: normalizedCodes.filter((code) => !stationMap.has(code)),
+  };
+};
 
 const extractMissingColumn = (error: SupabaseError) => {
   const message = error.message ?? "";
@@ -612,6 +651,7 @@ const mvSubmissionSchema = z.object({
   packageId: z.string().uuid().optional(),
   amountKrw: z.number().int().nonnegative().optional(),
   selectedStationIds: z.array(z.string().uuid()).optional(),
+  selectedStationCodes: z.array(z.string()).optional(),
   title: z.string().optional(),
   artistName: z.string().optional(),
   applicantEmail: z.string().optional(),
@@ -1461,11 +1501,14 @@ export async function saveMvSubmissionAction(
 
   const adminDb = createAdminClient();
   let db = isGuest ? adminDb : supabase;
+  const selectedMvStationCodes = normalizeMvStationCodes(
+    parsed.data.selectedStationCodes,
+  );
 
   let amountKrw = Math.max(0, Math.round(Number(parsed.data.amountKrw ?? 0)));
   if (isSubmitted) {
-    let selectedCodes: string[] = [];
-    if (parsed.data.selectedStationIds?.length) {
+    let selectedCodes = selectedMvStationCodes;
+    if (selectedCodes.length === 0 && parsed.data.selectedStationIds?.length) {
       const { data: selectedStations, error: stationError } = await adminDb
         .from("stations")
         .select("code")
@@ -1725,6 +1768,19 @@ export async function saveMvSubmissionAction(
 
   if (isSubmitted) {
     let stationIds = parsed.data.selectedStationIds ?? [];
+    if (stationIds.length === 0 && selectedMvStationCodes.length > 0) {
+      const resolved = await resolveMvStationIdsByCodes(
+        adminDb,
+        selectedMvStationCodes,
+      );
+      stationIds = resolved.stationIds;
+      if (resolved.missingCodes.length > 0) {
+        console.warn("Missing MV station codes", {
+          submissionId: parsed.data.submissionId,
+          missingCodes: resolved.missingCodes,
+        });
+      }
+    }
 
     if (stationIds.length === 0 && parsed.data.packageId) {
       const { data: packageStations, error: stationError } = await db
