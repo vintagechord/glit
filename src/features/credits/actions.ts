@@ -211,9 +211,8 @@ export async function redeemCreditRewardFormAction(
   if (isStudioCreditRewardTitle(reward?.title)) {
     redirect(
       withQuery(redirectPath, {
-        error: encodeURIComponent(
+        error:
           "녹음실 이용권은 날짜와 연락처를 입력해 예약 요청으로 접수해주세요.",
-        ),
       }),
     );
   }
@@ -225,7 +224,7 @@ export async function redeemCreditRewardFormAction(
   if (error) {
     redirect(
       withQuery(redirectPath, {
-        error: encodeURIComponent(normalizeRpcError(error.message)),
+        error: normalizeRpcError(error.message),
       }),
     );
   }
@@ -258,9 +257,7 @@ export async function createStudioReservationFormAction(
   if (!parsed.success) {
     redirect(
       withQuery(redirectPath, {
-        error: encodeURIComponent(
-          "예약 희망일, 시간, 담당자명, 연락처를 확인해주세요.",
-        ),
+        error: "예약 희망일, 시간, 담당자명, 연락처를 확인해주세요.",
       }),
     );
   }
@@ -287,7 +284,7 @@ export async function createStudioReservationFormAction(
   if (error) {
     redirect(
       withQuery(redirectPath, {
-        error: encodeURIComponent(normalizeStudioRpcError(error.message)),
+        error: normalizeStudioRpcError(error.message),
       }),
     );
   }

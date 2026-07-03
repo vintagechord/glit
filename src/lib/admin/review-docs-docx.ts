@@ -24,6 +24,15 @@ type TableCell = {
 type TableOptions = {
   width?: number;
   columns?: number[];
+  rowHeights?: number[];
+  borderSize?: number;
+  fixedLayout?: boolean;
+  cellMargins?: {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+  };
 };
 
 type DocOptions = {
@@ -163,9 +172,13 @@ const cell = (
   const width = widthValue ? `<w:tcW w:w="${widthValue}" w:type="dxa"/>` : "";
   const colspan = options?.colspan ? `<w:gridSpan w:val="${options.colspan}"/>` : "";
   const fill = options?.fill ? `<w:shd w:fill="${options.fill}"/>` : "";
+  const paragraphOptions = {
+    ...options,
+    spacingAfter: options?.spacingAfter ?? 0,
+  };
   return `<w:tc><w:tcPr>${width}${colspan}<w:vAlign w:val="center"/>${fill}</w:tcPr>${multilineParagraphs(
     text,
-    options,
+    paragraphOptions,
   )}</w:tc>`;
 };
 
@@ -185,11 +198,22 @@ const row = (cells: TableCell[], columns: number[], height?: number) => {
 const table = (rows: TableCell[][], options?: TableOptions) => {
   const width = options?.width ?? 9300;
   const columns = getTableColumns(width, getColumnCount(rows), options?.columns);
+  const borderSize = options?.borderSize ?? 8;
+  const fixedLayout =
+    options?.fixedLayout === false ? "" : '<w:tblLayout w:type="fixed"/>';
+  const margins = options?.cellMargins;
+  const cellMar = margins
+    ? `<w:tblCellMar><w:top w:w="${margins.top ?? 0}" w:type="dxa"/><w:left w:w="${
+        margins.left ?? 0
+      }" w:type="dxa"/><w:bottom w:w="${margins.bottom ?? 0}" w:type="dxa"/><w:right w:w="${
+        margins.right ?? 0
+      }" w:type="dxa"/></w:tblCellMar>`
+    : "";
   const grid = `<w:tblGrid>${columns
     .map((col) => `<w:gridCol w:w="${col}"/>`)
     .join("")}</w:tblGrid>`;
-  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="single" w:sz="6"/><w:left w:val="single" w:sz="6"/><w:bottom w:val="single" w:sz="6"/><w:right w:val="single" w:sz="6"/><w:insideH w:val="single" w:sz="6"/><w:insideV w:val="single" w:sz="6"/></w:tblBorders><w:tblCellMar><w:top w:w="90" w:type="dxa"/><w:left w:w="90" w:type="dxa"/><w:bottom w:w="90" w:type="dxa"/><w:right w:w="90" w:type="dxa"/></w:tblCellMar></w:tblPr>${grid}${rows
-    .map((cells) => row(cells, columns))
+  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/>${fixedLayout}<w:tblBorders><w:top w:val="single" w:sz="${borderSize}"/><w:left w:val="single" w:sz="${borderSize}"/><w:bottom w:val="single" w:sz="${borderSize}"/><w:right w:val="single" w:sz="${borderSize}"/><w:insideH w:val="single" w:sz="${borderSize}"/><w:insideV w:val="single" w:sz="${borderSize}"/></w:tblBorders>${cellMar}</w:tblPr>${grid}${rows
+    .map((cells, index) => row(cells, columns, options?.rowHeights?.[index]))
     .join("")}</w:tbl>`;
 };
 
@@ -259,8 +283,19 @@ const valueCell = (text: DocText | DocText[], colspan = 1, size = 10): TableCell
   options: { colspan, align: "center", size },
 });
 
-const fieldRows = (items: Array<[DocText, DocText]>) =>
-  items.map(([label, value]) => [headerCell(label), valueCell(value)]);
+const formLabelCell = (text: DocText, colspan = 1): TableCell => ({
+  text,
+  options: { colspan, align: "center", size: 11 },
+});
+
+const formValueCell = (
+  text: DocText | DocText[],
+  colspan = 1,
+  align: "left" | "center" | "right" = "center",
+): TableCell => ({
+  text,
+  options: { colspan, align, size: 11 },
+});
 
 const isBlank = (value: DocText) => !String(value ?? "").trim();
 
@@ -356,6 +391,8 @@ export function createSongReviewRequestDocx(data: SubmissionDocData) {
 }
 
 export function createReviewFormDocx(data: SubmissionDocData, title: string) {
+  void title;
+
   const body: string[] = [
     table(
       [
@@ -365,50 +402,70 @@ export function createReviewFormDocx(data: SubmissionDocData, title: string) {
             options: { colspan: 2, bold: true, align: "center", size: 18 },
           },
         ],
-        ...fieldRows([
+        ...[
           ["가수명", data.artist_name],
           ["발매일", data.release_date_short],
           ["제작일", data.production_date_short],
           ["기획사", data.company_name as string],
           ["유통사", data.distributor],
-        ]),
+        ].map(([label, value]) => [formLabelCell(label), formValueCell(value)]),
       ],
-      { columns: [1800, 7500] },
+      {
+        width: 9249,
+        columns: [2376, 6873],
+        rowHeights: [1690, 833, 831, 842, 841, 853],
+        fixedLayout: false,
+      },
     ),
-    paragraph(""),
     table(
-      fieldRows([
-        ["담당자", data.contact_name],
-        ["연락처", data.contact_phone],
-        ["e-mail", data.contact_email],
-      ]),
-      { width: 5000, columns: [1500, 3500] },
+      [
+        [formLabelCell("담당자"), formValueCell(data.contact_name)],
+        [formLabelCell("연락처"), formValueCell(data.contact_phone)],
+        [formLabelCell("e-mail"), formValueCell(data.contact_email)],
+      ],
+      {
+        width: 4863,
+        columns: [1242, 3621],
+        rowHeights: [558, 558, 558],
+        fixedLayout: false,
+      },
     ),
-    paragraph(title, { bold: true, size: 12, spacingBefore: 220 }),
   ];
 
   data.tracks.forEach((track, index) => {
-    if (index > 0) body.push(paragraph(""));
+    if (index > 0) body.push(paragraph("", { spacingAfter: 80 }));
     body.push(
       table(
         [
           [
-            headerCell("트랙번호"),
-            valueCell(track.track_no_padded),
-            valueCell(track.track_title_for_docs, 2, 11),
+            formLabelCell("트랙번호"),
+            formValueCell(track.track_no_padded),
+            formValueCell(track.track_title_for_docs),
           ],
-          [headerCell("작사", 2), valueCell(track.lyricist_display, 2, 11)],
-          [headerCell("작곡", 2), valueCell(track.composer, 2, 11)],
-          [headerCell("편곡", 2), valueCell(track.arranger, 2, 11)],
-          [headerCell("실연", 2), valueCell(track.performer, 2, 11)],
-          [{ text: lyricText(track), options: { colspan: 4, size: 11 } }],
+          [formLabelCell("작사", 2), formValueCell(track.lyricist_display)],
+          [formLabelCell("작곡", 2), formValueCell(track.composer)],
+          [formLabelCell("편곡", 2), formValueCell(track.arranger)],
+          [formLabelCell("실연", 2), formValueCell(track.performer)],
+          [
+            {
+              text: lyricText(track),
+              options: { colspan: 3, size: 11, align: "left" },
+            },
+          ],
         ],
-        { columns: [1400, 1100, 1800, 5000] },
+        {
+          width: 9016,
+          columns: [1097, 1098, 6821],
+          rowHeights: [703, 700, 696, 705, 687, 1406],
+          fixedLayout: false,
+        },
       ),
     );
   });
 
-  return makeDocx(body);
+  return makeDocx(body, {
+    margin: { top: 850, right: 907, bottom: 850, left: 907 },
+  });
 }
 
 const lyricHeader = (data: SubmissionDocData, size: number) => [

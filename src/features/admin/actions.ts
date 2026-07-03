@@ -660,13 +660,18 @@ export async function updateSubmissionStatusAction(
     admin_memo: parsed.data.adminMemo || null,
   };
 
-  const { error } = await supabase
+  const { data: updatedSubmission, error } = await supabase
     .from("submissions")
     .update(updatePayload)
-    .eq("id", parsed.data.submissionId);
+    .eq("id", parsed.data.submissionId)
+    .select("id, status")
+    .maybeSingle();
 
   if (error) {
     return { error: "상태 업데이트에 실패했습니다." };
+  }
+  if (!updatedSubmission || updatedSubmission.status !== parsed.data.status) {
+    return { error: "상태 저장 결과가 DB에 반영되지 않았습니다." };
   }
 
   await insertEvent(
@@ -697,6 +702,18 @@ export async function updateSubmissionStatusFormAction(
   });
   if (result.error) {
     console.error(result.error);
+    if (submissionId) {
+      redirect(
+        `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
+          result.error,
+        )}`,
+      );
+    }
+    redirect(
+      `/admin/submissions?saved=error&savedError=${encodeURIComponent(
+        result.error,
+      )}`,
+    );
   }
   revalidatePath("/admin/submissions");
   if (submissionId) {
@@ -766,6 +783,18 @@ export async function updateSubmissionMvRatingFormAction(
   const result = await updateSubmissionMvRatingAction({ submissionId, rating });
   if (result.error) {
     console.error(result.error);
+    if (submissionId) {
+      redirect(
+        `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
+          result.error,
+        )}`,
+      );
+    }
+    redirect(
+      `/admin/submissions?saved=error&savedError=${encodeURIComponent(
+        result.error,
+      )}`,
+    );
   }
   revalidatePath("/admin/submissions");
   if (submissionId) {
@@ -802,13 +831,18 @@ export async function updateSubmissionBasicInfoAction(
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase
+  const { data: updatedSubmission, error } = await supabase
     .from("submissions")
     .update(updatePayload)
-    .eq("id", parsed.data.submissionId);
+    .eq("id", parsed.data.submissionId)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     return { error: "아티스트/앨범 정보 업데이트에 실패했습니다." };
+  }
+  if (!updatedSubmission) {
+    return { error: "접수를 찾을 수 없습니다." };
   }
 
   await insertEvent(
@@ -832,7 +866,18 @@ export async function updateSubmissionBasicInfoFormAction(
 
   if (result.error) {
     console.error(result.error);
-    return;
+    if (submissionId) {
+      redirect(
+        `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
+          result.error,
+        )}`,
+      );
+    }
+    redirect(
+      `/admin/submissions?saved=error&savedError=${encodeURIComponent(
+        result.error,
+      )}`,
+    );
   }
 
   revalidatePath("/admin/submissions");
@@ -850,30 +895,46 @@ export async function updatePaymentStatusAction(
   }
 
   const supabase = createAdminClient();
-  const { data: submission } = await supabase
+  const { data: submission, error: submissionError } = await supabase
     .from("submissions")
-    .select("status")
+    .select("id, status")
     .eq("id", parsed.data.submissionId)
     .maybeSingle();
+
+  if (submissionError) {
+    return { error: "접수 정보를 확인하지 못했습니다." };
+  }
+  if (!submission) {
+    return { error: "접수를 찾을 수 없습니다." };
+  }
 
   const nextStatus =
     parsed.data.paymentStatus === "PAID" &&
     (submission?.status === "WAITING_PAYMENT" ||
       submission?.status === "SUBMITTED")
       ? "IN_PROGRESS"
-      : submission?.status;
+      : submission.status;
 
-  const { error } = await supabase
+  const { data: updatedSubmission, error } = await supabase
     .from("submissions")
     .update({
       payment_status: parsed.data.paymentStatus,
       status: nextStatus,
       admin_memo: parsed.data.adminMemo || null,
     })
-    .eq("id", parsed.data.submissionId);
+    .eq("id", parsed.data.submissionId)
+    .select("id, status, payment_status")
+    .maybeSingle();
 
   if (error) {
     return { error: "결제 상태 업데이트에 실패했습니다." };
+  }
+  if (
+    !updatedSubmission ||
+    updatedSubmission.payment_status !== parsed.data.paymentStatus ||
+    updatedSubmission.status !== nextStatus
+  ) {
+    return { error: "결제 상태 저장 결과가 DB에 반영되지 않았습니다." };
   }
 
   await insertEvent(
@@ -899,6 +960,18 @@ export async function updatePaymentStatusFormAction(
   });
   if (result.error) {
     console.error(result.error);
+    if (submissionId) {
+      redirect(
+        `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
+          result.error,
+        )}`,
+      );
+    }
+    redirect(
+      `/admin/submissions?saved=error&savedError=${encodeURIComponent(
+        result.error,
+      )}`,
+    );
   }
 
   revalidatePath("/admin/submissions");
@@ -1844,6 +1917,36 @@ export async function updateSubmissionResultAction(
 
   if (error) {
     return { error: "결과 정보를 저장하지 못했습니다." };
+  }
+
+  const savedWithResult = await supabase
+    .from("submissions")
+    .select("id, status, result_status")
+    .eq("id", parsed.data.submissionId)
+    .maybeSingle();
+  const saved =
+    savedWithResult.error?.code === "42703"
+      ? await supabase
+          .from("submissions")
+          .select("id, status")
+          .eq("id", parsed.data.submissionId)
+          .maybeSingle()
+      : savedWithResult;
+
+  if (saved.error) {
+    return { error: "결과 저장 여부를 확인하지 못했습니다." };
+  }
+  if (!saved.data) {
+    return { error: "접수를 찾을 수 없습니다." };
+  }
+  if (saved.data.status !== "RESULT_READY") {
+    return { error: "결과 상태가 DB에 반영되지 않았습니다." };
+  }
+  if (
+    "result_status" in saved.data &&
+    saved.data.result_status !== parsed.data.resultStatus
+  ) {
+    return { error: "결과 판정이 DB에 반영되지 않았습니다." };
   }
 
   const completion = await completeMvReviewFlow(supabase, parsed.data.submissionId, {

@@ -1,19 +1,26 @@
 type SubmissionDetailDebugPageProps = {
-  params: { [key: string]: string | string[] | undefined };
-  searchParams?: { [key: string]: string | string[] | undefined };
+  params:
+    | Promise<{ [key: string]: string | string[] | undefined }>
+    | { [key: string]: string | string[] | undefined };
+  searchParams?:
+    | Promise<{ [key: string]: string | string[] | undefined }>
+    | { [key: string]: string | string[] | undefined };
 };
 
-export default function DashboardSubmissionDetailDebugPage({
+export default async function DashboardSubmissionDetailDebugPage({
   params,
   searchParams,
 }: SubmissionDetailDebugPageProps) {
+  const resolvedParams = await Promise.resolve(params);
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+
   return (
     <main style={{ padding: 24 }}>
       <h1>Submission Debug Page</h1>
       <h2>params</h2>
-      <pre>{JSON.stringify(params, null, 2)}</pre>
+      <pre>{JSON.stringify(resolvedParams, null, 2)}</pre>
       <h2>searchParams</h2>
-      <pre>{JSON.stringify(searchParams ?? {}, null, 2)}</pre>
+      <pre>{JSON.stringify(resolvedSearchParams, null, 2)}</pre>
     </main>
   );
 }

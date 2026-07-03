@@ -1,13 +1,18 @@
 import { redirect } from "next/navigation";
 
-export default function AdminArtistDetailRedirect({
+type SearchParams = {
+  id?: string | string[];
+};
+
+export default async function AdminArtistDetailRedirect({
   searchParams,
 }: {
-  searchParams: { id?: string | string[] };
+  searchParams?: Promise<SearchParams> | SearchParams;
 }) {
-  const searchId = Array.isArray(searchParams.id)
-    ? searchParams.id?.[0] ?? ""
-    : searchParams.id ?? "";
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const searchId = Array.isArray(resolvedSearchParams.id)
+    ? resolvedSearchParams.id?.[0] ?? ""
+    : resolvedSearchParams.id ?? "";
 
   if (!searchId) {
     redirect("/admin/artists");
