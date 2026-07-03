@@ -51,6 +51,8 @@ type TrackResultModalState = {
   stationName: string;
   summary: ReturnType<typeof summarizeTrackResults>;
   resultNote: string | null;
+  resultLabel: string;
+  resultTone: string;
 };
 
 const receptionStatusMap: Record<string, { label: string; tone: string }> = {
@@ -163,6 +165,7 @@ function getResultStatus(
   showPartialTrackBreakdown: boolean,
 ) {
   const summary = summarizeTrackResults(review.track_results);
+  const normalizedStatus = normalizeStationReviewStatus(review.status);
   const base =
     summary.outcome === "APPROVED"
       ? trackResultStatusMap.APPROVED
@@ -173,7 +176,7 @@ function getResultStatus(
             label: "부분 적격",
             tone: "bauhaus-status-chip--waiting",
           }
-          : stationResultFallbackMap[review.status] ?? {
+          : stationResultFallbackMap[normalizedStatus] ?? {
             label: "대기",
             tone: "bauhaus-status-chip--neutral",
           };
@@ -184,6 +187,32 @@ function getResultStatus(
       : null;
 
   return { ...base, summaryText };
+}
+
+function shouldOpenResultModal(
+  review: StationItem,
+  summary: ReturnType<typeof summarizeTrackResults>,
+) {
+  const normalizedStatus = normalizeStationReviewStatus(review.status);
+  return (
+    summary.counts.total > 0 ||
+    Boolean(review.result_note?.trim()) ||
+    ["APPROVED", "REJECTED", "NEEDS_FIX"].includes(normalizedStatus)
+  );
+}
+
+function buildResultModalState(
+  review: StationItem,
+  summary: ReturnType<typeof summarizeTrackResults>,
+  result: { label: string; tone: string },
+): TrackResultModalState {
+  return {
+    stationName: review.station?.name ?? "-",
+    summary,
+    resultNote: review.result_note?.trim() || null,
+    resultLabel: result.label,
+    resultTone: result.tone,
+  };
 }
 
 function getStageStatus(submission?: SubmissionSummary | null) {
@@ -298,7 +327,7 @@ const isStationCompleted = (review: StationItem) => {
   if (summary.outcome && summary.outcome !== "PENDING") {
     return true;
   }
-  return completionStatusSet.has(review.status);
+  return completionStatusSet.has(normalizeStationReviewStatus(review.status));
 };
 
 function StationLogo({
@@ -1022,7 +1051,10 @@ export function HomeReviewPanel({
                         const summary = summarizeTrackResults(
                           station.track_results,
                         );
-                        const canOpenTracks = summary.counts.total > 0;
+                        const canOpenResultModal = shouldOpenResultModal(
+                          station,
+                          summary,
+                        );
                         const stationName = getStationName(station.station);
                         const stationCode = getStationCode(station.station);
                         return (
@@ -1049,18 +1081,18 @@ export function HomeReviewPanel({
                               {reception.label}
                             </span>
                             <div className="flex flex-col items-center justify-center gap-1 justify-self-center">
-                              {canOpenTracks ? (
+                              {canOpenResultModal ? (
                                 <button
                                   type="button"
                                   onPointerDown={(event) => event.stopPropagation()}
                                   onClick={() =>
-                                    setTrackResultModal({
-                                      stationName:
-                                        station.station?.name ?? "-",
-                                      summary,
-                                      resultNote:
-                                        station.result_note?.trim() || null,
-                                    })
+                                    setTrackResultModal(
+                                      buildResultModalState(
+                                        station,
+                                        summary,
+                                        result,
+                                      ),
+                                    )
                                   }
                                   className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${result.tone}`}
                                 >
@@ -1103,7 +1135,10 @@ export function HomeReviewPanel({
                         const summary = summarizeTrackResults(
                           station.track_results,
                         );
-                        const canOpenTracks = summary.counts.total > 0;
+                        const canOpenResultModal = shouldOpenResultModal(
+                          station,
+                          summary,
+                        );
                         const stationName = getStationName(station.station);
                         const stationCode = getStationCode(station.station);
                         const stationLabel = stationCode
@@ -1126,17 +1161,18 @@ export function HomeReviewPanel({
                             >
                               {reception.label}
                             </span>
-                            {canOpenTracks ? (
+                            {canOpenResultModal ? (
                               <button
                                 type="button"
                                 onPointerDown={(event) => event.stopPropagation()}
                                 onClick={() =>
-                                  setTrackResultModal({
-                                    stationName: station.station?.name ?? "-",
-                                    summary,
-                                    resultNote:
-                                      station.result_note?.trim() || null,
-                                  })
+                                  setTrackResultModal(
+                                    buildResultModalState(
+                                      station,
+                                      summary,
+                                      result,
+                                    ),
+                                  )
                                 }
                                 className={`bauhaus-status-chip bauhaus-status-chip--compact min-w-[88px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${result.tone}`}
                               >
@@ -1166,7 +1202,10 @@ export function HomeReviewPanel({
                         const summary = summarizeTrackResults(
                           station.track_results,
                         );
-                        const canOpenTracks = summary.counts.total > 0;
+                        const canOpenResultModal = shouldOpenResultModal(
+                          station,
+                          summary,
+                        );
                         const stationName = getStationName(station.station);
                         const stationCode = getStationCode(station.station);
                         return (
@@ -1198,16 +1237,18 @@ export function HomeReviewPanel({
                               >
                                 {reception.label}
                               </span>
-                              {canOpenTracks ? (
+                              {canOpenResultModal ? (
                                 <button
                                   type="button"
                                   onPointerDown={(event) => event.stopPropagation()}
                                   onClick={() =>
-                                    setTrackResultModal({
-                                      stationName: station.station?.name ?? "-",
-                                      summary,
-                                      resultNote: station.result_note?.trim() || null,
-                                    })
+                                    setTrackResultModal(
+                                      buildResultModalState(
+                                        station,
+                                        summary,
+                                        result,
+                                      ),
+                                    )
                                   }
                                   className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${result.tone}`}
                                 >
@@ -1261,18 +1302,37 @@ export function HomeReviewPanel({
       </div>
 
       {trackResultModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${trackResultModal.stationName} 심의 결과`}
+        >
           <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-4 shadow-xl sm:p-6">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              트랙별 결과
+              방송국 결과
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
               {trackResultModal.stationName}
             </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
-            </p>
-            <div className="mt-4 max-h-80 space-y-2 overflow-auto">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span
+                className={`bauhaus-status-chip bauhaus-status-chip--compact ${trackResultModal.resultTone}`}
+              >
+                {trackResultModal.resultLabel}
+              </span>
+            </div>
+            {trackResultModal.summary.counts.total > 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">
+                현재 {trackResultModal.resultLabel} 상태로 등록되어 있습니다.
+              </p>
+            )}
+            {trackResultModal.summary.results.length > 0 ? (
+              <div className="mt-4 max-h-80 space-y-2 overflow-auto">
               {trackResultModal.summary.results.map((track, index) => {
                 const status =
                   track.status === "APPROVED"
@@ -1304,12 +1364,6 @@ export function HomeReviewPanel({
                         {track.track_no ? `${track.track_no}. ` : ""}
                         {trackLabel}
                       </p>
-                      {track.status === "REJECTED" &&
-                        trackResultModal.resultNote ? (
-                        <p className="mt-1 break-words text-xs text-rose-600/80 dark:text-rose-200/80">
-                          사유: {trackResultModal.resultNote}
-                        </p>
-                      ) : null}
                     </div>
                     <span
                       className={`bauhaus-status-chip bauhaus-status-chip--compact ${status.tone}`}
@@ -1319,7 +1373,24 @@ export function HomeReviewPanel({
                   </div>
                 );
               })}
-            </div>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-border/60 bg-background/80 px-3 py-3 text-sm text-muted-foreground">
+                트랙별 상세 결과 없이 방송국 결과 상태만 등록되어 있습니다.
+              </div>
+            )}
+            {trackResultModal.resultNote ? (
+              <div className="mt-4 rounded-xl border border-rose-300 bg-rose-50 px-3 py-3 dark:border-rose-400/40 dark:bg-rose-950/30">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-600 dark:text-rose-200">
+                  {["부적격", "수정요청"].includes(trackResultModal.resultLabel)
+                    ? "부적격/수정 사유"
+                    : "결과 메모"}
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-rose-700 dark:text-rose-100">
+                  {trackResultModal.resultNote}
+                </p>
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() => setTrackResultModal(null)}

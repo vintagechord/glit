@@ -791,28 +791,6 @@ export function SubmissionDetailClient({
     stationDelivered: stationSummary.delivered,
     isMvSubmission,
   });
-  const heroSummaryItems = [
-    {
-      label: "접수 상태",
-      value: displayStatus.submissionLabel,
-    },
-    {
-      label: "결제 상태",
-      value: displayStatus.paymentLabel,
-    },
-    {
-      label: isMvSubmission ? "심의 접수" : "방송사 접수",
-      value: displayStatus.broadcastLabel,
-    },
-    {
-      label: "결과 반영",
-      value: displayStatus.resultLabel,
-    },
-    {
-      label: "최근 업데이트",
-      value: formatDateTime(submission.updated_at),
-    },
-  ];
   const handlePrimaryStatusAction = () => {
     if (displayStatus.primaryAction === "payment-info") {
       setShowPaymentInfo(true);
@@ -899,7 +877,7 @@ export function SubmissionDetailClient({
           심의 진행 단계
         </p>
         <p className="text-xs font-semibold text-muted-foreground">
-          전체 흐름에서 현재 위치를 보여줍니다.
+          현재 진행 상황
         </p>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -1503,8 +1481,8 @@ export function SubmissionDetailClient({
         <div className="pointer-events-none absolute right-0 top-0 h-6 w-32 bg-[#1556a4] dark:bg-[#3f8ad8]" />
         <div className="pointer-events-none absolute bottom-0 left-0 h-4 w-24 bg-[#d9362c] dark:bg-[#ff6258]" />
         <div className="pointer-events-none absolute bottom-0 right-0 h-4 w-40 bg-[#f2cf27]" />
-        <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="min-w-0">
+        <div className="relative z-10">
+          <div className="min-w-0 max-w-4xl">
             <p className="bauhaus-kicker">
               Submission Detail
             </p>
@@ -1535,6 +1513,12 @@ export function SubmissionDetailClient({
               <p className="mt-1 text-xs font-semibold leading-5 text-muted-foreground">
                 {displayStatus.secondaryMessage}
               </p>
+              <p className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                최근 업데이트{" "}
+                <span className="font-semibold tracking-normal text-foreground/72">
+                  {formatDateTime(submission.updated_at)}
+                </span>
+              </p>
               <div className="mt-5 flex flex-wrap gap-2">
                 {displayStatus.primaryActionLabel ? (
                   <button
@@ -1555,27 +1539,6 @@ export function SubmissionDetailClient({
               </div>
             </div>
           </div>
-
-          <aside className="rounded-[8px] border-2 border-[#111111] bg-white/75 p-4 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#111111]/50 dark:shadow-[4px_4px_0_#f2cf27]">
-            <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-              핵심 요약
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              {heroSummaryItems.map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-[6px] border-2 border-border bg-background px-3 py-2"
-                >
-                  <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                    {item.label}
-                  </p>
-                  <p className="mt-1 break-keep text-sm font-black text-foreground">
-                    {item.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </aside>
         </div>
       </section>
 
