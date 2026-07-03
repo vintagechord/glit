@@ -6,31 +6,37 @@ export const metadata = {
   title: "접수 상세 관리",
 };
 
-export default function AdminSubmissionDetailById({
+type AdminSubmissionDetailByIdSearchParams = {
+  saved?: string | string[];
+  savedError?: string | string[];
+  savedWarning?: string | string[];
+};
+
+export default async function AdminSubmissionDetailById({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams?: {
-    saved?: string | string[];
-    savedError?: string | string[];
-    savedWarning?: string | string[];
-  };
+  params: Promise<{ id: string }> | { id: string };
+  searchParams?:
+    | Promise<AdminSubmissionDetailByIdSearchParams>
+    | AdminSubmissionDetailByIdSearchParams;
 }) {
-  const saved = Array.isArray(searchParams?.saved)
-    ? searchParams?.saved[0]
-    : searchParams?.saved;
-  const savedError = Array.isArray(searchParams?.savedError)
-    ? searchParams?.savedError[0]
-    : searchParams?.savedError;
-  const savedWarning = Array.isArray(searchParams?.savedWarning)
-    ? searchParams?.savedWarning[0]
-    : searchParams?.savedWarning;
+  const resolvedParams = await Promise.resolve(params);
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const saved = Array.isArray(resolvedSearchParams.saved)
+    ? resolvedSearchParams.saved[0]
+    : resolvedSearchParams.saved;
+  const savedError = Array.isArray(resolvedSearchParams.savedError)
+    ? resolvedSearchParams.savedError[0]
+    : resolvedSearchParams.savedError;
+  const savedWarning = Array.isArray(resolvedSearchParams.savedWarning)
+    ? resolvedSearchParams.savedWarning[0]
+    : resolvedSearchParams.savedWarning;
 
-  return AdminSubmissionDetailPage({
-    params,
+  return await AdminSubmissionDetailPage({
+    params: resolvedParams,
     searchParams: {
-      id: params.id,
+      id: resolvedParams.id,
       saved,
       savedError,
       savedWarning,

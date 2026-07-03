@@ -144,6 +144,17 @@ type PaymentDocumentRow = {
   tax_invoice_business_number?: string | null;
 };
 
+type AdminSubmissionDetailSearchParams = {
+  id?: string | string[];
+  saved?: string | string[];
+  savedError?: string | string[];
+  savedWarning?: string | string[];
+};
+
+type AdminSubmissionDetailParams = {
+  id?: string;
+};
+
 const paymentMethodLabels: Record<string, string> = {
   BANK: "무통장",
   CARD: "카드",
@@ -169,25 +180,24 @@ export default async function AdminSubmissionDetailPage({
   searchParams,
   params,
 }: {
-  searchParams?: {
-    id?: string | string[];
-    saved?: string;
-    savedError?: string;
-    savedWarning?: string;
-  };
-  params?: { id?: string };
+  searchParams?:
+    | Promise<AdminSubmissionDetailSearchParams>
+    | AdminSubmissionDetailSearchParams;
+  params?: Promise<AdminSubmissionDetailParams> | AdminSubmissionDetailParams;
 }) {
-  const paramId = params?.id;
-  const searchId = searchParams?.id;
-  const savedFlag = Array.isArray(searchParams?.saved)
-    ? searchParams?.saved[0]
-    : searchParams?.saved;
-  const savedErrorParam = Array.isArray(searchParams?.savedError)
-    ? searchParams?.savedError[0]
-    : searchParams?.savedError;
-  const savedWarningParam = Array.isArray(searchParams?.savedWarning)
-    ? searchParams?.savedWarning[0]
-    : searchParams?.savedWarning;
+  const resolvedParams = await Promise.resolve(params ?? {});
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const paramId = resolvedParams.id;
+  const searchId = resolvedSearchParams.id;
+  const savedFlag = Array.isArray(resolvedSearchParams.saved)
+    ? resolvedSearchParams.saved[0]
+    : resolvedSearchParams.saved;
+  const savedErrorParam = Array.isArray(resolvedSearchParams.savedError)
+    ? resolvedSearchParams.savedError[0]
+    : resolvedSearchParams.savedError;
+  const savedWarningParam = Array.isArray(resolvedSearchParams.savedWarning)
+    ? resolvedSearchParams.savedWarning[0]
+    : resolvedSearchParams.savedWarning;
   const urlId = Array.isArray(searchId)
     ? searchId.find((v) => typeof v === "string" && uuidPattern.test(v)) ?? ""
     : typeof searchId === "string"
