@@ -4742,7 +4742,7 @@ export function AlbumWizard({
           {completionId && !shouldShowGuestLookup && (
             <button
               type="button"
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/dashboard?tab=album&refresh=1")}
               className="mt-6 rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5"
             >
               진행 상황 보기

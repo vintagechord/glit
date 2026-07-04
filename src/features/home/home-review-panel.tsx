@@ -32,14 +32,37 @@ type SubmissionSummary = {
   artist_name?: string | null;
   type?: string | null;
   status: string;
+  created_at?: string | null;
   updated_at: string;
   payment_status?: string | null;
 };
 
 type TabKey = "album" | "mv";
 
-const getPreferredReviewTab = (albumCount: number, mvCount: number): TabKey => {
-  if (albumCount === 0 && mvCount > 0) return "mv";
+const getSubmissionTimestamp = (submission?: SubmissionSummary | null) => {
+  if (!submission) return 0;
+  const parsed = Date.parse(submission.created_at ?? submission.updated_at);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const getLatestSubmissionTimestamp = (submissions: SubmissionSummary[]) =>
+  submissions.reduce(
+    (latest, submission) => Math.max(latest, getSubmissionTimestamp(submission)),
+    0,
+  );
+
+const getPreferredReviewTab = (
+  albumSubmissions: SubmissionSummary[],
+  mvSubmissions: SubmissionSummary[],
+  explicitTab?: TabKey,
+): TabKey => {
+  if (explicitTab) return explicitTab;
+  if (albumSubmissions.length === 0 && mvSubmissions.length > 0) return "mv";
+  if (albumSubmissions.length > 0 && mvSubmissions.length > 0) {
+    const albumLatest = getLatestSubmissionTimestamp(albumSubmissions);
+    const mvLatest = getLatestSubmissionTimestamp(mvSubmissions);
+    if (mvLatest > albumLatest) return "mv";
+  }
   return "album";
 };
 
@@ -304,6 +327,7 @@ export function HomeReviewPanel({
   panelMinHeightClassName = "lg:min-h-[520px]",
   compact = false,
   isLoading = false,
+  initialTab,
 }: {
   isLoggedIn: boolean;
   albumSubmissions: SubmissionSummary[];
@@ -320,6 +344,7 @@ export function HomeReviewPanel({
   panelMinHeightClassName?: string;
   compact?: boolean;
   isLoading?: boolean;
+  initialTab?: TabKey;
 }) {
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
@@ -328,9 +353,9 @@ export function HomeReviewPanel({
   const albumList = albumSubmissions;
   const mvList = mvSubmissions;
   const [tab, setTab] = React.useState<TabKey>(() => {
-    return getPreferredReviewTab(albumList.length, mvList.length);
+    return getPreferredReviewTab(albumList, mvList, initialTab);
   });
-  const hasManualTabSelection = React.useRef(false);
+  const hasManualTabSelection = React.useRef(Boolean(initialTab));
   const normalizeStations = React.useCallback((rows?: StationItem[] | null) => {
     return (rows ?? []).map((row) => ({
       ...row,
@@ -363,8 +388,9 @@ export function HomeReviewPanel({
 
   React.useEffect(() => {
     const preferredTab = getPreferredReviewTab(
-      albumState.submissions.length,
-      mvState.submissions.length,
+      albumState.submissions,
+      mvState.submissions,
+      initialTab,
     );
     setTab((currentTab) => {
       if (!availableTabs.includes(currentTab)) {
@@ -377,7 +403,7 @@ export function HomeReviewPanel({
       }
       return currentTab;
     });
-  }, [albumState.submissions.length, availableTabs, mvState.submissions.length]);
+  }, [albumState.submissions, availableTabs, initialTab, mvState.submissions]);
 
   const handleTabChange = React.useCallback((nextTab: TabKey) => {
     hasManualTabSelection.current = true;
@@ -860,21 +886,16 @@ export function HomeReviewPanel({
           <p className="sr-only">접수 현황</p>
           {activeSubmission ? (
             <div className={progressBodyClass}>
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-semibold text-foreground">
-                  심의 요약
-                </p>
-                {currentSubmissionStatus ? (
-                  <span
-                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${currentSubmissionStatus.tone}`}
-                  >
-                    {currentSubmissionStatus.label}
-                  </span>
-                ) : null}
-              </div>
               <div className={`rounded-xl border border-border/60 bg-background/80 ${innerCardPaddingClass}`}>
-                <div className="text-sm font-semibold text-foreground">
-                  <span className="truncate">{progressText}</span>
+                <div className="flex items-center justify-between gap-3 text-sm font-semibold text-foreground">
+                  <span className="min-w-0 truncate">{progressText}</span>
+                  {currentSubmissionStatus ? (
+                    <span
+                      className={`bauhaus-status-chip bauhaus-status-chip--compact shrink-0 ${currentSubmissionStatus.tone}`}
+                    >
+                      {currentSubmissionStatus.label}
+                    </span>
+                  ) : null}
                 </div>
                 <div
                   className="mt-2 h-2 w-full rounded-full bg-muted"

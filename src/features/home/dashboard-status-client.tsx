@@ -22,6 +22,7 @@ type StatusResponse = {
     title: string | null;
     artist_name?: string | null;
     status: string;
+    created_at?: string | null;
     updated_at: string;
     payment_status?: string | null;
     package?: { name?: string | null; station_count?: number | null }[];
@@ -31,6 +32,7 @@ type StatusResponse = {
     title: string | null;
     artist_name?: string | null;
     status: string;
+    created_at?: string | null;
     updated_at: string;
     payment_status?: string | null;
     type: string;
@@ -73,13 +75,17 @@ function writeCachedStatus(viewerId: string, data: StatusResponse) {
   }
 }
 
-async function fetchDashboardStatus(viewerId: string) {
-  const cached = readCachedStatus(viewerId);
+async function fetchDashboardStatus(
+  viewerId: string,
+  options: { bypassCache?: boolean } = {},
+) {
+  const cached = options.bypassCache ? null : readCachedStatus(viewerId);
   if (cached) {
     return cached;
   }
 
-  const inflight = inflightStatusRequestByUser.get(viewerId);
+  const inflightKey = options.bypassCache ? `${viewerId}:refresh` : viewerId;
+  const inflight = inflightStatusRequestByUser.get(inflightKey);
   if (inflight) {
     return inflight;
   }
@@ -91,7 +97,10 @@ async function fetchDashboardStatus(viewerId: string) {
     }, DASHBOARD_STATUS_FETCH_TIMEOUT_MS);
 
     try {
-      const res = await fetch("/api/dashboard/status", {
+      const statusUrl = options.bypassCache
+        ? "/api/dashboard/status?refresh=1"
+        : "/api/dashboard/status";
+      const res = await fetch(statusUrl, {
         cache: "no-store",
         signal: controller.signal,
       });
@@ -113,12 +122,12 @@ async function fetchDashboardStatus(viewerId: string) {
       window.clearTimeout(timeoutId);
     }
   })();
-  inflightStatusRequestByUser.set(viewerId, requestPromise);
+  inflightStatusRequestByUser.set(inflightKey, requestPromise);
 
   try {
     return await requestPromise;
   } finally {
-    inflightStatusRequestByUser.delete(viewerId);
+    inflightStatusRequestByUser.delete(inflightKey);
   }
 }
 
@@ -129,6 +138,8 @@ export function DashboardStatusClient({
   tabs,
   contextLabel,
   activeTab,
+  initialReviewTab,
+  forceStatusRefresh,
 }: {
   viewerId: string;
   title: string;
@@ -136,6 +147,8 @@ export function DashboardStatusClient({
   tabs: React.ComponentProps<typeof DashboardShell>["tabs"];
   contextLabel?: string;
   activeTab?: string;
+  initialReviewTab?: "album" | "mv";
+  forceStatusRefresh?: boolean;
 }) {
   const initialData = React.useMemo(() => readCachedStatus(viewerId), [viewerId]);
   const [data, setData] = React.useState<StatusResponse | null>(initialData);
@@ -158,7 +171,9 @@ export function DashboardStatusClient({
       }
 
       try {
-        const nextData = await fetchDashboardStatus(viewerId);
+        const nextData = await fetchDashboardStatus(viewerId, {
+          bypassCache: forceStatusRefresh,
+        });
         if (aborted) return;
         setData(nextData);
         setError(null);
@@ -176,7 +191,7 @@ export function DashboardStatusClient({
     return () => {
       aborted = true;
     };
-  }, [initialData, reloadSeq, viewerId]);
+  }, [forceStatusRefresh, initialData, reloadSeq, viewerId]);
 
   React.useEffect(() => {
     let aborted = false;
@@ -231,6 +246,7 @@ export function DashboardStatusClient({
           mvStationsMap={data.mvStationsMap}
           hideEmptyTabs={false}
           forceLiveBadge
+          initialTab={initialReviewTab}
         />
       ) : null}
     </DashboardShell>

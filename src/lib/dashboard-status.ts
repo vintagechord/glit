@@ -15,6 +15,7 @@ type DashboardSubmission =
         | null;
       artist_id?: string | null;
       status: string;
+      created_at: string;
       updated_at: string;
       payment_status?: string | null;
       package_id?: string | null;
@@ -30,6 +31,7 @@ type DashboardSubmission =
         | null;
       artist_id?: string | null;
       status: string;
+      created_at: string;
       updated_at: string;
       payment_status?: string | null;
       type: string;
@@ -63,6 +65,10 @@ export type DashboardStatusResult = {
   error?: string;
 };
 
+type DashboardStatusOptions = {
+  bypassCache?: boolean;
+};
+
 const configuredStatusCacheMs = Number(
   process.env.DASHBOARD_STATUS_CACHE_MS ?? "8000",
 );
@@ -74,8 +80,11 @@ const dashboardStatusCache = new Map<
   { expiresAt: number; data: DashboardStatusData }
 >();
 
-export const getDashboardStatusData = async (userId: string): Promise<DashboardStatusResult> => {
-  if (dashboardStatusCacheTtlMs > 0) {
+export const getDashboardStatusData = async (
+  userId: string,
+  options: DashboardStatusOptions = {},
+): Promise<DashboardStatusResult> => {
+  if (!options.bypassCache && dashboardStatusCacheTtlMs > 0) {
     const cached = dashboardStatusCache.get(userId);
     if (cached && cached.expiresAt > Date.now()) {
       return { data: cached.data };
@@ -100,7 +109,7 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
     admin
       .from("submissions")
       .select(
-        "id, title, artist_name, artist_id, artist:artists ( id, name ), status, updated_at, payment_status, package_id, package:packages ( name, station_count )",
+        "id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, package_id, package:packages ( name, station_count )",
       )
       .eq("user_id", userId)
       .eq("type", "ALBUM")
@@ -109,7 +118,7 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
   const buildMvBase = () =>
     admin
       .from("submissions")
-      .select("id, title, artist_name, artist_id, artist:artists ( id, name ), status, updated_at, payment_status, type, package_id, package:packages ( name, station_count )")
+      .select("id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, type, package_id, package:packages ( name, station_count )")
       .eq("user_id", userId)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
       .not("status", "eq", "DRAFT");
@@ -128,11 +137,11 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
   const [initialAlbumResult, initialMvResult] = await Promise.all([
     buildAlbumBase()
       .or(recentWindowOr)
-      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .range(0, queryEnd),
     buildMvBase()
       .or(recentWindowOr)
-      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .range(0, queryEnd),
   ]);
 
@@ -142,7 +151,7 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
     console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
     albumResult = await buildAlbumBase()
       .gte("updated_at", recentResultCutoff)
-      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .range(0, queryEnd);
   } else if (albumResult.error) {
     console.error("[dashboard status] album query error", albumResult.error);
@@ -155,7 +164,7 @@ export const getDashboardStatusData = async (userId: string): Promise<DashboardS
     console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);
     mvResult = await buildMvBase()
       .gte("updated_at", recentResultCutoff)
-      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .range(0, queryEnd);
   } else if (mvResult.error) {
     console.error("[dashboard status] mv query error", mvResult.error);

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
@@ -7,7 +7,7 @@ import { getDashboardStatusData } from "@/lib/dashboard-status";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const supabase = await createServerSupabase();
   const user = await getServerSessionUser(supabase);
 
@@ -15,7 +15,10 @@ export async function GET() {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
-  const result = await getDashboardStatusData(user.id);
+  const bypassCache =
+    request.nextUrl.searchParams.get("refresh") === "1" ||
+    request.nextUrl.searchParams.get("bypassCache") === "1";
+  const result = await getDashboardStatusData(user.id, { bypassCache });
   if (result.error || !result.data) {
     return NextResponse.json(
       { error: result.error ?? "STATUS_QUERY_FAILED" },
