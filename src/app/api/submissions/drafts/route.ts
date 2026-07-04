@@ -21,6 +21,7 @@ const selectAlbumColumns = [
   "id",
   "type",
   "status",
+  "payment_status",
   "user_id",
   "guest_token",
   "package_id",
@@ -58,6 +59,7 @@ const selectMvColumns = [
   "id",
   "type",
   "status",
+  "payment_status",
   "user_id",
   "guest_token",
   "package_id",
@@ -137,7 +139,8 @@ const selectFileColumns = [
   "duration_seconds",
 ].join(",");
 
-const draftStatuses = ["DRAFT", "PRE_REVIEW"] as const;
+const incompletePaymentFilter =
+  "payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)";
 
 const extractMissingColumn = (error: { message?: string; code?: string } | null) => {
   const message = error?.message ?? "";
@@ -184,7 +187,7 @@ export async function POST(request: Request) {
     const submissionQuery = admin
       .from("submissions")
       .select(selectClause)
-      .in("status", [...draftStatuses]);
+      .or(incompletePaymentFilter);
 
     if (parsed.data.type === "ALBUM") {
       submissionQuery.eq("type", "ALBUM");
@@ -362,7 +365,7 @@ export async function DELETE(request: Request) {
   const deleteQuery = admin
     .from("submissions")
     .delete()
-    .in("status", [...draftStatuses]);
+    .or(incompletePaymentFilter);
 
   if (parsed.data.type === "ALBUM") {
     deleteQuery.eq("type", "ALBUM");

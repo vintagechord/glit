@@ -341,6 +341,7 @@ const buildSubmissionDisplayStatus = ({
   stationSubmitted,
   stationDelivered,
   isMvSubmission,
+  resultDelivered,
 }: {
   submissionStatus: string;
   paymentStatus?: string | null;
@@ -351,9 +352,12 @@ const buildSubmissionDisplayStatus = ({
   stationSubmitted: number;
   stationDelivered: number;
   isMvSubmission: boolean;
+  resultDelivered: boolean;
 }) => {
   const isDraft = submissionStatus === "DRAFT";
   const safeStationTotal = Math.max(stationTotal, 0);
+  const hasAllStationResults =
+    safeStationTotal > 0 && stationDelivered >= safeStationTotal;
   const submissionLabel = isDraft ? "임시 저장" : "신청서 제출 완료";
   const paymentLabel = normalizePaymentStatusLabel(
     paymentStatus,
@@ -372,6 +376,7 @@ const buildSubmissionDisplayStatus = ({
 
   if (isDraft) {
     return {
+      currentLabel: "신청서 작성 중",
       submissionLabel,
       paymentLabel,
       broadcastLabel,
@@ -385,12 +390,12 @@ const buildSubmissionDisplayStatus = ({
 
   if (!isPaymentDone) {
     return {
+      currentLabel: paymentLabel,
       submissionLabel,
       paymentLabel,
       broadcastLabel,
       resultLabel,
-      primaryMessage:
-        "결제 확인을 기다리고 있습니다. 결제가 확인되면 방송사 접수가 시작됩니다.",
+      primaryMessage: "결제 확인 후 심의 접수가 이어집니다.",
       secondaryMessage: "현재 입금 확인 전 단계입니다.",
       primaryAction:
         paymentMethod && paymentMethod !== "BANK"
@@ -401,15 +406,16 @@ const buildSubmissionDisplayStatus = ({
     };
   }
 
-  if (safeStationTotal > 0 && stationDelivered >= safeStationTotal) {
+  if (resultDelivered || hasAllStationResults) {
     return {
+      currentLabel: isMvSubmission ? "심의 결과 통보 완료" : "결과 통보 완료",
       submissionLabel,
       paymentLabel,
       broadcastLabel,
       resultLabel,
       primaryMessage: isMvSubmission
-        ? "심의 결과가 모두 반영되었습니다."
-        : "방송사별 적격/부적격 결과가 모두 반영되었습니다.",
+        ? "심의 결과 확인이 가능합니다."
+        : "방송사별 결과 확인이 가능합니다.",
       secondaryMessage: "방송국별 진행표에서 결과와 최근 업데이트를 확인할 수 있습니다.",
       primaryAction: "station-review" as DetailPrimaryAction,
       primaryActionLabel: "진행표 보기",
@@ -418,11 +424,12 @@ const buildSubmissionDisplayStatus = ({
 
   if (stationDelivered > 0) {
     return {
+      currentLabel: "결과 반영 중",
       submissionLabel,
       paymentLabel,
       broadcastLabel,
       resultLabel,
-      primaryMessage: "방송사별 결과가 순차적으로 반영되고 있습니다.",
+      primaryMessage: "도착한 결과가 순차적으로 반영되고 있습니다.",
       secondaryMessage: "결과가 도착하는 대로 방송국별 진행표에 업데이트됩니다.",
       primaryAction: "station-review" as DetailPrimaryAction,
       primaryActionLabel: "진행표 보기",
@@ -431,11 +438,14 @@ const buildSubmissionDisplayStatus = ({
 
   if (isPaymentDone) {
     return {
+      currentLabel: stationSubmitted > 0 ? "심의 진행 중" : "결제 확인 완료",
       submissionLabel,
       paymentLabel,
       broadcastLabel,
       resultLabel,
-      primaryMessage: "결제가 확인되었습니다. 방송사 접수가 진행됩니다.",
+      primaryMessage: stationSubmitted > 0
+        ? "심의 진행 상황을 확인할 수 있습니다."
+        : "결제가 확인되었고 접수 정보를 준비 중입니다.",
       secondaryMessage:
         safeStationTotal > 0
           ? "방송사별 접수 상태가 진행표에 순차 반영됩니다."
@@ -446,6 +456,7 @@ const buildSubmissionDisplayStatus = ({
   }
 
   return {
+    currentLabel: "접수 상태 확인 중",
     submissionLabel,
     paymentLabel,
     broadcastLabel,
@@ -561,10 +572,9 @@ export function SubmissionDetailClient({
         : submission.artist_gender || "-";
   const hasMvRatingResult =
     isMvDistribution && Boolean(submission.mv_desired_rating) && hasResultSignal;
-  const hasMvCertificate =
-    isMvDistribution && Boolean(submission.certificate_b2_path);
+  const hasMvDistributionResult = isMvDistribution && hasResultSignal;
   const isReviewComplete =
-    (isMvDistribution && hasMvRatingResult && hasMvCertificate) ||
+    hasMvDistributionResult ||
     (isMvBroadcast && hasResultSignal);
   const canDownloadMvReviewAssets = hasMvRatingResult;
   const ratingReason = submission.result_memo?.trim() || null;
@@ -768,7 +778,7 @@ export function SubmissionDetailClient({
     },
   );
   const isMvResultDelivered = isMvDistribution
-    ? canDownloadMvReviewAssets
+    ? hasMvDistributionResult
     : isMvBroadcast &&
       (isReviewComplete ||
         (stationSummary.total > 0 && stationSummary.delivered >= stationSummary.total));
@@ -787,6 +797,10 @@ export function SubmissionDetailClient({
     stationSubmitted: stationSummary.submitted,
     stationDelivered: stationSummary.delivered,
     isMvSubmission,
+    resultDelivered:
+      isMvResultDelivered ||
+      isResultReady ||
+      Boolean(submission.result_status || submission.result_notified_at),
   });
   const handlePrimaryStatusAction = () => {
     if (displayStatus.primaryAction === "payment-info") {
@@ -812,10 +826,10 @@ export function SubmissionDetailClient({
     }, 0);
   };
   const hasFinalResultStarted = isMvDistribution
-    ? canDownloadMvReviewAssets
+    ? hasMvDistributionResult
     : stationSummary.delivered > 0 || hasResultDeliverySignal;
   const hasFinalResultDone = isMvDistribution
-    ? canDownloadMvReviewAssets && hasMvCertificate
+    ? hasMvDistributionResult
     : expectedStationTotal > 0 && stationSummary.delivered >= expectedStationTotal;
   const hasStationSubmissionDone =
     isPaymentDone &&
@@ -1470,13 +1484,10 @@ export function SubmissionDetailClient({
                 현재 상태
               </p>
               <h2 className="mt-2 text-2xl font-black text-foreground">
-                {displayStatus.paymentLabel}
+                {displayStatus.currentLabel}
               </h2>
               <p className="mt-3 text-sm font-semibold leading-6 text-foreground/85">
                 {displayStatus.primaryMessage}
-              </p>
-              <p className="mt-1 text-xs font-semibold leading-5 text-muted-foreground">
-                {displayStatus.secondaryMessage}
               </p>
               <p className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                 최근 업데이트{" "}

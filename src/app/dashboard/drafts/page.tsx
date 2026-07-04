@@ -32,9 +32,9 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
 
   const { data, error } = await supabase
     .from("submissions")
-    .select("id, type, status, title, artist_name, updated_at")
+    .select("id, type, status, payment_status, title, artist_name, updated_at")
     .eq("user_id", user.id)
-    .in("status", ["DRAFT", "PRE_REVIEW"])
+    .or("payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)")
     .order("updated_at", { ascending: false })
     .limit(200);
 
@@ -46,6 +46,7 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
     id: string;
     type: string;
     status: string;
+    payment_status: string | null;
     title: string | null;
     artist_name: string | null;
     updated_at: string | null;
@@ -53,6 +54,7 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
     id: row.id,
     type: row.type,
     status: row.status,
+    paymentStatus: row.payment_status,
     title: row.title,
     artistName: row.artist_name,
     updatedAt: row.updated_at,
@@ -61,7 +63,7 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
   return (
     <DashboardShell
       title="작성중 신청서"
-      description="작성 시작 시 생성된 임시저장 신청서를 확인하고 이어서 진행할 수 있습니다."
+      description="작성 중이거나 결제 완료 전인 신청서를 확인하고 이어서 진행할 수 있습니다."
       activeTab="drafts"
       tabs={config?.tabs ?? defaultDashboardTabs}
       contextLabel={config?.contextLabel ?? "마이페이지"}

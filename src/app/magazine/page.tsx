@@ -367,7 +367,7 @@ export default async function MagazinePage({
       <div className="mx-auto w-full max-w-6xl px-6 py-12">
         <section className="relative min-h-[178px] overflow-hidden rounded-[10px] border-2 border-[#111111] bg-[#1556a4] p-5 text-white shadow-[5px_5px_0_#111111] dark:border-[#8bc3ff] dark:shadow-[5px_5px_0_#8bc3ff] md:p-7">
           <Image
-            src="/media/banners/home-hero/magazine-credit.svg"
+            src="/media/banners/credit-wallet.svg"
             alt=""
             aria-hidden="true"
             fill

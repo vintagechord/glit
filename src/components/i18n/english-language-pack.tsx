@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const exactTranslations: Record<string, string> = {
   "심의 신청": "Apply",
-  "진행/결과 조회": "Progress / Results",
+  "진행/결과 조회": "Results",
   "매거진 발행": "Magazine",
   "크레딧": "Credits",
   "이용가이드": "Guide",

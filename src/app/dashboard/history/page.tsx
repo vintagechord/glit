@@ -48,13 +48,12 @@ export async function HistoryPageView(config?: ShellConfig) {
     redirect(config?.loginPath ?? "/login");
   }
 
-  const paymentStatuses = ["UNPAID", "PAYMENT_PENDING", "PAID"];
   const runSelect = (select: string) =>
     supabase
       .from("submissions")
       .select(select)
       .eq("user_id", user.id)
-      .in("payment_status", paymentStatuses)
+      .eq("payment_status", "PAID")
       .not("status", "eq", "DRAFT")
       .order("updated_at", { ascending: false });
 
@@ -120,7 +119,7 @@ export async function HistoryPageView(config?: ShellConfig) {
   return (
     <DashboardShell
       title="나의 심의 내역"
-      description="심의 기록을 발매 음원 단위로 확인합니다."
+      description="결제 완료된 심의 기록을 발매 음원 단위로 확인합니다."
       activeTab="history"
       tabs={config?.tabs ?? statusDashboardTabs}
       contextLabel={config?.contextLabel ?? "진행상황"}

@@ -10,6 +10,7 @@ export type DraftSubmissionItem = {
   id: string;
   type: string;
   status: string;
+  paymentStatus?: string | null;
   title: string | null;
   artistName: string | null;
   updatedAt: string | null;
@@ -27,6 +28,35 @@ const draftStatusMap: Record<string, { label: string; tone: string }> = {
     label: "파일/결제 진행중",
     tone: "bg-[#f6d64a] text-black dark:text-black",
   },
+  SUBMITTED: {
+    label: "결제 진행중",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
+  },
+  WAITING_PAYMENT: {
+    label: "결제 진행중",
+    tone: "bg-[#f6d64a] text-black dark:text-black",
+  },
+};
+
+const getDraftStatusInfo = (item: DraftSubmissionItem) => {
+  if (item.paymentStatus === "PAYMENT_PENDING") {
+    return {
+      label: "입금 확인 대기",
+      tone: "bg-[#f6d64a] text-black dark:text-black",
+    };
+  }
+  if (item.paymentStatus === "UNPAID" && !["DRAFT", "PRE_REVIEW"].includes(item.status)) {
+    return {
+      label: "결제 미완료",
+      tone: "bg-[#f6d64a] text-black dark:text-black",
+    };
+  }
+  return (
+    draftStatusMap[item.status] ?? {
+      label: item.status,
+      tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+    }
+  );
 };
 
 const getDraftGroupType = (type: string): DraftGroupType =>
@@ -328,11 +358,7 @@ export function DraftSubmissionList({
         ) : (
           filteredItems.map((item) => {
             const draftGroup = getDraftGroupType(item.type);
-            const statusInfo =
-              draftStatusMap[item.status] ?? {
-                label: item.status,
-                tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
-              };
+            const statusInfo = getDraftStatusInfo(item);
             return (
               <div
                 key={item.id}
