@@ -133,6 +133,9 @@ const uniqueJoin = (values: string[]) => {
   return normalized.join(", ");
 };
 
+const isInstrumentalTitle = (title: string) =>
+  /\b(inst|instrumental|mr)\b/i.test(title) || /반주|가사\s*없음/i.test(title);
+
 const parseMetaList = (html: string) => {
   const result: Record<string, string> = {};
   const dl = html.match(/<dl class="list">([\s\S]*?)<\/dl>/)?.[1] ?? html;
@@ -301,7 +304,7 @@ export async function fetchMelonAlbumReviewData(
 
   const requireLyrics = options.requireLyrics ?? true;
   const missingLyrics = requireLyrics
-    ? tracks.filter((track) => !track.lyrics.trim())
+    ? tracks.filter((track) => !isInstrumentalTitle(track.trackTitle) && !track.lyrics.trim())
     : [];
   if (missingLyrics.length > 0) {
     throw new MelonReviewDataError(

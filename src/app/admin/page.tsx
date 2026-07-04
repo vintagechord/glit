@@ -196,11 +196,11 @@ export default async function AdminPage() {
               id="melon-review-docs-title"
               className="mt-1 text-base font-black text-foreground"
             >
-              멜론 링크 심의자료 생성
+              멜론/지니 링크 심의자료 생성
             </h2>
             <p className="mt-1 text-xs font-semibold leading-5 text-muted-foreground">
-              멜론 앨범 링크만 입력하면 신청서, 심의폼, 앨범정보, 가사 파일,
-              방송국 통합신청서를 ZIP으로 생성합니다.
+              멜론 또는 지니 앨범 링크를 입력하면 가사와 크레딧을 수집하고,
+              두 링크가 같은 앨범이면 교차검증 후 심의자료 ZIP을 생성합니다.
             </p>
           </div>
           <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111]">

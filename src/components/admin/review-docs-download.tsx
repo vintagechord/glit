@@ -17,7 +17,7 @@ const ReviewDocsSelectionContext =
 const defaultButtonClassName =
   "inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#111111] px-3 py-2 text-xs font-black text-white transition hover:bg-[#1556a4] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
 
-const parseMelonUrls = (value: string) =>
+const parseReviewDocUrls = (value: string) =>
   Array.from(
     new Set(
       value
@@ -251,12 +251,12 @@ export function MelonReviewDocsDownloadForm() {
   const [linksText, setLinksText] = React.useState("");
   const [error, setError] = React.useState("");
   const [isDownloading, setIsDownloading] = React.useState(false);
-  const melonUrls = React.useMemo(() => parseMelonUrls(linksText), [linksText]);
+  const reviewDocUrls = React.useMemo(() => parseReviewDocUrls(linksText), [linksText]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (melonUrls.length === 0) {
-      setError("멜론 앨범 링크를 1개 이상 입력해주세요.");
+    if (reviewDocUrls.length === 0) {
+      setError("멜론 또는 지니 앨범 링크를 1개 이상 입력해주세요.");
       return;
     }
 
@@ -268,9 +268,9 @@ export function MelonReviewDocsDownloadForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ melonUrls }),
+        body: JSON.stringify({ urls: reviewDocUrls }),
       });
-      await downloadFromResponse(response, "melon-review-docs.zip");
+      await downloadFromResponse(response, "review-docs.zip");
     } catch (downloadError) {
       setError(
         downloadError instanceof Error
@@ -286,24 +286,24 @@ export function MelonReviewDocsDownloadForm() {
     <form onSubmit={handleSubmit} className="grid gap-3">
       <label className="grid gap-2">
         <span className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-          Melon album links
+          Melon / Genie album links
         </span>
         <textarea
           value={linksText}
           onChange={(event) => setLinksText(event.target.value)}
           rows={4}
           className="min-h-32 w-full resize-y rounded-[10px] border-2 border-border bg-background px-3 py-3 text-sm font-semibold leading-6 text-foreground outline-none transition focus:border-[#1556a4]"
-          placeholder={`https://www.melon.com/album/detail.htm?albumId=13760883
-https://www.melon.com/album/detail.htm?albumId=12144636`}
+          placeholder={`https://www.melon.com/album/detail.htm?albumId=13780811
+https://www.genie.co.kr/detail/albumInfo?axnm=87816941`}
         />
       </label>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-semibold text-muted-foreground">
-          입력 {melonUrls.length.toLocaleString()}건
+          입력 {reviewDocUrls.length.toLocaleString()}건
         </p>
         <button
           type="submit"
-          disabled={melonUrls.length === 0 || isDownloading}
+          disabled={reviewDocUrls.length === 0 || isDownloading}
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-4 py-2 text-xs font-black text-white shadow-[3px_3px_0_#f2cf27] transition hover:-translate-y-0.5 hover:bg-[#0f488e] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isDownloading ? (

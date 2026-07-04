@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { requireAdminForApi } from "@/lib/admin/api-auth";
 import {
-  buildMelonReviewDocSubmissionBundles,
+  buildExternalReviewDocSubmissionBundles,
   buildReviewDocsZip,
   buildReviewDocsZipFilename,
   contentDispositionAttachment,
@@ -15,8 +15,16 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const bodySchema = z.object({
-  melonUrls: z.array(z.string().trim().min(1)).min(1).max(20),
+  urls: z.array(z.string().trim().min(1)).max(40).optional(),
+  melonUrls: z.array(z.string().trim().min(1)).max(40).optional(),
+  genieUrls: z.array(z.string().trim().min(1)).max(40).optional(),
 });
+
+const getReviewDocUrls = (body: z.infer<typeof bodySchema>) => [
+  ...(body.urls ?? []),
+  ...(body.melonUrls ?? []),
+  ...(body.genieUrls ?? []),
+];
 
 export async function POST(request: Request) {
   const auth = await requireAdminForApi();
@@ -26,17 +34,16 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
-  if (!parsed.success) {
+  const urls = parsed.success ? getReviewDocUrls(parsed.data) : [];
+  if (!parsed.success || urls.length < 1 || urls.length > 40) {
     return NextResponse.json(
-      { error: "멜론 앨범 링크를 1개 이상 입력해주세요. 최대 20개까지 가능합니다." },
+      { error: "멜론 또는 지니 앨범 링크를 1개 이상 입력해주세요. 최대 40개까지 가능합니다." },
       { status: 400 },
     );
   }
 
   try {
-    const bundles = await buildMelonReviewDocSubmissionBundles(
-      parsed.data.melonUrls,
-    );
+    const bundles = await buildExternalReviewDocSubmissionBundles(urls);
     const zip = await buildReviewDocsZip(bundles);
     const filename = buildReviewDocsZipFilename(bundles);
 
@@ -49,7 +56,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error("[review-docs][melon] generation failed", error);
+    console.error("[review-docs][external] generation failed", error);
     const payload = getReviewDocsErrorPayload(error);
     return NextResponse.json(payload.body, { status: payload.status });
   }

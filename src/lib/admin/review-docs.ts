@@ -6,8 +6,17 @@ import { ZipFile } from "yazl";
 
 import { formatDate, formatDateTime } from "@/lib/format";
 import {
+  GenieReviewDataError,
+  extractGenieAlbumId,
+  fetchGenieAlbumReviewData,
+  type GenieFetchOptions,
+  type GenieTrackReviewData,
+} from "@/lib/genie";
+import {
   MelonReviewDataError,
+  extractMelonAlbumId,
   fetchMelonAlbumReviewData,
+  type MelonAlbumReviewData,
   type MelonFetchOptions,
   type MelonTrackReviewData,
 } from "@/lib/melon";
@@ -49,6 +58,24 @@ export type ReviewDocSubmissionBundle = {
   files: DbRecord[];
   events: DbRecord[];
 };
+
+type MusicSourceProvider = "melon" | "genie";
+
+type MusicSourceTrackData = (MelonTrackReviewData | GenieTrackReviewData) & {
+  sourceNotes?: string;
+};
+
+type MusicSourceAlbumData = Omit<MelonAlbumReviewData, "tracks"> & {
+  tracks: MusicSourceTrackData[];
+};
+
+type FetchedMusicSourceAlbum = MusicSourceAlbumData & {
+  provider: MusicSourceProvider;
+  sourceIndex: number;
+  sourceInput: string;
+};
+
+export type ExternalReviewDocFetchOptions = MelonFetchOptions & GenieFetchOptions;
 
 export class ReviewDocsTemplateMissingError extends Error {
   status = 500 as const;
@@ -491,9 +518,284 @@ const shouldHydrateFromMelon = (bundle: ReviewDocSubmissionBundle) => {
 const withFallback = (value: unknown, fallback: string) =>
   hasText(value) ? value : fallback || value;
 
-const melonTrackToRecord = (
+const SOURCE_LABELS = {
+  melon: "멜론",
+  genie: "지니",
+} as const;
+
+const normalizeComparableText = (value: string) =>
+  value
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[（）]/g, (char) => (char === "（" ? "(" : ")"))
+    .replace(/\s+/g, "")
+    .trim();
+
+const normalizeLyricsForCompare = (value: string) =>
+  value
+    .normalize("NFC")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+
+const normalizeContributorForCompare = (value: string) =>
+  value
+    .normalize("NFC")
+    .split(/[,，、;]+/)
+    .map((item) => item.replace(/\s+/g, " ").trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join(",");
+
+const formatSourceValues = (
+  values: Array<{ provider: MusicSourceProvider; value: string }>,
+) =>
+  values
+    .map((entry) => `${SOURCE_LABELS[entry.provider]} "${entry.value}"`)
+    .join(" / ");
+
+const pickPreferredText = (
+  values: Array<{ provider: MusicSourceProvider; value: string }>,
+) => {
+  const present = values.filter((entry) => entry.value.trim());
+  return (
+    present.find((entry) => entry.provider === "melon")?.value ??
+    present.find((entry) => entry.provider === "genie")?.value ??
+    ""
+  );
+};
+
+const pickVerifiedText = (
+  label: string,
+  values: Array<{ provider: MusicSourceProvider; value: string }>,
+  normalize: (value: string) => string = normalizeComparableText,
+) => {
+  const present = values.filter((entry) => entry.value.trim());
+  if (present.length <= 1) return present[0]?.value ?? "";
+
+  const expected = normalize(present[0].value);
+  const mismatch = present.find((entry) => normalize(entry.value) !== expected);
+  if (mismatch) {
+    throw new ReviewDocsInputError(
+      `멜론/지니 ${label} 정보가 서로 다릅니다. ${formatSourceValues(present)}`,
+    );
+  }
+
+  return pickPreferredText(present);
+};
+
+const sourceKindFromUrl = (url: string): MusicSourceProvider | null => {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (/genie\.co\.kr/i.test(trimmed) || /[?&]axnm=/i.test(trimmed)) {
+    return extractGenieAlbumId(trimmed) ? "genie" : null;
+  }
+  if (/melon\.com/i.test(trimmed) || /[?&]albumId=/i.test(trimmed)) {
+    return extractMelonAlbumId(trimmed) ? "melon" : null;
+  }
+  return extractMelonAlbumId(trimmed) ? "melon" : null;
+};
+
+const albumGroupKey = (album: MusicSourceAlbumData) =>
+  normalizeComparableText(`${album.artistName} ${album.albumTitle}`);
+
+const groupFetchedMusicAlbums = (albums: FetchedMusicSourceAlbum[]) => {
+  if (
+    albums.length === 2 &&
+    new Set(albums.map((album) => album.provider)).size === 2
+  ) {
+    return [albums];
+  }
+
+  const keyed = albums.reduce((map, album) => {
+    const key = albumGroupKey(album);
+    const list = map.get(key) ?? [];
+    list.push(album);
+    map.set(key, list);
+    return map;
+  }, new Map<string, FetchedMusicSourceAlbum[]>());
+
+  return Array.from(keyed.values()).flatMap((group) => {
+    if (new Set(group.map((album) => album.provider)).size > 1) {
+      return [group];
+    }
+    return group.map((album) => [album]);
+  });
+};
+
+const mergeMusicSourceTracks = (
+  albums: FetchedMusicSourceAlbum[],
+  albumTitle: string,
+) => {
+  const trackNumbers = Array.from(
+    new Set(
+      albums.flatMap((album) => album.tracks.map((track) => track.trackNo)),
+    ),
+  ).sort((a, b) => a - b);
+
+  return trackNumbers.map((trackNo) => {
+    const entries = albums
+      .map((album) => ({
+        provider: album.provider,
+        track: album.tracks.find((track) => track.trackNo === trackNo),
+      }))
+      .filter(
+        (entry): entry is { provider: MusicSourceProvider; track: MusicSourceTrackData } =>
+          Boolean(entry.track),
+      );
+
+    if (entries.length !== albums.length) {
+      throw new ReviewDocsInputError(
+        `${albumTitle} ${trackNo}번 트랙이 멜론/지니 중 한쪽에만 있습니다.`,
+      );
+    }
+
+    const title = pickVerifiedText(
+      `${albumTitle} ${trackNo}번 트랙명`,
+      entries.map((entry) => ({
+        provider: entry.provider,
+        value: entry.track.trackTitle,
+      })),
+    );
+    const isInstrumental = isInstrumentalTitle(title);
+    const lyrics = isInstrumental
+      ? pickPreferredText(
+          entries.map((entry) => ({
+            provider: entry.provider,
+            value: entry.track.lyrics,
+          })),
+        )
+      : pickVerifiedText(
+          `${albumTitle} ${trackNo}번 가사`,
+          entries.map((entry) => ({
+            provider: entry.provider,
+            value: entry.track.lyrics,
+          })),
+          normalizeLyricsForCompare,
+        );
+    const sourceNotes = entries
+      .map((entry) => `${SOURCE_LABELS[entry.provider]} 곡 ID: ${entry.track.songId}`)
+      .join(" / ");
+
+    return {
+      ...entries[0].track,
+      trackNo,
+      trackTitle: title,
+      artistName: pickVerifiedText(
+        `${albumTitle} ${trackNo}번 아티스트`,
+        entries.map((entry) => ({
+          provider: entry.provider,
+          value: entry.track.artistName,
+        })),
+      ),
+      isTitle: entries.some((entry) => entry.track.isTitle),
+      composer: pickVerifiedText(
+        `${albumTitle} ${trackNo}번 작곡자`,
+        entries.map((entry) => ({
+          provider: entry.provider,
+          value: entry.track.composer,
+        })),
+        normalizeContributorForCompare,
+      ),
+      lyricist: pickVerifiedText(
+        `${albumTitle} ${trackNo}번 작사자`,
+        entries.map((entry) => ({
+          provider: entry.provider,
+          value: entry.track.lyricist,
+        })),
+        normalizeContributorForCompare,
+      ),
+      arranger: pickVerifiedText(
+        `${albumTitle} ${trackNo}번 편곡자`,
+        entries.map((entry) => ({
+          provider: entry.provider,
+          value: entry.track.arranger,
+        })),
+        normalizeContributorForCompare,
+      ),
+      lyrics,
+      songId: entries.map((entry) => `${entry.provider}:${entry.track.songId}`).join("+"),
+      songUrl: entries.map((entry) => entry.track.songUrl).join("\n"),
+      sourceNotes,
+    } satisfies MusicSourceTrackData;
+  });
+};
+
+const mergeMusicSourceAlbums = (albums: FetchedMusicSourceAlbum[]) => {
+  if (albums.length === 1) {
+    const album = albums[0];
+    return {
+      ...album,
+      tracks: album.tracks.map((track) => ({
+        ...track,
+        sourceNotes: `${SOURCE_LABELS[album.provider]} 곡 ID: ${track.songId}`,
+      })),
+    } satisfies MusicSourceAlbumData;
+  }
+
+  const albumTitle = pickVerifiedText(
+    "앨범명",
+    albums.map((album) => ({
+      provider: album.provider,
+      value: album.albumTitle,
+    })),
+  );
+  const tracks = mergeMusicSourceTracks(albums, albumTitle);
+
+  return {
+    ...albums[0],
+    albumId: albums.map((album) => `${album.provider}-${album.albumId}`).join("+"),
+    albumUrl: albums.map((album) => album.albumUrl).join("\n"),
+    albumTitle,
+    albumType: pickPreferredText(
+      albums.map((album) => ({
+        provider: album.provider,
+        value: album.albumType,
+      })),
+    ),
+    artistName: pickVerifiedText(
+      `${albumTitle} 앨범 아티스트`,
+      albums.map((album) => ({
+        provider: album.provider,
+        value: album.artistName,
+      })),
+    ),
+    releaseDate: pickVerifiedText(
+      `${albumTitle} 발매일`,
+      albums.map((album) => ({
+        provider: album.provider,
+        value: album.releaseDate,
+      })),
+    ),
+    genre: pickPreferredText(
+      albums.map((album) => ({
+        provider: album.provider,
+        value: album.genre,
+      })),
+    ),
+    distributor: pickVerifiedText(
+      `${albumTitle} 발매사`,
+      albums.map((album) => ({
+        provider: album.provider,
+        value: album.distributor,
+      })),
+    ),
+    productionCompany: pickVerifiedText(
+      `${albumTitle} 기획사`,
+      albums.map((album) => ({
+        provider: album.provider,
+        value: album.productionCompany,
+      })),
+    ),
+    tracks,
+  } satisfies MusicSourceAlbumData;
+};
+
+const sourceTrackToRecord = (
   submissionId: string,
-  track: MelonTrackReviewData,
+  track: MusicSourceTrackData,
   existing?: DbRecord,
 ): DbRecord => ({
   ...(existing ?? {}),
@@ -505,12 +807,26 @@ const melonTrackToRecord = (
   arranger: withFallback(existing?.arranger, track.arranger),
   performer: withFallback(existing?.performer ?? existing?.performers, track.artistName),
   lyrics: withFallback(existing?.lyrics, track.lyrics),
-  notes: getText(existing ?? {}, "notes") || `멜론 곡 ID: ${track.songId}`,
+  notes: getText(existing ?? {}, "notes") || track.sourceNotes || `음원 곡 ID: ${track.songId}`,
   is_title: existing?.is_title === true || track.isTitle,
   title_role:
     getText(existing ?? {}, "title_role") || (track.isTitle ? "MAIN" : null),
   broadcast_selected: existing?.broadcast_selected === true || track.isTitle,
 });
+
+const melonTrackToRecord = (
+  submissionId: string,
+  track: MelonTrackReviewData,
+  existing?: DbRecord,
+) =>
+  sourceTrackToRecord(
+    submissionId,
+    {
+      ...track,
+      sourceNotes: `멜론 곡 ID: ${track.songId}`,
+    },
+    existing,
+  );
 
 async function hydrateOneClickMelonBundle(
   bundle: ReviewDocSubmissionBundle,
@@ -612,6 +928,93 @@ export async function buildMelonReviewDocSubmissionBundles(
         updated_at: new Date().toISOString(),
       },
       tracks: album.tracks.map((track) => melonTrackToRecord(submissionId, track)),
+      files: [],
+      events: [],
+    };
+  });
+}
+
+async function fetchMusicSourceAlbum(
+  url: string,
+  index: number,
+  options: ExternalReviewDocFetchOptions,
+): Promise<FetchedMusicSourceAlbum> {
+  const provider = sourceKindFromUrl(url);
+  if (!provider) {
+    throw new ReviewDocsInputError(
+      `${index + 1}번째 링크: 멜론 또는 지니 앨범 링크를 입력해주세요.`,
+    );
+  }
+
+  try {
+    if (provider === "genie") {
+      const album = await fetchGenieAlbumReviewData(url, {
+        ...options,
+        requireLyrics: true,
+      });
+      return {
+        ...album,
+        provider,
+        sourceIndex: index,
+        sourceInput: url,
+      };
+    }
+
+    const album = await fetchMelonAlbumReviewData(url, {
+      ...options,
+      requireLyrics: true,
+    });
+    return {
+      ...album,
+      provider,
+      sourceIndex: index,
+      sourceInput: url,
+    };
+  } catch (error) {
+    if (error instanceof MelonReviewDataError || error instanceof GenieReviewDataError) {
+      throw new ReviewDocsInputError(
+        `${index + 1}번째 ${SOURCE_LABELS[provider]} 링크: ${error.message}`,
+      );
+    }
+    throw error;
+  }
+}
+
+export async function buildExternalReviewDocSubmissionBundles(
+  urls: string[],
+  options: ExternalReviewDocFetchOptions = {},
+): Promise<ReviewDocSubmissionBundle[]> {
+  const uniqueUrls = Array.from(new Set(urls.map((url) => url.trim()).filter(Boolean)));
+  if (uniqueUrls.length === 0) {
+    throw new ReviewDocsInputError("멜론 또는 지니 앨범 링크를 1개 이상 입력해주세요.");
+  }
+
+  const fetchedAlbums = await Promise.all(
+    uniqueUrls.map((url, index) => fetchMusicSourceAlbum(url, index, options)),
+  );
+  const albums = groupFetchedMusicAlbums(fetchedAlbums).map(mergeMusicSourceAlbums);
+
+  return albums.map((album) => {
+    const submissionId = `external-${album.albumId}`;
+    const sourceUrls = album.albumUrl.split("\n").filter(Boolean);
+    return {
+      submission: {
+        id: submissionId,
+        type: "ALBUM",
+        is_oneclick: false,
+        melon_url: sourceUrls.find((url) => url.includes("melon.com")) ?? "",
+        genie_url: sourceUrls.find((url) => url.includes("genie.co.kr")) ?? "",
+        external_source_urls: sourceUrls.join("\n"),
+        title: album.albumTitle,
+        artist_name: album.artistName,
+        release_date: album.releaseDate,
+        genre: album.genre,
+        distributor: album.distributor,
+        production_company: album.productionCompany,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      tracks: album.tracks.map((track) => sourceTrackToRecord(submissionId, track)),
       files: [],
       events: [],
     };
