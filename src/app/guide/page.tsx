@@ -161,7 +161,7 @@ export default function GuidePage() {
         <div className="mt-6">
           <Link
             href="/dashboard/new/mv"
-            className="bauhaus-button px-6 py-3 text-xs uppercase"
+            className="inline-flex items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-6 py-3 text-xs font-black uppercase tracking-normal text-white shadow-[4px_4px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[4px_4px_0_#f2cf27] dark:hover:bg-[#5fa3e6]"
           >
             뮤직비디오 심의 신청하러 가기
           </Link>

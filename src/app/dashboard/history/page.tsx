@@ -27,6 +27,7 @@ type SubmissionRow = {
   created_at: string;
   updated_at: string | null;
   type: string;
+  user_deleted_at?: string | null;
 };
 
 type ShellConfig = {
@@ -36,9 +37,20 @@ type ShellConfig = {
 };
 
 const PRIMARY_SELECT =
-  "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type";
+  "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type, user_deleted_at";
 const FALLBACK_SELECT =
+  "id, title, artist_name, artist_id, status, payment_status, created_at, updated_at, type, user_deleted_at";
+const PRIMARY_LEGACY_SELECT =
+  "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type";
+const FALLBACK_LEGACY_SELECT =
   "id, title, artist_name, artist_id, status, payment_status, created_at, updated_at, type";
+
+const isMissingUserDeletedAt = (error?: { code?: string; message?: string }) =>
+  Boolean(
+    error &&
+      (error.code === "42703" ||
+        error.message?.toLowerCase().includes("user_deleted_at")),
+  );
 
 export async function HistoryPageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
@@ -48,14 +60,19 @@ export async function HistoryPageView(config?: ShellConfig) {
     redirect(config?.loginPath ?? "/login");
   }
 
-  const runSelect = (select: string) =>
-    supabase
+  const runSelect = (select: string, includeUserVisibility = true) => {
+    let query = supabase
       .from("submissions")
       .select(select)
       .eq("user_id", user.id)
       .eq("payment_status", "PAID")
-      .not("status", "eq", "DRAFT")
+      .not("status", "eq", "DRAFT");
+    if (includeUserVisibility) {
+      query = query.is("user_deleted_at", null);
+    }
+    return query
       .order("updated_at", { ascending: false });
+  };
 
   const { data: primaryData, error: primaryError } = await runSelect(PRIMARY_SELECT);
   let submissions: SubmissionRow[] = ((primaryData ?? []) as unknown[]).map(
@@ -64,16 +81,32 @@ export async function HistoryPageView(config?: ShellConfig) {
 
   if (primaryError) {
     console.error("[HistoryPage] primary query failed", primaryError);
+    const missingUserDeletedAt = isMissingUserDeletedAt(primaryError);
     const { data: fallbackData, error: fallbackError } = await runSelect(
-      FALLBACK_SELECT,
+      missingUserDeletedAt ? PRIMARY_LEGACY_SELECT : FALLBACK_SELECT,
+      !missingUserDeletedAt,
     );
     if (fallbackError) {
       console.error("[HistoryPage] fallback query failed", fallbackError);
-      submissions = [];
+      const { data: legacyData, error: legacyError } = await runSelect(
+        FALLBACK_LEGACY_SELECT,
+        false,
+      );
+      if (legacyError) {
+        console.error("[HistoryPage] legacy fallback query failed", legacyError);
+        submissions = [];
+      } else {
+        submissions = ((legacyData ?? []) as unknown[]).map((row) => ({
+          ...(row as SubmissionRow),
+          artist: null,
+        }));
+      }
     } else {
       submissions = ((fallbackData ?? []) as unknown[]).map((row) => ({
         ...(row as SubmissionRow),
-        artist: null,
+        artist: missingUserDeletedAt
+          ? (row as SubmissionRow).artist
+          : null,
       }));
     }
   }

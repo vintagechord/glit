@@ -1,11 +1,6 @@
 export const ALBUM_REVIEW_DISCOUNT_SETTING_KEY =
   "album_review_discount_percent";
 
-export const ALBUM_REVIEW_PACKAGE_DISCOUNT_OVERRIDES: Record<number, number> = {
-  3: 40,
-  7: 40,
-};
-
 export const normalizeAlbumDiscountPercent = (value: unknown) => {
   const numeric = Number(value ?? 0);
   if (!Number.isFinite(numeric)) return 0;
@@ -16,18 +11,7 @@ export const getAlbumReviewDiscountPercentForPackage = (
   baseDiscountPercent: number,
   stationCount?: number | null,
 ) => {
-  const normalizedStationCount = Number(stationCount ?? 0);
-  if (
-    Number.isFinite(normalizedStationCount) &&
-    Object.prototype.hasOwnProperty.call(
-      ALBUM_REVIEW_PACKAGE_DISCOUNT_OVERRIDES,
-      normalizedStationCount,
-    )
-  ) {
-    return normalizeAlbumDiscountPercent(
-      ALBUM_REVIEW_PACKAGE_DISCOUNT_OVERRIDES[normalizedStationCount],
-    );
-  }
+  void stationCount;
   return normalizeAlbumDiscountPercent(baseDiscountPercent);
 };
 

@@ -123,7 +123,7 @@ export function MagazineRequestForm({
               워터멜론 매거진 발행 요청
             </h2>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-[8px] border-2 border-[#1556a4] bg-[#eaf2fb] px-3 py-1 text-[11px] font-black text-[#1556a4] dark:border-[#8bc3ff] dark:bg-[#102033] dark:text-[#8bc3ff]">
+          <span className="inline-flex items-center gap-1.5 rounded-[8px] border-2 border-[#111111] bg-[#d9362c] px-3 py-1 text-[11px] font-black text-white shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[3px_3px_0_#f2cf27]">
             <Info className="h-3.5 w-3.5" aria-hidden="true" />
             1크레딧 사용
           </span>

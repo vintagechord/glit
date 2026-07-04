@@ -1,16 +1,25 @@
+import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { getGuideSignedUrl, getRatingSignedUrl, RATING_IMAGE_MAP } from "@/lib/mv-assets";
+import {
+  getGuideSignedUrl,
+  getRatingSignedUrl,
+  RATING_IMAGE_MAP,
+} from "@/lib/mv-assets";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { getBaseUrl } from "@/lib/url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const supabase = await createServerSupabase();
+    const baseUrl = getBaseUrl(req);
     const entries = await Promise.all(
       (Object.keys(RATING_IMAGE_MAP) as Array<keyof typeof RATING_IMAGE_MAP>).map(
         async (code) => {
-          const url = await getRatingSignedUrl(code);
+          const url = await getRatingSignedUrl(code, supabase, baseUrl);
           return [code, url] as const;
         },
       ),

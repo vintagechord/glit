@@ -44,8 +44,8 @@ const exactTranslations: Record<string, string> = {
   "심의 신청부터": "From Submission",
   "결과 확인까지": "to Result Check",
   "TEST - TEST 심의": "TEST - TEST Review",
-  "리뉴얼 기념 음반심의 50% 할인": "Renewal Special: 50% Off Album Review",
-  "리뉴얼 기념 AlbumReview 50% Discount": "Renewal Special: 50% Off Album Review",
+  "리뉴얼 기념 음반심의 30% 할인": "Renewal Special: 30% Off Album Review",
+  "리뉴얼 기념 AlbumReview 30% Discount": "Renewal Special: 30% Off Album Review",
   "할인 금액으로 바로 접수하세요.": "Submit now at the discounted price.",
   "Discount 금액으로 바로 Submission하세요.": "Submit now at the discounted price.",
   "나의 모든 음반·뮤직비디오 심의를 관리하고, 진행 현황을 실시간으로 확인하세요.":

@@ -168,7 +168,7 @@ function CreditServiceRewardCard({
           <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border-2 border-[#111111] bg-[#111111] text-white">
             <Gift className="h-5 w-5" aria-hidden="true" />
           </span>
-          <span className="rounded-[8px] border-2 border-[#1556a4] bg-[#eaf2fb] px-3 py-1 text-sm font-black text-[#1556a4] dark:border-[#8bc3ff] dark:bg-[#102033] dark:text-[#8bc3ff]">
+          <span className="rounded-[8px] border-2 border-[#111111] bg-[#d9362c] px-3 py-1 text-sm font-black text-white shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[3px_3px_0_#f2cf27]">
             {reward.credits_required.toLocaleString()} 크레딧
           </span>
         </div>

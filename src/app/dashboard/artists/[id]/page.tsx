@@ -49,11 +49,19 @@ type SubmissionRow = {
   payment_status?: string | null;
   created_at: string;
   updated_at: string | null;
+  user_deleted_at?: string | null;
   package?:
     | Array<{ name?: string | null; station_count?: number | null }>
     | { name?: string | null; station_count?: number | null }
     | null;
 };
+
+const isMissingUserDeletedAt = (error?: { code?: string; message?: string }) =>
+  Boolean(
+    error &&
+      (error.code === "42703" ||
+        error.message?.toLowerCase().includes("user_deleted_at")),
+  );
 
 export default async function DashboardArtistDetailPage({
   params,
@@ -128,14 +136,40 @@ export default async function DashboardArtistDetailPage({
     );
   }
 
-  const { data: submissions } = await supabase
-    .from("submissions")
-    .select(
-      "id, title, artist_name, status, type, payment_status, created_at, updated_at, package:packages ( name, station_count )",
-    )
-    .eq("user_id", user.id)
-    .eq("artist_id", artistId)
-    .order("created_at", { ascending: false });
+  const runSubmissionQuery = (includeUserVisibility = true) => {
+    let query = supabase
+      .from("submissions")
+      .select(
+        "id, title, artist_name, status, type, payment_status, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )",
+      )
+      .eq("user_id", user.id)
+      .eq("artist_id", artistId);
+    if (includeUserVisibility) {
+      query = query.is("user_deleted_at", null);
+    }
+    return query.order("created_at", { ascending: false });
+  };
+
+  const { data: submissionData, error: submissionError } =
+    await runSubmissionQuery();
+  let submissions: unknown[] | null = submissionData;
+  if (submissionError && isMissingUserDeletedAt(submissionError)) {
+    const { data: legacyData, error: legacyError } = await supabase
+      .from("submissions")
+      .select(
+        "id, title, artist_name, status, type, payment_status, created_at, updated_at, package:packages ( name, station_count )",
+      )
+      .eq("user_id", user.id)
+      .eq("artist_id", artistId)
+      .order("created_at", { ascending: false });
+    if (legacyError) {
+      console.error("[ArtistDetailPage] legacy submissions query failed", legacyError);
+    }
+    submissions = legacyData;
+  } else if (submissionError) {
+    console.error("[ArtistDetailPage] submissions query failed", submissionError);
+    submissions = [];
+  }
 
   const list = (submissions ?? []) as SubmissionRow[];
   const displayArtistName =

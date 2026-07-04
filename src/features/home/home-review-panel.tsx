@@ -168,13 +168,13 @@ const mvRatingLabel = (code?: string | null) => {
     case "ALL":
       return "전체관람가";
     case "12":
-      return "12세 이상";
+      return "12세이상관람가";
     case "15":
-      return "15세 이상";
+      return "15세이상관람가";
     case "18":
       return "청소년관람불가";
     case "19":
-      return "19세 이상";
+      return "청소년관람불가";
     case "REJECT":
       return "심의불가";
     default:

@@ -29,6 +29,6 @@ insert into public.site_settings (key, value, description)
 values (
   'album_review_discount_percent',
   jsonb_build_object('discountPercent', 50),
-  '음반 심의 기본 할인율(%), 3곳/7곳 패키지는 40% 우선 적용'
+  '음반 심의 전체 패키지 공통 할인율(%)'
 )
 on conflict (key) do nothing;

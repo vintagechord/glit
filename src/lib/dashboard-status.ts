@@ -112,11 +112,17 @@ export const getDashboardStatusData = async (
           error.code === "42P01" ||
           error.message?.toLowerCase().includes("result_notified_at")),
     );
+  const isUserDeletedAtMissing = (error?: { message?: string; code?: string | number }) =>
+    Boolean(
+      error &&
+        (error.code === "42703" ||
+          error.message?.toLowerCase().includes("user_deleted_at")),
+    );
 
   const admin = createAdminClient();
 
-  const buildAlbumBase = () =>
-    admin
+  const buildAlbumBase = (includeUserVisibility = true) => {
+    let query = admin
       .from("submissions")
       .select(
         "id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, package_id, package:packages ( name, station_count )",
@@ -124,14 +130,24 @@ export const getDashboardStatusData = async (
       .eq("user_id", userId)
       .eq("type", "ALBUM")
       .not("status", "eq", "DRAFT");
+    if (includeUserVisibility) {
+      query = query.is("user_deleted_at", null);
+    }
+    return query;
+  };
 
-  const buildMvBase = () =>
-    admin
+  const buildMvBase = (includeUserVisibility = true) => {
+    let query = admin
       .from("submissions")
       .select("id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, result_status, result_notified_at, type, mv_desired_rating, certificate_b2_path, certificate_original_name, package_id, package:packages ( name, station_count )")
       .eq("user_id", userId)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
       .not("status", "eq", "DRAFT");
+    if (includeUserVisibility) {
+      query = query.is("user_deleted_at", null);
+    }
+    return query;
+  };
 
   const recentWindowOr =
     `and(updated_at.gte.${recentResultCutoff},or(result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}))`;
@@ -144,22 +160,34 @@ export const getDashboardStatusData = async (
     : 400;
   const queryEnd = maxRows - 1;
 
+  const buildRecentAlbumQuery = (includeUserVisibility = true) =>
+    buildAlbumBase(includeUserVisibility)
+      .or(recentWindowOr)
+      .order("created_at", { ascending: false })
+      .range(0, queryEnd);
+  const buildRecentMvQuery = (includeUserVisibility = true) =>
+    buildMvBase(includeUserVisibility)
+      .or(recentWindowOr)
+      .order("created_at", { ascending: false })
+      .range(0, queryEnd);
+
   const [initialAlbumResult, initialMvResult] = await Promise.all([
-    buildAlbumBase()
-      .or(recentWindowOr)
-      .order("created_at", { ascending: false })
-      .range(0, queryEnd),
-    buildMvBase()
-      .or(recentWindowOr)
-      .order("created_at", { ascending: false })
-      .range(0, queryEnd),
+    buildRecentAlbumQuery(),
+    buildRecentMvQuery(),
   ]);
 
   let albumResult = initialAlbumResult;
+  let includeAlbumUserVisibility = true;
+
+  if (albumResult.error && isUserDeletedAtMissing(albumResult.error)) {
+    console.warn("[dashboard status] user_deleted_at missing for album, falling back", albumResult.error);
+    includeAlbumUserVisibility = false;
+    albumResult = await buildRecentAlbumQuery(false);
+  }
 
   if (albumResult.error && isResultNotifiedMissing(albumResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for album, falling back", albumResult.error);
-    albumResult = await buildAlbumBase()
+    albumResult = await buildAlbumBase(includeAlbumUserVisibility)
       .gte("updated_at", recentResultCutoff)
       .order("created_at", { ascending: false })
       .range(0, queryEnd);
@@ -169,10 +197,17 @@ export const getDashboardStatusData = async (
   }
 
   let mvResult = initialMvResult;
+  let includeMvUserVisibility = true;
+
+  if (mvResult.error && isUserDeletedAtMissing(mvResult.error)) {
+    console.warn("[dashboard status] user_deleted_at missing for mv, falling back", mvResult.error);
+    includeMvUserVisibility = false;
+    mvResult = await buildRecentMvQuery(false);
+  }
 
   if (mvResult.error && isResultNotifiedMissing(mvResult.error)) {
     console.warn("[dashboard status] result_notified_at missing for mv, falling back", mvResult.error);
-    mvResult = await buildMvBase()
+    mvResult = await buildMvBase(includeMvUserVisibility)
       .gte("updated_at", recentResultCutoff)
       .order("created_at", { ascending: false })
       .range(0, queryEnd);

@@ -7,11 +7,12 @@ import { AdminSaveToast } from "@/components/admin/save-toast";
 
 const ratingOptions = [
   { value: "", label: "결과 미입력" },
-  { value: "ALL", label: "전체연령" },
-  { value: "12", label: "12세 이상" },
-  { value: "15", label: "15세 이상" },
+  { value: "ALL", label: "전체관람가" },
+  { value: "12", label: "12세이상관람가" },
+  { value: "15", label: "15세이상관람가" },
+  { value: "19", label: "청소년관람불가" },
+  { value: "18", label: "청소년관람불가(기존 코드)" },
   { value: "REJECT", label: "심의 불가" },
-  { value: "18", label: "청소년불가(18세)" },
 ];
 
 const ratingLabelMap = Object.fromEntries(

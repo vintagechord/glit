@@ -8,6 +8,7 @@ import {
   upsertPackageFormAction,
   upsertStationFormAction,
 } from "@/features/admin/actions";
+import { MvRatingAssetsManager } from "@/components/admin/mv-rating-assets-manager";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { getAlbumReviewDiscountPercent } from "@/lib/album-discount-server";
 import {
@@ -142,11 +143,11 @@ export default async function AdminConfigPage({
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 패키지 원래 금액은 유지하고, 사용자 화면과 실제 결제/입금 요청 금액에만 할인율을 적용합니다.
-                3곳·7곳 패키지는 기본 할인율과 관계없이 40% 할인을 우선 적용합니다.
+                모든 음반 심의 패키지에 관리자 설정 할인율이 동일하게 적용됩니다.
               </p>
             </div>
             <span className="rounded-full border border-[#1556a4]/30 bg-[#1556a4]/10 px-3 py-1 text-xs font-black text-[#1556a4] dark:border-[#3f8ad8]/40 dark:bg-[#3f8ad8]/15 dark:text-[#8bc3ff]">
-              기본 {albumDiscountPercent}% · 3곳/7곳 40%
+              전체 패키지 {albumDiscountPercent}%
             </span>
           </div>
 
@@ -212,6 +213,10 @@ export default async function AdminConfigPage({
               </div>
             </div>
           ) : null}
+        </section>
+
+        <section className="space-y-4 rounded-[32px] border border-border/60 bg-card/80 p-6">
+          <MvRatingAssetsManager />
         </section>
 
         <section className="space-y-4 rounded-[32px] border border-border/60 bg-card/80 p-6">

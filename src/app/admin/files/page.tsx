@@ -1,274 +1,482 @@
 "use client";
 
 import React from "react";
+import { Download, FileCheck2, UploadCloud } from "lucide-react";
 
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { PendingOverlay } from "@/components/ui/pending-overlay";
+import { downloadEndpointFile } from "@/lib/browser-download";
 
-type UploadedAttachment = {
-  id?: string | null;
-  kind: string;
-  name: string;
-  size: number;
-  createdAt?: string | null;
+type MvSubmissionItem = {
+  id: string;
+  label: string;
+  artistName: string | null;
+  albumTitle: string | null;
+  status: string | null;
+  paymentStatus: string | null;
+  resultStatus: string | null;
+  resultNotifiedAt: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+  rating: string | null;
+  ratingLabel: string | null;
+  certificate: {
+    objectKey: string;
+    originalName?: string | null;
+    mimeType?: string | null;
+    sizeBytes?: number | null;
+    uploadedAt?: string | null;
+  } | null;
 };
 
-const kindOptions = [{ value: "MV_RESULT_FILE", label: "심의 결과 파일 (MV)" }];
+type SubmissionsPayload = {
+  submissions?: MvSubmissionItem[];
+  error?: string;
+};
 
-type Mode = "attach" | "free";
+type CertificateUploadResponse = {
+  error?: string;
+  certificate?: {
+    objectKey: string;
+    originalName: string;
+    uploadedAt: string;
+  };
+};
+
+const statusLabelMap: Record<string, string> = {
+  SUBMITTED: "접수 완료",
+  PRE_REVIEW: "사전 검토",
+  WAITING_PAYMENT: "결제 대기",
+  IN_PROGRESS: "진행 중",
+  RESULT_READY: "결과 준비",
+  COMPLETED: "결과 통보 완료",
+};
+
+const paymentLabelMap: Record<string, string> = {
+  UNPAID: "미결제",
+  PAYMENT_PENDING: "결제 대기",
+  PAID: "결제 완료",
+  REFUNDED: "환불",
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const formatBytes = (value?: number | null) => {
+  if (!value || value <= 0) return "";
+  if (value < 1024) return `${value}B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)}KB`;
+  return `${(value / 1024 / 1024).toFixed(1)}MB`;
+};
+
+const isAllowedCertificateFile = (file: File) => {
+  const mimeType = file.type.toLowerCase();
+  const filename = file.name.toLowerCase();
+  return (
+    ["application/pdf", "image/png", "image/jpeg"].includes(mimeType) ||
+    /\.(pdf|png|jpe?g)$/.test(filename)
+  );
+};
+
+const inferCertificateMimeType = (file: File) => {
+  const mimeType = file.type.toLowerCase();
+  if (["application/pdf", "image/png", "image/jpeg"].includes(mimeType)) {
+    return mimeType;
+  }
+  const filename = file.name.toLowerCase();
+  if (filename.endsWith(".pdf")) return "application/pdf";
+  if (filename.endsWith(".png")) return "image/png";
+  if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) return "image/jpeg";
+  return file.type || "application/octet-stream";
+};
+
+const ratingDownloadFallback = (rating?: string | null) => {
+  switch (rating) {
+    case "ALL":
+      return "onside-mv-rating-all.png";
+    case "12":
+      return "onside-mv-rating-12.png";
+    case "15":
+      return "onside-mv-rating-15.png";
+    case "18":
+    case "19":
+      return "onside-mv-rating-19.png";
+    default:
+      return "onside-mv-rating-image.png";
+  }
+};
 
 export default function AdminFilesPage() {
-  const [mode, setMode] = React.useState<Mode>("attach");
-  const [submissionId, setSubmissionId] = React.useState("");
-  const [label, setLabel] = React.useState("");
-  const [kind, setKind] = React.useState(kindOptions[0]?.value ?? "MV_RATING_FILE_ALL");
-  const [files, setFiles] = React.useState<FileList | null>(null);
+  const [submissions, setSubmissions] = React.useState<MvSubmissionItem[]>([]);
+  const [selectedSubmissionId, setSelectedSubmissionId] = React.useState("");
+  const [file, setFile] = React.useState<File | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isUploading, setIsUploading] = React.useState(false);
+  const [isDownloadingRating, setIsDownloadingRating] = React.useState(false);
+  const [isDownloadingCertificate, setIsDownloadingCertificate] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
   const [savePopup, setSavePopup] = React.useState<{
     id: number;
     message: string;
   } | null>(null);
-  const [isUploading, setIsUploading] = React.useState(false);
-  const [uploaded, setUploaded] = React.useState<UploadedAttachment[]>([]);
-  const [freeUploaded, setFreeUploaded] = React.useState<
-    { objectKey: string; url?: string | null }[]
-  >([]);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const handleSelectFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setFiles(event.target.files ?? null);
-  };
+  const selectedSubmission = React.useMemo(
+    () => submissions.find((item) => item.id === selectedSubmissionId) ?? null,
+    [selectedSubmissionId, submissions],
+  );
+
+  const loadSubmissions = React.useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/mv-submissions", {
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => null)) as SubmissionsPayload | null;
+      if (!response.ok || payload?.error) {
+        throw new Error(payload?.error || "뮤직비디오 접수 목록을 불러오지 못했습니다.");
+      }
+      const nextItems = payload?.submissions ?? [];
+      setSubmissions(nextItems);
+      setSelectedSubmissionId((current) => {
+        if (current && nextItems.some((item) => item.id === current)) return current;
+        return nextItems[0]?.id ?? "";
+      });
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "뮤직비디오 접수 목록을 불러오지 못했습니다.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadSubmissions();
+  }, [loadSubmissions]);
 
   const resetForm = () => {
     setNotice(null);
-    setFiles(null);
-    setLabel("");
+    setError(null);
+    setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSelectFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFile(event.target.files?.[0] ?? null);
+    setNotice(null);
+    setError(null);
+  };
+
+  const handleRatingDownload = async () => {
+    if (!selectedSubmission?.rating) {
+      setError("선택된 뮤직비디오의 등급이 아직 설정되지 않았습니다.");
+      return;
+    }
+
+    setIsDownloadingRating(true);
+    setNotice(null);
+    setError(null);
+    try {
+      await downloadEndpointFile(
+        `/api/admin/mv-rating-assets/download?rating=${encodeURIComponent(
+          selectedSubmission.rating,
+        )}`,
+        ratingDownloadFallback(selectedSubmission.rating),
+      );
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "등급 이미지를 다운로드하지 못했습니다.",
+      );
+    } finally {
+      setIsDownloadingRating(false);
+    }
+  };
+
+  const handleCertificateDownload = async () => {
+    if (!selectedSubmission?.certificate?.objectKey) {
+      setError("등록된 필증이 없습니다.");
+      return;
+    }
+
+    setIsDownloadingCertificate(true);
+    setNotice(null);
+    setError(null);
+    try {
+      await downloadEndpointFile(
+        `/api/admin/submissions/${selectedSubmission.id}/mv-certificate`,
+        selectedSubmission.certificate.originalName || "onside-mv-certificate.pdf",
+      );
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "필증을 다운로드하지 못했습니다.",
+      );
+    } finally {
+      setIsDownloadingCertificate(false);
+    }
   };
 
   const handleUpload = async () => {
-    if (mode === "attach" && !submissionId.trim()) {
-      setNotice("Submission ID를 입력하세요.");
+    if (!selectedSubmission) {
+      setError("필증을 업로드할 뮤직비디오 접수를 선택하세요.");
       return;
     }
-    if (!files || files.length === 0) {
-      setNotice("업로드할 파일을 선택하세요.");
+    if (!file) {
+      setError("업로드할 필증 파일을 선택하세요.");
+      return;
+    }
+    if (!isAllowedCertificateFile(file)) {
+      setError("필증은 PDF, PNG, JPG 파일만 업로드할 수 있습니다.");
+      return;
+    }
+    const maxSize = 20 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError("필증 파일 크기는 20MB 이하만 허용됩니다.");
       return;
     }
 
     setIsUploading(true);
     setNotice(null);
+    setError(null);
     try {
-      if (mode === "attach") {
-        for (const fileItem of Array.from(files)) {
-          const form = new FormData();
-          form.append("submissionId", submissionId.trim());
-          form.append("filename", fileItem.name);
-          form.append("mimeType", fileItem.type || "application/octet-stream");
-          form.append("sizeBytes", String(fileItem.size));
-          form.append("file", fileItem);
+      const form = new FormData();
+      form.append("filename", file.name);
+      form.append("mimeType", inferCertificateMimeType(file));
+      form.append("sizeBytes", String(file.size));
+      form.append("file", file);
 
-          const directRes = await fetch("/api/uploads/direct", {
-            method: "POST",
-            body: form,
-          });
-          const directJson = (await directRes.json().catch(() => ({}))) as {
-            objectKey?: string;
-            error?: string;
-          };
-          if (!directRes.ok || !directJson.objectKey) {
-            throw new Error(directJson.error || `직접 업로드 실패 (status ${directRes.status})`);
-          }
-
-          const saveRes = await fetch("/api/admin/submission-files", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              submissionId: submissionId.trim(),
-              kind,
-              objectKey: directJson.objectKey,
-              filename: fileItem.name,
-              mimeType: fileItem.type || "application/octet-stream",
-              sizeBytes: fileItem.size,
-            }),
-          });
-          const saveJson = (await saveRes.json().catch(() => null)) as { error?: string; attachmentId?: string };
-          if (!saveRes.ok || saveJson?.error) {
-            throw new Error(saveJson?.error || `파일 정보 저장 실패 (status ${saveRes.status})`);
-          }
-
-          setUploaded((prev) => [
-            {
-              id: saveJson.attachmentId,
-              kind,
-              name: fileItem.name,
-              size: fileItem.size,
-              createdAt: new Date().toISOString(),
-            },
-            ...prev,
-          ]);
-        }
-        resetForm();
-        const successMessage = "업로드 완료되었습니다.";
-        setNotice(successMessage);
-        setSavePopup({ id: Date.now(), message: successMessage });
-      } else {
-        const uploadedFree: { objectKey: string; url?: string | null }[] = [];
-        for (const fileItem of Array.from(files)) {
-          const form = new FormData();
-          form.append("filename", fileItem.name);
-          form.append("mimeType", fileItem.type || "application/octet-stream");
-          form.append("sizeBytes", String(fileItem.size));
-          if (label.trim()) form.append("label", label.trim());
-          form.append("file", fileItem);
-
-          const freeRes = await fetch("/api/admin/uploads/free", {
-            method: "POST",
-            body: form,
-          });
-          const freeJson = (await freeRes.json().catch(() => ({}))) as {
-            objectKey?: string;
-            error?: string;
-          };
-          if (!freeRes.ok || !freeJson.objectKey) {
-            throw new Error(freeJson.error || `자유 업로드 실패 (status ${freeRes.status})`);
-          }
-
-          let signedUrl: string | null = null;
-          try {
-            const presignRes = await fetch("/api/admin/files/presign", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ objectKey: freeJson.objectKey }),
-            });
-            const presignJson = (await presignRes.json().catch(() => null)) as { url?: string; error?: string };
-            if (presignRes.ok && presignJson?.url) signedUrl = presignJson.url;
-          } catch {
-            signedUrl = null;
-          }
-
-          uploadedFree.push({ objectKey: freeJson.objectKey, url: signedUrl });
-        }
-        setFreeUploaded((prev) => [...uploadedFree, ...prev]);
-        resetForm();
-        const successMessage =
-          "자유 업로드가 완료되었습니다. objectKey를 복사해 접수에 연결하거나 결과에 사용하세요.";
-        setNotice(successMessage);
-        setSavePopup({ id: Date.now(), message: successMessage });
+      const response = await fetch(
+        `/api/admin/submissions/${selectedSubmission.id}/certificate`,
+        {
+          method: "POST",
+          body: form,
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | CertificateUploadResponse
+        | null;
+      if (!response.ok || payload?.error) {
+        throw new Error(payload?.error || "필증 업로드에 실패했습니다.");
       }
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "업로드에 실패했습니다.");
+      if (!payload?.certificate) {
+        throw new Error("필증 업로드 결과를 확인하지 못했습니다.");
+      }
+
+      setSubmissions((prev) =>
+        prev.map((item) =>
+          item.id === selectedSubmission.id
+            ? {
+                ...item,
+                certificate: {
+                  objectKey: payload.certificate!.objectKey,
+                  originalName: payload.certificate!.originalName,
+                  mimeType: inferCertificateMimeType(file),
+                  sizeBytes: file.size,
+                  uploadedAt: payload.certificate!.uploadedAt,
+                },
+              }
+            : item,
+        ),
+      );
+      setFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      const successMessage =
+        "필증 업로드가 완료되었습니다. 회원 결과 조회에서 필증 다운로드가 가능합니다.";
+      setNotice(successMessage);
+      setSavePopup({ id: Date.now(), message: successMessage });
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "필증 업로드에 실패했습니다.");
     } finally {
       setIsUploading(false);
     }
   };
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-10">
+    <div className="mx-auto w-full max-w-5xl px-6 py-10">
       {savePopup ? (
         <AdminSaveToast key={savePopup.id} message={savePopup.message} />
       ) : null}
-      <PendingOverlay show={isUploading} label="파일 업로드 중..." />
+      <PendingOverlay
+        show={isUploading || isDownloadingRating || isDownloadingCertificate}
+        label={
+          isUploading
+            ? "필증 업로드 중..."
+            : isDownloadingCertificate
+              ? "필증 다운로드 중..."
+              : "등급 이미지 다운로드 중..."
+        }
+      />
       <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        관리자 · 파일 업로드
+        관리자 · 뮤직비디오 결과 파일
       </p>
-      <h1 className="font-display mt-2 text-2xl text-foreground">심의 결과/가이드 파일 업로드</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        심의 결과 파일을 접수에 바로 연결하거나, 자유 업로드로 B2에 저장해둔 뒤 필요 시 objectKey를 연결할 수
-        있습니다. 등급 이미지와 가이드는 공용 리소스로 관리되며 여기서 올리지 않습니다.
+      <h1 className="font-display mt-2 text-2xl text-foreground">
+        뮤직비디오 필증 업로드
+      </h1>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+        접수된 온라인 뮤직비디오 심의를 선택해 영등위 필증을 업로드합니다. 등급 이미지는 선택된 심의의 결과 등급에 따라 자동으로 제공되며, 회원 결과 조회에서 등급 이미지·가이드·필증을 다운로드할 수 있습니다.
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-        <button
-          type="button"
-          onClick={() => setMode("attach")}
-          className={`rounded-full px-4 py-2 transition ${
-            mode === "attach"
-              ? "bg-foreground text-background"
-              : "border border-border/70 text-foreground hover:border-foreground"
-          }`}
-        >
-          접수 연결 업로드
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("free")}
-          className={`rounded-full px-4 py-2 transition ${
-            mode === "free"
-              ? "bg-foreground text-background"
-              : "border border-border/70 text-foreground hover:border-foreground"
-          }`}
-        >
-          자유 업로드
-        </button>
-      </div>
+      <div className="mt-6 grid gap-5 rounded-[28px] border border-border/70 bg-card/80 p-6">
+        <label className="space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            뮤직비디오 접수 선택
+          </span>
+          <select
+            value={selectedSubmissionId}
+            onChange={(event) => {
+              setSelectedSubmissionId(event.target.value);
+              resetForm();
+            }}
+            disabled={isLoading || submissions.length === 0}
+            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm font-semibold text-foreground outline-none transition focus:border-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isLoading ? (
+              <option value="">접수 목록을 불러오는 중입니다.</option>
+            ) : submissions.length > 0 ? (
+              submissions.map((submission) => (
+                <option key={submission.id} value={submission.id}>
+                  {submission.label}
+                </option>
+              ))
+            ) : (
+              <option value="">접수된 온라인 뮤직비디오 심의가 없습니다.</option>
+            )}
+          </select>
+        </label>
 
-      <div className="mt-6 grid gap-4 rounded-3xl border border-border/70 bg-card/80 p-6">
-        {mode === "attach" ? (
-          <>
-            <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                Submission ID (UUID)
+        {selectedSubmission ? (
+          <div className="rounded-[18px] border border-border/60 bg-background/70 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-lg font-black text-foreground">
+                  {selectedSubmission.label}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  접수 ID {selectedSubmission.id}
+                </p>
+              </div>
+              <span className="rounded-full border border-[#1556a4]/30 bg-[#1556a4]/10 px-3 py-1 text-xs font-black text-[#1556a4]">
+                {selectedSubmission.ratingLabel ?? "등급 미설정"}
               </span>
-              <input
-                value={submissionId}
-                onChange={(event) => setSubmissionId(event.target.value)}
-                placeholder="예: 123e4567-e89b-12d3-a456-426614174000"
-                className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-              />
-            </label>
+            </div>
 
-            <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                파일 종류
-              </span>
-              <select
-                value={kind}
-                onChange={(event) => setKind(event.target.value)}
-                className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+            <div className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
+              <div className="rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                  접수 상태
+                </p>
+                <p className="mt-1 font-semibold text-foreground">
+                  {statusLabelMap[selectedSubmission.status ?? ""] ??
+                    selectedSubmission.status ??
+                    "-"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                  결제
+                </p>
+                <p className="mt-1 font-semibold text-foreground">
+                  {paymentLabelMap[selectedSubmission.paymentStatus ?? ""] ??
+                    selectedSubmission.paymentStatus ??
+                    "-"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                  결과 통보
+                </p>
+                <p className="mt-1 font-semibold text-foreground">
+                  {formatDateTime(selectedSubmission.resultNotifiedAt)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
+                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                  현재 필증
+                </p>
+                <p className="mt-1 truncate font-semibold text-foreground">
+                  {selectedSubmission.certificate?.originalName ?? "미업로드"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleRatingDownload}
+                disabled={!selectedSubmission.rating || isDownloadingRating}
+                className="inline-flex items-center gap-2 rounded-full bg-[#1556a4] px-4 py-2 text-xs font-black text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
               >
-                {kindOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </>
-        ) : (
-          <label className="space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              라벨 (선택)
-            </span>
-            <input
-              value={label}
-              onChange={(event) => setLabel(event.target.value)}
-              placeholder="예: mv-rating-18, guide, result 등"
-              className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-            />
-          </label>
-        )}
+                <Download className="h-4 w-4" aria-hidden="true" />
+                등급 이미지 다운로드
+              </button>
+              {selectedSubmission.certificate?.objectKey ? (
+                <button
+                  type="button"
+                  onClick={handleCertificateDownload}
+                  disabled={isDownloadingCertificate}
+                  className="inline-flex items-center gap-2 rounded-full border border-border/70 px-4 py-2 text-xs font-black text-foreground transition hover:border-foreground"
+                >
+                  <FileCheck2 className="h-4 w-4" aria-hidden="true" />
+                  현재 필증 다운로드
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         <label className="space-y-2">
           <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            파일 선택
+            필증 파일 선택
           </span>
           <input
+            ref={fileInputRef}
             type="file"
-            multiple
+            accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg"
             onChange={handleSelectFile}
-            className="block w-full text-sm text-foreground file:mr-3 file:rounded-xl file:border file:border-border/70 file:bg-background file:px-4 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-[0.2em] file:text-foreground hover:file:border-foreground"
+            disabled={!selectedSubmission || isUploading}
+            className="block w-full text-sm text-foreground file:mr-3 file:rounded-xl file:border file:border-border/70 file:bg-background file:px-4 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-[0.2em] file:text-foreground hover:file:border-foreground disabled:cursor-not-allowed disabled:opacity-60"
           />
-          {files && files.length > 0 ? (
+          {file ? (
             <p className="text-xs text-muted-foreground">
-              {Array.from(files)
-                .map((item) => `${item.name} · ${Math.round(item.size / 1024).toLocaleString()} KB`)
-                .join(", ")}
+              {file.name} · {formatBytes(file.size)}
             </p>
-          ) : null}
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              PDF, PNG, JPG 형식의 영등위 필증을 업로드하세요.
+            </p>
+          )}
         </label>
 
         {notice ? (
-          <div className="rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-sm font-semibold text-black">
+          <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/80 px-4 py-3 text-sm font-semibold text-emerald-800">
             {notice}
+          </div>
+        ) : null}
+        {error ? (
+          <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-sm font-semibold text-rose-700">
+            {error}
           </div>
         ) : null}
 
@@ -284,79 +492,14 @@ export default function AdminFilesPage() {
           <button
             type="button"
             onClick={handleUpload}
-            disabled={isUploading}
-            className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
+            disabled={isUploading || !selectedSubmission || !file}
+            className="inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted disabled:hover:translate-y-0"
           >
-            업로드
+            <UploadCloud className="h-4 w-4" aria-hidden="true" />
+            {isUploading ? "업로드 중" : "필증 업로드"}
           </button>
         </div>
       </div>
-
-      {uploaded.length > 0 ? (
-        <div className="mt-8 rounded-3xl border border-border/70 bg-card/80 p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            최근 업로드 (접수 연결)
-          </p>
-          <div className="mt-4 space-y-3 text-sm">
-            {uploaded.map((item, idx) => (
-              <div
-                key={`${item.id ?? idx}-${item.name}`}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border/60 bg-background/60 px-4 py-3"
-              >
-                <div className="space-y-1">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    {item.kind}
-                  </p>
-                  <p className="font-semibold text-foreground">{item.name}</p>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {Math.round(item.size / 1024)} KB
-                  {item.createdAt ? ` · ${new Date(item.createdAt).toLocaleString()}` : ""}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {freeUploaded.length > 0 ? (
-        <div className="mt-8 rounded-3xl border border-border/70 bg-card/80 p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            자유 업로드 결과 (objectKey 복사 후 연결)
-          </p>
-          <div className="mt-4 space-y-3 text-sm">
-            {freeUploaded.map((item, idx) => (
-              <div
-                key={`${item.objectKey}-${idx}`}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/60 px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-foreground">{item.objectKey}</p>
-                  {item.url ? (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-foreground underline hover:text-amber-300"
-                    >
-                      10분짜리 다운로드 링크 열기
-                    </a>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">사인 URL 생성 실패 시 직접 생성 필요</p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(item.objectKey)}
-                  className="rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/5"
-                >
-                  key 복사
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

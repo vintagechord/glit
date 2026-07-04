@@ -196,13 +196,13 @@ const mvRatingLabel = (code?: string | null) => {
     case "ALL":
       return "전체관람가";
     case "12":
-      return "12세 이상";
+      return "12세이상관람가";
     case "15":
-      return "15세 이상";
+      return "15세이상관람가";
     case "18":
       return "청소년관람불가";
     case "19":
-      return "19세 이상";
+      return "청소년관람불가";
     case "REJECT":
       return "심의불가";
     default:
@@ -290,19 +290,6 @@ const getReviewResult = (status: string) =>
     label: "대기",
     tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
   };
-
-const getSubmissionTypeLabel = (type: string) => {
-  switch (type) {
-    case "ALBUM":
-      return "음반 심의";
-    case "MV_BROADCAST":
-      return "뮤직비디오 방송 심의";
-    case "MV_DISTRIBUTION":
-      return "뮤직비디오 온라인 심의";
-    default:
-      return type;
-  }
-};
 
 type DetailPrimaryAction = "payment-info" | "retry-payment" | "station-review" | null;
 
@@ -409,9 +396,7 @@ const buildSubmissionDisplayStatus = ({
       paymentLabel,
       broadcastLabel,
       resultLabel,
-      primaryMessage: isMvSubmission
-        ? "심의 결과 확인이 가능합니다."
-        : "방송사별 결과 확인이 가능합니다.",
+      primaryMessage: isMvSubmission ? "심의 결과 확인이 가능합니다." : null,
       secondaryMessage: "방송국별 진행표에서 결과와 최근 업데이트를 확인할 수 있습니다.",
       primaryAction: "station-review" as DetailPrimaryAction,
       primaryActionLabel: "진행표 보기",
@@ -470,6 +455,38 @@ const mvReviewFallbackFilenames: Record<MvReviewAssetPath, string> = {
   "mv-rating-image": "onside-mv-rating-image.png",
   "mv-guide": "onside-mv-rating-guide.pdf",
   "mv-certificate": "onside-mv-certificate.pdf",
+};
+
+const getRadioLinkGuide = (link: RadioBoardLink) => {
+  const label = link.name;
+  if (/신청곡|게시판|청취자/.test(label)) {
+    return {
+      tag: "신청/게시판",
+      detail: "곡명, 아티스트명, 발매일, 심의 적격 방송국을 함께 적어 신청하세요.",
+    };
+  }
+  if (/편성표/.test(label)) {
+    return {
+      tag: "편성 확인",
+      detail: "장르와 시간대가 맞는 프로그램을 먼저 찾을 때 유용합니다.",
+    };
+  }
+  if (/프로그램|프로그램 목록|메뉴/.test(label)) {
+    return {
+      tag: "프로그램 찾기",
+      detail: "프로그램별 선곡 게시판이나 청취자 참여 메뉴를 확인하세요.",
+    };
+  }
+  if (/검색/.test(label)) {
+    return {
+      tag: "검색",
+      detail: "고정 신청 페이지가 없을 때 방송사 신청곡 게시판을 찾는 링크입니다.",
+    };
+  }
+  return {
+    tag: "방송사 홈",
+    detail: "라디오 메뉴에서 프로그램, 편성표, 신청곡 게시판을 순서대로 확인하세요.",
+  };
 };
 
 export function SubmissionDetailClient({
@@ -731,7 +748,6 @@ export function SubmissionDetailClient({
               "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-100",
           }
           : null;
-  const submissionTypeLabel = getSubmissionTypeLabel(submission.type);
   const stationSummary = renderStationReviews.reduce(
     (acc, review) => {
       const summary = buildTrackSummary(review.track_results);
@@ -1474,30 +1490,26 @@ export function SubmissionDetailClient({
             <p className="mt-3 text-lg font-semibold text-foreground/82 sm:text-xl">
               {submission.artist_name || "아티스트 미입력"}
             </p>
-            <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-normal">
-              <span className="rounded-[6px] border-2 border-[#111111] bg-[#1556a4] px-3 py-1.5 text-white dark:border-[#f2cf27]">
-                {submissionTypeLabel}
-              </span>
-              <span className="rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1.5 text-[#111111] dark:border-[#f2cf27]">
-                {guestToken ? "비회원 접수" : "회원 접수"}
-              </span>
-            </div>
             <div className="mt-6 max-w-3xl rounded-[8px] border-2 border-[#111111] bg-white/85 p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#111111]/55 dark:shadow-[4px_4px_0_#f2cf27]">
-              <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                현재 상태
-              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                  현재 상태
+                </p>
+                <p className="text-left text-[11px] font-black uppercase tracking-normal text-muted-foreground sm:text-right">
+                  최근 업데이트{" "}
+                  <span className="font-semibold tracking-normal text-foreground/72">
+                    {formatDateTime(submission.updated_at)}
+                  </span>
+                </p>
+              </div>
               <h2 className="mt-2 text-2xl font-black text-foreground">
                 {displayStatus.currentLabel}
               </h2>
-              <p className="mt-3 text-sm font-semibold leading-6 text-foreground/85">
-                {displayStatus.primaryMessage}
-              </p>
-              <p className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                최근 업데이트{" "}
-                <span className="font-semibold tracking-normal text-foreground/72">
-                  {formatDateTime(submission.updated_at)}
-                </span>
-              </p>
+              {displayStatus.primaryMessage ? (
+                <p className="mt-3 text-sm font-semibold leading-6 text-foreground/85">
+                  {displayStatus.primaryMessage}
+                </p>
+              ) : null}
               <div className="mt-5 flex flex-wrap gap-2">
                 {displayStatus.primaryActionLabel ? (
                   <button
@@ -2161,7 +2173,7 @@ export function SubmissionDetailClient({
                   }}
                   className={detailActionButtonClass}
                 >
-                  라디오 신청 링크
+                  라디오 신청 제안
                 </button>
               ) : (
                 <div />
@@ -2180,32 +2192,69 @@ export function SubmissionDetailClient({
 
       {radioLinksModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
             <p className={detailKickerClass}>
-              라디오 신청 링크
+              라디오 신청 제안
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
               {radioLinksModal.stationName
-                ? `${radioLinksModal.stationName} 적격/부분 적격 · 라디오 신청곡 올리기`
-                : "적격/부분 적격 · 라디오 신청곡 올리기"}
+                ? `${radioLinksModal.stationName} 적격 이후 신청 준비`
+                : "적격 이후 라디오 신청 준비"}
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              방송사별 라디오 신청곡/사연 접수 페이지로 이동합니다.
+              적격은 방송 가능 상태를 의미하며, 실제 선곡과 편성은 방송사 판단에 따릅니다.
+              아래 순서로 프로그램을 확인한 뒤 신청곡/사연 게시판에 등록하는 것을 권장합니다.
             </p>
+            <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+              <div className={`${detailSubPanelClass} bg-white/80 p-3 dark:bg-white/5`}>
+                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                  1. 프로그램 확인
+                </p>
+                <p className="mt-1 font-semibold text-foreground">
+                  장르와 시간대가 맞는 프로그램을 고릅니다.
+                </p>
+              </div>
+              <div className={`${detailSubPanelClass} bg-white/80 p-3 dark:bg-white/5`}>
+                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                  2. 신청 내용 준비
+                </p>
+                <p className="mt-1 font-semibold text-foreground">
+                  곡명, 아티스트명, 발매일, 적격 방송국을 함께 적습니다.
+                </p>
+              </div>
+              <div className={`${detailSubPanelClass} bg-white/80 p-3 dark:bg-white/5`}>
+                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                  3. 게시판 등록
+                </p>
+                <p className="mt-1 font-semibold text-foreground">
+                  신청곡 또는 청취자 게시판에 남기고 반영 여부를 확인합니다.
+                </p>
+              </div>
+            </div>
             <ul className="mt-4 space-y-2">
-              {radioLinksModal.links.map((link) => (
-                <li key={link.url}>
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`${detailSubPanelClass} flex items-center justify-between px-4 py-3 text-sm font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-foreground`}
-                  >
-                    <span>{link.name}</span>
-                    <span className="text-sm text-muted-foreground">새 창에서 열기 ↗</span>
-                  </a>
-                </li>
-              ))}
+              {radioLinksModal.links.map((link) => {
+                const guide = getRadioLinkGuide(link);
+                return (
+                  <li key={link.url}>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`${detailSubPanelClass} flex flex-col gap-2 px-4 py-3 text-sm text-foreground transition hover:-translate-y-0.5 hover:border-foreground sm:flex-row sm:items-center sm:justify-between`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block font-black">{link.name}</span>
+                        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                          {guide.detail}
+                        </span>
+                      </span>
+                      <span className="inline-flex shrink-0 items-center justify-center rounded-[6px] border border-border bg-muted px-2.5 py-1 text-[11px] font-black text-foreground">
+                        {guide.tag} ↗
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
             </ul>
             <div className="mt-5 flex justify-end">
               <button

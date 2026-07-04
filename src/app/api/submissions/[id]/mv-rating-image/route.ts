@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { createAttachmentResponseFromUrl } from "@/lib/download-response";
-import { getRatingObjectKey, isRatingCode, type RatingCode } from "@/lib/mv-assets";
-import { presignGetUrl } from "@/lib/b2";
+import { isRatingCode, resolveRatingImageUrl, type RatingCode } from "@/lib/mv-assets";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getBaseUrl } from "@/lib/url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ const ratingFilenames: Record<RatingCode, string> = {
   ALL: "onside-mv-rating-all.png",
   "12": "onside-mv-rating-12.png",
   "15": "onside-mv-rating-15.png",
-  "18": "onside-mv-rating-18.png",
+  "18": "onside-mv-rating-19.png",
   "19": "onside-mv-rating-19.png",
   REJECT: "onside-mv-rating-reject.png",
 };
@@ -67,16 +68,15 @@ export async function GET(
   if (!isRatingCode(rating)) {
     return NextResponse.json({ error: "등급이 설정되지 않았습니다." }, { status: 404 });
   }
-  const objectKey = getRatingObjectKey(rating);
-  if (!objectKey) {
-    return NextResponse.json({ error: "등급 이미지를 찾을 수 없습니다." }, { status: 404 });
-  }
   try {
-    const urlSigned = /^https?:\/\//i.test(objectKey)
-      ? objectKey
-      : await presignGetUrl(objectKey, 60 * 10);
+    const admin = createAdminClient();
+    const ratingAsset = await resolveRatingImageUrl({
+      rating,
+      db: admin,
+      baseUrl: getBaseUrl(req),
+    });
     return await createAttachmentResponseFromUrl({
-      url: urlSigned,
+      url: ratingAsset.url,
       filename: ratingFilenames[rating],
       fallbackContentType: "image/png",
     });

@@ -3103,778 +3103,778 @@ export function AlbumWizard({
           ) : (
             <>
 
-          <div className="rounded-[28px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]">
-            <p className="text-xs font-black uppercase tracking-[0.22em]">
-              빠른 접수 순서
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-4">
-              {albumQuickSteps.map((item, index) => (
-                <div
-                  key={item}
-                  className="rounded-xl border border-[#111111]/30 bg-white/45 px-3 py-2 text-sm font-black"
-                >
-                  <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-[5px] bg-[#111111] text-[11px] text-white">
-                    {index + 1}
-                  </span>
-                  {item}
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-xs font-semibold leading-5">
-              헷갈리면 필수 항목만 먼저 입력하고 다음 단계로 이동하세요. 파일이 크거나 업로드가 불안정하면 파일 없이 먼저 진행하거나 예전 온사이드 사이트에서 접수할 수 있습니다.
-            </p>
-          </div>
-
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              기본 정보
-            </p>
-            {!isOneClick ? (
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    앨범 제목 *
-                  </label>
-                  <input
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    아티스트명 공식 표기 *
-                  </label>
-                  <input
-                    value={artistName}
-                    onChange={(event) => setArtistName(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    아티스트 한글명 *
-                  </label>
-                  <input
-                    value={artistNameKr}
-                    onChange={(event) => setArtistNameKr(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    아티스트 영문명 *
-                  </label>
-                  <input
-                    value={artistNameEn}
-                    onChange={(event) => setArtistNameEn(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    발매일 *
-                  </label>
-                  <input
-                    type="date"
-                    value={releaseDate}
-                    onChange={(event) => setReleaseDate(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    장르 *
-                  </label>
-                  <select
-                    value={genreSelection}
-                    onChange={(event) => setGenreSelection(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  >
-                    <option value="">장르 선택</option>
-                    {genreOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {genreSelection === "기타" && (
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      기타 장르 입력 *
-                    </label>
-                    <input
-                      value={genreCustom}
-                      onChange={(event) => setGenreCustom(event.target.value)}
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                    />
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    유통사 *
-                  </label>
-                  <input
-                    value={distributor}
-                    onChange={(event) => setDistributor(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    제작사 *
-                  </label>
-                  <input
-                    value={productionCompany}
-                    onChange={(event) => setProductionCompany(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    이전 발매곡 *
-                  </label>
-                  <textarea
-                    value={previousRelease}
-                    onChange={(event) => setPreviousRelease(event.target.value)}
-                    placeholder="가장 최근 발매한 1곡을 적어주세요. 신인인 경우 신인이라고 표기해주세요."
-                    className="h-20 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    그룹/솔로 *
-                  </label>
-                  <select
-                    value={artistType}
-                    onChange={(event) => setArtistType(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  >
-                    <option value="">선택</option>
-                    <option value="GROUP">그룹</option>
-                    <option value="SOLO">솔로</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    성별 *
-                  </label>
-                  <select
-                    value={artistGender}
-                    onChange={(event) => setArtistGender(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  >
-                    {genderOptions.map((option) => (
-                      <option key={option.value || "empty"} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {artistType === "GROUP" && (
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      팀원 전체 이름 *
-                    </label>
-                    <input
-                      value={artistMembers}
-                      onChange={(event) => setArtistMembers(event.target.value)}
-                      placeholder="그룹인 경우 팀원 전체의 이름을 적어주세요."
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="mt-4 space-y-4">
-                <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em]">
-                    원클릭 접수 안내
-                  </p>
-                  <p className="mt-2 text-xs">
-                    이미 발매된 음원에 한정된 서비스입니다. 멜론 링크, 접수자 정보,
-                    음원 파일만 제출하면 접수가 완료됩니다.
-                  </p>
-                </div>
-                <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      멜론 링크 *
-                    </label>
-                    <input
-                      value={melonUrl}
-                      onChange={(event) => setMelonUrl(event.target.value)}
-                      placeholder="https://www.melon.com/..."
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="mt-6">
-              <AiUsageSelector
-                value={aiUsed}
-                onChange={(nextValue) => {
-                  setAiUsed(nextValue);
-                  setNotice({});
-                }}
-                context="album"
-              />
-            </div>
-
-            <div className="mt-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                접수자 정보
-              </p>
-              {isGuest && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  이름과 이메일은 심의 조회시에 사용됩니다.
+              <div className="rounded-[28px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]">
+                <p className="text-xs font-black uppercase tracking-[0.22em]">
+                  빠른 접수 순서
                 </p>
-              )}
-              <div className="mt-3 grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    접수자 *
-                  </label>
-                  <input
-                    value={applicantName}
-                    onChange={(event) => setApplicantName(event.target.value)}
-                    required
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
+                <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                  {albumQuickSteps.map((item, index) => (
+                    <div
+                      key={item}
+                      className="rounded-xl border border-[#111111]/30 bg-white/45 px-3 py-2 text-sm font-black"
+                    >
+                      <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-[5px] bg-[#111111] text-[11px] text-white">
+                        {index + 1}
+                      </span>
+                      {item}
+                    </div>
+                  ))}
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    이메일 *
-                  </label>
-                  <input
-                    type="email"
-                    value={applicantEmail}
-                    onChange={(event) => setApplicantEmail(event.target.value)}
-                    required
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    연락처 *
-                  </label>
-                  <input
-                    value={applicantPhone}
-                    onChange={(event) => setApplicantPhone(event.target.value)}
-                    required
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
+                <p className="mt-3 text-xs font-semibold leading-5">
+                  헷갈리면 필수 항목만 먼저 입력하고 다음 단계로 이동하세요. 파일이 크거나 업로드가 불안정하면 파일 없이 먼저 진행하거나 예전 온사이드 사이트에서 접수할 수 있습니다.
+                </p>
               </div>
-            </div>
-          </div>
 
-          {!isOneClick && (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-              <div className="flex items-center justify-between">
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  트랙 정보
+                  기본 정보
                 </p>
-                <span className="text-xs text-muted-foreground">
-                  총 {tracks.length}곡
-                </span>
-              </div>
-              <div className="mt-5 grid gap-6 md:grid-cols-[200px_1fr]">
-                <div className="space-y-2">
-                  {tracks.map((track, index) => {
-                    const active = index === activeTrackIndex;
-                    return (
-                      <button
-                        key={`track-tab-${index}`}
-                        type="button"
-                        onClick={() => setActiveTrackIndex(index)}
-                        className={`w-full rounded-2xl border px-3 py-3 text-left transition ${active
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border/60 bg-background text-foreground hover:border-foreground"
-                          }`}
-                      >
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em]">
-                          Track {String(index + 1).padStart(2, "0")}
-                        </p>
-                        <p className="mt-1 text-xs opacity-80">
-                          {getTrackDisplayTitle(track)}
-                        </p>
-                        <div
-                          className={`mt-2 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] ${active ? "text-background" : ""
-                            }`}
-                        >
-                          {track.isTitle && (
-                            <span
-                              className={`rounded-full border px-2 py-1 ${track.titleRole === "MAIN"
-                                ? active
-                                  ? "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm"
-                                  : "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black"
-                                : active
-                                  ? "border-background/80 bg-background text-foreground shadow-sm"
-                                  : "border-border/60 bg-background/80 text-foreground/80"
-                                }`}
-                            >
-                              {track.titleRole === "MAIN"
-                                ? "메인 타이틀"
-                                : "서브 타이틀"}
-                            </span>
-                          )}
-                          {track.broadcastSelected && (
-                            <span
-                              className={`rounded-full border px-2 py-1 ${active
-                                ? "border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm"
-                                : "border-emerald-300 text-emerald-600 dark:text-emerald-200"
-                                }`}
-                            >
-                              원음방송
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    onClick={addTrack}
-                    className="w-full rounded-2xl border border-dashed border-border/70 px-3 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
-                  >
-                    + 트랙 추가
-                  </button>
-                </div>
-
-                <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-foreground">
-                      트랙 {activeTrackIndex + 1}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={activeTrack.isTitle}
-                          onChange={() => toggleTitleTrack(activeTrackIndex)}
-                          className="h-4 w-4 rounded border-border accent-[#f6d64a]"
-                        />
-                        타이틀
+                {!isOneClick ? (
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        앨범 제목 *
                       </label>
-                      {activeTrack.isTitle && (
-                        <label className="flex items-center gap-2 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-[13px] font-semibold text-black shadow-sm transition dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
-                          <input
-                            type="radio"
-                            checked={activeTrack.titleRole === "MAIN"}
-                            onChange={() => setMainTitleTrack(activeTrackIndex)}
-                            className="h-4 w-4 rounded-full border border-black/60 bg-white accent-black shadow-sm"
-                          />
-                          메인 타이틀
+                      <input
+                        value={title}
+                        onChange={(event) => setTitle(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        아티스트명 공식 표기 *
+                      </label>
+                      <input
+                        value={artistName}
+                        onChange={(event) => setArtistName(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        아티스트 한글명 *
+                      </label>
+                      <input
+                        value={artistNameKr}
+                        onChange={(event) => setArtistNameKr(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        아티스트 영문명 *
+                      </label>
+                      <input
+                        value={artistNameEn}
+                        onChange={(event) => setArtistNameEn(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        발매일 *
+                      </label>
+                      <input
+                        type="date"
+                        value={releaseDate}
+                        onChange={(event) => setReleaseDate(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        장르 *
+                      </label>
+                      <select
+                        value={genreSelection}
+                        onChange={(event) => setGenreSelection(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      >
+                        <option value="">장르 선택</option>
+                        {genreOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {genreSelection === "기타" && (
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          기타 장르 입력 *
                         </label>
-                      )}
-                      {requiresBroadcastSelection && (
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={activeTrack.broadcastSelected}
-                            onChange={() =>
-                              toggleBroadcastTrack(activeTrackIndex)
-                            }
-                            className="h-4 w-4 rounded border-border"
-                          />
-                          원음방송 심의곡
+                        <input
+                          value={genreCustom}
+                          onChange={(event) => setGenreCustom(event.target.value)}
+                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        유통사 *
+                      </label>
+                      <input
+                        value={distributor}
+                        onChange={(event) => setDistributor(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        제작사 *
+                      </label>
+                      <input
+                        value={productionCompany}
+                        onChange={(event) => setProductionCompany(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        이전 발매곡 *
+                      </label>
+                      <textarea
+                        value={previousRelease}
+                        onChange={(event) => setPreviousRelease(event.target.value)}
+                        placeholder="가장 최근 발매한 1곡을 적어주세요. 신인인 경우 신인이라고 표기해주세요."
+                        className="h-20 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        그룹/솔로 *
+                      </label>
+                      <select
+                        value={artistType}
+                        onChange={(event) => setArtistType(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      >
+                        <option value="">선택</option>
+                        <option value="GROUP">그룹</option>
+                        <option value="SOLO">솔로</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        성별 *
+                      </label>
+                      <select
+                        value={artistGender}
+                        onChange={(event) => setArtistGender(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      >
+                        {genderOptions.map((option) => (
+                          <option key={option.value || "empty"} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {artistType === "GROUP" && (
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          팀원 전체 이름 *
                         </label>
-                      )}
-                      {tracks.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeTrack(activeTrackIndex)}
-                          className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 dark:border-rose-500/70 dark:bg-rose-500/15 dark:text-rose-200 dark:hover:border-rose-400 dark:hover:bg-rose-500/25 dark:hover:text-rose-100"
-                        >
-                          트랙 삭제
-                        </button>
-                      )}
+                        <input
+                          value={artistMembers}
+                          onChange={(event) => setArtistMembers(event.target.value)}
+                          placeholder="그룹인 경우 팀원 전체의 이름을 적어주세요."
+                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em]">
+                        원클릭 접수 안내
+                      </p>
+                      <p className="mt-2 text-xs">
+                        이미 발매된 음원에 한정된 서비스입니다. 멜론 링크, 접수자 정보,
+                        음원 파일만 제출하면 접수가 완료됩니다.
+                      </p>
+                    </div>
+                    <div className="grid gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          멜론 링크 *
+                        </label>
+                        <input
+                          value={melonUrl}
+                          onChange={(event) => setMelonUrl(event.target.value)}
+                          placeholder="https://www.melon.com/..."
+                          className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        />
+                      </div>
                     </div>
                   </div>
-                  {requiresBroadcastSelection && (
-                    <div className="mt-3 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-3 py-2 text-xs text-black dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
-                      {broadcastRequirementMessage} (선택 {broadcastCount}/3)
-                    </div>
+                )}
+
+                <div className="mt-6">
+                  <AiUsageSelector
+                    value={aiUsed}
+                    onChange={(nextValue) => {
+                      setAiUsed(nextValue);
+                      setNotice({});
+                    }}
+                    context="album"
+                  />
+                </div>
+
+                <div className="mt-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                    접수자 정보
+                  </p>
+                  {isGuest && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      이름과 이메일은 심의 조회시에 사용됩니다.
+                    </p>
                   )}
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2 md:col-span-2">
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
                       <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        곡명 *
+                        접수자 *
                       </label>
                       <input
-                        value={activeTrack.trackTitle}
-                        onChange={(event) =>
-                          updateTrack(
-                            activeTrackIndex,
-                            "trackTitle",
-                            event.target.value,
-                          )
-                        }
+                        value={applicantName}
+                        onChange={(event) => setApplicantName(event.target.value)}
+                        required
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        피처링
+                        이메일 *
                       </label>
                       <input
-                        value={activeTrack.featuring}
-                        placeholder="피처링이 있는 경우 피처링 아티스트"
-                        onChange={(event) =>
-                          updateTrack(
-                            activeTrackIndex,
-                            "featuring",
-                            event.target.value,
-                          )
-                        }
+                        type="email"
+                        value={applicantEmail}
+                        onChange={(event) => setApplicantEmail(event.target.value)}
+                        required
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        작곡 *
+                        연락처 *
                       </label>
                       <input
-                        value={activeTrack.composer}
-                        onChange={(event) =>
-                          updateTrack(
-                            activeTrackIndex,
-                            "composer",
-                            event.target.value,
-                          )
-                        }
+                        value={applicantPhone}
+                        onChange={(event) => setApplicantPhone(event.target.value)}
+                        required
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {!isOneClick && (
+                <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                      트랙 정보
+                    </p>
+                    <span className="text-xs text-muted-foreground">
+                      총 {tracks.length}곡
+                    </span>
+                  </div>
+                  <div className="mt-5 grid gap-6 md:grid-cols-[200px_1fr]">
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        작사
-                      </label>
-                      <input
-                        value={activeTrack.lyricist}
-                        placeholder="연주곡/MR/Inst. 인 경우 비워두세요"
-                        onChange={(event) =>
-                          updateTrack(
-                            activeTrackIndex,
-                            "lyricist",
-                            event.target.value,
-                          )
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        편곡
-                      </label>
-                      <input
-                        value={activeTrack.arranger}
-                        onChange={(event) =>
-                          updateTrack(
-                            activeTrackIndex,
-                            "arranger",
-                            event.target.value,
-                          )
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        가사
-                      </label>
-                      <div className="group/lyrics-tools">
-                        <div className="flex flex-wrap gap-2">
+                      {tracks.map((track, index) => {
+                        const active = index === activeTrackIndex;
+                        return (
                           <button
+                            key={`track-tab-${index}`}
                             type="button"
-                            onClick={handleProfanityCheck}
-                            className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer"
-                          >
-                            욕설 체크
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleTranslateLyrics}
-                            disabled={isTranslatingLyrics}
-                            className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            자동번역 {isTranslatingLyrics ? "중..." : ""}
-                          </button>
-                        </div>
-                        {showLyricsToolNotice && (
-                          <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
-                            위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
-                            체크해주세요.
-                          </div>
-                        )}
-                      </div>
-                      <div className="relative isolate overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
-                        {showProfanityOverlay && (
-                          <div
-                            ref={lyricsOverlayRef}
-                            aria-hidden="true"
-                            className="pointer-events-none absolute inset-0 z-10 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-foreground"
-                          >
-                            <div className="whitespace-pre-wrap">
-                              {renderProfanityPreview(
-                                activeTrack.lyrics,
-                                profanityPattern,
-                                profanityTestPattern,
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        <textarea
-                          ref={lyricsTextareaRef}
-                          value={activeTrack.lyrics}
-                          onChange={(event) =>
-                            updateTrack(
-                              activeTrackIndex,
-                              "lyrics",
-                              event.target.value,
-                            )
-                          }
-                          onScroll={handleLyricsScroll}
-                          className={`relative z-0 min-h-[180px] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${showProfanityOverlay
-                            ? "text-transparent caret-foreground"
-                            : "text-foreground"
-                            }`}
-                        />
-                      </div>
-                      <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={toggleTranslationPanel}
-                            className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] transition ${showTranslatedLyricsPanel
+                            onClick={() => setActiveTrackIndex(index)}
+                            className={`w-full rounded-2xl border px-3 py-3 text-left transition ${active
                               ? "border-foreground bg-foreground text-background"
-                              : "border-border/70 text-muted-foreground hover:border-foreground hover:text-foreground"
+                              : "border-border/60 bg-background text-foreground hover:border-foreground"
                               }`}
                           >
-                            번역본 가사 탭
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em]">
+                              Track {String(index + 1).padStart(2, "0")}
+                            </p>
+                            <p className="mt-1 text-xs opacity-80">
+                              {getTrackDisplayTitle(track)}
+                            </p>
+                            <div
+                              className={`mt-2 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] ${active ? "text-background" : ""
+                                }`}
+                            >
+                              {track.isTitle && (
+                                <span
+                                  className={`rounded-full border px-2 py-1 ${track.titleRole === "MAIN"
+                                    ? active
+                                      ? "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm"
+                                      : "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black"
+                                    : active
+                                      ? "border-background/80 bg-background text-foreground shadow-sm"
+                                      : "border-border/60 bg-background/80 text-foreground/80"
+                                    }`}
+                                >
+                                  {track.titleRole === "MAIN"
+                                    ? "메인 타이틀"
+                                    : "서브 타이틀"}
+                                </span>
+                              )}
+                              {track.broadcastSelected && (
+                                <span
+                                  className={`rounded-full border px-2 py-1 ${active
+                                    ? "border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm"
+                                    : "border-emerald-300 text-emerald-600 dark:text-emerald-200"
+                                    }`}
+                                >
+                                  원음방송
+                                </span>
+                              )}
+                            </div>
                           </button>
-                          <p className="text-[11px] font-semibold text-muted-foreground">
-                            한국어 외 언어가 일부라도 있는 경우 번역본 제출 필수
-                          </p>
-                        </div>
-                        {needsTranslatedLyrics && !activeTrack.translatedLyrics.trim() && (
-                          <p className="mt-2 text-[11px] font-semibold text-red-600">
-                            한국어 외 언어가 포함된 가사는 번역본을 반드시 입력해야
-                            제출할 수 있습니다.
-                          </p>
-                        )}
-                      </div>
-                      {showTranslatedLyricsPanel && (
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                            번역본 가사
-                            {needsTranslatedLyrics ? " *" : ""}
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={addTrack}
+                        className="w-full rounded-2xl border border-dashed border-border/70 px-3 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
+                      >
+                        + 트랙 추가
+                      </button>
+                    </div>
+
+                    <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-foreground">
+                          트랙 {activeTrackIndex + 1}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={activeTrack.isTitle}
+                              onChange={() => toggleTitleTrack(activeTrackIndex)}
+                              className="h-4 w-4 rounded border-border accent-[#f6d64a]"
+                            />
+                            타이틀
                           </label>
-                          <textarea
-                            value={activeTrack.translatedLyrics}
+                          {activeTrack.isTitle && (
+                            <label className="flex items-center gap-2 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-[13px] font-semibold text-black shadow-sm transition dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
+                              <input
+                                type="radio"
+                                checked={activeTrack.titleRole === "MAIN"}
+                                onChange={() => setMainTitleTrack(activeTrackIndex)}
+                                className="h-4 w-4 rounded-full border border-black/60 bg-white accent-black shadow-sm"
+                              />
+                              메인 타이틀
+                            </label>
+                          )}
+                          {requiresBroadcastSelection && (
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={activeTrack.broadcastSelected}
+                                onChange={() =>
+                                  toggleBroadcastTrack(activeTrackIndex)
+                                }
+                                className="h-4 w-4 rounded border-border"
+                              />
+                              원음방송 심의곡
+                            </label>
+                          )}
+                          {tracks.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeTrack(activeTrackIndex)}
+                              className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 dark:border-rose-500/70 dark:bg-rose-500/15 dark:text-rose-200 dark:hover:border-rose-400 dark:hover:bg-rose-500/25 dark:hover:text-rose-100"
+                            >
+                              트랙 삭제
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {requiresBroadcastSelection && (
+                        <div className="mt-3 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-3 py-2 text-xs text-black dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
+                          {broadcastRequirementMessage} (선택 {broadcastCount}/3)
+                        </div>
+                      )}
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2 md:col-span-2">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            곡명 *
+                          </label>
+                          <input
+                            value={activeTrack.trackTitle}
                             onChange={(event) =>
                               updateTrack(
                                 activeTrackIndex,
-                                "translatedLyrics",
+                                "trackTitle",
                                 event.target.value,
                               )
                             }
-                            placeholder="가사 번역본을 입력해주세요."
-                            className="min-h-[140px] w-full resize-y rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm leading-relaxed text-foreground outline-none transition focus:border-foreground"
+                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                           />
                         </div>
-                      )}
-                      {showLyricsTabs && (
-                        <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-foreground">
-                          {showProfanityPanel && (
-                            <div className="mt-3 space-y-2">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                                감지된 단어
-                              </p>
-                              <div className="max-h-32 space-y-2 overflow-auto pr-1">
-                                {profanityHighlightMap[activeTrackIndex] &&
-                                profanityWords.length > 0 ? (
-                                  profanityWords.map((word) => (
-                                    <div
-                                      key={word}
-                                      className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px] font-semibold text-red-600"
-                                    >
-                                      {word}
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="rounded-xl border border-dashed border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
-                                    {profanityHighlightMap[activeTrackIndex]
-                                      ? "회피 패턴이 감지되었습니다."
-                                      : "욕설이 감지되지 않았습니다."}
-                                  </div>
-                                )}
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            피처링
+                          </label>
+                          <input
+                            value={activeTrack.featuring}
+                            placeholder="피처링이 있는 경우 피처링 아티스트"
+                            onChange={(event) =>
+                              updateTrack(
+                                activeTrackIndex,
+                                "featuring",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            작곡 *
+                          </label>
+                          <input
+                            value={activeTrack.composer}
+                            onChange={(event) =>
+                              updateTrack(
+                                activeTrackIndex,
+                                "composer",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            작사
+                          </label>
+                          <input
+                            value={activeTrack.lyricist}
+                            placeholder="연주곡/MR/Inst. 인 경우 비워두세요"
+                            onChange={(event) =>
+                              updateTrack(
+                                activeTrackIndex,
+                                "lyricist",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            편곡
+                          </label>
+                          <input
+                            value={activeTrack.arranger}
+                            onChange={(event) =>
+                              updateTrack(
+                                activeTrackIndex,
+                                "arranger",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            가사
+                          </label>
+                          <div className="group/lyrics-tools">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={handleProfanityCheck}
+                                className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer"
+                              >
+                                욕설 체크
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleTranslateLyrics}
+                                disabled={isTranslatingLyrics}
+                                className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                자동번역 {isTranslatingLyrics ? "중..." : ""}
+                              </button>
+                            </div>
+                            {showLyricsToolNotice && (
+                              <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
+                                위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
+                                체크해주세요.
                               </div>
+                            )}
+                          </div>
+                          <div className="relative isolate overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
+                            {showProfanityOverlay && (
+                              <div
+                                ref={lyricsOverlayRef}
+                                aria-hidden="true"
+                                className="pointer-events-none absolute inset-0 z-10 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-foreground"
+                              >
+                                <div className="whitespace-pre-wrap">
+                                  {renderProfanityPreview(
+                                    activeTrack.lyrics,
+                                    profanityPattern,
+                                    profanityTestPattern,
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            <textarea
+                              ref={lyricsTextareaRef}
+                              value={activeTrack.lyrics}
+                              onChange={(event) =>
+                                updateTrack(
+                                  activeTrackIndex,
+                                  "lyrics",
+                                  event.target.value,
+                                )
+                              }
+                              onScroll={handleLyricsScroll}
+                              className={`relative z-0 min-h-[180px] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${showProfanityOverlay
+                                ? "text-transparent caret-foreground"
+                                : "text-foreground"
+                                }`}
+                            />
+                          </div>
+                          <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={toggleTranslationPanel}
+                                className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] transition ${showTranslatedLyricsPanel
+                                  ? "border-foreground bg-foreground text-background"
+                                  : "border-border/70 text-muted-foreground hover:border-foreground hover:text-foreground"
+                                  }`}
+                              >
+                                번역본 가사 탭
+                              </button>
+                              <p className="text-[11px] font-semibold text-muted-foreground">
+                                한국어 외 언어가 일부라도 있는 경우 번역본 제출 필수
+                              </p>
+                            </div>
+                            {needsTranslatedLyrics && !activeTrack.translatedLyrics.trim() && (
+                              <p className="mt-2 text-[11px] font-semibold text-red-600">
+                                한국어 외 언어가 포함된 가사는 번역본을 반드시 입력해야
+                                제출할 수 있습니다.
+                              </p>
+                            )}
+                          </div>
+                          {showTranslatedLyricsPanel && (
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                                번역본 가사
+                                {needsTranslatedLyrics ? " *" : ""}
+                              </label>
+                              <textarea
+                                value={activeTrack.translatedLyrics}
+                                onChange={(event) =>
+                                  updateTrack(
+                                    activeTrackIndex,
+                                    "translatedLyrics",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="가사 번역본을 입력해주세요."
+                                className="min-h-[140px] w-full resize-y rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm leading-relaxed text-foreground outline-none transition focus:border-foreground"
+                              />
                             </div>
                           )}
+                          {showLyricsTabs && (
+                            <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-foreground">
+                              {showProfanityPanel && (
+                                <div className="mt-3 space-y-2">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                                    감지된 단어
+                                  </p>
+                                  <div className="max-h-32 space-y-2 overflow-auto pr-1">
+                                    {profanityHighlightMap[activeTrackIndex] &&
+                                      profanityWords.length > 0 ? (
+                                      profanityWords.map((word) => (
+                                        <div
+                                          key={word}
+                                          className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px] font-semibold text-red-600"
+                                        >
+                                          {word}
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="rounded-xl border border-dashed border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
+                                        {profanityHighlightMap[activeTrackIndex]
+                                          ? "회피 패턴이 감지되었습니다."
+                                          : "욕설이 감지되지 않았습니다."}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          <div className="group rounded-2xl border border-border/60 bg-background/70 px-3 py-3 text-xs text-muted-foreground transition-all duration-200 group-hover:[&_li]:text-sm group-hover:[&_li]:leading-relaxed group-hover:[&_p]:text-xs">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                              유의사항
+                            </p>
+                            <ul className="mt-2 space-y-1">
+                              {lyricCautions.map((note) => (
+                                <li key={note} className="list-disc pl-4">
+                                  {note}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         </div>
-                      )}
-                      <div className="group rounded-2xl border border-border/60 bg-background/70 px-3 py-3 text-xs text-muted-foreground transition-all duration-200 group-hover:[&_li]:text-sm group-hover:[&_li]:leading-relaxed group-hover:[&_p]:text-xs">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          유의사항
-                        </p>
-                        <ul className="mt-2 space-y-1">
-                          {lyricCautions.map((note) => (
-                            <li key={note} className="list-disc pl-4">
-                              {note}
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="space-y-2 md:col-span-2">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            특이사항
+                          </label>
+                          <input
+                            value={activeTrack.notes}
+                            onChange={(event) =>
+                              updateTrack(
+                                activeTrackIndex,
+                                "notes",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        특이사항
-                      </label>
-                      <input
-                        value={activeTrack.notes}
-                        onChange={(event) =>
-                          updateTrack(
-                            activeTrackIndex,
-                            "notes",
-                            event.target.value,
-                          )
-                        }
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
+              )}
 
-          {albumDrafts.length > 0 && (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                등록 앨범 목록
-              </p>
-              <div className="mt-3 space-y-2">
-                {albumDrafts.map((draft, index) => (
-                  <div
-                    key={draft.submissionId}
-                    onClick={() => startEditingDraft(index)}
-                    role="button"
-                    tabIndex={0}
-                    className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${editingIndex === index
-                      ? "border-[#f6d64a] bg-[#f6d64a] text-black"
-                      : "border-border/60 bg-background/70 hover:border-foreground"
-                      }`}
-                  >
-                    <div>
-                      <p
-                        className={`text-sm font-semibold ${editingIndex === index ? "text-black" : "text-foreground"
+              {albumDrafts.length > 0 && (
+                <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                    등록 앨범 목록
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {albumDrafts.map((draft, index) => (
+                      <div
+                        key={draft.submissionId}
+                        onClick={() => startEditingDraft(index)}
+                        role="button"
+                        tabIndex={0}
+                        className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${editingIndex === index
+                          ? "border-[#f6d64a] bg-[#f6d64a] text-black"
+                          : "border-border/60 bg-background/70 hover:border-foreground"
                           }`}
                       >
-                        앨범 {index + 1}
-                        {editingIndex === index && (
-                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-black/70">
-                            수정 중
-                          </span>
-                        )}
-                      </p>
-                      <p
-                        className={`text-xs ${editingIndex === index
-                          ? "text-black/80"
-                          : "text-muted-foreground"
-                          }`}
-                      >
-                        {(draft.title.trim() ||
-                          (isOneClick ? "원클릭 접수" : "제목 미입력")) +
-                          " · " +
-                          (draft.artistName.trim() ||
-                            (isOneClick ? "원클릭 접수" : "아티스트 미입력"))}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        removeAlbumDraft(index);
-                      }}
-                      className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
-                    >
-                      삭제
-                    </button>
+                        <div>
+                          <p
+                            className={`text-sm font-semibold ${editingIndex === index ? "text-black" : "text-foreground"
+                              }`}
+                          >
+                            앨범 {index + 1}
+                            {editingIndex === index && (
+                              <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-black/70">
+                                수정 중
+                              </span>
+                            )}
+                          </p>
+                          <p
+                            className={`text-xs ${editingIndex === index
+                              ? "text-black/80"
+                              : "text-muted-foreground"
+                              }`}
+                          >
+                            {(draft.title.trim() ||
+                              (isOneClick ? "원클릭 접수" : "제목 미입력")) +
+                              " · " +
+                              (draft.artistName.trim() ||
+                                (isOneClick ? "원클릭 접수" : "아티스트 미입력"))}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removeAlbumDraft(index);
+                          }}
+                          className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+              )}
+
+              {notice.submissionId && (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
+                  임시 저장이 완료되었습니다.
+                </div>
+              )}
+
+              <div className="flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  disabled={isSaving || isAddingAlbum}
+                  className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+                >
+                  이전 단계
+                </button>
+                {!isGuest && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (editingIndex !== null) {
+                        setNotice({
+                          error: "수정 중인 앨범을 저장한 뒤 진행해주세요.",
+                        });
+                        return;
+                      }
+                      let draftsForSave: AlbumDraft[];
+                      try {
+                        draftsForSave = [captureCurrentDraft(), ...albumDrafts];
+                      } catch (error) {
+                        setNotice({
+                          error:
+                            draftError ||
+                            (error instanceof Error
+                              ? error.message
+                              : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
+                        });
+                        void createDraft();
+                        return;
+                      }
+                      await saveAlbumDrafts(draftsForSave, { includeFiles: false });
+                    }}
+                    disabled={isSaving || isAddingAlbum}
+                    className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+                  >
+                    임시 저장
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleAddAlbum}
+                  disabled={isSaving || isAddingAlbum}
+                  className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+                >
+                  {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 등록"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStep2Next}
+                  disabled={isSaving || isAddingAlbum || editingIndex !== null}
+                  className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
+                >
+                  다음 단계
+                </button>
               </div>
-            </div>
-          )}
-
-          {notice.submissionId && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
-              임시 저장이 완료되었습니다.
-            </div>
-          )}
-
-          <div className="flex flex-wrap justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              disabled={isSaving || isAddingAlbum}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
-            >
-              이전 단계
-            </button>
-            {!isGuest && (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (editingIndex !== null) {
-                    setNotice({
-                      error: "수정 중인 앨범을 저장한 뒤 진행해주세요.",
-                    });
-                    return;
-                  }
-                  let draftsForSave: AlbumDraft[];
-                  try {
-                    draftsForSave = [captureCurrentDraft(), ...albumDrafts];
-                  } catch (error) {
-                    setNotice({
-                      error:
-                        draftError ||
-                        (error instanceof Error
-                          ? error.message
-                          : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
-                    });
-                    void createDraft();
-                    return;
-                  }
-                  await saveAlbumDrafts(draftsForSave, { includeFiles: false });
-                }}
-                disabled={isSaving || isAddingAlbum}
-                className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
-              >
-                임시 저장
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleAddAlbum}
-              disabled={isSaving || isAddingAlbum}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
-            >
-              {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 등록"}
-            </button>
-            <button
-              type="button"
-              onClick={handleStep2Next}
-              disabled={isSaving || isAddingAlbum || editingIndex !== null}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
-            >
-              다음 단계
-            </button>
-          </div>
             </>
           )}
         </div>
@@ -4187,11 +4187,11 @@ export function AlbumWizard({
               ) : null}
               <p className="text-xs text-muted-foreground">
                 CD 제작 등 실물 앨범을 발표한 경우{" "}
-	                <button
-	                  type="button"
-	                  onClick={() => setShowCdInfo(true)}
-	                  className="font-semibold text-primary transition hover:text-primary/80"
-	                >
+                <button
+                  type="button"
+                  onClick={() => setShowCdInfo(true)}
+                  className="font-semibold text-primary transition hover:text-primary/80"
+                >
                   자세히 보기 →
                 </button>
               </p>
@@ -4649,35 +4649,35 @@ export function AlbumWizard({
                     )}
                   </div>
                 )}
-	                {paymentDocumentType === "TAX_INVOICE" && (
-	                  <div className="mt-4 space-y-2">
-	                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-	                      사업자번호
-	                    </label>
-	                    <input
-	                      value={taxInvoiceBusinessNumber}
-	                      onChange={(event) =>
-	                        setTaxInvoiceBusinessNumber(event.target.value)
-	                      }
-	                      placeholder="사업자번호 10자리를 입력해주세요."
-	                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-	                    />
-	                    <p className="text-[11px] leading-5 text-muted-foreground">
-	                      사업자등록증 파일은 음원 파일과 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
-	                    </p>
-	                  </div>
-	                )}
-	              </div>
-	            </div>
-	          )}
+                {paymentDocumentType === "TAX_INVOICE" && (
+                  <div className="mt-4 space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      사업자번호
+                    </label>
+                    <input
+                      value={taxInvoiceBusinessNumber}
+                      onChange={(event) =>
+                        setTaxInvoiceBusinessNumber(event.target.value)
+                      }
+                      placeholder="사업자번호 10자리를 입력해주세요."
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                    <p className="text-[11px] leading-5 text-muted-foreground">
+                      사업자등록증 파일은 음원 파일과 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
-	          {paymentMethod === "CARD" && (
-	            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
-	              카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
-	            </div>
-	          )}
+          {paymentMethod === "CARD" && (
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
+              카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
+            </div>
+          )}
 
-	          <div className="flex flex-wrap justify-end gap-3">
+          <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
               onClick={() => setStep(3)}
@@ -4734,10 +4734,10 @@ export function AlbumWizard({
               </div>
             </div>
           </div>
-	          {notice.emailNotice ? (
-	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
-	              {notice.emailNotice}
-	            </div>
+          {notice.emailNotice ? (
+            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+              {notice.emailNotice}
+            </div>
           ) : null}
           {completionId && !shouldShowGuestLookup && (
             <button
