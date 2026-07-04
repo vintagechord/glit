@@ -175,7 +175,7 @@ export function MagazineRequestForm({
                     onClick={() => setTargetChannel(option.value)}
                     className={`min-h-[94px] rounded-[8px] border-2 p-4 text-left transition ${
                       selected
-                        ? "border-[#111111] bg-[#d9362c] text-white shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[4px_4px_0_#f2cf27]"
+                        ? "border-[#111111] bg-[#1556a4] text-white shadow-[4px_4px_0_#111111] dark:border-[#8bc3ff] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[4px_4px_0_#8bc3ff]"
                         : "border-border bg-background text-foreground hover:border-[#1556a4]"
                     }`}
                   >
