@@ -34,7 +34,7 @@ const getTableSummaries = (xml: string) =>
     };
   });
 
-test("review docs zip uses docx-only files and example-like review form tables", async () => {
+test("admin selected submission review docs zip uses example-like docx packaging and tables", async () => {
   const decomposedTitle = "별고양이".normalize("NFD");
   const decomposedLyric = "바람결에 나부끼는 저 햇살은".normalize("NFD");
   const zipBuffer = await buildReviewDocsZip([
@@ -84,6 +84,16 @@ test("review docs zip uses docx-only files and example-like review form tables",
   assert.ok(fileNames.length > 0);
   assert.ok(fileNames.every((name) => name.endsWith(".docx")));
   assert.ok(fileNames.every((name) => !name.endsWith(".hwp")));
+  fileNames.forEach((name) => {
+    const buffer = outerZip.file(name)?.asNodeBuffer() ?? Buffer.alloc(0);
+    const docx = new PizZip(buffer);
+    assert.ok(docx.file("word/settings.xml"), `${name} includes word/settings.xml`);
+    assert.ok(docx.file("word/fontTable.xml"), `${name} includes word/fontTable.xml`);
+    assert.ok(docx.file("word/theme/theme1.xml"), `${name} includes word/theme/theme1.xml`);
+    const xml = getDocXml(buffer);
+    assert.match(xml, /맑은 고딕/, `${name} uses fixed Korean font`);
+    assert.doesNotMatch(xml, /Malgun Gothic/, `${name} does not mix font names`);
+  });
 
   const reviewFormName = fileNames.find((name) => name.includes("/심의폼_"));
   const albumInfoName = fileNames.find((name) => name.includes("/앨범정보_"));
@@ -94,13 +104,27 @@ test("review docs zip uses docx-only files and example-like review form tables",
   assert.ok(albumInfoName);
   assert.ok(songReviewRequestName);
 
-  const reviewFormXml = getDocXml(outerZip.file(reviewFormName)?.asNodeBuffer() ?? Buffer.alloc(0));
+  const reviewFormBuffer =
+    outerZip.file(reviewFormName)?.asNodeBuffer() ?? Buffer.alloc(0);
+  const reviewFormDocx = new PizZip(reviewFormBuffer);
+  const reviewFormXml = getDocXml(reviewFormBuffer);
   const albumInfoXml = getDocXml(outerZip.file(albumInfoName)?.asNodeBuffer() ?? Buffer.alloc(0));
   const songReviewRequestXml = getDocXml(
     outerZip.file(songReviewRequestName)?.asNodeBuffer() ?? Buffer.alloc(0),
   );
   const tables = getTableSummaries(reviewFormXml);
   const requestTables = getTableSummaries(songReviewRequestXml);
+
+  assert.ok(reviewFormDocx.file("word/settings.xml"));
+  assert.ok(reviewFormDocx.file("word/fontTable.xml"));
+  assert.ok(reviewFormDocx.file("word/theme/theme1.xml"));
+  assert.ok(reviewFormDocx.file("word/_rels/document.xml.rels"));
+  assert.match(
+    reviewFormDocx.file("word/settings.xml")?.asText() ?? "",
+    /characterSpacingControl[^>]*doNotCompress/,
+  );
+  assert.match(reviewFormDocx.file("word/fontTable.xml")?.asText() ?? "", /맑은 고딕/);
+  assert.match(reviewFormDocx.file("word/theme/theme1.xml")?.asText() ?? "", /script="Hang" typeface="맑은 고딕"/);
 
   assert.equal(tables.length, 4);
   assert.deepEqual(tables[0], {
@@ -146,6 +170,8 @@ test("review docs zip uses docx-only files and example-like review form tables",
 
   assert.match(reviewFormXml, /vintagechord@daum\.net/);
   assert.match(reviewFormXml, /빈티지코드/);
+  assert.match(reviewFormXml, /맑은 고딕/);
+  assert.doesNotMatch(reviewFormXml, /Malgun Gothic/);
   assert.match(reviewFormXml, /별고양이/);
   assert.match(reviewFormXml, /바람결에 나부끼는 저 햇살은/);
   assert.doesNotMatch(reviewFormXml, /별고양이/);

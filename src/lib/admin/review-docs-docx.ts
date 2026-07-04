@@ -49,6 +49,8 @@ type DocOptions = {
   };
 };
 
+const DOC_FONT = "맑은 고딕";
+
 const normalizeDocText = (value: DocText) =>
   String(value ?? "").normalize("NFC");
 
@@ -113,7 +115,7 @@ const cleanLines = (value: DocText | DocText[]) => {
 
 const run = (text: DocText, options?: ParagraphOptions) => {
   const size = options?.size ?? 11;
-  return `<w:r><w:rPr><w:rFonts w:ascii="Malgun Gothic" w:hAnsi="Malgun Gothic" w:eastAsia="맑은 고딕"/><w:sz w:val="${size * 2}"/><w:szCs w:val="${size * 2}"/>${options?.bold ? "<w:b/><w:bCs/>" : ""}</w:rPr><w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r>`;
+  return `<w:r><w:rPr><w:rFonts w:ascii="${DOC_FONT}" w:hAnsi="${DOC_FONT}" w:eastAsia="${DOC_FONT}" w:cs="${DOC_FONT}"/><w:sz w:val="${size * 2}"/><w:szCs w:val="${size * 2}"/><w:lang w:val="en-US" w:eastAsia="ko-KR"/>${options?.bold ? "<w:b/><w:bCs/>" : ""}</w:rPr><w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r>`;
 };
 
 const paragraph = (text: DocText, options?: ParagraphOptions) => {
@@ -235,7 +237,7 @@ const table = (rows: TableCell[][], options?: TableOptions) => {
   const grid = `<w:tblGrid>${columns
     .map((col) => `<w:gridCol w:w="${col}"/>`)
     .join("")}</w:tblGrid>`;
-  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/>${align}${fixedLayout}<w:tblBorders><w:top w:val="single" w:sz="${borderSize}"/><w:left w:val="single" w:sz="${borderSize}"/><w:bottom w:val="single" w:sz="${borderSize}"/><w:right w:val="single" w:sz="${borderSize}"/><w:insideH w:val="single" w:sz="${borderSize}"/><w:insideV w:val="single" w:sz="${borderSize}"/></w:tblBorders>${cellMar}</w:tblPr>${grid}${rows
+  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/>${align}${fixedLayout}<w:tblBorders><w:top w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/></w:tblBorders>${cellMar}</w:tblPr>${grid}${rows
     .map((cells, index) =>
       row(cells, columns, options?.rowHeights?.[index], options?.allowRowSplit),
     )
@@ -254,41 +256,192 @@ const documentXml = (body: string[], options?: DocOptions) => {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     ${body.join("\n")}
-    <w:sectPr>${pageSize}${pageMargin}</w:sectPr>
+    <w:sectPr>${pageSize}${pageMargin}<w:cols w:space="425"/><w:docGrid w:linePitch="360"/></w:sectPr>
   </w:body>
 </w:document>`;
 };
 
-const makeDocx = (body: string[], options?: DocOptions) => {
-  const zip = new PizZip();
-  zip.file(
-    "[Content_Types].xml",
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-</Types>`,
-  );
-  zip.folder("_rels").file(
-    ".rels",
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+  <Override PartName="/word/webSettings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml"/>
+  <Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/>
+  <Override PartName="/word/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`;
+
+const rootRelationshipsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>`,
-  );
-  zip.folder("word").file("document.xml", documentXml(body, options));
-  zip.folder("word").file(
-    "styles.xml",
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`;
+
+const documentRelationshipsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings" Target="webSettings.xml"/>
+  <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/>
+  <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
+</Relationships>`;
+
+const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault>
+      <w:rPr>
+        <w:rFonts w:ascii="${DOC_FONT}" w:hAnsi="${DOC_FONT}" w:eastAsia="${DOC_FONT}" w:cs="${DOC_FONT}"/>
+        <w:kern w:val="2"/>
+        <w:sz w:val="22"/>
+        <w:szCs w:val="22"/>
+        <w:lang w:val="en-US" w:eastAsia="ko-KR"/>
+      </w:rPr>
+    </w:rPrDefault>
+    <w:pPrDefault>
+      <w:pPr>
+        <w:spacing w:after="160" w:line="259" w:lineRule="auto"/>
+        <w:jc w:val="both"/>
+      </w:pPr>
+    </w:pPrDefault>
+  </w:docDefaults>
   <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
     <w:name w:val="Normal"/>
-    <w:rPr><w:rFonts w:ascii="Malgun Gothic" w:hAnsi="Malgun Gothic" w:eastAsia="맑은 고딕"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>
+    <w:qFormat/>
+    <w:rPr>
+      <w:rFonts w:ascii="${DOC_FONT}" w:hAnsi="${DOC_FONT}" w:eastAsia="${DOC_FONT}" w:cs="${DOC_FONT}"/>
+      <w:sz w:val="22"/>
+      <w:szCs w:val="22"/>
+      <w:lang w:val="en-US" w:eastAsia="ko-KR"/>
+    </w:rPr>
   </w:style>
-</w:styles>`,
-  );
+  <w:style w:type="table" w:default="1" w:styleId="TableNormal">
+    <w:name w:val="Normal Table"/>
+    <w:uiPriority w:val="99"/>
+    <w:semiHidden/>
+    <w:unhideWhenUsed/>
+    <w:tblPr>
+      <w:tblInd w:w="0" w:type="dxa"/>
+      <w:tblCellMar>
+        <w:top w:w="0" w:type="dxa"/>
+        <w:left w:w="108" w:type="dxa"/>
+        <w:bottom w:w="0" w:type="dxa"/>
+        <w:right w:w="108" w:type="dxa"/>
+      </w:tblCellMar>
+    </w:tblPr>
+  </w:style>
+</w:styles>`;
+
+const settingsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:zoom w:percent="100"/>
+  <w:proofState w:spelling="clean" w:grammar="clean"/>
+  <w:defaultTabStop w:val="800"/>
+  <w:characterSpacingControl w:val="doNotCompress"/>
+  <w:compat>
+    <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
+    <w:compatSetting w:name="overrideTableStyleFontSizeAndJustification" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
+    <w:compatSetting w:name="enableOpenTypeFeatures" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
+    <w:compatSetting w:name="differentiateMultirowTableHeaders" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
+  </w:compat>
+  <w:themeFontLang w:val="en-US" w:eastAsia="ko-KR"/>
+</w:settings>`;
+
+const webSettingsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:webSettings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:optimizeForBrowser/>
+</w:webSettings>`;
+
+const fontTableXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:font w:name="${DOC_FONT}">
+    <w:panose1 w:val="020B0503020000020004"/>
+    <w:charset w:val="81"/>
+    <w:family w:val="swiss"/>
+    <w:pitch w:val="variable"/>
+  </w:font>
+  <w:font w:name="Times New Roman">
+    <w:panose1 w:val="02020603050405020304"/>
+    <w:charset w:val="00"/>
+    <w:family w:val="roman"/>
+    <w:pitch w:val="variable"/>
+  </w:font>
+</w:fonts>`;
+
+const themeXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">
+  <a:themeElements>
+    <a:clrScheme name="Office">
+      <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
+      <a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+      <a:dk2><a:srgbClr val="1F1F1F"/></a:dk2>
+      <a:lt2><a:srgbClr val="F2F2F2"/></a:lt2>
+      <a:accent1><a:srgbClr val="1565C0"/></a:accent1>
+      <a:accent2><a:srgbClr val="F2CF27"/></a:accent2>
+      <a:accent3><a:srgbClr val="1F8A5B"/></a:accent3>
+      <a:accent4><a:srgbClr val="E53935"/></a:accent4>
+      <a:accent5><a:srgbClr val="7E57C2"/></a:accent5>
+      <a:accent6><a:srgbClr val="00897B"/></a:accent6>
+      <a:hlink><a:srgbClr val="0000FF"/></a:hlink>
+      <a:folHlink><a:srgbClr val="800080"/></a:folHlink>
+    </a:clrScheme>
+    <a:fontScheme name="Office">
+      <a:majorFont>
+        <a:latin typeface="${DOC_FONT}"/>
+        <a:ea typeface="${DOC_FONT}"/>
+        <a:cs typeface="${DOC_FONT}"/>
+        <a:font script="Hang" typeface="${DOC_FONT}"/>
+      </a:majorFont>
+      <a:minorFont>
+        <a:latin typeface="${DOC_FONT}"/>
+        <a:ea typeface="${DOC_FONT}"/>
+        <a:cs typeface="${DOC_FONT}"/>
+        <a:font script="Hang" typeface="${DOC_FONT}"/>
+      </a:minorFont>
+    </a:fontScheme>
+    <a:fmtScheme name="Office">
+      <a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst>
+      <a:lnStyleLst><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln></a:lnStyleLst>
+      <a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst>
+      <a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst>
+    </a:fmtScheme>
+  </a:themeElements>
+</a:theme>`;
+
+const corePropertiesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:creator>ONSIDE</dc:creator>
+  <cp:lastModifiedBy>ONSIDE</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">2026-07-04T00:00:00Z</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">2026-07-04T00:00:00Z</dcterms:modified>
+</cp:coreProperties>`;
+
+const appPropertiesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>ONSIDE</Application>
+  <DocSecurity>0</DocSecurity>
+  <ScaleCrop>false</ScaleCrop>
+</Properties>`;
+
+const makeDocx = (body: string[], options?: DocOptions) => {
+  const zip = new PizZip();
+  zip.file("[Content_Types].xml", contentTypesXml);
+  zip.folder("_rels").file(".rels", rootRelationshipsXml);
+  zip.folder("docProps").file("core.xml", corePropertiesXml);
+  zip.folder("docProps").file("app.xml", appPropertiesXml);
+  const word = zip.folder("word");
+  word.file("document.xml", documentXml(body, options));
+  word.folder("_rels").file("document.xml.rels", documentRelationshipsXml);
+  word.file("styles.xml", stylesXml);
+  word.file("settings.xml", settingsXml);
+  word.file("webSettings.xml", webSettingsXml);
+  word.file("fontTable.xml", fontTableXml);
+  word.folder("theme").file("theme1.xml", themeXml);
   return zip.generate({ type: "nodebuffer", compression: "DEFLATE" });
 };
 
@@ -463,6 +616,7 @@ export function createReviewFormDocx(data: SubmissionDocData, title: string) {
         rowHeights: [1690, 833, 831, 842, 841, 853],
       },
     ),
+    paragraph("", { spacingAfter: 4200 }),
     table(
       [
         [formLabelCell("담당자"), formValueCell(data.contact_name)],
