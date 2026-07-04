@@ -14,7 +14,11 @@ type PaymentRetryClientProps = {
   successHref: string;
   paymentState?: string;
   disabled?: boolean;
+  showDetailLink?: boolean;
 };
+
+const savedDraftNotice =
+  "작성한 신청서는 작성중 신청서에 보관되어 있으니 다시 작성하지 않아도 됩니다.";
 
 const normalizeInicisStatus = (type: string) => {
   const rawStatus = type.replace("INICIS:", "").toUpperCase();
@@ -30,13 +34,13 @@ const getInitialNotice = (paymentState?: string) => {
   if (normalized === "cancel") {
     return {
       type: "error" as const,
-      message: "결제가 취소되었습니다. 다시 결제할 수 있습니다.",
+      message: `결제가 취소되었습니다. 다시 결제할 수 있습니다. ${savedDraftNotice}`,
     };
   }
   if (normalized === "fail" || normalized === "error") {
     return {
       type: "error" as const,
-      message: "결제가 완료되지 않았습니다. 다시 시도해주세요.",
+      message: `결제가 완료되지 않았습니다. 다시 시도해주세요. ${savedDraftNotice}`,
     };
   }
   return null;
@@ -50,6 +54,7 @@ export function PaymentRetryClient({
   successHref,
   paymentState,
   disabled = false,
+  showDetailLink = true,
 }: PaymentRetryClientProps) {
   const router = useRouter();
   const [isOpening, setIsOpening] = React.useState(false);
@@ -89,10 +94,10 @@ export function PaymentRetryClient({
         const paymentState = status.toLowerCase();
         const message =
           typeof payload.message === "string"
-            ? payload.message
+            ? `${payload.message} ${savedDraftNotice}`
             : status === "CANCEL"
-              ? "결제가 취소되었습니다. 접수 내용은 결제 대기 상태로 유지됩니다."
-              : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
+              ? `결제가 취소되었습니다. 접수 내용은 결제 대기 상태로 유지됩니다. ${savedDraftNotice}`
+              : `결제가 완료되지 않았습니다. 다시 시도해주세요. ${savedDraftNotice}`;
         setNotice({ type: "error", message });
         setIsOpening(false);
         window.setTimeout(() => reloadPaymentPage(paymentState), 80);
@@ -146,12 +151,14 @@ export function PaymentRetryClient({
         >
           {isOpening ? "결제 모듈 준비 중" : "카드 결제하기"}
         </button>
-        <Link
-          href={detailHref}
-          className="rounded-[8px] border-2 border-border px-5 py-3 text-xs font-black uppercase tracking-normal text-foreground transition hover:border-foreground"
-        >
-          접수 상세 보기
-        </Link>
+        {showDetailLink ? (
+          <Link
+            href={detailHref}
+            className="rounded-[8px] border-2 border-border px-5 py-3 text-xs font-black uppercase tracking-normal text-foreground transition hover:border-foreground"
+          >
+            접수 상세 보기
+          </Link>
+        ) : null}
       </div>
     </div>
   );

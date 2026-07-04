@@ -430,7 +430,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-[0.2em]">
-                  최근 업데이트
+                  Updated
                 </p>
                 <p className="mt-1 text-sm font-semibold text-foreground">
                   {formatDateTime(activeSubmission.updatedAt)}
@@ -471,7 +471,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 <span>방송국</span>
                 <span className="justify-self-center text-center">현재 상태</span>
-                <span className="text-right">업데이트</span>
+                <span className="text-right">Updated</span>
               </div>
               {activeSubmission.stationReviews.length > 0 ? (
                 <div className="space-y-2 px-3 py-3 text-xs">
@@ -499,7 +499,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                           <span
                             className="text-right text-[10px] text-muted-foreground"
                             title={formatDate(station.updated_at)}
-                            aria-label={`업데이트 ${formatDate(station.updated_at)}`}
+                            aria-label={`Updated ${formatDate(station.updated_at)}`}
                           >
                             {formatShortDate(station.updated_at)}
                           </span>

@@ -41,7 +41,7 @@ const draftStatusMap: Record<string, { label: string; tone: string }> = {
 const getDraftStatusInfo = (item: DraftSubmissionItem) => {
   if (item.paymentStatus === "PAYMENT_PENDING") {
     return {
-      label: "입금 확인 대기",
+      label: "결제 대기",
       tone: "bg-[#f6d64a] text-black dark:text-black",
     };
   }
@@ -131,7 +131,7 @@ export function DraftSubmissionList({
     });
   };
 
-  const handleResume = (item: DraftSubmissionItem) => {
+  const handleResume = (item: DraftSubmissionItem, updatedAt: number) => {
     const draftGroup = getDraftGroupType(item.type);
     if (typeof window !== "undefined") {
       try {
@@ -141,7 +141,7 @@ export function DraftSubmissionList({
             JSON.stringify({
               ids: [item.id],
               guestToken: null,
-              updatedAt: Date.now(),
+              updatedAt,
             }),
           );
         } else {
@@ -187,7 +187,7 @@ export function DraftSubmissionList({
               emailSubmitConfirmed: shouldReuseExistingSelection
                 ? existing?.emailSubmitConfirmed
                 : undefined,
-              updatedAt: Date.now(),
+              updatedAt,
             }),
           );
         }
@@ -359,6 +359,9 @@ export function DraftSubmissionList({
           filteredItems.map((item) => {
             const draftGroup = getDraftGroupType(item.type);
             const statusInfo = getDraftStatusInfo(item);
+            const shouldOpenPayment =
+              item.paymentStatus !== "PAID" &&
+              !["DRAFT", "PRE_REVIEW"].includes(item.status);
             return (
               <div
                 key={item.id}
@@ -391,10 +394,16 @@ export function DraftSubmissionList({
                 <div className="flex items-center gap-2 md:justify-end">
                   <button
                     type="button"
-                    onClick={() => handleResume(item)}
+                    onClick={() => {
+                      if (shouldOpenPayment) {
+                        router.push(`/dashboard/pay/${item.id}`);
+                        return;
+                      }
+                      handleResume(item, Date.now());
+                    }}
                     className="rounded-full bg-foreground px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
                   >
-                    이어쓰기
+                    {shouldOpenPayment ? "결제하기" : "이어쓰기"}
                   </button>
                 </div>
               </div>

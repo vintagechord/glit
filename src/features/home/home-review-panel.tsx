@@ -305,11 +305,6 @@ function getStationName(station?: StationItem["station"] | null) {
   return station?.name?.trim() || "-";
 }
 
-function getStationCode(station?: StationItem["station"] | null) {
-  const code = station?.code?.trim();
-  return code ? code.toUpperCase() : null;
-}
-
 const stationBadgeMap: Record<
   string,
   { label: string; color: string; bg: string }
@@ -444,7 +439,7 @@ export function HomeReviewPanel({
   enableRemoteSync = false,
   stationRowsPerPage = 10,
   showPartialTrackBreakdown = true,
-  mobileStationLayout = "cards",
+  mobileStationLayout = "table",
   showDetailLink = true,
   panelMinHeightClassName = "lg:min-h-[520px]",
   compact = false,
@@ -764,8 +759,8 @@ export function HomeReviewPanel({
     ? "hidden grid-cols-[minmax(0,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:grid"
     : "hidden grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid";
   const mobileTableHeaderClass = compact
-    ? "grid grid-cols-[minmax(0,1fr)_minmax(96px,auto)_64px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:hidden"
-    : "grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_72px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden";
+    ? "grid grid-cols-[minmax(0,1fr)_minmax(92px,100px)_56px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:hidden"
+    : "grid grid-cols-[minmax(0,1fr)_minmax(100px,112px)_64px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground sm:hidden";
   const listPaddingClass = compact
     ? "px-2 py-2"
     : "px-2.5 py-2.5 sm:px-3 sm:py-3";
@@ -773,8 +768,8 @@ export function HomeReviewPanel({
     ? "grid min-h-[46px] grid-cols-[minmax(0,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-1.5 text-xs"
     : "grid min-h-[52px] grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-sm";
   const mobileStationRowClass = compact
-    ? "grid min-h-[48px] grid-cols-[minmax(0,1fr)_minmax(96px,auto)_64px] items-center gap-2 px-2 py-1.5 text-xs"
-    : "grid min-h-[52px] grid-cols-[minmax(0,1fr)_minmax(112px,auto)_72px] items-center gap-2 px-2 py-2 text-sm";
+    ? "grid min-h-[48px] grid-cols-[minmax(0,1fr)_minmax(92px,100px)_56px] items-center gap-2 px-2 py-1.5 text-xs"
+    : "grid min-h-[52px] grid-cols-[minmax(0,1fr)_minmax(100px,112px)_64px] items-center gap-2 px-2 py-2 text-sm";
   const stationListRef = React.useRef<HTMLDivElement | null>(null);
   const mouseDragPointerId = React.useRef<number | null>(null);
   const mouseDragStartY = React.useRef(0);
@@ -1145,7 +1140,7 @@ export function HomeReviewPanel({
             <div className={tableHeaderClass}>
               <span className="pl-2 text-left">방송국</span>
               <span className="justify-self-center text-center">현재 상태</span>
-              <span className="text-right">업데이트</span>
+              <span className="text-right">Updated</span>
             </div>
             {!needsPayment && activeStations.length > 0 ? (
               <>
@@ -1153,7 +1148,7 @@ export function HomeReviewPanel({
                   <div className={mobileTableHeaderClass}>
                     <span className="justify-self-center text-center">방송국</span>
                     <span className="justify-self-center text-center">현재 상태</span>
-                    <span className="justify-self-center text-center">업데이트</span>
+                    <span className="justify-self-center text-center">Updated</span>
                   </div>
                 ) : null}
                 <div
@@ -1187,7 +1182,6 @@ export function HomeReviewPanel({
                           activeSubmission,
                         );
                         const stationName = getStationName(station.station);
-                        const stationCode = getStationCode(station.station);
                         return (
                           <div
                             key={`${station.id}-${index}`}
@@ -1199,11 +1193,6 @@ export function HomeReviewPanel({
                                 <span className="block truncate font-semibold text-foreground">
                                   {stationName}
                                 </span>
-                                {stationCode ? (
-                                  <span className="mt-0.5 block truncate text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-                                    {stationCode}
-                                  </span>
-                                ) : null}
                               </span>
                             </span>
                             <div className="flex flex-col items-center justify-center gap-1 justify-self-center">
@@ -1248,7 +1237,7 @@ export function HomeReviewPanel({
                             <span
                               className="text-right text-xs text-muted-foreground"
                               title={formatDate(station.updated_at)}
-                              aria-label={`업데이트 ${formatDate(station.updated_at)}`}
+                              aria-label={`Updated ${formatDate(station.updated_at)}`}
                             >
                               {formatShortDate(station.updated_at)}
                             </span>
@@ -1272,10 +1261,6 @@ export function HomeReviewPanel({
                           activeSubmission,
                         );
                         const stationName = getStationName(station.station);
-                        const stationCode = getStationCode(station.station);
-                        const stationLabel = stationCode
-                          ? `${stationName} (${stationCode})`
-                          : stationName;
                         return (
                           <div
                             key={`${station.id}-mobile-${index}`}
@@ -1283,18 +1268,13 @@ export function HomeReviewPanel({
                           >
                             <div
                               className="flex min-w-0 items-center justify-start gap-2"
-                              title={stationLabel}
+                              title={stationName}
                             >
                               <StationLogo station={station.station ?? undefined} />
                               <span className="min-w-0">
                                 <span className="block truncate text-xs font-semibold text-foreground">
                                   {stationName}
                                 </span>
-                                {stationCode ? (
-                                  <span className="mt-0.5 block truncate text-[10px] font-medium uppercase tracking-normal text-muted-foreground">
-                                    {stationCode}
-                                  </span>
-                                ) : null}
                               </span>
                             </div>
                             {canOpenResultModal ? (
@@ -1318,7 +1298,7 @@ export function HomeReviewPanel({
                             ) : (
                               <div className="flex items-center justify-self-center">
                                 <span
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact ${displayStatus.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] min-w-[100px] ${displayStatus.tone}`}
                                 >
                                   {displayStatus.label}
                                 </span>
@@ -1327,7 +1307,7 @@ export function HomeReviewPanel({
                             <span
                               className="justify-self-end text-right text-[11px] text-muted-foreground"
                               title={formatDate(station.updated_at)}
-                              aria-label={`업데이트 ${formatDate(station.updated_at)}`}
+                              aria-label={`Updated ${formatDate(station.updated_at)}`}
                             >
                               {formatShortDate(station.updated_at)}
                             </span>
@@ -1352,73 +1332,53 @@ export function HomeReviewPanel({
                           activeSubmission,
                         );
                         const stationName = getStationName(station.station);
-                        const stationCode = getStationCode(station.station);
                         return (
                           <div
                             key={`${station.id}-mobile-${index}`}
-                            className="rounded-xl border border-border/50 bg-background/80 p-2.5 text-sm shadow-sm"
+                            className="grid min-h-[52px] grid-cols-[minmax(0,1fr)_minmax(100px,112px)_64px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-2 text-sm shadow-sm"
                           >
-                            <div className="flex min-w-0 items-center justify-between gap-2">
-                              <span className="flex min-w-0 items-center gap-3 pl-1 text-left">
-                                <StationLogo station={station.station ?? undefined} />
-                                <span className="min-w-0">
-                                  <span className="block truncate text-sm font-semibold text-foreground">
-                                    {stationName}
-                                  </span>
-                                  {stationCode ? (
-                                    <span className="mt-0.5 block truncate text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-                                      {stationCode}
-                                    </span>
-                                  ) : null}
+                            <span className="flex min-w-0 items-center gap-2 text-left">
+                              <StationLogo station={station.station ?? undefined} />
+                              <span className="min-w-0">
+                                <span className="block truncate text-xs font-semibold text-foreground">
+                                  {stationName}
                                 </span>
                               </span>
-                              <span
-                                className="text-xs text-muted-foreground"
-                                title={formatDate(station.updated_at)}
-                                aria-label={`업데이트 ${formatDate(station.updated_at)}`}
-                              >
-                                {formatShortDate(station.updated_at)}
-                              </span>
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {canOpenResultModal ? (
-                                <button
-                                  type="button"
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                  onClick={() =>
-                                    setTrackResultModal(
-                                      buildResultModalState(
-                                        station,
-                                        summary,
-                                        displayStatus,
-                                        activeSubmission,
-                                      ),
+                            </span>
+                            {canOpenResultModal ? (
+                              <button
+                                type="button"
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onClick={() =>
+                                  setTrackResultModal(
+                                    buildResultModalState(
+                                      station,
+                                      summary,
+                                      displayStatus,
+                                      activeSubmission,
                                     )
-                                  }
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[36px] min-w-[104px] flex-col px-3 transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
+                                  )
+                                }
+                                className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] min-w-[100px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
+                              >
+                                <span>{displayStatus.label}</span>
+                              </button>
+                            ) : (
+                              <div className="flex items-center justify-self-center">
+                                <span
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] min-w-[100px] ${displayStatus.tone}`}
                                 >
-                                  <span>{displayStatus.label}</span>
-                                  {displayStatus.summaryText ? (
-                                    <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                      {displayStatus.summaryText}
-                                    </span>
-                                  ) : null}
-                                </button>
-                              ) : (
-                                <div className="flex flex-col items-center gap-1">
-                                  <span
-                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${displayStatus.tone}`}
-                                  >
-                                    {displayStatus.label}
-                                  </span>
-                                  {displayStatus.summaryText ? (
-                                    <span className="text-[11px] leading-tight text-muted-foreground text-center">
-                                      {displayStatus.summaryText}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              )}
-                            </div>
+                                  {displayStatus.label}
+                                </span>
+                              </div>
+                            )}
+                            <span
+                              className="justify-self-end text-right text-[11px] text-muted-foreground"
+                              title={formatDate(station.updated_at)}
+                              aria-label={`Updated ${formatDate(station.updated_at)}`}
+                            >
+                              {formatShortDate(station.updated_at)}
+                            </span>
                           </div>
                         );
                       })}
@@ -1453,11 +1413,15 @@ export function HomeReviewPanel({
       {trackResultModal ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setTrackResultModal(null)}
           role="dialog"
           aria-modal="true"
           aria-label={`${trackResultModal.stationName} 심의 결과`}
         >
-          <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-4 shadow-xl sm:p-6">
+          <div
+            className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-4 shadow-xl sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               방송국 결과
             </p>
@@ -1529,13 +1493,13 @@ export function HomeReviewPanel({
               </div>
             )}
             {trackResultModal.resultNote ? (
-              <div className="mt-4 rounded-xl border border-rose-300 bg-rose-50 px-3 py-3 dark:border-rose-400/40 dark:bg-rose-950/30">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-600 dark:text-rose-200">
+              <div className="mt-4 rounded-xl border border-[#1556a4]/30 bg-[#1556a4]/5 px-3 py-3 dark:border-[#8fb7e8]/40 dark:bg-[#0f1d2e]">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1556a4] dark:text-[#b9d8ff]">
                   {["부적격", "수정요청"].includes(trackResultModal.resultLabel)
                     ? "부적격/수정 사유"
                     : "결과 메모"}
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-rose-700 dark:text-rose-100">
+                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/80 dark:text-[#d7e7ff]">
                   {trackResultModal.resultNote}
                 </p>
               </div>

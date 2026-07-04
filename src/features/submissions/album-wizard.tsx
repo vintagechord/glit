@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 import {
-  getAlbumDiscountAmount,
   getAlbumReviewDiscountPercentForPackage,
   getDiscountedAlbumPrice,
   normalizeAlbumDiscountPercent,
@@ -130,6 +129,11 @@ const steps = [
   "결제",
   "접수 완료",
 ];
+
+const deferredPaymentNotice =
+  "신청서가 결제 전 상태로 저장되었습니다. 작성중 신청서에서 다시 결제할 수 있습니다.";
+const paymentFailureDraftNotice =
+  "결제가 완료되지 않았습니다. 작성한 신청서는 작성중 신청서에 보관되어 있으니 다시 작성하지 않아도 됩니다.";
 
 const selectedBadgeClass =
   "inline-flex items-center rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
@@ -462,28 +466,22 @@ export function AlbumWizard({
     normalizedAlbumDiscountPercent,
     selectedPackage?.stationCount ?? null,
   );
-  const eventDiscountPerAlbumKrw = getAlbumDiscountAmount(
-    originalBasePriceKrw,
-    normalizedAlbumDiscountPercent,
-    selectedPackage?.stationCount ?? null,
-  );
   const hasAlbumEventDiscount = selectedAlbumDiscountPercent > 0;
   const additionalPriceKrw = Math.round(basePriceKrw * 0.5);
   const additionalAlbumCount = albumDrafts.length;
   const totalAlbumCount = additionalAlbumCount + 1;
   const additionalAlbumTotalKrw = additionalAlbumCount * additionalPriceKrw;
   const originalTotalPriceKrw = totalAlbumCount * originalBasePriceKrw;
-  const eventDiscountTotalKrw = totalAlbumCount * eventDiscountPerAlbumKrw;
-  const additionalDiscountPerAlbumKrw = Math.max(
-    0,
-    basePriceKrw - additionalPriceKrw,
-  );
-  const additionalDiscountTotalKrw =
-    additionalAlbumCount * additionalDiscountPerAlbumKrw;
   const totalPriceKrw =
     basePriceKrw + additionalAlbumTotalKrw;
-  const hasAdditionalAlbumDiscount =
-    additionalAlbumCount > 0 && basePriceKrw > 0;
+  const albumEventDiscountTotalKrw = hasAlbumEventDiscount
+    ? totalAlbumCount * Math.max(0, originalBasePriceKrw - basePriceKrw)
+    : 0;
+  const totalDisplayDiscountKrw = Math.max(
+    0,
+    originalTotalPriceKrw - totalPriceKrw,
+  );
+  const hasPaymentSummaryDiscount = totalDisplayDiscountKrw > 0;
   const selectionLocked = albumDrafts.length > 0;
   const selectedPackageSummary = selectedPackage
     ? {
@@ -830,8 +828,8 @@ export function AlbumWizard({
       if (status === "FAIL" || status === "CANCEL" || status === "ERROR") {
         const message =
           typeof payload.message === "string"
-            ? payload.message
-            : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
+            ? `${payload.message} ${paymentFailureDraftNotice}`
+            : paymentFailureDraftNotice;
         const paymentState = status.toLowerCase();
         if (guestPaymentToken) {
           window.location.href = `/track/${encodeURIComponent(guestPaymentToken)}?payment=${paymentState}`;
@@ -2485,7 +2483,11 @@ export function AlbumWizard({
     }
   };
 
-  const handleSave = async (status: "DRAFT" | "SUBMITTED") => {
+  const handleSave = async (
+    status: "DRAFT" | "SUBMITTED",
+    options?: { deferPayment?: boolean },
+  ) => {
+    const deferPayment = status === "SUBMITTED" && options?.deferPayment === true;
     if (editingIndex !== null) {
       setNotice({ error: "수정 중인 앨범을 저장한 뒤 진행해주세요." });
       return;
@@ -2509,12 +2511,13 @@ export function AlbumWizard({
       status === "SUBMITTED" &&
       paymentMethod === "BANK" &&
       !bankDepositorName.trim() &&
-      !isAdminReviewer
+      !isAdminReviewer &&
+      !deferPayment
     ) {
       setNotice({ error: "입금자명을 입력해주세요." });
       return;
     }
-    if (status === "SUBMITTED" && paymentMethod === "BANK") {
+    if (status === "SUBMITTED" && paymentMethod === "BANK" && !deferPayment) {
       if (!validatePaymentDocument()) {
         return;
       }
@@ -2563,6 +2566,7 @@ export function AlbumWizard({
       const submissionIds: string[] = [];
       const guestTokens: Array<{ token: string; title: string }> = [];
       let emailNotice: string | undefined;
+      const submissionPaymentMethod = deferPayment ? "BANK" : paymentMethod;
 
       for (let index = 0; index < draftsForSubmit.length; index += 1) {
         const draft = draftsForSubmit[index];
@@ -2610,31 +2614,42 @@ export function AlbumWizard({
           guestCompany: draft.productionCompany || undefined,
           guestEmail: applicantEmailValue,
           guestPhone: applicantPhoneValue,
-          paymentMethod,
+          paymentMethod: submissionPaymentMethod,
           bankDepositorName:
-            status === "SUBMITTED" ? bankDepositorName.trim() : undefined,
+            status === "SUBMITTED" && !deferPayment
+              ? bankDepositorName.trim()
+              : undefined,
           paymentDocumentType:
-            status === "SUBMITTED" ? paymentDocumentType || undefined : undefined,
+            status === "SUBMITTED" && !deferPayment
+              ? paymentDocumentType || undefined
+              : undefined,
           cashReceiptPurpose:
-            status === "SUBMITTED" && paymentDocumentType === "CASH_RECEIPT"
+            status === "SUBMITTED" &&
+              !deferPayment &&
+              paymentDocumentType === "CASH_RECEIPT"
               ? cashReceiptPurpose || undefined
               : undefined,
           cashReceiptPhone:
             status === "SUBMITTED" &&
+              !deferPayment &&
               paymentDocumentType === "CASH_RECEIPT" &&
               cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
               ? cashReceiptPhone.trim() || undefined
               : undefined,
           cashReceiptBusinessNumber:
             status === "SUBMITTED" &&
+              !deferPayment &&
               paymentDocumentType === "CASH_RECEIPT" &&
               cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
               ? cashReceiptBusinessNumber.trim() || undefined
               : undefined,
           taxInvoiceBusinessNumber:
-            status === "SUBMITTED" && paymentDocumentType === "TAX_INVOICE"
+            status === "SUBMITTED" &&
+              !deferPayment &&
+              paymentDocumentType === "TAX_INVOICE"
               ? taxInvoiceBusinessNumber.trim() || undefined
               : undefined,
+          deferPayment,
           status,
           tracks:
             isOneClick || isDownloadedApplicationFlow
@@ -2663,6 +2678,21 @@ export function AlbumWizard({
       }
 
       if (status === "SUBMITTED" && submissionIds.length > 0) {
+        if (deferPayment) {
+          clearDraftStorage();
+          setNotice({
+            emailNotice: emailNotice
+              ? `${deferredPaymentNotice} ${emailNotice}`
+              : deferredPaymentNotice,
+          });
+          setCompletionId(submissionIds[0]);
+          setCompletionSubmissionIds(submissionIds);
+          if (guestTokens.length > 0) {
+            setCompletionTokens(guestTokens);
+          }
+          setStep(5);
+          return;
+        }
         if (paymentMethod === "CARD") {
           setNotice(emailNotice ? { emailNotice } : {});
           const { ok, error } = await openInicisCardPopup({
@@ -2673,8 +2703,9 @@ export function AlbumWizard({
           if (!ok) {
             setNotice({
               error:
-                error ||
-                "결제 모듈을 실행하지 못했습니다. 잠시 후 다시 시도해주세요.",
+                error
+                  ? `${error} ${paymentFailureDraftNotice}`
+                  : paymentFailureDraftNotice,
             });
           }
           return;
@@ -4291,141 +4322,125 @@ export function AlbumWizard({
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              선택한 옵션
-            </p>
-            <div className="mt-4 space-y-3 text-sm text-foreground">
+          <div className="space-y-4">
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-5 sm:p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                선택 상품
+              </p>
               {selectedPackageSummary ? (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="font-semibold">
-                        {getPackageDisplayName(
-                          selectedPackageSummary,
-                          isOneClick,
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {getPackageDisplayName(
-                          selectedPackageSummary,
-                          isOneClick,
-                        )}{" "}
-                        · 총 {totalAlbumCount}건
-                      </p>
-                    </div>
-                    <span className="text-sm font-semibold">
-                      {hasAlbumEventDiscount ? (
-                        <span className="flex flex-col items-end gap-0.5 text-right">
-                          <span className="text-xs text-muted-foreground line-through">
-                            {formatCurrency(originalBasePriceKrw)}원
-                          </span>
-                          <span>{formatCurrency(basePriceKrw)}원</span>
-                        </span>
-                      ) : (
-                        `${formatCurrency(basePriceKrw)}원`
+                <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-lg font-black text-foreground">
+                      {getPackageDisplayName(
+                        selectedPackageSummary,
+                        isOneClick,
                       )}
-                    </span>
-                  </div>
-                  {hasAlbumEventDiscount ? (
-                    <div className="rounded-[18px] border border-[#f2cf27] bg-[#f2cf27]/20 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#1556a4] dark:text-[#8bc3ff]">
-                            오픈 기념 할인
-                          </p>
-                          <p className="mt-1 text-sm font-semibold text-foreground">
-                            음반 심의 {selectedAlbumDiscountPercent}% 할인 적용 중
-                          </p>
-                        </div>
-                        <span className="rounded-full bg-[#111111] px-3 py-1 text-xs font-black text-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]">
-                          -{formatCurrency(eventDiscountPerAlbumKrw)}원 / 앨범
-                        </span>
-                      </div>
-                    </div>
-                  ) : null}
-                  <div className="rounded-[18px] border border-border/60 bg-background/70 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      결제 금액 계산
                     </p>
-                    <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-                      {hasAlbumEventDiscount ? (
-                        <>
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span>할인 전 정상 금액</span>
-                            <span>
-                              {formatCurrency(originalBasePriceKrw)}원 ×{" "}
-                              {totalAlbumCount}건 ={" "}
-                              {formatCurrency(originalTotalPriceKrw)}원
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-[#1f7a5a] dark:text-emerald-300">
-                            <span>오픈 기념 {selectedAlbumDiscountPercent}% 할인</span>
-                            <span className="font-semibold">
-                              -{formatCurrency(eventDiscountTotalKrw)}원
-                            </span>
-                          </div>
-                        </>
-                      ) : null}
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span>
-                          1번째 앨범 적용가격
-                        </span>
-                        <span className="font-semibold text-foreground">
-                          {formatCurrency(basePriceKrw)}원 × 1 ={" "}
-                          {formatCurrency(basePriceKrw)}원
-                        </span>
-                      </div>
-                      {hasAdditionalAlbumDiscount ? (
-                        <>
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span>
-                              2번째~{totalAlbumCount}번째 앨범 추가 50% 할인
-                            </span>
-                            <span className="font-semibold text-foreground">
-                              {formatCurrency(basePriceKrw)}원 × 50% ={" "}
-                              {formatCurrency(additionalPriceKrw)}원 ×{" "}
-                              {additionalAlbumCount}건 ={" "}
-                              {formatCurrency(additionalAlbumTotalKrw)}원
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-[#1f7a5a] dark:text-emerald-300">
-                            <span>추가 앨범 할인 금액</span>
-                            <span className="font-semibold">
-                              -{formatCurrency(additionalDiscountTotalKrw)}원
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <p>
-                          앨범을 추가하면 2번째 앨범부터 같은 패키지 적용가격의 50%로 계산됩니다.
-                        </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      음반 심의{" "}
+                      {getPackageDisplayName(
+                        selectedPackageSummary,
+                        isOneClick,
                       )}
-                    </div>
+                      {totalAlbumCount > 1 ? ` · 총 ${totalAlbumCount}건` : ""}
+                    </p>
                   </div>
-                </>
+                  {isOneClick ? (
+                    <span className="inline-flex rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      원클릭 접수
+                    </span>
+                  ) : null}
+                </div>
               ) : (
-                <p className="text-xs text-muted-foreground">
+                <p className="mt-4 text-sm text-muted-foreground">
                   선택된 패키지가 없습니다.
                 </p>
               )}
-              {isOneClick && (
-                <span className="inline-flex rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  원클릭 접수
-                </span>
-              )}
             </div>
-            <div className="mt-4 flex items-center justify-between text-sm font-semibold text-foreground">
-              <span>총 결제 금액</span>
-              <span>
-                {formatCurrency(totalPriceKrw)}원
-              </span>
+
+            {hasAlbumEventDiscount ? (
+              <div className="rounded-[18px] border border-[#f2cf27] bg-[#f2cf27]/20 p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-foreground">
+                      오픈 기념 {selectedAlbumDiscountPercent}% 할인 적용
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {additionalAlbumCount > 0 ? "패키지 정상가" : "정상가"}{" "}
+                      <span className="text-foreground/70 line-through">
+                        {formatCurrency(
+                          additionalAlbumCount > 0
+                            ? originalBasePriceKrw
+                            : originalTotalPriceKrw,
+                        )}원
+                      </span>
+                      {" "}→{" "}
+                      <span className="font-black text-foreground">
+                        {additionalAlbumCount > 0
+                          ? `할인 적용가 ${formatCurrency(basePriceKrw)}원`
+                          : `결제가 ${formatCurrency(totalPriceKrw)}원`}
+                      </span>
+                    </p>
+                  </div>
+                  <span className="inline-flex w-fit rounded-full bg-[#111111] px-3 py-1 text-xs font-black text-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]">
+                    총 {formatCurrency(albumEventDiscountTotalKrw)}원 할인
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-5 sm:p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                결제 금액
+              </p>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-muted-foreground">정상가</span>
+                  <span
+                    className={
+                      hasPaymentSummaryDiscount
+                        ? "font-semibold text-muted-foreground line-through"
+                        : "font-black text-foreground"
+                    }
+                  >
+                    {formatCurrency(originalTotalPriceKrw)}원
+                  </span>
+                </div>
+                {hasPaymentSummaryDiscount ? (
+                  <div className="flex items-center justify-between gap-4 text-[#1f7a5a] dark:text-emerald-300">
+                    <span>할인</span>
+                    <span className="font-black">
+                      -{formatCurrency(totalDisplayDiscountKrw)}원
+                    </span>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-3">
+                  <span className="font-semibold text-foreground">결제금액</span>
+                  <span className="font-black text-foreground">
+                    {formatCurrency(totalPriceKrw)}원
+                  </span>
+                </div>
+              </div>
+              <div className="mt-5 rounded-[18px] border-2 border-[#111111] bg-background px-4 py-4 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:flex sm:items-end sm:justify-between sm:gap-4">
+                <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
+                  최종 결제 금액
+                </p>
+                <p className="mt-2 text-right text-[28px] font-black leading-none tracking-tight text-foreground sm:mt-0 sm:text-[34px]">
+                  {formatCurrency(totalPriceKrw)}원
+                </p>
+              </div>
             </div>
-            <div className="mt-4 grid gap-2 border-t border-border/60 pt-4 text-xs font-semibold text-muted-foreground sm:grid-cols-2">
-              <span>예상 진행 기간: 접수 후 1영업일~최대 3주</span>
-              <span>부가세 및 증빙 요청은 결제 방식 선택 후 확인</span>
-              <span>방송국 접수 전 취소 가능 여부 확인</span>
-              <span>누락 자료가 있으면 보완 요청 후 진행</span>
+
+            <div className="rounded-[24px] border border-border/60 bg-background/70 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                결제 전 안내
+              </p>
+              <ul className="mt-3 grid gap-2 text-xs font-semibold leading-5 text-muted-foreground sm:grid-cols-2">
+                <li>예상 진행 기간: 접수 후 영업일 기준 최대 3주</li>
+                <li>결제 방식 선택 후 부가세 및 증빙 요청 가능</li>
+                <li>접수 전 취소 가능 여부를 확인해주세요</li>
+                <li>누락 자료가 있으면 보완 요청 후 진행됩니다</li>
+              </ul>
             </div>
           </div>
 
@@ -4684,6 +4699,14 @@ export function AlbumWizard({
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSave("SUBMITTED", { deferPayment: true })}
+              disabled={isSaving || isAddingAlbum || !albumPaymentReady}
+              className="rounded-full border border-border/70 bg-background px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              (임시)저장하고 다음에 결제
             </button>
             <button
               type="button"

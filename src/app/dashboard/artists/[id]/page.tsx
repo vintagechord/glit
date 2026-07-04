@@ -231,7 +231,7 @@ export default async function DashboardArtistDetailPage({
                       {submission.title || "제목 미입력"}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      생성: {formatDateTime(submission.created_at)} · 업데이트:{" "}
+                      생성: {formatDateTime(submission.created_at)} · Updated:{" "}
                       {formatDateTime(submission.updated_at ?? submission.created_at)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">

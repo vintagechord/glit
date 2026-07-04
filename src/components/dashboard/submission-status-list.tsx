@@ -169,8 +169,8 @@ export function SubmissionStatusList({
                     {submission.artist_name || "아티스트 미입력"}
                   </p>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    접수일 {formatDateTime(submission.created_at)} · 최근
-                    업데이트 {formatDateTime(submission.updated_at)}
+                    접수일 {formatDateTime(submission.created_at)} · Updated{" "}
+                    {formatDateTime(submission.updated_at)}
                   </p>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
@@ -298,7 +298,7 @@ export function SubmissionStatusList({
               <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 <span>방송국</span>
                 <span className="justify-self-center text-center">현재 상태</span>
-                <span className="text-right">업데이트</span>
+                <span className="text-right">Updated</span>
               </div>
               {activeSubmission.station_reviews.length > 0 ? (
                 <div className="space-y-2 px-3 py-3 text-sm">
@@ -353,7 +353,7 @@ export function SubmissionStatusList({
                         <span
                           className="text-right text-xs text-muted-foreground"
                           title={formatDate(station.updated_at)}
-                          aria-label={`업데이트 ${formatDate(station.updated_at)}`}
+                          aria-label={`Updated ${formatDate(station.updated_at)}`}
                         >
                           {formatShortDate(station.updated_at)}
                         </span>
@@ -372,8 +372,14 @@ export function SubmissionStatusList({
       )}
 
       {trackResultModal ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setTrackResultModal(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-6 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               트랙별 결과
             </p>
@@ -417,7 +423,7 @@ export function SubmissionStatusList({
                       </p>
                       {track.status === "REJECTED" &&
                       trackResultModal.resultNote ? (
-                        <p className="mt-1 break-words text-xs text-rose-600/80 dark:text-rose-200/80">
+                        <p className="mt-1 break-words text-xs text-[#1556a4]/90 dark:text-[#b9d8ff]">
                           사유: {trackResultModal.resultNote}
                         </p>
                       ) : null}

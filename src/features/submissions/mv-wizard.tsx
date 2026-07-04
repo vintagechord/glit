@@ -104,6 +104,11 @@ const steps = [
   "접수 완료",
 ];
 
+const deferredPaymentNotice =
+  "신청서가 결제 전 상태로 저장되었습니다. 작성중 신청서에서 다시 결제할 수 있습니다.";
+const paymentFailureDraftNotice =
+  "결제가 완료되지 않았습니다. 작성한 신청서는 작성중 신청서에 보관되어 있으니 다시 작성하지 않아도 됩니다.";
+
 const selectedBadgeClass =
   "inline-flex items-center rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
 
@@ -677,8 +682,8 @@ export function MvWizard({
       if (status === "FAIL" || status === "CANCEL" || status === "ERROR") {
         const message =
           typeof payload.message === "string"
-            ? payload.message
-            : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
+            ? `${payload.message} ${paymentFailureDraftNotice}`
+            : paymentFailureDraftNotice;
         const paymentState = status.toLowerCase();
         if (guestPaymentToken) {
           window.location.href = `/track/${encodeURIComponent(guestPaymentToken)}?payment=${paymentState}`;
@@ -2352,8 +2357,9 @@ export function MvWizard({
     }
   };
 
-  const handleSubmit = async () => {
-    if (!validateMvForm({ requirePayment: true })) return;
+  const handleSubmit = async (options?: { deferPayment?: boolean }) => {
+    const deferPayment = options?.deferPayment === true;
+    if (!validateMvForm({ requirePayment: !deferPayment })) return;
     if (!validateMvUploads()) return;
 
     const { songTitleKrValue, songTitleEnValue, songTitleOfficialValue } =
@@ -2385,6 +2391,7 @@ export function MvWizard({
     setNotice({});
     try {
       const uploaded = uploads.length > 0 ? await uploadFiles() : [];
+      const submissionPaymentMethod = deferPayment ? "BANK" : paymentMethod;
       const result = await saveMvSubmissionAction({
         submissionId,
         amountKrw: totalAmount,
@@ -2426,28 +2433,34 @@ export function MvWizard({
         guestCompany: isGuest ? guestCompanyValue || undefined : undefined,
         guestEmail: isGuest ? guestEmailValue || undefined : undefined,
         guestPhone: isGuest ? guestPhoneValue || undefined : undefined,
-        paymentMethod,
+        paymentMethod: submissionPaymentMethod,
         bankDepositorName:
-          paymentMethod === "BANK" ? bankDepositorName.trim() : undefined,
-        paymentDocumentType: paymentDocumentType || undefined,
+          submissionPaymentMethod === "BANK" && !deferPayment
+            ? bankDepositorName.trim()
+            : undefined,
+        paymentDocumentType:
+          !deferPayment ? paymentDocumentType || undefined : undefined,
         cashReceiptPurpose:
-          paymentDocumentType === "CASH_RECEIPT"
+          !deferPayment && paymentDocumentType === "CASH_RECEIPT"
             ? cashReceiptPurpose || undefined
             : undefined,
         cashReceiptPhone:
-          paymentDocumentType === "CASH_RECEIPT" &&
+          !deferPayment &&
+            paymentDocumentType === "CASH_RECEIPT" &&
             cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
             ? cashReceiptPhone.trim() || undefined
             : undefined,
         cashReceiptBusinessNumber:
-          paymentDocumentType === "CASH_RECEIPT" &&
+          !deferPayment &&
+            paymentDocumentType === "CASH_RECEIPT" &&
             cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
             ? cashReceiptBusinessNumber.trim() || undefined
             : undefined,
         taxInvoiceBusinessNumber:
-          paymentDocumentType === "TAX_INVOICE"
+          !deferPayment && paymentDocumentType === "TAX_INVOICE"
             ? taxInvoiceBusinessNumber.trim() || undefined
             : undefined,
+        deferPayment,
         status: "SUBMITTED",
         files: uploaded,
         filesSubmittedByEmail: emailSubmitConfirmed,
@@ -2459,6 +2472,22 @@ export function MvWizard({
       }
 
       if (result.submissionId) {
+        if (deferPayment) {
+          clearDraftStorage();
+          setNotice({
+            emailNotice: result.emailNotice
+              ? `${deferredPaymentNotice} ${result.emailNotice}`
+              : deferredPaymentNotice,
+          });
+          setCompletionId(result.submissionId);
+          if (result.guestToken) {
+            setCompletionGuestToken(result.guestToken);
+          } else if (isGuest) {
+            setCompletionGuestToken(guestToken);
+          }
+          setStep(5);
+          return;
+        }
         if (paymentMethod === "CARD") {
           setNotice(result.emailNotice ? { emailNotice: result.emailNotice } : {});
           const { ok, error } = await openInicisCardPopup({
@@ -2469,8 +2498,9 @@ export function MvWizard({
           if (!ok) {
             setNotice({
               error:
-                error ||
-                "결제 모듈을 실행하지 못했습니다. 잠시 후 다시 시도해주세요.",
+                error
+                  ? `${error} ${paymentFailureDraftNotice}`
+                  : paymentFailureDraftNotice,
             });
           }
           return;
@@ -4273,7 +4303,15 @@ export function MvWizard({
             </button>
             <button
               type="button"
-              onClick={handleSubmit}
+              onClick={() => handleSubmit({ deferPayment: true })}
+              disabled={isSaving || !mvPaymentReady}
+              className="rounded-full border border-border/70 bg-background px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              (임시)저장하고 다음에 결제
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSubmit()}
               disabled={isSaving || !mvPaymentReady}
               className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >

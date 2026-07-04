@@ -279,32 +279,58 @@ export default async function PayPage({
           </div>
         ) : (
           <div className="mt-6 rounded-[8px] border-2 border-border bg-background/80 p-4 text-sm text-foreground">
-            <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-              무통장 입금 안내
-            </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="grid gap-5">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                  은행
+                <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
+                  무통장 입금 안내
                 </p>
-                <p className="mt-1 font-semibold">{APP_CONFIG.bankName}</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                      은행
+                    </p>
+                    <p className="mt-1 font-semibold">{APP_CONFIG.bankName}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                      계좌번호
+                    </p>
+                    <p className="mt-1 font-semibold">
+                      {APP_CONFIG.bankAccount}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                      예금주
+                    </p>
+                    <p className="mt-1 font-semibold">{APP_CONFIG.bankHolder}</p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  입금 후 24시간 내에 결제완료로 전환됩니다.
+                </p>
               </div>
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                  계좌번호
+
+              <div className="rounded-[8px] border-2 border-primary/20 bg-primary/8 p-4 dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12">
+                <p className="text-xs font-black uppercase tracking-normal text-primary dark:text-[#8bc3ff]">
+                  카드 결제로 변경
                 </p>
-                <p className="mt-1 font-semibold">{APP_CONFIG.bankAccount}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                  예금주
+                <p className="mt-2 text-xs font-semibold leading-5 text-muted-foreground">
+                  무통장 입금으로 신청했어도 입금 전이라면 카드 결제로 바로 진행할 수 있습니다.
                 </p>
-                <p className="mt-1 font-semibold">{APP_CONFIG.bankHolder}</p>
+                <div className="mt-4">
+                  <PaymentRetryClient
+                    submissionId={paymentSubmission.id}
+                    context={paymentContext}
+                    guestToken={hasGuestAccess ? guestToken : undefined}
+                    detailHref={detailHref}
+                    successHref={successHref}
+                    paymentState={paymentState}
+                    showDetailLink={false}
+                  />
+                </div>
               </div>
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              입금 후 24시간 내에 결제완료로 전환됩니다.
-            </p>
           </div>
         )}
 

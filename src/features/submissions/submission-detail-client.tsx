@@ -397,7 +397,7 @@ const buildSubmissionDisplayStatus = ({
       broadcastLabel,
       resultLabel,
       primaryMessage: isMvSubmission ? "심의 결과 확인이 가능합니다." : null,
-      secondaryMessage: "방송국별 진행표에서 결과와 최근 업데이트를 확인할 수 있습니다.",
+      secondaryMessage: "방송국별 진행표에서 결과와 Updated 시간을 확인할 수 있습니다.",
       primaryAction: "station-review" as DetailPrimaryAction,
       primaryActionLabel: "진행표 보기",
     };
@@ -735,7 +735,7 @@ export function SubmissionDetailClient({
         ? {
           title: "결제가 취소되었습니다.",
           description:
-            "현재 접수 내용은 유지되어 있습니다. 필요하면 다시 결제를 진행하거나 무통장 입금으로 접수할 수 있습니다.",
+            "현재 접수 내용은 작성중 신청서에 보관되어 있습니다. 필요하면 다시 결제를 진행하거나 무통장 입금으로 접수할 수 있습니다.",
           tone:
             "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
         }
@@ -743,7 +743,7 @@ export function SubmissionDetailClient({
           ? {
             title: "결제가 완료되지 않았습니다.",
             description:
-              "결제 과정에서 문제가 발생했습니다. 다시 시도하거나 다른 결제 방식을 선택해주세요.",
+              "결제 과정에서 문제가 발생했습니다. 작성한 신청서는 작성중 신청서에 보관되어 있으니 다시 결제하거나 다른 결제 방식을 선택해주세요.",
             tone:
               "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-100",
           }
@@ -986,7 +986,7 @@ export function SubmissionDetailClient({
                   <span className="hidden justify-self-center text-center sm:block">로고</span>
                   <span className="hidden text-left sm:block">방송국</span>
                   <span className="justify-self-center text-center">현재 상태</span>
-                  <span className="justify-self-center text-center">업데이트</span>
+                  <span className="justify-self-center text-center">Updated</span>
                 </div>
                 <div className="divide-y divide-border/60">
                   {renderStationReviews.map((review) => {
@@ -1061,22 +1061,12 @@ export function SubmissionDetailClient({
                             <span className="block truncate font-semibold text-foreground">
                               {review.station?.name ?? "-"}
                             </span>
-                            {review.station && "code" in review.station ? (
-                              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                                {review.station.code ?? ""}
-                              </span>
-                            ) : null}
                           </span>
                         </div>
                         <div className="hidden min-w-0 pl-1 text-left sm:block">
                           <p className="truncate font-semibold text-foreground">
                             {review.station?.name ?? "-"}
                           </p>
-                          {review.station && "code" in review.station ? (
-                            <p className="text-xs text-muted-foreground">
-                              {review.station.code ?? ""}
-                            </p>
-                          ) : null}
                         </div>
                         <button
                           type="button"
@@ -1097,7 +1087,7 @@ export function SubmissionDetailClient({
                         <span
                           className="justify-self-center text-center text-xs text-muted-foreground"
                           title={formatDateTime(review.updated_at)}
-                          aria-label={`업데이트 ${formatDateTime(review.updated_at)}`}
+                          aria-label={`Updated ${formatDateTime(review.updated_at)}`}
                         >
                           {formatShortDate(review.updated_at)}
                         </span>
@@ -1471,6 +1461,15 @@ export function SubmissionDetailClient({
               <p className="mt-3 text-xs text-muted-foreground">
                 입금 후 24시간 내에 결제 완료로 전환됩니다.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => router.push(retryPaymentHref)}
+                  className="rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-4 py-2 text-xs font-black uppercase tracking-normal text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
+                >
+                  카드 결제하기
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1496,7 +1495,7 @@ export function SubmissionDetailClient({
                   현재 상태
                 </p>
                 <p className="text-left text-[11px] font-black uppercase tracking-normal text-muted-foreground sm:text-right">
-                  최근 업데이트{" "}
+                  Updated{" "}
                   <span className="font-semibold tracking-normal text-foreground/72">
                     {formatDateTime(submission.updated_at)}
                   </span>
@@ -1937,7 +1936,7 @@ export function SubmissionDetailClient({
                           : "심의 결과"}
                       </span>
                       <span className="hidden justify-self-center text-center sm:block">
-                        최근 업데이트
+                        Updated
                       </span>
                     </div>
                     <div className="divide-y divide-border/60">
@@ -2036,22 +2035,12 @@ export function SubmissionDetailClient({
                                 <span className="block truncate font-semibold text-foreground">
                                   {review.station?.name ?? "-"}
                                 </span>
-                                {review.station && "code" in review.station ? (
-                                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                                    {review.station.code ?? ""}
-                                  </span>
-                                ) : null}
                               </span>
                             </div>
                             <div className="hidden min-w-0 pl-1 text-left sm:block">
                               <p className="truncate font-semibold text-foreground">
                                 {review.station?.name ?? "-"}
                               </p>
-                              {review.station && "code" in review.station ? (
-                                <p className="text-xs text-muted-foreground">
-                                  {review.station.code ?? ""}
-                                </p>
-                              ) : null}
                             </div>
                             <span
                               className={`inline-flex min-h-[34px] min-w-[92px] items-center justify-center justify-self-center rounded-full px-3 py-1.5 text-[13px] font-semibold ${reception.tone}`}
@@ -2094,8 +2083,14 @@ export function SubmissionDetailClient({
       </div>
 
       {trackResultModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setTrackResultModal(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]"
+            onClick={(event) => event.stopPropagation()}
+          >
             <p className={detailKickerClass}>
               트랙별 결과
             </p>
@@ -2151,11 +2146,11 @@ export function SubmissionDetailClient({
               </div>
             ) : null}
             {trackResultModal.resultNote ? (
-              <div className="mt-4 rounded-[8px] border-2 border-[#d9362c] bg-rose-50 p-4 dark:bg-[#2a1111]">
-                <p className="text-xs font-black uppercase tracking-normal text-[#d9362c] dark:text-[#ff6258]">
+              <div className="mt-4 rounded-[8px] border-2 border-[#1556a4] bg-[#1556a4]/5 p-4 dark:border-[#8fb7e8] dark:bg-[#0f1d2e]">
+                <p className="text-xs font-black uppercase tracking-normal text-[#1556a4] dark:text-[#b9d8ff]">
                   부적격 사유
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-rose-700 dark:text-rose-100">
+                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/80 dark:text-[#d7e7ff]">
                   {trackResultModal.resultNote}
                 </p>
               </div>
@@ -2191,8 +2186,14 @@ export function SubmissionDetailClient({
       )}
 
       {radioLinksModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={closeRadioLinks}
+        >
+          <div
+            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]"
+            onClick={(event) => event.stopPropagation()}
+          >
             <p className={detailKickerClass}>
               라디오 신청 제안
             </p>

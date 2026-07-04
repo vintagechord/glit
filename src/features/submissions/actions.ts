@@ -640,6 +640,7 @@ const albumSubmissionSchema = z.object({
   cashReceiptPhone: z.string().optional(),
   cashReceiptBusinessNumber: z.string().optional(),
   taxInvoiceBusinessNumber: z.string().optional(),
+  deferPayment: z.boolean().optional(),
   status: z.enum(["DRAFT", "PRE_REVIEW", "SUBMITTED"]),
   tracks: z.array(trackSchema).optional(),
   files: z.array(fileSchema).optional(),
@@ -698,6 +699,7 @@ const mvSubmissionSchema = z.object({
   cashReceiptPhone: z.string().optional(),
   cashReceiptBusinessNumber: z.string().optional(),
   taxInvoiceBusinessNumber: z.string().optional(),
+  deferPayment: z.boolean().optional(),
   status: z.enum(["DRAFT", "PRE_REVIEW", "SUBMITTED"]),
   files: z.array(fileSchema).optional(),
   filesSubmittedByEmail: z.boolean().optional(),
@@ -840,6 +842,7 @@ export async function saveAlbumSubmissionAction(
 
   const isGuest = !user;
   const isSubmitted = parsed.data.status === "SUBMITTED";
+  const deferPayment = isSubmitted && parsed.data.deferPayment === true;
   const isAdminReviewer = isAdminReviewEmail(user?.email);
   const isOneClick = parsed.data.isOneClick ?? false;
   const titleValue = parsed.data.title?.trim() ?? "";
@@ -996,14 +999,15 @@ export async function saveAlbumSubmissionAction(
     isSubmitted &&
     paymentMethod === "BANK" &&
     !bankDepositorNameValue &&
-    !isAdminReviewer
+    !isAdminReviewer &&
+    !deferPayment
   ) {
     return { error: "입금자명을 입력해주세요." };
   }
   const bankPaymentDocumentError = isAdminReviewer
     ? null
     : validateBankPaymentDocument({
-        isSubmitted,
+        isSubmitted: isSubmitted && !deferPayment,
         paymentMethod,
         paymentDocumentType,
         cashReceiptPurpose,
@@ -1016,6 +1020,7 @@ export async function saveAlbumSubmissionAction(
   }
   const shouldRequestPayment =
     isSubmitted &&
+    !deferPayment &&
     (paymentMethod === "CARD" || Boolean(bankDepositorNameValue));
   const artistId = await ensureArtistByName(artistNameValue);
 
@@ -1316,7 +1321,9 @@ export async function saveAlbumSubmissionAction(
 
   const eventMessage =
     parsed.data.status === "SUBMITTED"
-      ? shouldRequestPayment
+      ? deferPayment
+        ? "결제 전 신청서 저장이 완료되었습니다."
+        : shouldRequestPayment
         ? paymentMethod === "CARD"
           ? "카드 결제 요청이 접수되었습니다."
           : "입금 확인 요청이 접수되었습니다."
@@ -1370,7 +1377,7 @@ export async function saveAlbumSubmissionAction(
           });
         }
 
-        if (paymentMethod === "BANK" && amountKrw > 0) {
+        if (shouldRequestPayment && paymentMethod === "BANK" && amountKrw > 0) {
           const bankEmailResult = await sendSubmissionBankRequestEmail({
             email: recipientEmail,
             title: titleValue || "제목 미입력",
@@ -1437,6 +1444,7 @@ export async function saveMvSubmissionAction(
 
   const isGuest = !user;
   const isSubmitted = parsed.data.status === "SUBMITTED";
+  const deferPayment = isSubmitted && parsed.data.deferPayment === true;
   const isAdminReviewer = isAdminReviewEmail(user?.email);
   const titleValue = parsed.data.title?.trim() ?? "";
   const artistNameValue = parsed.data.artistName?.trim() ?? "";
@@ -1549,14 +1557,15 @@ export async function saveMvSubmissionAction(
     isSubmitted &&
     paymentMethod === "BANK" &&
     !bankDepositorNameValue &&
-    !isAdminReviewer
+    !isAdminReviewer &&
+    !deferPayment
   ) {
     return { error: "입금자명을 입력해주세요." };
   }
   const bankPaymentDocumentError = isAdminReviewer
     ? null
     : validateBankPaymentDocument({
-        isSubmitted,
+        isSubmitted: isSubmitted && !deferPayment,
         paymentMethod,
         paymentDocumentType,
         cashReceiptPurpose,
@@ -1586,6 +1595,7 @@ export async function saveMvSubmissionAction(
 
   const shouldRequestPayment =
     isSubmitted &&
+    !deferPayment &&
     (paymentMethod === "CARD" || Boolean(bankDepositorNameValue));
   const artistId = await ensureArtistByName(artistNameValue);
 
@@ -1811,7 +1821,9 @@ export async function saveMvSubmissionAction(
 
   const eventMessage =
     parsed.data.status === "SUBMITTED"
-      ? shouldRequestPayment
+      ? deferPayment
+        ? "결제 전 신청서 저장이 완료되었습니다."
+        : shouldRequestPayment
         ? paymentMethod === "CARD"
           ? "카드 결제 요청이 접수되었습니다."
           : "입금 확인 요청이 접수되었습니다."
@@ -1865,7 +1877,7 @@ export async function saveMvSubmissionAction(
           });
         }
 
-        if (paymentMethod === "BANK" && amountKrw > 0) {
+        if (shouldRequestPayment && paymentMethod === "BANK" && amountKrw > 0) {
           const bankEmailResult = await sendSubmissionBankRequestEmail({
             email: recipientEmail,
             title: titleValue || "제목 미입력",

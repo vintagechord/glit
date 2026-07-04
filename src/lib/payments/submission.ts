@@ -133,9 +133,6 @@ export const createSubmissionPaymentOrder = async (
   if (submission.status === "DRAFT") {
     return { error: "임시저장 상태에서는 결제를 시작할 수 없습니다." };
   }
-  if (submission.payment_method === "BANK") {
-    return { error: "무통장 입금 접수는 카드 결제를 시작할 수 없습니다." };
-  }
   const amountKrw = Math.round(Number(submission.amount_krw ?? 0));
   if (!Number.isFinite(amountKrw) || amountKrw <= 0) {
     return { error: "결제 금액이 유효하지 않습니다." };
