@@ -18,6 +18,11 @@ type DashboardSubmission =
       created_at: string;
       updated_at: string;
       payment_status?: string | null;
+      result_status?: string | null;
+      result_notified_at?: string | null;
+      mv_desired_rating?: string | null;
+      certificate_b2_path?: string | null;
+      certificate_original_name?: string | null;
       package_id?: string | null;
       package?: { name?: string | null; station_count?: number | null }[];
     }
@@ -34,6 +39,11 @@ type DashboardSubmission =
       created_at: string;
       updated_at: string;
       payment_status?: string | null;
+      result_status?: string | null;
+      result_notified_at?: string | null;
+      mv_desired_rating?: string | null;
+      certificate_b2_path?: string | null;
+      certificate_original_name?: string | null;
       type: string;
       package_id?: string | null;
       package?: { name?: string | null; station_count?: number | null }[];
@@ -118,7 +128,7 @@ export const getDashboardStatusData = async (
   const buildMvBase = () =>
     admin
       .from("submissions")
-      .select("id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, type, package_id, package:packages ( name, station_count )")
+      .select("id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, result_status, result_notified_at, type, mv_desired_rating, certificate_b2_path, certificate_original_name, package_id, package:packages ( name, station_count )")
       .eq("user_id", userId)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
       .not("status", "eq", "DRAFT");

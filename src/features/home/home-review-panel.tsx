@@ -35,6 +35,11 @@ type SubmissionSummary = {
   created_at?: string | null;
   updated_at: string;
   payment_status?: string | null;
+  result_status?: string | null;
+  result_notified_at?: string | null;
+  mv_desired_rating?: string | null;
+  certificate_b2_path?: string | null;
+  certificate_original_name?: string | null;
 };
 
 type TabKey = "album" | "mv";
@@ -76,12 +81,30 @@ type DashboardStatusResponse = {
 
 const DASHBOARD_STATUS_FETCH_TIMEOUT_MS = 12_000;
 
+type MvReviewAssetPath = "mv-rating-image" | "mv-guide" | "mv-certificate";
+
+type DownloadLinkResponse = {
+  url?: string;
+  error?: string;
+};
+
+type MvReviewAssetState = {
+  submissionId: string;
+  ratingCode: string | null;
+  ratingLabel: string;
+  hasRating: boolean;
+  hasResultSignal: boolean;
+  hasCertificate: boolean;
+  certificateName: string | null;
+};
+
 type TrackResultModalState = {
   stationName: string;
   summary: ReturnType<typeof summarizeTrackResults>;
   resultNote: string | null;
   resultLabel: string;
   resultTone: string;
+  mvReviewAssets?: MvReviewAssetState;
 };
 
 const stageStatusMap = {
@@ -131,15 +154,119 @@ function buildResultModalState(
   review: StationItem,
   summary: ReturnType<typeof summarizeTrackResults>,
   result: { label: string; tone: string },
+  submission?: SubmissionSummary | null,
 ): TrackResultModalState {
+  const mvReviewAssets = buildMvReviewAssetState(submission);
   return {
     stationName: review.station?.name ?? "-",
     summary,
     resultNote: review.result_note?.trim() || null,
     resultLabel: result.label,
     resultTone: result.tone,
+    ...(mvReviewAssets ? { mvReviewAssets } : {}),
   };
 }
+
+const mvRatingLabel = (code?: string | null) => {
+  switch (code) {
+    case "ALL":
+      return "전체관람가";
+    case "12":
+      return "12세 이상";
+    case "15":
+      return "15세 이상";
+    case "18":
+      return "청소년관람불가";
+    case "19":
+      return "19세 이상";
+    case "REJECT":
+      return "심의불가";
+    default:
+      return "등급 미설정";
+  }
+};
+
+const hasSubmissionResultSignal = (submission?: SubmissionSummary | null) =>
+  Boolean(
+    submission?.result_status ||
+      submission?.result_notified_at ||
+      (submission?.status &&
+        ["RESULT_READY", "COMPLETED"].includes(submission.status)),
+  );
+
+function buildMvReviewAssetState(
+  submission?: SubmissionSummary | null,
+): MvReviewAssetState | null {
+  if (submission?.type !== "MV_DISTRIBUTION") return null;
+  const ratingCode = submission.mv_desired_rating?.trim() || null;
+  return {
+    submissionId: submission.id,
+    ratingCode,
+    ratingLabel: mvRatingLabel(ratingCode),
+    hasRating: Boolean(ratingCode),
+    hasResultSignal: hasSubmissionResultSignal(submission),
+    hasCertificate: Boolean(submission.certificate_b2_path?.trim()),
+    certificateName: submission.certificate_original_name?.trim() || null,
+  };
+}
+
+function getDisplayStatusForReview(
+  status: ReturnType<typeof getStationReviewDisplayStatus>,
+  submission?: SubmissionSummary | null,
+) {
+  const mvAssets = buildMvReviewAssetState(submission);
+  if (!mvAssets?.hasRating || !mvAssets.hasResultSignal) {
+    return status;
+  }
+  return {
+    ...status,
+    label: mvAssets.ratingLabel,
+    tone:
+      mvAssets.ratingCode === "REJECT"
+        ? "bauhaus-status-chip--danger"
+        : "bauhaus-status-chip--success",
+    summaryText: null,
+  };
+}
+
+const getMvReviewAssetDisabledReason = (
+  assets: MvReviewAssetState,
+  assetPath: MvReviewAssetPath,
+) => {
+  if (!assets.hasResultSignal) return "심의 결과 반영 후 다운로드할 수 있습니다.";
+  if (!assets.hasRating) return "심의 등급 설정 후 다운로드할 수 있습니다.";
+  if (assetPath === "mv-certificate" && !assets.hasCertificate) {
+    return "필증 업로드 후 다운로드할 수 있습니다.";
+  }
+  return null;
+};
+
+const getMvReviewDownloadActions = (assets: MvReviewAssetState) => [
+  {
+    path: "mv-rating-image" as const,
+    label: "심의 등급 이미지",
+    detail: assets.hasRating ? assets.ratingLabel : "등급 설정 대기",
+  },
+  {
+    path: "mv-certificate" as const,
+    label: "필증 다운로드",
+    detail: assets.hasCertificate
+      ? assets.certificateName ?? "등록 완료"
+      : "필증 업로드 대기",
+  },
+  {
+    path: "mv-guide" as const,
+    label: "적용 가이드",
+    detail: "온라인 심의 공통 파일",
+  },
+];
+
+const openDownloadUrl = (url: string) => {
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    window.location.href = url;
+  }
+};
 
 function getStageStatus(submission?: SubmissionSummary | null) {
   if (!submission) return null;
@@ -328,6 +455,7 @@ export function HomeReviewPanel({
   compact = false,
   isLoading = false,
   initialTab,
+  guestToken,
 }: {
   isLoggedIn: boolean;
   albumSubmissions: SubmissionSummary[];
@@ -345,6 +473,7 @@ export function HomeReviewPanel({
   compact?: boolean;
   isLoading?: boolean;
   initialTab?: TabKey;
+  guestToken?: string;
 }) {
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
@@ -509,7 +638,9 @@ export function HomeReviewPanel({
         async () => {
           const { data } = await supabase
             .from("submissions")
-            .select("id, title, artist_name, status, updated_at, payment_status")
+            .select(
+              "id, title, artist_name, status, updated_at, payment_status, type, result_status, result_notified_at, mv_desired_rating, certificate_b2_path, certificate_original_name",
+            )
             .eq("id", activeSubmissionId)
             .maybeSingle();
           if (!data) return;
@@ -542,7 +673,7 @@ export function HomeReviewPanel({
           const { data } = await supabase
             .from("station_reviews")
             .select(
-              "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( name )",
+              "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code )",
             )
             .eq("submission_id", activeSubmissionId)
             .order("updated_at", { ascending: false });
@@ -551,7 +682,7 @@ export function HomeReviewPanel({
             const fallback = await supabase
               .from("station_reviews")
               .select(
-                "id, status, result_note, track_results, updated_at, station:stations ( name )",
+                "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )",
               )
               .eq("submission_id", activeSubmissionId)
               .order("updated_at", { ascending: false });
@@ -658,6 +789,50 @@ export function HomeReviewPanel({
   const [canScrollDown, setCanScrollDown] = React.useState(false);
   const [trackResultModal, setTrackResultModal] =
     React.useState<TrackResultModalState | null>(null);
+  const [downloadingMvAsset, setDownloadingMvAsset] =
+    React.useState<MvReviewAssetPath | null>(null);
+
+  const openSubmissionDownload = React.useCallback(
+    async (submissionId: string, assetPath: MvReviewAssetPath) => {
+      const params = new URLSearchParams();
+      if (guestToken) params.set("guestToken", guestToken);
+      const query = params.toString();
+      const res = await fetch(
+        `/api/submissions/${submissionId}/${assetPath}${query ? `?${query}` : ""}`,
+      );
+      const json = (await res.json().catch(() => null)) as DownloadLinkResponse | null;
+      if (!res.ok || !json?.url) {
+        throw new Error(json?.error || "다운로드 링크를 생성하지 못했습니다.");
+      }
+      openDownloadUrl(json.url);
+    },
+    [guestToken],
+  );
+
+  const handleMvReviewAssetDownload = React.useCallback(
+    async (assetPath: MvReviewAssetPath) => {
+      const assets = trackResultModal?.mvReviewAssets;
+      if (!assets) return;
+      const disabledReason = getMvReviewAssetDisabledReason(assets, assetPath);
+      if (disabledReason) {
+        alert(disabledReason);
+        return;
+      }
+      setDownloadingMvAsset(assetPath);
+      try {
+        await openSubmissionDownload(assets.submissionId, assetPath);
+      } catch (error) {
+        alert(
+          error instanceof Error
+            ? error.message
+            : "다운로드 링크를 생성하지 못했습니다.",
+        );
+      } finally {
+        setDownloadingMvAsset(null);
+      }
+    },
+    [openSubmissionDownload, trackResultModal?.mvReviewAssets],
+  );
   const updateScrollButtons = React.useCallback(() => {
     const list = stationListRef.current;
     if (!list) {
@@ -757,6 +932,8 @@ export function HomeReviewPanel({
     },
     [endStationListPointerDrag],
   );
+
+  const modalMvReviewAssets = trackResultModal?.mvReviewAssets ?? null;
 
   return (
     <div className={`min-w-0 w-full rounded-[10px] border-2 border-[#111111] bg-card ${shellPaddingClass} ${shellLayoutClass} shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] ${panelMinHeightClassName}`}>
@@ -1014,6 +1191,10 @@ export function HomeReviewPanel({
                           station,
                           summary,
                         );
+                        const displayStatus = getDisplayStatusForReview(
+                          currentStatus,
+                          activeSubmission,
+                        );
                         const stationName = getStationName(station.station);
                         const stationCode = getStationCode(station.station);
                         return (
@@ -1044,29 +1225,30 @@ export function HomeReviewPanel({
                                       buildResultModalState(
                                         station,
                                         summary,
-                                        currentStatus,
+                                        displayStatus,
+                                        activeSubmission,
                                       ),
                                     )
                                   }
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${currentStatus.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
                                 >
-                                  <span>{currentStatus.label}</span>
-                                  {currentStatus.summaryText ? (
+                                  <span>{displayStatus.label}</span>
+                                  {displayStatus.summaryText ? (
                                     <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                      {currentStatus.summaryText}
+                                      {displayStatus.summaryText}
                                     </span>
                                   ) : null}
                                 </button>
                               ) : (
                                 <div className="flex flex-col items-center gap-1">
                                   <span
-                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${currentStatus.tone}`}
+                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${displayStatus.tone}`}
                                   >
-                                    {currentStatus.label}
+                                    {displayStatus.label}
                                   </span>
-                                  {currentStatus.summaryText ? (
+                                  {displayStatus.summaryText ? (
                                     <span className="text-[11px] leading-tight text-muted-foreground text-center">
-                                      {currentStatus.summaryText}
+                                      {displayStatus.summaryText}
                                     </span>
                                   ) : null}
                                 </div>
@@ -1094,6 +1276,10 @@ export function HomeReviewPanel({
                           station,
                           summary,
                         );
+                        const displayStatus = getDisplayStatusForReview(
+                          currentStatus,
+                          activeSubmission,
+                        );
                         const stationName = getStationName(station.station);
                         const stationCode = getStationCode(station.station);
                         const stationLabel = stationCode
@@ -1120,20 +1306,21 @@ export function HomeReviewPanel({
                                     buildResultModalState(
                                       station,
                                       summary,
-                                      currentStatus,
+                                      displayStatus,
+                                      activeSubmission,
                                     ),
                                   )
                                 }
-                                className={`bauhaus-status-chip bauhaus-status-chip--compact min-w-[88px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${currentStatus.tone}`}
+                                className={`bauhaus-status-chip bauhaus-status-chip--compact min-w-[88px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
                               >
-                                <span>{currentStatus.label}</span>
+                                <span>{displayStatus.label}</span>
                               </button>
                             ) : (
                               <div className="flex items-center justify-self-center">
                                 <span
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact ${currentStatus.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact ${displayStatus.tone}`}
                                 >
-                                  {currentStatus.label}
+                                  {displayStatus.label}
                                 </span>
                               </div>
                             )}
@@ -1159,6 +1346,10 @@ export function HomeReviewPanel({
                         const canOpenResultModal = shouldOpenResultModal(
                           station,
                           summary,
+                        );
+                        const displayStatus = getDisplayStatusForReview(
+                          currentStatus,
+                          activeSubmission,
                         );
                         const stationName = getStationName(station.station);
                         const stationCode = getStationCode(station.station);
@@ -1199,29 +1390,30 @@ export function HomeReviewPanel({
                                       buildResultModalState(
                                         station,
                                         summary,
-                                        currentStatus,
+                                        displayStatus,
+                                        activeSubmission,
                                       ),
                                     )
                                   }
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${currentStatus.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
                                 >
-                                  <span>{currentStatus.label}</span>
-                                  {currentStatus.summaryText ? (
+                                  <span>{displayStatus.label}</span>
+                                  {displayStatus.summaryText ? (
                                     <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                      {currentStatus.summaryText}
+                                      {displayStatus.summaryText}
                                     </span>
                                   ) : null}
                                 </button>
                               ) : (
                                 <div className="flex flex-col items-center gap-1">
                                   <span
-                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${currentStatus.tone}`}
+                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${displayStatus.tone}`}
                                   >
-                                    {currentStatus.label}
+                                    {displayStatus.label}
                                   </span>
-                                  {currentStatus.summaryText ? (
+                                  {displayStatus.summaryText ? (
                                     <span className="text-[11px] leading-tight text-muted-foreground text-center">
-                                      {currentStatus.summaryText}
+                                      {displayStatus.summaryText}
                                     </span>
                                   ) : null}
                                 </div>
@@ -1348,6 +1540,46 @@ export function HomeReviewPanel({
                 </p>
               </div>
             ) : null}
+            {modalMvReviewAssets
+              ? (
+                <div className="mt-5 border-t border-border/60 pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    뮤직비디오 결과 다운로드
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    {getMvReviewDownloadActions(modalMvReviewAssets).map(
+                      (action) => {
+                        const disabledReason = getMvReviewAssetDisabledReason(
+                          modalMvReviewAssets,
+                          action.path,
+                        );
+                        const isDownloading = downloadingMvAsset === action.path;
+                        return (
+                          <button
+                            key={action.path}
+                            type="button"
+                            onClick={() => handleMvReviewAssetDownload(action.path)}
+                            disabled={Boolean(disabledReason) || Boolean(downloadingMvAsset)}
+                            className={`min-h-[74px] rounded-[8px] border-2 px-3 py-2 text-left text-xs font-black tracking-normal transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                              disabledReason
+                                ? "cursor-not-allowed border-border/60 bg-muted/40 text-muted-foreground"
+                                : "border-[#111111] bg-white text-[#111111] shadow-[3px_3px_0_#111111] hover:-translate-y-0.5 hover:bg-[#f2cf27] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
+                            }`}
+                          >
+                            <span className="block leading-tight">
+                              {isDownloading ? "준비 중..." : action.label}
+                            </span>
+                            <span className="mt-1 block truncate text-[11px] font-semibold leading-tight opacity-75">
+                              {disabledReason ?? action.detail}
+                            </span>
+                          </button>
+                        );
+                      },
+                    )}
+                  </div>
+                </div>
+              )
+              : null}
             <button
               type="button"
               onClick={() => setTrackResultModal(null)}

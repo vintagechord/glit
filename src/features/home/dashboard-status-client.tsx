@@ -25,6 +25,11 @@ type StatusResponse = {
     created_at?: string | null;
     updated_at: string;
     payment_status?: string | null;
+    result_status?: string | null;
+    result_notified_at?: string | null;
+    mv_desired_rating?: string | null;
+    certificate_b2_path?: string | null;
+    certificate_original_name?: string | null;
     package?: { name?: string | null; station_count?: number | null }[];
   }>;
   mvSubmissions: Array<{
@@ -35,6 +40,11 @@ type StatusResponse = {
     created_at?: string | null;
     updated_at: string;
     payment_status?: string | null;
+    result_status?: string | null;
+    result_notified_at?: string | null;
+    mv_desired_rating?: string | null;
+    certificate_b2_path?: string | null;
+    certificate_original_name?: string | null;
     type: string;
   }>;
   albumStationsMap: Record<string, StationItem[]>;
