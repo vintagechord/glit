@@ -75,6 +75,23 @@ test("parseMelonSongPage extracts credits and lyrics with line breaks", () => {
   assert.equal(track.lyrics, "Line one\n\nLine two");
 });
 
+test("melon parser normalizes decomposed Korean text", () => {
+  const decomposedTitle = "가을 왈츠".normalize("NFD");
+  const decomposedLyrics = "추억에 그리운 아이".normalize("NFD");
+  const decomposedSongHtml = `
+    <div class="song_name"><strong class="none">곡명</strong> ${decomposedTitle}</div>
+    <a class="artist_name"><span>토니 신</span></a>
+    <div class="lyric" id="d_video_summary">${decomposedLyrics}</div>
+  `;
+
+  const track = parseMelonSongPage(decomposedSongHtml, "222");
+
+  assert.equal(track.trackTitle, "가을 왈츠");
+  assert.equal(track.lyrics, "추억에 그리운 아이");
+  assert.equal(track.trackTitle, track.trackTitle.normalize("NFC"));
+  assert.equal(track.lyrics, track.lyrics.normalize("NFC"));
+});
+
 test("fetchMelonAlbumReviewData requires lyrics", async () => {
   const fetcher = async (input: Parameters<typeof fetch>[0]) => {
     const url = String(input);

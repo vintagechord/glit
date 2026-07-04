@@ -45,6 +45,9 @@ type DocOptions = {
   };
 };
 
+const normalizeDocText = (value: DocText) =>
+  String(value ?? "").normalize("NFC");
+
 type TrackDocData = Record<string, unknown> & {
   track_no: number;
   track_no_padded: string;
@@ -90,7 +93,7 @@ type SubmissionDocData = Record<string, unknown> & {
 };
 
 const xmlEscape = (value: DocText) =>
-  String(value ?? "")
+  normalizeDocText(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -98,7 +101,9 @@ const xmlEscape = (value: DocText) =>
     .replace(/'/g, "&apos;");
 
 const cleanLines = (value: DocText | DocText[]) => {
-  const raw = Array.isArray(value) ? value.join("\n") : String(value ?? "");
+  const raw = Array.isArray(value)
+    ? value.map((item) => normalizeDocText(item)).join("\n")
+    : normalizeDocText(value);
   return raw.replace(/\r\n?/g, "\n").split("\n");
 };
 

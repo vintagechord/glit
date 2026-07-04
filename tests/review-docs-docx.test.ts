@@ -29,12 +29,14 @@ const getTableSummaries = (xml: string) =>
   });
 
 test("review docs zip uses docx-only files and example-like review form tables", async () => {
+  const decomposedTitle = "별고양이".normalize("NFD");
+  const decomposedLyric = "바람결에 나부끼는 저 햇살은".normalize("NFD");
   const zipBuffer = await buildReviewDocsZip([
     {
       submission: {
         id: "11111111-1111-4111-8111-111111111111",
         type: "ALBUM",
-        title: "별고양이",
+        title: decomposedTitle,
         artist_name: "더 포엠(The Poem)",
         release_date: "2026-07-21",
         production_date: "2026-07-21",
@@ -46,12 +48,12 @@ test("review docs zip uses docx-only files and example-like review form tables",
         {
           submission_id: "11111111-1111-4111-8111-111111111111",
           track_no: 1,
-          track_title: "별고양이",
+          track_title: decomposedTitle,
           is_title: true,
           lyricist: "더 포엠(The Poem)",
           composer: "더 포엠(The Poem)",
           arranger: "ANDRO",
-          lyrics: "바람결에 나부끼는 저 햇살은\n내 어깨를 스쳐 가고",
+          lyrics: `${decomposedLyric}\n내 어깨를 스쳐 가고`,
         },
         {
           submission_id: "11111111-1111-4111-8111-111111111111",
@@ -106,5 +108,8 @@ test("review docs zip uses docx-only files and example-like review form tables",
 
   assert.match(reviewFormXml, /vintagechord@daum\.net/);
   assert.match(reviewFormXml, /빈티지코드/);
+  assert.match(reviewFormXml, /별고양이/);
+  assert.match(reviewFormXml, /바람결에 나부끼는 저 햇살은/);
+  assert.doesNotMatch(reviewFormXml, /별고양이/);
   assert.match(albumInfoXml, /BA MUSIC/);
 });

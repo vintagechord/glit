@@ -79,6 +79,9 @@ const decodeHtmlEntities = (value: string) =>
 
 const stripTags = (value: string) => value.replace(/<[^>]*>/g, "");
 
+const normalizeMelonText = (value: string) =>
+  typeof value.normalize === "function" ? value.normalize("NFC") : value;
+
 const htmlToText = (value: string, preserveLineBreaks = false) => {
   const withBreaks = value
     .replace(/<!--[\s\S]*?-->/g, "")
@@ -88,20 +91,22 @@ const htmlToText = (value: string, preserveLineBreaks = false) => {
   const decoded = decodeHtmlEntities(stripTags(withBreaks)).replace(/\u00a0/g, " ");
 
   if (!preserveLineBreaks) {
-    return decoded.replace(/\s+/g, " ").trim();
+    return normalizeMelonText(decoded.replace(/\s+/g, " ").trim());
   }
 
-  return decoded
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((line) => line.replace(/[ \t]+/g, " ").trim())
-    .reduce<string[]>((lines, line) => {
-      if (!line && !lines[lines.length - 1]) return lines;
-      lines.push(line);
-      return lines;
-    }, [])
-    .join("\n")
-    .trim();
+  return normalizeMelonText(
+    decoded
+      .replace(/\r\n?/g, "\n")
+      .split("\n")
+      .map((line) => line.replace(/[ \t]+/g, " ").trim())
+      .reduce<string[]>((lines, line) => {
+        if (!line && !lines[lines.length - 1]) return lines;
+        lines.push(line);
+        return lines;
+      }, [])
+      .join("\n")
+      .trim(),
+  );
 };
 
 const firstMatchText = (html: string, pattern: RegExp, preserveLineBreaks = false) => {

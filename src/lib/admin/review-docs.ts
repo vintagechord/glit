@@ -132,7 +132,7 @@ async function assertTemplatesAvailable() {
 
 const valueToText = (value: unknown) => {
   if (value === null || value === undefined) return "";
-  if (typeof value === "string") return value.trim();
+  if (typeof value === "string") return value.normalize("NFC").trim();
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return "";
 };
@@ -260,6 +260,7 @@ const normalizeRecord = (record: DbRecord) =>
 
 const sanitizeFilenamePart = (value: string, fallback: string) => {
   const cleaned = value
+    .normalize("NFC")
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
