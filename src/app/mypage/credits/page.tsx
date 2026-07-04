@@ -1,10 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   Coins,
   ExternalLink,
   History,
-  Newspaper,
   Ticket,
 } from "lucide-react";
 
@@ -245,15 +243,6 @@ export default async function MyPageCreditsPage({
       description="음반심의 결제 완료 건으로 적립된 크레딧을 매거진 발행이나 서비스 이용권으로 사용할 수 있습니다."
       activeTab="credits"
       contextLabel="마이페이지"
-      action={
-        <Link
-          href="/magazine"
-          className="inline-flex min-h-10 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-xs font-black text-[#111111] shadow-[3px_3px_0_#111111]"
-        >
-          <Newspaper className="h-4 w-4" aria-hidden="true" />
-          매거진 발행
-        </Link>
-      }
     >
       <div className="space-y-8">
         {notice ? (
@@ -496,7 +485,7 @@ export default async function MyPageCreditsPage({
               </h2>
             </div>
             <p className="mt-3 text-sm font-semibold leading-6 text-muted-foreground">
-              회원 계정으로 결제 완료된 건은 크레딧이 자동 적립됩니다.
+              회원 계정으로 결제 완료된 음반심의 건의 크레딧이 자동 적립됩니다.
             </p>
             <div className="mt-5 space-y-3">
               {creditSources.length > 0 ? (

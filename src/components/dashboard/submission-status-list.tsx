@@ -333,13 +333,13 @@ export function SubmissionStatusList({
                                   resultNote: station.result_note?.trim() || null,
                                 })
                               }
-                              className={`bauhaus-status-chip bauhaus-status-chip--compact transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${currentStatus.tone}`}
+                              className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] min-w-[100px] transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${currentStatus.tone}`}
                             >
                               {currentStatus.label}
                             </button>
                           ) : (
                             <span
-                              className={`bauhaus-status-chip bauhaus-status-chip--compact ${currentStatus.tone}`}
+                              className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] min-w-[100px] ${currentStatus.tone}`}
                             >
                               {currentStatus.label}
                             </span>

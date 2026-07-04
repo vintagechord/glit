@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { presignGetUrl } from "@/lib/b2";
 
@@ -63,11 +64,12 @@ export async function GET(
 
   try {
     const urlSigned = await presignGetUrl(key, 60 * 10);
-    return NextResponse.json({
+    return await createAttachmentResponseFromUrl({
       url: urlSigned,
-      filename: cert.certificate_original_name ?? null,
-      mimeType: cert.certificate_mime ?? null,
-      sizeBytes: cert.certificate_size ?? null,
+      filename:
+        cert.certificate_original_name?.trim() ||
+        `onside-mv-certificate-${submissionId}.pdf`,
+      fallbackContentType: cert.certificate_mime ?? "application/pdf",
     });
   } catch (error) {
     console.error("[mv-certificate] failed to presign certificate", {

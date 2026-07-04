@@ -84,21 +84,28 @@ function Thumbnail({ name, src }: { name: string; src: string | null }) {
   );
 }
 
-const removeSubmissionFromGroups = (groups: ArtistGroup[], submissionId: string) =>
+const removeSubmissionsFromGroups = (
+  groups: ArtistGroup[],
+  submissionIds: Set<string>,
+) =>
   groups
     .map((group) => ({
       ...group,
-      submissions: group.submissions.filter((item) => item.id !== submissionId),
+      submissions: group.submissions.filter((item) => !submissionIds.has(item.id)),
     }))
     .filter((group) => group.submissions.length > 0);
 
 function ArtistCard({
   group,
+  selectedIds,
   deletingIds,
+  onToggleSelection,
   onDelete,
 }: {
   group: ArtistGroup;
+  selectedIds: Set<string>;
   deletingIds: Set<string>;
+  onToggleSelection: (id: string) => void;
   onDelete: (item: SubmissionItem) => void;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -140,6 +147,18 @@ function ArtistCard({
                 key={item.id}
                 className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/80 px-3 py-2 text-sm transition hover:border-foreground"
               >
+                <label className="flex shrink-0 items-center justify-center">
+                  <span className="sr-only">
+                    {item.title || "제목 미입력"} 선택
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(item.id)}
+                    onChange={() => onToggleSelection(item.id)}
+                    disabled={deletingIds.has(item.id)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                </label>
                 <Link
                   href={`/dashboard/submissions/${encodeURIComponent(item.id)}`}
                   prefetch={false}
@@ -197,6 +216,9 @@ export function ArtistHistoryTabs({
   const [deletingIds, setDeletingIds] = React.useState<Set<string>>(
     () => new Set(),
   );
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
   const [notice, setNotice] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -206,6 +228,18 @@ export function ArtistHistoryTabs({
   React.useEffect(() => {
     setMvItems(mvGroups);
   }, [mvGroups]);
+
+  React.useEffect(() => {
+    const validIds = new Set(
+      [...albumItems, ...mvItems].flatMap((group) =>
+        group.submissions.map((item) => item.id),
+      ),
+    );
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((id) => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [albumItems, mvItems]);
 
   React.useEffect(() => {
     setTab((prev) => {
@@ -219,6 +253,63 @@ export function ArtistHistoryTabs({
     });
   }, [albumItems.length, mvItems.length]);
 
+  const updateDeletedItems = React.useCallback((ids: Set<string>) => {
+    setAlbumItems((prev) => removeSubmissionsFromGroups(prev, ids));
+    setMvItems((prev) => removeSubmissionsFromGroups(prev, ids));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  }, []);
+
+  const deleteSubmissionIds = React.useCallback(
+    async (ids: string[], successMessage: string) => {
+      const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+      if (uniqueIds.length === 0) return;
+
+      setNotice(null);
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        uniqueIds.forEach((id) => next.add(id));
+        return next;
+      });
+
+      try {
+        const response = await fetch("/api/submissions/delete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ids: uniqueIds }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as DeletePayload;
+        const deletedIds = new Set(payload.deletedIds ?? []);
+
+        if (!response.ok || deletedIds.size === 0) {
+          setNotice(
+            payload.error ??
+              "심의 내역 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.",
+          );
+          return;
+        }
+
+        updateDeletedItems(deletedIds);
+        setNotice(successMessage);
+      } catch (error) {
+        console.error(error);
+        setNotice("심의 내역 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      } finally {
+        setDeletingIds((prev) => {
+          const next = new Set(prev);
+          uniqueIds.forEach((id) => next.delete(id));
+          return next;
+        });
+      }
+    },
+    [updateDeletedItems],
+  );
+
   const handleDelete = React.useCallback(async (item: SubmissionItem) => {
     if (!item.id || deletingIds.has(item.id)) return;
     const label = item.title || "제목 미입력";
@@ -229,73 +320,110 @@ export function ArtistHistoryTabs({
       return;
     }
 
-    setNotice(null);
-    setDeletingIds((prev) => {
+    await deleteSubmissionIds([item.id], "심의 내역을 삭제했습니다.");
+  }, [deleteSubmissionIds, deletingIds]);
+
+  const visibleIds = React.useMemo(
+    () =>
+      (tab === "ALBUM" ? albumItems : mvItems).flatMap((group) =>
+        group.submissions.map((item) => item.id),
+      ),
+    [albumItems, mvItems, tab],
+  );
+  const selectedVisibleIds = React.useMemo(
+    () => visibleIds.filter((id) => selectedIds.has(id)),
+    [selectedIds, visibleIds],
+  );
+  const allVisibleSelected =
+    visibleIds.length > 0 && selectedVisibleIds.length === visibleIds.length;
+
+  const toggleSelection = React.useCallback((id: string) => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
-      next.add(item.id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
+  }, []);
 
-    try {
-      const response = await fetch("/api/submissions/delete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ids: [item.id] }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as DeletePayload;
-
-      if (!response.ok || !payload.deletedIds?.includes(item.id)) {
-        setNotice(
-          payload.error ??
-            "심의 내역 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.",
-        );
-        return;
+  const toggleVisibleSelection = React.useCallback(() => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        visibleIds.forEach((id) => next.delete(id));
+      } else {
+        visibleIds.forEach((id) => next.add(id));
       }
+      return next;
+    });
+  }, [allVisibleSelected, visibleIds]);
 
-      setAlbumItems((prev) => removeSubmissionFromGroups(prev, item.id));
-      setMvItems((prev) => removeSubmissionFromGroups(prev, item.id));
-      setNotice("심의 내역을 삭제했습니다.");
-    } catch (error) {
-      console.error(error);
-      setNotice("심의 내역 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
-    } finally {
-      setDeletingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(item.id);
-        return next;
-      });
+  const handleDeleteSelected = React.useCallback(async () => {
+    const ids = selectedVisibleIds;
+    if (ids.length === 0) return;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`선택한 심의 내역 ${ids.length}건을 삭제할까요?`)
+    ) {
+      return;
     }
-  }, [deletingIds]);
+    await deleteSubmissionIds(
+      ids,
+      `${ids.length}건의 심의 내역을 삭제했습니다.`,
+    );
+  }, [deleteSubmissionIds, selectedVisibleIds]);
 
   const groups = tab === "ALBUM" ? albumItems : mvItems;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-        <button
-          type="button"
-          onClick={() => setTab("ALBUM")}
-          className={`rounded-full px-4 py-2 transition ${
-            tab === "ALBUM"
-              ? "bg-foreground text-background"
-              : "border border-border/70 text-foreground hover:border-foreground"
-          }`}
-        >
-          앨범
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("MV")}
-          className={`rounded-full px-4 py-2 transition ${
-            tab === "MV"
-              ? "bg-foreground text-background"
-              : "border border-border/70 text-foreground hover:border-foreground"
-          }`}
-        >
-          뮤직비디오
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => setTab("ALBUM")}
+            className={`rounded-full px-4 py-2 transition ${
+              tab === "ALBUM"
+                ? "bg-foreground text-background"
+                : "border border-border/70 text-foreground hover:border-foreground"
+            }`}
+          >
+            앨범
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("MV")}
+            className={`rounded-full px-4 py-2 transition ${
+              tab === "MV"
+                ? "bg-foreground text-background"
+                : "border border-border/70 text-foreground hover:border-foreground"
+            }`}
+          >
+            뮤직비디오
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em]">
+          <button
+            type="button"
+            onClick={toggleVisibleSelection}
+            disabled={visibleIds.length === 0}
+            className="rounded-full border border-border/70 px-3 py-1.5 text-muted-foreground transition hover:border-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {allVisibleSelected ? "전체 해제" : "전체 선택"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDeleteSelected()}
+            disabled={selectedVisibleIds.length === 0 || deletingIds.size > 0}
+            className="rounded-full border border-red-500/40 px-3 py-1.5 font-semibold text-red-600 transition hover:border-red-600 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            선택 삭제
+            {selectedVisibleIds.length > 0 ? ` ${selectedVisibleIds.length}` : ""}
+          </button>
+        </div>
       </div>
 
       {notice ? (
@@ -317,7 +445,9 @@ export function ArtistHistoryTabs({
             <ArtistCard
               key={`${group.artistId ?? group.artistName}`}
               group={group}
+              selectedIds={selectedIds}
               deletingIds={deletingIds}
+              onToggleSelection={toggleSelection}
               onDelete={handleDelete}
             />
           ))}

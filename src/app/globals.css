@@ -266,10 +266,10 @@
   }
 
   .bauhaus-status-chip--compact {
-    min-height: 1.375rem;
-    padding: 0.2rem 0.45rem;
+    min-height: 1.625rem;
+    padding: 0.25rem 0.625rem;
     box-shadow: 1.5px 1.5px 0 var(--bauhaus-shadow);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
   }
 
   .bauhaus-status-chip--neutral {

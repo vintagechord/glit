@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 import { getGuideSignedUrl } from "@/lib/mv-assets";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 
@@ -44,7 +45,11 @@ export async function GET(
 
   try {
     const urlSigned = await getGuideSignedUrl();
-    return NextResponse.json({ url: urlSigned });
+    return await createAttachmentResponseFromUrl({
+      url: urlSigned,
+      filename: "onside-mv-rating-guide.pdf",
+      fallbackContentType: "application/pdf",
+    });
   } catch (error) {
     console.error("[mv-guide] failed to presign guide", {
       submissionId,

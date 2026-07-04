@@ -11,6 +11,7 @@ import {
 } from "@/lib/station-review-display";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { createClient } from "@/lib/supabase/client";
+import { downloadEndpointFile } from "@/lib/browser-download";
 
 type StationItem = {
   id: string;
@@ -82,11 +83,6 @@ type DashboardStatusResponse = {
 const DASHBOARD_STATUS_FETCH_TIMEOUT_MS = 12_000;
 
 type MvReviewAssetPath = "mv-rating-image" | "mv-guide" | "mv-certificate";
-
-type DownloadLinkResponse = {
-  url?: string;
-  error?: string;
-};
 
 type MvReviewAssetState = {
   submissionId: string;
@@ -261,11 +257,10 @@ const getMvReviewDownloadActions = (assets: MvReviewAssetState) => [
   },
 ];
 
-const openDownloadUrl = (url: string) => {
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
-  if (!opened) {
-    window.location.href = url;
-  }
+const mvReviewFallbackFilenames: Record<MvReviewAssetPath, string> = {
+  "mv-rating-image": "onside-mv-rating-image.png",
+  "mv-guide": "onside-mv-rating-guide.pdf",
+  "mv-certificate": "onside-mv-certificate.pdf",
 };
 
 function getStageStatus(submission?: SubmissionSummary | null) {
@@ -769,8 +764,8 @@ export function HomeReviewPanel({
     ? "hidden grid-cols-[minmax(0,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:grid"
     : "hidden grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid";
   const mobileTableHeaderClass = compact
-    ? "grid grid-cols-[60px_minmax(92px,1fr)_64px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:hidden"
-    : "grid grid-cols-[60px_minmax(104px,1fr)_72px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden";
+    ? "grid grid-cols-[minmax(0,1fr)_minmax(96px,auto)_64px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:hidden"
+    : "grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_72px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:hidden";
   const listPaddingClass = compact
     ? "px-2 py-2"
     : "px-2.5 py-2.5 sm:px-3 sm:py-3";
@@ -778,8 +773,8 @@ export function HomeReviewPanel({
     ? "grid min-h-[46px] grid-cols-[minmax(0,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-1.5 text-xs"
     : "grid min-h-[52px] grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-sm";
   const mobileStationRowClass = compact
-    ? "grid min-h-[44px] grid-cols-[60px_minmax(92px,1fr)_64px] items-center gap-2 px-2 py-1.5 text-xs"
-    : "grid min-h-[48px] grid-cols-[60px_minmax(104px,1fr)_72px] items-center gap-2 px-2 py-2 text-sm";
+    ? "grid min-h-[48px] grid-cols-[minmax(0,1fr)_minmax(96px,auto)_64px] items-center gap-2 px-2 py-1.5 text-xs"
+    : "grid min-h-[52px] grid-cols-[minmax(0,1fr)_minmax(112px,auto)_72px] items-center gap-2 px-2 py-2 text-sm";
   const stationListRef = React.useRef<HTMLDivElement | null>(null);
   const mouseDragPointerId = React.useRef<number | null>(null);
   const mouseDragStartY = React.useRef(0);
@@ -797,14 +792,10 @@ export function HomeReviewPanel({
       const params = new URLSearchParams();
       if (guestToken) params.set("guestToken", guestToken);
       const query = params.toString();
-      const res = await fetch(
+      await downloadEndpointFile(
         `/api/submissions/${submissionId}/${assetPath}${query ? `?${query}` : ""}`,
+        mvReviewFallbackFilenames[assetPath],
       );
-      const json = (await res.json().catch(() => null)) as DownloadLinkResponse | null;
-      if (!res.ok || !json?.url) {
-        throw new Error(json?.error || "다운로드 링크를 생성하지 못했습니다.");
-      }
-      openDownloadUrl(json.url);
     },
     [guestToken],
   );
@@ -1023,7 +1014,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex <= 0}
-            className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary/18 bg-white font-bold text-primary shadow-[0_8px_20px_rgba(0,113,227,0.12)] transition hover:border-primary hover:bg-[#eaf3ff] hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/16 dark:bg-white/8 dark:text-white dark:hover:border-white/24 dark:hover:bg-white/12`}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1556a4] bg-[#1556a4] text-xs font-black text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] disabled:cursor-not-allowed disabled:border-border disabled:bg-white disabled:text-muted-foreground disabled:opacity-70 disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#8bc3ff] dark:bg-[#8bc3ff] dark:text-[#06111f] dark:shadow-[3px_3px_0_#1556a4] dark:hover:bg-[#a8d2ff] dark:disabled:border-white/18 dark:disabled:bg-white/8 dark:disabled:text-white/45 dark:disabled:shadow-none sm:h-9 sm:w-9 sm:text-sm"
             aria-label="이전 접수"
           >
             ←
@@ -1050,7 +1041,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex >= Math.max(0, activeList.length - 1)}
-            className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary/18 bg-white font-bold text-primary shadow-[0_8px_20px_rgba(0,113,227,0.12)] transition hover:border-primary hover:bg-[#eaf3ff] hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/16 dark:bg-white/8 dark:text-white dark:hover:border-white/24 dark:hover:bg-white/12`}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1556a4] bg-[#1556a4] text-xs font-black text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] disabled:cursor-not-allowed disabled:border-border disabled:bg-white disabled:text-muted-foreground disabled:opacity-70 disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#8bc3ff] dark:bg-[#8bc3ff] dark:text-[#06111f] dark:shadow-[3px_3px_0_#1556a4] dark:hover:bg-[#a8d2ff] dark:disabled:border-white/18 dark:disabled:bg-white/8 dark:disabled:text-white/45 dark:disabled:shadow-none sm:h-9 sm:w-9 sm:text-sm"
             aria-label="다음 접수"
           >
             →
@@ -1230,7 +1221,7 @@ export function HomeReviewPanel({
                                       ),
                                     )
                                   }
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[38px] min-w-[108px] flex-col px-3 transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
                                 >
                                   <span>{displayStatus.label}</span>
                                   {displayStatus.summaryText ? (
@@ -1291,11 +1282,20 @@ export function HomeReviewPanel({
                             className={mobileStationRowClass}
                           >
                             <div
-                              className="flex items-center justify-center"
+                              className="flex min-w-0 items-center justify-start gap-2"
                               title={stationLabel}
                             >
                               <StationLogo station={station.station ?? undefined} />
-                              <span className="sr-only">{stationLabel}</span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-xs font-semibold text-foreground">
+                                  {stationName}
+                                </span>
+                                {stationCode ? (
+                                  <span className="mt-0.5 block truncate text-[10px] font-medium uppercase tracking-normal text-muted-foreground">
+                                    {stationCode}
+                                  </span>
+                                ) : null}
+                              </span>
                             </div>
                             {canOpenResultModal ? (
                               <button
@@ -1311,7 +1311,7 @@ export function HomeReviewPanel({
                                     ),
                                   )
                                 }
-                                className={`bauhaus-status-chip bauhaus-status-chip--compact min-w-[88px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
+                                className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] min-w-[100px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
                               >
                                 <span>{displayStatus.label}</span>
                               </button>
@@ -1395,7 +1395,7 @@ export function HomeReviewPanel({
                                       ),
                                     )
                                   }
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
+                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[36px] min-w-[104px] flex-col px-3 transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
                                 >
                                   <span>{displayStatus.label}</span>
                                   {displayStatus.summaryText ? (

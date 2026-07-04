@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getRatingObjectKey, isRatingCode } from "@/lib/mv-assets";
+import { createAttachmentResponseFromUrl } from "@/lib/download-response";
+import { getRatingObjectKey, isRatingCode, type RatingCode } from "@/lib/mv-assets";
 import { presignGetUrl } from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 
@@ -13,6 +14,15 @@ type RatingFields = {
   result_status?: string | null;
   result_notified_at?: string | null;
   status?: string | null;
+};
+
+const ratingFilenames: Record<RatingCode, string> = {
+  ALL: "onside-mv-rating-all.png",
+  "12": "onside-mv-rating-12.png",
+  "15": "onside-mv-rating-15.png",
+  "18": "onside-mv-rating-18.png",
+  "19": "onside-mv-rating-19.png",
+  REJECT: "onside-mv-rating-reject.png",
 };
 
 export async function GET(
@@ -65,7 +75,11 @@ export async function GET(
     const urlSigned = /^https?:\/\//i.test(objectKey)
       ? objectKey
       : await presignGetUrl(objectKey, 60 * 10);
-    return NextResponse.json({ url: urlSigned, rating });
+    return await createAttachmentResponseFromUrl({
+      url: urlSigned,
+      filename: ratingFilenames[rating],
+      fallbackContentType: "image/png",
+    });
   } catch (error) {
     console.error("[mv-rating-image] failed to presign rating image", {
       submissionId,

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import {
-  Coins,
   ExternalLink,
   Gift,
   Info,
@@ -274,16 +273,18 @@ function CreditServiceRewardsPanel({
             이 목록에 표시됩니다.
           </p>
         </div>
-        <div className="rounded-[10px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-white shadow-[4px_4px_0_#1556a4]">
-          <p className="text-[11px] font-black uppercase tracking-normal text-white/68">
+        <div className="min-w-[156px] rounded-[8px] border-2 border-border bg-card p-4">
+          <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
             사용 가능
           </p>
-          <p className="mt-1 flex items-center gap-2 text-2xl font-black">
-            <Coins className="h-5 w-5" aria-hidden="true" />
-            {isAuthenticated
-              ? `${creditSummary.available.toLocaleString()}개`
-              : "로그인 필요"}
+          <p className="mt-2 text-3xl font-black text-foreground">
+            {isAuthenticated ? creditSummary.available.toLocaleString() : "-"}
           </p>
+          {!isAuthenticated ? (
+            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+              로그인 필요
+            </p>
+          ) : null}
         </div>
       </div>
 

@@ -27,6 +27,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { APP_CONFIG } from "@/lib/config";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
+import { downloadEndpointFile } from "@/lib/browser-download";
 
 type Submission = {
   id: string;
@@ -118,11 +119,6 @@ type StationReview = {
     code: string | null;
     logo_url?: string | null;
   } | null;
-};
-
-type DownloadLinkResponse = {
-  url?: string;
-  error?: string;
 };
 
 const fallbackStationLogo = "/station-logos/default.svg";
@@ -468,11 +464,12 @@ const buildSubmissionDisplayStatus = ({
   };
 };
 
-const openDownloadUrl = (url: string) => {
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
-  if (!opened) {
-    window.location.href = url;
-  }
+type MvReviewAssetPath = "mv-rating-image" | "mv-guide" | "mv-certificate";
+
+const mvReviewFallbackFilenames: Record<MvReviewAssetPath, string> = {
+  "mv-rating-image": "onside-mv-rating-image.png",
+  "mv-guide": "onside-mv-rating-guide.pdf",
+  "mv-certificate": "onside-mv-certificate.pdf",
 };
 
 export function SubmissionDetailClient({
@@ -612,18 +609,14 @@ export function SubmissionDetailClient({
         ]
         : stationReviews;
   const openSubmissionDownload = React.useCallback(
-    async (assetPath: "mv-rating-image" | "mv-guide" | "mv-certificate") => {
+    async (assetPath: MvReviewAssetPath) => {
       const params = new URLSearchParams();
       if (guestToken) params.set("guestToken", guestToken);
       const query = params.toString();
-      const res = await fetch(
+      await downloadEndpointFile(
         `/api/submissions/${submission.id}/${assetPath}${query ? `?${query}` : ""}`,
+        mvReviewFallbackFilenames[assetPath],
       );
-      const json = (await res.json().catch(() => null)) as DownloadLinkResponse | null;
-      if (!res.ok || !json?.url) {
-        throw new Error(json?.error || "다운로드 링크를 생성하지 못했습니다.");
-      }
-      openDownloadUrl(json.url);
     },
     [guestToken, submission.id],
   );
@@ -972,7 +965,7 @@ export function SubmissionDetailClient({
           <div className="rounded-[8px] border-2 border-[#111111] bg-background dark:border-[#f2cf27]">
             <div className="overflow-x-auto">
               <div className="min-w-0 sm:min-w-[720px]">
-                <div className="grid grid-cols-[72px_1fr_72px] items-center gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-normal text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] sm:grid-cols-[72px_1.4fr_1fr_1fr]">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-normal text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] sm:grid-cols-[72px_1.4fr_1fr_1fr]">
                   <span className="justify-self-center text-center sm:hidden">방송국</span>
                   <span className="hidden justify-self-center text-center sm:block">로고</span>
                   <span className="hidden text-left sm:block">방송국</span>
@@ -1044,10 +1037,20 @@ export function SubmissionDetailClient({
                     return (
                       <div
                         key={review.id}
-                        className="grid grid-cols-[72px_1fr_72px] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[72px_1.4fr_1fr_1fr]"
+                        className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[72px_1.4fr_1fr_1fr]"
                       >
-                        <div className="flex items-center justify-center">
+                        <div className="flex min-w-0 items-center justify-start gap-2 sm:justify-center">
                           <StationLogoWithFallback station={review.station} />
+                          <span className="min-w-0 sm:hidden">
+                            <span className="block truncate font-semibold text-foreground">
+                              {review.station?.name ?? "-"}
+                            </span>
+                            {review.station && "code" in review.station ? (
+                              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                                {review.station.code ?? ""}
+                              </span>
+                            ) : null}
+                          </span>
                         </div>
                         <div className="hidden min-w-0 pl-1 text-left sm:block">
                           <p className="truncate font-semibold text-foreground">
@@ -1062,7 +1065,7 @@ export function SubmissionDetailClient({
                         <button
                           type="button"
                           onClick={handleResultClick}
-                          className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-2 py-1 text-xs font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${currentStatus.tone
+                          className={`inline-flex min-h-[42px] min-w-[112px] flex-col items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-3 py-1.5 text-[13px] font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${currentStatus.tone
                             } ${shouldOpenResultModal
                               ? "transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0"
                               : "transition"
@@ -1911,7 +1914,7 @@ export function SubmissionDetailClient({
               <div className="rounded-2xl border border-border/60 bg-background/70">
                 <div className="overflow-x-auto">
                   <div className="min-w-0 sm:min-w-[720px]">
-                    <div className="grid grid-cols-[72px_1fr_1fr] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]">
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(96px,auto)_minmax(112px,auto)] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]">
                       <span className="justify-self-center text-center sm:hidden">방송국</span>
                       <span className="hidden justify-self-center text-center sm:block">로고</span>
                       <span className="hidden text-left sm:block">방송국</span>
@@ -2013,10 +2016,20 @@ export function SubmissionDetailClient({
                         return (
                           <div
                             key={review.id}
-                            className="grid grid-cols-[72px_1fr_1fr] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]"
+                            className="grid grid-cols-[minmax(0,1fr)_minmax(96px,auto)_minmax(112px,auto)] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]"
                           >
-                            <div className="flex items-center justify-center">
+                            <div className="flex min-w-0 items-center justify-start gap-2 sm:justify-center">
                               <StationLogoWithFallback station={review.station} />
+                              <span className="min-w-0 sm:hidden">
+                                <span className="block truncate font-semibold text-foreground">
+                                  {review.station?.name ?? "-"}
+                                </span>
+                                {review.station && "code" in review.station ? (
+                                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                                    {review.station.code ?? ""}
+                                  </span>
+                                ) : null}
+                              </span>
                             </div>
                             <div className="hidden min-w-0 pl-1 text-left sm:block">
                               <p className="truncate font-semibold text-foreground">
@@ -2029,14 +2042,14 @@ export function SubmissionDetailClient({
                               ) : null}
                             </div>
                             <span
-                              className={`inline-flex items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${reception.tone}`}
+                              className={`inline-flex min-h-[34px] min-w-[92px] items-center justify-center justify-self-center rounded-full px-3 py-1.5 text-[13px] font-semibold ${reception.tone}`}
                             >
                               {reception.label}
                             </span>
                             <button
                               type="button"
                               onClick={handleResultClick}
-                              className={`inline-flex min-h-[36px] min-w-[90px] flex-col items-center justify-center justify-self-center rounded-full px-2 py-1 text-xs font-semibold ${resultTone.tone
+                              className={`inline-flex min-h-[42px] min-w-[112px] flex-col items-center justify-center justify-self-center rounded-full px-3 py-1.5 text-[13px] font-semibold ${resultTone.tone
                                 } ${shouldOpenResultModal
                                   ? "transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100"
                                   : "transition"

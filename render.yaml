@@ -5,7 +5,7 @@ services:
     plan: starter
     buildCommand: npm ci && npm run build
     startCommand: npm run start
-    healthCheckPath: /api/health
+    healthCheckPath: /healthz
     autoDeploy: true
     envVars:
       - key: NEXT_PUBLIC_SUPABASE_URL

@@ -129,21 +129,18 @@ SUPABASE_SERVICE_ROLE_KEY
 NEXT_PUBLIC_APP_URL
 ```
 
-### Render Free keep-alive
+### Render uptime
 
-GitHub Actions가 10분마다 Render 앱의 `/healthz`를 호출하도록
-`.github/workflows/render-keepalive.yml`에 cron을 추가했습니다.
-
-- 기본 URL: `https://glit-b1yn.onrender.com/healthz`
-- 운영 URL을 바꾸려면 GitHub Repository Variables에
-  `RENDER_KEEPALIVE_URL=https://your-render-app.onrender.com/healthz`를 설정하세요.
-- 여러 Render 서비스를 깨워야 하면 `RENDER_KEEPALIVE_URLS`에 URL을 한 줄씩 넣으세요.
-- GitHub Actions 탭에서 `Render Keepalive` workflow를 수동 실행해 응답을 확인할 수 있습니다.
+Render 무료 플랜은 비활성 상태에서 인스턴스가 잠들 수 있습니다. 무료 플랜의
+sleep 정책을 우회하기 위한 in-app self-ping 또는 별도 cron keepalive는 운영
+안정성의 근본 해결책으로 사용하지 않습니다. 실서비스에서 always-on이 필요하면
+Render Starter 이상 유료 플랜 또는 always-on을 제공하는 호스팅으로 전환하세요.
 
 ## Health Check
 
-- `/healthz`: lightweight liveness endpoint for Render keep-alive
-- `/api/health`: runtime configuration check
+- `/healthz`: lightweight liveness endpoint for Render and uptime monitors
+- `/readyz`: runtime configuration readiness check
+- `/api/health`: backward-compatible runtime configuration check
 
 For a real email send test, configure `RESEND_API_KEY`, `RESEND_FROM`, and a
 verified Resend sender/domain, then run:

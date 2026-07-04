@@ -486,13 +486,13 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                       return (
                         <div
                           key={`${station.id}-${index}`}
-                          className="grid h-10 grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 text-[11px]"
+                          className="grid min-h-[48px] grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-[11px]"
                         >
                           <span className="truncate font-semibold text-foreground">
                             {station.station?.name ?? "-"}
                           </span>
                           <span
-                            className={`bauhaus-status-chip bauhaus-status-chip--compact justify-self-center ${currentStatus.tone}`}
+                            className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] min-w-[100px] justify-self-center ${currentStatus.tone}`}
                           >
                             {currentStatus.label}
                           </span>
