@@ -179,6 +179,11 @@ const stripGenieLyricsHeader = (lyrics: string, title: string) =>
     .join("\n")
     .trim();
 
+const isUnavailableLyrics = (lyrics: string) =>
+  /가사\s*(정보가\s*)?(없습니다|준비\s*중입니다)|등록된\s*가사가\s*없습니다/i.test(
+    lyrics.replace(/\s+/g, " "),
+  );
+
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export function parseGenieAlbumPage(html: string, albumId: string) {
@@ -250,7 +255,8 @@ export function parseGenieSongPage(html: string, songId: string) {
   const lyricsBody =
     lyricsBlock.match(/<p[^>]*>([\s\S]*?)<\/p>/i)?.[1] ??
     lyricsBlock.replace(/<div[^>]*>[\s\S]*?<\/div>/i, "");
-  const lyrics = stripGenieLyricsHeader(htmlToText(lyricsBody, true), title);
+  const parsedLyrics = stripGenieLyricsHeader(htmlToText(lyricsBody, true), title);
+  const lyrics = isUnavailableLyrics(parsedLyrics) ? "" : parsedLyrics;
 
   return {
     songId,

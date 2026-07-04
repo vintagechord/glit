@@ -523,6 +523,9 @@ const SOURCE_LABELS = {
   genie: "지니",
 } as const;
 
+const PRIMARY_SOURCE: MusicSourceProvider = "genie";
+const FALLBACK_SOURCE: MusicSourceProvider = "melon";
+
 const normalizeComparableText = (value: string) =>
   value
     .normalize("NFC")
@@ -540,50 +543,50 @@ const normalizeLyricsForCompare = (value: string) =>
     .filter(Boolean)
     .join("\n");
 
+const stripAsciiParentheticalAlias = (value: string) =>
+  value.replace(/\s*\((?=[^)]*[A-Za-z])[\x20-\x7e]*\)\s*/g, " ");
+
 const normalizeContributorForCompare = (value: string) =>
   value
     .normalize("NFC")
     .split(/[,，、;]+/)
-    .map((item) => item.replace(/\s+/g, " ").trim().toLowerCase())
+    .map((item) => normalizeComparableText(stripAsciiParentheticalAlias(item)))
     .filter(Boolean)
     .sort()
     .join(",");
 
-const formatSourceValues = (
-  values: Array<{ provider: MusicSourceProvider; value: string }>,
-) =>
-  values
-    .map((entry) => `${SOURCE_LABELS[entry.provider]} "${entry.value}"`)
-    .join(" / ");
+const normalizeArtistForCompare = (value: string) =>
+  normalizeComparableText(stripAsciiParentheticalAlias(value));
+
+const normalizeCompanyForCompare = (value: string) =>
+  normalizeComparableText(value.replace(/㈜|\(주\)|（주）|주식회사/g, ""));
 
 const pickPreferredText = (
   values: Array<{ provider: MusicSourceProvider; value: string }>,
 ) => {
   const present = values.filter((entry) => entry.value.trim());
   return (
-    present.find((entry) => entry.provider === "melon")?.value ??
-    present.find((entry) => entry.provider === "genie")?.value ??
+    present.find((entry) => entry.provider === PRIMARY_SOURCE)?.value ??
+    present.find((entry) => entry.provider === FALLBACK_SOURCE)?.value ??
     ""
   );
 };
 
 const pickVerifiedText = (
-  label: string,
+  _label: string,
   values: Array<{ provider: MusicSourceProvider; value: string }>,
   normalize: (value: string) => string = normalizeComparableText,
 ) => {
   const present = values.filter((entry) => entry.value.trim());
-  if (present.length <= 1) return present[0]?.value ?? "";
-
-  const expected = normalize(present[0].value);
-  const mismatch = present.find((entry) => normalize(entry.value) !== expected);
-  if (mismatch) {
-    throw new ReviewDocsInputError(
-      `멜론/지니 ${label} 정보가 서로 다릅니다. ${formatSourceValues(present)}`,
-    );
-  }
-
-  return pickPreferredText(present);
+  const preferred = pickPreferredText(present);
+  if (!preferred) return "";
+  const preferredKey = normalize(preferred);
+  return (
+    present.find(
+      (entry) =>
+        entry.provider === PRIMARY_SOURCE && normalize(entry.value) === preferredKey,
+    )?.value ?? preferred
+  );
 };
 
 const sourceKindFromUrl = (url: string): MusicSourceProvider | null => {
@@ -599,16 +602,9 @@ const sourceKindFromUrl = (url: string): MusicSourceProvider | null => {
 };
 
 const albumGroupKey = (album: MusicSourceAlbumData) =>
-  normalizeComparableText(`${album.artistName} ${album.albumTitle}`);
+  `${normalizeArtistForCompare(album.artistName)}::${normalizeComparableText(album.albumTitle)}`;
 
 const groupFetchedMusicAlbums = (albums: FetchedMusicSourceAlbum[]) => {
-  if (
-    albums.length === 2 &&
-    new Set(albums.map((album) => album.provider)).size === 2
-  ) {
-    return [albums];
-  }
-
   const keyed = albums.reduce((map, album) => {
     const key = albumGroupKey(album);
     const list = map.get(key) ?? [];
@@ -689,6 +685,7 @@ const mergeMusicSourceTracks = (
           provider: entry.provider,
           value: entry.track.artistName,
         })),
+        normalizeArtistForCompare,
       ),
       isTitle: entries.some((entry) => entry.track.isTitle),
       composer: pickVerifiedText(
@@ -761,6 +758,7 @@ const mergeMusicSourceAlbums = (albums: FetchedMusicSourceAlbum[]) => {
         provider: album.provider,
         value: album.artistName,
       })),
+      normalizeArtistForCompare,
     ),
     releaseDate: pickVerifiedText(
       `${albumTitle} 발매일`,
@@ -781,6 +779,7 @@ const mergeMusicSourceAlbums = (albums: FetchedMusicSourceAlbum[]) => {
         provider: album.provider,
         value: album.distributor,
       })),
+      normalizeCompanyForCompare,
     ),
     productionCompany: pickVerifiedText(
       `${albumTitle} 기획사`,
@@ -788,9 +787,23 @@ const mergeMusicSourceAlbums = (albums: FetchedMusicSourceAlbum[]) => {
         provider: album.provider,
         value: album.productionCompany,
       })),
+      normalizeCompanyForCompare,
     ),
     tracks,
   } satisfies MusicSourceAlbumData;
+};
+
+const assertFinalLyricsAvailable = (album: MusicSourceAlbumData) => {
+  const missingLyrics = album.tracks.filter(
+    (track) => !isInstrumentalTitle(track.trackTitle) && !track.lyrics.trim(),
+  );
+  if (missingLyrics.length === 0) return;
+
+  throw new ReviewDocsInputError(
+    `${album.albumTitle}: 가사를 가져오지 못한 곡이 있습니다: ${missingLyrics
+      .map((track) => `${track.trackNo}. ${track.trackTitle}`)
+      .join(", ")}. 멜론/지니 모두에 실제 가사가 있는지 확인해주세요.`,
+  );
 };
 
 const sourceTrackToRecord = (
@@ -938,6 +951,7 @@ async function fetchMusicSourceAlbum(
   url: string,
   index: number,
   options: ExternalReviewDocFetchOptions,
+  requireLyrics: boolean,
 ): Promise<FetchedMusicSourceAlbum> {
   const provider = sourceKindFromUrl(url);
   if (!provider) {
@@ -950,7 +964,7 @@ async function fetchMusicSourceAlbum(
     if (provider === "genie") {
       const album = await fetchGenieAlbumReviewData(url, {
         ...options,
-        requireLyrics: true,
+        requireLyrics,
       });
       return {
         ...album,
@@ -962,7 +976,7 @@ async function fetchMusicSourceAlbum(
 
     const album = await fetchMelonAlbumReviewData(url, {
       ...options,
-      requireLyrics: true,
+      requireLyrics,
     });
     return {
       ...album,
@@ -989,10 +1003,15 @@ export async function buildExternalReviewDocSubmissionBundles(
     throw new ReviewDocsInputError("멜론 또는 지니 앨범 링크를 1개 이상 입력해주세요.");
   }
 
+  const hasCrossSourceFallback =
+    new Set(uniqueUrls.map(sourceKindFromUrl).filter(Boolean)).size > 1;
   const fetchedAlbums = await Promise.all(
-    uniqueUrls.map((url, index) => fetchMusicSourceAlbum(url, index, options)),
+    uniqueUrls.map((url, index) =>
+      fetchMusicSourceAlbum(url, index, options, !hasCrossSourceFallback),
+    ),
   );
   const albums = groupFetchedMusicAlbums(fetchedAlbums).map(mergeMusicSourceAlbums);
+  albums.forEach(assertFinalLyricsAvailable);
 
   return albums.map((album) => {
     const submissionId = `external-${album.albumId}`;

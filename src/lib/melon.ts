@@ -136,6 +136,11 @@ const uniqueJoin = (values: string[]) => {
 const isInstrumentalTitle = (title: string) =>
   /\b(inst|instrumental|mr)\b/i.test(title) || /반주|가사\s*없음/i.test(title);
 
+const isUnavailableLyrics = (lyrics: string) =>
+  /가사\s*(정보가\s*)?(없습니다|준비\s*중입니다)|등록된\s*가사가\s*없습니다/i.test(
+    lyrics.replace(/\s+/g, " "),
+  );
+
 const parseMetaList = (html: string) => {
   const result: Record<string, string> = {};
   const dl = html.match(/<dl class="list">([\s\S]*?)<\/dl>/)?.[1] ?? html;
@@ -221,11 +226,12 @@ export function parseMelonSongPage(html: string, songId: string) {
   const artistName =
     firstMatchText(html, /class="artist_name"[^>]*>\s*<span>([\s\S]*?)<\/span>/) ||
     firstMatchText(html, /class="artist_name"[^>]*>([\s\S]*?)<\/a>/);
-  const lyrics = firstMatchText(
+  const parsedLyrics = firstMatchText(
     html,
     /<div class="lyric" id="d_video_summary">([\s\S]*?)<\/div>/,
     true,
   );
+  const lyrics = isUnavailableLyrics(parsedLyrics) ? "" : parsedLyrics;
   const producerSection =
     html.match(/<ul class="list_person clfix">([\s\S]*?)<\/ul>/)?.[1] ?? "";
   const byType: Record<string, string[]> = {};

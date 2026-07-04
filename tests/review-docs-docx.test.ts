@@ -24,6 +24,12 @@ const getTableSummaries = (xml: string) =>
       ),
       rowCount: rows.length,
       cellCounts: rows.map((row) => [...row[0].matchAll(/<tc>/g)].length),
+      rowHeights: rows.map(
+        (row) => row[0].match(/<trHeight[^>]*val="(\d+)"/)?.[1] ?? "",
+      ),
+      isCentered: /<jc[^>]*val="center"/.test(tableXml),
+      hasFixedLayout: /<tblLayout[^>]*type="fixed"/.test(tableXml),
+      hasCantSplitRows: /<cantSplit/.test(tableXml),
       hasShading: /<shd/.test(tableXml),
     };
   });
@@ -81,12 +87,20 @@ test("review docs zip uses docx-only files and example-like review form tables",
 
   const reviewFormName = fileNames.find((name) => name.includes("/심의폼_"));
   const albumInfoName = fileNames.find((name) => name.includes("/앨범정보_"));
+  const songReviewRequestName = fileNames.find((name) =>
+    name.includes("/가요심의요청서_"),
+  );
   assert.ok(reviewFormName);
   assert.ok(albumInfoName);
+  assert.ok(songReviewRequestName);
 
   const reviewFormXml = getDocXml(outerZip.file(reviewFormName)?.asNodeBuffer() ?? Buffer.alloc(0));
   const albumInfoXml = getDocXml(outerZip.file(albumInfoName)?.asNodeBuffer() ?? Buffer.alloc(0));
+  const songReviewRequestXml = getDocXml(
+    outerZip.file(songReviewRequestName)?.asNodeBuffer() ?? Buffer.alloc(0),
+  );
   const tables = getTableSummaries(reviewFormXml);
+  const requestTables = getTableSummaries(songReviewRequestXml);
 
   assert.equal(tables.length, 4);
   assert.deepEqual(tables[0], {
@@ -94,6 +108,10 @@ test("review docs zip uses docx-only files and example-like review form tables",
     grid: [2376, 6873],
     rowCount: 6,
     cellCounts: [1, 2, 2, 2, 2, 2],
+    rowHeights: ["1690", "833", "831", "842", "841", "853"],
+    isCentered: true,
+    hasFixedLayout: true,
+    hasCantSplitRows: true,
     hasShading: false,
   });
   assert.deepEqual(tables[1], {
@@ -101,10 +119,30 @@ test("review docs zip uses docx-only files and example-like review form tables",
     grid: [1242, 3621],
     rowCount: 3,
     cellCounts: [2, 2, 2],
+    rowHeights: ["558", "558", "558"],
+    isCentered: true,
+    hasFixedLayout: true,
+    hasCantSplitRows: true,
     hasShading: false,
   });
   assert.deepEqual(tables[2].grid, [1097, 1098, 6821]);
   assert.deepEqual(tables[2].cellCounts, [3, 2, 2, 2, 2, 1]);
+  assert.equal(tables[2].hasFixedLayout, true);
+  assert.deepEqual(requestTables[0].rowHeights, [
+    "650",
+    "650",
+    "540",
+    "540",
+    "420",
+    "520",
+    "620",
+    "620",
+  ]);
+  assert.equal(requestTables[0].isCentered, true);
+  assert.equal(requestTables[0].hasFixedLayout, true);
+  assert.equal((reviewFormXml.match(/<br[^>]*type="page"/g) ?? []).length, 2);
+  assert.doesNotMatch(reviewFormXml, /<tblpPr/);
+  assert.doesNotMatch(songReviewRequestXml, /<tblpPr/);
 
   assert.match(reviewFormXml, /vintagechord@daum\.net/);
   assert.match(reviewFormXml, /빈티지코드/);

@@ -182,6 +182,15 @@ test("parseGenieSongPage extracts credits and lyrics without genie header", () =
   assert.equal(track.lyrics, "Line one\n\nLine two");
 });
 
+test("parseGenieSongPage treats unavailable lyric notices as empty lyrics", () => {
+  const track = parseGenieSongPage(
+    genieSongHtml.replace(/<p>[\s\S]*?<\/p>/, "<p>가사 정보가 없습니다.</p>"),
+    "222",
+  );
+
+  assert.equal(track.lyrics, "");
+});
+
 test("fetchGenieAlbumReviewData hydrates tracks and allows instrumental lyrics", async () => {
   const album = await fetchGenieAlbumReviewData(
     "https://www.genie.co.kr/detail/albumInfo?axnm=87816941",
@@ -205,7 +214,7 @@ test("buildExternalReviewDocSubmissionBundles cross-checks matching melon and ge
 
   assert.equal(bundle.submission.title, "Test Album");
   assert.equal(bundle.submission.artist_name, "Test Artist");
-  assert.equal(bundle.submission.genre, "Ballad, Indie");
+  assert.equal(bundle.submission.genre, "Ballad / K-Pop");
   assert.equal(bundle.tracks.length, 2);
   assert.equal(bundle.tracks[0].composer, "Composer A, Composer B");
   assert.equal(bundle.tracks[0].lyrics, "Line one\n\nLine two");
@@ -213,11 +222,146 @@ test("buildExternalReviewDocSubmissionBundles cross-checks matching melon and ge
   assert.match(String(bundle.tracks[0].notes), /지니 곡 ID: 222/);
 });
 
-test("buildExternalReviewDocSubmissionBundles rejects conflicting credits", async () => {
-  const conflictingFetcher = async (input: Parameters<typeof fetch>[0]) => {
+test("buildExternalReviewDocSubmissionBundles uses genie lyrics when melon lyrics are missing", async () => {
+  const melonMissingLyricsFetcher = async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("melon.com/song/detail.htm?songId=111")) {
+      return new Response(melonSongHtml.replace(/<div class="lyric"[\s\S]*?<\/div>/, ""), {
+        status: 200,
+      });
+    }
+    return fetcher(input);
+  };
+
+  const [bundle] = await buildExternalReviewDocSubmissionBundles(
+    [
+      "https://www.melon.com/album/detail.htm?albumId=123",
+      "https://www.genie.co.kr/detail/albumInfo?axnm=87816941",
+    ],
+    { fetcher: melonMissingLyricsFetcher },
+  );
+
+  assert.equal(bundle.tracks[0].lyrics, "Line one\n\nLine two");
+});
+
+test("buildExternalReviewDocSubmissionBundles treats parenthesized English artist alias as same artist", async () => {
+  const aliasedArtistFetcher = async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("genie.co.kr/detail/albumInfo")) {
+      return new Response(genieAlbumHtml.replaceAll("Test Artist", "Test Artist (TA)"), {
+        status: 200,
+      });
+    }
+    if (url.includes("genie.co.kr/detail/songInfo?xgnm=222")) {
+      return new Response(genieSongHtml.replaceAll("Test Artist", "Test Artist (TA)"), {
+        status: 200,
+      });
+    }
+    if (url.includes("genie.co.kr/detail/songInfo?xgnm=223")) {
+      return new Response(genieInstSongHtml.replaceAll("Test Artist", "Test Artist (TA)"), {
+        status: 200,
+      });
+    }
+    return fetcher(input);
+  };
+
+  const [bundle] = await buildExternalReviewDocSubmissionBundles(
+    [
+      "https://www.melon.com/album/detail.htm?albumId=123",
+      "https://www.genie.co.kr/detail/albumInfo?axnm=87816941",
+    ],
+    { fetcher: aliasedArtistFetcher },
+  );
+
+  assert.equal(bundle.submission.artist_name, "Test Artist (TA)");
+  assert.equal(bundle.tracks[0].performer, "Test Artist (TA)");
+});
+
+test("buildExternalReviewDocSubmissionBundles tolerates contributor spacing differences", async () => {
+  const spacedContributorFetcher = async (input: Parameters<typeof fetch>[0]) => {
     const url = String(input);
     if (url.includes("genie.co.kr/detail/songInfo?xgnm=222")) {
-      return new Response(genieSongHtml.replace("Writer", "Other Writer"), {
+      return new Response(genieSongHtml.replace("Composer A", "ComposerA"), {
+        status: 200,
+      });
+    }
+    if (url.includes("genie.co.kr/detail/songInfo?xgnm=223")) {
+      return new Response(genieInstSongHtml.replace("Composer A", "ComposerA"), {
+        status: 200,
+      });
+    }
+    return fetcher(input);
+  };
+
+  const [bundle] = await buildExternalReviewDocSubmissionBundles(
+    [
+      "https://www.melon.com/album/detail.htm?albumId=123",
+      "https://www.genie.co.kr/detail/albumInfo?axnm=87816941",
+    ],
+    { fetcher: spacedContributorFetcher },
+  );
+
+  assert.equal(bundle.tracks[0].composer, "ComposerA, Composer B");
+});
+
+test("buildExternalReviewDocSubmissionBundles treats company symbol variants as same company", async () => {
+  const companyVariantFetcher = async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("genie.co.kr/detail/albumInfo")) {
+      return new Response(
+        genieAlbumHtml
+          .replace("Test Distributor", "(주)Test Distributor")
+          .replace("Test Label", "㈜Test Label"),
+        { status: 200 },
+      );
+    }
+    return fetcher(input);
+  };
+
+  const [bundle] = await buildExternalReviewDocSubmissionBundles(
+    [
+      "https://www.melon.com/album/detail.htm?albumId=123",
+      "https://www.genie.co.kr/detail/albumInfo?axnm=87816941",
+    ],
+    { fetcher: companyVariantFetcher },
+  );
+
+  assert.equal(bundle.submission.distributor, "(주)Test Distributor");
+  assert.equal(bundle.submission.production_company, "㈜Test Label");
+});
+
+test("buildExternalReviewDocSubmissionBundles uses melon lyrics when genie lyrics are missing", async () => {
+  const genieMissingLyricsFetcher = async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("genie.co.kr/detail/songInfo?xgnm=222")) {
+      return new Response(genieSongHtml.replace(/<p>[\s\S]*?<\/p>/, ""), {
+        status: 200,
+      });
+    }
+    return fetcher(input);
+  };
+
+  const [bundle] = await buildExternalReviewDocSubmissionBundles(
+    [
+      "https://www.genie.co.kr/detail/albumInfo?axnm=87816941",
+      "https://www.melon.com/album/detail.htm?albumId=123",
+    ],
+    { fetcher: genieMissingLyricsFetcher },
+  );
+
+  assert.equal(bundle.tracks[0].lyrics, "Line one\n\nLine two");
+});
+
+test("buildExternalReviewDocSubmissionBundles rejects when every source misses lyrics", async () => {
+  const allMissingLyricsFetcher = async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("melon.com/song/detail.htm?songId=111")) {
+      return new Response(melonSongHtml.replace(/<div class="lyric"[\s\S]*?<\/div>/, ""), {
+        status: 200,
+      });
+    }
+    if (url.includes("genie.co.kr/detail/songInfo?xgnm=222")) {
+      return new Response(genieSongHtml.replace(/<pre id="pLyrics"[\s\S]*?<\/pre>/, ""), {
         status: 200,
       });
     }
@@ -231,8 +375,30 @@ test("buildExternalReviewDocSubmissionBundles rejects conflicting credits", asyn
           "https://www.melon.com/album/detail.htm?albumId=123",
           "https://www.genie.co.kr/detail/albumInfo?axnm=87816941",
         ],
-        { fetcher: conflictingFetcher },
+        { fetcher: allMissingLyricsFetcher },
       ),
-    /작사자 정보가 서로 다릅니다/,
+    /가사를 가져오지 못한 곡이 있습니다/,
   );
+});
+
+test("buildExternalReviewDocSubmissionBundles prefers genie credits when melon differs", async () => {
+  const conflictingFetcher = async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("genie.co.kr/detail/songInfo?xgnm=222")) {
+      return new Response(genieSongHtml.replace("Writer", "Other Writer"), {
+        status: 200,
+      });
+    }
+    return fetcher(input);
+  };
+
+  const [bundle] = await buildExternalReviewDocSubmissionBundles(
+    [
+      "https://www.genie.co.kr/detail/albumInfo?axnm=87816941",
+      "https://www.melon.com/album/detail.htm?albumId=123",
+    ],
+    { fetcher: conflictingFetcher },
+  );
+
+  assert.equal(bundle.tracks[0].lyricist, "Other Writer");
 });

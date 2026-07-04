@@ -75,6 +75,15 @@ test("parseMelonSongPage extracts credits and lyrics with line breaks", () => {
   assert.equal(track.lyrics, "Line one\n\nLine two");
 });
 
+test("parseMelonSongPage treats unavailable lyric notices as empty lyrics", () => {
+  const track = parseMelonSongPage(
+    songHtml.replace(/<div class="lyric" id="d_video_summary">[\s\S]*?<\/div>/, '<div class="lyric" id="d_video_summary">가사 정보가 없습니다.</div>'),
+    "111",
+  );
+
+  assert.equal(track.lyrics, "");
+});
+
 test("melon parser normalizes decomposed Korean text", () => {
   const decomposedTitle = "가을 왈츠".normalize("NFD");
   const decomposedLyrics = "추억에 그리운 아이".normalize("NFD");

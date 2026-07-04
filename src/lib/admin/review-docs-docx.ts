@@ -5,6 +5,8 @@ type DocText = string | number | boolean | null | undefined;
 type ParagraphOptions = {
   align?: "left" | "center" | "right";
   bold?: boolean;
+  keepNext?: boolean;
+  pageBreakBefore?: boolean;
   size?: number;
   spacingAfter?: number;
   spacingBefore?: number;
@@ -22,10 +24,12 @@ type TableCell = {
 };
 
 type TableOptions = {
+  align?: "left" | "center" | "right";
   width?: number;
   columns?: number[];
   rowHeights?: number[];
   borderSize?: number;
+  allowRowSplit?: boolean;
   fixedLayout?: boolean;
   cellMargins?: {
     top?: number;
@@ -114,6 +118,8 @@ const run = (text: DocText, options?: ParagraphOptions) => {
 
 const paragraph = (text: DocText, options?: ParagraphOptions) => {
   const align = options?.align ? `<w:jc w:val="${options.align}"/>` : "";
+  const keepNext = options?.keepNext ? "<w:keepNext/>" : "";
+  const pageBreakBefore = options?.pageBreakBefore ? "<w:pageBreakBefore/>" : "";
   const before =
     typeof options?.spacingBefore === "number"
       ? ` w:before="${options.spacingBefore}"`
@@ -122,7 +128,7 @@ const paragraph = (text: DocText, options?: ParagraphOptions) => {
     typeof options?.spacingAfter === "number"
       ? ` w:after="${options.spacingAfter}"`
       : ' w:after="80"';
-  return `<w:p><w:pPr>${align}<w:spacing${before}${after}/></w:pPr>${run(
+  return `<w:p><w:pPr>${pageBreakBefore}${keepNext}${align}<w:spacing${before}${after}/></w:pPr>${run(
     text,
     options,
   )}</w:p>`;
@@ -132,6 +138,8 @@ const multilineParagraphs = (text: DocText | DocText[], options?: ParagraphOptio
   cleanLines(text)
     .map((line) => paragraph(line, options))
     .join("");
+
+const pageBreak = () => '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
 
 const cellSpan = (item: TableCell) => Math.max(1, item.options?.colspan ?? 1);
 
@@ -187,8 +195,17 @@ const cell = (
   )}</w:tc>`;
 };
 
-const row = (cells: TableCell[], columns: number[], height?: number) => {
-  const trPr = height ? `<w:trPr><w:trHeight w:val="${height}"/></w:trPr>` : "";
+const row = (
+  cells: TableCell[],
+  columns: number[],
+  height?: number,
+  allowRowSplit = false,
+) => {
+  const rowSplit = allowRowSplit ? "" : "<w:cantSplit/>";
+  const trPr =
+    rowSplit || height
+      ? `<w:trPr>${rowSplit}${height ? `<w:trHeight w:val="${height}"/>` : ""}</w:trPr>`
+      : "";
   let columnIndex = 0;
   return `<w:tr>${trPr}${cells
     .map((item) => {
@@ -204,6 +221,7 @@ const table = (rows: TableCell[][], options?: TableOptions) => {
   const width = options?.width ?? 9300;
   const columns = getTableColumns(width, getColumnCount(rows), options?.columns);
   const borderSize = options?.borderSize ?? 8;
+  const align = options?.align ? `<w:jc w:val="${options.align}"/>` : "";
   const fixedLayout =
     options?.fixedLayout === false ? "" : '<w:tblLayout w:type="fixed"/>';
   const margins = options?.cellMargins;
@@ -217,8 +235,10 @@ const table = (rows: TableCell[][], options?: TableOptions) => {
   const grid = `<w:tblGrid>${columns
     .map((col) => `<w:gridCol w:w="${col}"/>`)
     .join("")}</w:tblGrid>`;
-  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/>${fixedLayout}<w:tblBorders><w:top w:val="single" w:sz="${borderSize}"/><w:left w:val="single" w:sz="${borderSize}"/><w:bottom w:val="single" w:sz="${borderSize}"/><w:right w:val="single" w:sz="${borderSize}"/><w:insideH w:val="single" w:sz="${borderSize}"/><w:insideV w:val="single" w:sz="${borderSize}"/></w:tblBorders>${cellMar}</w:tblPr>${grid}${rows
-    .map((cells, index) => row(cells, columns, options?.rowHeights?.[index]))
+  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/>${align}${fixedLayout}<w:tblBorders><w:top w:val="single" w:sz="${borderSize}"/><w:left w:val="single" w:sz="${borderSize}"/><w:bottom w:val="single" w:sz="${borderSize}"/><w:right w:val="single" w:sz="${borderSize}"/><w:insideH w:val="single" w:sz="${borderSize}"/><w:insideV w:val="single" w:sz="${borderSize}"/></w:tblBorders>${cellMar}</w:tblPr>${grid}${rows
+    .map((cells, index) =>
+      row(cells, columns, options?.rowHeights?.[index], options?.allowRowSplit),
+    )
     .join("")}</w:tbl>`;
 };
 
@@ -307,7 +327,25 @@ const isBlank = (value: DocText) => !String(value ?? "").trim();
 const lyricText = (track: TrackDocData) =>
   isBlank(track.lyrics_display) ? "가사 없음 / Instrumental" : track.lyrics_display;
 
+const compactLyricLines = (value: DocText | DocText[]) =>
+  cleanLines(value)
+    .map((line) => line.replace(/[ \t]+$/g, ""))
+    .reduce<string[]>((lines, line) => {
+      if (!line.trim() && !lines[lines.length - 1]?.trim()) return lines;
+      lines.push(line);
+      return lines;
+    }, []);
+
 export function createSongReviewRequestDocx(data: SubmissionDocData) {
+  const rowHeights = [
+    650,
+    650,
+    540,
+    540,
+    420,
+    520,
+    ...data.tracks.map(() => 620),
+  ];
   const rows: TableCell[][] = [
     [
       headerCell("음반제목", 2),
@@ -375,8 +413,11 @@ export function createSongReviewRequestDocx(data: SubmissionDocData) {
         { size: 10, spacingAfter: 140 },
       ),
       table(rows, {
+        align: "center",
         width: 15000,
         columns: [900, 3000, 1500, 1700, 1500, 1500, 1500, 1500, 1900],
+        rowHeights,
+        cellMargins: { top: 60, right: 80, bottom: 60, left: 80 },
       }),
       paragraph(""),
       paragraph(
@@ -416,10 +457,10 @@ export function createReviewFormDocx(data: SubmissionDocData, title: string) {
         ].map(([label, value]) => [formLabelCell(label), formValueCell(value)]),
       ],
       {
+        align: "center",
         width: 9249,
         columns: [2376, 6873],
         rowHeights: [1690, 833, 831, 842, 841, 853],
-        fixedLayout: false,
       },
     ),
     table(
@@ -429,16 +470,16 @@ export function createReviewFormDocx(data: SubmissionDocData, title: string) {
         [formLabelCell("e-mail"), formValueCell(data.contact_email)],
       ],
       {
+        align: "center",
         width: 4863,
         columns: [1242, 3621],
         rowHeights: [558, 558, 558],
-        fixedLayout: false,
       },
     ),
   ];
 
-  data.tracks.forEach((track, index) => {
-    if (index > 0) body.push(paragraph("", { spacingAfter: 80 }));
+  data.tracks.forEach((track) => {
+    body.push(pageBreak());
     body.push(
       table(
         [
@@ -459,10 +500,10 @@ export function createReviewFormDocx(data: SubmissionDocData, title: string) {
           ],
         ],
         {
+          align: "center",
           width: 9016,
           columns: [1097, 1098, 6821],
           rowHeights: [703, 700, 696, 705, 687, 1406],
-          fixedLayout: false,
         },
       ),
     );
@@ -499,12 +540,17 @@ export function createLyricsAllDocx(data: SubmissionDocData) {
       paragraph(`${track.track_no_padded}. ${track.track_title_for_docs}`, {
         bold: true,
         size: 11,
+        keepNext: true,
         spacingAfter: 40,
       }),
     );
     const credits = creditLine(track);
-    if (credits) body.push(paragraph(credits, { size: 10, spacingAfter: 60 }));
-    body.push(...cleanLines(lyricText(track)).map((line) => paragraph(line, { size: 10, spacingAfter: 20 })));
+    if (credits) body.push(paragraph(credits, { size: 10, spacingAfter: 40 }));
+    body.push(
+      ...compactLyricLines(lyricText(track)).map((line) =>
+        paragraph(line, { size: 10, spacingAfter: 12 }),
+      ),
+    );
   });
   return makeDocx(body, { margin: { top: 720, right: 900, bottom: 720, left: 900 } });
 }
@@ -520,7 +566,11 @@ export function createLyricsTrackDocx(data: SubmissionDocData, track: TrackDocDa
   );
   const credits = creditLine(track);
   if (credits) body.push(paragraph(credits, { size: 11, spacingAfter: 80 }));
-  body.push(...cleanLines(lyricText(track)).map((line) => paragraph(line, { size: 11, spacingAfter: 40 })));
+  body.push(
+    ...compactLyricLines(lyricText(track)).map((line) =>
+      paragraph(line, { size: 11, spacingAfter: 30 }),
+    ),
+  );
   return makeDocx(body);
 }
 
@@ -547,8 +597,10 @@ export function createTbsIntegratedDocx(submissions: SubmissionDocData[]) {
     [
       paragraph("심의 음반 접수 목록", { align: "center", bold: true, size: 16 }),
       table(rows, {
+        align: "center",
         width: 9300,
         columns: [900, 2800, 800, 1900, 1400, 1500],
+        cellMargins: { top: 60, right: 80, bottom: 60, left: 80 },
       }),
     ],
     { margin: { top: 1100, right: 1200, bottom: 900, left: 1200 } },
@@ -596,8 +648,10 @@ export function createWbsIntegratedDocx(submissions: SubmissionDocData[]) {
         { size: 9 },
       ),
       table(rows, {
+        align: "center",
         width: 15000,
         columns: [700, 1100, 1600, 1900, 1600, 3100, 1300, 1600, 2100],
+        cellMargins: { top: 60, right: 80, bottom: 60, left: 80 },
       }),
     ],
     { landscape: true, margin: { top: 700, right: 700, bottom: 700, left: 700 } },
@@ -629,8 +683,10 @@ export function createPbcIntegratedDocx(submissions: SubmissionDocData[]) {
     [
       paragraph("음원심의신청서", { align: "center", bold: true, size: 16 }),
       table(rows, {
+        align: "center",
         width: 9300,
         columns: [900, 1400, 1300, 2200, 1600, 1000, 900],
+        cellMargins: { top: 60, right: 80, bottom: 60, left: 80 },
       }),
     ],
     { margin: { top: 1100, right: 1200, bottom: 900, left: 1200 } },

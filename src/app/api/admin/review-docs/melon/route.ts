@@ -22,8 +22,8 @@ const bodySchema = z.object({
 
 const getReviewDocUrls = (body: z.infer<typeof bodySchema>) => [
   ...(body.urls ?? []),
-  ...(body.melonUrls ?? []),
   ...(body.genieUrls ?? []),
+  ...(body.melonUrls ?? []),
 ];
 
 export async function POST(request: Request) {

@@ -248,14 +248,23 @@ export function ReviewDocsBulkToolbar() {
 }
 
 export function MelonReviewDocsDownloadForm() {
-  const [linksText, setLinksText] = React.useState("");
+  const [genieLinksText, setGenieLinksText] = React.useState("");
+  const [melonLinksText, setMelonLinksText] = React.useState("");
   const [error, setError] = React.useState("");
   const [isDownloading, setIsDownloading] = React.useState(false);
-  const reviewDocUrls = React.useMemo(() => parseReviewDocUrls(linksText), [linksText]);
+  const genieUrls = React.useMemo(
+    () => parseReviewDocUrls(genieLinksText),
+    [genieLinksText],
+  );
+  const melonUrls = React.useMemo(
+    () => parseReviewDocUrls(melonLinksText),
+    [melonLinksText],
+  );
+  const totalUrlCount = genieUrls.length + melonUrls.length;
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (reviewDocUrls.length === 0) {
+    if (totalUrlCount === 0) {
       setError("멜론 또는 지니 앨범 링크를 1개 이상 입력해주세요.");
       return;
     }
@@ -268,7 +277,7 @@ export function MelonReviewDocsDownloadForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ urls: reviewDocUrls }),
+        body: JSON.stringify({ genieUrls, melonUrls }),
       });
       await downloadFromResponse(response, "review-docs.zip");
     } catch (downloadError) {
@@ -284,26 +293,39 @@ export function MelonReviewDocsDownloadForm() {
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-3">
-      <label className="grid gap-2">
-        <span className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-          Melon / Genie album links
-        </span>
-        <textarea
-          value={linksText}
-          onChange={(event) => setLinksText(event.target.value)}
-          rows={4}
-          className="min-h-32 w-full resize-y rounded-[10px] border-2 border-border bg-background px-3 py-3 text-sm font-semibold leading-6 text-foreground outline-none transition focus:border-[#1556a4]"
-          placeholder={`https://www.melon.com/album/detail.htm?albumId=13780811
-https://www.genie.co.kr/detail/albumInfo?axnm=87816941`}
-        />
-      </label>
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="grid gap-2">
+          <span className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+            Genie album links · priority
+          </span>
+          <textarea
+            value={genieLinksText}
+            onChange={(event) => setGenieLinksText(event.target.value)}
+            rows={4}
+            className="min-h-32 w-full resize-y rounded-[10px] border-2 border-[#1556a4] bg-background px-3 py-3 text-sm font-semibold leading-6 text-foreground outline-none transition focus:border-[#1556a4]"
+            placeholder="https://www.genie.co.kr/detail/albumInfo?axnm=87816941"
+          />
+        </label>
+        <label className="grid gap-2">
+          <span className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+            Melon album links · fallback
+          </span>
+          <textarea
+            value={melonLinksText}
+            onChange={(event) => setMelonLinksText(event.target.value)}
+            rows={4}
+            className="min-h-32 w-full resize-y rounded-[10px] border-2 border-border bg-background px-3 py-3 text-sm font-semibold leading-6 text-foreground outline-none transition focus:border-[#1556a4]"
+            placeholder="https://www.melon.com/album/detail.htm?albumId=13780811"
+          />
+        </label>
+      </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-semibold text-muted-foreground">
-          입력 {reviewDocUrls.length.toLocaleString()}건
+          지니 {genieUrls.length.toLocaleString()}건 / 멜론 {melonUrls.length.toLocaleString()}건
         </p>
         <button
           type="submit"
-          disabled={reviewDocUrls.length === 0 || isDownloading}
+          disabled={totalUrlCount === 0 || isDownloading}
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-4 py-2 text-xs font-black text-white shadow-[3px_3px_0_#f2cf27] transition hover:-translate-y-0.5 hover:bg-[#0f488e] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isDownloading ? (
