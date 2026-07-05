@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import * as React from "react";
 import { normalizeStationReviewStatus } from "@/constants/review-status";
-import { formatDate, formatShortDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import {
   buildStationTrackSummaryText,
   getStationReviewDisplayStatus,
@@ -342,13 +342,19 @@ function getStationName(station?: StationItem["station"] | null) {
   return station?.name?.trim() || "-";
 }
 
-function shouldShowStationNameText(
-  stationName: string,
-  submission?: SubmissionSummary | null,
-) {
-  const isMvSubmission =
-    submission?.type === "MV_DISTRIBUTION" || submission?.type === "MV_BROADCAST";
-  return isMvSubmission && stationName.includes("영상물등급위원회");
+function getLatestStationUpdatedAt(stations: StationItem[]) {
+  let latestValue: string | null = null;
+  let latestTimestamp = 0;
+
+  for (const station of stations) {
+    const timestamp = Date.parse(station.updated_at);
+    if (!Number.isNaN(timestamp) && timestamp >= latestTimestamp) {
+      latestTimestamp = timestamp;
+      latestValue = station.updated_at;
+    }
+  }
+
+  return latestValue;
 }
 
 const stationBadgeMap: Record<
@@ -386,12 +392,17 @@ const stationBadgeMap: Record<
 function StationLogo({
   station,
   hideOnMobile = false,
+  compact = false,
 }: {
   station?: { name?: string | null; code?: string | null; logo_url?: string | null } | null;
   hideOnMobile?: boolean;
+  compact?: boolean;
 }) {
   const key = (station?.name ?? station?.code ?? "").trim().toUpperCase();
   const visibilityClass = hideOnMobile ? "hidden sm:inline-flex" : "inline-flex";
+  const logoFrameClass = compact
+    ? "h-10 w-[96px]"
+    : "h-11 w-[112px] sm:h-12 sm:w-[132px]";
   const mappedLogo = getLocalStationLogoSource(station);
 
   const initialSrc = mappedLogo?.src ?? station?.logo_url ?? fallbackStationLogoPath;
@@ -412,13 +423,13 @@ function StationLogo({
   if (src) {
     return (
       <span
-        className={`${visibilityClass} h-9 w-[84px] shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-border/60 bg-white p-1.5 shadow-sm sm:h-10 sm:w-[104px]`}
+        className={`${visibilityClass} ${logoFrameClass} shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-border/60 bg-white p-1.5 shadow-sm`}
       >
         <Image
           src={src}
           alt={station?.name ?? station?.code ?? "station logo"}
-          width={104}
-          height={40}
+          width={132}
+          height={48}
           className="h-full w-full object-contain"
           unoptimized
           loading="lazy"
@@ -431,7 +442,7 @@ function StationLogo({
   const badge = stationBadgeMap[key] ?? { label: key || "-", color: "#111", bg: "#e5e7eb" };
   return (
     <span
-      className={`${visibilityClass} h-9 w-[84px] shrink-0 items-center justify-center rounded-[8px] border border-border/60 text-[10px] font-bold uppercase sm:h-10 sm:w-[104px]`}
+      className={`${visibilityClass} ${logoFrameClass} shrink-0 items-center justify-center rounded-[8px] border border-border/60 text-xs font-bold uppercase`}
       style={{ color: badge.color, backgroundColor: badge.bg }}
       aria-hidden
     >
@@ -451,7 +462,6 @@ export function HomeReviewPanel({
   enableRemoteSync = false,
   stationRowsPerPage = 10,
   showPartialTrackBreakdown = true,
-  mobileStationLayout = "table",
   showDetailLink = true,
   panelMinHeightClassName = "lg:min-h-[520px]",
   compact = false,
@@ -469,7 +479,6 @@ export function HomeReviewPanel({
   enableRemoteSync?: boolean;
   stationRowsPerPage?: number;
   showPartialTrackBreakdown?: boolean;
-  mobileStationLayout?: "cards" | "table";
   showDetailLink?: boolean;
   panelMinHeightClassName?: string;
   compact?: boolean;
@@ -763,11 +772,15 @@ export function HomeReviewPanel({
       : getStageStatus(activeSubmission);
 
   const rowsPerPage = Math.max(1, Math.floor(stationRowsPerPage));
-  const rowHeight = compact ? 46 : 52;
-  const rowGap = compact ? 6 : 8;
+  const latestStationUpdatedAt = getLatestStationUpdatedAt(activeStations);
+  const stationGridRowsPerPage = Math.max(1, Math.ceil(rowsPerPage / 2));
+  const stationCardHeight = compact ? 116 : 86;
+  const stationCardGap = compact ? 8 : 10;
   const listPadding = compact ? 8 : 12;
   const listViewportHeight =
-    rowsPerPage * rowHeight + (rowsPerPage - 1) * rowGap + listPadding * 2;
+    stationGridRowsPerPage * stationCardHeight +
+    (stationGridRowsPerPage - 1) * stationCardGap +
+    listPadding * 2;
   const shellPaddingClass = compact ? "p-3 sm:p-4" : "p-4 sm:p-6";
   const shellLayoutClass = compact ? "flex h-full flex-col" : "";
   const tabSpacingClass = compact ? "mt-3" : "mt-4 sm:mt-5";
@@ -790,21 +803,24 @@ export function HomeReviewPanel({
   const roundButtonClass = compact
     ? "h-7 w-7 text-[11px]"
     : "h-8 w-8 text-xs";
-  const tableHeaderClass = compact
-    ? "hidden grid-cols-[minmax(112px,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:grid"
-    : "hidden grid-cols-[minmax(132px,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid";
-  const mobileTableHeaderClass = compact
-    ? "grid grid-cols-[minmax(0,1fr)_minmax(92px,100px)_56px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:hidden"
-    : "grid grid-cols-[minmax(0,1fr)_minmax(100px,112px)_64px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground sm:hidden";
   const listPaddingClass = compact
     ? "px-2 py-2"
     : "px-2.5 py-2.5 sm:px-3 sm:py-3";
-  const desktopStationRowClass = compact
-    ? "grid min-h-[56px] grid-cols-[minmax(112px,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-2 text-xs"
-    : "grid min-h-[62px] grid-cols-[minmax(132px,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2.5 text-sm";
-  const mobileStationRowClass = compact
-    ? "grid min-h-[48px] grid-cols-[minmax(0,1fr)_minmax(92px,100px)_56px] items-center gap-2 px-2 py-1.5 text-xs"
-    : "grid min-h-[52px] grid-cols-[minmax(0,1fr)_minmax(100px,112px)_64px] items-center gap-2 px-2 py-2 text-sm";
+  const stationGridClass = compact
+    ? "grid grid-cols-1 gap-2 sm:grid-cols-2"
+    : "grid grid-cols-1 gap-2.5 sm:grid-cols-2";
+  const stationCardClass = compact
+    ? "flex min-h-[116px] flex-col items-center justify-center gap-2 rounded-xl border border-border/50 bg-background/85 px-2.5 py-2 text-xs shadow-sm"
+    : "flex min-h-[86px] items-center justify-between gap-3 rounded-xl border border-border/50 bg-background/85 px-3 py-2.5 text-sm shadow-sm";
+  const stationStatusActionClass = compact
+    ? "min-h-[34px] min-w-[90px] px-2"
+    : "min-h-[38px] min-w-[104px] px-3";
+  const stationInfoClass = compact
+    ? "flex min-w-0 flex-col items-center gap-1 text-center"
+    : "flex min-w-0 flex-1 items-center gap-3";
+  const stationNameClass = compact
+    ? "block max-w-full truncate text-[11px] font-black text-foreground"
+    : "block truncate font-black text-foreground";
   const stationListRef = React.useRef<HTMLDivElement | null>(null);
   const mouseDragPointerId = React.useRef<number | null>(null);
   const mouseDragStartY = React.useRef(0);
@@ -890,16 +906,22 @@ export function HomeReviewPanel({
   const handlePrev = React.useCallback(() => {
     const list = stationListRef.current;
     if (!list) return;
-    const step = Math.max(list.clientHeight - rowHeight, rowHeight * 3);
+    const step = Math.max(
+      list.clientHeight - stationCardHeight,
+      stationCardHeight * 2,
+    );
     list.scrollBy({ top: -step, behavior: "smooth" });
-  }, [rowHeight]);
+  }, [stationCardHeight]);
 
   const handleNext = React.useCallback(() => {
     const list = stationListRef.current;
     if (!list) return;
-    const step = Math.max(list.clientHeight - rowHeight, rowHeight * 3);
+    const step = Math.max(
+      list.clientHeight - stationCardHeight,
+      stationCardHeight * 2,
+    );
     list.scrollBy({ top: step, behavior: "smooth" });
-  }, [rowHeight]);
+  }, [stationCardHeight]);
 
   const handleStationListScroll = React.useCallback(() => {
     updateScrollButtons();
@@ -1146,10 +1168,24 @@ export function HomeReviewPanel({
         </div>
 
         <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass} ${stationSectionClass}`}>
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-foreground">
-              방송국별 현황
-            </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                방송국별 현황
+              </p>
+              {!needsPayment && latestStationUpdatedAt ? (
+                <p
+                  className="mt-1 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
+                  title={formatDate(latestStationUpdatedAt)}
+                  aria-label={`Updated ${formatDate(latestStationUpdatedAt)}`}
+                >
+                  Updated{" "}
+                  <span className="text-foreground/72">
+                    {formatDate(latestStationUpdatedAt)}
+                  </span>
+                </p>
+              ) : null}
+            </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1172,295 +1208,103 @@ export function HomeReviewPanel({
             </div>
           </div>
           <div className={stationTableShellClass}>
-            <>
-            <div className={tableHeaderClass}>
-              <span className="justify-self-center text-center">방송국</span>
-              <span className="justify-self-center text-center">현재 상태</span>
-              <span className="text-right">Updated</span>
-            </div>
             {!needsPayment && activeStations.length > 0 ? (
-              <>
-                {mobileStationLayout === "table" ? (
-                  <div className={mobileTableHeaderClass}>
-                    <span className="justify-self-center text-center">방송국</span>
-                    <span className="justify-self-center text-center">현재 상태</span>
-                    <span className="justify-self-center text-center">Updated</span>
-                  </div>
-                ) : null}
-                <div
-                  ref={stationListRef}
-                  className={`overflow-y-auto overscroll-contain ${listPaddingClass} touch-pan-y ${isMouseDraggingList
-                      ? "cursor-grabbing select-none"
-                      : "cursor-auto sm:cursor-grab"
-                    }`}
-                  style={{ maxHeight: `${listViewportHeight}px` }}
-                  onScroll={handleStationListScroll}
-                  onPointerDown={handleStationListPointerDown}
-                  onPointerMove={handleStationListPointerMove}
-                  onPointerUp={handleStationListPointerUp}
-                  onPointerCancel={handleStationListPointerCancel}
-                  onPointerLeave={handleStationListPointerCancel}
-                >
-                  <div className="hidden text-sm sm:block">
-                    <div className="grid gap-2">
-                      {activeStations.map((station, index) => {
-                        const currentStatus = getStationReviewDisplayStatus(
-                          station,
-                          { showPartialTrackBreakdown },
-                        );
-                        const summary = currentStatus.summary;
-                        const canOpenResultModal = shouldOpenResultModal(
-                          station,
-                          summary,
-                          activeSubmission,
-                        );
-                        const displayStatus = getDisplayStatusForReview(
-                          currentStatus,
-                          activeSubmission,
-                        );
-                        const stationName = getStationName(station.station);
-                        const showStationNameText = shouldShowStationNameText(
-                          stationName,
-                          activeSubmission,
-                        );
-                        return (
-                          <div
-                            key={`${station.id}-${index}`}
-                            className={desktopStationRowClass}
-                          >
-                            <span
-                              className={`flex min-w-0 items-center ${
-                                showStationNameText
-                                  ? "gap-3 pl-2 text-left"
-                                  : "justify-center text-center"
-                              }`}
-                              title={stationName}
-                            >
-                              <StationLogo station={station.station ?? undefined} hideOnMobile />
-                              {showStationNameText ? (
-                                <span className="min-w-0">
-                                  <span className="block truncate font-semibold text-foreground">
-                                    {stationName}
-                                  </span>
-                                </span>
-                              ) : null}
+              <div
+                ref={stationListRef}
+                className={`overflow-y-auto overscroll-contain ${listPaddingClass} touch-pan-y ${
+                  isMouseDraggingList
+                    ? "cursor-grabbing select-none"
+                    : "cursor-auto sm:cursor-grab"
+                }`}
+                style={{ maxHeight: `${listViewportHeight}px` }}
+                onScroll={handleStationListScroll}
+                onPointerDown={handleStationListPointerDown}
+                onPointerMove={handleStationListPointerMove}
+                onPointerUp={handleStationListPointerUp}
+                onPointerCancel={handleStationListPointerCancel}
+                onPointerLeave={handleStationListPointerCancel}
+              >
+                <div className={stationGridClass}>
+                  {activeStations.map((station, index) => {
+                    const currentStatus = getStationReviewDisplayStatus(
+                      station,
+                      { showPartialTrackBreakdown },
+                    );
+                    const summary = currentStatus.summary;
+                    const canOpenResultModal = shouldOpenResultModal(
+                      station,
+                      summary,
+                      activeSubmission,
+                    );
+                    const displayStatus = getDisplayStatusForReview(
+                      currentStatus,
+                      activeSubmission,
+                    );
+                    const stationName = getStationName(station.station);
+                    return (
+                      <div
+                        key={`${station.id}-${index}`}
+                        className={stationCardClass}
+                      >
+                        <div
+                          className={stationInfoClass}
+                          title={stationName}
+                        >
+                          <StationLogo
+                            station={station.station ?? undefined}
+                            compact={compact}
+                          />
+                          <div className="min-w-0">
+                            <span className={stationNameClass}>
+                              {stationName}
                             </span>
-                            <div className="flex flex-col items-center justify-center gap-1 justify-self-center">
-                              {canOpenResultModal ? (
-                                <button
-                                  type="button"
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                  onClick={() =>
-                                    setTrackResultModal(
-                                      buildResultModalState(
-                                        station,
-                                        summary,
-                                        displayStatus,
-                                        activeSubmission,
-                                      ),
-                                    )
-                                  }
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[38px] min-w-[108px] flex-col px-3 transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
-                                >
-                                  <span>{displayStatus.label}</span>
-                                  {displayStatus.summaryText ? (
-                                    <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                      {displayStatus.summaryText}
-                                    </span>
-                                  ) : null}
-                                </button>
-                              ) : (
-                                <div className="flex flex-col items-center gap-1">
-                                  <span
-                                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${displayStatus.tone}`}
-                                  >
-                                    {displayStatus.label}
-                                  </span>
-                                  {displayStatus.summaryText ? (
-                                    <span className="text-[11px] leading-tight text-muted-foreground text-center">
-                                      {displayStatus.summaryText}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              )}
-                            </div>
-                            <span
-                              className="text-right text-xs text-muted-foreground"
-                              title={formatDate(station.updated_at)}
-                              aria-label={`Updated ${formatDate(station.updated_at)}`}
-                            >
-                              {formatShortDate(station.updated_at)}
-                            </span>
+                            {!canOpenResultModal && displayStatus.summaryText ? (
+                              <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground">
+                                {displayStatus.summaryText}
+                              </span>
+                            ) : null}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {mobileStationLayout === "table" ? (
-                    <div className="divide-y divide-border/50 sm:hidden">
-                      {activeStations.map((station, index) => {
-                        const currentStatus = getStationReviewDisplayStatus(station);
-                        const summary = currentStatus.summary;
-                        const canOpenResultModal = shouldOpenResultModal(
-                          station,
-                          summary,
-                          activeSubmission,
-                        );
-                        const displayStatus = getDisplayStatusForReview(
-                          currentStatus,
-                          activeSubmission,
-                        );
-                        const stationName = getStationName(station.station);
-                        const showStationNameText = shouldShowStationNameText(
-                          stationName,
-                          activeSubmission,
-                        );
-                        return (
-                          <div
-                            key={`${station.id}-mobile-${index}`}
-                            className={mobileStationRowClass}
+                        </div>
+                        {canOpenResultModal ? (
+                          <button
+                            type="button"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={() =>
+                              setTrackResultModal(
+                                buildResultModalState(
+                                  station,
+                                  summary,
+                                  displayStatus,
+                                  activeSubmission,
+                                ),
+                              )
+                            }
+                            className={`bauhaus-status-chip bauhaus-status-chip--compact ${stationStatusActionClass} shrink-0 flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
                           >
-                            <div
-                              className={`flex min-w-0 items-center ${
-                                showStationNameText
-                                  ? "justify-start gap-2"
-                                  : "justify-center"
-                              }`}
-                              title={stationName}
-                            >
-                              <StationLogo station={station.station ?? undefined} />
-                              {showStationNameText ? (
-                                <span className="min-w-0">
-                                  <span className="block truncate text-xs font-semibold text-foreground">
-                                    {stationName}
-                                  </span>
-                                </span>
-                              ) : null}
-                            </div>
-                            {canOpenResultModal ? (
-                              <button
-                                type="button"
-                                onPointerDown={(event) => event.stopPropagation()}
-                                onClick={() =>
-                                  setTrackResultModal(
-                                    buildResultModalState(
-                                      station,
-                                      summary,
-                                      displayStatus,
-                                      activeSubmission,
-                                    ),
-                                  )
-                                }
-                                className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] min-w-[100px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
-                              >
-                                <span>{displayStatus.label}</span>
-                              </button>
-                            ) : (
-                              <div className="flex items-center justify-self-center">
-                                <span
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] min-w-[100px] ${displayStatus.tone}`}
-                                >
-                                  {displayStatus.label}
-                                </span>
-                              </div>
-                            )}
-                            <span
-                              className="justify-self-end text-right text-[11px] text-muted-foreground"
-                              title={formatDate(station.updated_at)}
-                              aria-label={`Updated ${formatDate(station.updated_at)}`}
-                            >
-                              {formatShortDate(station.updated_at)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="space-y-2 sm:hidden">
-                      {activeStations.map((station, index) => {
-                        const currentStatus = getStationReviewDisplayStatus(
-                          station,
-                          { showPartialTrackBreakdown },
-                        );
-                        const summary = currentStatus.summary;
-                        const canOpenResultModal = shouldOpenResultModal(
-                          station,
-                          summary,
-                          activeSubmission,
-                        );
-                        const displayStatus = getDisplayStatusForReview(
-                          currentStatus,
-                          activeSubmission,
-                        );
-                        const stationName = getStationName(station.station);
-                        const showStationNameText = shouldShowStationNameText(
-                          stationName,
-                          activeSubmission,
-                        );
-                        return (
-                          <div
-                            key={`${station.id}-mobile-${index}`}
-                            className="grid min-h-[52px] grid-cols-[minmax(0,1fr)_minmax(100px,112px)_64px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-2 text-sm shadow-sm"
+                            <span>{displayStatus.label}</span>
+                            {displayStatus.summaryText ? (
+                              <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
+                                {displayStatus.summaryText}
+                              </span>
+                            ) : null}
+                          </button>
+                        ) : (
+                          <span
+                            className={`bauhaus-status-chip bauhaus-status-chip--compact ${stationStatusActionClass} shrink-0 flex-col ${displayStatus.tone}`}
                           >
-                            <span
-                              className={`flex min-w-0 items-center ${
-                                showStationNameText
-                                  ? "gap-2 text-left"
-                                  : "justify-center text-center"
-                              }`}
-                              title={stationName}
-                            >
-                              <StationLogo station={station.station ?? undefined} />
-                              {showStationNameText ? (
-                                <span className="min-w-0">
-                                  <span className="block truncate text-xs font-semibold text-foreground">
-                                    {stationName}
-                                  </span>
-                                </span>
-                              ) : null}
-                            </span>
-                            {canOpenResultModal ? (
-                              <button
-                                type="button"
-                                onPointerDown={(event) => event.stopPropagation()}
-                                onClick={() =>
-                                  setTrackResultModal(
-                                    buildResultModalState(
-                                      station,
-                                      summary,
-                                      displayStatus,
-                                      activeSubmission,
-                                    )
-                                  )
-                                }
-                                className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] min-w-[100px] justify-self-center transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
-                              >
-                                <span>{displayStatus.label}</span>
-                              </button>
-                            ) : (
-                              <div className="flex items-center justify-self-center">
-                                <span
-                                  className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[32px] min-w-[100px] ${displayStatus.tone}`}
-                                >
-                                  {displayStatus.label}
-                                </span>
-                              </div>
-                            )}
-                            <span
-                              className="justify-self-end text-right text-[11px] text-muted-foreground"
-                              title={formatDate(station.updated_at)}
-                              aria-label={`Updated ${formatDate(station.updated_at)}`}
-                            >
-                              {formatShortDate(station.updated_at)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                            <span>{displayStatus.label}</span>
+                            {displayStatus.summaryText ? (
+                              <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
+                                {displayStatus.summaryText}
+                              </span>
+                            ) : null}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              </>
+              </div>
             ) : (
               <div className={stationEmptyClass}>
                 {isRemoteError
@@ -1470,7 +1314,6 @@ export function HomeReviewPanel({
                     : "방송국별 현황이 없습니다."}
               </div>
             )}
-              </>
           </div>
           {activeSubmission && showDetailLink ? (
             <div className="mt-4 flex justify-center">

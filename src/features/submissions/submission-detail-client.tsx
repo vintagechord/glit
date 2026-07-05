@@ -11,7 +11,7 @@ import {
   SubmissionFilesPanel,
   type SubmissionFile,
 } from "@/features/submissions/submission-files-panel";
-import { formatCurrency, formatDateTime, formatShortDate } from "@/lib/format";
+import { formatCurrency, formatDateTime } from "@/lib/format";
 import {
   buildStationTrackSummaryText,
   getStationReviewDisplayStatus,
@@ -166,13 +166,13 @@ function StationLogoWithFallback({
   }, [src]);
 
   return (
-    <div className="flex h-11 w-28 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white p-1.5 dark:border-[#f2cf27]">
+    <div className="flex h-[52px] w-[136px] shrink-0 items-center justify-center overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white p-1.5 dark:border-[#f2cf27]">
       {src ? (
         <Image
           src={src}
           alt={station?.name ?? station?.code ?? "station logo"}
-          width={112}
-          height={44}
+          width={136}
+          height={52}
           className="h-full w-full object-contain"
           unoptimized
           loading="lazy"
@@ -185,10 +185,6 @@ function StationLogoWithFallback({
       )}
     </div>
   );
-}
-
-function shouldShowStationNameText(stationName: string, isMvSubmission: boolean) {
-  return isMvSubmission && stationName.includes("영상물등급위원회");
 }
 
 const paymentMethodLabels: Record<string, string> = {
@@ -1041,160 +1037,145 @@ export function SubmissionDetailClient({
       </div>
       <div className="mt-5">
         {renderStationReviews && renderStationReviews.length > 0 ? (
-          <div className="rounded-[8px] border-2 border-[#111111] bg-background dark:border-[#f2cf27]">
-            <div className="overflow-x-auto">
-              <div className="min-w-0 sm:min-w-[720px]">
-                <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-normal text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] sm:grid-cols-[minmax(132px,1.1fr)_1fr_1fr]">
-                  <span className="justify-self-center text-center sm:hidden">방송국</span>
-                  <span className="hidden justify-self-center text-center sm:block">로고</span>
-                  <span className="justify-self-center text-center">현재 상태</span>
-                  <span className="justify-self-center text-center">Updated</span>
-                </div>
-                <div className="divide-y divide-border/60">
-                  {renderStationReviews.map((review) => {
-                    const trackInfo = buildTrackSummary(review.track_results);
-                    const currentStatus = getStationReviewDisplayStatus(review);
-                    const note = review.result_note?.trim() || null;
-                    const hasApprovedTrack = trackInfo.counts.approved > 0;
-                    const canOpenRadioLinks =
-                      hasApprovedTrack || review.status === "APPROVED";
-                    const stationCode =
-                      review.station && "code" in review.station
-                        ? review.station.code
-                        : null;
-                    const hasTrackDetails = trackInfo.results.length > 0;
-                    const totalTracksForDisplay = hasTrackDetails
-                      ? albumTracks.length > 1
-                        ? albumTracks.length
-                        : trackInfo.counts.total
-                      : 0;
-                    const pendingGap = Math.max(
-                      totalTracksForDisplay -
-                      (trackInfo.counts.approved +
-                        trackInfo.counts.rejected +
-                        trackInfo.counts.pending),
-                      0,
-                    );
-                    const pendingCount = trackInfo.counts.pending + pendingGap;
-                    const summaryCounts = {
-                      approved: trackInfo.counts.approved,
-                      rejected: trackInfo.counts.rejected,
-                      pending: pendingCount,
-                    };
-                    const trackSummaryLine =
-                      hasTrackDetails && totalTracksForDisplay > 1
-                        ? buildTrackSummaryText(summaryCounts, " · ")
-                        : null;
-                    const hasRejectedOutcome =
-                      trackInfo.counts.rejected > 0 ||
-                      review.status === "REJECTED" ||
-                      review.status === "NEEDS_FIX";
-                    const resolvedResultNote = hasRejectedOutcome ? note : null;
-                    const mvReviewAssets =
-                      isMvDistribution &&
-                      canDownloadMvReviewAssets &&
-                      submission.mv_desired_rating
-                        ? {
-                          ratingLabel: mvRatingLabel(submission.mv_desired_rating),
-                          hasCertificate: Boolean(submission.certificate_b2_path),
-                          certificateName:
-                            submission.certificate_original_name?.trim() || null,
-                        }
-                        : null;
-                    const resultDisplayStatus = mvReviewAssets
-                      ? {
-                        label:
-                          submission.mv_desired_rating === "REJECT"
-                            ? "부적격"
-                            : "적격",
-                        tone:
-                          submission.mv_desired_rating === "REJECT"
-                            ? rejectedDetailResultTone
-                            : approvedDetailResultTone,
-                      }
-                      : currentStatus;
-                    const shouldOpenResultModal =
-                      hasTrackDetails ||
-                      Boolean(resolvedResultNote) ||
-                      Boolean(mvReviewAssets);
+          <div className="grid gap-3 lg:grid-cols-2">
+            {renderStationReviews.map((review) => {
+              const trackInfo = buildTrackSummary(review.track_results);
+              const currentStatus = getStationReviewDisplayStatus(review);
+              const note = review.result_note?.trim() || null;
+              const hasApprovedTrack = trackInfo.counts.approved > 0;
+              const canOpenRadioLinks =
+                hasApprovedTrack || review.status === "APPROVED";
+              const stationCode =
+                review.station && "code" in review.station
+                  ? review.station.code
+                  : null;
+              const hasTrackDetails = trackInfo.results.length > 0;
+              const totalTracksForDisplay = hasTrackDetails
+                ? albumTracks.length > 1
+                  ? albumTracks.length
+                  : trackInfo.counts.total
+                : 0;
+              const pendingGap = Math.max(
+                totalTracksForDisplay -
+                  (trackInfo.counts.approved +
+                    trackInfo.counts.rejected +
+                    trackInfo.counts.pending),
+                0,
+              );
+              const pendingCount = trackInfo.counts.pending + pendingGap;
+              const summaryCounts = {
+                approved: trackInfo.counts.approved,
+                rejected: trackInfo.counts.rejected,
+                pending: pendingCount,
+              };
+              const trackSummaryLine =
+                hasTrackDetails && totalTracksForDisplay > 1
+                  ? buildTrackSummaryText(summaryCounts, " · ")
+                  : null;
+              const hasRejectedOutcome =
+                trackInfo.counts.rejected > 0 ||
+                review.status === "REJECTED" ||
+                review.status === "NEEDS_FIX";
+              const resolvedResultNote = hasRejectedOutcome ? note : null;
+              const mvReviewAssets =
+                isMvDistribution &&
+                canDownloadMvReviewAssets &&
+                submission.mv_desired_rating
+                  ? {
+                      ratingLabel: mvRatingLabel(submission.mv_desired_rating),
+                      hasCertificate: Boolean(submission.certificate_b2_path),
+                      certificateName:
+                        submission.certificate_original_name?.trim() || null,
+                    }
+                  : null;
+              const resultDisplayStatus = mvReviewAssets
+                ? {
+                    label:
+                      submission.mv_desired_rating === "REJECT"
+                        ? "부적격"
+                        : "적격",
+                    tone:
+                      submission.mv_desired_rating === "REJECT"
+                        ? rejectedDetailResultTone
+                        : approvedDetailResultTone,
+                  }
+                : currentStatus;
+              const shouldOpenResultModal =
+                hasTrackDetails ||
+                Boolean(resolvedResultNote) ||
+                Boolean(mvReviewAssets);
 
-                    const handleResultClick = () => {
-                      if (shouldOpenResultModal) {
-                        setTrackResultModal({
-                          stationName: review.station?.name ?? "-",
-                          stationCode,
-                          resultNote: resolvedResultNote,
-                          resultLabel: resultDisplayStatus.label,
-                          resultTone: resultDisplayStatus.tone,
-                          ...(mvReviewAssets ? { mvReviewAssets } : {}),
-                          summary: trackInfo,
-                        });
-                        return;
-                      }
-                      if (canOpenRadioLinks) {
-                        openRadioLinks({
-                          name: review.station?.name,
-                          code: stationCode,
-                        });
-                      }
-                    };
-                    const stationName = review.station?.name?.trim() || "-";
-                    const showStationNameText = shouldShowStationNameText(
-                      stationName,
-                      isMvSubmission,
-                    );
+              const handleResultClick = () => {
+                if (shouldOpenResultModal) {
+                  setTrackResultModal({
+                    stationName: review.station?.name ?? "-",
+                    stationCode,
+                    resultNote: resolvedResultNote,
+                    resultLabel: resultDisplayStatus.label,
+                    resultTone: resultDisplayStatus.tone,
+                    ...(mvReviewAssets ? { mvReviewAssets } : {}),
+                    summary: trackInfo,
+                  });
+                  return;
+                }
+                if (canOpenRadioLinks) {
+                  openRadioLinks({
+                    name: review.station?.name,
+                    code: stationCode,
+                  });
+                }
+              };
+              const stationName = review.station?.name?.trim() || "-";
 
-                    return (
-                      <div
-                        key={review.id}
-                        className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[minmax(132px,1.1fr)_1fr_1fr]"
-                      >
-                        <div
-                          className={`flex min-w-0 items-center ${
-                            showStationNameText
-                              ? "justify-start gap-2"
-                              : "justify-center"
-                          }`}
-                          title={stationName}
-                        >
-                          <StationLogoWithFallback station={review.station} />
-                          {showStationNameText ? (
-                            <span className="min-w-0">
-                              <span className="block truncate font-semibold text-foreground">
-                                {stationName}
-                              </span>
-                            </span>
-                          ) : null}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleResultClick}
-                          className={`inline-flex min-h-[42px] min-w-[112px] flex-col items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-3 py-1.5 text-[13px] font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${resultDisplayStatus.tone
-                            } ${shouldOpenResultModal
-                              ? "transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0"
-                              : "transition"
-                            }`}
-                        >
-                          <span>{resultDisplayStatus.label}</span>
-                          {trackSummaryLine ? (
-                            <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                              {trackSummaryLine}
-                            </span>
-                          ) : null}
-                        </button>
-                        <span
-                          className="justify-self-center text-center text-xs text-muted-foreground"
+              return (
+                <div
+                  key={review.id}
+                  className="rounded-[8px] border-2 border-[#111111] bg-background p-3 text-sm shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div
+                      className="flex min-w-0 items-center gap-3"
+                      title={stationName}
+                    >
+                      <StationLogoWithFallback station={review.station} />
+                      <div className="min-w-0">
+                        <p className="truncate font-black text-foreground">
+                          {stationName}
+                        </p>
+                        <p
+                          className="mt-1 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
                           title={formatDateTime(review.updated_at)}
                           aria-label={`Updated ${formatDateTime(review.updated_at)}`}
                         >
-                          {formatShortDate(review.updated_at)}
-                        </span>
+                          Updated{" "}
+                          <span className="text-foreground/72">
+                            {formatDateTime(review.updated_at)}
+                          </span>
+                        </p>
                       </div>
-                    );
-                  })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleResultClick}
+                      className={`inline-flex min-h-[42px] w-full flex-col items-center justify-center rounded-[6px] border-2 border-[#111111] px-3 py-1.5 text-[13px] font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] sm:w-auto sm:min-w-[112px] ${
+                        resultDisplayStatus.tone
+                      } ${
+                        shouldOpenResultModal
+                          ? "transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0"
+                          : "transition"
+                      }`}
+                    >
+                      <span>{resultDisplayStatus.label}</span>
+                      {trackSummaryLine ? (
+                        <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
+                          {trackSummaryLine}
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
         ) : (
           <div className="rounded-[8px] border-2 border-dashed border-border bg-background px-4 py-6 text-sm text-muted-foreground">

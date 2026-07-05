@@ -80,7 +80,6 @@ function buildExampleState() {
 const panelProps = {
   stationRowsPerPage: 3,
   showPartialTrackBreakdown: false,
-  mobileStationLayout: "table" as const,
   showDetailLink: false,
   panelMinHeightClassName: "h-full lg:min-h-0",
   compact: true,
