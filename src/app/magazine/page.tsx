@@ -16,7 +16,10 @@ import {
   StudioReservationForm,
   type StudioReservationContactDefaults,
 } from "@/features/credits/studio-reservation-form";
-import { redeemCreditRewardFormAction } from "@/features/credits/actions";
+import {
+  CreditActionNotice,
+  type CreditActionNoticeState,
+} from "@/features/credits/credit-action-notice";
 import {
   getCreditRewardStudioUrl,
   getUserCreditSummary,
@@ -69,7 +72,7 @@ const noticeText = (
   error?: string | string[],
   redeemed?: string | string[],
   studioRequested?: string | string[],
-) => {
+): CreditActionNoticeState | null => {
   const rawError = firstParam(error);
   if (rawError) {
     try {
@@ -82,14 +85,23 @@ const noticeText = (
   if (firstParam(redeemed)) {
     return {
       type: "success" as const,
+      title: "서비스 이용권 발행 완료",
       text: "크레딧 이용권이 발행되었습니다. 쿠폰코드는 보유 크레딧 페이지에서도 확인할 수 있습니다.",
+      actionHref: "/mypage/credits#credit-requests",
+      actionLabel: "요청 내역 보기",
+      clearQueryParams: ["redeemed"],
     };
   }
 
   if (firstParam(studioRequested)) {
     return {
       type: "success" as const,
-      text: "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.",
+      title: "녹음실 사용 신청 완료",
+      text:
+        "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.\n적어주신 연락처로 녹음실 사용 안내를 드립니다.",
+      actionHref: "/mypage/credits#credit-requests",
+      actionLabel: "요청 내역 보기",
+      clearQueryParams: ["studioRequested"],
     };
   }
 
@@ -214,28 +226,13 @@ function CreditServiceRewardCard({
           >
             로그인 후 이용
           </Link>
-        ) : studioUrl ? (
+        ) : canRedeem ? (
           <StudioReservationForm
             reward={reward}
             canRedeem={canRedeem}
             redirectTo="/magazine?tab=services#credit-use"
             contactDefaults={contactDefaults}
           />
-        ) : canRedeem ? (
-          <form action={redeemCreditRewardFormAction}>
-            <input type="hidden" name="rewardId" value={reward.id} />
-            <input
-              type="hidden"
-              name="redirectTo"
-              value="/magazine?tab=services#credit-use"
-            />
-            <button
-              type="submit"
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5"
-            >
-              크레딧으로 이용권 발행
-            </button>
-          </form>
         ) : (
           <button
             type="button"
@@ -309,11 +306,11 @@ function CreditServiceRewardsPanel({
 
       {isAuthenticated ? (
         <Link
-          href="/mypage/credits"
+          href="/mypage/credits#credit-requests"
           className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-5 py-3 text-sm font-black text-foreground transition hover:-translate-y-0.5 hover:border-[#1556a4] hover:bg-[#eaf2fb] dark:hover:bg-[#102033]"
         >
           <Ticket className="h-4 w-4" aria-hidden="true" />
-          보유 크레딧에서 발행 내역 보기
+          크레딧 요청 내역 보기
         </Link>
       ) : (
         <p className="flex max-w-2xl gap-2 text-xs font-semibold leading-5 text-muted-foreground">
@@ -389,17 +386,7 @@ export default async function MagazinePage({
         </section>
 
         <div id="credit-use" className="mt-8 scroll-mt-28">
-          {notice ? (
-            <div
-              className={`mb-5 rounded-[10px] border-2 px-4 py-3 text-sm font-black ${
-                notice.type === "success"
-                  ? "border-[#1f7a5a] bg-emerald-500/10 text-[#1f7a5a]"
-                  : "border-[#d9362c] bg-[#d9362c]/10 text-[#d9362c]"
-              }`}
-            >
-              {notice.text}
-            </div>
-          ) : null}
+          <CreditActionNotice notice={notice} />
 
           <CreditUseTabs
             initialTab={activeTab}

@@ -344,6 +344,26 @@ const exactTranslations: Record<string, string> = {
     "Use credits for Watermelon magazine requests, studio vouchers, and Onside partner services added by admins.",
   "크레딧 이용권이 발행되었습니다. 쿠폰코드는 보유 크레딧 페이지에서도 확인할 수 있습니다.":
     "Your credit voucher has been issued. You can also find the coupon code on the Available Credits page.",
+  "크레딧 이용권이 발행되었습니다. 쿠폰코드를 확인해주세요.":
+    "Your credit voucher has been issued. Please check the coupon code.",
+  "서비스 이용권 발행 완료": "Service Voucher Issued",
+  "녹음실 사용 신청 완료": "Studio Use Request Submitted",
+  "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.":
+    "Your studio reservation request has been submitted. Guidance will be shown after admin approval.",
+  "적어주신 연락처로 녹음실 사용 안내를 드립니다.":
+    "Studio use guidance will be sent to the contact details you entered.",
+  "크레딧 사용 완료": "Credit Use Complete",
+  "요청 내역 보기": "View Request History",
+  "크레딧 요청 내역 보기": "View Credit Request History",
+  "서비스 이용 신청": "Service Use Request",
+  "크레딧 사용해서 신청": "Request with Credits",
+  "서비스 이용권 신청": "Service Voucher Requests",
+  "승인/안내 완료": "Approved / Guidance Sent",
+  "서비스 위치 미입력": "Service Location Missing",
+  "사용완료된 이용권": "Used Vouchers",
+  "아직 사용완료된 이용권이 없습니다.": "There are no used vouchers yet.",
+  "크레딧 이용권, 매거진 발행 요청, 서비스 이용권 신청을 관리합니다.":
+    "Manage credit vouchers, magazine requests, and service voucher requests.",
   "사용처 선택": "Choose How to Use Credits",
   "워터멜론 매거진": "Watermelon Magazine",
   "1크레딧으로 발행 요청": "Request publication with 1 credit",

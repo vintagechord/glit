@@ -17,6 +17,10 @@ import {
   getStationReviewDisplayStatus,
 } from "@/lib/station-review-display";
 import {
+  fallbackStationLogoPath,
+  getLocalStationLogoSource,
+} from "@/lib/station-logos";
+import {
   summarizeTrackResults,
   type TrackReviewResult,
 } from "@/lib/track-results";
@@ -121,8 +125,6 @@ type StationReview = {
   } | null;
 };
 
-const fallbackStationLogo = "/station-logos/default.svg";
-
 const detailPanelClass =
   "rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]";
 const detailSubPanelClass =
@@ -147,8 +149,8 @@ function StationLogoWithFallback({
   station?: { id?: string | null; name?: string | null; code?: string | null; logo_url?: string | null } | null;
 }) {
   const key = (station?.name ?? station?.code ?? "").trim() || "S";
-  const mappedLogo = station?.code ? `/station-logos/${station.code.toLowerCase()}.svg` : null;
-  const initialSrc = station?.logo_url ?? mappedLogo;
+  const mappedLogo = getLocalStationLogoSource(station);
+  const initialSrc = mappedLogo?.src ?? station?.logo_url ?? fallbackStationLogoPath;
   const [src, setSrc] = React.useState<string | null>(initialSrc);
 
   React.useEffect(() => {
@@ -156,16 +158,12 @@ function StationLogoWithFallback({
   }, [initialSrc]);
 
   const handleError = React.useCallback(() => {
-    if (src && mappedLogo && src !== mappedLogo) {
-      setSrc(mappedLogo);
-      return;
-    }
-    if (src !== fallbackStationLogo) {
-      setSrc(fallbackStationLogo);
+    if (src !== fallbackStationLogoPath) {
+      setSrc(fallbackStationLogoPath);
       return;
     }
     setSrc(null);
-  }, [mappedLogo, src]);
+  }, [src]);
 
   return (
     <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white dark:border-[#f2cf27] dark:bg-[#171717]">

@@ -5,7 +5,10 @@ import { AdminSaveToast } from "@/components/admin/save-toast";
 import { updateStudioReservationStatusFormAction } from "@/features/credits/actions";
 import { updateMagazineRequestStatusFormAction } from "@/features/magazine/actions";
 import { formatDate, formatDateTime } from "@/lib/format";
-import type { StudioReservationRequest } from "@/lib/credits";
+import type {
+  CreditRewardRedemption,
+  StudioReservationRequest,
+} from "@/lib/credits";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +64,13 @@ const studioStatusOptions = ["REQUESTED", "APPROVED", "CANCELED"] as const;
 
 const studioStatusLabels: Record<string, string> = {
   REQUESTED: "요청 접수",
-  APPROVED: "예약 승인",
+  APPROVED: "승인/안내 완료",
+  CANCELED: "취소",
+};
+
+const redemptionStatusLabels: Record<string, string> = {
+  ISSUED: "발행됨",
+  USED: "사용 완료",
   CANCELED: "취소",
 };
 
@@ -81,13 +90,16 @@ const toSingle = (value?: string | string[]) =>
 const formatReservationDateTime = (date?: string | null, time?: string | null) =>
   `${formatDate(date)}${time ? ` ${time.slice(0, 5)}` : ""}`;
 
-const buildDefaultVisitMessage = (
-  reservation: Pick<StudioReservationRequest, "preferred_date" | "preferred_time">,
+const buildDefaultUseMessage = (
+  reservation: Pick<
+    StudioReservationRequest,
+    "preferred_date" | "preferred_time" | "reward_title" | "service_location"
+  >,
 ) =>
   `${formatReservationDateTime(
     reservation.preferred_date,
     reservation.preferred_time,
-  )}에 빈티지하우스 녹음실로 방문해주세요.`;
+  )} ${reservation.service_location ?? reservation.reward_title} 이용 안내를 적어주신 연락처로 드립니다.`;
 
 export default async function AdminCreditRequestsPage({
   searchParams,
@@ -120,6 +132,23 @@ export default async function AdminCreditRequestsPage({
     ((magazineResult.data ?? []) as MagazineRequestRow[]) ?? [];
   const studioRequests =
     ((studioResult.data ?? []) as StudioReservationRequest[]) ?? [];
+  const studioRedemptionIds = studioRequests.map(
+    (request) => request.redemption_id,
+  );
+  const { data: studioRedemptionsData } =
+    studioRedemptionIds.length > 0
+      ? await admin
+          .from("credit_reward_redemptions")
+          .select(
+            "id, user_id, reward_id, reward_title, reward_description, credits_spent, coupon_code, status, expires_at, admin_memo, issued_at, used_at, canceled_at, created_at",
+          )
+          .in("id", studioRedemptionIds)
+      : { data: [] as CreditRewardRedemption[] };
+  const studioRedemptionMap = new Map(
+    ((studioRedemptionsData ?? []) as CreditRewardRedemption[]).map(
+      (redemption) => [redemption.id, redemption],
+    ),
+  );
   const userIds = Array.from(
     new Set(
       [...magazineRequests, ...studioRequests]
@@ -153,7 +182,7 @@ export default async function AdminCreditRequestsPage({
             크레딧 요청 관리
           </h1>
           <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
-            크레딧으로 접수된 매거진 발행 요청과 빈티지하우스 녹음실 예약 요청을
+            크레딧으로 접수된 매거진 발행 요청과 서비스 이용권 신청을
             처리합니다.
           </p>
         </div>
@@ -310,11 +339,11 @@ export default async function AdminCreditRequestsPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-foreground">
-              녹음실 예약 요청
+              서비스 이용권 신청
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              예약 승인 시 사용자에게 방문 안내 문구가 표시됩니다. 취소 처리하면
-              해당 크레딧 사용량도 취소됩니다.
+              승인하면 사용자에게 이용 안내 문구가 표시됩니다. 실제 사용 완료는
+              크레딧/쿠폰 관리에서 쿠폰 상태를 사용 완료로 변경해 처리합니다.
             </p>
           </div>
           <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
@@ -324,14 +353,15 @@ export default async function AdminCreditRequestsPage({
 
         {studioResult.error ? (
           <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-            녹음실 예약 요청을 불러오지 못했습니다. ({studioResult.error.message})
+            서비스 이용권 신청을 불러오지 못했습니다. ({studioResult.error.message})
           </div>
         ) : studioRequests.length > 0 ? (
           <div className="space-y-4">
             {studioRequests.map((request) => {
               const profile = profileMap.get(request.user_id);
               const defaultMessage =
-                request.approved_message || buildDefaultVisitMessage(request);
+                request.approved_message || buildDefaultUseMessage(request);
+              const redemption = studioRedemptionMap.get(request.redemption_id);
 
               return (
                 <article
@@ -345,7 +375,7 @@ export default async function AdminCreditRequestsPage({
                           {studioStatusLabels[request.status] ?? request.status}
                         </span>
                         <span className="rounded-[6px] border border-border px-2 py-1 text-[10px] font-black text-muted-foreground">
-                          {request.service_location ?? "빈티지하우스 녹음실"}
+                          {request.service_location ?? "서비스 위치 미입력"}
                         </span>
                       </div>
                       <h3 className="mt-3 text-base font-black text-foreground">
@@ -364,12 +394,26 @@ export default async function AdminCreditRequestsPage({
                         {profile?.company ? ` · ${profile.company}` : ""} ·{" "}
                         {request.contact_phone} · {request.contact_email ?? "-"}
                       </p>
-                      {request.notes ? (
+                    {request.notes ? (
                         <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
                           요청사항: {request.notes}
                         </p>
                       ) : null}
                     </div>
+                    {redemption ? (
+                      <div className="min-w-[172px] rounded-[10px] border-2 border-[#111111] bg-[#111111] px-3 py-2 text-white">
+                        <p className="text-[10px] font-black uppercase tracking-normal text-white/60">
+                          Coupon
+                        </p>
+                        <p className="mt-1 text-sm font-black">
+                          {redemption.coupon_code}
+                        </p>
+                        <p className="mt-1 text-[11px] font-semibold text-white/70">
+                          {redemptionStatusLabels[redemption.status] ??
+                            redemption.status}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
 
                   <form
@@ -432,7 +476,7 @@ export default async function AdminCreditRequestsPage({
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
-            접수된 녹음실 예약 요청이 없습니다.
+            접수된 서비스 이용권 신청이 없습니다.
           </div>
         )}
       </section>

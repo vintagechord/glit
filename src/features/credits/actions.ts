@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { isStudioCreditRewardTitle } from "@/lib/credits";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -22,7 +21,6 @@ const rewardSchema = z.object({
   isActive: z.boolean().default(false),
 });
 
-const rewardIdSchema = z.string().uuid();
 const redemptionStatusSchema = z.enum(["ISSUED", "USED", "CANCELED"]);
 const studioReservationStatusSchema = z.enum([
   "REQUESTED",
@@ -128,41 +126,24 @@ async function requireAdminUser() {
   return user;
 }
 
-const normalizeRpcError = (message?: string | null) => {
-  const raw = message ?? "";
-  if (raw.includes("LOGIN_REQUIRED")) {
-    return "로그인 후 크레딧 이용권을 교환할 수 있습니다.";
-  }
-  if (raw.includes("REWARD_NOT_FOUND")) {
-    return "교환 가능한 이용권을 찾을 수 없습니다.";
-  }
-  if (raw.includes("INSUFFICIENT_CREDITS")) {
-    return "보유 크레딧이 부족합니다.";
-  }
-  return "크레딧 이용권 교환에 실패했습니다.";
-};
-
 const normalizeStudioRpcError = (message?: string | null) => {
   const raw = message ?? "";
   if (raw.includes("LOGIN_REQUIRED")) {
-    return "로그인 후 녹음실 예약을 요청할 수 있습니다.";
-  }
-  if (raw.includes("STUDIO_REWARD_REQUIRED")) {
-    return "녹음실 이용권만 예약 요청을 접수할 수 있습니다.";
+    return "로그인 후 서비스 이용권을 신청할 수 있습니다.";
   }
   if (raw.includes("REWARD_NOT_FOUND")) {
-    return "교환 가능한 녹음실 이용권을 찾을 수 없습니다.";
+    return "교환 가능한 서비스 이용권을 찾을 수 없습니다.";
   }
   if (raw.includes("INSUFFICIENT_CREDITS")) {
     return "보유 크레딧이 부족합니다.";
   }
   if (raw.includes("INVALID_RESERVATION_DATE")) {
-    return "예약 희망일은 오늘 이후 날짜로 선택해주세요.";
+    return "이용 희망일은 오늘 이후 날짜로 선택해주세요.";
   }
   if (raw.includes("INVALID_RESERVATION_TIME")) {
-    return "예약 희망 시간을 다시 선택해주세요.";
+    return "이용 희망 시간을 다시 선택해주세요.";
   }
-  return "녹음실 예약 요청에 실패했습니다.";
+  return "서비스 이용권 신청에 실패했습니다.";
 };
 
 const formatStudioVisitDateTime = (date?: string | null, time?: string | null) => {
@@ -178,8 +159,16 @@ const formatStudioVisitDateTime = (date?: string | null, time?: string | null) =
   return `${dateText}${timeText}`;
 };
 
-const buildStudioVisitMessage = (date?: string | null, time?: string | null) =>
-  `${formatStudioVisitDateTime(date, time)}에 빈티지하우스 녹음실로 방문해주세요.`;
+const buildServiceUseMessage = ({
+  date,
+  time,
+  serviceName,
+}: {
+  date?: string | null;
+  time?: string | null;
+  serviceName?: string | null;
+}) =>
+  `${formatStudioVisitDateTime(date, time)} ${serviceName ?? "서비스 이용권"} 이용 안내를 적어주신 연락처로 드립니다.`;
 
 export async function redeemCreditRewardFormAction(
   formData: FormData,
@@ -187,10 +176,6 @@ export async function redeemCreditRewardFormAction(
   const redirectPath = safeUserCreditsPath(
     String(formData.get("redirectTo") ?? ""),
   );
-  const parsed = rewardIdSchema.safeParse(formData.get("rewardId"));
-  if (!parsed.success) {
-    redirect(withQuery(redirectPath, { error: "invalid_reward" }));
-  }
 
   const supabase = await createServerSupabase();
   const {
@@ -201,40 +186,11 @@ export async function redeemCreditRewardFormAction(
     redirect(`/login?next=${encodeURIComponent(redirectPath)}`);
   }
 
-  const admin = createAdminClient();
-  const { data: reward } = await admin
-    .from("credit_rewards")
-    .select("title")
-    .eq("id", parsed.data)
-    .maybeSingle();
-
-  if (isStudioCreditRewardTitle(reward?.title)) {
-    redirect(
-      withQuery(redirectPath, {
-        error:
-          "녹음실 이용권은 날짜와 연락처를 입력해 예약 요청으로 접수해주세요.",
-      }),
-    );
-  }
-
-  const { error } = await supabase.rpc("redeem_credit_reward", {
-    p_reward_id: parsed.data,
-  });
-
-  if (error) {
-    redirect(
-      withQuery(redirectPath, {
-        error: normalizeRpcError(error.message),
-      }),
-    );
-  }
-
-  revalidatePath("/mypage/credits");
-  revalidatePath("/dashboard/credits");
-  revalidatePath("/magazine");
-  revalidatePath("/admin/credits");
-
-  redirect(withQuery(redirectPath, { redeemed: "1" }));
+  redirect(
+    withQuery(redirectPath, {
+      error: "서비스 이용권은 이용 희망일과 연락처를 입력해 신청해주세요.",
+    }),
+  );
 }
 
 export async function createStudioReservationFormAction(
@@ -257,7 +213,7 @@ export async function createStudioReservationFormAction(
   if (!parsed.success) {
     redirect(
       withQuery(redirectPath, {
-        error: "예약 희망일, 시간, 담당자명, 연락처를 확인해주세요.",
+        error: "이용 희망일, 시간, 신청자명, 연락처를 확인해주세요.",
       }),
     );
   }
@@ -416,7 +372,7 @@ export async function updateStudioReservationStatusFormAction(
   const admin = createAdminClient();
   const { data: reservation, error: loadError } = await admin
     .from("studio_reservation_requests")
-    .select("id, redemption_id, preferred_date, preferred_time")
+    .select("id, redemption_id, reward_title, service_location, preferred_date, preferred_time")
     .eq("id", parsed.data.reservationId)
     .maybeSingle();
 
@@ -425,16 +381,28 @@ export async function updateStudioReservationStatusFormAction(
     redirect(withQuery(redirectPath, { error: "studio_request_not_found" }));
   }
 
+  const { data: redemption, error: redemptionLoadError } = await admin
+    .from("credit_reward_redemptions")
+    .select("status")
+    .eq("id", reservation.redemption_id)
+    .maybeSingle();
+
+  if (redemptionLoadError || !redemption) {
+    console.error("[credits] studio redemption load failed", redemptionLoadError);
+    redirect(withQuery(redirectPath, { error: "studio_redemption_not_found" }));
+  }
+
   const now = new Date().toISOString();
   const updatePayload = {
     status: parsed.data.status,
     approved_message:
       parsed.data.status === "APPROVED"
         ? (parsed.data.approvedMessage ??
-          buildStudioVisitMessage(
-            reservation.preferred_date,
-            reservation.preferred_time,
-          ))
+          buildServiceUseMessage({
+            date: reservation.preferred_date,
+            time: reservation.preferred_time,
+            serviceName: reservation.service_location ?? reservation.reward_title,
+          }))
         : (parsed.data.approvedMessage ?? null),
     admin_memo: parsed.data.adminMemo ?? null,
     approved_at: parsed.data.status === "APPROVED" ? now : null,
@@ -452,18 +420,25 @@ export async function updateStudioReservationStatusFormAction(
   }
 
   const redemptionStatus =
-    parsed.data.status === "APPROVED"
-      ? "USED"
-      : parsed.data.status === "CANCELED"
-        ? "CANCELED"
+    parsed.data.status === "CANCELED"
+      ? "CANCELED"
+      : redemption.status === "USED"
+        ? "USED"
         : "ISSUED";
+  const redemptionUpdate: {
+    status: string;
+    canceled_at: string | null;
+    used_at?: null;
+  } = {
+    status: redemptionStatus,
+    canceled_at: parsed.data.status === "CANCELED" ? now : null,
+  };
+  if (redemptionStatus !== "USED") {
+    redemptionUpdate.used_at = null;
+  }
   const { error: redemptionError } = await admin
     .from("credit_reward_redemptions")
-    .update({
-      status: redemptionStatus,
-      canceled_at: parsed.data.status === "CANCELED" ? now : null,
-      used_at: parsed.data.status === "APPROVED" ? now : null,
-    })
+    .update(redemptionUpdate)
     .eq("id", reservation.redemption_id);
 
   if (redemptionError) {

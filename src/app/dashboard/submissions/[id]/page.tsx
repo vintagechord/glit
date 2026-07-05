@@ -6,6 +6,7 @@ import { SubmissionDetailClient } from "@/features/submissions/submission-detail
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
+import { getStationLogoPath } from "@/lib/station-logos";
 import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-reviews";
 import { normalizeTrackResults } from "@/lib/track-results";
 import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
@@ -420,9 +421,6 @@ export default async function SubmissionDetailPage({
     });
   });
 
-  const logoFor = (code?: string | null) =>
-    code ? admin.storage.from("broadcast").getPublicUrl(`${code}.png`).data.publicUrl ?? null : null;
-
   const initialStationReviews = packageStations.map((station) => {
     const review = station.id ? reviewMap.get(station.id) : null;
     const trackResults = review
@@ -438,7 +436,7 @@ export default async function SubmissionDetailPage({
         id: station.id || "",
         name: station.name,
         code: station.code,
-        logo_url: logoFor(station.code ?? undefined),
+        logo_url: getStationLogoPath(station),
       },
     };
   });

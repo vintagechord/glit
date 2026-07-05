@@ -237,7 +237,9 @@ export default async function AdminCreditsPage({
                 등록된 이용권
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                노출 체크를 끄면 사용자는 해당 이용권을 새로 교환할 수 없습니다.
+                노출 체크를 끄면 사용자는 해당 이용권을 새로 신청할 수 없습니다.
+                사용자가 신청하면 연락처, 이메일, 희망 일정, 요청사항이 크레딧
+                요청 관리에 함께 접수됩니다.
               </p>
             </div>
             <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
@@ -280,6 +282,7 @@ export default async function AdminCreditsPage({
               <p className="mt-1 text-xs text-muted-foreground">
                 사용 완료 처리 시 고객의 쿠폰 상태가 마이페이지에도 반영됩니다.
                 취소 처리된 쿠폰은 크레딧 사용량에서 제외됩니다.
+                신청 상세 내용은 크레딧 요청 관리에서 확인합니다.
               </p>
             </div>
             <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">

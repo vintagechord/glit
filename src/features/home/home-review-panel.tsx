@@ -9,6 +9,10 @@ import {
   buildStationTrackSummaryText,
   getStationReviewDisplayStatus,
 } from "@/lib/station-review-display";
+import {
+  fallbackStationLogoPath,
+  getLocalStationLogoSource,
+} from "@/lib/station-logos";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { createClient } from "@/lib/supabase/client";
 import { downloadEndpointFile } from "@/lib/browser-download";
@@ -346,32 +350,6 @@ const stationBadgeMap: Record<
   G1: { label: "G1", color: "#2563eb", bg: "#e0ebff" },
 };
 
-const stationLogoSources: Array<{
-  patterns: string[];
-  src: string;
-  alt: string;
-}> = [
-    { patterns: ["KBS", "KBS 1FM", "KBS 2FM"], src: "/station-logos/kbs.svg", alt: "KBS" },
-    { patterns: ["MBC", "MBC FM4U", "MBC 표준FM"], src: "/station-logos/mbc.svg", alt: "MBC" },
-    { patterns: ["SBS", "SBS 파워FM", "SBS 러브FM"], src: "/station-logos/sbs.svg", alt: "SBS" },
-    { patterns: ["TBS", "TBS EFM"], src: "/station-logos/tbs.svg", alt: "TBS" },
-    { patterns: ["YTN"], src: "/station-logos/ytn.svg", alt: "YTN" },
-    { patterns: ["CBS"], src: "/station-logos/cbs.svg", alt: "CBS" },
-    { patterns: ["BBS"], src: "/station-logos/bbs.svg", alt: "BBS 불교방송" },
-    { patterns: ["WBS"], src: "/station-logos/wbs.svg", alt: "WBS" },
-    { patterns: ["PBC"], src: "/station-logos/pbc.svg", alt: "PBC 평화방송" },
-    { patterns: ["FEBC"], src: "/station-logos/febc.svg", alt: "FEBC 극동방송" },
-    { patterns: ["ARIRANG"], src: "/station-logos/arirang.svg", alt: "Arirang" },
-    { patterns: ["GYEONGIN IFM", "KFM", "IFM"], src: "/station-logos/ifm.svg", alt: "경인방송 iFM" },
-    { patterns: ["TBN"], src: "/station-logos/tbn.svg", alt: "TBN" },
-    { patterns: ["KISS"], src: "/station-logos/kiss.svg", alt: "KISS" },
-    { patterns: ["GUGAK"], src: "/station-logos/gugak.svg", alt: "국악방송" },
-    { patterns: ["EBS"], src: "/station-logos/ebs.svg", alt: "EBS" },
-    { patterns: ["TVN"], src: "/station-logos/tvn.svg", alt: "tvN" },
-    { patterns: ["JTBC"], src: "/station-logos/jtbc.svg", alt: "JTBC" },
-    { patterns: ["G1", "GFM"], src: "/station-logos/g1.svg", alt: "G1" },
-  ];
-
 function StationLogo({
   station,
   hideOnMobile = false,
@@ -381,15 +359,9 @@ function StationLogo({
 }) {
   const key = (station?.name ?? station?.code ?? "").trim().toUpperCase();
   const visibilityClass = hideOnMobile ? "hidden sm:inline-flex" : "inline-flex";
-  const fallbackLocal = "/station-logos/default.svg";
+  const mappedLogo = getLocalStationLogoSource(station);
 
-  const mappedLogo = stationLogoSources.find((entry) =>
-    entry.patterns.some(
-      (pattern) => key === pattern || key.startsWith(pattern),
-    ),
-  );
-
-  const initialSrc = station?.logo_url ?? mappedLogo?.src ?? null;
+  const initialSrc = mappedLogo?.src ?? station?.logo_url ?? fallbackStationLogoPath;
   const [src, setSrc] = React.useState<string | null>(initialSrc);
 
   React.useEffect(() => {
@@ -397,16 +369,12 @@ function StationLogo({
   }, [initialSrc]);
 
   const handleError = React.useCallback(() => {
-    if (src && src !== mappedLogo?.src && mappedLogo?.src) {
-      setSrc(mappedLogo.src);
-      return;
-    }
-    if (src !== fallbackLocal) {
-      setSrc(fallbackLocal);
+    if (src !== fallbackStationLogoPath) {
+      setSrc(fallbackStationLogoPath);
       return;
     }
     setSrc(null);
-  }, [mappedLogo?.src, src]);
+  }, [src]);
 
   if (src) {
     return (

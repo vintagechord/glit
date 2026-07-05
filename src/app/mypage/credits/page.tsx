@@ -8,6 +8,10 @@ import {
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import {
+  CreditActionNotice,
+  type CreditActionNoticeState,
+} from "@/features/credits/credit-action-notice";
+import {
   getCreditRewardStudioUrl,
   getUserCreditSummary,
   type CreditRewardRedemption,
@@ -56,7 +60,7 @@ const magazineStatusLabels: Record<string, string> = {
 
 const studioStatusLabels: Record<string, string> = {
   REQUESTED: "요청 접수",
-  APPROVED: "사용 완료",
+  APPROVED: "승인/안내 완료",
   CANCELED: "취소됨",
 };
 
@@ -81,6 +85,12 @@ const formatReservationDateTime = (date?: string | null, time?: string | null) =
   return `${dateText}${timeText}`;
 };
 
+const getRequestTimestamp = (value?: string | null) => {
+  if (!value) return 0;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
 const getMagazineRequestStatusLabel = (request: UserMagazineRequest) => {
   if (request.status === "PUBLISHED" || request.published_url) {
     return "사용 완료";
@@ -90,7 +100,7 @@ const getMagazineRequestStatusLabel = (request: UserMagazineRequest) => {
 
 const getStudioRequestStatusLabel = (reservation: StudioReservationRequest) => {
   if (reservation.status === "APPROVED" || reservation.approved_at) {
-    return "사용 완료";
+    return "승인/안내 완료";
   }
   return studioStatusLabels[reservation.status] ?? reservation.status;
 };
@@ -99,7 +109,7 @@ const noticeText = (
   error?: string | string[],
   redeemed?: string | string[],
   studioRequested?: string | string[],
-) => {
+): CreditActionNoticeState | null => {
   const rawError = Array.isArray(error) ? error[0] : error;
   if (rawError) {
     try {
@@ -112,7 +122,11 @@ const noticeText = (
   if (redeemedFlag) {
     return {
       type: "success" as const,
+      title: "서비스 이용권 발행 완료",
       text: "크레딧 이용권이 발행되었습니다. 쿠폰코드를 확인해주세요.",
+      actionHref: "/mypage/credits#credit-requests",
+      actionLabel: "요청 내역 보기",
+      clearQueryParams: ["redeemed"],
     };
   }
   const studioRequestedFlag = Array.isArray(studioRequested)
@@ -121,7 +135,12 @@ const noticeText = (
   if (studioRequestedFlag) {
     return {
       type: "success" as const,
-      text: "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구를 확인할 수 있습니다.",
+      title: "녹음실 사용 신청 완료",
+      text:
+        "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.\n적어주신 연락처로 녹음실 사용 안내를 드립니다.",
+      actionHref: "/mypage/credits#credit-requests",
+      actionLabel: "요청 내역 보기",
+      clearQueryParams: ["studioRequested"],
     };
   }
   return null;
@@ -146,6 +165,143 @@ function SummaryCard({
       <p className="mt-2 text-4xl font-black">{value.toLocaleString()}</p>
       <p className="mt-2 text-xs font-semibold leading-5 opacity-75">
         {description}
+      </p>
+    </div>
+  );
+}
+
+function MagazineRequestCard({ request }: { request: UserMagazineRequest }) {
+  return (
+    <div className="rounded-[10px] border-2 border-border bg-background p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+            Magazine
+          </p>
+          <p className="mt-1 font-black text-foreground">
+            {request.album_title ?? "제목 미입력"}
+          </p>
+        </div>
+        <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
+          {getMagazineRequestStatusLabel(request)}
+        </span>
+      </div>
+      <p className="mt-2 text-xs font-semibold text-muted-foreground">
+        {request.artist_name ?? "-"} ·{" "}
+        {channelLabels[request.target_channel ?? ""] ??
+          request.target_channel ??
+          "-"}{" "}
+        · 요청일 {formatDate(request.created_at)}
+      </p>
+      {request.published_url ? (
+        <a
+          href={request.published_url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111] transition hover:-translate-y-0.5"
+        >
+          발행 페이지 보기
+          <ExternalLink className="h-4 w-4" aria-hidden="true" />
+        </a>
+      ) : null}
+      {request.admin_memo ? (
+        <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
+          관리자 메모: {request.admin_memo}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function StudioReservationCard({
+  reservation,
+}: {
+  reservation: StudioReservationRequest;
+}) {
+  return (
+    <div className="rounded-[10px] border-2 border-border bg-background p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+            Service
+          </p>
+          <p className="mt-1 font-black text-foreground">
+            {reservation.reward_title}
+          </p>
+        </div>
+        <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
+          {getStudioRequestStatusLabel(reservation)}
+        </span>
+      </div>
+      <p className="mt-2 text-xs font-semibold text-muted-foreground">
+        희망일 {formatReservationDateTime(
+          reservation.preferred_date,
+          reservation.preferred_time,
+        )}{" "}
+        · {reservation.contact_phone}
+      </p>
+      {reservation.status === "APPROVED" && reservation.approved_message ? (
+        <div className="mt-3 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black leading-5 text-[#111111]">
+          {reservation.approved_message}
+        </div>
+      ) : null}
+      {reservation.admin_memo ? (
+        <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
+          관리자 메모: {reservation.admin_memo}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function RedemptionCard({
+  redemption,
+}: {
+  redemption: CreditRewardRedemption;
+}) {
+  const studioUrl = getCreditRewardStudioUrl(redemption.reward_title);
+
+  return (
+    <div className="rounded-[10px] border-2 border-border bg-background p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-black text-foreground">
+            {redemption.reward_title}
+          </p>
+          <p className="mt-1 text-xs font-semibold text-muted-foreground">
+            {redemption.credits_spent}크레딧 사용 · 발행일{" "}
+            {formatDate(redemption.issued_at)}
+          </p>
+        </div>
+        <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
+          {statusLabels[redemption.status] ?? redemption.status}
+        </span>
+      </div>
+      <div className="mt-4 rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-white">
+        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/60">
+          Coupon Code
+        </p>
+        <p className="mt-1 text-2xl font-black tracking-normal">
+          {redemption.coupon_code}
+        </p>
+      </div>
+      {studioUrl ? (
+        <a
+          href={studioUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-4 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
+        >
+          녹음실 살펴보기
+          <ExternalLink className="h-4 w-4" aria-hidden="true" />
+        </a>
+      ) : null}
+      <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
+        유효기간 {formatDate(redemption.expires_at)}
+        {redemption.used_at ? ` · 사용완료 ${formatDate(redemption.used_at)}` : ""}
+        {redemption.admin_memo
+          ? ` · 관리자 메모: ${redemption.admin_memo}`
+          : ""}
       </p>
     </div>
   );
@@ -228,14 +384,31 @@ export default async function MyPageCreditsPage({
     ((magazineRequestsResult.data ?? []) as UserMagazineRequest[]) ?? [];
   const studioReservations =
     ((studioReservationsResult.data ?? []) as StudioReservationRequest[]) ?? [];
-  const studioRedemptionIds = new Set(
-    studioReservations.map((reservation) => reservation.redemption_id),
+  const issuedRedemptions = redemptions.filter(
+    (redemption) => redemption.status === "ISSUED",
   );
-  const couponRedemptions = redemptions.filter(
-    (redemption) => !studioRedemptionIds.has(redemption.id),
+  const usedRedemptions = redemptions.filter(
+    (redemption) => redemption.status === "USED",
   );
   const hasCreditRequests =
     magazineRequests.length > 0 || studioReservations.length > 0;
+  const creditRequestItems = [
+    ...magazineRequests.map((request) => ({
+      key: `magazine-${request.id}`,
+      type: "magazine" as const,
+      createdAt: request.created_at,
+      request,
+    })),
+    ...studioReservations.map((reservation) => ({
+      key: `studio-${reservation.id}`,
+      type: "studio" as const,
+      createdAt: reservation.created_at,
+      reservation,
+    })),
+  ].sort(
+    (a, b) =>
+      getRequestTimestamp(b.createdAt) - getRequestTimestamp(a.createdAt),
+  );
 
   return (
     <DashboardShell
@@ -245,17 +418,7 @@ export default async function MyPageCreditsPage({
       contextLabel="마이페이지"
     >
       <div className="space-y-8">
-        {notice ? (
-          <div
-            className={`rounded-[10px] border-2 px-4 py-3 text-sm font-black ${
-              notice.type === "success"
-                ? "border-[#1f7a5a] bg-emerald-500/10 text-[#1f7a5a]"
-                : "border-[#d9362c] bg-[#d9362c]/10 text-[#d9362c]"
-            }`}
-          >
-            {notice.text}
-          </div>
-        ) : null}
+        <CreditActionNotice notice={notice} />
 
         <section className="rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27]">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -265,8 +428,8 @@ export default async function MyPageCreditsPage({
                 결제 완료 음반심의 1건 = 1크레딧
               </h2>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-muted-foreground">
-                1크레딧은 매거진 1회 발행에 사용할 수 있고, 크레딧을 모으면
-                치킨 쿠폰처럼 녹음실 이용권 등 서비스 쿠폰으로 교환할 수 있습니다.
+                1크레딧으로 매거진을 1회 발행할 수 있습니다. 모은 크레딧은
+                치킨 쿠폰처럼 녹음실 이용권 등 서비스 쿠폰으로 교환됩니다.
               </p>
             </div>
             <span className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-sm font-black text-[#111111]">
@@ -302,7 +465,10 @@ export default async function MyPageCreditsPage({
           </div>
         </section>
 
-        <section className="rounded-[10px] border-2 border-border bg-card p-5">
+        <section
+          id="credit-requests"
+          className="scroll-mt-28 rounded-[10px] border-2 border-border bg-card p-5"
+        >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="bauhaus-kicker">Requests</p>
@@ -317,92 +483,20 @@ export default async function MyPageCreditsPage({
 
           {hasCreditRequests ? (
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              {magazineRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="rounded-[10px] border-2 border-border bg-background p-4"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                        Magazine
-                      </p>
-                      <p className="mt-1 font-black text-foreground">
-                        {request.album_title ?? "제목 미입력"}
-                      </p>
-                    </div>
-                    <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
-                      {getMagazineRequestStatusLabel(request)}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs font-semibold text-muted-foreground">
-                    {request.artist_name ?? "-"} ·{" "}
-                    {channelLabels[request.target_channel ?? ""] ??
-                      request.target_channel ??
-                      "-"}{" "}
-                    · 요청일 {formatDate(request.created_at)}
-                  </p>
-                  {request.published_url ? (
-                    <a
-                      href={request.published_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111] transition hover:-translate-y-0.5"
-                    >
-                      발행 페이지 보기
-                      <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                    </a>
-                  ) : null}
-                  {request.admin_memo ? (
-                    <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
-                      관리자 메모: {request.admin_memo}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-
-              {studioReservations.map((reservation) => (
-                <div
-                  key={reservation.id}
-                  className="rounded-[10px] border-2 border-border bg-background p-4"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                        Studio
-                      </p>
-                      <p className="mt-1 font-black text-foreground">
-                        {reservation.reward_title}
-                      </p>
-                    </div>
-                    <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
-                      {getStudioRequestStatusLabel(reservation)}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs font-semibold text-muted-foreground">
-                    희망일 {formatReservationDateTime(
-                      reservation.preferred_date,
-                      reservation.preferred_time,
-                    )}{" "}
-                    · {reservation.contact_phone}
-                  </p>
-                  {reservation.status === "APPROVED" &&
-                  reservation.approved_message ? (
-                    <div className="mt-3 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black leading-5 text-[#111111]">
-                      {reservation.approved_message}
-                    </div>
-                  ) : null}
-                  {reservation.admin_memo ? (
-                    <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
-                      관리자 메모: {reservation.admin_memo}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
+              {creditRequestItems.map((item) =>
+                item.type === "magazine" ? (
+                  <MagazineRequestCard key={item.key} request={item.request} />
+                ) : (
+                  <StudioReservationCard
+                    key={item.key}
+                    reservation={item.reservation}
+                  />
+                ),
+              )}
             </div>
           ) : (
             <p className="mt-5 rounded-[10px] border-2 border-dashed border-border bg-background p-5 text-sm font-semibold text-muted-foreground">
-              아직 크레딧으로 접수한 매거진 발행 또는 녹음실 예약 요청이 없습니다.
+              아직 크레딧으로 접수한 매거진 발행 또는 서비스 이용권 신청이 없습니다.
             </p>
           )}
         </section>
@@ -415,60 +509,14 @@ export default async function MyPageCreditsPage({
                 발행된 이용권
               </h2>
             </div>
-            {couponRedemptions.length > 0 ? (
+            {issuedRedemptions.length > 0 ? (
               <div className="mt-5 space-y-3">
-                {couponRedemptions.map((redemption) => {
-                  const studioUrl = getCreditRewardStudioUrl(
-                    redemption.reward_title,
-                  );
-
-                  return (
-                    <div
-                      key={redemption.id}
-                      className="rounded-[10px] border-2 border-border bg-background p-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="font-black text-foreground">
-                            {redemption.reward_title}
-                          </p>
-                          <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                            {redemption.credits_spent}크레딧 사용 · 발행일{" "}
-                            {formatDate(redemption.issued_at)}
-                          </p>
-                        </div>
-                        <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
-                          {statusLabels[redemption.status] ?? redemption.status}
-                        </span>
-                      </div>
-                      <div className="mt-4 rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-white">
-                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/60">
-                          Coupon Code
-                        </p>
-                        <p className="mt-1 text-2xl font-black tracking-normal">
-                          {redemption.coupon_code}
-                        </p>
-                      </div>
-                      {studioUrl ? (
-                        <a
-                          href={studioUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-4 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
-                        >
-                          녹음실 살펴보기
-                          <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                        </a>
-                      ) : null}
-                      <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
-                        유효기간 {formatDate(redemption.expires_at)}
-                        {redemption.admin_memo
-                          ? ` · 관리자 메모: ${redemption.admin_memo}`
-                          : ""}
-                      </p>
-                    </div>
-                  );
-                })}
+                {issuedRedemptions.map((redemption) => (
+                  <RedemptionCard
+                    key={redemption.id}
+                    redemption={redemption}
+                  />
+                ))}
               </div>
             ) : (
               <p className="mt-5 rounded-[10px] border-2 border-dashed border-border bg-background p-5 text-sm font-semibold text-muted-foreground">
@@ -479,39 +527,62 @@ export default async function MyPageCreditsPage({
 
           <div className="rounded-[10px] border-2 border-border bg-card p-5">
             <div className="flex items-center gap-2">
-              <History className="h-5 w-5 text-[#1556a4]" aria-hidden="true" />
+              <Ticket className="h-5 w-5 text-[#1556a4]" aria-hidden="true" />
               <h2 className="text-xl font-black text-foreground">
-                크레딧 적립 기준
+                사용완료된 이용권
               </h2>
             </div>
-            <p className="mt-3 text-sm font-semibold leading-6 text-muted-foreground">
-              회원 계정으로 결제 완료된 음반심의 건의 크레딧이 자동 적립됩니다.
-            </p>
-            <div className="mt-5 space-y-3">
-              {creditSources.length > 0 ? (
-                creditSources.map((submission) => (
-                  <div
-                    key={submission.id}
-                    className="rounded-[8px] border-2 border-border bg-background p-4"
-                  >
-                    <p className="font-black text-foreground">
-                      {submission.title ?? "앨범명 미입력"}
-                    </p>
-                    <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                      {submission.artist_name ?? "-"} · 발매일{" "}
-                      {submission.release_date ?? "-"}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      적립일 {formatDate(submission.created_at)}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="rounded-[8px] border-2 border-dashed border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
-                  아직 크레딧으로 적립된 음반심의 결제 건이 없습니다.
-                </p>
-              )}
-            </div>
+            {usedRedemptions.length > 0 ? (
+              <div className="mt-5 space-y-3">
+                {usedRedemptions.map((redemption) => (
+                  <RedemptionCard
+                    key={redemption.id}
+                    redemption={redemption}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="mt-5 rounded-[10px] border-2 border-dashed border-border bg-background p-5 text-sm font-semibold text-muted-foreground">
+                아직 사용완료된 이용권이 없습니다.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-[10px] border-2 border-border bg-card p-5">
+          <div className="flex items-center gap-2">
+            <History className="h-5 w-5 text-[#1556a4]" aria-hidden="true" />
+            <h2 className="text-xl font-black text-foreground">
+              크레딧 적립 기준
+            </h2>
+          </div>
+          <p className="mt-3 text-sm font-semibold leading-6 text-muted-foreground">
+            회원 계정으로 결제 완료된 음반심의 건의 크레딧이 자동 적립됩니다.
+          </p>
+          <div className="mt-5 space-y-3">
+            {creditSources.length > 0 ? (
+              creditSources.map((submission) => (
+                <div
+                  key={submission.id}
+                  className="rounded-[8px] border-2 border-border bg-background p-4"
+                >
+                  <p className="font-black text-foreground">
+                    {submission.title ?? "앨범명 미입력"}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                    {submission.artist_name ?? "-"} · 발매일{" "}
+                    {submission.release_date ?? "-"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    적립일 {formatDate(submission.created_at)}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-[8px] border-2 border-dashed border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
+                아직 크레딧으로 적립된 음반심의 결제 건이 없습니다.
+              </p>
+            )}
           </div>
         </section>
       </div>

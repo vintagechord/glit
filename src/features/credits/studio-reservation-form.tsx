@@ -36,7 +36,7 @@ export function StudioReservationForm({
       <input type="hidden" name="durationHours" value="1" />
       <div className="flex items-center gap-2 text-xs font-black text-foreground">
         <CalendarClock className="h-4 w-4 text-[#1556a4]" aria-hidden="true" />
-        녹음실 예약 요청
+        서비스 이용 신청
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className={labelClass}>
@@ -58,7 +58,7 @@ export function StudioReservationForm({
           />
         </label>
         <label className={labelClass}>
-          담당자명
+          신청자명
           <input
             name="contactName"
             required
@@ -90,7 +90,7 @@ export function StudioReservationForm({
         <textarea
           name="notes"
           rows={3}
-          placeholder="희망 시간대가 여러 개라면 함께 적어주세요."
+          placeholder="희망 시간대, 이용 목적, 안내받을 내용 등을 함께 적어주세요."
           className={inputClass}
         />
       </label>
@@ -99,7 +99,7 @@ export function StudioReservationForm({
         disabled={!canRedeem}
         className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground"
       >
-        {canRedeem ? "크레딧 사용해서 예약 요청" : "크레딧 부족"}
+        {canRedeem ? "크레딧 사용해서 신청" : "크레딧 부족"}
       </button>
     </form>
   );

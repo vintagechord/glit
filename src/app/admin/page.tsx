@@ -292,7 +292,7 @@ export default async function AdminPage() {
             크레딧/쿠폰 관리
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            크레딧 이용권, 매거진 발행 요청, 녹음실 예약 요청을 관리합니다.
+            크레딧 이용권, 매거진 발행 요청, 서비스 이용권 신청을 관리합니다.
           </p>
         </Link>
         <Link

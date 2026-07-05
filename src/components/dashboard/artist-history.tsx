@@ -84,6 +84,67 @@ function Thumbnail({ name, src }: { name: string; src: string | null }) {
   );
 }
 
+function SubmissionManagementRow({
+  item,
+  selected,
+  deleting,
+  onToggleSelection,
+  onDelete,
+}: {
+  item: SubmissionItem;
+  selected: boolean;
+  deleting: boolean;
+  onToggleSelection: (id: string) => void;
+  onDelete: (item: SubmissionItem) => void;
+}) {
+  return (
+    <div
+      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border px-3 py-2 text-sm transition sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center ${
+        selected
+          ? "border-foreground bg-background"
+          : "border-border/60 bg-card/80 hover:border-foreground"
+      }`}
+    >
+      <label className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background/70 transition hover:border-foreground">
+        <span className="sr-only">
+          {item.title || "제목 미입력"} 선택
+        </span>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelection(item.id)}
+          disabled={deleting}
+          className="h-4 w-4 rounded border-border"
+        />
+      </label>
+      <Link
+        href={`/dashboard/submissions/${encodeURIComponent(item.id)}`}
+        prefetch={false}
+        className="min-w-0"
+      >
+        <p className="truncate font-semibold text-foreground">
+          {item.title || "제목 미입력"}
+        </p>
+        <p className="truncate text-xs text-muted-foreground">
+          접수일 {formatDate(item.created_at)}
+        </p>
+      </Link>
+      <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 sm:col-start-auto sm:justify-end">
+        <StatusChip label={getStageLabel(item)} />
+        <button
+          type="button"
+          onClick={() => onDelete(item)}
+          disabled={deleting}
+          className="rounded-full border border-red-500/40 px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:border-red-600 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={`${item.title || "제목 미입력"} 심의 내역 삭제`}
+        >
+          {deleting ? "삭제 중" : "삭제"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const removeSubmissionsFromGroups = (
   groups: ArtistGroup[],
   submissionIds: Set<string>,
@@ -108,7 +169,6 @@ function ArtistCard({
   onToggleSelection: (id: string) => void;
   onDelete: (item: SubmissionItem) => void;
 }) {
-  const [open, setOpen] = React.useState(false);
   return (
     <div className="overflow-hidden rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.12)] transition hover:border-foreground/70">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
@@ -130,73 +190,31 @@ function ArtistCard({
               아티스트 상세
             </Link>
           ) : null}
-          <button
-            type="button"
-            onClick={() => setOpen((prev) => !prev)}
-            className="inline-flex shrink-0 items-center justify-center rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-foreground hover:text-foreground whitespace-nowrap"
-          >
-            {open ? "접기" : "보기"}
-          </button>
         </div>
       </div>
-      {open && (
-        <div className="mt-3 space-y-2 rounded-2xl border border-border/60 bg-background/70 p-3">
-          {group.submissions.map((item) => (
-            item.id ? (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/80 px-3 py-2 text-sm transition hover:border-foreground"
-              >
-                <label className="flex shrink-0 items-center justify-center">
-                  <span className="sr-only">
-                    {item.title || "제목 미입력"} 선택
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(item.id)}
-                    onChange={() => onToggleSelection(item.id)}
-                    disabled={deletingIds.has(item.id)}
-                    className="h-4 w-4 rounded border-border"
-                  />
-                </label>
-                <Link
-                  href={`/dashboard/submissions/${encodeURIComponent(item.id)}`}
-                  prefetch={false}
-                  className="min-w-0 flex-1"
-                >
-                  <p className="truncate font-semibold text-foreground">
-                    {item.title || "제목 미입력"}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    접수일 {formatDate(item.created_at)}
-                  </p>
-                </Link>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                  <StatusChip label={getStageLabel(item)} />
-                  <button
-                    type="button"
-                    onClick={() => onDelete(item)}
-                    disabled={deletingIds.has(item.id)}
-                    className="rounded-full border border-red-500/40 px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:border-red-600 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label={`${item.title || "제목 미입력"} 심의 내역 삭제`}
-                  >
-                    {deletingIds.has(item.id) ? "삭제 중" : "삭제"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div
-                key={`${group.artistName}-${item.title ?? "unknown"}`}
-                className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-red-400/40 bg-red-500/5 px-3 py-2 text-sm text-red-700"
-              >
-                <span className="truncate">
-                  ID가 없는 항목입니다. 관리자에게 문의해주세요.
-                </span>
-              </div>
-            )
-          ))}
-        </div>
-      )}
+      <div className="mt-3 space-y-2 rounded-2xl border border-border/60 bg-background/70 p-3">
+        {group.submissions.map((item) => (
+          item.id ? (
+            <SubmissionManagementRow
+              key={item.id}
+              item={item}
+              selected={selectedIds.has(item.id)}
+              deleting={deletingIds.has(item.id)}
+              onToggleSelection={onToggleSelection}
+              onDelete={onDelete}
+            />
+          ) : (
+            <div
+              key={`${group.artistName}-${item.title ?? "unknown"}`}
+              className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-red-400/40 bg-red-500/5 px-3 py-2 text-sm text-red-700"
+            >
+              <span className="truncate">
+                ID가 없는 항목입니다. 관리자에게 문의해주세요.
+              </span>
+            </div>
+          )
+        ))}
+      </div>
     </div>
   );
 }

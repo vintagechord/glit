@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getStationLogoPath } from "@/lib/station-logos";
 import {
   getPackageStations,
 } from "@/lib/station-reviews";
@@ -402,9 +403,6 @@ export const getDashboardStatusData = async (
       reviewMap.set(submissionId, entry);
     });
 
-    const logoFor = (code?: string | null) =>
-      code ? admin.storage.from("broadcast").getPublicUrl(`${code}.png`).data.publicUrl ?? null : null;
-
     const buildRows = (
       submission: DashboardSubmission,
       targetMap: Record<string, StationReviewRow[]>,
@@ -462,7 +460,7 @@ export const getDashboardStatusData = async (
                   id: station.id,
                   code: station.code,
                   name: station.name,
-                  logo_url: logoFor(station.code ?? undefined),
+                  logo_url: getStationLogoPath(station),
                 },
               };
             })
@@ -489,7 +487,7 @@ export const getDashboardStatusData = async (
               id: String(station.id ?? station.code ?? ""),
               code: station.code ?? null,
               name: station.name ?? null,
-              logo_url: logoFor(station.code ?? undefined),
+              logo_url: getStationLogoPath(station),
             },
           });
         };

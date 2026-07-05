@@ -78,9 +78,16 @@ export function MagazineRequestForm({
   const [targetChannel, setTargetChannel] =
     React.useState<(typeof channelOptions)[number]["value"]>("DOMESTIC_NEWS");
   const [artworkFileName, setArtworkFileName] = React.useState("");
+  const successTitleId = React.useId();
+  const successConfirmButtonRef = React.useRef<HTMLButtonElement>(null);
 
   const hasAvailableCredits = availableCredits > 0;
   const canSubmit = isAuthenticated && hasAvailableCredits;
+
+  React.useEffect(() => {
+    if (notice?.type !== "success") return;
+    successConfirmButtonRef.current?.focus();
+  }, [notice?.type]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -125,13 +132,9 @@ export function MagazineRequestForm({
           </span>
         </div>
 
-        {notice ? (
+        {notice?.type === "error" ? (
           <div
-            className={`mt-5 rounded-[8px] border-2 px-4 py-3 text-sm font-semibold ${
-              notice.type === "success"
-                ? "border-[#1f7a5a] bg-emerald-500/10 text-[#1f7a5a]"
-                : "border-[#d9362c] bg-[#d9362c]/10 text-[#d9362c]"
-            }`}
+            className="mt-5 rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-sm font-semibold text-[#d9362c]"
           >
             {notice.text}
           </div>
@@ -409,6 +412,51 @@ export function MagazineRequestForm({
           )}
         </section>
       </aside>
+
+      {notice?.type === "success" ? (
+        <div
+          className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6"
+          style={{ top: "var(--site-header-height, 76px)" }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={successTitleId}
+            className="w-full max-w-md rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-[#111111] shadow-[6px_6px_0_#111111]"
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#1f7a5a] text-white">
+                <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <h2 id={successTitleId} className="text-lg font-black">
+                  크레딧 사용 완료
+                </h2>
+                <p className="mt-2 text-sm font-semibold leading-6 text-black/70">
+                  {notice.text}
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <Link
+                href="/mypage/credits#credit-requests"
+                className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
+              >
+                요청 내역 보기
+              </Link>
+              <button
+                ref={successConfirmButtonRef}
+                type="button"
+                onClick={() => setNotice(null)}
+                className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-2 text-sm font-black text-white shadow-[3px_3px_0_#1556a4] transition hover:-translate-y-0.5"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
