@@ -84,6 +84,15 @@ export function getCreditRewardStudioUrl(rewardTitle: string | null | undefined)
   return VINTAGE_HOUSE_STUDIO_URL;
 }
 
+const approvalMessageDatePrefixPattern =
+  /^\s*\d{4}\s*(?:[.\-/]\s*|년\s*)\d{1,2}\s*(?:[.\-/]\s*|월\s*)\d{1,2}\s*(?:\.|일)?\s*(?:\d{1,2}:\d{2}(?::\d{2})?\s*)?/;
+
+export function stripCreditApprovalMessageDatePrefix(
+  message?: string | null,
+) {
+  return (message ?? "").replace(approvalMessageDatePrefixPattern, "").trim();
+}
+
 const countOrZero = (count?: number | null) => count ?? 0;
 
 export async function getUserCreditSummary(

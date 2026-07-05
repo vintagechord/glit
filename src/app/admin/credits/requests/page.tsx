@@ -1,13 +1,20 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Newspaper,
+  Ticket,
+} from "lucide-react";
 
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { updateStudioReservationStatusFormAction } from "@/features/credits/actions";
 import { updateMagazineRequestStatusFormAction } from "@/features/magazine/actions";
 import { formatDate, formatDateTime } from "@/lib/format";
-import type {
-  CreditRewardRedemption,
-  StudioReservationRequest,
+import {
+  stripCreditApprovalMessageDatePrefix,
+  type CreditRewardRedemption,
+  type StudioReservationRequest,
 } from "@/lib/credits";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -20,7 +27,11 @@ export const metadata = {
 type SearchParamsInput = {
   saved?: string | string[];
   error?: string | string[];
+  view?: string | string[];
+  page?: string | string[];
 };
+
+type RequestView = "magazine" | "services";
 
 type ProfileRow = {
   user_id: string;
@@ -83,9 +94,166 @@ const fieldClass =
   "min-h-10 rounded-2xl border border-border/70 bg-card px-4 py-2 text-xs text-foreground";
 
 const labelClass = "grid gap-1 text-xs font-semibold text-muted-foreground";
+const requestsPerPage = 20;
 
 const toSingle = (value?: string | string[]) =>
   Array.isArray(value) ? value[0] : value;
+
+const parseRequestView = (value?: string | string[]): RequestView =>
+  toSingle(value) === "services" ? "services" : "magazine";
+
+const parsePage = (value?: string | string[]) => {
+  const parsed = Number(toSingle(value));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+};
+
+const buildRequestPath = (view: RequestView, page = 1) =>
+  `/admin/credits/requests?view=${view}&page=${page}`;
+
+function RequestViewBanner({
+  view,
+  activeView,
+  title,
+  description,
+  count,
+}: {
+  view: RequestView;
+  activeView: RequestView;
+  title: string;
+  description: string;
+  count: number;
+}) {
+  const isActive = view === activeView;
+  const Icon = view === "magazine" ? Newspaper : Ticket;
+
+  return (
+    <Link
+      href={buildRequestPath(view)}
+      className={`group flex min-h-[126px] items-stretch rounded-[10px] border-2 p-4 transition hover:-translate-y-0.5 ${
+        isActive
+          ? "border-[#111111] bg-[#1556a4] text-white shadow-[5px_5px_0_#f2cf27]"
+          : "border-border bg-card text-foreground hover:border-[#1556a4]"
+      }`}
+      aria-current={isActive ? "page" : undefined}
+    >
+      <span
+        className={`mr-4 inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-2 ${
+          isActive
+            ? "border-white bg-white text-[#1556a4]"
+            : "border-border bg-background text-[#1556a4]"
+        }`}
+      >
+        <Icon className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-lg font-black">{title}</span>
+        <span
+          className={`mt-2 text-xs font-semibold leading-5 ${
+            isActive ? "text-white/78" : "text-muted-foreground"
+          }`}
+        >
+          {description}
+        </span>
+        <span
+          className={`mt-auto w-fit rounded-[6px] border px-2.5 py-1 text-[11px] font-black ${
+            isActive
+              ? "border-white/35 text-white"
+              : "border-border text-muted-foreground"
+          }`}
+        >
+          총 {count.toLocaleString()}건
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+function PaginationControls({
+  activeView,
+  currentPage,
+  totalPages,
+  totalCount,
+}: {
+  activeView: RequestView;
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+}) {
+  if (totalCount <= requestsPerPage) return null;
+
+  const from = (currentPage - 1) * requestsPerPage + 1;
+  const to = Math.min(currentPage * requestsPerPage, totalCount);
+  const prevPage = Math.max(1, currentPage - 1);
+  const nextPage = Math.min(totalPages, currentPage + 1);
+  const pageStart = Math.max(1, currentPage - 2);
+  const pageEnd = Math.min(totalPages, currentPage + 2);
+  const pages = Array.from(
+    { length: pageEnd - pageStart + 1 },
+    (_, index) => pageStart + index,
+  );
+  const baseButtonClass =
+    "inline-flex h-9 min-w-9 items-center justify-center rounded-[8px] border-2 px-3 text-xs font-black transition";
+  const disabledClass =
+    "cursor-not-allowed border-border bg-muted text-muted-foreground opacity-60";
+  const enabledClass =
+    "border-[#111111] bg-background text-foreground hover:-translate-y-0.5 hover:bg-[#f2cf27]";
+
+  return (
+    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
+      <p className="text-xs font-semibold text-muted-foreground">
+        {from.toLocaleString()}-{to.toLocaleString()} / 총{" "}
+        {totalCount.toLocaleString()}건
+      </p>
+      <nav
+        className="flex flex-wrap items-center gap-2"
+        aria-label="크레딧 요청 페이지"
+      >
+        {currentPage > 1 ? (
+          <Link
+            href={buildRequestPath(activeView, prevPage)}
+            className={`${baseButtonClass} ${enabledClass}`}
+            aria-label="이전 페이지"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        ) : (
+          <span className={`${baseButtonClass} ${disabledClass}`}>
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </span>
+        )}
+
+        {pages.map((page) => (
+          <Link
+            key={page}
+            href={buildRequestPath(activeView, page)}
+            className={`${baseButtonClass} ${
+              page === currentPage
+                ? "border-[#111111] bg-[#1556a4] text-white"
+                : enabledClass
+            }`}
+            aria-current={page === currentPage ? "page" : undefined}
+          >
+            {page}
+          </Link>
+        ))}
+
+        {currentPage < totalPages ? (
+          <Link
+            href={buildRequestPath(activeView, nextPage)}
+            className={`${baseButtonClass} ${enabledClass}`}
+            aria-label="다음 페이지"
+          >
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        ) : (
+          <span className={`${baseButtonClass} ${disabledClass}`}>
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </span>
+        )}
+      </nav>
+    </div>
+  );
+}
 
 const formatReservationDateTime = (date?: string | null, time?: string | null) =>
   `${formatDate(date)}${time ? ` ${time.slice(0, 5)}` : ""}`;
@@ -93,13 +261,10 @@ const formatReservationDateTime = (date?: string | null, time?: string | null) =
 const buildDefaultUseMessage = (
   reservation: Pick<
     StudioReservationRequest,
-    "preferred_date" | "preferred_time" | "reward_title" | "service_location"
+    "reward_title" | "service_location"
   >,
 ) =>
-  `${formatReservationDateTime(
-    reservation.preferred_date,
-    reservation.preferred_time,
-  )} ${reservation.service_location ?? reservation.reward_title} 이용 안내를 적어주신 연락처로 드립니다.`;
+  `${reservation.service_location ?? reservation.reward_title} 이용 안내를 적어주신 연락처로 드립니다.`;
 
 export default async function AdminCreditRequestsPage({
   searchParams,
@@ -109,24 +274,47 @@ export default async function AdminCreditRequestsPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const savedFlag = toSingle(resolvedSearchParams?.saved);
   const errorFlag = toSingle(resolvedSearchParams?.error);
+  const activeView = parseRequestView(resolvedSearchParams?.view);
+  const requestedPage = parsePage(resolvedSearchParams?.page);
   const admin = createAdminClient();
 
-  const [magazineResult, studioResult] = await Promise.all([
+  const [magazineCountResult, studioCountResult] = await Promise.all([
     admin
       .from("magazine_requests")
-      .select(
-        "id, submission_id, user_id, target_channel, status, requester_name, requester_email, requester_phone, album_title, artist_name, release_date, published_url, admin_memo, created_at",
-      )
-      .order("created_at", { ascending: false })
-      .limit(120),
+      .select("id", { count: "exact", head: true }),
     admin
       .from("studio_reservation_requests")
-      .select(
-        "id, user_id, redemption_id, reward_id, reward_title, service_location, status, preferred_date, preferred_time, duration_hours, contact_name, contact_phone, contact_email, notes, approved_message, admin_memo, approved_at, canceled_at, created_at",
-      )
-      .order("created_at", { ascending: false })
-      .limit(120),
+      .select("id", { count: "exact", head: true }),
   ]);
+  const magazineTotal = magazineCountResult.count ?? 0;
+  const studioTotal = studioCountResult.count ?? 0;
+  const activeTotal = activeView === "magazine" ? magazineTotal : studioTotal;
+  const totalPages = Math.max(1, Math.ceil(activeTotal / requestsPerPage));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const rangeFrom = (currentPage - 1) * requestsPerPage;
+  const rangeTo = rangeFrom + requestsPerPage - 1;
+  const currentListPath = buildRequestPath(activeView, currentPage);
+
+  const magazineResult =
+    activeView === "magazine"
+      ? await admin
+          .from("magazine_requests")
+          .select(
+            "id, submission_id, user_id, target_channel, status, requester_name, requester_email, requester_phone, album_title, artist_name, release_date, published_url, admin_memo, created_at",
+          )
+          .order("created_at", { ascending: false })
+          .range(rangeFrom, rangeTo)
+      : { data: [] as MagazineRequestRow[], error: null };
+  const studioResult =
+    activeView === "services"
+      ? await admin
+          .from("studio_reservation_requests")
+          .select(
+            "id, user_id, redemption_id, reward_id, reward_title, service_location, status, preferred_date, preferred_time, duration_hours, contact_name, contact_phone, contact_email, notes, approved_message, admin_memo, approved_at, canceled_at, created_at",
+          )
+          .order("created_at", { ascending: false })
+          .range(rangeFrom, rangeTo)
+      : { data: [] as StudioReservationRequest[], error: null };
 
   const magazineRequests =
     ((magazineResult.data ?? []) as MagazineRequestRow[]) ?? [];
@@ -201,6 +389,30 @@ export default async function AdminCreditRequestsPage({
         </div>
       ) : null}
 
+      {magazineCountResult.error || studioCountResult.error ? (
+        <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+          요청 건수 집계 중 오류가 발생했습니다.
+        </div>
+      ) : null}
+
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
+        <RequestViewBanner
+          view="magazine"
+          activeView={activeView}
+          title="매거진 발행 요청"
+          description="발행 URL, 발행 상태, 관리자 메모를 처리합니다."
+          count={magazineTotal}
+        />
+        <RequestViewBanner
+          view="services"
+          activeView={activeView}
+          title="서비스 이용권 신청"
+          description="연락처, 이메일, 희망 일정, 요청사항을 확인합니다."
+          count={studioTotal}
+        />
+      </div>
+
+      {activeView === "magazine" ? (
       <section className="mt-8 space-y-4 rounded-[32px] border border-border/60 bg-card/80 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -213,7 +425,7 @@ export default async function AdminCreditRequestsPage({
             </p>
           </div>
           <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
-            {magazineRequests.length.toLocaleString()}건
+            최신순 · {magazineTotal.toLocaleString()}건
           </span>
         </div>
 
@@ -282,7 +494,7 @@ export default async function AdminCreditRequestsPage({
                     <input
                       type="hidden"
                       name="redirectTo"
-                      value="/admin/credits/requests"
+                      value={currentListPath}
                     />
                     <label className={labelClass}>
                       상태
@@ -333,8 +545,16 @@ export default async function AdminCreditRequestsPage({
             접수된 매거진 발행 요청이 없습니다.
           </div>
         )}
+        <PaginationControls
+          activeView={activeView}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalCount={activeTotal}
+        />
       </section>
+      ) : null}
 
+      {activeView === "services" ? (
       <section className="mt-6 space-y-4 rounded-[32px] border border-border/60 bg-card/80 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -347,7 +567,7 @@ export default async function AdminCreditRequestsPage({
             </p>
           </div>
           <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
-            {studioRequests.length.toLocaleString()}건
+            최신순 · {studioTotal.toLocaleString()}건
           </span>
         </div>
 
@@ -360,7 +580,8 @@ export default async function AdminCreditRequestsPage({
             {studioRequests.map((request) => {
               const profile = profileMap.get(request.user_id);
               const defaultMessage =
-                request.approved_message || buildDefaultUseMessage(request);
+                stripCreditApprovalMessageDatePrefix(request.approved_message) ||
+                buildDefaultUseMessage(request);
               const redemption = studioRedemptionMap.get(request.redemption_id);
 
               return (
@@ -428,7 +649,7 @@ export default async function AdminCreditRequestsPage({
                     <input
                       type="hidden"
                       name="redirectTo"
-                      value="/admin/credits/requests"
+                      value={currentListPath}
                     />
                     <label className={labelClass}>
                       상태
@@ -479,7 +700,14 @@ export default async function AdminCreditRequestsPage({
             접수된 서비스 이용권 신청이 없습니다.
           </div>
         )}
+        <PaginationControls
+          activeView={activeView}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalCount={activeTotal}
+        />
       </section>
+      ) : null}
     </div>
   );
 }

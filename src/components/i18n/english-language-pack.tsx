@@ -244,7 +244,7 @@ const exactTranslations: Record<string, string> = {
     "Each broadcaster requires separate review, and review is available only for music videos from albums with completed music review.",
   "기본 Music Video Review는 바로 신청할 수 있고, Broadcaster 입고 옵션은 조건 확인 후 진행합니다.":
     "Standard music video review can be submitted immediately. Broadcaster delivery options proceed after requirement confirmation.",
-  "기본 뮤직비디오 심의는 바로 신청할 수 있고, 방송국 입고 옵션은 조건 확인 후 진행합니다.":
+  "기본 뮤직비디오 심의는 바로 신청할 수 있고, 방송국 별 옵션은 조건 확인 후 진행합니다.":
     "Standard music video review can be submitted immediately. Broadcaster delivery options proceed after requirement confirmation.",
   "일반 Music Video Review": "Standard Music Video Review",
   "Review 완료 후 등급분류를 영상에 삽입하면 Melon, 지니, 유튜브 등으로 온라인 유통이 가능합니다.":
@@ -260,7 +260,7 @@ const exactTranslations: Record<string, string> = {
     "Available only for artists scheduled for MBC M broadcast.",
   "MBC M 방송 아티스트에 한해 심의 가능합니다.":
     "Available only for artists scheduled for MBC M broadcast.",
-  "조건 확인하기 후 담당자 확인을 거쳐 진행됩니다.":
+  "조건 확인 후 담당자 확인을 거쳐 진행됩니다.":
     "Proceed after requirement check and staff confirmation.",
   "방송 일정이 있는 경우에만 문의해주세요.":
     "Contact us only when a broadcast schedule exists.",
@@ -362,6 +362,11 @@ const exactTranslations: Record<string, string> = {
   "서비스 위치 미입력": "Service Location Missing",
   "사용완료된 이용권": "Used Vouchers",
   "아직 사용완료된 이용권이 없습니다.": "There are no used vouchers yet.",
+  "크레딧 적립 내역": "Credit Earning History",
+  "결제 완료된 음반심의 건마다 1크레딧이 자동 적립됩니다.":
+    "1 credit is automatically earned for each paid album review.",
+  "아직 크레딧으로 적립된 음반심의 결제 건이 없습니다.":
+    "There are no paid album reviews that earned credits yet.",
   "크레딧 이용권, 매거진 발행 요청, 서비스 이용권 신청을 관리합니다.":
     "Manage credit vouchers, magazine requests, and service voucher requests.",
   "사용처 선택": "Choose How to Use Credits",
@@ -664,6 +669,31 @@ const exactTranslations: Record<string, string> = {
     "Review flow, required materials, and FAQs for album and music video review.",
   "Album과 Music Video Review 흐름, 준비물, 자주 묻는 질문을 정리했습니다.":
     "Review flow, required materials, and FAQs for album and music video review.",
+  "음반·뮤직비디오 심의의 공통 흐름, 유형별 차이, 준비 항목을 정리했습니다.":
+    "Common review flow, service differences, and preparation items for album and music video review.",
+  "심의 진행 흐름": "Review Process",
+  "음반은 음원·가사·앨범 정보, 뮤직비디오는 영상 파일과 송출 목적을 정리합니다.":
+    "For albums, prepare audio, lyrics, and album information. For music videos, prepare the video file and release purpose.",
+  "신청·결제": "Application and Payment",
+  "온라인 신청서 작성 후 카드 결제 또는 무통장 입금을 선택합니다.":
+    "After completing the online application, choose card payment or bank transfer.",
+  "진행·결과 확인": "Progress and Result Check",
+  "마이페이지 또는 조회 코드로 진행 현황과 결과 파일을 확인합니다.":
+    "Check progress and result files from My Page or with a lookup code.",
+  "유형별 핵심 안내": "Review Type Highlights",
+  "TV·라디오 송출 전 방송국이 음원, 가사, 앨범 정보를 확인합니다.":
+    "Broadcasters check audio, lyrics, and album information before TV or radio broadcast.",
+  "주요·지역 방송국별 일정 상이":
+    "Schedules vary by major and regional broadcasters",
+  "발매 전·후 접수 가능": "Available before or after release",
+  "음반심의 신청하기": "Apply for Album Review",
+  "뮤직비디오 심의": "Music Video Review",
+  "온라인 유통, 업로드, TV 송출 목적에 맞춰 영상 등급과 제출 조건을 확인합니다.":
+    "Checks video rating and submission requirements for online distribution, upload, or TV broadcast.",
+  "온라인용은 유통 제출 중심": "Online review focuses on distribution submission",
+  "TV 송출용은 방송국별 조건 확인":
+    "TV broadcast review requires checking each broadcaster's conditions",
+  "뮤직비디오 심의 신청하기": "Apply for Music Video Review",
   "AlbumReview, 이렇게 진행됩니다": "How Album Review Works",
   "AlbumReview란?": "What Is Album Review?",
   "TV·라디오 송출 전 Broadcaster이 음원, 가사, 앨범 정보를 확인하는 절차입니다.":
@@ -737,7 +767,7 @@ const exactTranslations: Record<string, string> = {
     "Result files and progress tracking provided",
   "MUSIC VIDEO REVIEW 신청하러 가기": "Apply for Music Video Review",
   "Music Video Review 신청하러 가기": "Apply for Music Video Review",
-  "신청 전 준비물 체크리스트": "Pre-Submission Checklist",
+  "신청 전 준비": "Pre-Submission Preparation",
   "Album Review 준비물": "Album Review Materials",
   "WAV 음원 또는 전체 음원 ZIP": "WAV audio or complete audio ZIP",
   "전체 가사: 반복 후렴, 코러스, 나레이션 포함":

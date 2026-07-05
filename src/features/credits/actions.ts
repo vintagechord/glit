@@ -146,29 +146,12 @@ const normalizeStudioRpcError = (message?: string | null) => {
   return "서비스 이용권 신청에 실패했습니다.";
 };
 
-const formatStudioVisitDateTime = (date?: string | null, time?: string | null) => {
-  if (!date) return "예약하신 날짜와 시간";
-  const parsed = new Date(`${date}T00:00:00+09:00`);
-  const dateText = Number.isNaN(parsed.getTime())
-    ? date
-    : new Intl.DateTimeFormat("ko-KR", {
-        dateStyle: "long",
-        timeZone: "Asia/Seoul",
-      }).format(parsed);
-  const timeText = time ? ` ${time.slice(0, 5)}` : "";
-  return `${dateText}${timeText}`;
-};
-
 const buildServiceUseMessage = ({
-  date,
-  time,
   serviceName,
 }: {
-  date?: string | null;
-  time?: string | null;
   serviceName?: string | null;
 }) =>
-  `${formatStudioVisitDateTime(date, time)} ${serviceName ?? "서비스 이용권"} 이용 안내를 적어주신 연락처로 드립니다.`;
+  `${serviceName ?? "서비스 이용권"} 이용 안내를 적어주신 연락처로 드립니다.`;
 
 export async function redeemCreditRewardFormAction(
   formData: FormData,
@@ -399,8 +382,6 @@ export async function updateStudioReservationStatusFormAction(
       parsed.data.status === "APPROVED"
         ? (parsed.data.approvedMessage ??
           buildServiceUseMessage({
-            date: reservation.preferred_date,
-            time: reservation.preferred_time,
             serviceName: reservation.service_location ?? reservation.reward_title,
           }))
         : (parsed.data.approvedMessage ?? null),

@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Coins,
   ExternalLink,
   History,
@@ -14,6 +18,7 @@ import {
 import {
   getCreditRewardStudioUrl,
   getUserCreditSummary,
+  stripCreditApprovalMessageDatePrefix,
   type CreditRewardRedemption,
   type StudioReservationRequest,
 } from "@/lib/credits";
@@ -67,6 +72,34 @@ const studioStatusLabels: Record<string, string> = {
 const channelLabels: Record<string, string> = {
   DOMESTIC_NEWS: "국내뉴스",
   MEDIA: "미디어",
+};
+
+const creditSourcesPerPage = 10;
+
+const firstParam = (value?: string | string[]) =>
+  Array.isArray(value) ? value[0] : value;
+
+const parsePositivePage = (value?: string | string[]) => {
+  const parsed = Number(firstParam(value));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+};
+
+const isOpenFlag = (value?: string | string[]) => firstParam(value) === "1";
+
+const buildCreditsPath = ({
+  creditPage,
+  creditsOpen = true,
+}: {
+  creditPage?: number;
+  creditsOpen?: boolean;
+}) => {
+  const params = new URLSearchParams();
+  if (creditsOpen) params.set("creditsOpen", "1");
+  if (creditPage && creditPage > 1) {
+    params.set("creditPage", String(creditPage));
+  }
+  const query = params.toString();
+  return `/mypage/credits${query ? `?${query}` : ""}#credit-sources`;
 };
 
 const formatDate = (value?: string | null) => {
@@ -218,6 +251,10 @@ function StudioReservationCard({
 }: {
   reservation: StudioReservationRequest;
 }) {
+  const approvedMessage = stripCreditApprovalMessageDatePrefix(
+    reservation.approved_message,
+  );
+
   return (
     <div className="rounded-[10px] border-2 border-border bg-background p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -240,9 +277,9 @@ function StudioReservationCard({
         )}{" "}
         · {reservation.contact_phone}
       </p>
-      {reservation.status === "APPROVED" && reservation.approved_message ? (
+      {reservation.status === "APPROVED" && approvedMessage ? (
         <div className="mt-3 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black leading-5 text-[#111111]">
-          {reservation.approved_message}
+          {approvedMessage}
         </div>
       ) : null}
       {reservation.admin_memo ? (
@@ -307,6 +344,117 @@ function RedemptionCard({
   );
 }
 
+function CreditSourceCard({
+  submission,
+}: {
+  submission: CreditSourceSubmission;
+}) {
+  return (
+    <div className="rounded-[8px] border-2 border-border bg-background p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-black text-foreground">
+            {submission.title ?? "앨범명 미입력"}
+          </p>
+          <p className="mt-1 text-xs font-semibold text-muted-foreground">
+            {submission.artist_name ?? "-"} · 발매일{" "}
+            {submission.release_date ?? "-"}
+          </p>
+        </div>
+        <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
+          +1 크레딧
+        </span>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        적립일 {formatDate(submission.created_at)}
+      </p>
+    </div>
+  );
+}
+
+function CreditSourcePagination({
+  currentPage,
+  totalPages,
+  totalCount,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+}) {
+  if (totalCount <= creditSourcesPerPage) return null;
+
+  const from = (currentPage - 1) * creditSourcesPerPage + 1;
+  const to = Math.min(currentPage * creditSourcesPerPage, totalCount);
+  const pageStart = Math.max(1, currentPage - 2);
+  const pageEnd = Math.min(totalPages, currentPage + 2);
+  const pages = Array.from(
+    { length: pageEnd - pageStart + 1 },
+    (_, index) => pageStart + index,
+  );
+  const baseButtonClass =
+    "inline-flex h-9 min-w-9 items-center justify-center rounded-[8px] border-2 px-3 text-xs font-black transition";
+  const enabledClass =
+    "border-[#111111] bg-background text-foreground hover:-translate-y-0.5 hover:bg-[#f2cf27]";
+  const disabledClass =
+    "cursor-not-allowed border-border bg-muted text-muted-foreground opacity-60";
+
+  return (
+    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
+      <p className="text-xs font-semibold text-muted-foreground">
+        {from.toLocaleString()}-{to.toLocaleString()} / 총{" "}
+        {totalCount.toLocaleString()}건
+      </p>
+      <nav
+        className="flex flex-wrap items-center gap-2"
+        aria-label="크레딧 적립 내역 페이지"
+      >
+        {currentPage > 1 ? (
+          <Link
+            href={buildCreditsPath({ creditPage: currentPage - 1 })}
+            className={`${baseButtonClass} ${enabledClass}`}
+            aria-label="이전 페이지"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        ) : (
+          <span className={`${baseButtonClass} ${disabledClass}`}>
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </span>
+        )}
+
+        {pages.map((page) => (
+          <Link
+            key={page}
+            href={buildCreditsPath({ creditPage: page })}
+            className={`${baseButtonClass} ${
+              page === currentPage
+                ? "border-[#111111] bg-[#1556a4] text-white"
+                : enabledClass
+            }`}
+            aria-current={page === currentPage ? "page" : undefined}
+          >
+            {page}
+          </Link>
+        ))}
+
+        {currentPage < totalPages ? (
+          <Link
+            href={buildCreditsPath({ creditPage: currentPage + 1 })}
+            className={`${baseButtonClass} ${enabledClass}`}
+            aria-label="다음 페이지"
+          >
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        ) : (
+          <span className={`${baseButtonClass} ${disabledClass}`}>
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </span>
+        )}
+      </nav>
+    </div>
+  );
+}
+
 export default async function MyPageCreditsPage({
   searchParams,
 }: {
@@ -314,6 +462,8 @@ export default async function MyPageCreditsPage({
     error?: string | string[];
     redeemed?: string | string[];
     studioRequested?: string | string[];
+    creditsOpen?: string | string[];
+    creditPage?: string | string[];
   }>;
 }) {
   const supabase = await createServerSupabase();
@@ -326,6 +476,10 @@ export default async function MyPageCreditsPage({
   }
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const creditSourcesOpen = isOpenFlag(resolvedSearchParams?.creditsOpen);
+  const requestedCreditSourcePage = parsePositivePage(
+    resolvedSearchParams?.creditPage,
+  );
   const notice = noticeText(
     resolvedSearchParams?.error,
     resolvedSearchParams?.redeemed,
@@ -335,13 +489,19 @@ export default async function MyPageCreditsPage({
 
   const [
     summary,
+    creditSourcesCountResult,
     redemptionsResult,
-    submissionsResult,
     magazineRequestsResult,
     studioReservationsResult,
   ] =
     await Promise.all([
       getUserCreditSummary(admin, user.id),
+      admin
+        .from("submissions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("type", "ALBUM")
+        .eq("payment_status", "PAID"),
       admin
         .from("credit_reward_redemptions")
         .select(
@@ -350,14 +510,6 @@ export default async function MyPageCreditsPage({
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(50),
-      admin
-        .from("submissions")
-        .select("id, title, artist_name, release_date, created_at")
-        .eq("user_id", user.id)
-        .eq("type", "ALBUM")
-        .eq("payment_status", "PAID")
-        .order("created_at", { ascending: false })
-        .limit(12),
       admin
         .from("magazine_requests")
         .select(
@@ -378,6 +530,28 @@ export default async function MyPageCreditsPage({
 
   const redemptions =
     ((redemptionsResult.data ?? []) as CreditRewardRedemption[]) ?? [];
+  const creditSourcesTotal = creditSourcesCountResult.count ?? 0;
+  const creditSourcesTotalPages = Math.max(
+    1,
+    Math.ceil(creditSourcesTotal / creditSourcesPerPage),
+  );
+  const creditSourcesCurrentPage = Math.min(
+    requestedCreditSourcePage,
+    creditSourcesTotalPages,
+  );
+  const creditSourcesRangeFrom =
+    (creditSourcesCurrentPage - 1) * creditSourcesPerPage;
+  const submissionsResult = await admin
+    .from("submissions")
+    .select("id, title, artist_name, release_date, created_at")
+    .eq("user_id", user.id)
+    .eq("type", "ALBUM")
+    .eq("payment_status", "PAID")
+    .order("created_at", { ascending: false })
+    .range(
+      creditSourcesRangeFrom,
+      creditSourcesRangeFrom + creditSourcesPerPage - 1,
+    );
   const creditSources =
     ((submissionsResult.data ?? []) as CreditSourceSubmission[]) ?? [];
   const magazineRequests =
@@ -549,41 +723,61 @@ export default async function MyPageCreditsPage({
           </div>
         </section>
 
-        <section className="rounded-[10px] border-2 border-border bg-card p-5">
-          <div className="flex items-center gap-2">
-            <History className="h-5 w-5 text-[#1556a4]" aria-hidden="true" />
-            <h2 className="text-xl font-black text-foreground">
-              크레딧 적립 기준
-            </h2>
-          </div>
-          <p className="mt-3 text-sm font-semibold leading-6 text-muted-foreground">
-            회원 계정으로 결제 완료된 음반심의 건의 크레딧이 자동 적립됩니다.
-          </p>
-          <div className="mt-5 space-y-3">
-            {creditSources.length > 0 ? (
-              creditSources.map((submission) => (
-                <div
-                  key={submission.id}
-                  className="rounded-[8px] border-2 border-border bg-background p-4"
-                >
-                  <p className="font-black text-foreground">
-                    {submission.title ?? "앨범명 미입력"}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                    {submission.artist_name ?? "-"} · 발매일{" "}
-                    {submission.release_date ?? "-"}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    적립일 {formatDate(submission.created_at)}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-[8px] border-2 border-dashed border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
-                아직 크레딧으로 적립된 음반심의 결제 건이 없습니다.
-              </p>
-            )}
-          </div>
+        <section
+          id="credit-sources"
+          className="scroll-mt-28 rounded-[10px] border-2 border-border bg-card"
+        >
+          <details open={creditSourcesOpen} className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 marker:hidden">
+              <span className="flex min-w-0 items-center gap-2">
+                <History
+                  className="h-5 w-5 shrink-0 text-[#1556a4]"
+                  aria-hidden="true"
+                />
+                <span>
+                  <span className="block text-xl font-black text-foreground">
+                    크레딧 적립 내역
+                  </span>
+                  <span className="mt-1 block text-sm font-semibold leading-6 text-muted-foreground">
+                    결제 완료된 음반심의 건마다 1크레딧이 자동 적립됩니다.
+                  </span>
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="rounded-[8px] border-2 border-[#111111] bg-background px-3 py-1 text-xs font-black text-foreground">
+                  {creditSourcesTotal.toLocaleString()}건
+                </span>
+                <ChevronDown
+                  className="h-5 w-5 text-muted-foreground transition group-open:rotate-180"
+                  aria-hidden="true"
+                />
+              </span>
+            </summary>
+
+            <div className="border-t border-border/60 p-5 pt-4">
+              {creditSourcesTotal > 0 ? (
+                <>
+                  <div className="space-y-3">
+                    {creditSources.map((submission) => (
+                      <CreditSourceCard
+                        key={submission.id}
+                        submission={submission}
+                      />
+                    ))}
+                  </div>
+                  <CreditSourcePagination
+                    currentPage={creditSourcesCurrentPage}
+                    totalPages={creditSourcesTotalPages}
+                    totalCount={creditSourcesTotal}
+                  />
+                </>
+              ) : (
+                <p className="rounded-[8px] border-2 border-dashed border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
+                  아직 크레딧으로 적립된 음반심의 결제 건이 없습니다.
+                </p>
+              )}
+            </div>
+          </details>
         </section>
       </div>
     </DashboardShell>

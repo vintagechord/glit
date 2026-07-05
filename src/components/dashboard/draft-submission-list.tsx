@@ -22,39 +22,55 @@ type FilterType = "ALL" | DraftGroupType;
 const draftStatusMap: Record<string, { label: string; tone: string }> = {
   DRAFT: {
     label: "작성중",
-    tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+    tone: "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]",
   },
   PRE_REVIEW: {
     label: "파일/결제 진행중",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
   },
   SUBMITTED: {
     label: "결제 진행중",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
   },
   WAITING_PAYMENT: {
     label: "결제 진행중",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
+    tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
   },
 };
+
+const filterButtonClass = (active: boolean) =>
+  `inline-flex h-8 items-center justify-center rounded-[8px] border-2 px-3 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
+    active
+      ? "border-[var(--bauhaus-ink)] bg-[var(--foreground)] text-[var(--background)]"
+      : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]"
+  }`;
+
+const outlineControlClass =
+  "inline-flex h-8 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
+
+const dangerControlClass =
+  "inline-flex h-8 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
+
+const chipClass =
+  "inline-flex min-h-7 items-center justify-center rounded-[6px] border-2 px-2.5 py-1 text-[11px] font-black leading-none tracking-normal shadow-[1.5px_1.5px_0_var(--bauhaus-shadow)]";
 
 const getDraftStatusInfo = (item: DraftSubmissionItem) => {
   if (item.paymentStatus === "PAYMENT_PENDING") {
     return {
       label: "결제 대기",
-      tone: "bg-[#f6d64a] text-black dark:text-black",
+      tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
     };
   }
   if (item.paymentStatus === "UNPAID" && !["DRAFT", "PRE_REVIEW"].includes(item.status)) {
     return {
       label: "결제 미완료",
-      tone: "bg-[#f6d64a] text-black dark:text-black",
+      tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
     };
   }
   return (
     draftStatusMap[item.status] ?? {
       label: item.status,
-      tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
+      tone: "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]",
     }
   );
 };
@@ -274,12 +290,12 @@ export function DraftSubmissionList({
   if (items.length === 0) {
     return (
       <div className="space-y-4">
-        <div className="rounded-[28px] border border-dashed border-border/70 bg-background/70 px-5 py-7 text-sm text-muted-foreground">
+        <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-5 py-7 text-sm text-muted-foreground">
           작성중 신청서가 없습니다.
         </div>
         <Link
           href="/dashboard/new"
-          className="inline-flex rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+          className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-4 text-xs font-black tracking-normal text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5"
         >
           새 신청서 작성
         </Link>
@@ -294,33 +310,21 @@ export function DraftSubmissionList({
           <button
             type="button"
             onClick={() => setFilter("ALL")}
-            className={`rounded-full px-3 py-1 transition ${
-              filter === "ALL"
-                ? "bg-foreground text-background"
-                : "border border-border/70 text-foreground hover:border-foreground"
-            }`}
+            className={filterButtonClass(filter === "ALL")}
           >
             전체
           </button>
           <button
             type="button"
             onClick={() => setFilter("ALBUM")}
-            className={`rounded-full px-3 py-1 transition ${
-              filter === "ALBUM"
-                ? "bg-foreground text-background"
-                : "border border-border/70 text-foreground hover:border-foreground"
-            }`}
+            className={filterButtonClass(filter === "ALBUM")}
           >
             앨범
           </button>
           <button
             type="button"
             onClick={() => setFilter("MV")}
-            className={`rounded-full px-3 py-1 transition ${
-              filter === "MV"
-                ? "bg-foreground text-background"
-                : "border border-border/70 text-foreground hover:border-foreground"
-            }`}
+            className={filterButtonClass(filter === "MV")}
           >
             뮤직비디오
           </button>
@@ -329,7 +333,7 @@ export function DraftSubmissionList({
           <button
             type="button"
             onClick={handleToggleVisibleAll}
-            className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+            className={outlineControlClass}
           >
             {isAllVisibleSelected ? "선택 해제" : "전체 선택"}
           </button>
@@ -337,7 +341,7 @@ export function DraftSubmissionList({
             type="button"
             onClick={handleDelete}
             disabled={selectedIds.size === 0 || isDeleting}
-            className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-700 transition hover:border-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className={dangerControlClass}
           >
             선택 삭제
           </button>
@@ -345,14 +349,14 @@ export function DraftSubmissionList({
       </div>
 
       {notice ? (
-        <div className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-2 text-xs text-rose-700">
+        <div className="rounded-[8px] border-2 border-[var(--bauhaus-red)] bg-[var(--background)] px-4 py-2 text-xs font-bold text-[var(--bauhaus-red)]">
           {notice}
         </div>
       ) : null}
 
       <div className="space-y-3">
         {filteredItems.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border/70 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
+          <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-4 py-6 text-sm text-muted-foreground">
             선택한 유형의 작성중 신청서가 없습니다.
           </div>
         ) : (
@@ -365,24 +369,24 @@ export function DraftSubmissionList({
             return (
               <div
                 key={item.id}
-                className="grid gap-3 rounded-2xl border border-border/60 bg-card/80 px-4 py-3 md:grid-cols-[24px_1fr_auto] md:items-center"
+                className="grid gap-3 rounded-[8px] border-2 border-border bg-[var(--card)] px-4 py-3 transition hover:border-[var(--bauhaus-ink)] md:grid-cols-[24px_1fr_auto] md:items-center"
               >
                 <input
                   type="checkbox"
                   checked={selectedIds.has(item.id)}
                   onChange={() => handleToggleItem(item.id)}
-                  className="mt-1 h-4 w-4 rounded border-border md:mt-0"
+                  className="mt-1 h-4 w-4 rounded border-border accent-[var(--bauhaus-ink)] md:mt-0"
                 />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-semibold text-foreground">
                       {buildDisplayTitle(item)}
                     </p>
-                    <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground">
+                    <span className={`${chipClass} border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]`}>
                       {getTypeLabel(draftGroup)}
                     </span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${statusInfo.tone}`}
+                      className={`${chipClass} ${statusInfo.tone}`}
                     >
                       {statusInfo.label}
                     </span>
@@ -401,7 +405,7 @@ export function DraftSubmissionList({
                       }
                       handleResume(item, Date.now());
                     }}
-                    className="rounded-full bg-foreground px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
+                    className="inline-flex h-8 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-3 text-[11px] font-black tracking-normal text-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
                   >
                     {shouldOpenPayment ? "결제하기" : "이어쓰기"}
                   </button>

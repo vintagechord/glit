@@ -521,10 +521,9 @@ export function MvWizard({
   );
   const requiredFieldClass = React.useCallback(
     (field: MvValidationField) =>
-      `w-full rounded-2xl border bg-background px-4 py-3 text-sm text-foreground outline-none transition ${
-        invalidField === field
-          ? "border-red-500 ring-2 ring-red-500/20 focus:border-red-500"
-          : "border-border/70 focus:border-foreground"
+      `w-full rounded-2xl border bg-background px-4 py-3 text-sm text-foreground outline-none transition ${invalidField === field
+        ? "border-red-500 ring-2 ring-red-500/20 focus:border-red-500"
+        : "border-border/70 focus:border-foreground"
       }`,
     [invalidField],
   );
@@ -888,8 +887,8 @@ export function MvWizard({
           <div
             key={label}
             className={`rounded-2xl border px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] ${active
-                ? activeStepTone
-                : "border-border/60 bg-background text-muted-foreground"
+              ? activeStepTone
+              : "border-border/60 bg-background text-muted-foreground"
               }`}
           >
             STEP {String(index + 1).padStart(2, "0")}
@@ -2805,8 +2804,8 @@ export function MvWizard({
                     }
                   }}
                   className={`text-left rounded-[28px] border p-6 transition ${active
-                      ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
-                      : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
+                    ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
+                    : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
                     }`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -2834,7 +2833,7 @@ export function MvWizard({
                 TV 송출 목적의 심의
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                방송국별 개별 심의가 필요하며, 선택한 방송국만 접수됩니다.
+                방송국별 개별 심의가 필요하며, 모든 방송국 접수됩니다.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {tvStationCodes.map((code, index) => {
@@ -2849,8 +2848,8 @@ export function MvWizard({
                       type="button"
                       onClick={() => toggleTvStation(code)}
                       className={`text-left rounded-2xl border p-4 transition ${active
-                          ? tone
-                          : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                        ? tone
+                        : "border-border/60 bg-background text-foreground hover:border-primary/40"
                         }`}
                     >
                       <div className="flex items-center justify-between">
@@ -2882,15 +2881,15 @@ export function MvWizard({
                 유통사 제출 & 온라인 업로드
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                기본 뮤직비디오 심의는 바로 신청할 수 있고, 방송국 입고 옵션은 조건 확인 후 진행합니다.
+                기본 뮤직비디오 심의는 바로 신청할 수 있고, 방송국 별 옵션은 조건 확인 후 진행합니다.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => setOnlineBaseSelected((prev) => !prev)}
                   className={`text-left rounded-2xl border p-4 transition ${onlineBaseSelected
-                      ? mvOptionToneClasses[0]
-                      : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                    ? mvOptionToneClasses[0]
+                    : "border-border/60 bg-background text-foreground hover:border-primary/40"
                     }`}
                 >
                   <div className="flex items-center justify-between">
@@ -2931,8 +2930,8 @@ export function MvWizard({
                       type="button"
                       onClick={() => toggleOnlineOption(code)}
                       className={`text-left rounded-2xl border p-4 transition ${active
-                          ? tone
-                          : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                        ? tone
+                        : "border-border/60 bg-background text-foreground hover:border-primary/40"
                         }`}
                     >
                       <div className="flex items-center justify-between">
@@ -2960,7 +2959,7 @@ export function MvWizard({
                       </p>
                       {isConditional ? (
                         <p className="mt-3 text-xs font-semibold opacity-90">
-                          조건 확인하기 후 담당자 확인을 거쳐 진행됩니다.
+                          조건 확인 후 담당자 확인을 거쳐 진행됩니다.
                         </p>
                       ) : null}
                     </button>
@@ -3020,8 +3019,8 @@ export function MvWizard({
                 type="button"
                 onClick={() => setApplicationFormMode("online")}
                 className={`rounded-[12px] px-4 py-3 text-sm font-black transition ${applicationFormMode === "online"
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                   }`}
               >
                 온라인 신청서로 접수
@@ -3030,8 +3029,8 @@ export function MvWizard({
                 type="button"
                 onClick={() => setApplicationFormMode("upload")}
                 className={`rounded-[12px] px-4 py-3 text-sm font-black transition ${isDownloadedApplicationFlow
-                    ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
-                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                   }`}
               >
                 신청서 다운로드하여 업로드
@@ -3103,622 +3102,621 @@ export function MvWizard({
             </div>
           ) : (
             <>
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              뮤직비디오 기본 정보
-            </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  뮤직비디오 제목 *
-                </label>
-                <input
-                  data-mv-field="title"
-                  aria-invalid={invalidField === "title"}
-                  value={title}
-                  onChange={(event) => {
-                    setTitle(event.target.value);
-                    clearInvalidField("title");
-                  }}
-                  className={requiredFieldClass("title")}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  아티스트명 (한글/영문) *
-                </label>
-                <input
-                  data-mv-field="artistName"
-                  aria-invalid={invalidField === "artistName"}
-                  value={artistName}
-                  onChange={(event) => {
-                    setArtistName(event.target.value);
-                    clearInvalidField("artistName");
-                  }}
-                  className={requiredFieldClass("artistName")}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  아티스트명과 국문표기용 영문도 써주세요. 예: 싸이(PSY) / PSY
-                  · 아이유 / IU
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  뮤직비디오 기본 정보
                 </p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      뮤직비디오 제목 *
+                    </label>
+                    <input
+                      data-mv-field="title"
+                      aria-invalid={invalidField === "title"}
+                      value={title}
+                      onChange={(event) => {
+                        setTitle(event.target.value);
+                        clearInvalidField("title");
+                      }}
+                      className={requiredFieldClass("title")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      아티스트명 (한글/영문) *
+                    </label>
+                    <input
+                      data-mv-field="artistName"
+                      aria-invalid={invalidField === "artistName"}
+                      value={artistName}
+                      onChange={(event) => {
+                        setArtistName(event.target.value);
+                        clearInvalidField("artistName");
+                      }}
+                      className={requiredFieldClass("artistName")}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      아티스트명과 국문표기용 영문도 써주세요. 예: 싸이(PSY) / PSY
+                      · 아이유 / IU
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      아티스트명 공식 표기 *
+                    </label>
+                    <input
+                      data-mv-field="artistNameOfficial"
+                      aria-invalid={invalidField === "artistNameOfficial"}
+                      value={artistNameOfficial}
+                      onChange={(event) => {
+                        setArtistNameOfficial(event.target.value);
+                        clearInvalidField("artistNameOfficial");
+                      }}
+                      className={requiredFieldClass("artistNameOfficial")}
+                    />
+                    <p className="text-[11px] text-muted-foreground whitespace-pre-line">
+                      실제 음원사이트 표기법을 적용한 공식 표기를 적어주세요.
+                      {"\n"}예) SOLE (쏠), 윤하 (YOUNHA), Bakehour, 김장훈
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      영상 공개일자 *
+                    </label>
+                    <input
+                      data-mv-field="releaseDate"
+                      aria-invalid={invalidField === "releaseDate"}
+                      type="date"
+                      value={releaseDate}
+                      onChange={(event) => {
+                        setReleaseDate(event.target.value);
+                        clearInvalidField("releaseDate");
+                      }}
+                      className={requiredFieldClass("releaseDate")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      장르
+                    </label>
+                    <input
+                      value={genre}
+                      onChange={(event) => setGenre(event.target.value)}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      러닝타임
+                    </label>
+                    <input
+                      placeholder="예: 03:25"
+                      value={runtime}
+                      onChange={(event) => setRuntime(event.target.value)}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      파일 포맷
+                    </label>
+                    <input
+                      placeholder="예: MP4 (H.264)"
+                      value={format}
+                      onChange={(event) => setFormat(event.target.value)}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      감독 *
+                    </label>
+                    <input
+                      data-mv-field="director"
+                      aria-invalid={invalidField === "director"}
+                      value={director}
+                      onChange={(event) => {
+                        setDirector(event.target.value);
+                        clearInvalidField("director");
+                      }}
+                      className={requiredFieldClass("director")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      주연 *
+                    </label>
+                    <input
+                      data-mv-field="leadActor"
+                      aria-invalid={invalidField === "leadActor"}
+                      value={leadActor}
+                      onChange={(event) => {
+                        setLeadActor(event.target.value);
+                        clearInvalidField("leadActor");
+                      }}
+                      className={requiredFieldClass("leadActor")}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  아티스트명 공식 표기 *
-                </label>
-                <input
-                  data-mv-field="artistNameOfficial"
-                  aria-invalid={invalidField === "artistNameOfficial"}
-                  value={artistNameOfficial}
-                  onChange={(event) => {
-                    setArtistNameOfficial(event.target.value);
-                    clearInvalidField("artistNameOfficial");
-                  }}
-                  className={requiredFieldClass("artistNameOfficial")}
-                />
-                <p className="text-[11px] text-muted-foreground whitespace-pre-line">
-                  실제 음원사이트 표기법을 적용한 공식 표기를 적어주세요.
-                  {"\n"}예) SOLE (쏠), 윤하 (YOUNHA), Bakehour, 김장훈
-                </p>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  영상 공개일자 *
-                </label>
-                <input
-                  data-mv-field="releaseDate"
-                  aria-invalid={invalidField === "releaseDate"}
-                  type="date"
-                  value={releaseDate}
-                  onChange={(event) => {
-                    setReleaseDate(event.target.value);
-                    clearInvalidField("releaseDate");
-                  }}
-                  className={requiredFieldClass("releaseDate")}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  장르
-                </label>
-                <input
-                  value={genre}
-                  onChange={(event) => setGenre(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  러닝타임
-                </label>
-                <input
-                  placeholder="예: 03:25"
-                  value={runtime}
-                  onChange={(event) => setRuntime(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  파일 포맷
-                </label>
-                <input
-                  placeholder="예: MP4 (H.264)"
-                  value={format}
-                  onChange={(event) => setFormat(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  감독 *
-                </label>
-                <input
-                  data-mv-field="director"
-                  aria-invalid={invalidField === "director"}
-                  value={director}
-                  onChange={(event) => {
-                    setDirector(event.target.value);
-                    clearInvalidField("director");
-                  }}
-                  className={requiredFieldClass("director")}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  주연 *
-                </label>
-                <input
-                  data-mv-field="leadActor"
-                  aria-invalid={invalidField === "leadActor"}
-                  value={leadActor}
-                  onChange={(event) => {
-                    setLeadActor(event.target.value);
-                    clearInvalidField("leadActor");
-                  }}
-                  className={requiredFieldClass("leadActor")}
-                />
-              </div>
-            </div>
-          </div>
 
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              제작 정보
-            </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  뮤직비디오 제작사 *
-                </label>
-                <input
-                  data-mv-field="productionCompany"
-                  aria-invalid={invalidField === "productionCompany"}
-                  value={productionCompany}
-                  onChange={(event) => {
-                    setProductionCompany(event.target.value);
-                    clearInvalidField("productionCompany");
-                  }}
-                  className={requiredFieldClass("productionCompany")}
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    소속사 *
-                  </label>
-	                  <div className="group relative">
-	                    <button
-	                      type="button"
-	                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-primary bg-primary text-sm font-black text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.22)] transition hover:-translate-y-0.5 hover:bg-[#0077ed] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-[#2997ff] dark:text-[#00101f]"
-	                      aria-label="소속사 표기 안내"
-	                    >
-	                      ?
-                    </button>
-                    <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-72 rounded-2xl border border-border/70 bg-background px-4 py-3 text-[11px] font-medium leading-5 text-foreground shadow-[0_18px_40px_rgba(0,0,0,0.14)] group-hover:block group-focus-within:block">
-                      공개되는 뮤직비디오 좌측 하단에 들어갈 소속사/기획사/로고 등과 동일한 명칭을 기입해주세요. 대소문자 및 한/영 표기 모두 동일해야합니다.
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  제작 정보
+                </p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      뮤직비디오 제작사 *
+                    </label>
+                    <input
+                      data-mv-field="productionCompany"
+                      aria-invalid={invalidField === "productionCompany"}
+                      value={productionCompany}
+                      onChange={(event) => {
+                        setProductionCompany(event.target.value);
+                        clearInvalidField("productionCompany");
+                      }}
+                      className={requiredFieldClass("productionCompany")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        소속사 *
+                      </label>
+                      <div className="group relative">
+                        <button
+                          type="button"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-primary bg-primary text-sm font-black text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.22)] transition hover:-translate-y-0.5 hover:bg-[#0077ed] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-[#2997ff] dark:text-[#00101f]"
+                          aria-label="소속사 표기 안내"
+                        >
+                          ?
+                        </button>
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-72 rounded-2xl border border-border/70 bg-background px-4 py-3 text-[11px] font-medium leading-5 text-foreground shadow-[0_18px_40px_rgba(0,0,0,0.14)] group-hover:block group-focus-within:block">
+                          공개되는 뮤직비디오 좌측 하단에 들어갈 소속사/기획사/로고 등과 동일한 명칭을 기입해주세요. 대소문자 및 한/영 표기 모두 동일해야합니다.
+                        </div>
+                      </div>
                     </div>
+                    <input
+                      data-mv-field="agency"
+                      aria-invalid={invalidField === "agency"}
+                      value={agency}
+                      onChange={(event) => {
+                        setAgency(event.target.value);
+                        clearInvalidField("agency");
+                      }}
+                      className={requiredFieldClass("agency")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      앨범명 *
+                    </label>
+                    <input
+                      data-mv-field="albumTitle"
+                      aria-invalid={invalidField === "albumTitle"}
+                      value={albumTitle}
+                      onChange={(event) => {
+                        setAlbumTitle(event.target.value);
+                        clearInvalidField("albumTitle");
+                      }}
+                      className={requiredFieldClass("albumTitle")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      유통사 *
+                    </label>
+                    <input
+                      data-mv-field="distributionCompany"
+                      aria-invalid={invalidField === "distributionCompany"}
+                      value={distributionCompany}
+                      onChange={(event) => {
+                        setDistributionCompany(event.target.value);
+                        clearInvalidField("distributionCompany");
+                      }}
+                      className={requiredFieldClass("distributionCompany")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      용도 *
+                    </label>
+                    <input
+                      data-mv-field="usage"
+                      aria-invalid={invalidField === "usage"}
+                      placeholder="예: 음악사이트 기재"
+                      value={usage}
+                      onChange={(event) => {
+                        setUsage(event.target.value);
+                        clearInvalidField("usage");
+                      }}
+                      className={requiredFieldClass("usage")}
+                    />
+                  </div>
+                  {mvType === "MV_DISTRIBUTION" ? (
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        희망등급 (선택)
+                      </label>
+                      <input
+                        value={desiredRating}
+                        onChange={(event) => setDesiredRating(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      메모 (선택)
+                    </label>
+                    <textarea
+                      value={memo}
+                      onChange={(event) => setMemo(event.target.value)}
+                      className="h-20 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
                   </div>
                 </div>
-                <input
-                  data-mv-field="agency"
-                  aria-invalid={invalidField === "agency"}
-                  value={agency}
-                  onChange={(event) => {
-                    setAgency(event.target.value);
-                    clearInvalidField("agency");
+              </div>
+
+              <div data-mv-field="aiUsed" tabIndex={-1}>
+                <AiUsageSelector
+                  value={aiUsed}
+                  onChange={(nextValue) => {
+                    setAiUsed(nextValue);
+                    clearInvalidField("aiUsed");
+                    setNotice({});
                   }}
-                  className={requiredFieldClass("agency")}
+                  context="mv"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  앨범명 *
-                </label>
-                <input
-                  data-mv-field="albumTitle"
-                  aria-invalid={invalidField === "albumTitle"}
-                  value={albumTitle}
-                  onChange={(event) => {
-                    setAlbumTitle(event.target.value);
-                    clearInvalidField("albumTitle");
-                  }}
-                  className={requiredFieldClass("albumTitle")}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  유통사 *
-                </label>
-                <input
-                  data-mv-field="distributionCompany"
-                  aria-invalid={invalidField === "distributionCompany"}
-                  value={distributionCompany}
-                  onChange={(event) => {
-                    setDistributionCompany(event.target.value);
-                    clearInvalidField("distributionCompany");
-                  }}
-                  className={requiredFieldClass("distributionCompany")}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  용도 *
-                </label>
-                <input
-                  data-mv-field="usage"
-                  aria-invalid={invalidField === "usage"}
-                  placeholder="예: 음악사이트 기재"
-                  value={usage}
-                  onChange={(event) => {
-                    setUsage(event.target.value);
-                    clearInvalidField("usage");
-                  }}
-                  className={requiredFieldClass("usage")}
-                />
-              </div>
-              {mvType === "MV_DISTRIBUTION" ? (
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    희망등급 (선택)
-                  </label>
-                  <input
-                    value={desiredRating}
-                    onChange={(event) => setDesiredRating(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
+
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  곡 정보
+                </p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      곡명 (한글) *
+                    </label>
+                    <input
+                      data-mv-field="songTitleKr"
+                      aria-invalid={invalidField === "songTitleKr"}
+                      value={songTitleKr}
+                      onChange={(event) => {
+                        setSongTitleKr(event.target.value);
+                        clearInvalidField("songTitleKr");
+                      }}
+                      className={requiredFieldClass("songTitleKr")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      곡명 (영문) *
+                    </label>
+                    <input
+                      data-mv-field="songTitleEn"
+                      aria-invalid={invalidField === "songTitleEn"}
+                      value={songTitleEn}
+                      onChange={(event) => {
+                        setSongTitleEn(event.target.value);
+                        clearInvalidField("songTitleEn");
+                      }}
+                      className={requiredFieldClass("songTitleEn")}
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      곡 정보 공식 표기 *
+                    </label>
+                    <input
+                      data-mv-field="songTitleOfficial"
+                      aria-invalid={invalidField === "songTitleOfficial"}
+                      value={songTitleOfficial}
+                      onChange={(event) => {
+                        setSongTitleOfficial(event.target.value);
+                        clearInvalidField("songTitleOfficial");
+                      }}
+                      className={requiredFieldClass("songTitleOfficial")}
+                    />
+                    <p className="text-[11px] text-muted-foreground whitespace-pre-line">
+                      실제 공개되는 곡의 표기법을 적용한 공식 표기를 적어주세요.
+                      {"\n"}예) 바람, 바람(Wish), Wish, Wish(바람), 바람(feat.ABC)
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      작곡자 *
+                    </label>
+                    <input
+                      data-mv-field="composer"
+                      aria-invalid={invalidField === "composer"}
+                      value={composer}
+                      onChange={(event) => {
+                        setComposer(event.target.value);
+                        clearInvalidField("composer");
+                      }}
+                      className={requiredFieldClass("composer")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      작사가 (선택)
+                    </label>
+                    <input
+                      value={lyricist}
+                      onChange={(event) => setLyricist(event.target.value)}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      편곡자 (선택)
+                    </label>
+                    <input
+                      value={arranger}
+                      onChange={(event) => setArranger(event.target.value)}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      메모 (선택)
+                    </label>
+                    <input
+                      value={songMemo}
+                      onChange={(event) => setSongMemo(event.target.value)}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
                 </div>
-              ) : null}
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  메모 (선택)
-                </label>
+              </div>
+
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  줄거리 / 작품내용 *
+                </p>
                 <textarea
-                  value={memo}
-                  onChange={(event) => setMemo(event.target.value)}
-                  className="h-20 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div data-mv-field="aiUsed" tabIndex={-1}>
-            <AiUsageSelector
-              value={aiUsed}
-              onChange={(nextValue) => {
-                setAiUsed(nextValue);
-                clearInvalidField("aiUsed");
-                setNotice({});
-              }}
-              context="mv"
-            />
-          </div>
-
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              곡 정보
-            </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  곡명 (한글) *
-                </label>
-                <input
-                  data-mv-field="songTitleKr"
-                  aria-invalid={invalidField === "songTitleKr"}
-                  value={songTitleKr}
+                  data-mv-field="storyline"
+                  aria-invalid={invalidField === "storyline"}
+                  value={storyline}
                   onChange={(event) => {
-                    setSongTitleKr(event.target.value);
-                    clearInvalidField("songTitleKr");
+                    setStoryline(event.target.value);
+                    clearInvalidField("storyline");
                   }}
-                  className={requiredFieldClass("songTitleKr")}
+                  className={`${requiredFieldClass("storyline")} mt-4 h-32`}
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  곡명 (영문) *
-                </label>
-                <input
-                  data-mv-field="songTitleEn"
-                  aria-invalid={invalidField === "songTitleEn"}
-                  value={songTitleEn}
-                  onChange={(event) => {
-                    setSongTitleEn(event.target.value);
-                    clearInvalidField("songTitleEn");
-                  }}
-                  className={requiredFieldClass("songTitleEn")}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  곡 정보 공식 표기 *
-                </label>
-                <input
-                  data-mv-field="songTitleOfficial"
-                  aria-invalid={invalidField === "songTitleOfficial"}
-                  value={songTitleOfficial}
-                  onChange={(event) => {
-                    setSongTitleOfficial(event.target.value);
-                    clearInvalidField("songTitleOfficial");
-                  }}
-                  className={requiredFieldClass("songTitleOfficial")}
-                />
-                <p className="text-[11px] text-muted-foreground whitespace-pre-line">
-                  실제 공개되는 곡의 표기법을 적용한 공식 표기를 적어주세요.
-                  {"\n"}예) 바람, 바람(Wish), Wish, Wish(바람), 바람(feat.ABC)
+                <p className="mt-2 text-xs text-muted-foreground">
+                  줄거리는 결말까지 작성하셔야 합니다.
                 </p>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  작곡자 *
-                </label>
-                <input
-                  data-mv-field="composer"
-                  aria-invalid={invalidField === "composer"}
-                  value={composer}
-                  onChange={(event) => {
-                    setComposer(event.target.value);
-                    clearInvalidField("composer");
-                  }}
-                  className={requiredFieldClass("composer")}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  작사가 (선택)
-                </label>
-                <input
-                  value={lyricist}
-                  onChange={(event) => setLyricist(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  편곡자 (선택)
-                </label>
-                <input
-                  value={arranger}
-                  onChange={(event) => setArranger(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
-	              <div className="space-y-2 md:col-span-2">
-	                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-	                  메모 (선택)
-	                </label>
-                <input
-                  value={songMemo}
-                  onChange={(event) => setSongMemo(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                />
-              </div>
-            </div>
-          </div>
 
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              줄거리 / 작품내용 *
-            </p>
-            <textarea
-              data-mv-field="storyline"
-              aria-invalid={invalidField === "storyline"}
-              value={storyline}
-              onChange={(event) => {
-                setStoryline(event.target.value);
-                clearInvalidField("storyline");
-              }}
-              className={`${requiredFieldClass("storyline")} mt-4 h-32`}
-            />
-            <p className="mt-2 text-xs text-muted-foreground">
-              줄거리는 결말까지 작성하셔야 합니다.
-            </p>
-          </div>
-
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                가사 *
-              </p>
-              <div className="group/lyrics-tools">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleProfanityCheck}
-                    disabled={isCheckingProfanity}
-                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    욕설 체크 {isCheckingProfanity ? "중..." : ""}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleTranslateLyrics}
-                    disabled={isTranslatingLyrics}
-                    className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    자동번역 {isTranslatingLyrics ? "중..." : ""}
-                  </button>
-                </div>
-                {showLyricsToolNotice && (
-                  <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
-                    위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
-                    체크해주세요.
-                  </div>
-                )}
-              </div>
-            </div>
-            {lyricsToolNotice && (
-              <div
-	                className={`mt-3 rounded-2xl border px-4 py-2 text-xs font-semibold ${lyricsToolNotice.type === "error"
-	                    ? "border-red-200/70 bg-red-50 text-red-700"
-	                    : lyricsToolNotice.type === "success"
-	                      ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
-	                      : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
-	                  }`}
-	              >
-	                {lyricsToolNotice.message}
-	              </div>
-	            )}
-	            <div
-	              className={`relative isolate mt-4 overflow-hidden rounded-2xl border bg-background transition ${
-	                invalidField === "lyrics"
-	                  ? "border-red-500 ring-2 ring-red-500/20 focus-within:border-red-500"
-	                  : "border-border/70 focus-within:border-foreground"
-	              }`}
-	            >
-              {showProfanityOverlay && (
-                <div
-                  ref={lyricsOverlayRef}
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 z-10 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-foreground"
-                >
-                  <div className="whitespace-pre-wrap">
-                    {renderProfanityPreview(
-                      lyrics,
-                      profanityPattern,
-                      profanityTestPattern,
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                    가사 *
+                  </p>
+                  <div className="group/lyrics-tools">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleProfanityCheck}
+                        disabled={isCheckingProfanity}
+                        className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        욕설 체크 {isCheckingProfanity ? "중..." : ""}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleTranslateLyrics}
+                        disabled={isTranslatingLyrics}
+                        className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        자동번역 {isTranslatingLyrics ? "중..." : ""}
+                      </button>
+                    </div>
+                    {showLyricsToolNotice && (
+                      <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
+                        위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
+                        체크해주세요.
+                      </div>
                     )}
                   </div>
                 </div>
-              )}
-              <textarea
-                data-mv-field="lyrics"
-                aria-invalid={invalidField === "lyrics"}
-                ref={lyricsTextareaRef}
-                value={lyrics}
-                onChange={(event) => {
-                  setLyrics(event.target.value);
-                  clearInvalidField("lyrics");
-                }}
-                onScroll={handleLyricsScroll}
-                className={`relative z-0 min-h-[8rem] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${showProfanityOverlay
-                    ? "text-transparent caret-foreground"
-                    : "text-foreground"
-                  }`}
-              />
-            </div>
-            {profanityChecked && (
-              <div className="mt-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-foreground">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  감지된 단어
-                </p>
-                <div className="mt-2 max-h-32 space-y-2 overflow-auto pr-1">
-                  {profanityHighlight && profanityWords.length > 0 ? (
-                    profanityWords.map((word) => (
-                      <div
-                        key={word}
-                        className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px] font-semibold text-red-600"
-                      >
-                        {word}
+                {lyricsToolNotice && (
+                  <div
+                    className={`mt-3 rounded-2xl border px-4 py-2 text-xs font-semibold ${lyricsToolNotice.type === "error"
+                      ? "border-red-200/70 bg-red-50 text-red-700"
+                      : lyricsToolNotice.type === "success"
+                        ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
+                        : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
+                      }`}
+                  >
+                    {lyricsToolNotice.message}
+                  </div>
+                )}
+                <div
+                  className={`relative isolate mt-4 overflow-hidden rounded-2xl border bg-background transition ${invalidField === "lyrics"
+                      ? "border-red-500 ring-2 ring-red-500/20 focus-within:border-red-500"
+                      : "border-border/70 focus-within:border-foreground"
+                    }`}
+                >
+                  {showProfanityOverlay && (
+                    <div
+                      ref={lyricsOverlayRef}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 z-10 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-foreground"
+                    >
+                      <div className="whitespace-pre-wrap">
+                        {renderProfanityPreview(
+                          lyrics,
+                          profanityPattern,
+                          profanityTestPattern,
+                        )}
                       </div>
-                    ))
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
-                      {profanityHighlight
-                        ? "회피 패턴이 감지되었습니다."
-                        : "욕설이 감지되지 않았습니다."}
                     </div>
                   )}
+                  <textarea
+                    data-mv-field="lyrics"
+                    aria-invalid={invalidField === "lyrics"}
+                    ref={lyricsTextareaRef}
+                    value={lyrics}
+                    onChange={(event) => {
+                      setLyrics(event.target.value);
+                      clearInvalidField("lyrics");
+                    }}
+                    onScroll={handleLyricsScroll}
+                    className={`relative z-0 min-h-[8rem] w-full resize-y overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed outline-none ${showProfanityOverlay
+                      ? "text-transparent caret-foreground"
+                      : "text-foreground"
+                      }`}
+                  />
                 </div>
+                {profanityChecked && (
+                  <div className="mt-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-foreground">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      감지된 단어
+                    </p>
+                    <div className="mt-2 max-h-32 space-y-2 overflow-auto pr-1">
+                      {profanityHighlight && profanityWords.length > 0 ? (
+                        profanityWords.map((word) => (
+                          <div
+                            key={word}
+                            className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px] font-semibold text-red-600"
+                          >
+                            {word}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
+                          {profanityHighlight
+                            ? "회피 패턴이 감지되었습니다."
+                            : "욕설이 감지되지 않았습니다."}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  가사의 외국어는 반드시 번역이 있어야 합니다.
+                </p>
               </div>
-            )}
-            <p className="mt-2 text-xs text-muted-foreground">
-              가사의 외국어는 반드시 번역이 있어야 합니다.
-            </p>
-          </div>
 
-          {isGuest && (
-            <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                신청자 정보
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                이름과 이메일은 심의 조회시에 사용됩니다.
-              </p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    담당자명 *
-                  </label>
-                  <input
-                    data-mv-field="guestName"
-                    aria-invalid={invalidField === "guestName"}
-                    value={guestName}
-                    onChange={(event) => {
-                      setGuestName(event.target.value);
-                      clearInvalidField("guestName");
+              {isGuest && (
+                <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                    신청자 정보
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    이름과 이메일은 심의 조회시에 사용됩니다.
+                  </p>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        담당자명 *
+                      </label>
+                      <input
+                        data-mv-field="guestName"
+                        aria-invalid={invalidField === "guestName"}
+                        value={guestName}
+                        onChange={(event) => {
+                          setGuestName(event.target.value);
+                          clearInvalidField("guestName");
+                        }}
+                        required
+                        className={requiredFieldClass("guestName")}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        회사/기획사
+                      </label>
+                      <input
+                        value={guestCompany}
+                        onChange={(event) => setGuestCompany(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        이메일 *
+                      </label>
+                      <input
+                        data-mv-field="guestEmail"
+                        aria-invalid={invalidField === "guestEmail"}
+                        type="email"
+                        value={guestEmail}
+                        onChange={(event) => {
+                          setGuestEmail(event.target.value);
+                          clearInvalidField("guestEmail");
+                        }}
+                        required
+                        className={requiredFieldClass("guestEmail")}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        연락처 *
+                      </label>
+                      <input
+                        data-mv-field="guestPhone"
+                        aria-invalid={invalidField === "guestPhone"}
+                        value={guestPhone}
+                        onChange={(event) => {
+                          setGuestPhone(event.target.value);
+                          clearInvalidField("guestPhone");
+                        }}
+                        required
+                        className={requiredFieldClass("guestPhone")}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {notice.error && (
+                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                  {notice.error}
+                </div>
+              )}
+              {notice.submissionId && (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
+                  임시 저장이 완료되었습니다.
+                </div>
+              )}
+
+              <div className="flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  disabled={isSaving}
+                  className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+                >
+                  이전 단계
+                </button>
+                {!isGuest && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await saveMvDraft({ includeFiles: false });
                     }}
-                    required
-                    className={requiredFieldClass("guestName")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    회사/기획사
-                  </label>
-                  <input
-                    value={guestCompany}
-                    onChange={(event) => setGuestCompany(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    이메일 *
-                  </label>
-                  <input
-                    data-mv-field="guestEmail"
-                    aria-invalid={invalidField === "guestEmail"}
-                    type="email"
-                    value={guestEmail}
-                    onChange={(event) => {
-                      setGuestEmail(event.target.value);
-                      clearInvalidField("guestEmail");
-                    }}
-                    required
-                    className={requiredFieldClass("guestEmail")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    연락처 *
-                  </label>
-                  <input
-                    data-mv-field="guestPhone"
-                    aria-invalid={invalidField === "guestPhone"}
-                    value={guestPhone}
-                    onChange={(event) => {
-                      setGuestPhone(event.target.value);
-                      clearInvalidField("guestPhone");
-                    }}
-                    required
-                    className={requiredFieldClass("guestPhone")}
-                  />
-                </div>
+                    disabled={isSaving}
+                    className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/10 dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed"
+                  >
+                    임시 저장
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleStep2Next}
+                  className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
+                >
+                  다음 단계
+                </button>
               </div>
-            </div>
-          )}
-
-          {notice.error && (
-            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-              {notice.error}
-            </div>
-          )}
-          {notice.submissionId && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
-              임시 저장이 완료되었습니다.
-            </div>
-          )}
-
-          <div className="flex flex-wrap justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              disabled={isSaving}
-              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
-            >
-              이전 단계
-            </button>
-            {!isGuest && (
-              <button
-                type="button"
-                onClick={async () => {
-                  await saveMvDraft({ includeFiles: false });
-                }}
-                disabled={isSaving}
-                className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/10 dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed"
-              >
-                임시 저장
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleStep2Next}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
-            >
-              다음 단계
-            </button>
-          </div>
             </>
           )}
         </div>
@@ -3774,8 +3772,8 @@ export function MvWizard({
                 type="button"
                 onClick={() => selectUploadDeliveryMode("upload")}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${!emailSubmitConfirmed
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                   }`}
               >
                 파일 업로드
@@ -3784,16 +3782,16 @@ export function MvWizard({
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
-                    ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
-                    : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                   }`}
               >
                 <span className="inline-flex items-center justify-center gap-2">
                   <span
                     aria-hidden="true"
                     className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${emailSubmitConfirmed
-                        ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#3f8ad8]"
-                        : "border-current"
+                      ? "border-white bg-white text-[#1556a4] dark:border-[#06111f] dark:bg-[#06111f] dark:text-[#3f8ad8]"
+                      : "border-current"
                       }`}
                   >
                     {emailSubmitConfirmed ? "✓" : ""}
@@ -4057,8 +4055,8 @@ export function MvWizard({
                 type="button"
                 onClick={() => setPaymentMethod("BANK")}
                 className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "BANK"
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border/60 bg-background text-foreground hover:border-foreground"
                   }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
@@ -4073,8 +4071,8 @@ export function MvWizard({
                 type="button"
                 onClick={() => setPaymentMethod("CARD")}
                 className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "CARD"
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border/60 bg-background text-foreground hover:border-foreground"
                   }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
@@ -4137,15 +4135,15 @@ export function MvWizard({
                       setTaxInvoiceBusinessNumber("");
                     }}
                     className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "CASH_RECEIPT"
-                        ? "border-foreground bg-foreground/5 text-foreground"
-                        : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                      ? "border-foreground bg-foreground/5 text-foreground"
+                      : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
                       }`}
                   >
                     <span
                       aria-hidden="true"
                       className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${paymentDocumentType === "CASH_RECEIPT"
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-current"
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-current"
                         }`}
                     >
                       {paymentDocumentType === "CASH_RECEIPT" ? "✓" : ""}
@@ -4166,15 +4164,15 @@ export function MvWizard({
                       setCashReceiptBusinessNumber("");
                     }}
                     className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "TAX_INVOICE"
-                        ? "border-foreground bg-foreground/5 text-foreground"
-                        : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                      ? "border-foreground bg-foreground/5 text-foreground"
+                      : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
                       }`}
                   >
                     <span
                       aria-hidden="true"
                       className={`inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-black ${paymentDocumentType === "TAX_INVOICE"
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-current"
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-current"
                         }`}
                     >
                       {paymentDocumentType === "TAX_INVOICE" ? "✓" : ""}
@@ -4190,8 +4188,8 @@ export function MvWizard({
                     <div className="grid gap-2 sm:grid-cols-2">
                       <label
                         className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
-                            ? "border-foreground bg-foreground/5 text-foreground"
-                            : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                          ? "border-foreground bg-foreground/5 text-foreground"
+                          : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
                           }`}
                       >
                         <input
@@ -4210,8 +4208,8 @@ export function MvWizard({
                       </label>
                       <label
                         className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
-                            ? "border-foreground bg-foreground/5 text-foreground"
-                            : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
+                          ? "border-foreground bg-foreground/5 text-foreground"
+                          : "border-border/70 bg-background text-muted-foreground hover:border-foreground"
                           }`}
                       >
                         <input
@@ -4266,26 +4264,26 @@ export function MvWizard({
                     <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       사업자번호
                     </label>
-	                    <input
-	                      value={taxInvoiceBusinessNumber}
-	                      onChange={(event) =>
-	                        setTaxInvoiceBusinessNumber(event.target.value)
-	                      }
-	                      placeholder="사업자번호 10자리를 입력해주세요."
-	                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-	                    />
-	                    <p className="text-[11px] leading-5 text-muted-foreground">
-	                      사업자등록증 파일은 영상 파일과 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
-	                    </p>
-	                  </div>
-	                )}
-	              </div>
-	            </div>
-	          ) : (
-	            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
-	              카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
-	            </div>
-	          )}
+                    <input
+                      value={taxInvoiceBusinessNumber}
+                      onChange={(event) =>
+                        setTaxInvoiceBusinessNumber(event.target.value)
+                      }
+                      placeholder="사업자번호 10자리를 입력해주세요."
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                    <p className="text-[11px] leading-5 text-muted-foreground">
+                      사업자등록증 파일은 영상 파일과 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
+              카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
+            </div>
+          )}
 
           {notice.error && (
             <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
@@ -4332,10 +4330,10 @@ export function MvWizard({
           <p className="mt-3 text-sm text-muted-foreground">
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
-	          {notice.emailNotice ? (
-	            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
-	              {notice.emailNotice}
-	            </div>
+          {notice.emailNotice ? (
+            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+              {notice.emailNotice}
+            </div>
           ) : null}
           {completionId && !shouldShowGuestLookup && (
             <button

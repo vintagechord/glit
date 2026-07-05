@@ -30,12 +30,21 @@ type DeletePayload = {
 };
 
 const stageTone: Record<string, string> = {
-  "결제 대기": "bg-[#f6d64a] text-black dark:text-black",
-  "접수 완료": "bg-sky-500/15 text-sky-700 dark:text-sky-200",
-  "결제 확인": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
-  "심의 진행": "bg-indigo-500/15 text-indigo-700 dark:text-indigo-200",
-  "결과 전달": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+  "결제 대기": "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
+  "접수 완료": "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]",
+  "결제 확인": "border-[var(--bauhaus-blue)] bg-[var(--bauhaus-blue)] text-white dark:text-[#06111f]",
+  "심의 진행": "border-[var(--bauhaus-ink)] bg-[var(--foreground)] text-[var(--background)]",
+  "결과 전달": "border-[var(--bauhaus-green)] bg-[var(--bauhaus-green)] text-white dark:text-[#06111f]",
 };
+
+const outlineControlClass =
+  "inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
+
+const dangerControlClass =
+  "inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
+
+const smallDangerControlClass =
+  "inline-flex h-8 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-2.5 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
 
 const getStageLabel = (item: SubmissionItem) => {
   if (["RESULT_READY", "COMPLETED"].includes(item.status)) {
@@ -60,9 +69,11 @@ const getStageLabel = (item: SubmissionItem) => {
 };
 
 function StatusChip({ label }: { label: string }) {
-  const tone = stageTone[label] ?? "bg-border/60 text-foreground";
+  const tone =
+    stageTone[label] ??
+    "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]";
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.2em] ${tone}`}>
+    <span className={`inline-flex min-h-7 items-center justify-center rounded-[6px] border-2 px-2.5 py-1 text-[11px] font-black leading-none tracking-normal shadow-[1.5px_1.5px_0_var(--bauhaus-shadow)] ${tone}`}>
       {label}
     </span>
   );
@@ -72,13 +83,13 @@ function Thumbnail({ name, src }: { name: string; src: string | null }) {
   const initial = (name || "A").trim().charAt(0).toUpperCase() || "A";
   if (!src) {
     return (
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-200 via-lime-200 to-emerald-400 text-lg font-bold text-emerald-900 shadow-inner">
+      <div className="flex h-14 w-14 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-lg font-black text-[#111111] shadow-[3px_3px_0_var(--bauhaus-shadow)]">
         {initial}
       </div>
     );
   }
   return (
-    <div className="relative h-14 w-14 overflow-hidden rounded-2xl border border-border/70 bg-background">
+    <div className="relative h-14 w-14 overflow-hidden rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] shadow-[3px_3px_0_var(--bauhaus-shadow)]">
       <Image src={src} alt={name} fill sizes="56px" unoptimized className="object-cover" />
     </div>
   );
@@ -99,13 +110,13 @@ function SubmissionManagementRow({
 }) {
   return (
     <div
-      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border px-3 py-2 text-sm transition sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center ${
+      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-[8px] border-2 px-3 py-2 text-sm transition sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center ${
         selected
-          ? "border-foreground bg-background"
-          : "border-border/60 bg-card/80 hover:border-foreground"
+          ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-panel)] shadow-[3px_3px_0_var(--bauhaus-shadow)]"
+          : "border-border bg-[var(--background)] hover:border-[var(--bauhaus-ink)]"
       }`}
     >
-      <label className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background/70 transition hover:border-foreground">
+      <label className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5">
         <span className="sr-only">
           {item.title || "제목 미입력"} 선택
         </span>
@@ -114,7 +125,7 @@ function SubmissionManagementRow({
           checked={selected}
           onChange={() => onToggleSelection(item.id)}
           disabled={deleting}
-          className="h-4 w-4 rounded border-border"
+          className="h-4 w-4 rounded border-border accent-[var(--bauhaus-ink)]"
         />
       </label>
       <Link
@@ -135,7 +146,7 @@ function SubmissionManagementRow({
           type="button"
           onClick={() => onDelete(item)}
           disabled={deleting}
-          className="rounded-full border border-red-500/40 px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:border-red-600 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className={smallDangerControlClass}
           aria-label={`${item.title || "제목 미입력"} 심의 내역 삭제`}
         >
           {deleting ? "삭제 중" : "삭제"}
@@ -170,7 +181,7 @@ function ArtistCard({
   onDelete: (item: SubmissionItem) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.12)] transition hover:border-foreground/70">
+    <div className="overflow-hidden rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--card)] p-4 shadow-[5px_5px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="flex min-w-0 items-center gap-3">
           <Thumbnail name={group.artistName} src={group.thumbnail} />
@@ -185,14 +196,14 @@ function ArtistCard({
           {group.artistId ? (
             <Link
               href={`/dashboard/artists/${group.artistId}`}
-              className="inline-flex shrink-0 items-center justify-center rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-foreground hover:text-foreground whitespace-nowrap"
+              className={`${outlineControlClass} whitespace-nowrap`}
             >
               아티스트 상세
             </Link>
           ) : null}
         </div>
       </div>
-      <div className="mt-3 space-y-2 rounded-2xl border border-border/60 bg-background/70 p-3">
+      <div className="mt-3 space-y-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] p-3">
         {group.submissions.map((item) => (
           item.id ? (
             <SubmissionManagementRow
@@ -206,7 +217,7 @@ function ArtistCard({
           ) : (
             <div
               key={`${group.artistName}-${item.title ?? "unknown"}`}
-              className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-red-400/40 bg-red-500/5 px-3 py-2 text-sm text-red-700"
+              className="flex items-center justify-between gap-3 rounded-[8px] border-2 border-dashed border-[var(--bauhaus-red)] bg-[var(--background)] px-3 py-2 text-sm font-bold text-[var(--bauhaus-red)]"
             >
               <span className="truncate">
                 ID가 없는 항목입니다. 관리자에게 문의해주세요.
@@ -403,10 +414,10 @@ export function ArtistHistoryTabs({
           <button
             type="button"
             onClick={() => setTab("ALBUM")}
-            className={`rounded-full px-4 py-2 transition ${
+            className={`inline-flex h-9 items-center justify-center rounded-[8px] border-2 px-4 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
               tab === "ALBUM"
-                ? "bg-foreground text-background"
-                : "border border-border/70 text-foreground hover:border-foreground"
+                ? "border-[var(--bauhaus-ink)] bg-[var(--foreground)] text-[var(--background)]"
+                : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]"
             }`}
           >
             앨범
@@ -414,10 +425,10 @@ export function ArtistHistoryTabs({
           <button
             type="button"
             onClick={() => setTab("MV")}
-            className={`rounded-full px-4 py-2 transition ${
+            className={`inline-flex h-9 items-center justify-center rounded-[8px] border-2 px-4 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
               tab === "MV"
-                ? "bg-foreground text-background"
-                : "border border-border/70 text-foreground hover:border-foreground"
+                ? "border-[var(--bauhaus-ink)] bg-[var(--foreground)] text-[var(--background)]"
+                : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]"
             }`}
           >
             뮤직비디오
@@ -428,7 +439,7 @@ export function ArtistHistoryTabs({
             type="button"
             onClick={toggleVisibleSelection}
             disabled={visibleIds.length === 0}
-            className="rounded-full border border-border/70 px-3 py-1.5 text-muted-foreground transition hover:border-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className={outlineControlClass}
           >
             {allVisibleSelected ? "전체 해제" : "전체 선택"}
           </button>
@@ -436,7 +447,7 @@ export function ArtistHistoryTabs({
             type="button"
             onClick={() => void handleDeleteSelected()}
             disabled={selectedVisibleIds.length === 0 || deletingIds.size > 0}
-            className="rounded-full border border-red-500/40 px-3 py-1.5 font-semibold text-red-600 transition hover:border-red-600 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className={dangerControlClass}
           >
             선택 삭제
             {selectedVisibleIds.length > 0 ? ` ${selectedVisibleIds.length}` : ""}
@@ -446,7 +457,7 @@ export function ArtistHistoryTabs({
 
       {notice ? (
         <div
-          className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-sm font-semibold text-muted-foreground"
+          className="rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-4 py-3 text-sm font-bold text-[var(--foreground)] shadow-[3px_3px_0_var(--bauhaus-shadow)]"
           role="status"
         >
           {notice}
@@ -454,7 +465,7 @@ export function ArtistHistoryTabs({
       ) : null}
 
       {groups.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
+        <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-4 py-6 text-sm text-muted-foreground">
           아직 접수된 내역이 없습니다.
         </div>
       ) : (
