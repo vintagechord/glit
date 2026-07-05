@@ -36,6 +36,7 @@ import {
   type SubmissionActionState,
 } from "./actions";
 import { AiUsageSelector } from "./ai-usage-selector";
+import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
 
 declare global {
   interface Window {
@@ -109,7 +110,7 @@ const steps = [
 ];
 
 const deferredPaymentNotice =
-  "신청서가 결제 전 상태로 저장되었습니다. 작성중 신청서에서 다시 결제할 수 있습니다.";
+  "결제가 완료되지 않아 신청서만 저장되었습니다.";
 const paymentFailureDraftNotice =
   "결제가 완료되지 않았습니다. 작성한 신청서는 작성중 신청서에 보관되어 있으니 다시 작성하지 않아도 됩니다.";
 
@@ -813,8 +814,6 @@ export function MvWizard({
       ? tvStations.length > 0
       : onlineBaseSelected || onlineOptions.length > 0;
   const isDownloadedApplicationFlow = applicationFormMode === "upload";
-  const uploadHintTitle =
-    mvType === "MV_DISTRIBUTION" ? "파일 포맷" : "방송국별 제출 규격";
   const uploadChips = React.useMemo(() => {
     const chips: string[] = [];
 
@@ -2984,7 +2983,7 @@ export function MvWizard({
                 유통사 제출 & 온라인 업로드
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                기본 뮤직비디오 심의는 바로 신청할 수 있고, 방송국 별 옵션은 조건 확인 후 진행합니다.
+                일반 뮤직비디오 심의는 바로 신청할 수 있고, 방송국의 경우 접수 조건 확인 후 진행합니다.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <button
@@ -3002,7 +3001,7 @@ export function MvWizard({
                         <span
                           className={`rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${onlineBaseSelected ? "border-[#111111]/30 bg-white/45 text-[#111111]" : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}
                         >
-                          가장 많이 선택
+                          유통사 제출용
                         </span>
                       </div>
                       {onlineBaseSelected ? (
@@ -3016,8 +3015,7 @@ export function MvWizard({
                     </span>
                   </div>
                   <p className="mt-2 text-xs opacity-80">
-                    심의 완료 후 등급분류를 영상에 삽입하면 Melon, 지니,
-                    유튜브 등으로 온라인 유통이 가능합니다.
+                    필증과 등급분류 파일이 제공되며, Melon, 지니, 유튜브 등 온라인 유통이 가능합니다.
                   </p>
                 </button>
                 {onlineOptionCodes.map((code, index) => {
@@ -3110,36 +3108,10 @@ export function MvWizard({
             </div>
           </div>
 
-          <div className="rounded-[18px] border border-border/70 bg-background/70 p-3">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-foreground">
-              신청서 접수 방식 · 택 1
-            </p>
-            <p className="mt-1 text-sm font-semibold leading-6 text-muted-foreground">
-              아래 두 방식 중 하나만 선택해서 진행하세요. 온라인 작성과 신청서 파일 업로드를 동시에 진행할 필요는 없습니다.
-            </p>
-            <div className="mt-3 grid gap-2 rounded-[14px] bg-background/70 p-1 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setApplicationFormMode("online")}
-                className={`rounded-[12px] px-4 py-3 text-sm font-black transition ${applicationFormMode === "online"
-                  ? "bg-foreground text-background shadow-sm"
-                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                  }`}
-              >
-                온라인 신청서로 접수
-              </button>
-              <button
-                type="button"
-                onClick={() => setApplicationFormMode("upload")}
-                className={`rounded-[12px] px-4 py-3 text-sm font-black transition ${isDownloadedApplicationFlow
-                  ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
-                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                  }`}
-              >
-                신청서 다운로드하여 업로드
-              </button>
-            </div>
-          </div>
+          <ApplicationFormModeTabs
+            mode={applicationFormMode}
+            onModeChange={setApplicationFormMode}
+          />
 
           {isDownloadedApplicationFlow ? (
             <div className="rounded-[28px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
@@ -3842,17 +3814,6 @@ export function MvWizard({
           </div>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              뮤직비디오 파일 업로드
-            </p>
-            <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              {uploadHintTitle}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {mvType === "MV_BROADCAST"
-                ? `시스템 업로드 한도: 최대 ${uploadMaxLabel}까지 업로드할 수 있습니다.`
-                : `최대 ${uploadMaxLabel}까지 업로드할 수 있습니다.`}
-            </p>
             <p className="mt-1 text-xs font-semibold text-foreground">
               허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX
             </p>
@@ -3908,7 +3869,7 @@ export function MvWizard({
                 <p className="text-xs font-semibold text-muted-foreground">
                   아래 이메일 주소로 영상 파일을 보내주세요.
                 </p>
-                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
+                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 text-base font-black text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
                   {APP_CONFIG.supportEmail}
                 </p>
                 <div className="mt-3 rounded-xl border border-border/60 bg-background/80 px-3 py-3 text-xs leading-5 text-muted-foreground">
@@ -3945,13 +3906,10 @@ export function MvWizard({
                     />
                     <span className="flex w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
                       {submissionIdRef.current
-                        ? "파일 첨부 (드래그 앤 드롭 가능)"
+                        ? "파일 첨부 (최대 2GB, 드래그 앤 드롭 가능)"
                         : isPreparingDraft
                           ? "접수 ID 준비 중... 잠시 후 첨부 가능"
                           : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
-                    </span>
-                    <span className="mt-3 block rounded-xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100">
-                      2GB 이상의 영상도 최대 4GB까지 업로드 가능하며, 어려우면 예전 온사이드 사이트에서 접수해주세요.
                     </span>
                     {!submissionIdRef.current && !isPreparingDraft ? (
                       <button
@@ -3973,87 +3931,72 @@ export function MvWizard({
                 </div>
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground">
                   <p>
-                    영상 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 다음 단계로 진행하거나 예전 온사이드 사이트에서 접수해주세요.
+                    영상 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 다음 단계로 진행하거나 이메일로 파일을 전송해주세요.
                   </p>
                   {isDownloadedApplicationFlow ? (
                     <p>
-                      신청서 다운로드하여 직접 작성한 경우 신청서도 영상과 함께 첨부해주세요.
+                      다운로드한 신청서를 작성한 경우 신청서도 영상과 함께 첨부해주세요.
                     </p>
                   ) : null}
-                  <p className="font-semibold text-foreground">{APP_CONFIG.supportEmail}</p>
+                  <p className="pt-1 text-sm font-black text-foreground sm:text-base">
+                    {APP_CONFIG.supportEmail}
+                  </p>
                 </div>
-                <div className="mt-4 space-y-3">
-                  {uploads.map((upload, index) => (
-                    <div
-                      key={`${upload.name}-${index}`}
-                      className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-semibold text-foreground">
-                          {upload.name}
-                        </span>
-                        <div className="flex items-center gap-3">
-                          {upload.status === "done" ? (
-                            <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
-                              첨부 완료
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">
-                              {upload.status === "uploading"
-                                ? `업로드 중 · ${upload.progress}%`
-                                : upload.status === "error"
-                                  ? "실패"
-                                  : "대기"}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const nextFiles = [...files];
-                              nextFiles.splice(index, 1);
-                              const nextUploads = [...uploads];
-                              nextUploads.splice(index, 1);
-                              setFiles(nextFiles);
-                              setUploads(nextUploads);
-                              setUploadedFiles((prev) =>
-                                prev.filter((_, idx) => idx !== index),
-                              );
-                              setFileDigest("");
-                            }}
-                            className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
-                          >
-                            삭제
-                          </button>
+                {uploads.length > 0 ? (
+                  <div className="mt-4 space-y-3">
+                    {uploads.map((upload, index) => (
+                      <div
+                        key={`${upload.name}-${index}`}
+                        className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-semibold text-foreground">
+                            {upload.name}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            {upload.status === "done" ? (
+                              <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                                첨부 완료
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {upload.status === "uploading"
+                                  ? `업로드 중 · ${upload.progress}%`
+                                  : upload.status === "error"
+                                    ? "실패"
+                                    : "대기"}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextFiles = [...files];
+                                nextFiles.splice(index, 1);
+                                const nextUploads = [...uploads];
+                                nextUploads.splice(index, 1);
+                                setFiles(nextFiles);
+                                setUploads(nextUploads);
+                                setUploadedFiles((prev) =>
+                                  prev.filter((_, idx) => idx !== index),
+                                );
+                                setFileDigest("");
+                              }}
+                              className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
+                          <div
+                            className="h-1.5 rounded-full bg-foreground transition-all"
+                            style={{ width: `${upload.progress}%` }}
+                          />
                         </div>
                       </div>
-                      <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
-                        <div
-                          className="h-1.5 rounded-full bg-foreground transition-all"
-                          style={{ width: `${upload.progress}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                  {uploads.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-center text-xs text-muted-foreground">
-                      <p className="font-semibold text-foreground">
-                        선택된 파일이 없습니다.
-                      </p>
-                      <p className="mt-2 text-[11px] text-muted-foreground">
-                        파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요.
-                      </p>
-                      <div className="mt-3 flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => selectUploadDeliveryMode("email")}
-                          className="rounded-full border border-border/70 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
-                        >
-                          파일 없이 진행
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                ) : null}
               </>
             )}
           </div>

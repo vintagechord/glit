@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import * as React from "react";
+import { Check } from "lucide-react";
 
 import { formatDate } from "@/lib/format";
 
@@ -110,13 +111,19 @@ function SubmissionManagementRow({
 }) {
   return (
     <div
-      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-t border-black/15 py-3 text-sm transition dark:border-white/15 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center ${
+      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center ${
         selected
-          ? "rounded-[8px] bg-[rgba(242,207,39,0.22)] px-2 shadow-[2px_2px_0_var(--bauhaus-shadow)]"
-          : "px-0 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+          ? "rounded-[8px] bg-[rgba(242,207,39,0.22)] shadow-[2px_2px_0_var(--bauhaus-shadow)]"
+          : "rounded-[8px] hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
       }`}
     >
-      <label className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5">
+      <label
+        className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] border-2 border-[var(--bauhaus-ink)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
+          selected
+            ? "bg-[var(--foreground)] text-[var(--background)]"
+            : "bg-[var(--background)] text-[var(--foreground)]"
+        }`}
+      >
         <span className="sr-only">
           {item.title || "제목 미입력"} 선택
         </span>
@@ -125,8 +132,18 @@ function SubmissionManagementRow({
           checked={selected}
           onChange={() => onToggleSelection(item.id)}
           disabled={deleting}
-          className="h-4 w-4 rounded border-border accent-[var(--bauhaus-ink)]"
+          className="peer sr-only"
         />
+        <span
+          aria-hidden="true"
+          className={`flex h-5 w-5 items-center justify-center rounded-[4px] border-2 text-[13px] font-black leading-none transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--bauhaus-blue)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[var(--background)] peer-disabled:opacity-50 ${
+            selected
+              ? "border-[var(--background)] bg-[var(--foreground)] text-[var(--background)]"
+              : "border-[var(--bauhaus-ink)] bg-[var(--card)] text-transparent"
+          }`}
+        >
+          <Check className="h-4 w-4" strokeWidth={3} />
+        </span>
       </label>
       <Link
         href={`/dashboard/submissions/${encodeURIComponent(item.id)}`}

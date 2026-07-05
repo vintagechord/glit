@@ -251,15 +251,16 @@ const exactTranslations: Record<string, string> = {
     "Each broadcaster requires separate review, and review is available only for music videos from albums with completed music review.",
   "기본 Music Video Review는 바로 신청할 수 있고, Broadcaster 입고 옵션은 조건 확인 후 진행합니다.":
     "Standard music video review can be submitted immediately. Broadcaster delivery options proceed after requirement confirmation.",
-  "기본 뮤직비디오 심의는 바로 신청할 수 있고, 방송국 별 옵션은 조건 확인 후 진행합니다.":
+  "일반 뮤직비디오 심의는 바로 신청할 수 있고, 방송국의 경우 접수 조건 확인 후 진행합니다.":
     "Standard music video review can be submitted immediately. Broadcaster delivery options proceed after requirement confirmation.",
   "일반 Music Video Review": "Standard Music Video Review",
   "Review 완료 후 등급분류를 영상에 삽입하면 Melon, 지니, 유튜브 등으로 온라인 유통이 가능합니다.":
     "After review, insert the rating mark into the video for online distribution through Melon, Genie, YouTube, and similar services.",
   "Review 완료 후 등급분류를 Video에 삽입하면 Melon, Genie, YouTube 등으로 Online Distribution이 가능합니다.":
     "After review, insert the rating mark into the video for online distribution through Melon, Genie, YouTube, and similar services.",
-  "심의 완료 후 등급분류를 영상에 삽입하면 Melon, 지니, 유튜브 등으로 온라인 유통이 가능합니다.":
-    "After review, insert the rating mark into the video for online distribution through Melon, Genie, YouTube, and similar services.",
+  "필증과 등급분류 파일이 제공되며, Melon, 지니, 유튜브 등 온라인 유통이 가능합니다.":
+    "A certificate and rating file are provided for online distribution through Melon, Genie, YouTube, and similar services.",
+  "유통사 제출용": "For Distributor Submission",
   "문의 필요": "Contact Required",
   "MBC M 방송 아티스트에 한해 Review 가능합니다.":
     "Available only for artists scheduled for MBC M broadcast.",

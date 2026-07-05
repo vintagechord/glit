@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import * as React from "react";
+import { ArrowRight, CreditCard } from "lucide-react";
 import { normalizeStationReviewStatus } from "@/constants/review-status";
 import { formatDate } from "@/lib/format";
 import {
@@ -1131,14 +1132,28 @@ export function HomeReviewPanel({
                   />
                 </div>
                 {needsPayment && activeSubmission ? (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#111111] bg-white px-3 py-2 text-xs font-semibold text-[#111111] shadow-[3px_3px_0_#111111] dark:border-white dark:bg-[#111111] dark:text-white dark:shadow-[3px_3px_0_rgba(255,255,255,0.55)]">
-                    <span>결제 완료 후 심의가 진행됩니다.</span>
-                    <Link
-                      href={`/dashboard/pay/${activeSubmission.id}`}
-                      className="rounded-full border border-[#111111] bg-[#111111] px-3 py-1.5 text-[11px] font-black uppercase tracking-normal text-white transition hover:-translate-y-0.5 hover:bg-white hover:text-[#111111] dark:border-white dark:bg-white dark:text-[#111111] dark:hover:bg-[#111111] dark:hover:text-white"
-                    >
-                      결제하기
-                    </Link>
+                  <div className="mt-4 rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-3 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-black uppercase tracking-normal">
+                          결제 대기
+                        </p>
+                        <p className="mt-1 text-sm font-black sm:text-base">
+                          결제가 완료되지 않았습니다.
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-[#111111]/72">
+                          결제 후 심의가 진행됩니다.
+                        </p>
+                      </div>
+                      <Link
+                        href={`/dashboard/pay/${activeSubmission.id}`}
+                        className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#111111] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.28)] transition hover:-translate-y-0.5 hover:bg-white hover:text-[#111111] hover:shadow-[5px_5px_0_rgba(17,17,17,0.32)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] sm:w-auto sm:min-w-[10.5rem]"
+                      >
+                        <CreditCard aria-hidden="true" className="h-4 w-4" />
+                        결제하기
+                        <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                      </Link>
+                    </div>
                   </div>
                 ) : null}
               </div>
