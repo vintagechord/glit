@@ -271,7 +271,7 @@ export default async function MyPageCreditsPage({
             </div>
             <span className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-sm font-black text-[#111111]">
               <Coins className="h-4 w-4" aria-hidden="true" />
-              사용 가능 {summary.available.toLocaleString()}개
+              보유 크레딧 {summary.available.toLocaleString()}개
             </span>
           </div>
           <div className="mt-6 grid gap-3 md:grid-cols-4">
@@ -282,7 +282,7 @@ export default async function MyPageCreditsPage({
               tone="border-[#111111] bg-white text-[#111111]"
             />
             <SummaryCard
-              label="사용 가능"
+              label="보유 크레딧"
               value={summary.available}
               description="지금 교환 가능한 잔여 크레딧"
               tone="border-[#111111] bg-[#f2cf27] text-[#111111]"

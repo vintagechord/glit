@@ -91,9 +91,6 @@ export function CreditUseTabs({
         <h2 className="text-2xl font-black text-foreground">
           크레딧 사용처
         </h2>
-        <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-muted-foreground">
-          원하는 사용처를 선택해 신청을 이어가세요.
-        </p>
         <div
           role="tablist"
           aria-label="크레딧 사용처"

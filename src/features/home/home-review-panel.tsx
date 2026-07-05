@@ -305,6 +305,15 @@ function getStationName(station?: StationItem["station"] | null) {
   return station?.name?.trim() || "-";
 }
 
+function shouldShowStationNameText(
+  stationName: string,
+  submission?: SubmissionSummary | null,
+) {
+  const isMvSubmission =
+    submission?.type === "MV_DISTRIBUTION" || submission?.type === "MV_BROADCAST";
+  return isMvSubmission && stationName.includes("영상물등급위원회");
+}
+
 const stationBadgeMap: Record<
   string,
   { label: string; color: string; bg: string }
@@ -1182,18 +1191,31 @@ export function HomeReviewPanel({
                           activeSubmission,
                         );
                         const stationName = getStationName(station.station);
+                        const showStationNameText = shouldShowStationNameText(
+                          stationName,
+                          activeSubmission,
+                        );
                         return (
                           <div
                             key={`${station.id}-${index}`}
                             className={desktopStationRowClass}
                           >
-                            <span className="flex min-w-0 items-center gap-3 pl-2 text-left">
+                            <span
+                              className={`flex min-w-0 items-center ${
+                                showStationNameText
+                                  ? "gap-3 pl-2 text-left"
+                                  : "justify-center text-center"
+                              }`}
+                              title={stationName}
+                            >
                               <StationLogo station={station.station ?? undefined} hideOnMobile />
-                              <span className="min-w-0">
-                                <span className="block truncate font-semibold text-foreground">
-                                  {stationName}
+                              {showStationNameText ? (
+                                <span className="min-w-0">
+                                  <span className="block truncate font-semibold text-foreground">
+                                    {stationName}
+                                  </span>
                                 </span>
-                              </span>
+                              ) : null}
                             </span>
                             <div className="flex flex-col items-center justify-center gap-1 justify-self-center">
                               {canOpenResultModal ? (
@@ -1261,21 +1283,31 @@ export function HomeReviewPanel({
                           activeSubmission,
                         );
                         const stationName = getStationName(station.station);
+                        const showStationNameText = shouldShowStationNameText(
+                          stationName,
+                          activeSubmission,
+                        );
                         return (
                           <div
                             key={`${station.id}-mobile-${index}`}
                             className={mobileStationRowClass}
                           >
                             <div
-                              className="flex min-w-0 items-center justify-start gap-2"
+                              className={`flex min-w-0 items-center ${
+                                showStationNameText
+                                  ? "justify-start gap-2"
+                                  : "justify-center"
+                              }`}
                               title={stationName}
                             >
                               <StationLogo station={station.station ?? undefined} />
-                              <span className="min-w-0">
-                                <span className="block truncate text-xs font-semibold text-foreground">
-                                  {stationName}
+                              {showStationNameText ? (
+                                <span className="min-w-0">
+                                  <span className="block truncate text-xs font-semibold text-foreground">
+                                    {stationName}
+                                  </span>
                                 </span>
-                              </span>
+                              ) : null}
                             </div>
                             {canOpenResultModal ? (
                               <button
@@ -1332,18 +1364,31 @@ export function HomeReviewPanel({
                           activeSubmission,
                         );
                         const stationName = getStationName(station.station);
+                        const showStationNameText = shouldShowStationNameText(
+                          stationName,
+                          activeSubmission,
+                        );
                         return (
                           <div
                             key={`${station.id}-mobile-${index}`}
                             className="grid min-h-[52px] grid-cols-[minmax(0,1fr)_minmax(100px,112px)_64px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-2 text-sm shadow-sm"
                           >
-                            <span className="flex min-w-0 items-center gap-2 text-left">
+                            <span
+                              className={`flex min-w-0 items-center ${
+                                showStationNameText
+                                  ? "gap-2 text-left"
+                                  : "justify-center text-center"
+                              }`}
+                              title={stationName}
+                            >
                               <StationLogo station={station.station ?? undefined} />
-                              <span className="min-w-0">
-                                <span className="block truncate text-xs font-semibold text-foreground">
-                                  {stationName}
+                              {showStationNameText ? (
+                                <span className="min-w-0">
+                                  <span className="block truncate text-xs font-semibold text-foreground">
+                                    {stationName}
+                                  </span>
                                 </span>
-                              </span>
+                              ) : null}
                             </span>
                             {canOpenResultModal ? (
                               <button
@@ -1487,11 +1532,7 @@ export function HomeReviewPanel({
                 );
               })}
               </div>
-            ) : (
-              <div className="mt-4 rounded-xl border border-border/60 bg-background/80 px-3 py-3 text-sm text-muted-foreground">
-                트랙별 상세 결과 없이 방송국 결과 상태만 등록되어 있습니다.
-              </div>
-            )}
+            ) : null}
             {trackResultModal.resultNote ? (
               <div className="mt-4 rounded-xl border border-[#1556a4]/30 bg-[#1556a4]/5 px-3 py-3 dark:border-[#8fb7e8]/40 dark:bg-[#0f1d2e]">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1556a4] dark:text-[#b9d8ff]">

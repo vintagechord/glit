@@ -332,6 +332,8 @@ const exactTranslations: Record<string, string> = {
     "Your magazine listing request has been submitted. The admin will review it.",
   "매거진 등록 신청 1회 또는 서비스 이용권 교환 시 잔여 크레딧에서 차감됩니다.":
     "Each magazine listing request or service voucher exchange is deducted from your remaining credits.",
+  "매거진 등록 신청 또는 서비스 이용권 교환 시 잔여 크레딧에서 차감됩니다.":
+    "Magazine listing requests or service voucher exchanges are deducted from your remaining credits.",
   "자유 신청": "Free-form Request",
   "회원가입 후 크레딧 사용": "Sign Up to Use Credits",
   "앨범심의 결제 완료 1건당 크레딧 1개가 발급됩니다.":

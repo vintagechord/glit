@@ -186,6 +186,10 @@ function StationLogoWithFallback({
   );
 }
 
+function shouldShowStationNameText(stationName: string, isMvSubmission: boolean) {
+  return isMvSubmission && stationName.includes("영상물등급위원회");
+}
+
 const paymentMethodLabels: Record<string, string> = {
   BANK: "무통장",
   CARD: "카드",
@@ -981,10 +985,9 @@ export function SubmissionDetailClient({
           <div className="rounded-[8px] border-2 border-[#111111] bg-background dark:border-[#f2cf27]">
             <div className="overflow-x-auto">
               <div className="min-w-0 sm:min-w-[720px]">
-                <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-normal text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] sm:grid-cols-[72px_1.4fr_1fr_1fr]">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-normal text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] sm:grid-cols-[minmax(96px,1.1fr)_1fr_1fr]">
                   <span className="justify-self-center text-center sm:hidden">방송국</span>
                   <span className="hidden justify-self-center text-center sm:block">로고</span>
-                  <span className="hidden text-left sm:block">방송국</span>
                   <span className="justify-self-center text-center">현재 상태</span>
                   <span className="justify-self-center text-center">Updated</span>
                 </div>
@@ -1000,10 +1003,12 @@ export function SubmissionDetailClient({
                       review.station && "code" in review.station
                         ? review.station.code
                         : null;
-                    const totalTracksForDisplay =
-                      albumTracks.length > 1
+                    const hasTrackDetails = trackInfo.results.length > 0;
+                    const totalTracksForDisplay = hasTrackDetails
+                      ? albumTracks.length > 1
                         ? albumTracks.length
-                        : trackInfo.counts.total;
+                        : trackInfo.counts.total
+                      : 0;
                     const pendingGap = Math.max(
                       totalTracksForDisplay -
                       (trackInfo.counts.approved +
@@ -1012,14 +1017,13 @@ export function SubmissionDetailClient({
                       0,
                     );
                     const pendingCount = trackInfo.counts.pending + pendingGap;
-                    const hasTrackDetails = totalTracksForDisplay > 0;
                     const summaryCounts = {
                       approved: trackInfo.counts.approved,
                       rejected: trackInfo.counts.rejected,
                       pending: pendingCount,
                     };
                     const trackSummaryLine =
-                      totalTracksForDisplay > 1
+                      hasTrackDetails && totalTracksForDisplay > 1
                         ? buildTrackSummaryText(summaryCounts, " · ")
                         : null;
                     const hasRejectedOutcome =
@@ -1049,24 +1053,33 @@ export function SubmissionDetailClient({
                         });
                       }
                     };
+                    const stationName = review.station?.name?.trim() || "-";
+                    const showStationNameText = shouldShowStationNameText(
+                      stationName,
+                      isMvSubmission,
+                    );
 
                     return (
                       <div
                         key={review.id}
-                        className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[72px_1.4fr_1fr_1fr]"
+                        className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[minmax(96px,1.1fr)_1fr_1fr]"
                       >
-                        <div className="flex min-w-0 items-center justify-start gap-2 sm:justify-center">
+                        <div
+                          className={`flex min-w-0 items-center ${
+                            showStationNameText
+                              ? "justify-start gap-2"
+                              : "justify-center"
+                          }`}
+                          title={stationName}
+                        >
                           <StationLogoWithFallback station={review.station} />
-                          <span className="min-w-0 sm:hidden">
-                            <span className="block truncate font-semibold text-foreground">
-                              {review.station?.name ?? "-"}
+                          {showStationNameText ? (
+                            <span className="min-w-0">
+                              <span className="block truncate font-semibold text-foreground">
+                                {stationName}
+                              </span>
                             </span>
-                          </span>
-                        </div>
-                        <div className="hidden min-w-0 pl-1 text-left sm:block">
-                          <p className="truncate font-semibold text-foreground">
-                            {review.station?.name ?? "-"}
-                          </p>
+                          ) : null}
                         </div>
                         <button
                           type="button"
@@ -2101,11 +2114,7 @@ export function SubmissionDetailClient({
               <p className="mt-1 text-sm text-muted-foreground">
                 {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
               </p>
-            ) : (
-              <p className="mt-1 text-sm text-muted-foreground">
-                방송국 결과가 등록되면 트랙 상세가 표시됩니다.
-              </p>
-            )}
+            ) : null}
             {trackResultModal.summary.results.length > 0 ? (
               <div className="mt-4 max-h-80 space-y-2 overflow-auto">
                 {trackResultModal.summary.results.map((track, index) => {

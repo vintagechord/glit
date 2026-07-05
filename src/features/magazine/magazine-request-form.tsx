@@ -60,15 +60,11 @@ const labelClass =
 
 export function MagazineRequestForm({
   isAuthenticated,
-  userEmail,
-  requesterName,
   requesterPhone,
   existingRequests,
   availableCredits,
 }: {
   isAuthenticated: boolean;
-  userEmail?: string | null;
-  requesterName?: string | null;
   requesterPhone?: string | null;
   existingRequests: MagazineExistingRequest[];
   availableCredits: number;
@@ -195,27 +191,6 @@ export function MagazineRequestForm({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-2">
-              <span className={labelClass}>담당자명</span>
-              <input
-                name="requesterName"
-                required
-                disabled={!isAuthenticated}
-                defaultValue={requesterName ?? ""}
-                className={fieldClass}
-              />
-            </label>
-            <label className="grid gap-2">
-              <span className={labelClass}>이메일</span>
-              <input
-                name="requesterEmail"
-                type="email"
-                required
-                disabled={!isAuthenticated}
-                defaultValue={userEmail ?? ""}
-                className={fieldClass}
-              />
-            </label>
             <label className="grid gap-2">
               <span className={labelClass}>연락처</span>
               <input
@@ -365,7 +340,7 @@ export function MagazineRequestForm({
           </h2>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-[8px] border-2 border-border bg-card p-4">
-              <p className={labelClass}>사용 가능</p>
+              <p className={labelClass}>보유 크레딧</p>
               <p className="mt-2 text-3xl font-black text-foreground">
                 {isAuthenticated ? availableCredits : "-"}
               </p>
@@ -378,7 +353,7 @@ export function MagazineRequestForm({
             </div>
           </div>
           <p className="mt-4 text-xs leading-5 text-muted-foreground">
-            매거진 등록 신청 1회 또는 서비스 이용권 교환 시 잔여 크레딧에서
+            매거진 등록 신청 또는 서비스 이용권 교환 시 잔여 크레딧에서
             차감됩니다.
           </p>
         </section>

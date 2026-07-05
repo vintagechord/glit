@@ -27,6 +27,11 @@ const optionalText = z.preprocess((value) => {
   return text.length > 0 ? text : undefined;
 }, z.string().optional());
 
+const optionalEmail = z.preprocess((value) => {
+  const text = String(value ?? "").trim();
+  return text.length > 0 ? text : undefined;
+}, z.string().email().optional());
+
 const optionalDate = z.preprocess((value) => {
   const text = String(value ?? "").trim();
   return text.length > 0 ? text : undefined;
@@ -50,8 +55,8 @@ const artworkImageTypes = new Set([
 const magazineRequestSchema = z.object({
   submissionId: z.string().uuid().optional(),
   targetChannel: targetChannelSchema,
-  requesterName: z.string().trim().min(1),
-  requesterEmail: z.string().trim().email(),
+  requesterName: optionalText,
+  requesterEmail: optionalEmail,
   requesterPhone: optionalText,
   albumTitle: optionalText,
   artistName: optionalText,
@@ -254,6 +259,33 @@ export async function createMagazineRequestAction(
   }
 
   const admin = createAdminClient();
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .select("name, phone")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    console.error("[magazine] failed to load requester profile", profileError);
+  }
+
+  const profileName =
+    typeof profile?.name === "string" ? profile.name.trim() : "";
+  const profilePhone =
+    typeof profile?.phone === "string" ? profile.phone.trim() : "";
+  const metadataName =
+    typeof user.user_metadata?.name === "string"
+      ? user.user_metadata.name.trim()
+      : "";
+  const requesterName =
+    (parsed.data.requesterName ?? profileName) || metadataName || "회원";
+  const requesterEmail = parsed.data.requesterEmail ?? user.email?.trim();
+  const requesterPhone = (parsed.data.requesterPhone ?? profilePhone) || null;
+
+  if (!requesterEmail) {
+    return { error: "회원 이메일 정보를 확인할 수 없습니다." };
+  }
+
   const creditSummary = await getUserCreditSummary(admin, user.id);
   if (creditSummary.available < 1) {
     return {
@@ -280,9 +312,9 @@ export async function createMagazineRequestAction(
     {
       p_submission_id: parsed.data.submissionId ?? null,
       p_target_channel: parsed.data.targetChannel,
-      p_requester_name: parsed.data.requesterName,
-      p_requester_email: parsed.data.requesterEmail,
-      p_requester_phone: parsed.data.requesterPhone ?? null,
+      p_requester_name: requesterName,
+      p_requester_email: requesterEmail,
+      p_requester_phone: requesterPhone,
       p_album_title: parsed.data.albumTitle ?? null,
       p_artist_name: parsed.data.artistName ?? null,
       p_release_date: parsed.data.releaseDate ?? null,

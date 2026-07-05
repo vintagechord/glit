@@ -275,7 +275,7 @@ function CreditServiceRewardsPanel({
         </div>
         <div className="min-w-[156px] rounded-[8px] border-2 border-border bg-card p-4">
           <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-            사용 가능
+            보유 크레딧
           </p>
           <p className="mt-2 text-3xl font-black text-foreground">
             {isAuthenticated ? creditSummary.available.toLocaleString() : "-"}
@@ -418,8 +418,6 @@ export default async function MagazinePage({
               <div>
                 <MagazineRequestForm
                   isAuthenticated={Boolean(user)}
-                  userEmail={user?.email ?? null}
-                  requesterName={profile?.name}
                   requesterPhone={profile?.phone}
                   existingRequests={existingRequests}
                   availableCredits={creditSummary.available}
