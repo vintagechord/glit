@@ -8,6 +8,7 @@ import * as React from "react";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import {
+  cleanupInicisPaymentLayer,
   openInicisCardPopup,
   type InicisPopupContext,
 } from "@/lib/inicis/popup";
@@ -173,6 +174,7 @@ export function SubmissionCartCheckout({
       if (!type || !String(type).startsWith("INICIS:")) return;
 
       const status = normalizeInicisStatus(String(type));
+      cleanupInicisPaymentLayer();
       if (status === "SUCCESS") {
         router.push(`${cartHref}?payment=success`);
         router.refresh();

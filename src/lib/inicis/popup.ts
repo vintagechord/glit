@@ -34,12 +34,143 @@ type OpenPopupResult = {
 
 declare global {
   interface Window {
-    INIStdPay?: { pay: (formId: string) => void };
+    INIStdPay?: {
+      pay: (formId: string) => void;
+      close?: () => void;
+      destroy?: () => void;
+    };
   }
 }
 
 const FORM_ID = "SendPayForm";
 const SCRIPT_TIMEOUT_MS = 7000;
+const inicisLayerPattern =
+  /inicis|inipay|inistdpay|inipaystd|stdpay|ini_std|iniwebstd/i;
+
+const isLikelyPaymentElement = (element: Element) => {
+  const attrText = [
+    element.id,
+    element.getAttribute("name"),
+    element.getAttribute("class"),
+    element.getAttribute("src"),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return inicisLayerPattern.test(attrText);
+};
+
+const isLikelyFullscreenLayer = (element: Element) => {
+  if (typeof window === "undefined") return false;
+  if (!(element instanceof HTMLElement)) return false;
+  const style = window.getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+  const zIndex = Number.parseInt(style.zIndex || "0", 10);
+  const coversViewport =
+    rect.width >= window.innerWidth * 0.7 &&
+    rect.height >= window.innerHeight * 0.7;
+  return (
+    (style.position === "fixed" || style.position === "absolute") &&
+    coversViewport &&
+    (Number.isFinite(zIndex) ? zIndex >= 100 : true)
+  );
+};
+
+const removeElement = (element: Element | null | undefined) => {
+  if (!element || element === document.documentElement || element === document.body) {
+    return;
+  }
+  try {
+    element.remove();
+  } catch {
+    element.parentNode?.removeChild(element);
+  }
+};
+
+const removePaymentElementWithShell = (element: Element) => {
+  let target: Element = element;
+  let current: Element | null = element;
+
+  for (let depth = 0; depth < 4; depth += 1) {
+    const parentElement: HTMLElement | null = current?.parentElement ?? null;
+    if (
+      !parentElement ||
+      parentElement === document.body ||
+      parentElement === document.documentElement
+    ) {
+      break;
+    }
+    if (
+      isLikelyPaymentElement(parentElement) ||
+      isLikelyFullscreenLayer(parentElement)
+    ) {
+      target = parentElement;
+      current = parentElement;
+      continue;
+    }
+    break;
+  }
+
+  removeElement(target);
+};
+
+export const cleanupInicisPaymentLayer = () => {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+
+  try {
+    window.INIStdPay?.close?.();
+  } catch {
+    // The SDK does not guarantee a close method.
+  }
+  try {
+    window.INIStdPay?.destroy?.();
+  } catch {
+    // The SDK does not guarantee a destroy method.
+  }
+
+  const selectors = [
+    `#${FORM_ID}`,
+    "iframe[src*='inicis']",
+    "iframe[src*='/api/inicis/close']",
+    "iframe[src*='/pay/inicis/return']",
+    "iframe[id*='inicis' i]",
+    "iframe[name*='inicis' i]",
+    "iframe[class*='inicis' i]",
+    "iframe[id*='INI' i]",
+    "iframe[name*='INI' i]",
+    "iframe[class*='INI' i]",
+    "div[id*='inicis' i]",
+    "div[class*='inicis' i]",
+    "div[id*='INIpay' i]",
+    "div[class*='INIpay' i]",
+    "div[id*='stdpay' i]",
+    "div[class*='stdpay' i]",
+    "form[id*='inicis' i]",
+    "form[id*='INI' i]",
+    "form[name*='inicis' i]",
+    "form[name*='INI' i]",
+  ];
+
+  for (const selector of selectors) {
+    try {
+      document
+        .querySelectorAll(selector)
+        .forEach((element) => removePaymentElementWithShell(element));
+    } catch {
+      // Ignore unsupported selector variants in older browsers.
+    }
+  }
+
+  document.querySelectorAll("iframe, div, form").forEach((element) => {
+    if (!isLikelyPaymentElement(element)) return;
+    removePaymentElementWithShell(element);
+  });
+
+  document.documentElement.style.removeProperty("overflow");
+  document.body.style.removeProperty("overflow");
+  document.body.style.removeProperty("position");
+};
 
 const isMobileUa = (ua: string) =>
   /iphone|ipad|ipod|android|windows phone|mobile/i.test(ua);
@@ -198,6 +329,7 @@ export const openInicisCardPopup = async (
   }
 
   try {
+    cleanupInicisPaymentLayer();
     const initData = await fetchStdPayInit(options);
     await ensureStdPayScript(initData.stdJsUrl);
     const formId = mountStdPayForm(initData.stdParams);

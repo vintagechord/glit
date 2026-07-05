@@ -14,11 +14,11 @@ const postMessageResponse = (payloadData: Record<string, unknown> = {}) => {
   const html = `
 <!DOCTYPE html>
 <html lang="ko">
-<body>
-<p>결제 창을 닫아주세요.</p>
+<body style="margin:0;background:transparent;">
 <script>
   (function() {
     try {
+      document.body.innerHTML = "";
       if (window.opener) {
         window.opener.postMessage(${payload}, window.location.origin);
       }
@@ -28,7 +28,11 @@ const postMessageResponse = (payloadData: Record<string, unknown> = {}) => {
     } catch (e) {
       console.error("INICIS postMessage error", e);
     }
-    window.close();
+    setTimeout(function() {
+      try {
+        window.close();
+      } catch (e) {}
+    }, 0);
   })();
 </script>
 </body>

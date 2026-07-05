@@ -11,7 +11,10 @@ import {
 } from "@/lib/album-pricing";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
-import { openInicisCardPopup } from "@/lib/inicis/popup";
+import {
+  cleanupInicisPaymentLayer,
+  openInicisCardPopup,
+} from "@/lib/inicis/popup";
 import {
   isBusinessRegistrationFile,
   uploadSubmissionEtcFile,
@@ -48,6 +51,8 @@ declare global {
   interface Window {
     INIStdPay?: {
       pay: (formId: string) => void;
+      close?: () => void;
+      destroy?: () => void;
     };
   }
 }
@@ -819,6 +824,7 @@ export function AlbumWizard({
       const payload = (data as { payload?: Record<string, unknown> }).payload ?? {};
       if (!type || !String(type).startsWith("INICIS:")) return;
       const status = String(type).replace("INICIS:", "");
+      cleanupInicisPaymentLayer();
       const submissionIdFromMsg = (payload.submissionId as string | undefined) || currentSubmissionId;
       const guestTokenFromMsg = payload.guestToken as string | undefined;
       const guestPaymentToken = isGuest

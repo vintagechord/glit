@@ -17,7 +17,11 @@ type StdPayInit = {
 
 declare global {
   interface Window {
-    INIStdPay?: { pay: (formId: string) => void };
+    INIStdPay?: {
+      pay: (formId: string) => void;
+      close?: () => void;
+      destroy?: () => void;
+    };
   }
 }
 

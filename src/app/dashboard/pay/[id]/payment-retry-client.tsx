@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
-import { openInicisCardPopup, type InicisPopupContext } from "@/lib/inicis/popup";
+import {
+  cleanupInicisPaymentLayer,
+  openInicisCardPopup,
+  type InicisPopupContext,
+} from "@/lib/inicis/popup";
 
 type PaymentRetryClientProps = {
   submissionId: string;
@@ -85,6 +89,7 @@ export function PaymentRetryClient({
       if (!type || !String(type).startsWith("INICIS:")) return;
 
       const status = normalizeInicisStatus(String(type));
+      cleanupInicisPaymentLayer();
       if (status === "SUCCESS") {
         router.push(successHref);
         return;
