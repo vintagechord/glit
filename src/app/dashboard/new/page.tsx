@@ -1,5 +1,4 @@
 import { ReliableLink } from "@/components/site/reliable-link";
-import { APP_CONFIG } from "@/lib/config";
 
 export const metadata = {
   title: "새 심의 접수",
@@ -66,16 +65,14 @@ export default function NewSubmissionPage() {
           ))}
         </div>
       </section>
-      <div className="mt-5 rounded-[10px] border-2 border-[#111111] bg-white px-5 py-4 text-sm font-semibold text-muted-foreground shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27]">
-        이전 버전의 온사이드 사이트가 편하신 경우 이전 사이트에서 접수해주셔도 심의는 동일하게 진행이 됩니다.
-        <p className="mt-2 font-semibold text-foreground">{APP_CONFIG.supportEmail}</p>
+      <div className="mt-4 text-right text-xs font-semibold text-muted-foreground">
         <ReliableLink
           href="https://onside17.com/"
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 inline-flex rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-xs font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
+          className="underline-offset-4 transition hover:text-foreground hover:underline"
         >
-          예전 온사이드 사이트에서 접수하기 -&gt;
+          기존 사이트 접수
         </ReliableLink>
       </div>
     </div>

@@ -16,7 +16,9 @@ type StdPayInit = {
 type OpenPopupOptions = {
   context: InicisPopupContext;
   submissionId?: string;
+  submissionIds?: string[];
   guestToken?: string;
+  guestTokensBySubmissionId?: Record<string, string>;
   orderId?: string;
   requestId?: string;
   popupName?: string;
@@ -45,7 +47,16 @@ const isMobileUa = (ua: string) =>
 const buildPopupUrl = (options: OpenPopupOptions) => {
   const params = new URLSearchParams({ mode: "card", context: options.context });
   if (options.submissionId) params.set("submissionId", options.submissionId);
+  if (options.submissionIds?.length) {
+    params.set("submissionIds", options.submissionIds.join(","));
+  }
   if (options.guestToken) params.set("guestToken", options.guestToken);
+  if (options.guestTokensBySubmissionId) {
+    const tokenPairs = Object.entries(options.guestTokensBySubmissionId)
+      .filter(([, token]) => token)
+      .map(([submissionId, token]) => `${submissionId}:${token}`);
+    if (tokenPairs.length) params.set("guestTokens", tokenPairs.join(","));
+  }
   if (options.orderId) params.set("orderId", options.orderId);
   if (options.requestId) params.set("requestId", options.requestId);
   return `/pay/inicis/popup?${params.toString()}`;
@@ -79,7 +90,9 @@ const fetchStdPayInit = async (
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         submissionId: options.submissionId,
+        submissionIds: options.submissionIds,
         guestToken: options.guestToken,
+        guestTokensBySubmissionId: options.guestTokensBySubmissionId,
         context: options.context,
       }),
     });

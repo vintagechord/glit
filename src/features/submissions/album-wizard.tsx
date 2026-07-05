@@ -13,6 +13,10 @@ import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { openInicisCardPopup } from "@/lib/inicis/popup";
 import {
+  isBusinessRegistrationFile,
+  uploadSubmissionEtcFile,
+} from "@/lib/submission-etc-upload";
+import {
   buildInlineTranslatedLyrics,
   collectForeignLyricsSegments,
   hasNonKoreanLyrics,
@@ -325,6 +329,10 @@ export function AlbumWizard({
     React.useState("");
   const [taxInvoiceBusinessNumber, setTaxInvoiceBusinessNumber] =
     React.useState("");
+  const [taxInvoiceCertificateFile, setTaxInvoiceCertificateFile] =
+    React.useState<File | null>(null);
+  const [taxInvoiceCertificateUpload, setTaxInvoiceCertificateUpload] =
+    React.useState<UploadItem | null>(null);
   const [files, setFiles] = React.useState<File[]>([]);
   const [uploads, setUploads] = React.useState<UploadItem[]>([]);
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadResult[]>([]);
@@ -477,6 +485,11 @@ export function AlbumWizard({
   const albumEventDiscountTotalKrw = hasAlbumEventDiscount
     ? totalAlbumCount * Math.max(0, originalBasePriceKrw - basePriceKrw)
     : 0;
+  const additionalAlbumDiscountTotalKrw = additionalAlbumCount * Math.max(
+    0,
+    basePriceKrw - additionalPriceKrw,
+  );
+  const hasAdditionalAlbumDiscount = additionalAlbumDiscountTotalKrw > 0;
   const totalDisplayDiscountKrw = Math.max(
     0,
     originalTotalPriceKrw - totalPriceKrw,
@@ -534,12 +547,6 @@ export function AlbumWizard({
   const albumQuickSteps = isOneClick
     ? ["담당자 정보", "멜론 링크", "음원 WAV/MP3/ZIP", "결제"]
     : ["담당자 정보", "앨범·트랙 정보", "음원 WAV/MP3/ZIP", "결제"];
-
-  React.useEffect(() => {
-    if (additionalAlbumCount > 0 && paymentMethod === "CARD") {
-      setPaymentMethod("BANK");
-    }
-  }, [additionalAlbumCount, paymentMethod]);
 
   const readDraftStorage = React.useCallback(() => {
     if (typeof window === "undefined") return null;
@@ -1205,6 +1212,87 @@ export function AlbumWizard({
     if (dropped.length === 0) return;
     setIsDraggingOver(false);
     addFiles(dropped);
+  };
+
+  const handleTaxInvoiceCertificateChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+    if (!isBusinessRegistrationFile(file.name, file.type)) {
+      setNotice({
+        error: "사업자등록증은 PDF, JPG, PNG, WEBP 파일로 첨부해주세요.",
+      });
+      return;
+    }
+    setTaxInvoiceCertificateFile(file);
+    setTaxInvoiceCertificateUpload({
+      name: file.name,
+      size: file.size,
+      progress: 0,
+      status: "pending",
+      mime: file.type,
+    });
+    setNotice({});
+  };
+
+  const clearTaxInvoiceCertificate = () => {
+    setTaxInvoiceCertificateFile(null);
+    setTaxInvoiceCertificateUpload(null);
+  };
+
+  const uploadTaxInvoiceCertificateForSubmission = async (
+    submissionId: string,
+    titleForUpload: string,
+  ) => {
+    if (!taxInvoiceCertificateFile) return null;
+    setTaxInvoiceCertificateUpload({
+      name: taxInvoiceCertificateFile.name,
+      size: taxInvoiceCertificateFile.size,
+      progress: 0,
+      status: "uploading",
+      mime: taxInvoiceCertificateFile.type,
+    });
+    try {
+      const uploaded = await uploadSubmissionEtcFile({
+        file: taxInvoiceCertificateFile,
+        submissionId,
+        guestToken: isGuest ? currentGuestTokenRef.current : undefined,
+        title: `${titleForUpload || "tax-invoice"}-business-registration`,
+        onProgress: (progress) =>
+          setTaxInvoiceCertificateUpload({
+            name: taxInvoiceCertificateFile.name,
+            size: taxInvoiceCertificateFile.size,
+            progress,
+            status: "uploading",
+            mime: taxInvoiceCertificateFile.type,
+          }),
+      });
+      setTaxInvoiceCertificateUpload({
+        name: taxInvoiceCertificateFile.name,
+        size: taxInvoiceCertificateFile.size,
+        progress: 100,
+        status: "done",
+        path: uploaded.path,
+        mime: taxInvoiceCertificateFile.type,
+      });
+      return uploaded;
+    } catch (error) {
+      setTaxInvoiceCertificateUpload({
+        name: taxInvoiceCertificateFile.name,
+        size: taxInvoiceCertificateFile.size,
+        progress: 0,
+        status: "error",
+        mime: taxInvoiceCertificateFile.type,
+      });
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "사업자등록증 업로드 중 오류가 발생했습니다.";
+      setNotice({ error: message });
+      throw new Error(message);
+    }
   };
 
   const uploadWithProgress = async (
@@ -2145,6 +2233,10 @@ export function AlbumWizard({
         setNotice({ error: "사업자번호는 숫자 10자리로 입력해주세요." });
         return false;
       }
+      if (!taxInvoiceCertificateFile) {
+        setNotice({ error: "세금계산서 발급용 사업자등록증을 첨부해주세요." });
+        return false;
+      }
     }
     return true;
   };
@@ -2565,6 +2657,7 @@ export function AlbumWizard({
       const applicantPhoneValue = applicantPhone.trim();
       const submissionIds: string[] = [];
       const guestTokens: Array<{ token: string; title: string }> = [];
+      const guestTokensBySubmissionId: Record<string, string> = {};
       let emailNotice: string | undefined;
       const submissionPaymentMethod = deferPayment ? "BANK" : paymentMethod;
 
@@ -2582,6 +2675,17 @@ export function AlbumWizard({
               : 0;
         const titleValue = draft.title.trim();
         const artistValue = draft.artistName.trim();
+        if (
+          status === "SUBMITTED" &&
+          !deferPayment &&
+          submissionPaymentMethod === "BANK" &&
+          paymentDocumentType === "TAX_INVOICE"
+        ) {
+          await uploadTaxInvoiceCertificateForSubmission(
+            draft.submissionId,
+            titleValue || `album-${index + 1}`,
+          );
+        }
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
           packageId: selectedPackage?.id,
@@ -2663,8 +2767,13 @@ export function AlbumWizard({
           return;
         }
 
+        const savedSubmissionId = result.submissionId ?? draft.submissionId;
         if (result.submissionId) {
           submissionIds.push(result.submissionId);
+        }
+        const savedGuestToken = result.guestToken ?? draft.guestToken;
+        if (isGuest && savedSubmissionId && savedGuestToken) {
+          guestTokensBySubmissionId[savedSubmissionId] = savedGuestToken;
         }
         if (result.guestToken) {
           guestTokens.push({
@@ -2698,7 +2807,9 @@ export function AlbumWizard({
           const { ok, error } = await openInicisCardPopup({
             context: isOneClick ? "oneclick" : "music",
             submissionId: submissionIds[0],
+            submissionIds,
             guestToken: guestTokens[0]?.token ?? currentGuestToken ?? undefined,
+            guestTokensBySubmissionId,
           });
           if (!ok) {
             setNotice({
@@ -2858,7 +2969,7 @@ export function AlbumWizard({
                   ) : null}
                 </div>
                 <p className="mt-2 text-xs opacity-80">
-                  멜론 링크와 음원 파일만 제출하는 간편 접수입니다.
+                  발매 완료된 앨범의 멜론 링크와 음원 파일만 제출하면 온사이드가 모든 것을 해결합니다.
                 </p>
               </button>
             </div>
@@ -4304,15 +4415,21 @@ export function AlbumWizard({
                 <div
                   key={item.label}
                   className={`rounded-2xl border px-4 py-3 text-sm ${item.ready
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100"
-                    : "border-[#f2cf27] bg-[#f2cf27]/18 text-foreground"
+                    ? "border-[#111111] bg-[#fffaf0] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27]"
+                    : "border-[#f2cf27] bg-[rgba(242,207,39,0.18)] text-foreground shadow-[3px_3px_0_rgba(17,17,17,0.2)]"
                     }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
                       {item.label}
                     </p>
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] border border-current text-[11px] font-black">
+                    <span
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-[5px] border text-[11px] font-black ${
+                        item.ready
+                          ? "border-[#1556a4] bg-[#1556a4] text-white dark:border-[#8bc3ff] dark:bg-[#8bc3ff] dark:text-[#06111f]"
+                          : "border-[#111111] bg-[#f2cf27] text-[#111111]"
+                      }`}
+                    >
                       {item.ready ? "✓" : "!"}
                     </span>
                   </div>
@@ -4389,6 +4506,31 @@ export function AlbumWizard({
               </div>
             ) : null}
 
+            {hasAdditionalAlbumDiscount ? (
+              <div className="rounded-[18px] border-2 border-[#1556a4] bg-[rgba(21,86,164,0.08)] p-4 text-foreground dark:border-[#8bc3ff] dark:bg-[#0f1d2e] sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-black">
+                      2번째 앨범부터 50% 할인 적용
+                    </p>
+                    <p className="mt-1 text-sm text-foreground/75 dark:text-[#d7e7ff]">
+                      추가 앨범 {additionalAlbumCount}건 · 앨범당{" "}
+                      <span className="line-through">
+                        {formatCurrency(basePriceKrw)}원
+                      </span>
+                      {" "}→{" "}
+                      <span className="font-black text-[#1556a4] dark:text-[#8bc3ff]">
+                        {formatCurrency(additionalPriceKrw)}원
+                      </span>
+                    </p>
+                  </div>
+                  <span className="inline-flex w-fit rounded-full bg-[#1556a4] px-3 py-1 text-xs font-black text-white dark:bg-[#8bc3ff] dark:text-[#06111f]">
+                    총 {formatCurrency(additionalAlbumDiscountTotalKrw)}원 할인
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-5 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 결제 금액
@@ -4407,12 +4549,30 @@ export function AlbumWizard({
                   </span>
                 </div>
                 {hasPaymentSummaryDiscount ? (
-                  <div className="flex items-center justify-between gap-4 text-[#1f7a5a] dark:text-emerald-300">
-                    <span>할인</span>
-                    <span className="font-black">
-                      -{formatCurrency(totalDisplayDiscountKrw)}원
-                    </span>
-                  </div>
+                  <>
+                    {albumEventDiscountTotalKrw > 0 ? (
+                      <div className="flex items-center justify-between gap-4 text-[#1556a4] dark:text-[#8bc3ff]">
+                        <span>오픈 기념 할인</span>
+                        <span className="font-black">
+                          -{formatCurrency(albumEventDiscountTotalKrw)}원
+                        </span>
+                      </div>
+                    ) : null}
+                    {hasAdditionalAlbumDiscount ? (
+                      <div className="flex items-center justify-between gap-4 text-[#1556a4] dark:text-[#8bc3ff]">
+                        <span>2번째 앨범부터 50% 할인</span>
+                        <span className="font-black">
+                          -{formatCurrency(additionalAlbumDiscountTotalKrw)}원
+                        </span>
+                      </div>
+                    ) : null}
+                    <div className="flex items-center justify-between gap-4 text-[#1556a4] dark:text-[#8bc3ff]">
+                      <span>총 할인</span>
+                      <span className="font-black">
+                        -{formatCurrency(totalDisplayDiscountKrw)}원
+                      </span>
+                    </div>
+                  </>
                 ) : null}
                 <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-3">
                   <span className="font-semibold text-foreground">결제금액</span>
@@ -4467,15 +4627,10 @@ export function AlbumWizard({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (additionalAlbumCount === 0) setPaymentMethod("CARD");
-                }}
-                disabled={additionalAlbumCount > 0}
+                onClick={() => setPaymentMethod("CARD")}
                 className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "CARD"
                   ? "border-foreground bg-foreground text-background"
-                  : additionalAlbumCount > 0
-                    ? "cursor-not-allowed border-border/40 bg-muted/40 text-muted-foreground opacity-70"
-                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                  : "border-border/60 bg-background text-foreground hover:border-foreground"
                   }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
@@ -4484,7 +4639,7 @@ export function AlbumWizard({
                 <p className="mt-2 text-sm font-semibold">카드 결제</p>
                 <p className="mt-2 text-xs opacity-80">
                   {additionalAlbumCount > 0
-                    ? "추가 앨범 할인 접수는 무통장 입금으로 진행됩니다."
+                    ? "추가 앨범 할인 금액까지 합산해 카드 결제합니다."
                     : "카드 결제로 진행할 수 있습니다."}
                 </p>
               </button>
@@ -4538,6 +4693,7 @@ export function AlbumWizard({
                       }
                       setPaymentDocumentType("CASH_RECEIPT");
                       setTaxInvoiceBusinessNumber("");
+                      clearTaxInvoiceCertificate();
                     }}
                     className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "CASH_RECEIPT"
                       ? "border-foreground bg-foreground/5 text-foreground"
@@ -4561,6 +4717,7 @@ export function AlbumWizard({
                       if (paymentDocumentType === "TAX_INVOICE") {
                         setPaymentDocumentType("");
                         setTaxInvoiceBusinessNumber("");
+                        clearTaxInvoiceCertificate();
                         return;
                       }
                       setPaymentDocumentType("TAX_INVOICE");
@@ -4586,7 +4743,7 @@ export function AlbumWizard({
                   </button>
                 </div>
                 <p className="mt-3 text-[11px] text-muted-foreground">
-                  * 결제 연관 서류는 기재해주신 이메일로 전송됩니다. 세금계산서 신청 시 사업자등록증을 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
+                  * 결제 연관 서류는 기재해주신 이메일로 전송됩니다.
                 </p>
                 {paymentDocumentType === "CASH_RECEIPT" && (
                   <div className="mt-4 space-y-3">
@@ -4665,7 +4822,7 @@ export function AlbumWizard({
                   </div>
                 )}
                 {paymentDocumentType === "TAX_INVOICE" && (
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-4 space-y-3">
                     <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       사업자번호
                     </label>
@@ -4677,9 +4834,52 @@ export function AlbumWizard({
                       placeholder="사업자번호 10자리를 입력해주세요."
                       className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                     />
-                    <p className="text-[11px] leading-5 text-muted-foreground">
-                      사업자등록증 파일은 음원 파일과 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
-                    </p>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        사업자등록증 첨부
+                      </label>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <label className="flex min-h-[48px] flex-1 cursor-pointer items-center justify-between rounded-2xl border border-dashed border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground transition hover:border-foreground hover:text-foreground">
+                          <span className="truncate">
+                            {taxInvoiceCertificateFile?.name ??
+                              "PDF, JPG, PNG 파일 선택"}
+                          </span>
+                          <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.2em]">
+                            첨부
+                          </span>
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                            className="sr-only"
+                            onChange={handleTaxInvoiceCertificateChange}
+                          />
+                        </label>
+                        {taxInvoiceCertificateFile ? (
+                          <button
+                            type="button"
+                            onClick={clearTaxInvoiceCertificate}
+                            className="rounded-2xl border border-border/70 px-4 py-3 text-xs font-semibold text-muted-foreground transition hover:border-foreground hover:text-foreground"
+                          >
+                            삭제
+                          </button>
+                        ) : null}
+                      </div>
+                      {taxInvoiceCertificateUpload ? (
+                        <p className="text-[11px] leading-5 text-muted-foreground">
+                          {taxInvoiceCertificateUpload.status === "uploading"
+                            ? `업로드 중 ${taxInvoiceCertificateUpload.progress}%`
+                            : taxInvoiceCertificateUpload.status === "done"
+                              ? "사업자등록증 첨부 완료"
+                              : taxInvoiceCertificateUpload.status === "error"
+                                ? "사업자등록증 업로드 실패"
+                                : "선택된 파일은 제출 시 업로드됩니다."}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] leading-5 text-muted-foreground">
+                          세금계산서 발급을 위해 사업자등록증을 첨부해주세요.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

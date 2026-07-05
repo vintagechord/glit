@@ -141,9 +141,12 @@ const stageStatusMap = {
 function shouldOpenResultModal(
   review: StationItem,
   summary: ReturnType<typeof summarizeTrackResults>,
+  submission?: SubmissionSummary | null,
 ) {
   const normalizedStatus = normalizeStationReviewStatus(review.status);
+  const mvReviewAssets = buildMvReviewAssetState(submission);
   return (
+    Boolean(mvReviewAssets?.hasResultSignal && mvReviewAssets.hasRating) ||
     summary.counts.total > 0 ||
     Boolean(review.result_note?.trim()) ||
     ["APPROVED", "REJECTED", "NEEDS_FIX"].includes(normalizedStatus)
@@ -157,13 +160,17 @@ function buildResultModalState(
   submission?: SubmissionSummary | null,
 ): TrackResultModalState {
   const mvReviewAssets = buildMvReviewAssetState(submission);
+  const modalMvReviewAssets =
+    mvReviewAssets?.hasResultSignal && mvReviewAssets.hasRating
+      ? mvReviewAssets
+      : null;
   return {
     stationName: review.station?.name ?? "-",
     summary,
     resultNote: review.result_note?.trim() || null,
     resultLabel: result.label,
     resultTone: result.tone,
-    ...(mvReviewAssets ? { mvReviewAssets } : {}),
+    ...(modalMvReviewAssets ? { mvReviewAssets: modalMvReviewAssets } : {}),
   };
 }
 
@@ -220,12 +227,38 @@ function getDisplayStatusForReview(
   }
   return {
     ...status,
-    label: mvAssets.ratingLabel,
+    label: mvAssets.ratingCode === "REJECT" ? "부적격" : "적격",
     tone:
       mvAssets.ratingCode === "REJECT"
         ? "bauhaus-status-chip--danger"
         : "bauhaus-status-chip--success",
     summaryText: null,
+    isComplete: true,
+    needsAttention: mvAssets.ratingCode === "REJECT",
+  };
+}
+
+function buildMvFallbackStation(submission: SubmissionSummary): StationItem {
+  const hasResultSignal = hasSubmissionResultSignal(submission);
+  const status = hasResultSignal
+    ? submission.mv_desired_rating?.trim() === "REJECT"
+      ? "REJECTED"
+      : "APPROVED"
+    : submission.payment_status === "PAID"
+      ? "SENT"
+      : "NOT_SENT";
+  return {
+    id: `fallback-${submission.id}`,
+    status,
+    updated_at: submission.updated_at,
+    track_results: null,
+    result_note: null,
+    station: {
+      id: null,
+      name: "영상물등급위원회",
+      code: null,
+      logo_url: null,
+    },
   };
 }
 
@@ -378,13 +411,15 @@ function StationLogo({
 
   if (src) {
     return (
-      <span className={`${visibilityClass} h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-white shadow-sm`}>
+      <span
+        className={`${visibilityClass} h-9 w-[84px] shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-border/60 bg-white p-1.5 shadow-sm sm:h-10 sm:w-[104px]`}
+      >
         <Image
           src={src}
           alt={station?.name ?? station?.code ?? "station logo"}
-          width={28}
-          height={28}
-          className="h-7 w-auto max-w-7 object-contain"
+          width={104}
+          height={40}
+          className="h-full w-full object-contain"
           unoptimized
           loading="lazy"
           onError={handleError}
@@ -396,11 +431,11 @@ function StationLogo({
   const badge = stationBadgeMap[key] ?? { label: key || "-", color: "#111", bg: "#e5e7eb" };
   return (
     <span
-      className={`${visibilityClass} h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold uppercase`}
+      className={`${visibilityClass} h-9 w-[84px] shrink-0 items-center justify-center rounded-[8px] border border-border/60 text-[10px] font-bold uppercase sm:h-10 sm:w-[104px]`}
       style={{ color: badge.color, backgroundColor: badge.bg }}
       aria-hidden
     >
-      {badge.label.slice(0, 4)}
+      {badge.label.slice(0, 8)}
     </span>
   );
 }
@@ -579,9 +614,15 @@ export function HomeReviewPanel({
   const activeSubmission =
     activeList.length > 0 ? activeList[Math.min(activeIndex, activeList.length - 1)] : null;
   const activeSubmissionId = activeSubmission?.id;
-  const activeStations = activeSubmissionId
+  const storedActiveStations = activeSubmissionId
     ? activeStationsMap[activeSubmissionId] ?? []
     : [];
+  const activeStations =
+    storedActiveStations.length > 0
+      ? storedActiveStations
+      : activeSubmission?.type === "MV_DISTRIBUTION"
+        ? [buildMvFallbackStation(activeSubmission)]
+        : storedActiveStations;
   const submissionLabels = getSubmissionLabels(activeSubmission);
   const isLive =
     (forceLiveBadge && isLoggedIn) ||
@@ -684,61 +725,12 @@ export function HomeReviewPanel({
 
   const needsPayment =
     Boolean(activeSubmission) && activeSubmission?.payment_status !== "PAID";
-  const isActiveMvSubmission =
-    activeSubmission?.type === "MV_DISTRIBUTION" ||
-    activeSubmission?.type === "MV_BROADCAST";
-  const activeMvAssets = buildMvReviewAssetState(activeSubmission);
-  const activeMvResultReady =
-    isActiveMvSubmission && hasSubmissionResultSignal(activeSubmission);
-  const activeMvReceptionStarted =
-    isActiveMvSubmission &&
-    !needsPayment &&
-    (activeSubmission?.status === "IN_PROGRESS" ||
-      activeSubmission?.status === "RESULT_READY" ||
-      activeSubmission?.status === "COMPLETED" ||
-      activeStations.some((station) => {
-        const normalized = normalizeStationReviewStatus(station.status);
-        return (
-          normalized === "SENT" ||
-          normalized === "APPROVED" ||
-          normalized === "REJECTED" ||
-          normalized === "NEEDS_FIX"
-        );
-      }) ||
-      activeMvResultReady);
-  const mvCompletedStepCount = activeSubmission && isActiveMvSubmission
-    ? [
-        true,
-        !needsPayment,
-        activeMvReceptionStarted,
-        activeMvResultReady,
-      ].filter(Boolean).length
-    : 0;
-  const mvFlowSteps = [
-    { label: "신청 완료", done: Boolean(activeSubmission), active: false },
-    {
-      label: "결제 완료",
-      done: Boolean(activeSubmission) && !needsPayment,
-      active: Boolean(activeSubmission) && needsPayment,
-    },
-    {
-      label: "접수 진행",
-      done: activeMvReceptionStarted || activeMvResultReady,
-      active:
-        Boolean(activeSubmission) &&
-        !needsPayment &&
-        !activeMvReceptionStarted &&
-        !activeMvResultReady,
-    },
-    {
-      label: "결과 통보",
-      done: activeMvResultReady,
-      active: activeMvReceptionStarted && !activeMvResultReady,
-    },
-  ];
   const totalCount = needsPayment ? 0 : activeStations.length;
   const activeStationDisplayStatuses = activeStations.map((review) =>
-    getStationReviewDisplayStatus(review, { showPartialTrackBreakdown }),
+    getDisplayStatusForReview(
+      getStationReviewDisplayStatus(review, { showPartialTrackBreakdown }),
+      activeSubmission,
+    ),
   );
   const completedCount = needsPayment
     ? 0
@@ -748,12 +740,8 @@ export function HomeReviewPanel({
     activeStationDisplayStatuses.some((status) => status.needsAttention);
   const stationProgressPercent =
     totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-  const progressPercent = isActiveMvSubmission
-    ? Math.round((mvCompletedStepCount / 4) * 100)
-    : stationProgressPercent;
-  const progressText = isActiveMvSubmission
-    ? `4단계 중 ${mvCompletedStepCount}단계 완료 · ${progressPercent}%`
-    : `${totalCount}곳 중 ${completedCount}곳 완료 · ${progressPercent}%`;
+  const progressPercent = stationProgressPercent;
+  const progressText = `${totalCount}곳 중 ${completedCount}곳 완료 · ${progressPercent}%`;
   const isAlbumStatusContext = tab === "album" || activeSubmission?.type === "ALBUM";
   const hasAllStationResults =
     !needsPayment && totalCount > 0 && completedCount === totalCount;
@@ -764,15 +752,7 @@ export function HomeReviewPanel({
     totalCount > 0 &&
     !hasAllStationResults;
   const currentSubmissionStatus =
-    isActiveMvSubmission
-      ? needsPayment
-        ? getStageStatus(activeSubmission)
-        : activeMvResultReady
-          ? stageStatusMap.completed
-          : activeMvReceptionStarted
-            ? stageStatusMap.progress
-            : stageStatusMap.received
-      : hasPendingAlbumStationResults
+    hasPendingAlbumStationResults
       ? stageStatusMap.received
       : isAlbumStatusContext && hasAllStationResults
         ? stageStatusMap.completed
@@ -811,8 +791,8 @@ export function HomeReviewPanel({
     ? "h-7 w-7 text-[11px]"
     : "h-8 w-8 text-xs";
   const tableHeaderClass = compact
-    ? "hidden grid-cols-[minmax(0,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:grid"
-    : "hidden grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid";
+    ? "hidden grid-cols-[minmax(112px,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:grid"
+    : "hidden grid-cols-[minmax(132px,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid";
   const mobileTableHeaderClass = compact
     ? "grid grid-cols-[minmax(0,1fr)_minmax(92px,100px)_56px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:hidden"
     : "grid grid-cols-[minmax(0,1fr)_minmax(100px,112px)_64px] items-center gap-2 border-b border-border/60 bg-muted/40 px-2 py-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground sm:hidden";
@@ -820,8 +800,8 @@ export function HomeReviewPanel({
     ? "px-2 py-2"
     : "px-2.5 py-2.5 sm:px-3 sm:py-3";
   const desktopStationRowClass = compact
-    ? "grid min-h-[46px] grid-cols-[minmax(0,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-1.5 text-xs"
-    : "grid min-h-[52px] grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-sm";
+    ? "grid min-h-[56px] grid-cols-[minmax(112px,1.4fr)_minmax(92px,0.8fr)_80px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-2 py-2 text-xs"
+    : "grid min-h-[62px] grid-cols-[minmax(132px,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2.5 text-sm";
   const mobileStationRowClass = compact
     ? "grid min-h-[48px] grid-cols-[minmax(0,1fr)_minmax(92px,100px)_56px] items-center gap-2 px-2 py-1.5 text-xs"
     : "grid min-h-[52px] grid-cols-[minmax(0,1fr)_minmax(100px,112px)_64px] items-center gap-2 px-2 py-2 text-sm";
@@ -1168,9 +1148,8 @@ export function HomeReviewPanel({
         <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass} ${stationSectionClass}`}>
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">
-              {isActiveMvSubmission ? "결과 통보" : "방송국별 현황"}
+              방송국별 현황
             </p>
-            {!isActiveMvSubmission ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1191,51 +1170,9 @@ export function HomeReviewPanel({
                 ↓
               </button>
             </div>
-            ) : null}
           </div>
           <div className={stationTableShellClass}>
-            {isActiveMvSubmission ? (
-              <div className="space-y-3 px-3 py-3 text-sm">
-                <div className="grid gap-2 sm:grid-cols-4">
-                  {mvFlowSteps.map((step, index) => (
-                    <div
-                      key={step.label}
-                      className={[
-                        "rounded-xl border px-3 py-2",
-                        step.done
-                          ? "border-[#1f7a5a]/40 bg-[#1f7a5a]/10 text-[#1f7a5a] dark:text-[#75d2a5]"
-                          : step.active
-                            ? "border-[#f2cf27] bg-[#f2cf27]/30 text-[#111111] dark:text-[#f7f5ef]"
-                            : "border-border/60 bg-background text-muted-foreground",
-                      ].join(" ")}
-                    >
-                      <p className="text-[11px] font-black uppercase tracking-normal">
-                        {index + 1}
-                      </p>
-                      <p className="mt-1 font-semibold">{step.label}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="rounded-xl border border-border/60 bg-background/80 px-3 py-3">
-                  <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-                    결과 등급
-                  </p>
-                  <p className="mt-2 font-semibold text-foreground">
-                    {activeMvAssets?.hasResultSignal && activeMvAssets.hasRating
-                      ? activeMvAssets.ratingLabel
-                      : activeMvResultReady
-                        ? "결과 통보 완료"
-                        : "결과 통보 대기"}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {activeMvAssets?.hasResultSignal && activeMvAssets.hasRating
-                      ? "상세 화면에서 심의등급 이미지, 필증, 사용 가이드를 다운로드할 수 있습니다."
-                      : "담당자가 결과 등급을 통보하면 다운로드 자료가 표시됩니다."}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
+            <>
             <div className={tableHeaderClass}>
               <span className="justify-self-center text-center">방송국</span>
               <span className="justify-self-center text-center">현재 상태</span>
@@ -1275,6 +1212,7 @@ export function HomeReviewPanel({
                         const canOpenResultModal = shouldOpenResultModal(
                           station,
                           summary,
+                          activeSubmission,
                         );
                         const displayStatus = getDisplayStatusForReview(
                           currentStatus,
@@ -1367,6 +1305,7 @@ export function HomeReviewPanel({
                         const canOpenResultModal = shouldOpenResultModal(
                           station,
                           summary,
+                          activeSubmission,
                         );
                         const displayStatus = getDisplayStatusForReview(
                           currentStatus,
@@ -1448,6 +1387,7 @@ export function HomeReviewPanel({
                         const canOpenResultModal = shouldOpenResultModal(
                           station,
                           summary,
+                          activeSubmission,
                         );
                         const displayStatus = getDisplayStatusForReview(
                           currentStatus,
@@ -1531,7 +1471,6 @@ export function HomeReviewPanel({
               </div>
             )}
               </>
-            )}
           </div>
           {activeSubmission && showDetailLink ? (
             <div className="mt-4 flex justify-center">

@@ -36,6 +36,24 @@ const subtleButtonClass =
 const primaryButtonClass =
   "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-white dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 
+const englishRoutePrefixes = [
+  "/dashboard",
+  "/mypage",
+  "/track",
+  "/submissions",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/magazine",
+  "/guide",
+  "/faq",
+  "/support",
+  "/forms",
+  "/about",
+  "/apply",
+];
+
 const isActivePath = (
   pathname: string,
   href: string,
@@ -48,13 +66,39 @@ const isActivePath = (
   return pathname === href || pathname.startsWith(`${href}/`);
 };
 
+const supportsEnglishRoute = (pathname: string) =>
+  pathname === "/" ||
+  englishRoutePrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+
+const toEnglishPath = (pathname: string) => {
+  if (pathname === "/") return "/en";
+  if (pathname === "/en" || pathname.startsWith("/en/")) return pathname;
+  return supportsEnglishRoute(pathname) ? `/en${pathname}` : "/en";
+};
+
+const toKoreanPath = (pathname: string) => {
+  if (pathname === "/en") return "/";
+  if (pathname.startsWith("/en/")) return pathname.slice(3) || "/";
+  return pathname;
+};
+
 export function SiteHeader() {
   const pathname = usePathname();
   const headerRef = React.useRef<HTMLElement | null>(null);
   const [authState, setAuthState] = React.useState<AuthState>("unauthenticated");
+  const [locationSuffix, setLocationSuffix] = React.useState("");
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const activeNavLinks = isEnglishRoute ? englishNavLinks : navLinks;
-  const languageHref = isEnglishRoute ? "/" : "/en";
+  const languagePath = isEnglishRoute
+    ? toKoreanPath(pathname)
+    : toEnglishPath(pathname);
+  const languageHref = `${languagePath}${locationSuffix}`;
+
+  React.useEffect(() => {
+    setLocationSuffix(`${window.location.search}${window.location.hash}`);
+  }, [pathname]);
 
   const handleLanguageClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
@@ -69,9 +113,11 @@ export function SiteHeader() {
       }
 
       event.preventDefault();
-      window.location.assign(languageHref);
+      window.location.assign(
+        `${languagePath}${window.location.search}${window.location.hash}`,
+      );
     },
-    [languageHref],
+    [languagePath],
   );
 
   React.useEffect(() => {

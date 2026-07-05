@@ -4,6 +4,7 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 
 const exactTranslations: Record<string, string> = {
+  "본문으로 바로가기": "Skip to content",
   "심의 신청": "Apply",
   "진행/결과 조회": "Results",
   "매거진 발행": "Magazine",
@@ -22,6 +23,8 @@ const exactTranslations: Record<string, string> = {
   "로그인": "Login",
   "로그아웃": "Logout",
   "마이페이지": "My Page",
+  "마이페이지 - 나의 크레딧": "My Page - My Credits",
+  "마이페이지 - 나의 크레딧 | 온사이드": "My Page - My Credits | Onside",
   "실시간 채팅": "Live Chat",
   "온사이드 실시간 채팅": "Onside Live Chat",
   "관리자와 바로 대화할 수 있습니다.": "Chat directly with the admin.",
@@ -92,6 +95,8 @@ const exactTranslations: Record<string, string> = {
   "접수 방식을 선택하면 바로 신청서를 작성할 수 있습니다.":
     "Choose a submission method to start the application form.",
   "알아보기": "Learn More",
+  "준비물 보기": "View Materials",
+  "기존 사이트 접수": "Legacy Site Submission",
   "진행 중": "In Progress",
   "Review 진행중": "Review in Progress",
   "패키지를 선택하세요.": "Select a Package.",
@@ -112,6 +117,8 @@ const exactTranslations: Record<string, string> = {
     "A simpler submission using only the Melon link and audio files.",
   "멜론 링크와 음원 파일만 제출하는 간편 접수입니다.":
     "A simpler submission using only the Melon link and audio files.",
+  "발매 완료된 앨범의 멜론 링크와 음원 파일만 제출하면 온사이드가 모든 것을 해결합니다.":
+    "Submit only the Melon link and audio files for a released album, and Onside handles the rest.",
   "핵심 Broadcaster 3개 Review Submission":
     "Core 3-Broadcaster Review Submission",
   "주요 Broadcaster 7개 Review Submission":
@@ -300,11 +307,27 @@ const exactTranslations: Record<string, string> = {
   "접수 현황": "Submission Status",
   "작성중 신청서": "Draft Application Forms",
   "나의 심의 내역": "My Review History",
+  "나의 크레딧": "My Credits",
   "보유 크레딧": "Available Credits",
   "음반심의 결제 완료 건으로 발급되는 온사이드 크레딧을 확인하고 사용하세요.":
     "Check and use Onside credits issued from completed album review payments.",
+  "음반심의 결제 완료 건으로 적립된 크레딧을 매거진 발행이나 서비스 이용권으로 사용할 수 있습니다.":
+    "Use credits earned from paid album reviews for magazine publication or service requests.",
+  "음반심의 결제 완료 건으로 적립된 크레딧을 매거진 발행이나 서비스 이용 요청에 사용할 수 있습니다.":
+    "Use credits earned from paid album reviews for magazine publication or service requests.",
   "온사이드의 크레딧으로 필요한 서비스를 이용하세요.":
     "Use Onside credits for the services you need.",
+  "결제 완료 음반심의 1건 = 1크레딧":
+    "1 paid album review = 1 credit",
+  "적립 크레딧은 매거진 발행, 녹음실 이용권 등으로 사용 가능합니다.":
+    "Earned credits can be used for magazine publication, studio passes, and more.",
+  "총 적립": "Total Earned",
+  "결제 완료 및 지급 크레딧": "Paid and Issued Credits",
+  "지금 교환 가능한 잔여 크레딧": "Credits Currently Available",
+  "매거진 사용": "Magazine Use",
+  "매거진 발행 요청에 사용": "Used for magazine requests",
+  "이용권 사용": "Service Use",
+  "서비스 이용 요청에 사용": "Used for service requests",
   "앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 워터멜론 매거진 발행 요청과 온사이드 연계 서비스 이용에 사용할 수 있습니다.":
     "Each completed album review payment issues 1 credit. Credits can be used for Watermelon magazine requests and Onside partner services.",
   "앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 매거진 발행, 녹음실 이용권 등 관리자가 등록한 온사이드 연계 서비스에 사용할 수 있습니다.":
@@ -347,18 +370,36 @@ const exactTranslations: Record<string, string> = {
   "크레딧 이용권이 발행되었습니다. 쿠폰코드를 확인해주세요.":
     "Your credit voucher has been issued. Please check the coupon code.",
   "서비스 이용권 발행 완료": "Service Voucher Issued",
+  "서비스 이용 요청 접수": "Service Request Received",
+  "서비스 이용 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.":
+    "Your service request has been received. Instructions will appear after admin approval.",
   "녹음실 사용 신청 완료": "Studio Use Request Submitted",
   "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.":
     "Your studio reservation request has been submitted. Guidance will be shown after admin approval.",
   "적어주신 연락처로 녹음실 사용 안내를 드립니다.":
     "Studio use guidance will be sent to the contact details you entered.",
+  "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.\n적어주신 연락처로 녹음실 사용 안내를 드립니다.":
+    "Your studio booking request has been received. Instructions will appear after admin approval.\nWe will contact you using the contact details you provided.",
   "크레딧 사용 완료": "Credit Use Complete",
   "요청 내역 보기": "View Request History",
   "크레딧 요청 내역 보기": "View Credit Request History",
+  "크레딧 사용 요청 내역": "Credit Use Request History",
   "서비스 이용 신청": "Service Use Request",
+  "서비스 이용 요청": "Service Request",
   "크레딧 사용해서 신청": "Request with Credits",
   "서비스 이용권 신청": "Service Voucher Requests",
+  "녹음실 등 연계 서비스 신청":
+    "Request linked services such as studios",
+  "서비스별 차감": "Varies by service",
+  "요청 접수": "Request Received",
+  "요청접수": "Request Received",
   "승인/안내 완료": "Approved / Guidance Sent",
+  "작성 중": "Writing",
+  "사용 완료": "Used",
+  "사용완료": "Used",
+  "취소됨": "Canceled",
+  "국내뉴스": "Domestic News",
+  "미디어": "Media",
   "서비스 위치 미입력": "Service Location Missing",
   "사용완료된 이용권": "Used Vouchers",
   "아직 사용완료된 이용권이 없습니다.": "There are no used vouchers yet.",
@@ -367,6 +408,21 @@ const exactTranslations: Record<string, string> = {
     "1 credit is automatically earned for each paid album review.",
   "아직 크레딧으로 적립된 음반심의 결제 건이 없습니다.":
     "There are no paid album reviews that earned credits yet.",
+  "아직 크레딧으로 접수한 매거진 발행 또는 서비스 이용권 신청이 없습니다.":
+    "There are no magazine publication or service requests submitted with credits yet.",
+  "아직 크레딧으로 접수한 매거진 발행 또는 서비스 이용 요청이 없습니다.":
+    "There are no magazine publication or service requests submitted with credits yet.",
+  "발행 페이지 보기": "View Published Page",
+  "관리자 메모": "Admin Memo",
+  "녹음실 위치 보기": "View Studio Location",
+  "희망 날짜": "Preferred Date",
+  "희망 시간": "Preferred Time",
+  "요청사항": "Request Notes",
+  "희망 시간대, 이용 목적, 안내받을 내용 등을 함께 적어주세요.":
+    "Enter your preferred time, purpose of use, and any details you need guidance on.",
+  "크레딧 적립 내역 페이지": "Credit earning history page",
+  "이전 페이지": "Previous page",
+  "다음 페이지": "Next page",
   "크레딧 이용권, 매거진 발행 요청, 서비스 이용권 신청을 관리합니다.":
     "Manage credit vouchers, magazine requests, and service voucher requests.",
   "사용처 선택": "Choose How to Use Credits",
@@ -385,6 +441,15 @@ const exactTranslations: Record<string, string> = {
   "크레딧 부족": "Not Enough Credits",
   "현재 교환 가능한 서비스 이용권이 없습니다. 관리자 등록 후 이 탭에 서비스가 표시됩니다.":
     "There are no service vouchers available right now. Services will appear here after an admin registers them.",
+  "현재 신청 가능한 서비스가 없습니다.": "There are no services available right now.",
+  "서비스 사용": "Service Use",
+  "크레딧 서비스 관리": "Credit Service Management",
+  "크레딧 사용 서비스와 요청 접수를 관리합니다.":
+    "Manage credit-use services and submitted requests.",
+  "등록된 서비스": "Registered Services",
+  "새 서비스 등록": "Add New Service",
+  "서비스명": "Service Name",
+  "사용자에게 보이는 서비스 설명": "Service description shown to users",
   "보유 크레딧에서 발행 내역 보기": "View Issued Vouchers in Available Credits",
   "계정정보": "Account Info",
   "접수한 심의의 현재 상태를 확인할 수 있습니다.":
@@ -564,6 +629,7 @@ const exactTranslations: Record<string, string> = {
   "제출": "Submit",
   "접수하기": "Submit",
   "신청하기": "Apply",
+  "확인": "OK",
   "현재 파일": "Current File",
   "다운로드": "Download",
   "심의 상세": "Review Detail",
@@ -976,6 +1042,15 @@ const exactTranslations: Record<string, string> = {
 const phraseTranslations: Array<[RegExp, string]> = [
   [/진행률\s*:\s*총\s*(\d+)곳\s*중\s*(\d+)곳\s*완료/g, "Progress: $2 of $1 completed"],
   [/총\s*(\d+)곳\s*중\s*(\d+)곳\s*완료/g, "$2 of $1 completed"],
+  [/보유\s*크레딧\s*([\d,]+)개/g, "$1 available credits"],
+  [/총\s*([\d,]+)건/g, "Total $1"],
+  [/요청일\s*/g, "Requested "],
+  [/희망일\s*/g, "Preferred date "],
+  [/사용완료\s*/g, "Used "],
+  [/발매일\s*/g, "Release date "],
+  [/적립일\s*/g, "Earned "],
+  [/관리자\s*메모\s*:/g, "Admin memo:"],
+  [/\+1\s*크레딧/g, "+1 credit"],
   [/Copyright © \(주\)Vintage House\. All Rights Reserved\./g, "Copyright © Vintage House Co., Ltd. All Rights Reserved."],
   [/\(주\)Vintage House/g, "Vintage House Co., Ltd."],
   [/\(주\)빈티지하우스/g, "Vintage House Co., Ltd."],
@@ -1065,7 +1140,7 @@ const phraseTranslations: Array<[RegExp, string]> = [
   [/총 결제금액/g, "Total Payment Amount"],
   [/진행중 (\d+)건/g, "$1 active"],
   [/(\d+)곡 대기/g, "$1 tracks pending"],
-  [/(\d+)건/g, "$1 items"],
+  [/([\d,]+)건/g, "$1 items"],
   [/접수한 심의/g, "Submitted reviews"],
   [/아티스트 미입력/g, "Artist not entered"],
   [/제목 미입력/g, "Title not entered"],
@@ -1113,6 +1188,11 @@ const phraseTranslations: Array<[RegExp, string]> = [
   [/접수/g, "Submission"],
   [/결제/g, "Payment"],
   [/결과/g, "Result"],
+  [/크레딧/g, "credits"],
+  [/관리자/g, "admin"],
+  [/매거진/g, "magazine"],
+  [/이용권/g, "service pass"],
+  [/요청/g, "request"],
   [
     /\b([A-Za-z][A-Za-z0-9 /&().,'-]*)(?:을|를|이|가|은|는|와|과|의|에서|으로|로|에|까지|부터|만|도|용|용은|용과|가|를)\b/g,
     "$1",
@@ -1228,6 +1308,7 @@ function englishPathFor(pathname: string) {
     "/dashboard",
     "/mypage",
     "/track",
+    "/submissions",
     "/login",
     "/signup",
     "/forgot-password",
@@ -1237,6 +1318,8 @@ function englishPathFor(pathname: string) {
     "/faq",
     "/support",
     "/forms",
+    "/about",
+    "/apply",
   ];
   const match = prefixes.find(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -1277,6 +1360,13 @@ function localizeLinks(root: ParentNode) {
   });
 }
 
+function translateDocumentMetadata() {
+  const nextTitle = translateValue(document.title);
+  if (nextTitle !== document.title) {
+    document.title = nextTitle;
+  }
+}
+
 export function EnglishLanguagePack() {
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
@@ -1287,6 +1377,7 @@ export function EnglishLanguagePack() {
     document.documentElement.lang = "en";
 
     const apply = (root: ParentNode = document.body) => {
+      translateDocumentMetadata();
       walkAndTranslate(root);
       localizeLinks(root);
     };
@@ -1397,6 +1488,7 @@ export function EnglishLanguagePack() {
       document.removeEventListener("click", handleClick, true);
       window.alert = originalAlert;
       window.confirm = originalConfirm;
+      document.documentElement.lang = "ko";
     };
   }, [isEnglishRoute, pathname]);
 

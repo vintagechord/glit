@@ -289,10 +289,10 @@ export default async function AdminPage() {
             크레딧
           </p>
           <h2 className="mt-3 text-xl font-semibold text-foreground">
-            크레딧/쿠폰 관리
+            크레딧 서비스 관리
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            크레딧 이용권, 매거진 발행 요청, 서비스 이용권 신청을 관리합니다.
+            크레딧 사용 서비스와 요청 접수를 관리합니다.
           </p>
         </Link>
         <Link

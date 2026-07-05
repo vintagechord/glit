@@ -8,6 +8,10 @@ import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { openInicisCardPopup } from "@/lib/inicis/popup";
 import {
+  isBusinessRegistrationFile,
+  uploadSubmissionEtcFile,
+} from "@/lib/submission-etc-upload";
+import {
   buildInlineTranslatedLyrics,
   collectForeignLyricsSegments,
   requestLyricsTranslations,
@@ -356,6 +360,10 @@ export function MvWizard({
     React.useState("");
   const [taxInvoiceBusinessNumber, setTaxInvoiceBusinessNumber] =
     React.useState("");
+  const [taxInvoiceCertificateFile, setTaxInvoiceCertificateFile] =
+    React.useState<File | null>(null);
+  const [taxInvoiceCertificateUpload, setTaxInvoiceCertificateUpload] =
+    React.useState<UploadItem | null>(null);
   const [files, setFiles] = React.useState<File[]>([]);
   const [uploads, setUploads] = React.useState<UploadItem[]>([]);
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadResult[]>([]);
@@ -986,6 +994,87 @@ export function MvWizard({
     if (dropped.length === 0) return;
     setIsDraggingOver(false);
     addFiles(dropped);
+  };
+
+  const handleTaxInvoiceCertificateChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+    if (!isBusinessRegistrationFile(file.name, file.type)) {
+      setNotice({
+        error: "사업자등록증은 PDF, JPG, PNG, WEBP 파일로 첨부해주세요.",
+      });
+      return;
+    }
+    setTaxInvoiceCertificateFile(file);
+    setTaxInvoiceCertificateUpload({
+      name: file.name,
+      size: file.size,
+      progress: 0,
+      status: "pending",
+      mime: file.type,
+    });
+    setNotice({});
+  };
+
+  const clearTaxInvoiceCertificate = () => {
+    setTaxInvoiceCertificateFile(null);
+    setTaxInvoiceCertificateUpload(null);
+  };
+
+  const uploadTaxInvoiceCertificate = async (
+    submissionId: string,
+    titleForUpload: string,
+  ) => {
+    if (!taxInvoiceCertificateFile) return null;
+    setTaxInvoiceCertificateUpload({
+      name: taxInvoiceCertificateFile.name,
+      size: taxInvoiceCertificateFile.size,
+      progress: 0,
+      status: "uploading",
+      mime: taxInvoiceCertificateFile.type,
+    });
+    try {
+      const uploaded = await uploadSubmissionEtcFile({
+        file: taxInvoiceCertificateFile,
+        submissionId,
+        guestToken: isGuest ? guestTokenRef.current ?? undefined : undefined,
+        title: `${titleForUpload || "mv-tax-invoice"}-business-registration`,
+        onProgress: (progress) =>
+          setTaxInvoiceCertificateUpload({
+            name: taxInvoiceCertificateFile.name,
+            size: taxInvoiceCertificateFile.size,
+            progress,
+            status: "uploading",
+            mime: taxInvoiceCertificateFile.type,
+          }),
+      });
+      setTaxInvoiceCertificateUpload({
+        name: taxInvoiceCertificateFile.name,
+        size: taxInvoiceCertificateFile.size,
+        progress: 100,
+        status: "done",
+        path: uploaded.path,
+        mime: taxInvoiceCertificateFile.type,
+      });
+      return uploaded;
+    } catch (error) {
+      setTaxInvoiceCertificateUpload({
+        name: taxInvoiceCertificateFile.name,
+        size: taxInvoiceCertificateFile.size,
+        progress: 0,
+        status: "error",
+        mime: taxInvoiceCertificateFile.type,
+      });
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "사업자등록증 업로드 중 오류가 발생했습니다.";
+      setNotice({ error: message });
+      throw new Error(message);
+    }
   };
 
   const sleep = (ms: number) =>
@@ -2042,6 +2131,10 @@ export function MvWizard({
         setNotice({ error: "사업자번호는 숫자 10자리로 입력해주세요." });
         return false;
       }
+      if (!taxInvoiceCertificateFile) {
+        setNotice({ error: "세금계산서 발급용 사업자등록증을 첨부해주세요." });
+        return false;
+      }
     }
     return true;
   };
@@ -2391,6 +2484,16 @@ export function MvWizard({
     try {
       const uploaded = uploads.length > 0 ? await uploadFiles() : [];
       const submissionPaymentMethod = deferPayment ? "BANK" : paymentMethod;
+      if (
+        !deferPayment &&
+        submissionPaymentMethod === "BANK" &&
+        paymentDocumentType === "TAX_INVOICE"
+      ) {
+        await uploadTaxInvoiceCertificate(
+          submissionId,
+          titleValue || songTitleOfficialValue || "mv",
+        );
+      }
       const result = await saveMvSubmissionAction({
         submissionId,
         amountKrw: totalAmount,
@@ -4133,6 +4236,7 @@ export function MvWizard({
                       }
                       setPaymentDocumentType("CASH_RECEIPT");
                       setTaxInvoiceBusinessNumber("");
+                      clearTaxInvoiceCertificate();
                     }}
                     className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${paymentDocumentType === "CASH_RECEIPT"
                       ? "border-foreground bg-foreground/5 text-foreground"
@@ -4156,6 +4260,7 @@ export function MvWizard({
                       if (paymentDocumentType === "TAX_INVOICE") {
                         setPaymentDocumentType("");
                         setTaxInvoiceBusinessNumber("");
+                        clearTaxInvoiceCertificate();
                         return;
                       }
                       setPaymentDocumentType("TAX_INVOICE");
@@ -4181,7 +4286,7 @@ export function MvWizard({
                   </button>
                 </div>
                 <p className="mt-3 text-[11px] text-muted-foreground">
-                  * 결제 연관 서류는 기재해주신 이메일로 전송됩니다. 세금계산서 신청 시 사업자등록증을 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
+                  * 결제 연관 서류는 기재해주신 이메일로 전송됩니다.
                 </p>
                 {paymentDocumentType === "CASH_RECEIPT" && (
                   <div className="mt-4 space-y-3">
@@ -4260,7 +4365,7 @@ export function MvWizard({
                   </div>
                 )}
                 {paymentDocumentType === "TAX_INVOICE" && (
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-4 space-y-3">
                     <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       사업자번호
                     </label>
@@ -4272,9 +4377,52 @@ export function MvWizard({
                       placeholder="사업자번호 10자리를 입력해주세요."
                       className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                     />
-                    <p className="text-[11px] leading-5 text-muted-foreground">
-                      사업자등록증 파일은 영상 파일과 함께 첨부하거나 {APP_CONFIG.supportEmail}로 보내주세요.
-                    </p>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        사업자등록증 첨부
+                      </label>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <label className="flex min-h-[48px] flex-1 cursor-pointer items-center justify-between rounded-2xl border border-dashed border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground transition hover:border-foreground hover:text-foreground">
+                          <span className="truncate">
+                            {taxInvoiceCertificateFile?.name ??
+                              "PDF, JPG, PNG 파일 선택"}
+                          </span>
+                          <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.2em]">
+                            첨부
+                          </span>
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                            className="sr-only"
+                            onChange={handleTaxInvoiceCertificateChange}
+                          />
+                        </label>
+                        {taxInvoiceCertificateFile ? (
+                          <button
+                            type="button"
+                            onClick={clearTaxInvoiceCertificate}
+                            className="rounded-2xl border border-border/70 px-4 py-3 text-xs font-semibold text-muted-foreground transition hover:border-foreground hover:text-foreground"
+                          >
+                            삭제
+                          </button>
+                        ) : null}
+                      </div>
+                      {taxInvoiceCertificateUpload ? (
+                        <p className="text-[11px] leading-5 text-muted-foreground">
+                          {taxInvoiceCertificateUpload.status === "uploading"
+                            ? `업로드 중 ${taxInvoiceCertificateUpload.progress}%`
+                            : taxInvoiceCertificateUpload.status === "done"
+                              ? "사업자등록증 첨부 완료"
+                              : taxInvoiceCertificateUpload.status === "error"
+                                ? "사업자등록증 업로드 실패"
+                                : "선택된 파일은 제출 시 업로드됩니다."}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] leading-5 text-muted-foreground">
+                          세금계산서 발급을 위해 사업자등록증을 첨부해주세요.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -966,25 +966,12 @@ export async function saveAlbumSubmissionAction(
           guestToken: parsed.data.guestToken ?? null,
           basePriceKrw: serverBasePriceKrw,
         }));
-      if (paymentMethod === "CARD" && hasRecentBaseAlbum) {
-        return {
-          error:
-            "여러 앨범 동시 접수의 카드 결제는 아직 지원하지 않습니다. 무통장 입금으로 진행해주세요.",
-        };
-      }
       const canUseAdditionalDiscount =
         requestedAdditionalDiscount &&
-        paymentMethod === "BANK" &&
         hasRecentBaseAlbum;
       amountKrw = canUseAdditionalDiscount
         ? additionalPriceKrw
         : serverBasePriceKrw;
-      if (requestedAdditionalDiscount && paymentMethod === "CARD") {
-        return {
-          error:
-            "추가 앨범 할인 접수는 무통장 입금으로 진행해주세요. 카드 결제는 단일 앨범 접수만 지원합니다.",
-        };
-      }
     } else if (amountKrw <= 0) {
       amountKrw = serverBasePriceKrw;
     }

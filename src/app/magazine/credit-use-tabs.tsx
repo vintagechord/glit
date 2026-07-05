@@ -28,9 +28,9 @@ const tabs: Array<{
   },
   {
     key: "services",
-    title: "서비스 이용권",
-    description: "녹음실, 관리자 등록 등 연계 서비스 신청",
-    meta: "이용권별 차감",
+    title: "서비스 이용 요청",
+    description: "녹음실 등 연계 서비스 신청",
+    meta: "서비스별 차감",
     icon: Gift,
   },
 ];

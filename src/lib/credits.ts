@@ -38,7 +38,11 @@ export type CreditRewardRedemption = {
   created_at: string | null;
 };
 
-export type StudioReservationStatus = "REQUESTED" | "APPROVED" | "CANCELED";
+export type StudioReservationStatus =
+  | "REQUESTED"
+  | "APPROVED"
+  | "USED"
+  | "CANCELED";
 
 export type StudioReservationRequest = {
   id: string;

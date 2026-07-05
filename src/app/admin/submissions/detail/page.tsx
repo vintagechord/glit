@@ -4,11 +4,9 @@ import { cookies, headers } from "next/headers";
 import {
   normalizeStationReviewStatus,
   paymentStatusLabelMap,
-  paymentStatusOptions,
   resultStatusLabelMap,
   resultStatusOptions,
   reviewStatusLabelMap,
-  reviewStatusOptions,
   stationReviewStatusOptions,
   type PaymentStatus,
   type ReviewStatus,
@@ -184,6 +182,13 @@ const cashReceiptPurposeLabels: Record<string, string> = {
   PERSONAL_INCOME_DEDUCTION: "개인소득공제용",
   BUSINESS_EXPENSE_PROOF: "사업자지출증빙용",
 };
+
+const operationalStageOptions = [
+  { value: "APPLICATION_RECEIVED", label: "신청접수" },
+  { value: "PAYMENT_COMPLETE", label: "결제완료" },
+  { value: "REVIEW_IN_PROGRESS", label: "심의진행" },
+  { value: "RESULT_NOTIFIED", label: "결과 통보" },
+] as const;
 
 export default async function AdminSubmissionDetailPage({
   searchParams,
@@ -676,11 +681,34 @@ export default async function AdminSubmissionDetailPage({
       submission.status === "COMPLETED" ||
       stationSubmittedCount > 0 ||
       hasResultNotified);
+  const hasAlbumResultNotified = !isMvSubmission && hasAllReviewsCompleted;
+  const hasAlbumReviewInProgress =
+    !isMvSubmission &&
+    hasPaymentComplete &&
+    (submission.status === "IN_PROGRESS" ||
+      submission.status === "RESULT_READY" ||
+      submission.status === "COMPLETED" ||
+      stationSubmittedCount > 0 ||
+      completedReviewCount > 0);
+  const currentOperationalStage =
+    (isMvSubmission ? hasResultNotified : hasAlbumResultNotified)
+      ? "RESULT_NOTIFIED"
+      : isMvSubmission
+        ? hasMvReceptionStarted
+          ? "REVIEW_IN_PROGRESS"
+          : hasPaymentComplete
+            ? "PAYMENT_COMPLETE"
+            : "APPLICATION_RECEIVED"
+        : hasAlbumReviewInProgress
+          ? "REVIEW_IN_PROGRESS"
+          : hasPaymentComplete
+            ? "PAYMENT_COMPLETE"
+            : "APPLICATION_RECEIVED";
   const stationResultProgressLabel =
     reviews.length > 0
       ? `${completedReviewCount}/${reviews.length} 결과`
       : "결과 대기";
-  const finalReviewStepLabel = isMvSubmission ? "결과 통보" : "적격/부적격 통보";
+  const finalReviewStepLabel = "결과 통보";
   const finalReviewStepValue = isMvSubmission
     ? isMvDistribution
       ? hasMvResultComplete
@@ -712,28 +740,23 @@ export default async function AdminSubmissionDetailPage({
         ? "active"
         : "pending";
   const latestEvent = events?.[0] ?? null;
-  const statusOptionsForForm = isMvSubmission
-    ? reviewStatusOptions.filter(
-        (status) => status.value !== "RESULT_READY" && status.value !== "COMPLETED",
-      )
-    : reviewStatusOptions;
   const workflowSteps: Array<{
     label: string;
     value: string;
     state: "done" | "active" | "pending";
   }> = [
     {
-      label: isMvSubmission ? "신청 완료" : "신청서 작성 및 결제",
+      label: isMvSubmission ? "신청 완료" : "신청접수",
       value: hasRequiredBasics ? "신청서 접수" : "정보 보완 필요",
       state: hasRequiredBasics ? "done" : "active",
     },
     {
-      label: isMvSubmission ? "결제 완료" : "결제 확인",
+      label: "결제완료",
       value: hasPaymentComplete ? "결제 완료" : paymentLabel,
       state: hasPaymentComplete ? "done" : "active",
     },
     {
-      label: isMvSubmission ? "접수 진행" : "방송사 접수 완료",
+      label: isMvSubmission ? "접수 진행" : "심의진행",
       value: isMvSubmission
         ? hasResultNotified
           ? "접수 진행 완료"
@@ -742,18 +765,22 @@ export default async function AdminSubmissionDetailPage({
             : hasPaymentComplete
               ? "접수 준비"
               : "결제 완료 후 진행"
-        : reviews.length > 0
-          ? `${stationSubmittedCount}/${reviews.length} 접수`
-          : "방송사 대기",
+        : hasAlbumResultNotified
+          ? "심의 진행 완료"
+          : hasAlbumReviewInProgress
+            ? "방송사별 심의 진행 중"
+            : hasPaymentComplete
+              ? "심의 진행 준비"
+              : "결제 완료 후 진행",
       state: isMvSubmission
         ? hasResultNotified
           ? "done"
           : hasPaymentComplete || hasMvReceptionStarted
             ? "active"
             : "pending"
-        : hasAllStationsSubmitted
+        : hasAlbumResultNotified
           ? "done"
-          : hasPaymentComplete || stationSubmittedCount > 0
+          : hasPaymentComplete || hasAlbumReviewInProgress
             ? "active"
             : "pending",
     },
@@ -823,7 +850,7 @@ export default async function AdminSubmissionDetailPage({
             <p className="mt-1 text-sm text-muted-foreground">
               {isMvSubmission
                 ? "신청 완료, 결제 완료, 접수 진행, 결과 통보 4단계로 관리합니다."
-                : "신청서 작성/결제, 결제 확인, 방송사 접수 완료, 최종 통보 순서로 관리합니다."}
+                : "신청접수, 결제완료, 심의진행, 결과 통보 4단계로 관리합니다."}
             </p>
           </div>
           <Link
@@ -968,10 +995,10 @@ export default async function AdminSubmissionDetailPage({
 
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                2. 결제 확인 및 전체 상태
+                2. 운영 단계
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                결제 확인과 전체 접수 상태는 이 영역에서만 관리합니다.
+                접수 상태와 결제 상태를 하나의 단계로 관리합니다.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -1040,49 +1067,37 @@ export default async function AdminSubmissionDetailPage({
                   </>
                 )}
               </div>
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div className="mt-6 grid gap-4">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    접수 상태
+                    운영 단계
                   </label>
                   {isMvSubmission && hasResultNotified ? (
                     <>
-                      <input type="hidden" name="status" value={submission.status} />
                       <input
-                        value="결과 통보 완료"
+                        type="hidden"
+                        name="operationalStage"
+                        value={currentOperationalStage}
+                      />
+                      <input
+                        value="결과 통보"
                         readOnly
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
                       />
                     </>
                   ) : (
                     <select
-                      name="status"
-                      defaultValue={submission.status}
+                      name="operationalStage"
+                      defaultValue={currentOperationalStage}
                       className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
                     >
-                      {statusOptionsForForm.map((status) => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
+                      {operationalStageOptions.map((stage) => (
+                        <option key={stage.value} value={stage.value}>
+                          {stage.label}
                         </option>
                       ))}
                     </select>
                   )}
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    결제 상태
-                  </label>
-                  <select
-                    name="paymentStatus"
-                    defaultValue={submission.payment_status ?? "UNPAID"}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                  >
-                    {paymentStatusOptions.map((status) => (
-                      <option key={status.value} value={status.value}>
-                        {status.label}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
               <div className="mt-4 space-y-2">
@@ -1231,7 +1246,7 @@ export default async function AdminSubmissionDetailPage({
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                3. 방송사 접수 완료 / 4. 적격·부적격 또는 등급 통보
+                3. 심의진행 / 4. 결과 통보
               </p>
               <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground">
                 {completedReviewCount}/{reviews.length} 결과

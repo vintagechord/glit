@@ -111,14 +111,42 @@ type Props = {
 const firstParam = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
 
+const parseCommaList = (value: string | undefined) =>
+  (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const parseGuestTokenPairs = (value: string | undefined) =>
+  parseCommaList(value).reduce<Record<string, string>>((acc, pair) => {
+    const separatorIndex = pair.indexOf(":");
+    if (separatorIndex <= 0) return acc;
+    const submissionId = pair.slice(0, separatorIndex).trim();
+    const token = pair.slice(separatorIndex + 1).trim();
+    if (submissionId && token) {
+      acc[submissionId] = token;
+    }
+    return acc;
+  }, {});
+
 export default function InicisPopupClientPage({ searchParams }: Props) {
   usePopupChromeStyles();
 
   const ctxValue = firstParam(searchParams.context);
   const modeValue = firstParam(searchParams.mode);
   const submissionId = firstParam(searchParams.submissionId);
+  const submissionIdsParam = firstParam(searchParams.submissionIds);
+  const submissionIds = React.useMemo(
+    () => parseCommaList(submissionIdsParam),
+    [submissionIdsParam],
+  );
   const requestId = firstParam(searchParams.requestId);
   const guestToken = firstParam(searchParams.guestToken);
+  const guestTokensParam = firstParam(searchParams.guestTokens);
+  const guestTokensBySubmissionId = React.useMemo(
+    () => parseGuestTokenPairs(guestTokensParam),
+    [guestTokensParam],
+  );
   const debug = firstParam(searchParams.debug) === "1";
 
   const context: InicisPaymentContext | null = parseInicisContext(ctxValue);
@@ -187,7 +215,13 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
             res = await fetch("/api/inicis/submission/order", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ submissionId, guestToken, context }),
+              body: JSON.stringify({
+                submissionId,
+                submissionIds,
+                guestToken,
+                guestTokensBySubmissionId,
+                context,
+              }),
             });
           }
         }
@@ -226,7 +260,17 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [context, submissionId, requestId, guestToken, searchParams, ctxValue, isKaraoke]);
+  }, [
+    context,
+    ctxValue,
+    guestToken,
+    guestTokensBySubmissionId,
+    isKaraoke,
+    requestId,
+    searchParams,
+    submissionId,
+    submissionIds,
+  ]);
 
   React.useEffect(() => {
     if (error) setLoadingBarVisible(false);

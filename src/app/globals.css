@@ -107,6 +107,13 @@
   --legacy-soft-border: rgba(17, 17, 17, 0.2);
 }
 
+html[lang="en"] {
+  --font-onside-sans: "SF Pro Text", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Arial, sans-serif;
+  --font-onside-display: "SF Pro Display", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Arial, sans-serif;
+}
+
 .dark {
   --app-font-size: 15.5px;
   --app-line-height: 1.47;

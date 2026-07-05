@@ -18,7 +18,7 @@ const kindLabelMap: Record<string, string> = {
   AUDIO: "음원",
   VIDEO: "영상",
   LYRICS: "가사",
-  ETC: "기타",
+  ETC: "결제서류/기타",
 };
 
 const formatFileSize = (size?: number | null) => {

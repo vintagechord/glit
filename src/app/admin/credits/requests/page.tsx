@@ -71,17 +71,23 @@ const magazineStatusLabels: Record<string, string> = {
   CANCELED: "취소",
 };
 
-const studioStatusOptions = ["REQUESTED", "APPROVED", "CANCELED"] as const;
+const studioStatusOptions = [
+  "REQUESTED",
+  "APPROVED",
+  "USED",
+  "CANCELED",
+] as const;
 
 const studioStatusLabels: Record<string, string> = {
-  REQUESTED: "요청 접수",
+  REQUESTED: "요청접수",
   APPROVED: "승인/안내 완료",
+  USED: "사용완료",
   CANCELED: "취소",
 };
 
 const redemptionStatusLabels: Record<string, string> = {
-  ISSUED: "발행됨",
-  USED: "사용 완료",
+  ISSUED: "요청접수",
+  USED: "사용완료",
   CANCELED: "취소",
 };
 
@@ -370,15 +376,14 @@ export default async function AdminCreditRequestsPage({
             크레딧 요청 관리
           </h1>
           <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
-            크레딧으로 접수된 매거진 발행 요청과 서비스 이용권 신청을
-            처리합니다.
+            크레딧으로 접수된 매거진 발행 요청과 서비스 이용 요청을 처리합니다.
           </p>
         </div>
         <Link
           href="/admin/credits"
           className="rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold text-foreground transition hover:border-foreground"
         >
-          크레딧/쿠폰 관리
+          크레딧 서비스 관리
         </Link>
       </div>
 
@@ -406,7 +411,7 @@ export default async function AdminCreditRequestsPage({
         <RequestViewBanner
           view="services"
           activeView={activeView}
-          title="서비스 이용권 신청"
+          title="서비스 이용 요청"
           description="연락처, 이메일, 희망 일정, 요청사항을 확인합니다."
           count={studioTotal}
         />
@@ -559,11 +564,10 @@ export default async function AdminCreditRequestsPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-foreground">
-              서비스 이용권 신청
+              서비스 이용 요청
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              승인하면 사용자에게 이용 안내 문구가 표시됩니다. 실제 사용 완료는
-              크레딧/쿠폰 관리에서 쿠폰 상태를 사용 완료로 변경해 처리합니다.
+              요청접수, 승인/안내 완료, 사용완료까지 이 화면에서 처리합니다.
             </p>
           </div>
           <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
@@ -573,7 +577,7 @@ export default async function AdminCreditRequestsPage({
 
         {studioResult.error ? (
           <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-            서비스 이용권 신청을 불러오지 못했습니다. ({studioResult.error.message})
+            서비스 이용 요청을 불러오지 못했습니다. ({studioResult.error.message})
           </div>
         ) : studioRequests.length > 0 ? (
           <div className="space-y-4">
@@ -583,6 +587,8 @@ export default async function AdminCreditRequestsPage({
                 stripCreditApprovalMessageDatePrefix(request.approved_message) ||
                 buildDefaultUseMessage(request);
               const redemption = studioRedemptionMap.get(request.redemption_id);
+              const effectiveStatus =
+                redemption?.status === "USED" ? "USED" : request.status;
 
               return (
                 <article
@@ -593,7 +599,7 @@ export default async function AdminCreditRequestsPage({
                     <div>
                       <div className="flex flex-wrap gap-2">
                         <span className="rounded-[6px] bg-[#f2cf27] px-2 py-1 text-[10px] font-black text-[#111111]">
-                          {studioStatusLabels[request.status] ?? request.status}
+                          {studioStatusLabels[effectiveStatus] ?? effectiveStatus}
                         </span>
                         <span className="rounded-[6px] border border-border px-2 py-1 text-[10px] font-black text-muted-foreground">
                           {request.service_location ?? "서비스 위치 미입력"}
@@ -622,14 +628,12 @@ export default async function AdminCreditRequestsPage({
                       ) : null}
                     </div>
                     {redemption ? (
-                      <div className="min-w-[172px] rounded-[10px] border-2 border-[#111111] bg-[#111111] px-3 py-2 text-white">
+                      <div className="min-w-[150px] rounded-[10px] border-2 border-[#111111] bg-[#111111] px-3 py-2 text-white">
                         <p className="text-[10px] font-black uppercase tracking-normal text-white/60">
-                          Coupon
-                        </p>
-                        <p className="mt-1 text-sm font-black">
-                          {redemption.coupon_code}
+                          Credit Use
                         </p>
                         <p className="mt-1 text-[11px] font-semibold text-white/70">
+                          {redemption.credits_spent.toLocaleString()}크레딧 ·{" "}
                           {redemptionStatusLabels[redemption.status] ??
                             redemption.status}
                         </p>
@@ -655,7 +659,7 @@ export default async function AdminCreditRequestsPage({
                       상태
                       <select
                         name="status"
-                        defaultValue={request.status}
+                        defaultValue={effectiveStatus}
                         className={fieldClass}
                       >
                         {studioStatusOptions.map((status) => (
@@ -697,7 +701,7 @@ export default async function AdminCreditRequestsPage({
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-xs text-muted-foreground">
-            접수된 서비스 이용권 신청이 없습니다.
+            접수된 서비스 이용 요청이 없습니다.
           </div>
         )}
         <PaginationControls

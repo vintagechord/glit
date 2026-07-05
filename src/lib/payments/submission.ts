@@ -65,6 +65,64 @@ const collectNotificationEmails = (
   return Array.from(recipients);
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const normalizeSubmissionIds = (...values: unknown[]) =>
+  Array.from(
+    new Set(
+      values
+        .flatMap((value) => {
+          if (Array.isArray(value)) return value;
+          return [value];
+        })
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  );
+
+const getPaymentGroupSubmissionIds = (payment?: {
+  submission_id?: string | null;
+  raw_response?: unknown;
+} | null) => {
+  const baseIds = normalizeSubmissionIds(payment?.submission_id);
+  const raw = payment?.raw_response;
+  if (!isRecord(raw) || !isRecord(raw.paymentGroup)) return baseIds;
+  return normalizeSubmissionIds(
+    baseIds,
+    raw.paymentGroup.submissionIds,
+    raw.paymentGroup.relatedSubmissionIds,
+  );
+};
+
+const mergePaymentRawResponse = (
+  previousRaw: unknown,
+  nextRaw?: Record<string, unknown> | null,
+) => {
+  const next = nextRaw ? { ...nextRaw } : {};
+  if (isRecord(previousRaw) && "paymentGroup" in previousRaw) {
+    next.paymentGroup = previousRaw.paymentGroup;
+  }
+  return Object.keys(next).length > 0 ? next : null;
+};
+
+const getPaymentMetadataByOrderId = async (
+  admin: ReturnType<typeof createAdminClient>,
+  orderId: string,
+) => {
+  const { data } = await admin
+    .from("submission_payments")
+    .select("submission_id, status, raw_response")
+    .eq("order_id", orderId)
+    .maybeSingle();
+  return data as {
+    submission_id: string | null;
+    status: string | null;
+    raw_response: unknown;
+  } | null;
+};
+
 export const findSubmissionById = async (submissionId: string) => {
   const admin = createAdminClient();
   const selectWithRating =
@@ -122,21 +180,48 @@ export const ensureSubmissionOwner = async (
 export const createSubmissionPaymentOrder = async (
   submissionId: string,
   baseUrl: string,
+  options?: { submissionIds?: string[] },
 ): Promise<{ error?: string; result?: StdPayInitResult }> => {
-  const { submission, error } = await findSubmissionById(submissionId);
-  if (error || !submission) {
+  const submissionIds = normalizeSubmissionIds(
+    submissionId,
+    options?.submissionIds,
+  );
+  const submissions: SubmissionRecord[] = [];
+
+  for (const id of submissionIds) {
+    const { submission, error } = await findSubmissionById(id);
+    if (error || !submission) {
+      return { error: "접수를 찾을 수 없습니다." };
+    }
+    if (submission.payment_status === "PAID") {
+      return { error: "이미 결제가 완료된 접수가 포함되어 있습니다." };
+    }
+    if (submission.status === "DRAFT") {
+      return { error: "임시저장 상태에서는 결제를 시작할 수 없습니다." };
+    }
+    const submissionAmount = Math.round(Number(submission.amount_krw ?? 0));
+    if (!Number.isFinite(submissionAmount) || submissionAmount <= 0) {
+      return { error: "결제 금액이 유효하지 않습니다." };
+    }
+    submissions.push(submission);
+  }
+
+  const submission = submissions[0];
+  if (!submission) {
     return { error: "접수를 찾을 수 없습니다." };
   }
-  if (submission.payment_status === "PAID") {
-    return { error: "이미 결제가 완료된 접수입니다." };
+
+  const hasMismatchedMemberOwner = submissions.some(
+    (item) => item.user_id !== submission.user_id && (item.user_id || submission.user_id),
+  );
+  if (hasMismatchedMemberOwner) {
+    return { error: "같은 신청자의 접수만 함께 결제할 수 있습니다." };
   }
-  if (submission.status === "DRAFT") {
-    return { error: "임시저장 상태에서는 결제를 시작할 수 없습니다." };
-  }
-  const amountKrw = Math.round(Number(submission.amount_krw ?? 0));
-  if (!Number.isFinite(amountKrw) || amountKrw <= 0) {
-    return { error: "결제 금액이 유효하지 않습니다." };
-  }
+
+  const amountKrw = submissions.reduce(
+    (sum, item) => sum + Math.round(Number(item.amount_krw ?? 0)),
+    0,
+  );
   const orderTimestamp = Date.now().toString();
   const orderId = `SUBP-${orderTimestamp}-${submission.id.slice(0, 8)}-${randomUUID().slice(0, 8)}`;
   const config = getStdPayConfig();
@@ -145,7 +230,9 @@ export const createSubmissionPaymentOrder = async (
     : (submission.package as { name?: string } | null | undefined)?.name;
 
   const productName =
-    packageName ?? submission.title ?? submission.artist_name ?? "심의 접수";
+    submissions.length > 1
+      ? `${packageName ?? "음반 심의"} ${submissions.length}건`
+      : packageName ?? submission.title ?? submission.artist_name ?? "심의 접수";
   const buyerName =
     submission.applicant_name ??
     submission.artist_name ??
@@ -181,10 +268,20 @@ export const createSubmissionPaymentOrder = async (
     timestamp: stdParams.timestamp,
     baseUrl,
     guest: Boolean(submission.guest_token),
+    submissionCount: submissions.length,
     note: baseUrl.includes("localhost")
       ? "Local baseUrl detected; use a public URL (e.g. ngrok) if the window is blocked."
       : undefined,
   });
+
+  const paymentGroup = {
+    primarySubmissionId: submission.id,
+    submissionIds: submissions.map((item) => item.id),
+    submissionAmounts: submissions.map((item) => ({
+      submissionId: item.id,
+      amountKrw: Math.round(Number(item.amount_krw ?? 0)),
+    })),
+  };
 
   const admin = createAdminClient();
   const { error: insertError } = await admin.from("submission_payments").insert({
@@ -193,6 +290,7 @@ export const createSubmissionPaymentOrder = async (
     order_id: orderId,
     amount_krw: amountKrw,
     status: "REQUESTED",
+    raw_response: { paymentGroup },
   });
 
   if (insertError) {
@@ -228,24 +326,37 @@ export const markPaymentFailure = async (
   },
 ) => {
   const admin = createAdminClient();
+  const existingPayment = await getPaymentMetadataByOrderId(admin, orderId);
+  const nextRawResponse = mergePaymentRawResponse(
+    existingPayment?.raw_response,
+    payload.raw_response,
+  );
   const { data: updated, error } = await admin
     .from("submission_payments")
     .update({
       status: "FAILED",
       result_code: payload.result_code ?? null,
       result_message: payload.result_message ?? null,
-      raw_response: payload.raw_response ?? null,
+      raw_response: nextRawResponse,
     })
     .eq("order_id", orderId)
     .neq("status", "APPROVED")
-    .select("submission_id")
+    .select("submission_id, raw_response")
     .maybeSingle();
 
-  if (updated?.submission_id) {
+  if (error) {
+    return { ok: false, error };
+  }
+
+  const submissionIds =
+    !updated?.submission_id && existingPayment?.status === "APPROVED"
+      ? []
+      : getPaymentGroupSubmissionIds(updated ?? existingPayment);
+  for (const targetSubmissionId of submissionIds) {
     const { data: approvedPayments } = await admin
       .from("submission_payments")
       .select("id")
-      .eq("submission_id", updated.submission_id)
+      .eq("submission_id", targetSubmissionId)
       .eq("status", "APPROVED")
       .limit(1);
 
@@ -253,7 +364,7 @@ export const markPaymentFailure = async (
       const { error: submissionError } = await admin
         .from("submissions")
         .update({ payment_status: "UNPAID", status: "WAITING_PAYMENT" })
-        .eq("id", updated.submission_id)
+        .eq("id", targetSubmissionId)
         .neq("payment_status", "PAID");
       if (submissionError) {
         return { ok: false, error: submissionError };
@@ -273,26 +384,44 @@ export const markPaymentCanceled = async (
   },
 ) => {
   const admin = createAdminClient();
+  const existingPayment = await getPaymentMetadataByOrderId(admin, orderId);
+  const nextRawResponse = mergePaymentRawResponse(
+    existingPayment?.raw_response,
+    payload?.raw_response,
+  );
   const { data: updated, error } = await admin
     .from("submission_payments")
     .update({
       status: "CANCELED",
       result_code: payload?.result_code ?? "CANCELED",
       result_message: payload?.result_message ?? "사용자 취소",
-      raw_response: payload?.raw_response ?? null,
+      raw_response: nextRawResponse,
     })
     .eq("order_id", orderId)
     .neq("status", "APPROVED")
-    .select("submission_id")
+    .select("submission_id, raw_response")
     .maybeSingle();
 
-  let guestToken: string | null = null;
+  if (error) {
+    return {
+      ok: false,
+      error,
+      submissionId: null,
+      guestToken: null,
+    } satisfies PaymentCancelResult;
+  }
 
-  if (updated?.submission_id) {
+  let guestToken: string | null = null;
+  const submissionIds =
+    !updated?.submission_id && existingPayment?.status === "APPROVED"
+      ? []
+      : getPaymentGroupSubmissionIds(updated ?? existingPayment);
+
+  for (const targetSubmissionId of submissionIds) {
     const { data: approvedPayments } = await admin
       .from("submission_payments")
       .select("id")
-      .eq("submission_id", updated.submission_id)
+      .eq("submission_id", targetSubmissionId)
       .eq("status", "APPROVED")
       .limit(1);
 
@@ -300,18 +429,20 @@ export const markPaymentCanceled = async (
       const { error: submissionError } = await admin
         .from("submissions")
         .update({ payment_status: "UNPAID", status: "WAITING_PAYMENT" })
-        .eq("id", updated.submission_id)
+        .eq("id", targetSubmissionId)
         .neq("payment_status", "PAID");
       if (submissionError) {
         return {
           ok: false,
           error: submissionError,
-          submissionId: updated.submission_id,
+          submissionId: targetSubmissionId,
           guestToken,
         } satisfies PaymentCancelResult;
       }
     }
+  }
 
+  if (updated?.submission_id) {
     const { data: submission } = await admin
       .from("submissions")
       .select("guest_token")
@@ -338,6 +469,11 @@ export const markPaymentSuccess = async (
   },
 ) => {
   const admin = createAdminClient();
+  const existingPayment = await getPaymentMetadataByOrderId(admin, orderId);
+  const nextRawResponse = mergePaymentRawResponse(
+    existingPayment?.raw_response,
+    payload.raw_response,
+  );
   const { data: updated, error } = await admin
     .from("submission_payments")
     .update({
@@ -345,18 +481,23 @@ export const markPaymentSuccess = async (
       pg_tid: payload.tid ?? null,
       result_code: payload.result_code ?? null,
       result_message: payload.result_message ?? null,
-      raw_response: payload.raw_response ?? null,
+      raw_response: nextRawResponse,
       paid_at: new Date().toISOString(),
     })
     .eq("order_id", orderId)
-    .select("submission_id")
+    .select("submission_id, raw_response")
     .maybeSingle();
 
-  if (updated?.submission_id) {
+  if (error) {
+    return { ok: false, error, submissionId: null };
+  }
+
+  const submissionIds = getPaymentGroupSubmissionIds(updated ?? existingPayment);
+  for (const targetSubmissionId of submissionIds) {
     const { data: submission } = await admin
       .from("submissions")
       .select("status")
-      .eq("id", updated.submission_id)
+      .eq("id", targetSubmissionId)
       .maybeSingle();
     const nextSubmissionUpdate: Record<string, unknown> = {
       payment_status: "PAID",
@@ -372,22 +513,22 @@ export const markPaymentSuccess = async (
     const { error: submissionError } = await admin
       .from("submissions")
       .update(nextSubmissionUpdate)
-      .eq("id", updated.submission_id);
+      .eq("id", targetSubmissionId);
     if (submissionError) {
-      return { ok: false, error: submissionError, submissionId: updated.submission_id };
+      return { ok: false, error: submissionError, submissionId: targetSubmissionId };
     }
 
     const { error: eventError } = await admin.from("submission_events").insert({
-      submission_id: updated.submission_id,
+      submission_id: targetSubmissionId,
       event_type: "PAYMENT",
       message: "KG이니시스 카드 결제 완료",
     });
     if (eventError) {
-      return { ok: false, error: eventError, submissionId: updated.submission_id };
+      return { ok: false, error: eventError, submissionId: targetSubmissionId };
     }
 
     const { submission: notificationSubmission } = await findSubmissionById(
-      updated.submission_id,
+      targetSubmissionId,
     );
     if (notificationSubmission) {
       let memberEmail: string | null = null;

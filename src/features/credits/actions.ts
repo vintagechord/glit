@@ -25,6 +25,7 @@ const redemptionStatusSchema = z.enum(["ISSUED", "USED", "CANCELED"]);
 const studioReservationStatusSchema = z.enum([
   "REQUESTED",
   "APPROVED",
+  "USED",
   "CANCELED",
 ]);
 
@@ -129,10 +130,10 @@ async function requireAdminUser() {
 const normalizeStudioRpcError = (message?: string | null) => {
   const raw = message ?? "";
   if (raw.includes("LOGIN_REQUIRED")) {
-    return "로그인 후 서비스 이용권을 신청할 수 있습니다.";
+    return "로그인 후 서비스 이용 요청을 접수할 수 있습니다.";
   }
   if (raw.includes("REWARD_NOT_FOUND")) {
-    return "교환 가능한 서비스 이용권을 찾을 수 없습니다.";
+    return "신청 가능한 서비스를 찾을 수 없습니다.";
   }
   if (raw.includes("INSUFFICIENT_CREDITS")) {
     return "보유 크레딧이 부족합니다.";
@@ -143,7 +144,7 @@ const normalizeStudioRpcError = (message?: string | null) => {
   if (raw.includes("INVALID_RESERVATION_TIME")) {
     return "이용 희망 시간을 다시 선택해주세요.";
   }
-  return "서비스 이용권 신청에 실패했습니다.";
+  return "서비스 이용 요청 접수에 실패했습니다.";
 };
 
 const buildServiceUseMessage = ({
@@ -151,7 +152,7 @@ const buildServiceUseMessage = ({
 }: {
   serviceName?: string | null;
 }) =>
-  `${serviceName ?? "서비스 이용권"} 이용 안내를 적어주신 연락처로 드립니다.`;
+  `${serviceName ?? "서비스"} 이용 안내를 적어주신 연락처로 드립니다.`;
 
 export async function redeemCreditRewardFormAction(
   formData: FormData,
@@ -171,7 +172,7 @@ export async function redeemCreditRewardFormAction(
 
   redirect(
     withQuery(redirectPath, {
-      error: "서비스 이용권은 이용 희망일과 연락처를 입력해 신청해주세요.",
+      error: "서비스 이용 요청은 이용 희망일과 연락처를 입력해 접수해주세요.",
     }),
   );
 }
@@ -355,7 +356,7 @@ export async function updateStudioReservationStatusFormAction(
   const admin = createAdminClient();
   const { data: reservation, error: loadError } = await admin
     .from("studio_reservation_requests")
-    .select("id, redemption_id, reward_title, service_location, preferred_date, preferred_time")
+    .select("id, redemption_id, reward_title, service_location, preferred_date, preferred_time, approved_at")
     .eq("id", parsed.data.reservationId)
     .maybeSingle();
 
@@ -376,17 +377,20 @@ export async function updateStudioReservationStatusFormAction(
   }
 
   const now = new Date().toISOString();
+  const shouldApprove = parsed.data.status === "APPROVED" || parsed.data.status === "USED";
+  const nextReservationStatus =
+    parsed.data.status === "USED" ? "APPROVED" : parsed.data.status;
   const updatePayload = {
-    status: parsed.data.status,
+    status: nextReservationStatus,
     approved_message:
-      parsed.data.status === "APPROVED"
+      shouldApprove
         ? (parsed.data.approvedMessage ??
           buildServiceUseMessage({
             serviceName: reservation.service_location ?? reservation.reward_title,
           }))
         : (parsed.data.approvedMessage ?? null),
     admin_memo: parsed.data.adminMemo ?? null,
-    approved_at: parsed.data.status === "APPROVED" ? now : null,
+    approved_at: shouldApprove ? (reservation.approved_at ?? now) : null,
     canceled_at: parsed.data.status === "CANCELED" ? now : null,
   };
 
@@ -403,20 +407,18 @@ export async function updateStudioReservationStatusFormAction(
   const redemptionStatus =
     parsed.data.status === "CANCELED"
       ? "CANCELED"
-      : redemption.status === "USED"
+      : parsed.data.status === "USED"
         ? "USED"
         : "ISSUED";
   const redemptionUpdate: {
     status: string;
     canceled_at: string | null;
-    used_at?: null;
+    used_at: string | null;
   } = {
     status: redemptionStatus,
     canceled_at: parsed.data.status === "CANCELED" ? now : null,
+    used_at: redemptionStatus === "USED" ? now : null,
   };
-  if (redemptionStatus !== "USED") {
-    redemptionUpdate.used_at = null;
-  }
   const { error: redemptionError } = await admin
     .from("credit_reward_redemptions")
     .update(redemptionUpdate)

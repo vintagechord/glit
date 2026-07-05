@@ -4,11 +4,45 @@ import { ensureSubmissionOwner, createSubmissionPaymentOrder } from "../../../..
 import { getBaseUrl } from "../../../../../lib/url";
 import { parseInicisContext } from "@/lib/inicis/context";
 
+const normalizeStringList = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((item) => normalizeStringList(item))
+      .filter(Boolean);
+  }
+  if (typeof value !== "string") return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const normalizeGuestTokenMap = (value: unknown) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {} as Record<string, string>;
+  }
+  return Object.entries(value as Record<string, unknown>).reduce<
+    Record<string, string>
+  >((acc, [submissionId, token]) => {
+    if (typeof token === "string" && token.trim()) {
+      acc[submissionId] = token.trim();
+    }
+    return acc;
+  }, {});
+};
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const submissionId = String(body.submissionId ?? "").trim();
+    const requestedSubmissionIds = normalizeStringList(body.submissionIds);
+    const submissionIds = Array.from(
+      new Set([submissionId, ...requestedSubmissionIds].filter(Boolean)),
+    );
     const guestToken = body.guestToken ? String(body.guestToken).trim() : undefined;
+    const guestTokensBySubmissionId = normalizeGuestTokenMap(
+      body.guestTokensBySubmissionId,
+    );
     const context = parseInicisContext(body.context);
 
     if (!context) {
@@ -29,7 +63,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "submissionId가 필요합니다." }, { status: 400 });
     }
 
-    const ownership = await ensureSubmissionOwner(submissionId, guestToken);
+    const ownership = await ensureSubmissionOwner(
+      submissionId,
+      guestTokensBySubmissionId[submissionId] ?? guestToken,
+    );
     if (ownership.error === "UNAUTHORIZED") {
       return NextResponse.json({ error: "로그인 또는 조회코드가 필요합니다." }, { status: 401 });
     }
@@ -40,8 +77,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "접수 소유자가 아닙니다." }, { status: 403 });
     }
 
+    for (const relatedSubmissionId of submissionIds) {
+      if (relatedSubmissionId === submissionId) continue;
+      const relatedOwnership = await ensureSubmissionOwner(
+        relatedSubmissionId,
+        guestTokensBySubmissionId[relatedSubmissionId] ?? guestToken,
+      );
+      if (relatedOwnership.error === "UNAUTHORIZED") {
+        return NextResponse.json({ error: "로그인 또는 조회코드가 필요합니다." }, { status: 401 });
+      }
+      if (relatedOwnership.error === "NOT_FOUND") {
+        return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
+      }
+      if (relatedOwnership.error === "FORBIDDEN") {
+        return NextResponse.json({ error: "접수 소유자가 아닙니다." }, { status: 403 });
+      }
+    }
+
     const baseUrl = getBaseUrl(req);
-    const { error, result } = await createSubmissionPaymentOrder(submissionId, baseUrl);
+    const { error, result } = await createSubmissionPaymentOrder(
+      submissionId,
+      baseUrl,
+      { submissionIds },
+    );
     if (error || !result) {
       console.error("[Inicis][STDPay][init][order-error]", {
         submissionId,

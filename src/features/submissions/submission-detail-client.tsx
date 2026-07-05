@@ -166,19 +166,22 @@ function StationLogoWithFallback({
   }, [src]);
 
   return (
-    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white dark:border-[#f2cf27] dark:bg-[#171717]">
+    <div className="flex h-11 w-28 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white p-1.5 dark:border-[#f2cf27]">
       {src ? (
         <Image
           src={src}
           alt={station?.name ?? station?.code ?? "station logo"}
-          width={36}
-          height={36}
-          className="h-full w-full object-cover"
+          width={112}
+          height={44}
+          className="h-full w-full object-contain"
           unoptimized
+          loading="lazy"
           onError={handleError}
         />
       ) : (
-        <span className="text-sm font-semibold text-foreground">{key.charAt(0)}</span>
+        <span className="truncate text-xs font-semibold uppercase text-foreground">
+          {key.slice(0, 8)}
+        </span>
       )}
     </div>
   );
@@ -400,10 +403,10 @@ const buildSubmissionDisplayStatus = ({
       resultLabel,
       primaryMessage: isMvSubmission ? "심의 결과 확인이 가능합니다." : null,
       secondaryMessage: isMvSubmission
-        ? "결과 통보 영역에서 등급과 다운로드 자료를 확인할 수 있습니다."
+        ? "방송국별 현황 표에서 적격/부적격 결과와 다운로드 자료를 확인할 수 있습니다."
         : "방송국별 진행표에서 결과와 Updated 시간을 확인할 수 있습니다.",
       primaryAction: "station-review" as DetailPrimaryAction,
-      primaryActionLabel: isMvSubmission ? "결과 통보 보기" : "진행표 보기",
+      primaryActionLabel: isMvSubmission ? "현황 보기" : "진행표 보기",
     };
   }
 
@@ -418,10 +421,10 @@ const buildSubmissionDisplayStatus = ({
         ? "도착한 결과가 순차적으로 반영되고 있습니다."
         : "방송국별 결과가 순차적으로 반영되고 있습니다.",
       secondaryMessage: isMvSubmission
-        ? "결과가 확정되면 결과 통보 영역에 업데이트됩니다."
+        ? "결과가 확정되면 방송국별 현황 표에 업데이트됩니다."
         : "모든 방송국의 결과가 반영되면 완료로 표시됩니다.",
       primaryAction: "station-review" as DetailPrimaryAction,
-      primaryActionLabel: isMvSubmission ? "결과 통보 보기" : "진행표 보기",
+      primaryActionLabel: isMvSubmission ? "현황 보기" : "진행표 보기",
     };
   }
 
@@ -442,12 +445,12 @@ const buildSubmissionDisplayStatus = ({
         : "결제가 확인되었고 접수 정보를 준비 중입니다.",
       secondaryMessage:
         isMvSubmission
-          ? "담당자 확인 후 결과 통보 영역에 상태가 반영됩니다."
+          ? "담당자 확인 후 방송국별 현황 표에 상태가 반영됩니다."
           : safeStationTotal > 0
           ? "방송사별 접수 상태가 진행표에 순차 반영됩니다."
           : "관리자 확인 후 방송사 접수 정보가 생성됩니다.",
       primaryAction: "station-review" as DetailPrimaryAction,
-      primaryActionLabel: isMvSubmission ? "결과 통보 보기" : "진행표 보기",
+      primaryActionLabel: isMvSubmission ? "현황 보기" : "진행표 보기",
     };
   }
 
@@ -465,6 +468,12 @@ const buildSubmissionDisplayStatus = ({
 };
 
 type MvReviewAssetPath = "mv-rating-image" | "mv-guide" | "mv-certificate";
+
+type DetailMvReviewAssetState = {
+  ratingLabel: string;
+  hasCertificate: boolean;
+  certificateName: string | null;
+};
 
 const mvReviewFallbackFilenames: Record<MvReviewAssetPath, string> = {
   "mv-rating-image": "onside-mv-rating-image.png",
@@ -545,6 +554,9 @@ export function SubmissionDetailClient({
     stationName?: string;
     stationCode?: string | null;
     resultNote?: string | null;
+    resultLabel?: string;
+    resultTone?: string;
+    mvReviewAssets?: DetailMvReviewAssetState;
     summary: ReturnType<typeof summarizeTrackResults>;
   } | null>(null);
   const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
@@ -606,8 +618,14 @@ export function SubmissionDetailClient({
     hasMvDistributionResult ||
     (isMvBroadcast && hasResultSignal);
   const canDownloadMvReviewAssets = hasMvRatingResult;
-  const ratingReason = submission.result_memo?.trim() || null;
-
+  const mvFallbackStationStatus =
+    canDownloadMvReviewAssets && submission.mv_desired_rating
+      ? submission.mv_desired_rating === "REJECT"
+        ? "REJECTED"
+        : "APPROVED"
+      : isPaymentDone
+        ? "SENT"
+        : "NOT_SENT";
 
   const stationNames = React.useMemo(() => {
     const names = stationReviews
@@ -632,7 +650,7 @@ export function SubmissionDetailClient({
         ? [
           {
             id: `fallback-${submission.id}`,
-            status: submission.status,
+            status: mvFallbackStationStatus,
             result_note: null,
             track_results: null,
             updated_at: submission.updated_at,
@@ -1026,7 +1044,7 @@ export function SubmissionDetailClient({
           <div className="rounded-[8px] border-2 border-[#111111] bg-background dark:border-[#f2cf27]">
             <div className="overflow-x-auto">
               <div className="min-w-0 sm:min-w-[720px]">
-                <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-normal text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] sm:grid-cols-[minmax(96px,1.1fr)_1fr_1fr]">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 border-b-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-normal text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] sm:grid-cols-[minmax(132px,1.1fr)_1fr_1fr]">
                   <span className="justify-self-center text-center sm:hidden">방송국</span>
                   <span className="hidden justify-self-center text-center sm:block">로고</span>
                   <span className="justify-self-center text-center">현재 상태</span>
@@ -1071,11 +1089,34 @@ export function SubmissionDetailClient({
                       trackInfo.counts.rejected > 0 ||
                       review.status === "REJECTED" ||
                       review.status === "NEEDS_FIX";
-                    const resolvedResultNote = hasRejectedOutcome
-                      ? note ?? ratingReason ?? null
-                      : null;
+                    const resolvedResultNote = hasRejectedOutcome ? note : null;
+                    const mvReviewAssets =
+                      isMvDistribution &&
+                      canDownloadMvReviewAssets &&
+                      submission.mv_desired_rating
+                        ? {
+                          ratingLabel: mvRatingLabel(submission.mv_desired_rating),
+                          hasCertificate: Boolean(submission.certificate_b2_path),
+                          certificateName:
+                            submission.certificate_original_name?.trim() || null,
+                        }
+                        : null;
+                    const resultDisplayStatus = mvReviewAssets
+                      ? {
+                        label:
+                          submission.mv_desired_rating === "REJECT"
+                            ? "부적격"
+                            : "적격",
+                        tone:
+                          submission.mv_desired_rating === "REJECT"
+                            ? rejectedDetailResultTone
+                            : approvedDetailResultTone,
+                      }
+                      : currentStatus;
                     const shouldOpenResultModal =
-                      hasTrackDetails || Boolean(resolvedResultNote);
+                      hasTrackDetails ||
+                      Boolean(resolvedResultNote) ||
+                      Boolean(mvReviewAssets);
 
                     const handleResultClick = () => {
                       if (shouldOpenResultModal) {
@@ -1083,6 +1124,9 @@ export function SubmissionDetailClient({
                           stationName: review.station?.name ?? "-",
                           stationCode,
                           resultNote: resolvedResultNote,
+                          resultLabel: resultDisplayStatus.label,
+                          resultTone: resultDisplayStatus.tone,
+                          ...(mvReviewAssets ? { mvReviewAssets } : {}),
                           summary: trackInfo,
                         });
                         return;
@@ -1103,7 +1147,7 @@ export function SubmissionDetailClient({
                     return (
                       <div
                         key={review.id}
-                        className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[minmax(96px,1.1fr)_1fr_1fr]"
+                        className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_76px] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[minmax(132px,1.1fr)_1fr_1fr]"
                       >
                         <div
                           className={`flex min-w-0 items-center ${
@@ -1125,13 +1169,13 @@ export function SubmissionDetailClient({
                         <button
                           type="button"
                           onClick={handleResultClick}
-                          className={`inline-flex min-h-[42px] min-w-[112px] flex-col items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-3 py-1.5 text-[13px] font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${currentStatus.tone
+                          className={`inline-flex min-h-[42px] min-w-[112px] flex-col items-center justify-center justify-self-center rounded-[6px] border-2 border-[#111111] px-3 py-1.5 text-[13px] font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${resultDisplayStatus.tone
                             } ${shouldOpenResultModal
                               ? "transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0"
                               : "transition"
                             }`}
                         >
-                          <span>{currentStatus.label}</span>
+                          <span>{resultDisplayStatus.label}</span>
                           {trackSummaryLine ? (
                             <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
                               {trackSummaryLine}
@@ -1160,93 +1204,6 @@ export function SubmissionDetailClient({
       </div>
     </div>
   );
-
-  const renderMvReviewAssetsSection = () =>
-    isMvSubmission ? (
-      <div id="station-review-section" className={detailPanelClass}>
-        <p className={detailKickerClass}>
-          결과 통보
-        </p>
-        {!isMvDistribution ? (
-          <div className="mt-4 rounded-[8px] border-2 border-[#111111] bg-background px-4 py-3 text-sm dark:border-[#f2cf27]">
-            <p className="font-black text-foreground">
-              {hasFinalResultDone ? "결과 통보 완료" : "결과 통보 대기"}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              담당자 확인 후 결과가 통보되면 이 화면에서 확인할 수 있습니다.
-            </p>
-          </div>
-        ) : null}
-        {isMvDistribution ? (
-        <div className="mt-4 space-y-3 text-sm">
-          {canDownloadMvReviewAssets ? (
-            <div className="rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-[13px] font-black text-black dark:border-[#f2cf27]">
-              심의 등급: {mvRatingLabel(submission.mv_desired_rating)} (설정 완료)
-              <span className="ml-2 text-xs font-normal text-black/80">
-                아래에서 등급 이미지와 필증 파일을 다운로드하세요.
-              </span>
-            </div>
-          ) : (
-            <div className="rounded-[8px] border-2 border-dashed border-border bg-background px-4 py-3 text-[13px] text-muted-foreground">
-              심의 등급 확정 후 등급 이미지와 가이드가 제공됩니다. 필증은 관리자 업로드 후 다운로드할 수 있습니다.
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="w-32 text-xs font-black uppercase tracking-normal text-muted-foreground">
-              등급
-            </span>
-            <button
-              type="button"
-              onClick={handleRatingDownload}
-              disabled={!canDownloadMvReviewAssets || isRatingDownloading}
-              className={detailActionButtonClass}
-            >
-              {canDownloadMvReviewAssets
-                ? `${mvRatingLabel(submission.mv_desired_rating)} 이미지 다운로드`
-                : "등급 확정 후 다운로드"}
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="w-32 text-xs font-black uppercase tracking-normal text-muted-foreground">
-              표기 가이드
-            </span>
-            <button
-              type="button"
-              onClick={handleGuideDownload}
-              disabled={!canDownloadMvReviewAssets}
-              className={detailActionButtonClass}
-            >
-              {canDownloadMvReviewAssets
-                ? "가이드 PDF 다운로드"
-                : "등급 확정 후 다운로드"}
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="w-32 text-xs font-black uppercase tracking-normal text-muted-foreground">
-              심의 필증
-            </span>
-            <button
-              type="button"
-              onClick={handleCertificateDownload}
-              disabled={!canDownloadMvReviewAssets || !submission.certificate_b2_path}
-              className={detailActionButtonClass}
-            >
-              {submission.certificate_original_name
-                ? submission.certificate_original_name
-                : canDownloadMvReviewAssets
-                  ? "필증 미등록"
-                  : "등급 확정 후 다운로드"}
-            </button>
-            {!submission.certificate_b2_path ? (
-              <span className="text-xs text-muted-foreground">
-                업로드 완료 후 다운로드 가능
-              </span>
-            ) : null}
-          </div>
-        </div>
-        ) : null}
-      </div>
-    ) : null;
 
   const openRadioLinks = (station?: { name?: string | null; code?: string | null }) => {
     const links = resolveRadioBoardLinks({
@@ -1598,13 +1555,12 @@ export function SubmissionDetailClient({
         </div>
       </section>
 
-      <div className="mt-8">{renderProcessSection()}</div>
       {!isMvSubmission ? (
-        <div className="mt-6">{renderStationReviewSection()}</div>
+        <div className="mt-8">{renderProcessSection()}</div>
       ) : null}
-      {isMvSubmission ? (
-        <div className="mt-6">{renderMvReviewAssetsSection()}</div>
-      ) : null}
+      <div className={isMvSubmission ? "mt-8" : "mt-6"}>
+        {renderStationReviewSection()}
+      </div>
 
       {/* 관리자용 등급/필증 편집 UI는 관리자 페이지에서만 제공 */}
       {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}
@@ -1995,7 +1951,7 @@ export function SubmissionDetailClient({
               <div className="rounded-2xl border border-border/60 bg-background/70">
                 <div className="overflow-x-auto">
                   <div className="min-w-0 sm:min-w-[720px]">
-                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(96px,auto)_minmax(112px,auto)] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]">
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(96px,auto)_minmax(112px,auto)] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid-cols-[128px_1.1fr_0.95fr_1fr_1fr]">
                       <span className="justify-self-center text-center sm:hidden">방송국</span>
                       <span className="hidden justify-self-center text-center sm:block">로고</span>
                       <span className="hidden text-left sm:block">방송국</span>
@@ -2070,9 +2026,7 @@ export function SubmissionDetailClient({
                           trackInfo.counts.rejected > 0 ||
                           review.status === "REJECTED" ||
                           review.status === "NEEDS_FIX";
-                        const resolvedResultNote = hasRejectedOutcome
-                          ? note ?? ratingReason ?? null
-                          : null;
+                        const resolvedResultNote = hasRejectedOutcome ? note : null;
                         const shouldOpenResultModal =
                           hasTrackDetails || Boolean(resolvedResultNote);
 
@@ -2097,7 +2051,7 @@ export function SubmissionDetailClient({
                         return (
                           <div
                             key={review.id}
-                            className="grid grid-cols-[minmax(0,1fr)_minmax(96px,auto)_minmax(112px,auto)] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[72px_1.1fr_0.95fr_1fr_1fr]"
+                            className="grid grid-cols-[minmax(0,1fr)_minmax(96px,auto)_minmax(112px,auto)] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[128px_1.1fr_0.95fr_1fr_1fr]"
                           >
                             <div className="flex min-w-0 items-center justify-start gap-2 sm:justify-center">
                               <StationLogoWithFallback station={review.station} />
@@ -2158,15 +2112,24 @@ export function SubmissionDetailClient({
           onClick={() => setTrackResultModal(null)}
         >
           <div
-            className="w-full max-w-lg rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]"
+            className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]"
             onClick={(event) => event.stopPropagation()}
           >
             <p className={detailKickerClass}>
-              트랙별 결과
+              {trackResultModal.mvReviewAssets ? "심의 결과" : "트랙별 결과"}
             </p>
             <h3 className="mt-2 text-lg font-semibold text-foreground">
               {trackResultModal.stationName ?? "-"}
             </h3>
+            {trackResultModal.resultLabel ? (
+              <div className="mt-3">
+                <span
+                  className={`bauhaus-status-chip bauhaus-status-chip--compact ${trackResultModal.resultTone ?? ""}`}
+                >
+                  {trackResultModal.resultLabel}
+                </span>
+              </div>
+            ) : null}
             {trackResultModal.summary.counts.total > 0 ? (
               <p className="mt-1 text-sm text-muted-foreground">
                 {buildTrackSummaryText(trackResultModal.summary.counts, " · ")}
@@ -2219,6 +2182,52 @@ export function SubmissionDetailClient({
                 <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/80 dark:text-[#d7e7ff]">
                   {trackResultModal.resultNote}
                 </p>
+              </div>
+            ) : null}
+            {trackResultModal.mvReviewAssets ? (
+              <div className="mt-5 border-t-2 border-border pt-4">
+                <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
+                  뮤직비디오 결과 다운로드
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  심의 등급: {trackResultModal.mvReviewAssets.ratingLabel}
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={handleRatingDownload}
+                    disabled={isRatingDownloading}
+                    className={`${detailActionButtonClass} min-h-[64px] flex-col items-start text-left`}
+                  >
+                    <span>{isRatingDownloading ? "준비 중..." : "등급 이미지"}</span>
+                    <span className="text-[11px] font-semibold opacity-70">
+                      {trackResultModal.mvReviewAssets.ratingLabel}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCertificateDownload}
+                    disabled={!trackResultModal.mvReviewAssets.hasCertificate}
+                    className={`${detailActionButtonClass} min-h-[64px] flex-col items-start text-left`}
+                  >
+                    <span>필증</span>
+                    <span className="max-w-full truncate text-[11px] font-semibold opacity-70">
+                      {trackResultModal.mvReviewAssets.hasCertificate
+                        ? trackResultModal.mvReviewAssets.certificateName ?? "등록 완료"
+                        : "업로드 대기"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGuideDownload}
+                    className={`${detailActionButtonClass} min-h-[64px] flex-col items-start text-left`}
+                  >
+                    <span>사용 가이드</span>
+                    <span className="text-[11px] font-semibold opacity-70">
+                      온라인 심의 공통 파일
+                    </span>
+                  </button>
+                </div>
               </div>
             ) : null}
             <div className="mt-5 flex items-center justify-between gap-3">

@@ -28,6 +28,7 @@ function englishPathFor(pathname: string) {
     "/dashboard",
     "/mypage",
     "/track",
+    "/submissions",
     "/login",
     "/signup",
     "/forgot-password",
@@ -37,6 +38,8 @@ function englishPathFor(pathname: string) {
     "/faq",
     "/support",
     "/forms",
+    "/about",
+    "/apply",
   ];
   const match = prefixes.find(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),

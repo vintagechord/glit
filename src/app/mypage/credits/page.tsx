@@ -7,7 +7,6 @@ import {
   Coins,
   ExternalLink,
   History,
-  Ticket,
 } from "lucide-react";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
@@ -50,10 +49,12 @@ type UserMagazineRequest = {
   created_at: string | null;
 };
 
-const statusLabels: Record<string, string> = {
-  ISSUED: "발행됨",
-  USED: "사용 완료",
-  CANCELED: "취소됨",
+export type MyPageCreditsSearchParams = {
+  error?: string | string[];
+  redeemed?: string | string[];
+  studioRequested?: string | string[];
+  creditsOpen?: string | string[];
+  creditPage?: string | string[];
 };
 
 const magazineStatusLabels: Record<string, string> = {
@@ -64,8 +65,9 @@ const magazineStatusLabels: Record<string, string> = {
 };
 
 const studioStatusLabels: Record<string, string> = {
-  REQUESTED: "요청 접수",
+  REQUESTED: "요청접수",
   APPROVED: "승인/안내 완료",
+  USED: "사용완료",
   CANCELED: "취소됨",
 };
 
@@ -89,9 +91,11 @@ const isOpenFlag = (value?: string | string[]) => firstParam(value) === "1";
 const buildCreditsPath = ({
   creditPage,
   creditsOpen = true,
+  localePrefix = "",
 }: {
   creditPage?: number;
   creditsOpen?: boolean;
+  localePrefix?: string;
 }) => {
   const params = new URLSearchParams();
   if (creditsOpen) params.set("creditsOpen", "1");
@@ -99,7 +103,7 @@ const buildCreditsPath = ({
     params.set("creditPage", String(creditPage));
   }
   const query = params.toString();
-  return `/mypage/credits${query ? `?${query}` : ""}#credit-sources`;
+  return `${localePrefix}/mypage/credits${query ? `?${query}` : ""}#credit-sources`;
 };
 
 const formatDate = (value?: string | null) => {
@@ -131,17 +135,44 @@ const getMagazineRequestStatusLabel = (request: UserMagazineRequest) => {
   return magazineStatusLabels[request.status ?? ""] ?? request.status ?? "-";
 };
 
-const getStudioRequestStatusLabel = (reservation: StudioReservationRequest) => {
+const getStudioRequestStatusLabel = (
+  reservation: StudioReservationRequest,
+  redemption?: CreditRewardRedemption,
+) => {
+  if (redemption?.status === "USED" || redemption?.used_at) {
+    return studioStatusLabels.USED;
+  }
+  if (redemption?.status === "CANCELED" || reservation.status === "CANCELED") {
+    return studioStatusLabels.CANCELED;
+  }
   if (reservation.status === "APPROVED" || reservation.approved_at) {
-    return "승인/안내 완료";
+    return studioStatusLabels.APPROVED;
   }
   return studioStatusLabels[reservation.status] ?? reservation.status;
 };
+
+const getStudioRequestStepIndex = (
+  reservation: StudioReservationRequest,
+  redemption?: CreditRewardRedemption,
+) => {
+  const label = getStudioRequestStatusLabel(reservation, redemption);
+  if (label === studioStatusLabels.USED) return 2;
+  if (label === studioStatusLabels.APPROVED) return 1;
+  if (label === studioStatusLabels.REQUESTED) return 0;
+  return -1;
+};
+
+const studioRequestSteps = [
+  studioStatusLabels.REQUESTED,
+  studioStatusLabels.APPROVED,
+  studioStatusLabels.USED,
+];
 
 const noticeText = (
   error?: string | string[],
   redeemed?: string | string[],
   studioRequested?: string | string[],
+  localePrefix = "",
 ): CreditActionNoticeState | null => {
   const rawError = Array.isArray(error) ? error[0] : error;
   if (rawError) {
@@ -155,9 +186,9 @@ const noticeText = (
   if (redeemedFlag) {
     return {
       type: "success" as const,
-      title: "서비스 이용권 발행 완료",
-      text: "크레딧 이용권이 발행되었습니다. 쿠폰코드를 확인해주세요.",
-      actionHref: "/mypage/credits#credit-requests",
+      title: "서비스 이용 요청 접수",
+      text: "서비스 이용 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.",
+      actionHref: `${localePrefix}/mypage/credits#credit-requests`,
       actionLabel: "요청 내역 보기",
       clearQueryParams: ["redeemed"],
     };
@@ -171,7 +202,7 @@ const noticeText = (
       title: "녹음실 사용 신청 완료",
       text:
         "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.\n적어주신 연락처로 녹음실 사용 안내를 드립니다.",
-      actionHref: "/mypage/credits#credit-requests",
+      actionHref: `${localePrefix}/mypage/credits#credit-requests`,
       actionLabel: "요청 내역 보기",
       clearQueryParams: ["studioRequested"],
     };
@@ -248,12 +279,18 @@ function MagazineRequestCard({ request }: { request: UserMagazineRequest }) {
 
 function StudioReservationCard({
   reservation,
+  redemption,
 }: {
   reservation: StudioReservationRequest;
+  redemption?: CreditRewardRedemption;
 }) {
   const approvedMessage = stripCreditApprovalMessageDatePrefix(
     reservation.approved_message,
   );
+  const studioUrl = getCreditRewardStudioUrl(reservation.reward_title);
+  const statusLabel = getStudioRequestStatusLabel(reservation, redemption);
+  const activeStepIndex = getStudioRequestStepIndex(reservation, redemption);
+  const isUsed = statusLabel === studioStatusLabels.USED;
 
   return (
     <div className="rounded-[10px] border-2 border-border bg-background p-4">
@@ -267,7 +304,7 @@ function StudioReservationCard({
           </p>
         </div>
         <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
-          {getStudioRequestStatusLabel(reservation)}
+          {statusLabel}
         </span>
       </div>
       <p className="mt-2 text-xs font-semibold text-muted-foreground">
@@ -277,51 +314,37 @@ function StudioReservationCard({
         )}{" "}
         · {reservation.contact_phone}
       </p>
-      {reservation.status === "APPROVED" && approvedMessage ? (
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        {studioRequestSteps.map((step, index) => {
+          const isDone = activeStepIndex >= index;
+          const isActive = activeStepIndex === index;
+          return (
+            <div
+              key={step}
+              className={[
+                "rounded-[8px] border-2 px-3 py-2 text-[11px] font-black",
+                isDone
+                  ? "border-[#111111] bg-[#1556a4] text-white dark:border-[#8bc3ff] dark:bg-[#8bc3ff] dark:text-[#06111f]"
+                  : isActive
+                    ? "border-[#111111] bg-[#f2cf27] text-[#111111]"
+                    : "border-border bg-card text-muted-foreground",
+              ].join(" ")}
+            >
+              {step}
+            </div>
+          );
+        })}
+      </div>
+      {(reservation.status === "APPROVED" || isUsed) && approvedMessage ? (
         <div className="mt-3 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black leading-5 text-[#111111]">
           {approvedMessage}
         </div>
       ) : null}
-      {reservation.admin_memo ? (
-        <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
-          관리자 메모: {reservation.admin_memo}
+      {isUsed && redemption?.used_at ? (
+        <p className="mt-3 text-xs font-semibold text-muted-foreground">
+          사용완료 {formatDate(redemption.used_at)}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-function RedemptionCard({
-  redemption,
-}: {
-  redemption: CreditRewardRedemption;
-}) {
-  const studioUrl = getCreditRewardStudioUrl(redemption.reward_title);
-
-  return (
-    <div className="rounded-[10px] border-2 border-border bg-background p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-black text-foreground">
-            {redemption.reward_title}
-          </p>
-          <p className="mt-1 text-xs font-semibold text-muted-foreground">
-            {redemption.credits_spent}크레딧 사용 · 발행일{" "}
-            {formatDate(redemption.issued_at)}
-          </p>
-        </div>
-        <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
-          {statusLabels[redemption.status] ?? redemption.status}
-        </span>
-      </div>
-      <div className="mt-4 rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-white">
-        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/60">
-          Coupon Code
-        </p>
-        <p className="mt-1 text-2xl font-black tracking-normal">
-          {redemption.coupon_code}
-        </p>
-      </div>
       {studioUrl ? (
         <a
           href={studioUrl}
@@ -329,17 +352,10 @@ function RedemptionCard({
           rel="noreferrer"
           className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-4 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
         >
-          녹음실 살펴보기
+          녹음실 위치 보기
           <ExternalLink className="h-4 w-4" aria-hidden="true" />
         </a>
       ) : null}
-      <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
-        유효기간 {formatDate(redemption.expires_at)}
-        {redemption.used_at ? ` · 사용완료 ${formatDate(redemption.used_at)}` : ""}
-        {redemption.admin_memo
-          ? ` · 관리자 메모: ${redemption.admin_memo}`
-          : ""}
-      </p>
     </div>
   );
 }
@@ -376,10 +392,12 @@ function CreditSourcePagination({
   currentPage,
   totalPages,
   totalCount,
+  localePrefix = "",
 }: {
   currentPage: number;
   totalPages: number;
   totalCount: number;
+  localePrefix?: string;
 }) {
   if (totalCount <= creditSourcesPerPage) return null;
 
@@ -410,7 +428,10 @@ function CreditSourcePagination({
       >
         {currentPage > 1 ? (
           <Link
-            href={buildCreditsPath({ creditPage: currentPage - 1 })}
+            href={buildCreditsPath({
+              creditPage: currentPage - 1,
+              localePrefix,
+            })}
             className={`${baseButtonClass} ${enabledClass}`}
             aria-label="이전 페이지"
           >
@@ -425,7 +446,7 @@ function CreditSourcePagination({
         {pages.map((page) => (
           <Link
             key={page}
-            href={buildCreditsPath({ creditPage: page })}
+            href={buildCreditsPath({ creditPage: page, localePrefix })}
             className={`${baseButtonClass} ${
               page === currentPage
                 ? "border-[#111111] bg-[#1556a4] text-white"
@@ -439,7 +460,10 @@ function CreditSourcePagination({
 
         {currentPage < totalPages ? (
           <Link
-            href={buildCreditsPath({ creditPage: currentPage + 1 })}
+            href={buildCreditsPath({
+              creditPage: currentPage + 1,
+              localePrefix,
+            })}
             className={`${baseButtonClass} ${enabledClass}`}
             aria-label="다음 페이지"
           >
@@ -455,16 +479,12 @@ function CreditSourcePagination({
   );
 }
 
-export default async function MyPageCreditsPage({
+export async function MyPageCreditsPageView({
   searchParams,
+  localePrefix = "",
 }: {
-  searchParams?: Promise<{
-    error?: string | string[];
-    redeemed?: string | string[];
-    studioRequested?: string | string[];
-    creditsOpen?: string | string[];
-    creditPage?: string | string[];
-  }>;
+  searchParams?: Promise<MyPageCreditsSearchParams>;
+  localePrefix?: string;
 }) {
   const supabase = await createServerSupabase();
   const {
@@ -472,7 +492,9 @@ export default async function MyPageCreditsPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/mypage/credits");
+    redirect(
+      `${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/mypage/credits`)}`,
+    );
   }
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
@@ -484,6 +506,7 @@ export default async function MyPageCreditsPage({
     resolvedSearchParams?.error,
     resolvedSearchParams?.redeemed,
     resolvedSearchParams?.studioRequested,
+    localePrefix,
   );
   const admin = createAdminClient();
 
@@ -558,11 +581,8 @@ export default async function MyPageCreditsPage({
     ((magazineRequestsResult.data ?? []) as UserMagazineRequest[]) ?? [];
   const studioReservations =
     ((studioReservationsResult.data ?? []) as StudioReservationRequest[]) ?? [];
-  const issuedRedemptions = redemptions.filter(
-    (redemption) => redemption.status === "ISSUED",
-  );
-  const usedRedemptions = redemptions.filter(
-    (redemption) => redemption.status === "USED",
+  const redemptionMap = new Map(
+    redemptions.map((redemption) => [redemption.id, redemption]),
   );
   const hasCreditRequests =
     magazineRequests.length > 0 || studioReservations.length > 0;
@@ -585,11 +605,11 @@ export default async function MyPageCreditsPage({
   );
 
   return (
-    <DashboardShell
-      title="나의 크레딧"
-      description="음반심의 결제 완료 건으로 적립된 크레딧을 매거진 발행이나 서비스 이용권으로 사용할 수 있습니다."
-      activeTab="credits"
-      contextLabel="마이페이지"
+      <DashboardShell
+        title="나의 크레딧"
+        description="음반심의 결제 완료 건으로 적립된 크레딧을 매거진 발행이나 서비스 이용 요청에 사용할 수 있습니다."
+        activeTab="credits"
+        contextLabel="마이페이지"
     >
       <div className="space-y-8">
         <CreditActionNotice notice={notice} />
@@ -602,8 +622,7 @@ export default async function MyPageCreditsPage({
                 결제 완료 음반심의 1건 = 1크레딧
               </h2>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-muted-foreground">
-                1크레딧으로 매거진을 1회 발행할 수 있습니다. 모은 크레딧은
-                치킨 쿠폰처럼 녹음실 이용권 등 서비스 쿠폰으로 교환됩니다.
+                적립 크레딧은 매거진 발행, 녹음실 이용권 등으로 사용 가능합니다.
               </p>
             </div>
             <span className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-sm font-black text-[#111111]">
@@ -631,9 +650,9 @@ export default async function MyPageCreditsPage({
               tone="border-border bg-card text-foreground"
             />
             <SummaryCard
-              label="이용권 사용"
+              label="서비스 사용"
               value={summary.rewardUsed}
-              description="서비스 쿠폰 교환에 사용"
+              description="서비스 이용 요청에 사용"
               tone="border-border bg-card text-foreground"
             />
           </div>
@@ -664,63 +683,16 @@ export default async function MyPageCreditsPage({
                   <StudioReservationCard
                     key={item.key}
                     reservation={item.reservation}
+                    redemption={redemptionMap.get(item.reservation.redemption_id)}
                   />
                 ),
               )}
             </div>
           ) : (
             <p className="mt-5 rounded-[10px] border-2 border-dashed border-border bg-background p-5 text-sm font-semibold text-muted-foreground">
-              아직 크레딧으로 접수한 매거진 발행 또는 서비스 이용권 신청이 없습니다.
+              아직 크레딧으로 접수한 매거진 발행 또는 서비스 이용 요청이 없습니다.
             </p>
           )}
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-[1fr_0.86fr]">
-          <div className="rounded-[10px] border-2 border-border bg-card p-5">
-            <div className="flex items-center gap-2">
-              <Ticket className="h-5 w-5 text-[#1556a4]" aria-hidden="true" />
-              <h2 className="text-xl font-black text-foreground">
-                발행된 이용권
-              </h2>
-            </div>
-            {issuedRedemptions.length > 0 ? (
-              <div className="mt-5 space-y-3">
-                {issuedRedemptions.map((redemption) => (
-                  <RedemptionCard
-                    key={redemption.id}
-                    redemption={redemption}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="mt-5 rounded-[10px] border-2 border-dashed border-border bg-background p-5 text-sm font-semibold text-muted-foreground">
-                아직 발행된 이용권이 없습니다.
-              </p>
-            )}
-          </div>
-
-          <div className="rounded-[10px] border-2 border-border bg-card p-5">
-            <div className="flex items-center gap-2">
-              <Ticket className="h-5 w-5 text-[#1556a4]" aria-hidden="true" />
-              <h2 className="text-xl font-black text-foreground">
-                사용완료된 이용권
-              </h2>
-            </div>
-            {usedRedemptions.length > 0 ? (
-              <div className="mt-5 space-y-3">
-                {usedRedemptions.map((redemption) => (
-                  <RedemptionCard
-                    key={redemption.id}
-                    redemption={redemption}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="mt-5 rounded-[10px] border-2 border-dashed border-border bg-background p-5 text-sm font-semibold text-muted-foreground">
-                아직 사용완료된 이용권이 없습니다.
-              </p>
-            )}
-          </div>
         </section>
 
         <section
@@ -769,6 +741,7 @@ export default async function MyPageCreditsPage({
                     currentPage={creditSourcesCurrentPage}
                     totalPages={creditSourcesTotalPages}
                     totalCount={creditSourcesTotal}
+                    localePrefix={localePrefix}
                   />
                 </>
               ) : (
@@ -782,4 +755,12 @@ export default async function MyPageCreditsPage({
       </div>
     </DashboardShell>
   );
+}
+
+export default async function MyPageCreditsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<MyPageCreditsSearchParams>;
+}) {
+  return MyPageCreditsPageView({ searchParams });
 }

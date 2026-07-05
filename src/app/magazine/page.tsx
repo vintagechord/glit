@@ -85,8 +85,8 @@ const noticeText = (
   if (firstParam(redeemed)) {
     return {
       type: "success" as const,
-      title: "서비스 이용권 발행 완료",
-      text: "크레딧 이용권이 발행되었습니다. 쿠폰코드는 보유 크레딧 페이지에서도 확인할 수 있습니다.",
+      title: "서비스 이용 요청 접수",
+      text: "서비스 이용 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.",
       actionHref: "/mypage/credits#credit-requests",
       actionLabel: "요청 내역 보기",
       clearQueryParams: ["redeemed"],
@@ -198,11 +198,6 @@ function CreditServiceRewardCard({
               {reward.service_location}
             </span>
           ) : null}
-          {reward.validity_days ? (
-            <span className="rounded-[6px] border border-border bg-background px-2 py-1">
-              발행 후 {reward.validity_days}일
-            </span>
-          ) : null}
         </div>
       </div>
 
@@ -263,11 +258,10 @@ function CreditServiceRewardsPanel({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-black text-foreground">
-            서비스 이용권 목록
+            서비스 이용 요청
           </h2>
           <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
-            녹음실 예약 등 현재 신청 가능한 이용권입니다. 새 서비스가 추가되면
-            이 목록에 표시됩니다.
+            녹음실 예약 등 현재 신청 가능한 서비스입니다.
           </p>
         </div>
         <div className="min-w-[156px] rounded-[8px] border-2 border-border bg-card p-4">
@@ -298,8 +292,7 @@ function CreditServiceRewardsPanel({
           ))
         ) : (
           <div className="rounded-[10px] border-2 border-dashed border-border bg-card p-6 text-sm font-semibold text-muted-foreground">
-            현재 교환 가능한 서비스 이용권이 없습니다. 관리자 등록 후 이 탭에
-            서비스가 표시됩니다.
+            현재 신청 가능한 서비스가 없습니다.
           </div>
         )}
       </div>

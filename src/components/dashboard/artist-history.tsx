@@ -110,10 +110,10 @@ function SubmissionManagementRow({
 }) {
   return (
     <div
-      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-[8px] border-2 px-3 py-2 text-sm transition sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center ${
+      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-t border-black/15 py-3 text-sm transition dark:border-white/15 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center ${
         selected
-          ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-panel)] shadow-[3px_3px_0_var(--bauhaus-shadow)]"
-          : "border-border bg-[var(--background)] hover:border-[var(--bauhaus-ink)]"
+          ? "rounded-[8px] bg-[rgba(242,207,39,0.22)] px-2 shadow-[2px_2px_0_var(--bauhaus-shadow)]"
+          : "px-0 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
       }`}
     >
       <label className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5">
@@ -203,7 +203,7 @@ function ArtistCard({
           ) : null}
         </div>
       </div>
-      <div className="mt-3 space-y-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] p-3">
+      <div className="mt-4">
         {group.submissions.map((item) => (
           item.id ? (
             <SubmissionManagementRow
@@ -217,7 +217,7 @@ function ArtistCard({
           ) : (
             <div
               key={`${group.artistName}-${item.title ?? "unknown"}`}
-              className="flex items-center justify-between gap-3 rounded-[8px] border-2 border-dashed border-[var(--bauhaus-red)] bg-[var(--background)] px-3 py-2 text-sm font-bold text-[var(--bauhaus-red)]"
+              className="flex items-center justify-between gap-3 border-t border-red-500/40 py-3 text-sm font-bold text-[var(--bauhaus-red)]"
             >
               <span className="truncate">
                 ID가 없는 항목입니다. 관리자에게 문의해주세요.

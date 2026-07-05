@@ -59,6 +59,45 @@ const submissionStatusSchema = z.object({
   adminMemo: z.string().optional(),
 });
 
+const adminOperationalStageValues = [
+  "APPLICATION_RECEIVED",
+  "PAYMENT_COMPLETE",
+  "REVIEW_IN_PROGRESS",
+  "RESULT_NOTIFIED",
+] as const;
+
+const adminOperationalStageEnum = z.enum(adminOperationalStageValues);
+type AdminOperationalStage = z.infer<typeof adminOperationalStageEnum>;
+
+const adminOperationalStageLabelMap: Record<AdminOperationalStage, string> = {
+  APPLICATION_RECEIVED: "신청접수",
+  PAYMENT_COMPLETE: "결제완료",
+  REVIEW_IN_PROGRESS: "심의진행",
+  RESULT_NOTIFIED: "결과 통보",
+};
+
+const mapAdminOperationalStage = (
+  stage: AdminOperationalStage,
+  currentPaymentStatus?: PaymentStatus | null,
+): { status: ReviewStatus; paymentStatus: PaymentStatus } => {
+  switch (stage) {
+    case "APPLICATION_RECEIVED":
+      return {
+        status: "SUBMITTED",
+        paymentStatus:
+          currentPaymentStatus && currentPaymentStatus !== "PAID"
+            ? currentPaymentStatus
+            : "PAYMENT_PENDING",
+      };
+    case "PAYMENT_COMPLETE":
+      return { status: "SUBMITTED", paymentStatus: "PAID" };
+    case "REVIEW_IN_PROGRESS":
+      return { status: "IN_PROGRESS", paymentStatus: "PAID" };
+    case "RESULT_NOTIFIED":
+      return { status: "RESULT_READY", paymentStatus: "PAID" };
+  }
+};
+
 const submissionBasicInfoSchema = z.object({
   submissionId: z.string().uuid(),
   title: z.string().optional(),
@@ -2648,22 +2687,28 @@ export async function saveSubmissionAdminFormAction(
   };
 
   const status = String(formData.get("status") ?? "").trim();
+  const operationalStage = String(formData.get("operationalStage") ?? "").trim();
   const adminMemo = String(formData.get("adminMemo") ?? "").trim();
   const paymentStatus = String(formData.get("paymentStatus") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
   const artistName = String(formData.get("artistName") ?? "").trim();
 
   const parsedSubmissionId = uuidValueSchema.safeParse(submissionId);
-  const parsedStatus = reviewStatusEnum.safeParse(status);
-  const parsedPaymentStatus = paymentStatusEnum.safeParse(paymentStatus);
+  const parsedOperationalStage = adminOperationalStageEnum.safeParse(operationalStage);
+  const parsedStatus = parsedOperationalStage.success
+    ? null
+    : reviewStatusEnum.safeParse(status);
+  const parsedPaymentStatus = parsedOperationalStage.success
+    ? null
+    : paymentStatusEnum.safeParse(paymentStatus);
 
   if (!parsedSubmissionId.success) {
     redirectWithError("접수 ID가 유효하지 않습니다.");
   }
-  if (!parsedStatus.success) {
+  if (!parsedOperationalStage.success && !parsedStatus?.success) {
     redirectWithError("접수 상태 값을 확인해주세요.");
   }
-  if (!parsedPaymentStatus.success) {
+  if (!parsedOperationalStage.success && !parsedPaymentStatus?.success) {
     redirectWithError("결제 상태 값을 확인해주세요.");
   }
 
@@ -2690,10 +2735,18 @@ export async function saveSubmissionAdminFormAction(
   >;
   const currentStatus = currentSubmissionRow.status as ReviewStatus;
   const currentPaymentStatus = currentSubmissionRow.payment_status as PaymentStatus;
-  let nextStatus = parsedStatus.data as ReviewStatus;
-  const nextPaymentStatus = parsedPaymentStatus.data as PaymentStatus;
+  const mappedStage = parsedOperationalStage.success
+    ? mapAdminOperationalStage(parsedOperationalStage.data, currentPaymentStatus)
+    : null;
+  const mappedStageLabel = parsedOperationalStage.success
+    ? adminOperationalStageLabelMap[parsedOperationalStage.data]
+    : null;
+  let nextStatus = mappedStage?.status ?? (parsedStatus?.data as ReviewStatus);
+  const nextPaymentStatus =
+    mappedStage?.paymentStatus ?? (parsedPaymentStatus?.data as PaymentStatus);
 
   if (
+    !mappedStage &&
     nextPaymentStatus === "PAID" &&
     (currentStatus === "WAITING_PAYMENT" || currentStatus === "SUBMITTED") &&
     status === currentStatus
@@ -2740,13 +2793,15 @@ export async function saveSubmissionAdminFormAction(
   }
 
   const changes = [
-    currentStatus !== nextStatus
+    mappedStageLabel &&
+    (currentStatus !== nextStatus || currentPaymentStatus !== nextPaymentStatus)
+      ? `운영 단계: ${mappedStageLabel}`
+      : null,
+    !mappedStage && currentStatus !== nextStatus
       ? `접수 상태: ${reviewStatusLabelMap[nextStatus] ?? nextStatus}`
       : null,
-    currentPaymentStatus !== nextPaymentStatus
-      ? `결제 상태: ${
-          paymentStatusLabelMap[nextPaymentStatus] ?? nextPaymentStatus
-        }`
+    !mappedStage && currentPaymentStatus !== nextPaymentStatus
+      ? `결제 상태: ${paymentStatusLabelMap[nextPaymentStatus] ?? nextPaymentStatus}`
       : null,
     title && currentSubmissionRow.title !== title ? "작품명이 정리되었습니다." : null,
     artistName && currentSubmissionRow.artist_name !== artistName
