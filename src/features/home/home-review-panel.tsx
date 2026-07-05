@@ -1147,7 +1147,7 @@ export function HomeReviewPanel({
           </div>
           <div className={stationTableShellClass}>
             <div className={tableHeaderClass}>
-              <span className="pl-2 text-left">방송국</span>
+              <span className="justify-self-center text-center">방송국</span>
               <span className="justify-self-center text-center">현재 상태</span>
               <span className="text-right">Updated</span>
             </div>
@@ -1484,11 +1484,7 @@ export function HomeReviewPanel({
               <p className="mt-2 text-sm text-muted-foreground">
                 {buildStationTrackSummaryText(trackResultModal.summary.counts, " · ")}
               </p>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">
-                현재 {trackResultModal.resultLabel} 상태로 등록되어 있습니다.
-              </p>
-            )}
+            ) : null}
             {trackResultModal.summary.results.length > 0 ? (
               <div className="mt-4 max-h-80 space-y-2 overflow-auto">
               {trackResultModal.summary.results.map((track, index) => {
