@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
+import { ShoppingCart } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 
@@ -35,6 +36,8 @@ const subtleButtonClass =
   "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-3 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 const primaryButtonClass =
   "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-white dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
+const cartButtonClass =
+  "relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:w-11 sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 
 const englishRoutePrefixes = [
   "/dashboard",
@@ -88,9 +91,11 @@ export function SiteHeader() {
   const pathname = usePathname();
   const headerRef = React.useRef<HTMLElement | null>(null);
   const [authState, setAuthState] = React.useState<AuthState>("unauthenticated");
+  const [cartCount, setCartCount] = React.useState(0);
   const [locationSuffix, setLocationSuffix] = React.useState("");
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const activeNavLinks = isEnglishRoute ? englishNavLinks : navLinks;
+  const cartHref = isEnglishRoute ? "/en/mypage/cart" : "/mypage/cart";
   const languagePath = isEnglishRoute
     ? toKoreanPath(pathname)
     : toEnglishPath(pathname);
@@ -200,6 +205,38 @@ export function SiteHeader() {
     };
   }, []);
 
+  React.useEffect(() => {
+    if (authState !== "authenticated") {
+      setCartCount(0);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadCartCount = async () => {
+      try {
+        const response = await fetch("/api/cart/count", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const payload = (await response.json().catch(() => null)) as {
+          count?: number;
+        } | null;
+        if (!controller.signal.aborted) {
+          setCartCount(Math.max(0, Math.trunc(Number(payload?.count ?? 0))));
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("[SiteHeader] Failed to read cart count:", error);
+        }
+      }
+    };
+
+    void loadCartCount();
+
+    return () => controller.abort();
+  }, [authState, pathname]);
+
   return (
     <header
       ref={headerRef}
@@ -249,6 +286,19 @@ export function SiteHeader() {
                 className={subtleButtonClass}
               >
                 {isEnglishRoute ? "My Page" : "마이페이지"}
+              </ReliableLink>
+              <ReliableLink
+                href={cartHref}
+                className={cartButtonClass}
+                aria-label={isEnglishRoute ? "Cart" : "장바구니"}
+                title={isEnglishRoute ? "Cart" : "장바구니"}
+              >
+                <ShoppingCart size={18} strokeWidth={2.6} />
+                {cartCount > 0 ? (
+                  <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-1 text-[10px] font-black leading-none text-white dark:border-[#f2cf27] dark:text-[#06111f]">
+                    {cartCount > 99 ? "99+" : cartCount}
+                  </span>
+                ) : null}
               </ReliableLink>
             </>
           ) : (

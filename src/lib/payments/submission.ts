@@ -199,6 +199,9 @@ export const createSubmissionPaymentOrder = async (
     if (submission.status === "DRAFT") {
       return { error: "임시저장 상태에서는 결제를 시작할 수 없습니다." };
     }
+    if (submission.status === "PRE_REVIEW") {
+      return { error: "파일 업로드 단계가 완료된 신청서만 결제할 수 있습니다." };
+    }
     const submissionAmount = Math.round(Number(submission.amount_krw ?? 0));
     if (!Number.isFinite(submissionAmount) || submissionAmount <= 0) {
       return { error: "결제 금액이 유효하지 않습니다." };
@@ -298,6 +301,25 @@ export const createSubmissionPaymentOrder = async (
       return { error: "이미 생성된 결제 요청이 있습니다. 잠시 후 다시 시도해주세요." };
     }
     return { error: "결제 요청을 저장하지 못했습니다." };
+  }
+
+  for (const item of submissions) {
+    const nextStatus =
+      item.status === "SUBMITTED" || item.status === "WAITING_PAYMENT"
+        ? "WAITING_PAYMENT"
+        : item.status;
+    const { error: updateError } = await admin
+      .from("submissions")
+      .update({
+        payment_method: "CARD",
+        payment_status: "PAYMENT_PENDING",
+        status: nextStatus,
+      })
+      .eq("id", item.id)
+      .neq("payment_status", "PAID");
+    if (updateError) {
+      return { error: "결제 대기 상태를 저장하지 못했습니다." };
+    }
   }
 
   return {

@@ -208,7 +208,7 @@ export function SubmissionStatusList({
                   {submission.payment_status !== "PAID" && (
                     <button
                       type="button"
-                      onClick={() => router.push(`/dashboard/pay/${submission.id}`)}
+                      onClick={() => router.push(`/mypage/cart?focus=${submission.id}`)}
                       className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
                     >
                       결제하기

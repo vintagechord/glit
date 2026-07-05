@@ -1146,7 +1146,7 @@ export function HomeReviewPanel({
                         </p>
                       </div>
                       <Link
-                        href={`/dashboard/pay/${activeSubmission.id}`}
+                        href={`/mypage/cart?focus=${activeSubmission.id}`}
                         className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] hover:shadow-[5px_5px_0_rgba(17,17,17,0.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] dark:text-[#06111f] dark:hover:bg-[#ff7a72] sm:w-auto sm:min-w-[10.5rem]"
                       >
                         <CreditCard aria-hidden="true" className="h-4 w-4" />

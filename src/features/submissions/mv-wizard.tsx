@@ -2448,7 +2448,9 @@ export function MvWizard({
     }
   };
 
-  const handleSubmit = async (options?: { deferPayment?: boolean }) => {
+  const handleSubmit = async (
+    options?: { deferPayment?: boolean; redirectToCart?: boolean },
+  ) => {
     const deferPayment = options?.deferPayment === true;
     if (!validateMvForm({ requirePayment: !deferPayment })) return;
     if (!validateMvUploads()) return;
@@ -2575,6 +2577,10 @@ export function MvWizard({
       if (result.submissionId) {
         if (deferPayment) {
           clearDraftStorage();
+          if (options?.redirectToCart && !isGuest) {
+            router.push(`/mypage/cart?added=${encodeURIComponent(result.submissionId)}`);
+            return;
+          }
           setNotice({
             emailNotice: result.emailNotice
               ? `${deferredPaymentNotice} ${result.emailNotice}`
@@ -4055,10 +4061,12 @@ export function MvWizard({
                 STEP 04
               </p>
               <h2 className="font-display mt-2 text-2xl text-foreground">
-                결제하기
+                {isGuest ? "결제하기" : "장바구니에 담기"}
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                무통장 입금 또는 카드 결제를 선택할 수 있습니다.
+                {isGuest
+                  ? "무통장 입금 또는 카드 결제를 선택할 수 있습니다."
+                  : "신청서를 장바구니에 담은 뒤 여러 심의건을 한 번에 결제할 수 있습니다."}
               </p>
             </div>
           </div>
@@ -4092,47 +4100,53 @@ export function MvWizard({
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              결제 방식 선택
-            </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("BANK")}
-                className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "BANK"
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border/60 bg-background text-foreground hover:border-foreground"
-                  }`}
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  무통장
-                </p>
-                <p className="mt-2 text-sm font-semibold">무통장 입금</p>
-                <p className="mt-2 text-xs opacity-80">
-                  입금 확인 후 진행이 시작됩니다.
-                </p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("CARD")}
-                className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "CARD"
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border/60 bg-background text-foreground hover:border-foreground"
-                  }`}
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                  카드
-                </p>
-                <p className="mt-2 text-sm font-semibold">카드 결제</p>
-                <p className="mt-2 text-xs opacity-80">
-                  KG이니시스 카드 결제 · 결제 모듈에서 즉시 진행
-                </p>
-              </button>
+          {isGuest ? (
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                결제 방식 선택
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("BANK")}
+                  className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "BANK"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                    }`}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
+                    무통장
+                  </p>
+                  <p className="mt-2 text-sm font-semibold">무통장 입금</p>
+                  <p className="mt-2 text-xs opacity-80">
+                    입금 확인 후 진행이 시작됩니다.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("CARD")}
+                  className={`rounded-2xl border p-4 text-left transition ${paymentMethod === "CARD"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border/60 bg-background text-foreground hover:border-foreground"
+                    }`}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
+                    카드
+                  </p>
+                  <p className="mt-2 text-sm font-semibold">카드 결제</p>
+                  <p className="mt-2 text-xs opacity-80">
+                    KG이니시스 카드 결제 · 결제 모듈에서 즉시 진행
+                  </p>
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm font-semibold leading-6 text-muted-foreground">
+              신청서 작성과 파일 업로드/이메일 제출 선택이 완료되었습니다. 다음 버튼을 누르면 이 신청서가 장바구니에 담기고, 장바구니에서 다른 신청서와 함께 선택 결제할 수 있습니다.
+            </div>
+          )}
 
-          {paymentMethod === "BANK" ? (
+          {isGuest && paymentMethod === "BANK" ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 무통장 입금 안내
@@ -4370,11 +4384,11 @@ export function MvWizard({
                 )}
               </div>
             </div>
-          ) : (
+          ) : isGuest ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
               카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
             </div>
-          )}
+          ) : null}
 
           {notice.error && (
             <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
@@ -4396,15 +4410,22 @@ export function MvWizard({
               disabled={isSaving || !mvPaymentReady}
               className="rounded-full border border-border/70 bg-background px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              (임시)저장하고 다음에 결제
+              {isGuest ? "(임시)저장하고 다음에 결제" : "장바구니에 담고 나중에 결제"}
             </button>
             <button
               type="button"
-              onClick={() => handleSubmit()}
+              onClick={() =>
+                isGuest
+                  ? handleSubmit()
+                  : handleSubmit({
+                    deferPayment: true,
+                    redirectToCart: true,
+                  })
+              }
               disabled={isSaving || !mvPaymentReady}
               className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
             >
-              결제하기
+              {isGuest ? "결제하기" : "장바구니에서 결제하기"}
             </button>
           </div>
         </div>

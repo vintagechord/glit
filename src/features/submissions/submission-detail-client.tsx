@@ -745,7 +745,7 @@ export function SubmissionDetailClient({
     submission.payment_method !== "BANK" && submission.payment_status !== "PAID";
   const retryPaymentHref = guestToken
     ? `/dashboard/pay/${submission.id}?guestToken=${encodeURIComponent(guestToken)}`
-    : `/dashboard/pay/${submission.id}`;
+    : `/mypage/cart?focus=${submission.id}`;
   const mvSongTitleDisplay =
     submission.mv_song_title_official ||
     submission.mv_song_title ||
@@ -1471,7 +1471,7 @@ export function SubmissionDetailClient({
                   onClick={() => router.push(retryPaymentHref)}
                   className="rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-4 py-2 text-xs font-black uppercase tracking-normal text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
                 >
-                  카드 결제하기
+                  {guestToken ? "카드 결제하기" : "장바구니에서 결제하기"}
                 </button>
               </div>
             </div>

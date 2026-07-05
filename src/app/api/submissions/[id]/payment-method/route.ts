@@ -134,6 +134,10 @@ export async function PATCH(
   revalidatePath(`/mypage/submissions/${submission.id}`);
   revalidatePath("/dashboard/drafts");
   revalidatePath("/mypage/drafts");
+  revalidatePath("/dashboard/cart");
+  revalidatePath("/mypage/cart");
+  revalidatePath("/en/dashboard/cart");
+  revalidatePath("/en/mypage/cart");
 
   return NextResponse.json({
     ok: true,

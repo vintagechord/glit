@@ -141,6 +141,7 @@ const selectFileColumns = [
 
 const incompletePaymentFilter =
   "payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)";
+const editableDraftStatuses = ["DRAFT", "PRE_REVIEW"];
 
 const extractMissingColumn = (error: { message?: string; code?: string } | null) => {
   const message = error?.message ?? "";
@@ -187,7 +188,8 @@ export async function POST(request: Request) {
     const submissionQuery = admin
       .from("submissions")
       .select(selectClause)
-      .or(incompletePaymentFilter);
+      .or(incompletePaymentFilter)
+      .in("status", editableDraftStatuses);
 
     if (parsed.data.type === "ALBUM") {
       submissionQuery.eq("type", "ALBUM");
@@ -365,7 +367,8 @@ export async function DELETE(request: Request) {
   const deleteQuery = admin
     .from("submissions")
     .delete()
-    .or(incompletePaymentFilter);
+    .or(incompletePaymentFilter)
+    .in("status", editableDraftStatuses);
 
   if (parsed.data.type === "ALBUM") {
     deleteQuery.eq("type", "ALBUM");
