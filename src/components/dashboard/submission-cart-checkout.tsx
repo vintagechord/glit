@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Check, CreditCard, Landmark, ShoppingCart } from "lucide-react";
+import { Check, CreditCard, Landmark, ShoppingCart, Trash2 } from "lucide-react";
 import * as React from "react";
 
 import { APP_CONFIG } from "@/lib/config";
@@ -91,10 +91,13 @@ export function SubmissionCartCheckout({
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const cartHref = isEnglishRoute ? "/en/mypage/cart" : "/mypage/cart";
   const newSubmissionHref = isEnglishRoute ? "/en/dashboard/new" : "/dashboard/new";
-  const items = React.useMemo(
-    () => initialItems.map(mapSubmissionCartItem),
-    [initialItems],
+  const [cartItems, setCartItems] = React.useState<CartItem[]>(() =>
+    initialItems.map(mapSubmissionCartItem),
   );
+  React.useEffect(() => {
+    setCartItems(initialItems.map(mapSubmissionCartItem));
+  }, [initialItems]);
+  const items = cartItems;
   const payableIds = React.useMemo(
     () => items.filter((item) => getPayableAmount(item) > 0).map((item) => item.id),
     [items],
@@ -105,6 +108,7 @@ export function SubmissionCartCheckout({
   const [selectedMethod, setSelectedMethod] =
     React.useState<PaymentMethod>("CARD");
   const [isOpening, setIsOpening] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
   const [bankResult, setBankResult] = React.useState<{
     count: number;
     totalAmountKrw: number;
@@ -212,6 +216,68 @@ export function SubmissionCartCheckout({
       if (isAllSelected) return new Set<string>();
       return new Set(payableIds);
     });
+  };
+
+  const handleDeleteItems = async (ids: string[]) => {
+    if (isDeleting || isOpening) return;
+    const targetIds = Array.from(new Set(ids.filter(Boolean)));
+    if (targetIds.length === 0) {
+      setNotice({ type: "error", message: "삭제할 장바구니 항목을 선택해주세요." });
+      return;
+    }
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        targetIds.length === 1
+          ? "이 장바구니 항목을 삭제할까요? 삭제한 신청서는 복구할 수 없습니다."
+          : `선택한 ${targetIds.length}개 장바구니 항목을 삭제할까요? 삭제한 신청서는 복구할 수 없습니다.`,
+      )
+    ) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/cart/items", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submissionIds: targetIds }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        deletedIds?: string[];
+      };
+      if (!response.ok) {
+        setNotice({
+          type: "error",
+          message: payload.error ?? "장바구니 항목 삭제에 실패했습니다.",
+        });
+        return;
+      }
+
+      const deletedIds = new Set(payload.deletedIds ?? targetIds);
+      setCartItems((prev) => prev.filter((item) => !deletedIds.has(item.id)));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        deletedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      setBankResult(null);
+      setNotice({
+        type: "success",
+        message:
+          deletedIds.size === 1
+            ? "장바구니 항목이 삭제되었습니다."
+            : `${deletedIds.size}개 장바구니 항목이 삭제되었습니다.`,
+      });
+      window.dispatchEvent(new Event("onside:cart-updated"));
+      router.refresh();
+    } catch {
+      setNotice({ type: "error", message: "장바구니 항목 삭제 중 오류가 발생했습니다." });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleBankTransfer = async () => {
@@ -341,14 +407,25 @@ export function SubmissionCartCheckout({
             <ShoppingCart size={16} strokeWidth={2.5} />
             <span>{items.length}건 대기</span>
           </div>
-          <button
-            type="button"
-            onClick={toggleAll}
-            disabled={payableIds.length === 0}
-            className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-          >
-            {isAllSelected ? "전체 해제" : "전체 선택"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleAll}
+              disabled={payableIds.length === 0 || isDeleting}
+              className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+            >
+              {isAllSelected ? "전체 해제" : "전체 선택"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteItems(Array.from(selectedIds))}
+              disabled={selectedIds.size === 0 || isDeleting || isOpening}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70 disabled:hover:translate-y-0 dark:text-[#06111f]"
+            >
+              <Trash2 size={14} strokeWidth={2.8} />
+              {isDeleting ? "삭제 중" : "선택 삭제"}
+            </button>
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -357,16 +434,22 @@ export function SubmissionCartCheckout({
             const selected = selectedIds.has(item.id);
             const disabled = amount <= 0;
             return (
-              <label
+              <div
                 key={item.id}
-                className={`grid cursor-pointer gap-3 rounded-[8px] border-2 px-4 py-4 transition md:grid-cols-[32px_minmax(0,1fr)_auto] md:items-center ${
+                className={`grid gap-3 rounded-[8px] border-2 px-4 py-4 transition md:grid-cols-[32px_minmax(0,1fr)_auto_auto] md:items-center ${
                   selected
                     ? "border-[var(--bauhaus-ink)] bg-[#fff4bd] shadow-[4px_4px_0_var(--bauhaus-shadow)] dark:bg-[#f2cf27]/18"
                     : "border-border bg-[var(--card)] hover:border-[var(--bauhaus-ink)]"
                 } ${disabled ? "opacity-60" : ""}`}
               >
-                <span
-                  aria-hidden="true"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!disabled) toggleItem(item.id);
+                  }}
+                  disabled={disabled || isDeleting}
+                  aria-pressed={selected}
+                  aria-label={`${getDisplayTitle(item)} 선택`}
                   className={`flex h-7 w-7 items-center justify-center rounded-[6px] border-2 ${
                     selected
                       ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-ink)] text-[var(--background)]"
@@ -374,15 +457,15 @@ export function SubmissionCartCheckout({
                   }`}
                 >
                   <Check size={16} strokeWidth={3} />
-                </span>
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  disabled={disabled}
-                  onChange={() => toggleItem(item.id)}
-                  className="sr-only"
-                />
-                <span className="min-w-0">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!disabled) toggleItem(item.id);
+                  }}
+                  disabled={disabled || isDeleting}
+                  className="min-w-0 text-left disabled:cursor-default"
+                >
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="rounded-[6px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-2 py-1 text-[11px] font-black text-[var(--foreground)]">
                       {getTypeLabel(item)}
@@ -400,11 +483,21 @@ export function SubmissionCartCheckout({
                     {item.packageName ?? "패키지 미지정"} · 최근 수정{" "}
                     {formatDateTime(item.updatedAt)}
                   </span>
-                </span>
+                </button>
                 <span className="text-right text-base font-black text-foreground md:min-w-[112px]">
                   {amount > 0 ? `${formatCurrency(amount)}원` : "금액 확인 필요"}
                 </span>
-              </label>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteItems([item.id])}
+                  disabled={isDeleting || isOpening}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-red)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:hover:text-[#06111f]"
+                  aria-label={`${getDisplayTitle(item)} 삭제`}
+                >
+                  <Trash2 size={14} strokeWidth={2.8} />
+                  삭제
+                </button>
+              </div>
             );
           })}
         </div>

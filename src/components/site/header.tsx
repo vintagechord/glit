@@ -233,8 +233,12 @@ export function SiteHeader() {
     };
 
     void loadCartCount();
+    window.addEventListener("onside:cart-updated", loadCartCount);
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      window.removeEventListener("onside:cart-updated", loadCartCount);
+    };
   }, [authState, pathname]);
 
   return (
