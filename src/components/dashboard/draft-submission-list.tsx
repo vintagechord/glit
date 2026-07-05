@@ -405,7 +405,11 @@ export function DraftSubmissionList({
                       }
                       handleResume(item, Date.now());
                     }}
-                    className="inline-flex h-8 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-3 text-[11px] font-black tracking-normal text-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
+                    className={`inline-flex h-8 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] px-3 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
+                      shouldOpenPayment
+                        ? "bg-[var(--bauhaus-red)] text-white hover:bg-[#b92d25] dark:text-[#06111f] dark:hover:bg-[#ff7a72]"
+                        : "bg-[var(--foreground)] text-[var(--background)] hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
+                    }`}
                   >
                     {shouldOpenPayment ? "결제하기" : "이어쓰기"}
                   </button>

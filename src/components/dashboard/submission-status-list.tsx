@@ -209,7 +209,7 @@ export function SubmissionStatusList({
                     <button
                       type="button"
                       onClick={() => router.push(`/dashboard/pay/${submission.id}`)}
-                      className="rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-sm transition hover:bg-[#efcc49]"
+                      className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
                     >
                       결제하기
                     </button>

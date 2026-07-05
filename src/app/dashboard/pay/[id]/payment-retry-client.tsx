@@ -147,7 +147,7 @@ export function PaymentRetryClient({
           type="button"
           onClick={handleRetryPayment}
           disabled={disabled || isOpening}
-          className="bauhaus-button px-5 py-3 text-xs uppercase disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-5 py-3 text-xs font-black uppercase tracking-normal text-white shadow-[3px_3px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:text-[#06111f] dark:hover:bg-[#ff7a72]"
         >
           {isOpening ? "결제 모듈 준비 중" : "카드 결제하기"}
         </button>
