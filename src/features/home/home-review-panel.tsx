@@ -121,7 +121,7 @@ const stageStatusMap = {
     tone: "bauhaus-status-chip--success",
   },
   received: {
-    label: "진행중",
+    label: "접수완료",
     tone: "bauhaus-status-chip--info",
   },
   progress: {
@@ -684,6 +684,58 @@ export function HomeReviewPanel({
 
   const needsPayment =
     Boolean(activeSubmission) && activeSubmission?.payment_status !== "PAID";
+  const isActiveMvSubmission =
+    activeSubmission?.type === "MV_DISTRIBUTION" ||
+    activeSubmission?.type === "MV_BROADCAST";
+  const activeMvAssets = buildMvReviewAssetState(activeSubmission);
+  const activeMvResultReady =
+    isActiveMvSubmission && hasSubmissionResultSignal(activeSubmission);
+  const activeMvReceptionStarted =
+    isActiveMvSubmission &&
+    !needsPayment &&
+    (activeSubmission?.status === "IN_PROGRESS" ||
+      activeSubmission?.status === "RESULT_READY" ||
+      activeSubmission?.status === "COMPLETED" ||
+      activeStations.some((station) => {
+        const normalized = normalizeStationReviewStatus(station.status);
+        return (
+          normalized === "SENT" ||
+          normalized === "APPROVED" ||
+          normalized === "REJECTED" ||
+          normalized === "NEEDS_FIX"
+        );
+      }) ||
+      activeMvResultReady);
+  const mvCompletedStepCount = activeSubmission && isActiveMvSubmission
+    ? [
+        true,
+        !needsPayment,
+        activeMvReceptionStarted,
+        activeMvResultReady,
+      ].filter(Boolean).length
+    : 0;
+  const mvFlowSteps = [
+    { label: "신청 완료", done: Boolean(activeSubmission), active: false },
+    {
+      label: "결제 완료",
+      done: Boolean(activeSubmission) && !needsPayment,
+      active: Boolean(activeSubmission) && needsPayment,
+    },
+    {
+      label: "접수 진행",
+      done: activeMvReceptionStarted || activeMvResultReady,
+      active:
+        Boolean(activeSubmission) &&
+        !needsPayment &&
+        !activeMvReceptionStarted &&
+        !activeMvResultReady,
+    },
+    {
+      label: "결과 통보",
+      done: activeMvResultReady,
+      active: activeMvReceptionStarted && !activeMvResultReady,
+    },
+  ];
   const totalCount = needsPayment ? 0 : activeStations.length;
   const activeStationDisplayStatuses = activeStations.map((review) =>
     getStationReviewDisplayStatus(review, { showPartialTrackBreakdown }),
@@ -694,13 +746,39 @@ export function HomeReviewPanel({
   const hasAttentionStatus =
     !needsPayment &&
     activeStationDisplayStatuses.some((status) => status.needsAttention);
-  const progressPercent =
+  const stationProgressPercent =
     totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-  const progressText = `${totalCount}곳 중 ${completedCount}곳 완료 · ${progressPercent}%`;
+  const progressPercent = isActiveMvSubmission
+    ? Math.round((mvCompletedStepCount / 4) * 100)
+    : stationProgressPercent;
+  const progressText = isActiveMvSubmission
+    ? `4단계 중 ${mvCompletedStepCount}단계 완료 · ${progressPercent}%`
+    : `${totalCount}곳 중 ${completedCount}곳 완료 · ${progressPercent}%`;
+  const isAlbumStatusContext = tab === "album" || activeSubmission?.type === "ALBUM";
+  const hasAllStationResults =
+    !needsPayment && totalCount > 0 && completedCount === totalCount;
+  const hasPendingAlbumStationResults =
+    Boolean(activeSubmission) &&
+    isAlbumStatusContext &&
+    !needsPayment &&
+    totalCount > 0 &&
+    !hasAllStationResults;
   const currentSubmissionStatus =
-    hasAttentionStatus
+    isActiveMvSubmission
+      ? needsPayment
+        ? getStageStatus(activeSubmission)
+        : activeMvResultReady
+          ? stageStatusMap.completed
+          : activeMvReceptionStarted
+            ? stageStatusMap.progress
+            : stageStatusMap.received
+      : hasPendingAlbumStationResults
+      ? stageStatusMap.received
+      : isAlbumStatusContext && hasAllStationResults
+        ? stageStatusMap.completed
+        : hasAttentionStatus
       ? stageStatusMap.attention
-      : activeSubmission && !needsPayment && totalCount > 0 && completedCount === totalCount
+      : activeSubmission && hasAllStationResults
       ? stageStatusMap.completed
       : getStageStatus(activeSubmission);
 
@@ -1090,8 +1168,9 @@ export function HomeReviewPanel({
         <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass} ${stationSectionClass}`}>
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">
-              방송국별 현황
+              {isActiveMvSubmission ? "결과 통보" : "방송국별 현황"}
             </p>
+            {!isActiveMvSubmission ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1112,8 +1191,51 @@ export function HomeReviewPanel({
                 ↓
               </button>
             </div>
+            ) : null}
           </div>
           <div className={stationTableShellClass}>
+            {isActiveMvSubmission ? (
+              <div className="space-y-3 px-3 py-3 text-sm">
+                <div className="grid gap-2 sm:grid-cols-4">
+                  {mvFlowSteps.map((step, index) => (
+                    <div
+                      key={step.label}
+                      className={[
+                        "rounded-xl border px-3 py-2",
+                        step.done
+                          ? "border-[#1f7a5a]/40 bg-[#1f7a5a]/10 text-[#1f7a5a] dark:text-[#75d2a5]"
+                          : step.active
+                            ? "border-[#f2cf27] bg-[#f2cf27]/30 text-[#111111] dark:text-[#f7f5ef]"
+                            : "border-border/60 bg-background text-muted-foreground",
+                      ].join(" ")}
+                    >
+                      <p className="text-[11px] font-black uppercase tracking-normal">
+                        {index + 1}
+                      </p>
+                      <p className="mt-1 font-semibold">{step.label}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/80 px-3 py-3">
+                  <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
+                    결과 등급
+                  </p>
+                  <p className="mt-2 font-semibold text-foreground">
+                    {activeMvAssets?.hasResultSignal && activeMvAssets.hasRating
+                      ? activeMvAssets.ratingLabel
+                      : activeMvResultReady
+                        ? "결과 통보 완료"
+                        : "결과 통보 대기"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {activeMvAssets?.hasResultSignal && activeMvAssets.hasRating
+                      ? "상세 화면에서 심의등급 이미지, 필증, 사용 가이드를 다운로드할 수 있습니다."
+                      : "담당자가 결과 등급을 통보하면 다운로드 자료가 표시됩니다."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
             <div className={tableHeaderClass}>
               <span className="justify-self-center text-center">방송국</span>
               <span className="justify-self-center text-center">현재 상태</span>
@@ -1407,6 +1529,8 @@ export function HomeReviewPanel({
                     ? "입금 확인 후 방송국별 현황이 표시됩니다."
                     : "방송국별 현황이 없습니다."}
               </div>
+            )}
+              </>
             )}
           </div>
           {activeSubmission && showDetailLink ? (

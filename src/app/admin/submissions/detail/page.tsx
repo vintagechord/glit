@@ -5,6 +5,8 @@ import {
   normalizeStationReviewStatus,
   paymentStatusLabelMap,
   paymentStatusOptions,
+  resultStatusLabelMap,
+  resultStatusOptions,
   reviewStatusLabelMap,
   reviewStatusOptions,
   stationReviewStatusOptions,
@@ -15,11 +17,13 @@ import {
   createTrackForSubmissionAction,
   deleteTrackForSubmissionAction,
   saveSubmissionAdminFormAction,
+  updateSubmissionResultFormAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { summarizeTrackResults } from "@/lib/track-results";
+import { RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { AdminSaveToast } from "@/components/admin/save-toast";
@@ -164,6 +168,11 @@ const aiUsageLabel = (value?: boolean | null) => {
   if (value === true) return "AI 활용함";
   if (value === false) return "AI 사용 안 함";
   return "미입력";
+};
+
+const mvRatingLabel = (code?: string | null) => {
+  if (!code) return "등급 미설정";
+  return RATING_LABELS[code as RatingCode] ?? code;
 };
 
 const paymentDocumentLabels: Record<string, string> = {
@@ -645,67 +654,108 @@ export default async function AdminSubmissionDetailPage({
   }).length;
   const hasRequiredBasics = Boolean(submission.title && submission.artist_name);
   const hasPaymentComplete = submission.payment_status === "PAID";
+  const hasResultNotified =
+    submission.status === "RESULT_READY" ||
+    submission.status === "COMPLETED" ||
+    Boolean(submission.result_status || submission.result_notified_at);
   const hasAllStationsSubmitted =
     reviews.length > 0 && stationSubmittedCount === reviews.length;
   const hasAllReviewsCompleted =
     reviews.length > 0 && completedReviewCount === reviews.length;
   const hasMvRating = Boolean(submission.mv_desired_rating);
   const hasMvCertificate = Boolean(submission.certificate_b2_path);
+  const hasMvResultGrade = isMvDistribution && hasMvRating && hasResultNotified;
+  const hasMvResultComplete = isMvDistribution
+    ? hasMvResultGrade && hasMvCertificate
+    : isMvSubmission && hasResultNotified;
+  const hasMvReceptionStarted =
+    isMvSubmission &&
+    hasPaymentComplete &&
+    (submission.status === "IN_PROGRESS" ||
+      submission.status === "RESULT_READY" ||
+      submission.status === "COMPLETED" ||
+      stationSubmittedCount > 0 ||
+      hasResultNotified);
   const stationResultProgressLabel =
     reviews.length > 0
       ? `${completedReviewCount}/${reviews.length} 결과`
       : "결과 대기";
-  const finalReviewStepLabel = isMvSubmission
+  const finalReviewStepLabel = isMvSubmission ? "결과 통보" : "적격/부적격 통보";
+  const finalReviewStepValue = isMvSubmission
     ? isMvDistribution
-      ? "심의 등급/필증 발급"
-      : "방송사 심의 결과 통보"
-    : "적격/부적격 통보";
-  const finalReviewStepValue = isMvDistribution
-    ? hasAllReviewsCompleted && hasMvRating && hasMvCertificate
-      ? "등급·필증 완료"
-      : hasAllReviewsCompleted && hasMvRating
-        ? "필증 대기"
-        : hasAllReviewsCompleted
-          ? "등급 대기"
-          : stationResultProgressLabel
+      ? hasMvResultComplete
+        ? `${mvRatingLabel(submission.mv_desired_rating)} · 필증 등록`
+        : hasMvResultGrade
+          ? `${mvRatingLabel(submission.mv_desired_rating)} · 필증 대기`
+          : hasMvReceptionStarted
+            ? "결과 등급 선택"
+            : "접수 후 통보"
+      : hasResultNotified
+        ? resultStatusLabelMap[
+            submission.result_status as keyof typeof resultStatusLabelMap
+          ] ?? "결과 통보 완료"
+        : hasMvReceptionStarted
+          ? "결과 입력 대기"
+          : "접수 후 통보"
     : reviews.length > 0
       ? stationResultProgressLabel
       : "결과 대기";
-  const finalReviewStepState =
-    isMvDistribution && hasAllReviewsCompleted && hasMvRating && hasMvCertificate
+  const finalReviewStepState = isMvSubmission
+    ? hasMvResultComplete
       ? "done"
-      : !isMvDistribution && hasAllReviewsCompleted
-        ? "done"
-        : hasAllStationsSubmitted || completedReviewCount > 0
-          ? "active"
-          : "pending";
+      : hasMvReceptionStarted
+        ? "active"
+        : "pending"
+    : hasAllReviewsCompleted
+      ? "done"
+      : hasAllStationsSubmitted || completedReviewCount > 0
+        ? "active"
+        : "pending";
   const latestEvent = events?.[0] ?? null;
+  const statusOptionsForForm = isMvSubmission
+    ? reviewStatusOptions.filter(
+        (status) => status.value !== "RESULT_READY" && status.value !== "COMPLETED",
+      )
+    : reviewStatusOptions;
   const workflowSteps: Array<{
     label: string;
     value: string;
     state: "done" | "active" | "pending";
   }> = [
     {
-      label: "신청서 작성 및 결제",
+      label: isMvSubmission ? "신청 완료" : "신청서 작성 및 결제",
       value: hasRequiredBasics ? "신청서 접수" : "정보 보완 필요",
       state: hasRequiredBasics ? "done" : "active",
     },
     {
-      label: "결제 확인",
-      value: paymentLabel,
+      label: isMvSubmission ? "결제 완료" : "결제 확인",
+      value: hasPaymentComplete ? "결제 완료" : paymentLabel,
       state: hasPaymentComplete ? "done" : "active",
     },
     {
-      label: "방송사 접수 완료",
-      value:
-        reviews.length > 0
+      label: isMvSubmission ? "접수 진행" : "방송사 접수 완료",
+      value: isMvSubmission
+        ? hasResultNotified
+          ? "접수 진행 완료"
+          : hasMvReceptionStarted
+            ? "접수 진행 중"
+            : hasPaymentComplete
+              ? "접수 준비"
+              : "결제 완료 후 진행"
+        : reviews.length > 0
           ? `${stationSubmittedCount}/${reviews.length} 접수`
           : "방송사 대기",
-      state: hasAllStationsSubmitted
-        ? "done"
-        : hasPaymentComplete || stationSubmittedCount > 0
-          ? "active"
-          : "pending",
+      state: isMvSubmission
+        ? hasResultNotified
+          ? "done"
+          : hasPaymentComplete || hasMvReceptionStarted
+            ? "active"
+            : "pending"
+        : hasAllStationsSubmitted
+          ? "done"
+          : hasPaymentComplete || stationSubmittedCount > 0
+            ? "active"
+            : "pending",
     },
     {
       label: finalReviewStepLabel,
@@ -771,7 +821,9 @@ export default async function AdminSubmissionDetailPage({
               심의 흐름
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              신청서 작성/결제, 결제 확인, 방송사 접수 완료, 최종 통보 순서로 관리합니다.
+              {isMvSubmission
+                ? "신청 완료, 결제 완료, 접수 진행, 결과 통보 4단계로 관리합니다."
+                : "신청서 작성/결제, 결제 확인, 방송사 접수 완료, 최종 통보 순서로 관리합니다."}
             </p>
           </div>
           <Link
@@ -993,17 +1045,28 @@ export default async function AdminSubmissionDetailPage({
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     접수 상태
                   </label>
-                  <select
-                    name="status"
-                    defaultValue={submission.status}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                  >
-                    {reviewStatusOptions.map((status) => (
-                      <option key={status.value} value={status.value}>
-                        {status.label}
-                      </option>
-                    ))}
-                  </select>
+                  {isMvSubmission && hasResultNotified ? (
+                    <>
+                      <input type="hidden" name="status" value={submission.status} />
+                      <input
+                        value="결과 통보 완료"
+                        readOnly
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                      />
+                    </>
+                  ) : (
+                    <select
+                      name="status"
+                      defaultValue={submission.status}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
+                    >
+                      {statusOptionsForForm.map((status) => (
+                        <option key={status.value} value={status.value}>
+                          {status.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -1053,6 +1116,118 @@ export default async function AdminSubmissionDetailPage({
             </div>
           </div>
 
+          {isMvSubmission ? (
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                    3. 접수 진행 / 4. 결과 통보
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    뮤직비디오 심의는 방송국별 적격/부적격을 따로 입력하지 않고, 이 카드에서 결과 통보를 완료합니다.
+                  </p>
+                </div>
+                <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground">
+                  {finalReviewStepValue}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    접수 진행
+                  </p>
+                  <p className="mt-2 font-semibold text-foreground">
+                    {hasResultNotified
+                      ? "접수 진행 완료"
+                      : hasMvReceptionStarted
+                        ? "접수 진행 중"
+                        : "결제 완료 후 접수 진행"}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    결과 통보
+                  </p>
+                  <p className="mt-2 font-semibold text-foreground">
+                    {finalReviewStepValue}
+                  </p>
+                </div>
+              </div>
+
+              {isMvDistribution ? (
+                <div className="mt-5 space-y-5">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                      결과 등급
+                    </p>
+                    <div className="mt-3">
+                      <MvRatingControl
+                        submissionId={submission.id}
+                        initialRating={submission.mv_desired_rating ?? ""}
+                        isResultNotified={hasResultNotified}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                      심의 필증
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      사용자가 결과 화면에서 심의등급 이미지, 필증, 사용 가이드를 함께 받을 수 있도록 필증을 업로드합니다.
+                    </p>
+                    <div className="mt-3">
+                      <CertificateUploader
+                        submissionId={submission.id}
+                        currentObjectKey={submission.certificate_b2_path}
+                        currentName={submission.certificate_original_name}
+                        currentUploadedAt={submission.certificate_uploaded_at}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <form
+                  action={updateSubmissionResultFormAction}
+                  method="post"
+                  className="mt-5 grid gap-4 rounded-2xl border border-border/60 bg-background/70 p-4 md:grid-cols-[220px_1fr_auto]"
+                >
+                  <input type="hidden" name="submissionId" value={submission.id} />
+                  <label className="space-y-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      결과
+                    </span>
+                    <select
+                      name="resultStatus"
+                      defaultValue={submission.result_status ?? "APPROVED"}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
+                    >
+                      {resultStatusOptions.map((status) => (
+                        <option key={status.value} value={status.value}>
+                          {status.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      결과 메모
+                    </span>
+                    <input
+                      name="resultMemo"
+                      defaultValue={submission.result_memo ?? ""}
+                      className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
+                      placeholder="사용자에게 전달할 메모"
+                    />
+                  </label>
+                  <div className="flex items-end justify-end">
+                    <ConfirmSubmitButton className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background">
+                      결과 통보 저장
+                    </ConfirmSubmitButton>
+                  </div>
+                </form>
+              )}
+            </div>
+          ) : (
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -1140,34 +1315,7 @@ export default async function AdminSubmissionDetailPage({
               )}
             </div>
           </div>
-
-          {isMvDistribution ? (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                온라인 업로드용 등급 이미지/영등위 필증
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                온라인 업로드용 뮤직비디오 심의에서 등급 이미지·표기 가이드를 열고, 영등위 필증을 사용자 다운로드용으로 업로드합니다.
-              </p>
-              <div className="mt-4">
-                <MvRatingControl
-                  submissionId={submission.id}
-                  initialRating={submission.mv_desired_rating ?? ""}
-                />
-              </div>
-              <div className="mt-6 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  심의 필증 업로드
-                </p>
-                <CertificateUploader
-                  submissionId={submission.id}
-                  currentObjectKey={submission.certificate_b2_path}
-                  currentName={submission.certificate_original_name}
-                  currentUploadedAt={submission.certificate_uploaded_at}
-                />
-              </div>
-            </div>
-          ) : null}
+          )}
 
         </div>
 

@@ -399,29 +399,40 @@ const buildSubmissionDisplayStatus = ({
       broadcastLabel,
       resultLabel,
       primaryMessage: isMvSubmission ? "심의 결과 확인이 가능합니다." : null,
-      secondaryMessage: "방송국별 진행표에서 결과와 Updated 시간을 확인할 수 있습니다.",
+      secondaryMessage: isMvSubmission
+        ? "결과 통보 영역에서 등급과 다운로드 자료를 확인할 수 있습니다."
+        : "방송국별 진행표에서 결과와 Updated 시간을 확인할 수 있습니다.",
       primaryAction: "station-review" as DetailPrimaryAction,
-      primaryActionLabel: "진행표 보기",
+      primaryActionLabel: isMvSubmission ? "결과 통보 보기" : "진행표 보기",
     };
   }
 
   if (stationDelivered > 0) {
     return {
-      currentLabel: "결과 반영 중",
+      currentLabel: isMvSubmission ? "결과 반영 중" : "접수완료",
       submissionLabel,
       paymentLabel,
       broadcastLabel,
       resultLabel,
-      primaryMessage: "도착한 결과가 순차적으로 반영되고 있습니다.",
-      secondaryMessage: "결과가 도착하는 대로 방송국별 진행표에 업데이트됩니다.",
+      primaryMessage: isMvSubmission
+        ? "도착한 결과가 순차적으로 반영되고 있습니다."
+        : "방송국별 결과가 순차적으로 반영되고 있습니다.",
+      secondaryMessage: isMvSubmission
+        ? "결과가 확정되면 결과 통보 영역에 업데이트됩니다."
+        : "모든 방송국의 결과가 반영되면 완료로 표시됩니다.",
       primaryAction: "station-review" as DetailPrimaryAction,
-      primaryActionLabel: "진행표 보기",
+      primaryActionLabel: isMvSubmission ? "결과 통보 보기" : "진행표 보기",
     };
   }
 
   if (isPaymentDone) {
     return {
-      currentLabel: stationSubmitted > 0 ? "심의 진행 중" : "결제 확인 완료",
+      currentLabel:
+        !isMvSubmission && safeStationTotal > 0
+          ? "접수완료"
+          : stationSubmitted > 0
+            ? "심의 진행 중"
+            : "결제 확인 완료",
       submissionLabel,
       paymentLabel,
       broadcastLabel,
@@ -430,11 +441,13 @@ const buildSubmissionDisplayStatus = ({
         ? "심의 진행 상황을 확인할 수 있습니다."
         : "결제가 확인되었고 접수 정보를 준비 중입니다.",
       secondaryMessage:
-        safeStationTotal > 0
+        isMvSubmission
+          ? "담당자 확인 후 결과 통보 영역에 상태가 반영됩니다."
+          : safeStationTotal > 0
           ? "방송사별 접수 상태가 진행표에 순차 반영됩니다."
           : "관리자 확인 후 방송사 접수 정보가 생성됩니다.",
       primaryAction: "station-review" as DetailPrimaryAction,
-      primaryActionLabel: "진행표 보기",
+      primaryActionLabel: isMvSubmission ? "결과 통보 보기" : "진행표 보기",
     };
   }
 
@@ -788,16 +801,21 @@ export function SubmissionDetailClient({
       approved: 0,
     },
   );
-  const isMvResultDelivered = isMvDistribution
-    ? hasMvDistributionResult
-    : isMvBroadcast &&
-      (isReviewComplete ||
-        (stationSummary.total > 0 && stationSummary.delivered >= stationSummary.total));
   const expectedStationTotal = Math.max(
     stationSummary.total,
     mvOptions?.length ?? 0,
     packageInfo?.station_count ?? 0,
   );
+  const hasAllExpectedStationResults =
+    expectedStationTotal > 0 && stationSummary.delivered >= expectedStationTotal;
+  const isMvResultDelivered = isMvDistribution
+    ? hasMvDistributionResult
+    : isMvBroadcast && (isReviewComplete || hasAllExpectedStationResults);
+  const hasSubmissionLevelResultSignal =
+    isResultReady || Boolean(submission.result_status || submission.result_notified_at);
+  const displayResultDelivered = isMvSubmission
+    ? isMvResultDelivered || hasSubmissionLevelResultSignal
+    : hasAllExpectedStationResults;
   const displayStatus = buildSubmissionDisplayStatus({
     submissionStatus: submission.status,
     paymentStatus: submission.payment_status,
@@ -808,10 +826,7 @@ export function SubmissionDetailClient({
     stationSubmitted: stationSummary.submitted,
     stationDelivered: stationSummary.delivered,
     isMvSubmission,
-    resultDelivered:
-      isMvResultDelivered ||
-      isResultReady ||
-      Boolean(submission.result_status || submission.result_notified_at),
+    resultDelivered: displayResultDelivered,
   });
   const handlePrimaryStatusAction = () => {
     if (displayStatus.primaryAction === "payment-info") {
@@ -841,30 +856,44 @@ export function SubmissionDetailClient({
     : stationSummary.delivered > 0 || hasResultDeliverySignal;
   const hasFinalResultDone = isMvDistribution
     ? hasMvDistributionResult
-    : expectedStationTotal > 0 && stationSummary.delivered >= expectedStationTotal;
+    : isMvBroadcast
+      ? displayResultDelivered
+      : hasAllExpectedStationResults;
   const hasStationSubmissionDone =
     isPaymentDone &&
     ((expectedStationTotal > 0 && stationSummary.submitted >= expectedStationTotal) ||
       hasFinalResultStarted);
+  const mvReceptionStarted =
+    isMvSubmission &&
+    isPaymentDone &&
+    (submission.status === "IN_PROGRESS" ||
+      submission.status === "RESULT_READY" ||
+      submission.status === "COMPLETED" ||
+      stationSummary.submitted > 0 ||
+      hasFinalResultStarted);
   const stepThreeState: "done" | "active" | "pending" = !isPaymentDone
     ? "pending"
-    : hasStationSubmissionDone
+    : isMvSubmission
+      ? hasFinalResultDone
+        ? "done"
+        : "active"
+      : hasStationSubmissionDone
       ? "done"
       : "active";
-  const finalProcessLabel = isMvSubmission ? "심의 결과 통보" : "적격/부적격 통보";
+  const finalProcessLabel = isMvSubmission ? "결과 통보" : "적격/부적격 통보";
   const processSteps: Array<{
     label: string;
     value: string;
     state: "done" | "active" | "pending";
   }> = [
     {
-      label: "신청서 작성 및 제출",
+      label: isMvSubmission ? "신청 완료" : "신청서 작성 및 제출",
       value: submission.status === "DRAFT" ? "신청서 작성 중" : "신청서 제출 완료",
       state: submission.status === "DRAFT" ? "active" : "done",
     },
     {
-      label: "결제 확인",
-      value: isPaymentDone ? "결제 확인 완료" : "입금 확인 대기",
+      label: isMvSubmission ? "결제 완료" : "결제 확인",
+      value: isPaymentDone ? "결제 완료" : "입금 확인 대기",
       state: isPaymentDone
         ? "done"
         : submission.status === "DRAFT"
@@ -872,19 +901,33 @@ export function SubmissionDetailClient({
           : "active",
     },
     {
-      label: "방송사 접수",
-      value: !isPaymentDone
-        ? "결제 확인 후 접수 시작"
-        : stepThreeState === "done"
-          ? "방송사 접수 완료"
-          : "방송사별 접수 진행 중",
+      label: isMvSubmission ? "접수 진행" : "방송사 접수",
+      value: isMvSubmission
+        ? !isPaymentDone
+          ? "결제 완료 후 접수 진행"
+          : hasFinalResultDone
+            ? "접수 진행 완료"
+            : mvReceptionStarted
+              ? "접수 진행 중"
+              : "담당자 접수 준비"
+        : !isPaymentDone
+          ? "결제 확인 후 접수 시작"
+          : stepThreeState === "done"
+            ? "방송사 접수 완료"
+            : "방송사별 접수 진행 중",
       state: stepThreeState,
     },
     {
       label: finalProcessLabel,
-      value: hasFinalResultDone
-        ? "방송사별 결과 반영 완료"
-        : "방송사별 결과 순차 반영",
+      value: isMvSubmission
+        ? hasFinalResultDone
+          ? isMvDistribution && submission.mv_desired_rating
+            ? `${mvRatingLabel(submission.mv_desired_rating)} 결과 통보 완료`
+            : "결과 통보 완료"
+          : "결과 등급 통보 대기"
+        : hasFinalResultDone
+          ? "방송사별 결과 반영 완료"
+          : "방송사별 결과 순차 반영",
       state: hasFinalResultDone
         ? "done"
         : hasFinalResultStarted
@@ -1119,11 +1162,22 @@ export function SubmissionDetailClient({
   );
 
   const renderMvReviewAssetsSection = () =>
-    isMvDistribution ? (
-      <div className={detailPanelClass}>
+    isMvSubmission ? (
+      <div id="station-review-section" className={detailPanelClass}>
         <p className={detailKickerClass}>
-          심의 등급 / 가이드 / 필증
+          결과 통보
         </p>
+        {!isMvDistribution ? (
+          <div className="mt-4 rounded-[8px] border-2 border-[#111111] bg-background px-4 py-3 text-sm dark:border-[#f2cf27]">
+            <p className="font-black text-foreground">
+              {hasFinalResultDone ? "결과 통보 완료" : "결과 통보 대기"}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              담당자 확인 후 결과가 통보되면 이 화면에서 확인할 수 있습니다.
+            </p>
+          </div>
+        ) : null}
+        {isMvDistribution ? (
         <div className="mt-4 space-y-3 text-sm">
           {canDownloadMvReviewAssets ? (
             <div className="rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-[13px] font-black text-black dark:border-[#f2cf27]">
@@ -1190,6 +1244,7 @@ export function SubmissionDetailClient({
             ) : null}
           </div>
         </div>
+        ) : null}
       </div>
     ) : null;
 
@@ -1544,8 +1599,12 @@ export function SubmissionDetailClient({
       </section>
 
       <div className="mt-8">{renderProcessSection()}</div>
-      <div className="mt-6">{renderStationReviewSection()}</div>
-      <div className="mt-6">{renderMvReviewAssetsSection()}</div>
+      {!isMvSubmission ? (
+        <div className="mt-6">{renderStationReviewSection()}</div>
+      ) : null}
+      {isMvSubmission ? (
+        <div className="mt-6">{renderMvReviewAssetsSection()}</div>
+      ) : null}
 
       {/* 관리자용 등급/필증 편집 UI는 관리자 페이지에서만 제공 */}
       {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}

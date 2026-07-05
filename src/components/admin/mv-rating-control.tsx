@@ -22,13 +22,16 @@ const ratingLabelMap = Object.fromEntries(
 export function MvRatingControl({
   submissionId,
   initialRating,
+  isResultNotified = false,
 }: {
   submissionId: string;
   initialRating?: string | null;
+  isResultNotified?: boolean;
 }) {
   const router = useRouter();
   const [rating, setRating] = React.useState(initialRating ?? "");
   const [savedRating, setSavedRating] = React.useState(initialRating ?? "");
+  const [resultNotified, setResultNotified] = React.useState(isResultNotified);
   const [loading, setLoading] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [savePopup, setSavePopup] = React.useState<{
@@ -42,7 +45,8 @@ export function MvRatingControl({
     const nextRating = initialRating ?? "";
     setRating(nextRating);
     setSavedRating(nextRating);
-  }, [initialRating]);
+    setResultNotified(isResultNotified);
+  }, [initialRating, isResultNotified]);
 
   const handleSave = async () => {
     if (!rating) {
@@ -67,7 +71,8 @@ export function MvRatingControl({
         throw new Error(json?.error || `저장 실패 (status ${res.status})`);
       }
       setSavedRating(json?.rating ?? rating);
-      const successMessage = "MV 등급이 저장되었습니다.";
+      setResultNotified(true);
+      const successMessage = "결과 등급이 사용자 화면에 통보되었습니다.";
       setNotice(successMessage);
       setSavePopup({ id: Date.now(), message: successMessage });
       setError(null);
@@ -91,13 +96,17 @@ export function MvRatingControl({
         />
       ) : null}
       <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-muted-foreground">
-        현재 저장된 등급:{" "}
+        결과 등급:{" "}
         <span className="font-semibold text-foreground">
-          {ratingLabelMap[savedRating] ?? savedRating}
+          {ratingLabelMap[savedRating] ?? (savedRating || "결과 미입력")}
         </span>
         {hasChanges ? (
           <span className="ml-2 font-semibold text-[#1556a4]">
             저장 전 변경사항 있음
+          </span>
+        ) : !resultNotified && savedRating ? (
+          <span className="ml-2 font-semibold text-[#1556a4]">
+            통보 전
           </span>
         ) : null}
       </div>
@@ -119,16 +128,16 @@ export function MvRatingControl({
         </select>
       </label>
       <p className="text-xs text-muted-foreground">
-        저장한 등급은 사용자 상세의 등급 이미지·가이드·필증 다운로드에 사용됩니다.
+        저장하면 결과 통보 단계가 완료되고 사용자 상세의 등급 이미지·가이드·필증 다운로드에 적용됩니다.
       </p>
       <div className="flex gap-2">
         <button
           type="button"
           onClick={handleSave}
-          disabled={loading || !hasChanges}
+          disabled={loading || (!hasChanges && resultNotified)}
           className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading ? "저장 중..." : "MV 등급 설정 저장"}
+          {loading ? "저장 중..." : "결과 통보 저장"}
         </button>
       </div>
       {notice ? (

@@ -95,14 +95,12 @@ export function SubmissionStatusList({
     <>
       <div className="space-y-4">
         {submissions.map((submission) => {
-          const displayStatus =
+          const rawDisplayStatus =
             submission.payment_status !== "PAID" &&
             submission.status !== "DRAFT" &&
             submission.status !== "PRE_REVIEW"
               ? "WAITING_PAYMENT"
               : submission.status;
-          const statusInfo =
-            statusLabels[displayStatus] ?? statusLabels.DRAFT;
           const paymentInfo =
             paymentLabels[submission.payment_status] ?? paymentLabels.UNPAID;
           const shouldShowPaymentChip = !(
@@ -126,11 +124,35 @@ export function SubmissionStatusList({
           const hasAttentionStatus = stationDisplayStatuses.some(
             (status) => status.needsAttention,
           );
+          const isAlbumSubmission = submission.type === "ALBUM";
+          const hasAllStationResults =
+            totalStations > 0 && completedStations >= totalStations;
+          const displayStatus =
+            isAlbumSubmission &&
+            totalStations > 0 &&
+            submission.payment_status === "PAID"
+              ? hasAllStationResults
+                ? "COMPLETED"
+                : "SUBMITTED"
+              : rawDisplayStatus;
+          const statusInfo =
+            isAlbumSubmission &&
+            totalStations > 0 &&
+            submission.payment_status === "PAID" &&
+            !hasAllStationResults
+              ? { ...statusLabels.SUBMITTED, label: "접수완료" }
+              : statusLabels[displayStatus] ?? statusLabels.DRAFT;
           const progressPercent =
             totalStations > 0
               ? Math.round((completedStations / totalStations) * 100)
               : 0;
           const stageLabel = (() => {
+            if (submission.payment_status !== "PAID") {
+              return "입금 확인 대기";
+            }
+            if (isAlbumSubmission && totalStations > 0) {
+              return hasAllStationResults ? "완료" : "접수완료";
+            }
             if (
               submission.status === "COMPLETED" ||
               submission.status === "RESULT_READY"
@@ -139,9 +161,6 @@ export function SubmissionStatusList({
             }
             if (submission.status === "IN_PROGRESS") {
               return hasAttentionStatus ? "확인 필요" : "진행중";
-            }
-            if (submission.payment_status !== "PAID") {
-              return "입금 확인 대기";
             }
             if (
               submission.status === "SUBMITTED" ||
