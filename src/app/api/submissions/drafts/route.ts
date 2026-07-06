@@ -141,7 +141,13 @@ const selectFileColumns = [
 
 const incompletePaymentFilter =
   "payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)";
-const editableDraftStatuses = ["DRAFT", "PRE_REVIEW"];
+const loadableDraftStatuses = [
+  "DRAFT",
+  "PRE_REVIEW",
+  "SUBMITTED",
+  "WAITING_PAYMENT",
+];
+const deletableDraftStatuses = ["DRAFT", "PRE_REVIEW"];
 
 const extractMissingColumn = (error: { message?: string; code?: string } | null) => {
   const message = error?.message ?? "";
@@ -189,7 +195,7 @@ export async function POST(request: Request) {
       .from("submissions")
       .select(selectClause)
       .or(incompletePaymentFilter)
-      .in("status", editableDraftStatuses);
+      .in("status", loadableDraftStatuses);
 
     if (parsed.data.type === "ALBUM") {
       submissionQuery.eq("type", "ALBUM");
@@ -257,6 +263,7 @@ export async function POST(request: Request) {
   const drafts = submissions ?? [];
 
   let trackRows: Array<Record<string, unknown>> = [];
+  let stationReviewRows: Array<Record<string, unknown>> = [];
   if (parsed.data.type === "ALBUM") {
     let trackSelectClause = selectTrackColumns;
     const maxTrackAttempts = Math.max(6, trackSelectClause.split(",").length);
@@ -281,6 +288,17 @@ export async function POST(request: Request) {
         break;
       }
       trackSelectClause = next;
+    }
+  } else {
+    const stationResult = await admin
+      .from("station_reviews")
+      .select("submission_id, station:stations ( code )")
+      .in("submission_id", submissionIds);
+
+    if (!stationResult.error) {
+      stationReviewRows = (stationResult.data ?? []) as unknown as Array<
+        Record<string, unknown>
+      >;
     }
   }
 
@@ -337,10 +355,23 @@ export async function POST(request: Request) {
     filesBySubmission.set(submissionId, list);
   });
 
+  const stationReviewsBySubmission = new Map<
+    string,
+    Array<Record<string, unknown>>
+  >();
+  stationReviewRows.forEach((row) => {
+    const submissionId = String(row.submission_id ?? "");
+    if (!submissionId) return;
+    const list = stationReviewsBySubmission.get(submissionId) ?? [];
+    list.push(row);
+    stationReviewsBySubmission.set(submissionId, list);
+  });
+
   const payload = drafts.map((draft) => ({
     ...draft,
     tracks: tracksBySubmission.get(String(draft.id)) ?? [],
     files: filesBySubmission.get(String(draft.id)) ?? [],
+    station_reviews: stationReviewsBySubmission.get(String(draft.id)) ?? [],
   }));
 
   return NextResponse.json({ ok: true, drafts: payload });
@@ -368,7 +399,7 @@ export async function DELETE(request: Request) {
     .from("submissions")
     .delete()
     .or(incompletePaymentFilter)
-    .in("status", editableDraftStatuses);
+    .in("status", deletableDraftStatuses);
 
   if (parsed.data.type === "ALBUM") {
     deleteQuery.eq("type", "ALBUM");

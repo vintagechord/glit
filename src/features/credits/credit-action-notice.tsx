@@ -63,8 +63,7 @@ export function CreditActionNotice({
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6"
-      style={{ top: "var(--site-header-height, 76px)" }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6"
       role="presentation"
     >
       <div

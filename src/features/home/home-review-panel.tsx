@@ -454,6 +454,7 @@ function StationLogo({
 
 export function HomeReviewPanel({
   isLoggedIn,
+  viewerId,
   albumSubmissions,
   mvSubmissions,
   albumStationsMap,
@@ -471,6 +472,7 @@ export function HomeReviewPanel({
   guestToken,
 }: {
   isLoggedIn: boolean;
+  viewerId?: string | null;
   albumSubmissions: SubmissionSummary[];
   mvSubmissions: SubmissionSummary[];
   albumStationsMap: Record<string, StationItem[]>;
@@ -735,6 +737,43 @@ export function HomeReviewPanel({
 
   const needsPayment =
     Boolean(activeSubmission) && activeSubmission?.payment_status !== "PAID";
+  const activeSubmissionType =
+    activeSubmission?.type ?? (tab === "album" ? "ALBUM" : "MV_DISTRIBUTION");
+  const editHref =
+    activeSubmissionType === "ALBUM"
+      ? "/dashboard/new/album?from=drafts"
+      : "/dashboard/new/mv?from=drafts";
+  const prepareActiveSubmissionEdit = React.useCallback(() => {
+    if (!viewerId || !activeSubmission) return;
+    try {
+      if (activeSubmissionType === "ALBUM") {
+        window.localStorage.setItem(
+          `onside:draft:album:${viewerId}`,
+          JSON.stringify({
+            ids: [activeSubmission.id],
+            guestToken: null,
+            updatedAt: Date.now(),
+          }),
+        );
+        return;
+      }
+
+      window.localStorage.setItem(
+        `onside:draft:mv:${viewerId}`,
+        JSON.stringify({
+          id: activeSubmission.id,
+          guestToken: null,
+          mvType:
+            activeSubmissionType === "MV_BROADCAST"
+              ? "MV_BROADCAST"
+              : "MV_DISTRIBUTION",
+          updatedAt: Date.now(),
+        }),
+      );
+    } catch {
+      // Ignore storage failures; the detail/cart paths remain available.
+    }
+  }, [activeSubmission, activeSubmissionType, viewerId]);
   const totalCount = needsPayment ? 0 : activeStations.length;
   const activeStationDisplayStatuses = activeStations.map((review) =>
     getDisplayStatusForReview(
@@ -1145,14 +1184,23 @@ export function HomeReviewPanel({
                           결제 후 심의가 진행됩니다.
                         </p>
                       </div>
-                      <Link
-                        href={`/mypage/cart?focus=${activeSubmission.id}`}
-                        className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] hover:shadow-[5px_5px_0_rgba(17,17,17,0.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] dark:text-[#06111f] dark:hover:bg-[#ff7a72] sm:w-auto sm:min-w-[10.5rem]"
-                      >
-                        <CreditCard aria-hidden="true" className="h-4 w-4" />
-                        결제하기
-                        <ArrowRight aria-hidden="true" className="h-4 w-4" />
-                      </Link>
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                        <Link
+                          href={editHref}
+                          onClick={prepareActiveSubmissionEdit}
+                          className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black tracking-normal text-[#111111] shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#fff7cf] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] sm:w-auto sm:min-w-[8.5rem]"
+                        >
+                          수정하기
+                        </Link>
+                        <Link
+                          href={`/mypage/cart?focus=${activeSubmission.id}`}
+                          className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] hover:shadow-[5px_5px_0_rgba(17,17,17,0.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] dark:text-[#06111f] dark:hover:bg-[#ff7a72] sm:w-auto sm:min-w-[10.5rem]"
+                        >
+                          <CreditCard aria-hidden="true" className="h-4 w-4" />
+                          결제하기
+                          <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 ) : null}

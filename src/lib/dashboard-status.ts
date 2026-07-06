@@ -150,7 +150,8 @@ export const getDashboardStatusData = async (
     return query;
   };
 
-  const recentWindowOr =
+  const activeSubmissionWindowOr =
+    `payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING),` +
     `and(updated_at.gte.${recentResultCutoff},or(result_notified_at.is.null,result_notified_at.gte.${recentResultCutoff}))`;
 
   const configuredMaxRows = Number(
@@ -163,12 +164,12 @@ export const getDashboardStatusData = async (
 
   const buildRecentAlbumQuery = (includeUserVisibility = true) =>
     buildAlbumBase(includeUserVisibility)
-      .or(recentWindowOr)
+      .or(activeSubmissionWindowOr)
       .order("created_at", { ascending: false })
       .range(0, queryEnd);
   const buildRecentMvQuery = (includeUserVisibility = true) =>
     buildMvBase(includeUserVisibility)
-      .or(recentWindowOr)
+      .or(activeSubmissionWindowOr)
       .order("created_at", { ascending: false })
       .range(0, queryEnd);
 

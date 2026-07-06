@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Check, CreditCard, Landmark, ShoppingCart, Trash2 } from "lucide-react";
+import {
+  Check,
+  CreditCard,
+  Eye,
+  Landmark,
+  Pencil,
+  ShoppingCart,
+  Trash2,
+} from "lucide-react";
 import * as React from "react";
 
 import { APP_CONFIG } from "@/lib/config";
@@ -81,8 +89,10 @@ const normalizeInicisStatus = (type: string) => {
 };
 
 export function SubmissionCartCheckout({
+  userId,
   initialItems,
 }: {
+  userId: string;
   initialItems: SubmissionCartItem[];
 }) {
   const router = useRouter();
@@ -91,6 +101,8 @@ export function SubmissionCartCheckout({
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const cartHref = isEnglishRoute ? "/en/mypage/cart" : "/mypage/cart";
   const newSubmissionHref = isEnglishRoute ? "/en/dashboard/new" : "/dashboard/new";
+  const focusedSubmissionId =
+    searchParams.get("focus") ?? searchParams.get("added");
   const [cartItems, setCartItems] = React.useState<CartItem[]>(() =>
     initialItems.map(mapSubmissionCartItem),
   );
@@ -159,6 +171,25 @@ export function SubmissionCartCheckout({
     });
   }, [payableIds]);
 
+  React.useEffect(() => {
+    if (!focusedSubmissionId) return;
+    const target = items.find((item) => item.id === focusedSubmissionId);
+    if (!target || getPayableAmount(target) <= 0) return;
+
+    setSelectedIds((prev) => {
+      if (prev.has(focusedSubmissionId)) return prev;
+      const next = new Set(prev);
+      next.add(focusedSubmissionId);
+      return next;
+    });
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(`cart-item-${focusedSubmissionId}`)
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }, [focusedSubmissionId, items]);
+
   const selectedItems = items.filter((item) => selectedIds.has(item.id));
   const selectedTotal = selectedItems.reduce(
     (sum, item) => sum + getPayableAmount(item),
@@ -216,6 +247,41 @@ export function SubmissionCartCheckout({
       if (isAllSelected) return new Set<string>();
       return new Set(payableIds);
     });
+  };
+
+  const getEditHref = (item: CartItem) =>
+    item.type === "ALBUM" ? "/dashboard/new/album?from=drafts" : "/dashboard/new/mv?from=drafts";
+
+  const prepareEditStorage = (item: CartItem) => {
+    if (typeof window === "undefined") return;
+    try {
+      if (item.type === "ALBUM") {
+        window.localStorage.setItem(
+          `onside:draft:album:${userId}`,
+          JSON.stringify({
+            ids: [item.id],
+            guestToken: null,
+            updatedAt: Date.now(),
+          }),
+        );
+        return;
+      }
+
+      window.localStorage.setItem(
+        `onside:draft:mv:${userId}`,
+        JSON.stringify({
+          id: item.id,
+          guestToken: null,
+          mvType:
+            item.type === "MV_BROADCAST"
+              ? "MV_BROADCAST"
+              : "MV_DISTRIBUTION",
+          updatedAt: Date.now(),
+        }),
+      );
+    } catch {
+      // localStorage may be unavailable in private browsing modes.
+    }
   };
 
   const handleDeleteItems = async (ids: string[]) => {
@@ -382,7 +448,11 @@ export function SubmissionCartCheckout({
     return (
       <div className="space-y-5">
         {notice ? (
-          <NoticeBox type={notice.type} message={notice.message} />
+          <NoticeDialog
+            type={notice.type}
+            message={notice.message}
+            onClose={() => setNotice(null)}
+          />
         ) : null}
         <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-5 py-8 text-sm font-semibold text-muted-foreground">
           장바구니에 담긴 미결제 신청서가 없습니다.
@@ -399,9 +469,14 @@ export function SubmissionCartCheckout({
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {notice ? (
+        <NoticeDialog
+          type={notice.type}
+          message={notice.message}
+          onClose={() => setNotice(null)}
+        />
+      ) : null}
       <div className="space-y-4">
-        {notice ? <NoticeBox type={notice.type} message={notice.message} /> : null}
-
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 py-2 text-xs font-black text-foreground shadow-[2px_2px_0_var(--bauhaus-shadow)]">
             <ShoppingCart size={16} strokeWidth={2.5} />
@@ -435,6 +510,7 @@ export function SubmissionCartCheckout({
             const disabled = amount <= 0;
             return (
               <div
+                id={`cart-item-${item.id}`}
                 key={item.id}
                 className={`grid gap-3 rounded-[8px] border-2 px-4 py-4 transition md:grid-cols-[32px_minmax(0,1fr)_auto_auto] md:items-center ${
                   selected
@@ -487,16 +563,35 @@ export function SubmissionCartCheckout({
                 <span className="text-right text-base font-black text-foreground md:min-w-[112px]">
                   {amount > 0 ? `${formatCurrency(amount)}원` : "금액 확인 필요"}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => void handleDeleteItems([item.id])}
-                  disabled={isDeleting || isOpening}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-red)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:hover:text-[#06111f]"
-                  aria-label={`${getDisplayTitle(item)} 삭제`}
-                >
-                  <Trash2 size={14} strokeWidth={2.8} />
-                  삭제
-                </button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Link
+                    href={`/dashboard/submissions/${item.id}`}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
+                    aria-label={`${getDisplayTitle(item)} 확인`}
+                  >
+                    <Eye size={14} strokeWidth={2.8} />
+                    확인
+                  </Link>
+                  <Link
+                    href={getEditHref(item)}
+                    onClick={() => prepareEditStorage(item)}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-3 text-[11px] font-black text-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
+                    aria-label={`${getDisplayTitle(item)} 수정`}
+                  >
+                    <Pencil size={14} strokeWidth={2.8} />
+                    수정
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteItems([item.id])}
+                    disabled={isDeleting || isOpening}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-red)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:hover:text-[#06111f]"
+                    aria-label={`${getDisplayTitle(item)} 삭제`}
+                  >
+                    <Trash2 size={14} strokeWidth={2.8} />
+                    삭제
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -583,23 +678,46 @@ export function SubmissionCartCheckout({
   );
 }
 
-function NoticeBox({
+function NoticeDialog({
   type,
   message,
+  onClose,
 }: {
   type: "info" | "error" | "success";
   message: string;
+  onClose: () => void;
 }) {
   const tone =
     type === "error"
-      ? "border-[#d9362c] bg-[#d9362c]/10 text-[#d9362c]"
+      ? "border-[#d9362c] bg-[#fff6f5] text-[#d9362c]"
       : type === "success"
-        ? "border-[#1f7a5a] bg-[#1f7a5a]/10 text-[#1f7a5a]"
-        : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]";
+        ? "border-[#1f7a5a] bg-[#f3fbf7] text-[#1f7a5a]"
+        : "border-[#1556a4] bg-[#f5f9ff] text-[#1556a4]";
+  const title =
+    type === "error" ? "확인이 필요합니다." : type === "success" ? "완료되었습니다." : "안내";
 
   return (
-    <div className={`rounded-[8px] border-2 px-4 py-3 text-sm font-semibold ${tone}`}>
-      {message}
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4 py-6"
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={`w-full max-w-sm rounded-[10px] border-2 p-5 text-center shadow-[6px_6px_0_#111111] ${tone}`}
+      >
+        <p className="text-base font-black">{title}</p>
+        <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6">
+          {message}
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 inline-flex h-10 min-w-28 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-5 text-xs font-black text-white shadow-[2px_2px_0_#1556a4] transition hover:-translate-y-0.5 hover:bg-[#1556a4]"
+        >
+          확인
+        </button>
+      </div>
     </div>
   );
 }

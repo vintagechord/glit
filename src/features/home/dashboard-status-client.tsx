@@ -250,6 +250,7 @@ export function DashboardStatusClient({
       ) : data ? (
         <HomeReviewPanel
           isLoggedIn
+          viewerId={viewerId}
           albumSubmissions={data.albumSubmissions}
           mvSubmissions={data.mvSubmissions}
           albumStationsMap={data.albumStationsMap}

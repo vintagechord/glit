@@ -143,7 +143,7 @@ const steps = [
 const deferredPaymentNotice =
   "결제가 완료되지 않아 신청서만 저장되었습니다.";
 const paymentFailureDraftNotice =
-  "결제가 완료되지 않았습니다. 작성한 신청서는 작성중 신청서에 보관되어 있으니 다시 작성하지 않아도 됩니다.";
+  "결제가 완료되지 않았습니다. 작성한 신청서는 접수 현황과 장바구니에 보관되어 있으니 다시 작성하지 않아도 됩니다.";
 
 const selectedBadgeClass =
   "inline-flex items-center rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";

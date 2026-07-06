@@ -468,8 +468,7 @@ export function SiteFooter() {
 
       {activeModal && (
         <div
-          className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          style={{ top: "var(--site-header-height, 76px)" }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
           onClick={closeModal}
         >
           <div

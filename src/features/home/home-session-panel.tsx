@@ -164,6 +164,7 @@ export async function HomeSessionPanel() {
   return (
     <HomeReviewPanel
       isLoggedIn
+      viewerId={user.id}
       albumSubmissions={result.data?.albumSubmissions ?? []}
       mvSubmissions={result.data?.mvSubmissions ?? []}
       albumStationsMap={normalizeStationsMap(result.data?.albumStationsMap)}

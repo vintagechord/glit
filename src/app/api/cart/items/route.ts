@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { deleteSubmissionRelations } from "@/lib/submission-cleanup";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
@@ -71,6 +72,15 @@ export async function DELETE(request: Request) {
     return NextResponse.json(
       { error: "삭제할 수 없는 장바구니 항목이 포함되어 있습니다." },
       { status: 409 },
+    );
+  }
+
+  const cleanupError = await deleteSubmissionRelations(admin, submissionIds);
+  if (cleanupError) {
+    console.error("[CartItems] cleanup failed", cleanupError);
+    return NextResponse.json(
+      { error: "연결된 접수 정보를 정리하지 못했습니다." },
+      { status: 500 },
     );
   }
 

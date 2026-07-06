@@ -247,8 +247,32 @@ const ensureStationReviews = async (
   db: SupabaseClient,
   submissionId: string,
   stationIds: string[],
+  options?: { syncNotSent?: boolean },
 ) => {
-  if (stationIds.length === 0) {
+  const uniqueStationIds = Array.from(new Set(stationIds.filter(Boolean)));
+
+  if (options?.syncNotSent) {
+    let deleteQuery = db
+      .from("station_reviews")
+      .delete()
+      .eq("submission_id", submissionId)
+      .eq("status", "NOT_SENT");
+
+    if (uniqueStationIds.length > 0) {
+      deleteQuery = deleteQuery.not(
+        "station_id",
+        "in",
+        `(${uniqueStationIds.join(",")})`,
+      );
+    }
+
+    const { error: deleteError } = await deleteQuery;
+    if (deleteError) {
+      return { error: deleteError };
+    }
+  }
+
+  if (uniqueStationIds.length === 0) {
     return { error: null };
   }
 
@@ -266,7 +290,7 @@ const ensureStationReviews = async (
       .map((review) => review.station_id)
       .filter((id): id is string => Boolean(id)),
   );
-  const missingStations = stationIds.filter((id) => !existingSet.has(id));
+  const missingStations = uniqueStationIds.filter((id) => !existingSet.has(id));
 
   if (missingStations.length === 0) {
     return { error: null };
@@ -281,6 +305,37 @@ const ensureStationReviews = async (
   );
 
   return { error: insertError ?? null };
+};
+
+const cancelStaleRequestedSubmissionPayments = async (
+  db: ReturnType<typeof createAdminClient>,
+  submissionId: string,
+) => {
+  const payload = {
+    status: "CANCELED",
+    result_code: "SUPERSEDED",
+    result_message: "신청서 수정으로 기존 결제 요청이 취소되었습니다.",
+  };
+
+  const direct = await db
+    .from("submission_payments")
+    .update(payload)
+    .eq("submission_id", submissionId)
+    .eq("status", "REQUESTED");
+
+  if (direct.error) {
+    return { error: direct.error };
+  }
+
+  const grouped = await db
+    .from("submission_payments")
+    .update(payload)
+    .contains("raw_response", {
+      paymentGroup: { submissionIds: [submissionId] },
+    })
+    .eq("status", "REQUESTED");
+
+  return { error: grouped.error ?? null };
 };
 
 const resolveAlbumStationIds = async (
@@ -1134,6 +1189,17 @@ export async function saveAlbumSubmissionAction(
     return { error: formatSubmissionError(submissionError) };
   }
 
+  if (parsed.data.status === "SUBMITTED") {
+    const stalePaymentResult = await cancelStaleRequestedSubmissionPayments(
+      adminDb,
+      parsed.data.submissionId,
+    );
+    if (stalePaymentResult.error) {
+      console.error("Stale submission payment cleanup failed", stalePaymentResult.error);
+      return { error: "기존 결제 요청을 정리하지 못했습니다. 잠시 후 다시 시도해주세요." };
+    }
+  }
+
   await db
     .from("album_tracks")
     .delete()
@@ -1291,6 +1357,7 @@ export async function saveAlbumSubmissionAction(
         db,
         parsed.data.submissionId,
         stationIds,
+        { syncNotSent: true },
       );
 
       if (reviewError) {
@@ -1725,6 +1792,17 @@ export async function saveMvSubmissionAction(
     return { error: formatSubmissionError(submissionError) };
   }
 
+  if (parsed.data.status === "SUBMITTED") {
+    const stalePaymentResult = await cancelStaleRequestedSubmissionPayments(
+      adminDb,
+      parsed.data.submissionId,
+    );
+    if (stalePaymentResult.error) {
+      console.error("Stale MV payment cleanup failed", stalePaymentResult.error);
+      return { error: "기존 결제 요청을 정리하지 못했습니다. 잠시 후 다시 시도해주세요." };
+    }
+  }
+
   if (parsed.data.files !== undefined) {
     await db
       .from("submission_files")
@@ -1799,6 +1877,7 @@ export async function saveMvSubmissionAction(
       db,
       parsed.data.submissionId,
       stationIds,
+      { syncNotSent: true },
     );
 
     if (reviewError) {

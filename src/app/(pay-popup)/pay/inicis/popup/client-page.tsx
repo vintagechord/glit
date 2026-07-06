@@ -351,8 +351,8 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
       `}</style>
 
       {loadingBarVisible && (
-        <div className="pointer-events-none fixed inset-x-0 top-0 z-30 flex justify-center">
-          <div className="mt-0.5 rounded-b-lg bg-black/85 px-4 py-2 text-xs font-medium text-white shadow-md">
+        <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-black/20 px-4">
+          <div className="rounded-[10px] bg-black/85 px-5 py-3 text-xs font-medium text-white shadow-md">
             이니시스 결제창을 준비 중입니다...
           </div>
         </div>

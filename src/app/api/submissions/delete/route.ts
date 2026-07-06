@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
+import { deleteSubmissionRelations } from "@/lib/submission-cleanup";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -85,6 +86,15 @@ export async function POST(request: Request) {
   }
 
   if (unpaidIds.length > 0) {
+    const cleanupError = await deleteSubmissionRelations(admin, unpaidIds);
+    if (cleanupError) {
+      console.error("[submissions/delete] relation cleanup failed", cleanupError);
+      return NextResponse.json(
+        { error: "연결된 신청 정보를 정리하지 못했습니다." },
+        { status: 500 },
+      );
+    }
+
     const { data: removedRows, error: removeError } = await admin
       .from("submissions")
       .delete()

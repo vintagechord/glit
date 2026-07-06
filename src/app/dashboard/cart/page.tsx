@@ -44,7 +44,7 @@ export async function SubmissionCartPageView(config?: ShellConfig) {
       tabs={config?.tabs ?? defaultDashboardTabs}
       contextLabel={config?.contextLabel ?? "마이페이지"}
     >
-      <SubmissionCartCheckout initialItems={items} />
+      <SubmissionCartCheckout userId={user.id} initialItems={items} />
     </DashboardShell>
   );
 }
