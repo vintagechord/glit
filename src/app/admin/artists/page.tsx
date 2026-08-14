@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { ConfirmForm } from "@/components/admin/confirm-form";
 import { SelectAllCheckbox } from "@/components/admin/select-all-checkbox";
+import { requireAdminPage } from "@/lib/admin/page-auth";
 import { formatDate } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -42,6 +43,7 @@ export default async function AdminArtistsPage({
 }: {
   searchParams: Promise<SearchParamsInput>;
 }) {
+  await requireAdminPage();
   const admin = createAdminClient();
   const resolvedSearchParams = await searchParams;
   const q = toSingle(resolvedSearchParams.q).trim();
@@ -213,8 +215,14 @@ export default async function AdminArtistsPage({
         </button>
       </ConfirmForm>
 
-      <div className="mt-6 overflow-x-auto">
+      <div
+        className="mt-6 overflow-x-auto"
+        role="region"
+        aria-label="아티스트 목록"
+        tabIndex={0}
+      >
         <table className="min-w-[900px] w-full rounded-[24px] border border-border/60 bg-card/80 text-center text-sm shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+          <caption className="sr-only">아티스트 관리 목록</caption>
           <thead className="border-b border-border/60 bg-muted/40 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
             <tr>
               <th className="w-14 px-4 py-3 font-semibold">

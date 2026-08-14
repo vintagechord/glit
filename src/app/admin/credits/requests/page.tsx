@@ -16,6 +16,7 @@ import {
   type CreditRewardRedemption,
   type StudioReservationRequest,
 } from "@/lib/credits";
+import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -277,6 +278,7 @@ export default async function AdminCreditRequestsPage({
 }: {
   searchParams?: Promise<SearchParamsInput>;
 }) {
+  await requireAdminPage();
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const savedFlag = toSingle(resolvedSearchParams?.saved);
   const errorFlag = toSingle(resolvedSearchParams?.error);

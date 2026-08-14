@@ -6,6 +6,7 @@ import {
   getB2Config,
   sanitizeFileName,
 } from "@/lib/b2";
+import { getStorageLogId } from "@/lib/guest-storage-owner";
 import {
   MANAGED_RATING_IMAGE_CODES,
   MV_RATING_IMAGE_SETTING_KEY,
@@ -166,6 +167,11 @@ export async function POST(req: NextRequest) {
   if (!hasPngName || !hasAllowedMime) {
     return NextResponse.json({ error: "PNG 파일만 업로드할 수 있습니다." }, { status: 400 });
   }
+  const fileBuffer = Buffer.from(await fileValue.arrayBuffer());
+  const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (fileBuffer.length < pngSignature.length || !fileBuffer.subarray(0, 8).equals(pngSignature)) {
+    return NextResponse.json({ error: "올바른 PNG 파일이 아닙니다." }, { status: 400 });
+  }
 
   const admin = createAdminClient();
   const settings = await loadSettings(admin);
@@ -181,7 +187,7 @@ export async function POST(req: NextRequest) {
       new PutObjectCommand({
         Bucket: bucket,
         Key: objectKey,
-        Body: Buffer.from(await fileValue.arrayBuffer()),
+        Body: fileBuffer,
         ContentType: "image/png",
         ContentLength: fileValue.size,
       }),
@@ -198,6 +204,15 @@ export async function POST(req: NextRequest) {
     const saveError = await saveSettings(admin, settings);
     if (saveError) {
       console.error("[admin][mv-rating-assets] save failed", saveError);
+      await deleteObject(objectKey).catch((cleanupError) => {
+        console.warn("[admin][mv-rating-assets] rollback delete failed", {
+          objectKeyId: getStorageLogId(objectKey),
+          errorName:
+            cleanupError instanceof Error
+              ? cleanupError.name
+              : "UnknownError",
+        });
+      });
       return NextResponse.json(
         { error: "연령등급 이미지 설정을 저장하지 못했습니다." },
         { status: 500 },
@@ -211,8 +226,8 @@ export async function POST(req: NextRequest) {
     ) {
       await deleteObject(previousObjectKey).catch((error) => {
         console.warn("[admin][mv-rating-assets] previous delete failed", {
-          previousObjectKey,
-          error,
+          objectKeyId: getStorageLogId(previousObjectKey),
+          errorName: error instanceof Error ? error.name : "UnknownError",
         });
       });
     }
@@ -222,9 +237,11 @@ export async function POST(req: NextRequest) {
       ...(await buildAssetsPayload(req)),
     });
   } catch (error) {
-    console.error("[admin][mv-rating-assets] upload failed", error);
+    console.error("[admin][mv-rating-assets] upload failed", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "업로드에 실패했습니다." },
+      { error: "업로드에 실패했습니다." },
       { status: 500 },
     );
   }
@@ -260,7 +277,7 @@ export async function DELETE(req: NextRequest) {
     const objectKeyToDelete = previousObjectKey;
     await deleteObject(objectKeyToDelete).catch((error) => {
       console.warn("[admin][mv-rating-assets] object delete failed", {
-        previousObjectKey: objectKeyToDelete,
+        objectKeyId: getStorageLogId(objectKeyToDelete),
         error,
       });
     });

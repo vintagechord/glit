@@ -46,14 +46,14 @@ export function TrackLookupModalTrigger({
       </button>
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4"
           onClick={() => setOpen(false)}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby={modalTitle ? titleId : undefined}
-            className="w-full max-w-md rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-5 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between">

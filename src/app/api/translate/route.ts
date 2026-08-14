@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { translateLyricsWithOpenAI } from "@/lib/openai-translation";
+import { readBoundedJsonBody } from "@/lib/request-body";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
 
 type TranslateRequest = {
   lines?: string[];
@@ -18,6 +23,7 @@ const sleep = (ms: number) =>
 const maxTranslateChunkLength = 1200;
 const maxTranslateLines = 120;
 const maxTranslateLineLength = 5000;
+const maxTranslateTotalLength = 60_000;
 const translateConcurrency = 3;
 const lingvaTranslateOrigins = ["https://lingva.ml"];
 
@@ -268,7 +274,52 @@ const translateBatch = async (
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as TranslateRequest;
+    const requestLimit = consumeRateLimit({
+      namespace: "translate",
+      identifier: getRequestIdentifier(request.headers),
+      limit: 20,
+      windowMs: 10 * 60 * 1_000,
+    });
+    if (!requestLimit.allowed) {
+      return NextResponse.json(
+        { error: "Translation requests are temporarily limited. Please try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
+        },
+      );
+    }
+    const bodyResult = await readBoundedJsonBody(request, 256 * 1024);
+    if (!bodyResult.ok) {
+      return NextResponse.json(
+        { error: "Translation request is invalid or too large" },
+        { status: bodyResult.reason === "too_large" ? 413 : 400 },
+      );
+    }
+    const rawBody = bodyResult.value;
+    if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
+      return NextResponse.json(
+        { error: "Translation request is invalid" },
+        { status: 400 },
+      );
+    }
+    const body = rawBody as TranslateRequest;
+    if (
+      (body.lines !== undefined && !Array.isArray(body.lines)) ||
+      (body.lines?.length ?? 0) > maxTranslateLines ||
+      (body.lines ?? []).some(
+        (line) => typeof line === "string" && line.length > maxTranslateLineLength,
+      ) ||
+      (body.lines ?? []).reduce(
+        (total, line) => total + String(line ?? "").length,
+        0,
+      ) > maxTranslateTotalLength
+    ) {
+      return NextResponse.json(
+        { error: "Translation request is too large" },
+        { status: 413 },
+      );
+    }
     const lines = Array.isArray(body.lines)
       ? body.lines
           .slice(0, maxTranslateLines)

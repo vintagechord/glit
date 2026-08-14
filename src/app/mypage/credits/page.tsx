@@ -9,7 +9,11 @@ import {
   History,
 } from "lucide-react";
 
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import {
+  DashboardShell,
+  defaultDashboardTabs,
+  englishDefaultDashboardTabs,
+} from "@/components/dashboard/dashboard-shell";
 import {
   CreditActionNotice,
   type CreditActionNoticeState,
@@ -609,6 +613,11 @@ export async function MyPageCreditsPageView({
         title="나의 크레딧"
         description="음반심의 결제 완료 건으로 적립된 크레딧을 매거진 발행이나 서비스 이용 요청에 사용할 수 있습니다."
         activeTab="credits"
+        tabs={
+          localePrefix === "/en"
+            ? englishDefaultDashboardTabs
+            : defaultDashboardTabs
+        }
         contextLabel="마이페이지"
     >
       <div className="space-y-8">

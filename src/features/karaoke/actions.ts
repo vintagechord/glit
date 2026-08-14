@@ -3,6 +3,9 @@
 import { z } from "zod";
 
 import { APP_CONFIG } from "@/lib/config";
+import { requireAdminAction } from "@/lib/admin/action-auth";
+import { getB2Config } from "@/lib/b2";
+import { getGuestStorageOwnerId } from "@/lib/guest-storage-owner";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -19,20 +22,21 @@ export type KaraokeFileUrlActionState = {
 };
 
 const karaokeRequestSchema = z.object({
-  title: z.string().min(1),
-  artist: z.string().optional(),
-  contact: z.string().min(3),
-  notes: z.string().optional(),
-  filePath: z.string().optional(),
+  title: z.string().min(1).max(500),
+  artist: z.string().max(500).optional(),
+  contact: z.string().min(3).max(500),
+  notes: z.string().max(20_000).optional(),
+  filePath: z.string().max(1_024).optional(),
   paymentMethod: z.enum(["CARD", "BANK"]),
-  bankDepositorName: z.string().optional(),
+  bankDepositorName: z.string().max(500).optional(),
   tjRequested: z.boolean().optional(),
   kyRequested: z.boolean().optional(),
   recommendationPublic: z.boolean().optional(),
-  promotionCredits: z.number().int().min(0).optional(),
-  guestName: z.string().min(1).optional(),
-  guestEmail: z.string().email().optional(),
-  guestPhone: z.string().min(3).optional(),
+  promotionCredits: z.number().int().min(0).max(1_000_000).optional(),
+  guestName: z.string().min(1).max(500).optional(),
+  guestEmail: z.string().email().max(320).optional(),
+  guestPhone: z.string().min(3).max(100).optional(),
+  guestToken: z.string().min(8).max(120).optional(),
 });
 
 const karaokeStatusSchema = z.object({
@@ -57,10 +61,10 @@ const promotionContributionSchema = z
   .object({
     submissionId: z.string().uuid().optional(),
     promotionId: z.string().uuid().optional(),
-    credits: z.number().int().positive(),
+    credits: z.number().int().positive().max(1_000_000),
     tjEnabled: z.boolean().optional(),
     kyEnabled: z.boolean().optional(),
-    referenceUrl: z.string().optional(),
+    referenceUrl: z.string().max(2_048).optional(),
   })
   .refine((data) => data.submissionId || data.promotionId, {
     message: "대상 정보가 필요합니다.",
@@ -102,6 +106,50 @@ const buildAdminKaraokeSavedPath = (redirectTo?: string | null) => {
   return hash ? `${nextPath}#${hash}` : nextPath;
 };
 
+const classifyB2ObjectKey = (
+  objectKey: string,
+  ownerId: string,
+): "owned" | "foreign" | "other" => {
+  try {
+    const { prefix } = getB2Config();
+    if (!objectKey.startsWith(prefix)) return "other";
+    return objectKey.startsWith(`${prefix}${ownerId}/`) ? "owned" : "foreign";
+  } catch {
+    return "other";
+  }
+};
+
+const formatKaraokeCreditRpcError = (
+  message: string | null | undefined,
+  fallback: string,
+) => {
+  const value = message ?? "";
+  if (value.includes("KARAOKE_CREDITS_INSUFFICIENT")) {
+    return "보유한 크레딧이 부족합니다.";
+  }
+  if (value.includes("KARAOKE_PROMOTION_CREDITS_EXHAUSTED")) {
+    return "추천 노출 크레딧이 부족합니다.";
+  }
+  if (value.includes("KARAOKE_SUBMISSION_OWNER_MISMATCH")) {
+    return "본인 심의에만 크레딧을 사용할 수 있습니다.";
+  }
+  if (
+    value.includes("KARAOKE_PROMOTION_NOT_FOUND") ||
+    value.includes("KARAOKE_SUBMISSION_NOT_FOUND") ||
+    value.includes("KARAOKE_RECOMMENDATION_NOT_FOUND") ||
+    value.includes("KARAOKE_VOTE_NOT_FOUND")
+  ) {
+    return "추천 정보를 찾을 수 없습니다.";
+  }
+  if (
+    value.includes("APPROVAL_TERMINAL") ||
+    value.includes("STATE_CHANGED")
+  ) {
+    return "이미 처리된 요청입니다. 최신 상태를 확인해주세요.";
+  }
+  return fallback;
+};
+
 export async function createKaraokeRequestAction(
   payload: z.infer<typeof karaokeRequestSchema>,
 ): Promise<KaraokeActionState> {
@@ -127,6 +175,22 @@ export async function createKaraokeRequestAction(
   if (isGuest && (!parsed.data.guestName || !parsed.data.guestEmail)) {
     return { error: "비회원 정보를 입력해주세요." };
   }
+  const uploadOwnerIds = user?.id
+    ? [user.id]
+    : parsed.data.guestToken
+      ? [
+          getGuestStorageOwnerId(parsed.data.guestToken),
+          `guest-${parsed.data.guestToken}`,
+        ]
+      : [];
+  if (
+    parsed.data.filePath &&
+    !uploadOwnerIds.some(
+      (ownerId) => classifyB2ObjectKey(parsed.data.filePath as string, ownerId) === "owned",
+    )
+  ) {
+    return { error: "첨부 파일의 업로드 경로를 확인해주세요." };
+  }
   if (
     parsed.data.paymentMethod === "BANK" &&
     !parsed.data.bankDepositorName?.trim()
@@ -143,94 +207,52 @@ export async function createKaraokeRequestAction(
   }
 
   const admin = createAdminClient();
-  const db = isGuest ? admin : supabase;
-
-  if (recommendationPublic && user) {
-    const { data: creditRow } = await admin
-      .from("karaoke_credits")
-      .select("balance")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    const currentBalance = creditRow?.balance ?? 0;
-    if (currentBalance < promotionCredits) {
-      return { error: "보유한 크레딧이 부족합니다." };
-    }
-  }
-
-  const { data, error } = await db
-    .from("karaoke_requests")
-    .insert({
-      user_id: user?.id ?? null,
-      guest_name: isGuest ? parsed.data.guestName : null,
-      guest_email: isGuest ? parsed.data.guestEmail : null,
-      guest_phone: isGuest
-        ? parsed.data.guestPhone ?? parsed.data.contact
-        : null,
-      title: parsed.data.title,
-      artist: parsed.data.artist || null,
-      contact: parsed.data.contact,
-      notes: parsed.data.notes || null,
-      file_path: parsed.data.filePath || null,
-      payment_method: parsed.data.paymentMethod,
-      payment_status: "PAYMENT_PENDING",
-      amount_krw: APP_CONFIG.karaokeFeeKrw,
-      bank_depositor_name:
+  const { data, error } = await admin.rpc(
+    "create_karaoke_request_with_promotion",
+    {
+      p_user_id: user?.id ?? null,
+      p_title: parsed.data.title,
+      p_artist: parsed.data.artist ?? null,
+      p_contact: parsed.data.contact,
+      p_notes: parsed.data.notes ?? null,
+      p_file_path: parsed.data.filePath ?? null,
+      p_payment_method: parsed.data.paymentMethod,
+      p_amount_krw: APP_CONFIG.karaokeFeeKrw,
+      p_bank_depositor_name:
         parsed.data.paymentMethod === "BANK"
           ? parsed.data.bankDepositorName?.trim() ?? null
           : null,
-      tj_requested: parsed.data.tjRequested ?? true,
-      ky_requested: parsed.data.kyRequested ?? true,
-      recommendation_public: recommendationPublic,
-      recommendation_url: null,
-    })
-    .select("id")
-    .maybeSingle();
+      p_tj_requested: parsed.data.tjRequested ?? true,
+      p_ky_requested: parsed.data.kyRequested ?? true,
+      p_guest_name: isGuest ? parsed.data.guestName ?? null : null,
+      p_guest_email: isGuest ? parsed.data.guestEmail ?? null : null,
+      p_guest_phone: isGuest
+        ? parsed.data.guestPhone ?? parsed.data.contact
+        : null,
+      p_recommendation_public: recommendationPublic,
+      p_promotion_credits: promotionCredits,
+    },
+  );
 
   if (error) {
-    return { error: "요청 접수에 실패했습니다." };
+    console.error("[karaoke][request][atomic-create-error]", {
+      code: error.code,
+    });
+    return {
+      error: formatKaraokeCreditRpcError(
+        error.message,
+        "요청 접수에 실패했습니다.",
+      ),
+    };
   }
 
-  if (recommendationPublic && user && data?.id) {
-    const nextBalance = Math.max(0, promotionCredits);
-    const { error: promotionError } = await admin.from("karaoke_promotions").insert({
-      karaoke_request_id: data.id,
-      submission_id: null,
-      owner_user_id: user.id,
-      status: nextBalance > 0 ? "ACTIVE" : "PENDING",
-      credits_balance: nextBalance,
-      credits_required: 1,
-      tj_enabled: parsed.data.tjRequested ?? true,
-      ky_enabled: parsed.data.kyRequested ?? true,
-      reference_url: null,
-    });
-
-    if (promotionError) {
-      console.error("[karaoke][promotion][create-error]", promotionError);
-      return {
-        error:
-          "등록 요청은 접수되었지만 추천 공개 설정을 저장하지 못했습니다. 관리자에게 문의해주세요.",
-        requestId: data.id,
-      };
-    }
-
-    const { data: creditRow } = await admin
-      .from("karaoke_credits")
-      .select("balance")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    const currentBalance = creditRow?.balance ?? 0;
-    await admin.from("karaoke_credits").upsert({
-      user_id: user.id,
-      balance: Math.max(0, currentBalance - nextBalance),
-    });
-    await admin.from("karaoke_credit_events").insert({
-      user_id: user.id,
-      delta: -nextBalance,
-      reason: "노래방 추천 공개 크레딧 예치",
-    });
-  }
-
-  return { message: "노래방 등록 요청이 접수되었습니다.", requestId: data?.id ?? undefined };
+  const result = (Array.isArray(data) ? data[0] : data) as
+    | { result_request_id?: string }
+    | null;
+  return {
+    message: "노래방 등록 요청이 접수되었습니다.",
+    requestId: result?.result_request_id,
+  };
 }
 
 export async function getKaraokeRequestFileUrlAction(
@@ -265,13 +287,31 @@ export async function getKaraokeRequestFileUrlAction(
     return { error: "첨부된 파일이 없습니다." };
   }
 
-  try {
-    const url = await import("@/lib/b2")
-      .then(({ presignGetUrl }) => presignGetUrl(request.file_path, 300))
-      .catch(() => null);
-    if (url) return { url };
-  } catch {
-    // fall through to supabase
+  const objectKeyKind = classifyB2ObjectKey(request.file_path, user.id);
+  const { data: isAdmin, error: adminCheckError } =
+    objectKeyKind === "foreign"
+      ? await supabase.rpc("is_admin")
+      : { data: false, error: null };
+  if (adminCheckError) {
+    console.warn("[karaoke][request-file][admin-check-error]", {
+      code: adminCheckError.code,
+    });
+  }
+  if (objectKeyKind === "foreign" && isAdmin !== true) {
+    return { error: "첨부 파일에 접근할 권한이 없습니다." };
+  }
+
+  // The RLS-scoped row read above proves the exact stored reference. Admins may
+  // presign that foreign B2 key; regular users remain restricted to their prefix.
+  if (objectKeyKind === "owned" || (objectKeyKind === "foreign" && isAdmin === true)) {
+    try {
+      const url = await import("@/lib/b2")
+        .then(({ presignGetUrl }) => presignGetUrl(request.file_path, 300))
+        .catch(() => null);
+      if (url) return { url };
+    } catch {
+      // fall through to supabase
+    }
   }
 
   const { data, error } = await supabase.storage
@@ -317,13 +357,29 @@ export async function getKaraokeRecommendationFileUrlAction(
     return { error: "첨부된 파일이 없습니다." };
   }
 
-  try {
-    const url = await import("@/lib/b2")
-      .then(({ presignGetUrl }) => presignGetUrl(recommendation.proof_path, 300))
-      .catch(() => null);
-    if (url) return { url };
-  } catch {
-    // fall back
+  const objectKeyKind = classifyB2ObjectKey(recommendation.proof_path, user.id);
+  const { data: isAdmin, error: adminCheckError } =
+    objectKeyKind === "foreign"
+      ? await supabase.rpc("is_admin")
+      : { data: false, error: null };
+  if (adminCheckError) {
+    console.warn("[karaoke][recommendation-file][admin-check-error]", {
+      code: adminCheckError.code,
+    });
+  }
+  if (objectKeyKind === "foreign" && isAdmin !== true) {
+    return { error: "첨부 파일에 접근할 권한이 없습니다." };
+  }
+
+  if (objectKeyKind === "owned" || (objectKeyKind === "foreign" && isAdmin === true)) {
+    try {
+      const url = await import("@/lib/b2")
+        .then(({ presignGetUrl }) => presignGetUrl(recommendation.proof_path, 300))
+        .catch(() => null);
+      if (url) return { url };
+    } catch {
+      // fall back
+    }
   }
 
   const { data, error } = await supabase.storage
@@ -358,8 +414,15 @@ export async function createKaraokeVoteAction(
   if (!user) {
     return { error: "로그인 후 추천에 참여할 수 있습니다." };
   }
+  if (
+    parsed.data.proofPath &&
+    classifyB2ObjectKey(parsed.data.proofPath, user.id) !== "owned"
+  ) {
+    return { error: "인증 파일의 업로드 경로를 확인해주세요." };
+  }
 
-  const { error } = await supabase.from("karaoke_votes").insert({
+  const admin = createAdminClient();
+  const { error } = await admin.from("karaoke_votes").insert({
     request_id: parsed.data.requestId,
     voter_user_id: user.id,
     proof_path: parsed.data.proofPath ?? null,
@@ -394,136 +457,37 @@ export async function contributeKaraokePromotionAction(
     return { error: "로그인 후 크레딧을 사용할 수 있습니다." };
   }
 
-  const creditsToUse = parsed.data.credits;
-  if (creditsToUse <= 0) {
-    return { error: "사용할 크레딧을 입력해주세요." };
-  }
-
   const admin = createAdminClient();
-
-  let promotion = null;
-  const referenceUrl = parsed.data.referenceUrl?.trim() || null;
-  if (parsed.data.promotionId) {
-    const { data } = await admin
-      .from("karaoke_promotions")
-      .select(
-        "id, submission_id, owner_user_id, credits_balance, credits_required, status, tj_enabled, ky_enabled, reference_url",
-      )
-      .eq("id", parsed.data.promotionId)
-      .maybeSingle();
-    promotion = data ?? null;
-  }
-
-  if (!promotion && parsed.data.submissionId) {
-    const { data: submission } = await admin
-      .from("submissions")
-      .select("id, user_id")
-      .eq("id", parsed.data.submissionId)
-      .maybeSingle();
-    if (!submission) {
-      return { error: "심의 정보를 찾을 수 없습니다." };
-    }
-    if (submission.user_id !== user.id) {
-      return { error: "본인 심의에만 크레딧을 사용할 수 있습니다." };
-    }
-
-    const { data: existingPromotion } = await admin
-      .from("karaoke_promotions")
-      .select(
-        "id, submission_id, owner_user_id, credits_balance, credits_required, status, tj_enabled, ky_enabled, reference_url",
-      )
-      .eq("submission_id", submission.id)
-      .maybeSingle();
-
-    if (existingPromotion) {
-      promotion = existingPromotion;
-    } else {
-      const { data: createdPromotion, error: promotionError } = await admin
-        .from("karaoke_promotions")
-        .insert({
-          submission_id: submission.id,
-          owner_user_id: user.id,
-          status: "PENDING",
-          credits_balance: 0,
-          credits_required: 10,
-          tj_enabled: parsed.data.tjEnabled ?? true,
-          ky_enabled: parsed.data.kyEnabled ?? true,
-          reference_url: referenceUrl,
-        })
-        .select(
-          "id, submission_id, owner_user_id, credits_balance, credits_required, status, tj_enabled, ky_enabled, reference_url",
-        )
-        .maybeSingle();
-
-      if (promotionError || !createdPromotion) {
-        return { error: "추천 노출 정보를 생성할 수 없습니다." };
-      }
-      promotion = createdPromotion;
-    }
-  }
-
-  if (!promotion) {
-    return { error: "추천 노출 정보를 찾을 수 없습니다." };
-  }
-
-  const { data: creditRow } = await admin
-    .from("karaoke_credits")
-    .select("balance")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const currentBalance = creditRow?.balance ?? 0;
-  if (currentBalance < creditsToUse) {
-    return { error: "보유한 크레딧이 부족합니다." };
-  }
-
-  const nextBalance = currentBalance - creditsToUse;
-  const nextPromotionBalance = (promotion.credits_balance ?? 0) + creditsToUse;
-  const shouldActivate =
-    promotion.status === "ACTIVE" ||
-    nextPromotionBalance >= promotion.credits_required;
-
-  const { error: promotionUpdateError } = await admin
-    .from("karaoke_promotions")
-    .update({
-      credits_balance: nextPromotionBalance,
-      status: shouldActivate ? "ACTIVE" : "PENDING",
-      tj_enabled: parsed.data.tjEnabled ?? promotion.tj_enabled,
-      ky_enabled: parsed.data.kyEnabled ?? promotion.ky_enabled,
-      reference_url: referenceUrl ?? promotion.reference_url ?? null,
-    })
-    .eq("id", promotion.id);
-
-  if (promotionUpdateError) {
-    return { error: "크레딧 반영에 실패했습니다." };
-  }
-
-  const { error: contributionError } = await admin
-    .from("karaoke_promotion_contributions")
-    .insert({
-      promotion_id: promotion.id,
-      contributor_user_id: user.id,
-      credits: creditsToUse,
+  const { data, error } = await admin.rpc(
+    "contribute_karaoke_promotion_credits",
+    {
+      p_user_id: user.id,
+      p_submission_id: parsed.data.submissionId ?? null,
+      p_promotion_id: parsed.data.promotionId ?? null,
+      p_credits: parsed.data.credits,
+      p_tj_enabled: parsed.data.tjEnabled ?? null,
+      p_ky_enabled: parsed.data.kyEnabled ?? null,
+      p_reference_url: parsed.data.referenceUrl?.trim() || null,
+    },
+  );
+  if (error) {
+    console.error("[karaoke][promotion][atomic-contribution-error]", {
+      code: error.code,
     });
-
-  if (contributionError) {
-    return { error: "크레딧 사용 기록에 실패했습니다." };
+    return {
+      error: formatKaraokeCreditRpcError(
+        error.message,
+        "크레딧 반영에 실패했습니다.",
+      ),
+    };
   }
-
-  await admin.from("karaoke_credits").upsert({
-    user_id: user.id,
-    balance: nextBalance,
-  });
-
-  await admin.from("karaoke_credit_events").insert({
-    user_id: user.id,
-    delta: -creditsToUse,
-    reason: "노래방 추천 노출 크레딧 사용",
-  });
+  const result = (Array.isArray(data) ? data[0] : data) as
+    | { result_status?: string }
+    | null;
 
   return {
     message:
-      nextPromotionBalance >= promotion.credits_required
+      result?.result_status === "ACTIVE"
         ? "추천 노출이 활성화되었습니다."
         : "크레딧이 반영되었습니다.",
   };
@@ -550,6 +514,12 @@ export async function createKaraokePromotionRecommendationAction(
   if (!user) {
     return { error: "로그인 후 추천에 참여할 수 있습니다." };
   }
+  if (
+    parsed.data.proofPath &&
+    classifyB2ObjectKey(parsed.data.proofPath, user.id) !== "owned"
+  ) {
+    return { error: "인증 파일의 업로드 경로를 확인해주세요." };
+  }
 
   const { data: promotion } = await supabase
     .from("karaoke_promotions")
@@ -569,7 +539,8 @@ export async function createKaraokePromotionRecommendationAction(
     return { error: "본인의 곡에는 추천을 등록할 수 없습니다." };
   }
 
-  const { error } = await supabase
+  const admin = createAdminClient();
+  const { error } = await admin
     .from("karaoke_promotion_recommendations")
     .insert({
       promotion_id: promotion.id,
@@ -587,86 +558,27 @@ export async function createKaraokePromotionRecommendationAction(
 export async function updateKaraokePromotionRecommendationStatusAction(
   payload: z.infer<typeof promotionRecommendationStatusSchema>,
 ): Promise<KaraokeActionState> {
+  await requireAdminAction();
   const parsed = promotionRecommendationStatusSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "추천 상태를 확인해주세요." };
   }
 
   const admin = createAdminClient();
-  const { data: recommendation } = await admin
-    .from("karaoke_promotion_recommendations")
-    .select("id, recommender_user_id, status, promotion_id")
-    .eq("id", parsed.data.recommendationId)
-    .maybeSingle();
-
-  if (!recommendation) {
-    return { error: "추천 정보를 찾을 수 없습니다." };
-  }
-
-  const { error: updateError } = await admin
-    .from("karaoke_promotion_recommendations")
-    .update({ status: parsed.data.status })
-    .eq("id", parsed.data.recommendationId);
-
-  if (updateError) {
-    return { error: "추천 상태 변경에 실패했습니다." };
-  }
-
-  if (
-    parsed.data.status === "APPROVED" &&
-    recommendation.status !== "APPROVED"
-  ) {
-    const { data: promotion } = await admin
-      .from("karaoke_promotions")
-      .select("id, credits_balance, credits_required, status")
-      .eq("id", recommendation.promotion_id)
-      .maybeSingle();
-
-    if (!promotion) {
-      return { error: "추천 대상 정보를 찾을 수 없습니다." };
-    }
-
-    if (promotion.credits_balance <= 0) {
-      return { error: "추천 노출 크레딧이 부족합니다." };
-    }
-
-    const nextPromotionBalance = Math.max(promotion.credits_balance - 1, 0);
-    const nextStatus =
-      nextPromotionBalance <= 0
-        ? "EXHAUSTED"
-        : promotion.status === "ACTIVE"
-          ? "ACTIVE"
-          : nextPromotionBalance >= promotion.credits_required
-            ? "ACTIVE"
-            : "PENDING";
-
-    await admin
-      .from("karaoke_promotions")
-      .update({
-        credits_balance: nextPromotionBalance,
-        status: nextStatus,
-      })
-      .eq("id", promotion.id);
-
-    if (recommendation.recommender_user_id) {
-      const { data: creditRow } = await admin
-        .from("karaoke_credits")
-        .select("balance")
-        .eq("user_id", recommendation.recommender_user_id)
-        .maybeSingle();
-
-      const nextBalance = (creditRow?.balance ?? 0) + 1;
-      await admin.from("karaoke_credits").upsert({
-        user_id: recommendation.recommender_user_id,
-        balance: nextBalance,
-      });
-
-      await admin.from("karaoke_credit_events").insert({
-        user_id: recommendation.recommender_user_id,
-        delta: 1,
-        reason: "추천 인증 승인",
-      });
-    }
+  const { error } = await admin.rpc(
+    "set_karaoke_promotion_recommendation_status",
+    {
+      p_recommendation_id: parsed.data.recommendationId,
+      p_status: parsed.data.status,
+    },
+  );
+  if (error) {
+    return {
+      error: formatKaraokeCreditRpcError(
+        error.message,
+        "추천 상태 변경에 실패했습니다.",
+      ),
+    };
   }
 
   return { message: "추천 상태가 업데이트되었습니다." };
@@ -675,53 +587,24 @@ export async function updateKaraokePromotionRecommendationStatusAction(
 export async function updateKaraokeVoteStatusAction(
   payload: z.infer<typeof karaokeVoteStatusSchema>,
 ): Promise<KaraokeActionState> {
+  await requireAdminAction();
   const parsed = karaokeVoteStatusSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "추천 상태를 확인해주세요." };
   }
 
   const admin = createAdminClient();
-  const { data: vote, error: voteError } = await admin
-    .from("karaoke_votes")
-    .select("id, voter_user_id, status")
-    .eq("id", parsed.data.voteId)
-    .maybeSingle();
-
-  if (voteError || !vote) {
-    return { error: "추천 정보를 찾을 수 없습니다." };
-  }
-
-  const { error } = await admin
-    .from("karaoke_votes")
-    .update({ status: parsed.data.status })
-    .eq("id", parsed.data.voteId);
-
+  const { error } = await admin.rpc("set_karaoke_vote_status", {
+    p_vote_id: parsed.data.voteId,
+    p_status: parsed.data.status,
+  });
   if (error) {
-    return { error: "추천 상태 변경에 실패했습니다." };
-  }
-
-  if (
-    parsed.data.status === "APPROVED" &&
-    vote.voter_user_id &&
-    vote.status !== "APPROVED"
-  ) {
-    const { data: creditRow } = await admin
-      .from("karaoke_credits")
-      .select("balance")
-      .eq("user_id", vote.voter_user_id)
-      .maybeSingle();
-
-    const nextBalance = (creditRow?.balance ?? 0) + 1;
-    await admin.from("karaoke_credits").upsert({
-      user_id: vote.voter_user_id,
-      balance: nextBalance,
-    });
-
-    await admin.from("karaoke_credit_events").insert({
-      user_id: vote.voter_user_id,
-      delta: 1,
-      reason: "추천 승인",
-    });
+    return {
+      error: formatKaraokeCreditRpcError(
+        error.message,
+        "추천 상태 변경에 실패했습니다.",
+      ),
+    };
   }
 
   return { message: "추천 상태가 업데이트되었습니다." };
@@ -730,6 +613,7 @@ export async function updateKaraokeVoteStatusAction(
 export async function updateKaraokeStatusAction(
   payload: z.infer<typeof karaokeStatusSchema>,
 ): Promise<KaraokeActionState> {
+  await requireAdminAction();
   const parsed = karaokeStatusSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "상태를 확인해주세요." };

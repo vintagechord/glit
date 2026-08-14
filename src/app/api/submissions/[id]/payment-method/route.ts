@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import { readBoundedJsonBody } from "@/lib/request-body";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -10,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
   method: z.enum(["BANK", "CARD"]),
-  guestToken: z.string().trim().min(8).optional(),
+  guestToken: z.string().trim().min(8).max(120).optional(),
 });
 
 const uuidPattern =
@@ -38,6 +43,22 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  const requestLimit = consumeRateLimit({
+    namespace: "submission-payment-method-ip",
+    identifier: getRequestIdentifier(request.headers),
+    limit: 30,
+    windowMs: 15 * 60 * 1_000,
+  });
+  if (!requestLimit.allowed) {
+    return NextResponse.json(
+      { error: "결제 방식 변경 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
+      },
+    );
+  }
+
   const { id } = await context.params;
   const submissionId = id?.trim();
   if (!submissionId || !uuidPattern.test(submissionId)) {
@@ -47,7 +68,14 @@ export async function PATCH(
     );
   }
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  const body = await readBoundedJsonBody(request, 8 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "결제 방식을 확인해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = bodySchema.safeParse(body.value);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "결제 방식을 확인해주세요." },

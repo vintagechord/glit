@@ -116,6 +116,7 @@ export function SubmissionCartCheckout({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
+  const localePrefix = isEnglishRoute ? "/en" : "";
   const cartHref = isEnglishRoute ? "/en/mypage/cart" : "/mypage/cart";
   const newSubmissionHref = isEnglishRoute ? "/en/dashboard/new" : "/dashboard/new";
   const focusedSubmissionId =
@@ -124,6 +125,7 @@ export function SubmissionCartCheckout({
     initialItems.map((item) => mapSubmissionCartItem(item)),
   );
   const [isLoadingGuestCart, setIsLoadingGuestCart] = React.useState(!userId);
+  const didAttemptGuestCartClaim = React.useRef(false);
   React.useEffect(() => {
     if (!userId) return;
     setCartItems(initialItems.map((item) => mapSubmissionCartItem(item)));
@@ -137,6 +139,7 @@ export function SubmissionCartCheckout({
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
     () => new Set(payableIds),
   );
+  const didAutoSelectPayableItems = React.useRef(payableIds.length > 0);
   const [selectedMethod, setSelectedMethod] =
     React.useState<PaymentMethod>("CARD");
   const [isOpening, setIsOpening] = React.useState(false);
@@ -181,6 +184,77 @@ export function SubmissionCartCheckout({
     }
     return null;
   });
+
+  React.useEffect(() => {
+    if (!userId || didAttemptGuestCartClaim.current) return;
+    didAttemptGuestCartClaim.current = true;
+
+    const entries = readGuestSubmissionCartEntries();
+    if (entries.length === 0) return;
+
+    const controller = new AbortController();
+    const claimGuestCart = async () => {
+      setIsLoadingGuestCart(true);
+      try {
+        const response = await fetch("/api/cart/items", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            guestTokensBySubmissionId:
+              toGuestTokensBySubmissionId(entries),
+          }),
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          claimedIds?: string[];
+          invalidSubmissionIds?: string[];
+          error?: string;
+        };
+        const invalidIds = payload.invalidSubmissionIds ?? [];
+        if (invalidIds.length > 0) {
+          removeGuestSubmissionCartEntries(invalidIds);
+        }
+        if (!response.ok) {
+          throw new Error(
+            payload.error ?? "비회원 장바구니를 계정에 연결하지 못했습니다.",
+          );
+        }
+
+        const claimedIds = payload.claimedIds ?? [];
+        const completedIds = [...claimedIds, ...invalidIds];
+        if (completedIds.length > 0) {
+          removeGuestSubmissionCartEntries(completedIds);
+        }
+        if (claimedIds.length > 0) {
+          setNotice({
+            type: "success",
+            message: `${claimedIds.length}개 비회원 신청서를 로그인 계정의 장바구니로 연결했습니다.`,
+          });
+        }
+        router.refresh();
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setNotice({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "비회원 장바구니를 계정에 연결하지 못했습니다.",
+        });
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingGuestCart(false);
+        }
+      }
+    };
+
+    void claimGuestCart();
+    return () => {
+      controller.abort();
+      didAttemptGuestCartClaim.current = false;
+    };
+  }, [router, userId]);
 
   React.useEffect(() => {
     if (userId) return;
@@ -254,8 +328,9 @@ export function SubmissionCartCheckout({
       prev.forEach((id) => {
         if (validIds.has(id)) next.add(id);
       });
-      if (next.size === 0) {
+      if (!didAutoSelectPayableItems.current && payableIds.length > 0) {
         payableIds.forEach((id) => next.add(id));
+        didAutoSelectPayableItems.current = true;
       }
       return next;
     });
@@ -308,11 +383,27 @@ export function SubmissionCartCheckout({
       const status = normalizeInicisStatus(String(type));
       cleanupInicisPaymentLayer();
       if (status === "SUCCESS") {
+        const paidIds = new Set(
+          selectedItemsRef.current.map((item) => item.id),
+        );
         if (!userId) {
-          removeGuestSubmissionCartEntries(
-            selectedItemsRef.current.map((item) => item.id),
+          removeGuestSubmissionCartEntries(Array.from(paidIds));
+          setCartItems((prev) =>
+            prev.filter((item) => !paidIds.has(item.id)),
           );
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            paidIds.forEach((id) => next.delete(id));
+            return next;
+          });
         }
+        setNotice({
+          type: "success",
+          message: userId
+            ? "결제가 완료되었습니다. 결제된 신청서는 나의 심의 내역에서 확인할 수 있습니다."
+            : "결제가 완료되었습니다. 비회원 조회 코드로 진행 상태를 확인할 수 있습니다.",
+        });
+        setIsOpening(false);
         router.push(`${cartHref}?payment=success`);
         router.refresh();
         return;
@@ -352,12 +443,14 @@ export function SubmissionCartCheckout({
   };
 
   const getEditHref = (item: CartItem) =>
-    item.type === "ALBUM" ? "/dashboard/new/album?from=drafts" : "/dashboard/new/mv?from=drafts";
+    item.type === "ALBUM"
+      ? `${localePrefix}/dashboard/new/album?from=drafts`
+      : `${localePrefix}/dashboard/new/mv?from=drafts`;
 
   const getDetailHref = (item: CartItem) =>
     item.guestToken
-      ? `/track/${encodeURIComponent(item.guestToken)}`
-      : `/dashboard/submissions/${item.id}`;
+      ? `${localePrefix}/track/${encodeURIComponent(item.guestToken)}`
+      : `${localePrefix}/dashboard/submissions/${item.id}`;
 
   const prepareEditStorage = (item: CartItem) => {
     if (typeof window === "undefined") return;
@@ -482,6 +575,18 @@ export function SubmissionCartCheckout({
         Math.round(Number(payload.totalAmountKrw ?? selectedTotal)),
       ),
     };
+    const pendingIds = new Set(selectedItems.map((item) => item.id));
+    setCartItems((prev) =>
+      prev.map((item) =>
+        pendingIds.has(item.id)
+          ? {
+              ...item,
+              status: "WAITING_PAYMENT",
+              paymentStatus: "PAYMENT_PENDING",
+            }
+          : item,
+      ),
+    );
     setBankResult(nextResult);
     setNotice({
       type: "success",
@@ -838,7 +943,7 @@ function NoticeDialog({
       <div
         role="dialog"
         aria-modal="true"
-        className={`w-full max-w-sm rounded-[10px] border-2 p-5 text-center shadow-[6px_6px_0_#111111] ${tone}`}
+        className={`max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto rounded-[10px] border-2 p-5 text-center shadow-[6px_6px_0_#111111] ${tone}`}
       >
         <p className="text-base font-black">{title}</p>
         <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6">
@@ -875,7 +980,7 @@ function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="cart-delete-dialog-title"
         aria-describedby="cart-delete-dialog-description"
-        className="w-full max-w-sm rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-center text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]"
+        className="max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-center text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]"
       >
         <p id="cart-delete-dialog-title" className="text-base font-black">
           삭제 확인

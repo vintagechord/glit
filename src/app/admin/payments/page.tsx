@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { requireAdminPage } from "@/lib/admin/page-auth";
 import { formatDateTime, formatCurrency } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -28,6 +29,7 @@ type PaymentRow = {
 };
 
 export default async function AdminPaymentsPage() {
+  await requireAdminPage();
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("submission_payments")
@@ -86,8 +88,14 @@ export default async function AdminPaymentsPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 overflow-auto rounded-2xl border border-border/60 bg-card/70">
+      <div
+        className="mt-6 overflow-auto rounded-2xl border border-border/60 bg-card/70"
+        role="region"
+        aria-label="승인 완료 결제 목록"
+        tabIndex={0}
+      >
         <table className="min-w-full text-sm">
+          <caption className="sr-only">이니시스 카드 승인 완료 결제 목록</caption>
           <thead className="bg-card/80 text-muted-foreground">
             <tr>
               <th className="px-4 py-3 text-left">주문번호</th>

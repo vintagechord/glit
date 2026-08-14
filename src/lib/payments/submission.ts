@@ -6,7 +6,6 @@ import { buildStdPayRequest } from "@/lib/inicis/stdpay";
 import { getInicisMode, getStdPayConfig } from "@/lib/inicis/config";
 import { sendSubmissionUpdateEmail } from "@/lib/email";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
-import { getPaymentGroupSubmissionIds } from "@/lib/payment-group";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 
 export type StdPayInitResult = {
@@ -50,6 +49,24 @@ type PaymentCancelResult = {
   guestToken?: string | null;
 };
 
+type ClosePaymentRpcRow = {
+  primary_submission_id: string | null;
+  submission_ids: string[] | null;
+  final_status: string | null;
+  transitioned: boolean | null;
+};
+
+type ApprovePaymentRpcRow = {
+  primary_submission_id: string | null;
+  submission_ids: string[] | null;
+  already_approved: boolean | null;
+};
+
+const submissionSelectWithResult =
+  "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
+const submissionSelectFallback =
+  "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, package:packages ( name )";
+
 const normalizeEmailValue = (value?: string | null) =>
   value?.trim().toLowerCase() ?? "";
 
@@ -91,6 +108,9 @@ const mergePaymentRawResponse = (
   if (isRecord(previousRaw) && "paymentGroup" in previousRaw) {
     next.paymentGroup = previousRaw.paymentGroup;
   }
+  if (isRecord(previousRaw) && "closeState" in previousRaw) {
+    next.closeState = previousRaw.closeState;
+  }
   return Object.keys(next).length > 0 ? next : null;
 };
 
@@ -112,14 +132,10 @@ const getPaymentMetadataByOrderId = async (
 
 export const findSubmissionById = async (submissionId: string) => {
   const admin = createAdminClient();
-  const selectWithRating =
-    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
-  const selectFallback =
-    "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, package:packages ( name )";
 
   const primary = await admin
     .from("submissions")
-    .select(selectWithRating)
+    .select(submissionSelectWithResult)
     .eq("id", submissionId)
     .maybeSingle();
   let data = primary.data as SubmissionRecord | null;
@@ -128,9 +144,47 @@ export const findSubmissionById = async (submissionId: string) => {
   if (error?.code === "42703") {
     const fallback = await admin
       .from("submissions")
-      .select(selectFallback)
+      .select(submissionSelectFallback)
       .eq("id", submissionId)
       .maybeSingle();
+    data = fallback.data as SubmissionRecord | null;
+    error = fallback.error;
+  }
+
+  return { submission: data, error };
+};
+
+type SubmissionOwner =
+  | { kind: "member"; userId: string }
+  | { kind: "guest"; guestToken: string };
+
+const findSubmissionForOwner = async (
+  submissionId: string,
+  owner: SubmissionOwner,
+) => {
+  const admin = createAdminClient();
+  const runQuery = (select: string) => {
+    const query = admin
+      .from("submissions")
+      .select(select)
+      .eq("id", submissionId);
+
+    if (owner.kind === "member") {
+      return query.eq("user_id", owner.userId).maybeSingle();
+    }
+
+    return query
+      .is("user_id", null)
+      .eq("guest_token", owner.guestToken)
+      .maybeSingle();
+  };
+
+  const primary = await runQuery(submissionSelectWithResult);
+  let data = primary.data as SubmissionRecord | null;
+  let error = primary.error;
+
+  if (error?.code === "42703") {
+    const fallback = await runQuery(submissionSelectFallback);
     data = fallback.data as SubmissionRecord | null;
     error = fallback.error;
   }
@@ -146,21 +200,36 @@ export const ensureSubmissionOwner = async (
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { submission, error } = await findSubmissionById(submissionId);
-  if (error || !submission) {
-    return { user, submission: null, error: "NOT_FOUND" };
-  }
-  if (submission.user_id && user?.id === submission.user_id) {
-    return { user, submission, error: null };
-  }
-  if (!submission.user_id && submission.guest_token && guestToken) {
-    if (guestToken === submission.guest_token) {
-      return { user, submission, error: null };
-    }
-  }
   if (!user && !guestToken) {
     return { user: null, submission: null, error: "UNAUTHORIZED" };
   }
+
+  if (user) {
+    const owned = await findSubmissionForOwner(submissionId, {
+      kind: "member",
+      userId: user.id,
+    });
+    if (owned.error) {
+      return { user, submission: null, error: "NOT_FOUND" };
+    }
+    if (owned.submission) {
+      return { user, submission: owned.submission, error: null };
+    }
+  }
+
+  if (guestToken) {
+    const owned = await findSubmissionForOwner(submissionId, {
+      kind: "guest",
+      guestToken,
+    });
+    if (owned.error) {
+      return { user, submission: null, error: "NOT_FOUND" };
+    }
+    if (owned.submission) {
+      return { user, submission: owned.submission, error: null };
+    }
+  }
+
   return { user, submission: null, error: "FORBIDDEN" };
 };
 
@@ -182,6 +251,12 @@ export const createSubmissionPaymentOrder = async (
     }
     if (submission.payment_status === "PAID") {
       return { error: "이미 결제가 완료된 접수가 포함되어 있습니다." };
+    }
+    if (
+      submission.payment_status === "PAYMENT_PENDING" &&
+      submission.payment_method !== "CARD"
+    ) {
+      return { error: "이미 결제가 진행 중인 접수가 포함되어 있습니다." };
     }
     if (submission.status === "DRAFT") {
       return { error: "임시저장 상태에서는 결제를 시작할 수 없습니다." };
@@ -214,6 +289,7 @@ export const createSubmissionPaymentOrder = async (
   );
   const orderTimestamp = Date.now().toString();
   const orderId = `SUBP-${orderTimestamp}-${submission.id.slice(0, 8)}-${randomUUID().slice(0, 8)}`;
+  const closeState = randomUUID();
   const config = getStdPayConfig();
   const packageName = Array.isArray(submission.package)
     ? (submission.package as Array<{ name?: string }>)[0]?.name
@@ -235,7 +311,10 @@ export const createSubmissionPaymentOrder = async (
     mid.length <= 4 ? `${mid.slice(0, 2)}**` : `${mid.slice(0, 2)}***${mid.slice(-2)}`;
 
   const returnUrl = new URL("/api/inicis/return", baseUrl).toString();
-  const closeUrl = new URL(`/api/inicis/close?oid=${encodeURIComponent(orderId)}&cancel=1`, baseUrl).toString();
+  const closeUrl = new URL(
+    `/api/inicis/close?oid=${encodeURIComponent(orderId)}&state=${encodeURIComponent(closeState)}&cancel=1`,
+    baseUrl,
+  ).toString();
   const stdParams = buildStdPayRequest({
     orderId,
     amountKrw,
@@ -245,6 +324,7 @@ export const createSubmissionPaymentOrder = async (
     buyerTel,
     returnUrl,
     closeUrl,
+    merchantData: closeState,
   }, orderTimestamp);
 
   console.info("[Inicis][STDPay][init]", {
@@ -253,7 +333,7 @@ export const createSubmissionPaymentOrder = async (
     orderId,
     amountKrw,
     returnUrl,
-    closeUrl: stdParams.closeUrl,
+    closeUrlConfigured: Boolean(stdParams.closeUrl),
     stdJsUrl: config.stdJsUrl,
     timestamp: stdParams.timestamp,
     baseUrl,
@@ -274,39 +354,66 @@ export const createSubmissionPaymentOrder = async (
   };
 
   const admin = createAdminClient();
-  const { error: insertError } = await admin.from("submission_payments").insert({
-    submission_id: submission.id,
-    user_id: submission.user_id ?? null,
-    order_id: orderId,
-    amount_krw: amountKrw,
-    status: "REQUESTED",
-    raw_response: { paymentGroup },
-  });
+  const { data: startedRows, error: startError } = await admin.rpc(
+    "begin_submission_payment_order",
+    {
+      p_primary_submission_id: submission.id,
+      p_submission_ids: submissions.map((item) => item.id),
+      p_order_id: orderId,
+      p_amount_krw: amountKrw,
+      p_user_id: submission.user_id ?? null,
+      p_raw_response: { paymentGroup, closeState },
+    },
+  );
 
-  if (insertError) {
-    if (insertError.code === "23505") {
+  if (startError) {
+    if (
+      startError.code === "23505" ||
+      startError.message?.includes("PAYMENT_ALREADY_IN_PROGRESS")
+    ) {
       return { error: "이미 생성된 결제 요청이 있습니다. 잠시 후 다시 시도해주세요." };
     }
+    if (startError.message?.includes("SUBMISSION_NOT_FOUND")) {
+      return { error: "접수를 찾을 수 없습니다." };
+    }
+    if (startError.message?.includes("SUBMISSION_NOT_PAYABLE")) {
+      return { error: "결제할 수 없는 상태의 신청서가 포함되어 있습니다." };
+    }
+    if (startError.message?.includes("PAYMENT_AMOUNT_MISMATCH")) {
+      return { error: "신청서 금액이 변경되었습니다. 다시 확인해주세요." };
+    }
+    if (startError.message?.includes("ALBUM_PRICE_SNAPSHOT_INVALID")) {
+      return { error: "앨범 신청서의 결제 금액이 변경되었습니다. 신청서를 다시 저장해주세요." };
+    }
+    if (startError.message?.includes("ALBUM_DISCOUNT_NOT_ELIGIBLE")) {
+      return {
+        error:
+          "추가 앨범 할인 결제에는 같은 패키지의 정가 앨범을 함께 선택하거나 먼저 결제해야 합니다.",
+      };
+    }
+    console.error("[Inicis][STDPay][init][transaction-error]", {
+      orderId,
+      code: startError.code,
+      message: startError.message,
+    });
     return { error: "결제 요청을 저장하지 못했습니다." };
   }
 
-  for (const item of submissions) {
-    const nextStatus =
-      item.status === "SUBMITTED" || item.status === "WAITING_PAYMENT"
-        ? "WAITING_PAYMENT"
-        : item.status;
-    const { error: updateError } = await admin
-      .from("submissions")
-      .update({
-        payment_method: "CARD",
-        payment_status: "PAYMENT_PENDING",
-        status: nextStatus,
-      })
-      .eq("id", item.id)
-      .neq("payment_status", "PAID");
-    if (updateError) {
-      return { error: "결제 대기 상태를 저장하지 못했습니다." };
-    }
+  const startedIds = new Set(
+    ((startedRows ?? []) as Array<{ submission_id?: string | null }>)
+      .map((row) => row.submission_id)
+      .filter((id): id is string => Boolean(id)),
+  );
+  if (
+    startedIds.size !== submissions.length ||
+    submissions.some((item) => !startedIds.has(item.id))
+  ) {
+    console.error("[Inicis][STDPay][init][transaction-result-mismatch]", {
+      orderId,
+      expectedSubmissionIds: submissions.map((item) => item.id),
+      startedSubmissionIds: Array.from(startedIds),
+    });
+    return { error: "결제 대기 상태를 저장하지 못했습니다." };
   }
 
   return {
@@ -336,52 +443,35 @@ export const markPaymentFailure = async (
 ) => {
   const admin = createAdminClient();
   const existingPayment = await getPaymentMetadataByOrderId(admin, orderId);
+  if (!existingPayment) {
+    return {
+      ok: false,
+      error: new Error("결제 요청 정보를 찾을 수 없습니다."),
+    };
+  }
   const nextRawResponse = mergePaymentRawResponse(
     existingPayment?.raw_response,
     payload.raw_response,
   );
-  const { data: updated, error } = await admin
-    .from("submission_payments")
-    .update({
-      status: "FAILED",
-      result_code: payload.result_code ?? null,
-      result_message: payload.result_message ?? null,
-      raw_response: nextRawResponse,
-    })
-    .eq("order_id", orderId)
-    .neq("status", "APPROVED")
-    .select("submission_id, raw_response")
-    .maybeSingle();
+  const { data, error } = await admin.rpc("close_submission_payment_order", {
+    p_order_id: orderId,
+    p_status: "FAILED",
+    p_result_code: payload.result_code ?? null,
+    p_result_message: payload.result_message ?? null,
+    p_raw_response: nextRawResponse,
+  });
 
   if (error) {
     return { ok: false, error };
   }
-
-  const submissionIds =
-    !updated?.submission_id && existingPayment?.status === "APPROVED"
-      ? []
-      : getPaymentGroupSubmissionIds(updated ?? existingPayment);
-  for (const targetSubmissionId of submissionIds) {
-    const { data: approvedPayments } = await admin
-      .from("submission_payments")
-      .select("id")
-      .eq("submission_id", targetSubmissionId)
-      .eq("status", "APPROVED")
-      .limit(1);
-
-    if (!approvedPayments?.length) {
-      const { error: submissionError } = await admin
-        .from("submissions")
-        .update({ payment_status: "UNPAID", status: "WAITING_PAYMENT" })
-        .eq("id", targetSubmissionId)
-        .neq("payment_status", "PAID");
-      if (submissionError) {
-        return { ok: false, error: submissionError };
-      }
-    }
-  }
-
-  return { ok: !error, error };
+  const closed = ((data ?? []) as ClosePaymentRpcRow[])[0] ?? null;
+  const ok =
+    closed?.final_status === "FAILED" ||
+    closed?.final_status === "CANCELED";
+  return {
+    ok,
+    error: ok ? null : new Error("이미 승인되거나 종료된 결제 요청입니다."),
+  };
 };
 
 export const markPaymentCanceled = async (
@@ -390,26 +480,46 @@ export const markPaymentCanceled = async (
     result_code?: string | null;
     result_message?: string | null;
     raw_response?: Record<string, unknown> | null;
+    close_state?: string | null;
   },
 ) => {
   const admin = createAdminClient();
   const existingPayment = await getPaymentMetadataByOrderId(admin, orderId);
+  if (!existingPayment) {
+    return {
+      ok: false,
+      error: new Error("결제 요청 정보를 찾을 수 없습니다."),
+      submissionId: null,
+      guestToken: null,
+    } satisfies PaymentCancelResult;
+  }
+  const expectedCloseState = isRecord(existingPayment.raw_response)
+    ? existingPayment.raw_response.closeState
+    : null;
+  const receivedCloseState = payload?.close_state ?? "";
+  if (
+    typeof expectedCloseState !== "string" ||
+    expectedCloseState.length < 32 ||
+    receivedCloseState !== expectedCloseState
+  ) {
+    return {
+      ok: false,
+      error: new Error("결제창 종료 요청 인증값이 올바르지 않습니다."),
+      submissionId: null,
+      guestToken: null,
+    } satisfies PaymentCancelResult;
+  }
   const nextRawResponse = mergePaymentRawResponse(
     existingPayment?.raw_response,
     payload?.raw_response,
   );
-  const { data: updated, error } = await admin
-    .from("submission_payments")
-    .update({
-      status: "CANCELED",
-      result_code: payload?.result_code ?? "CANCELED",
-      result_message: payload?.result_message ?? "사용자 취소",
-      raw_response: nextRawResponse,
-    })
-    .eq("order_id", orderId)
-    .neq("status", "APPROVED")
-    .select("submission_id, raw_response")
-    .maybeSingle();
+  const { data, error } = await admin.rpc("close_submission_payment_order", {
+    p_order_id: orderId,
+    p_status: "CANCELED",
+    p_result_code: payload?.result_code ?? "CANCELED",
+    p_result_message: payload?.result_message ?? "사용자 취소",
+    p_raw_response: nextRawResponse,
+  });
 
   if (error) {
     return {
@@ -420,50 +530,23 @@ export const markPaymentCanceled = async (
     } satisfies PaymentCancelResult;
   }
 
+  const closed = ((data ?? []) as ClosePaymentRpcRow[])[0] ?? null;
+  const primarySubmissionId = closed?.primary_submission_id ?? null;
   let guestToken: string | null = null;
-  const submissionIds =
-    !updated?.submission_id && existingPayment?.status === "APPROVED"
-      ? []
-      : getPaymentGroupSubmissionIds(updated ?? existingPayment);
-
-  for (const targetSubmissionId of submissionIds) {
-    const { data: approvedPayments } = await admin
-      .from("submission_payments")
-      .select("id")
-      .eq("submission_id", targetSubmissionId)
-      .eq("status", "APPROVED")
-      .limit(1);
-
-    if (!approvedPayments?.length) {
-      const { error: submissionError } = await admin
-        .from("submissions")
-        .update({ payment_status: "UNPAID", status: "WAITING_PAYMENT" })
-        .eq("id", targetSubmissionId)
-        .neq("payment_status", "PAID");
-      if (submissionError) {
-        return {
-          ok: false,
-          error: submissionError,
-          submissionId: targetSubmissionId,
-          guestToken,
-        } satisfies PaymentCancelResult;
-      }
-    }
-  }
-
-  if (updated?.submission_id) {
+  if (primarySubmissionId) {
     const { data: submission } = await admin
       .from("submissions")
       .select("guest_token")
-      .eq("id", updated.submission_id)
+      .eq("id", primarySubmissionId)
       .maybeSingle();
     guestToken = submission?.guest_token ?? null;
   }
 
+  const ok = closed?.final_status === "CANCELED";
   return {
-    ok: Boolean(updated?.submission_id) && !error,
-    error,
-    submissionId: updated?.submission_id ?? null,
+    ok,
+    error: ok ? null : new Error("이미 승인되거나 종료된 결제 요청입니다."),
+    submissionId: primarySubmissionId,
     guestToken,
   } satisfies PaymentCancelResult;
 };
@@ -486,14 +569,10 @@ export const markPaymentSuccess = async (
       submissionId: null,
     };
   }
-  if (existingPayment.status === "APPROVED") {
-    return {
-      ok: true,
-      error: null,
-      submissionId: existingPayment.submission_id,
-    };
-  }
-  if (existingPayment.status !== "REQUESTED") {
+  if (
+    existingPayment.status !== "REQUESTED" &&
+    existingPayment.status !== "APPROVED"
+  ) {
     return {
       ok: false,
       error: new Error("취소되거나 종료된 결제 요청입니다."),
@@ -504,67 +583,44 @@ export const markPaymentSuccess = async (
     existingPayment?.raw_response,
     payload.raw_response,
   );
-  const { data: updated, error } = await admin
-    .from("submission_payments")
-    .update({
-      status: "APPROVED",
-      pg_tid: payload.tid ?? null,
-      result_code: payload.result_code ?? null,
-      result_message: payload.result_message ?? null,
-      raw_response: nextRawResponse,
-      paid_at: new Date().toISOString(),
-    })
-    .eq("order_id", orderId)
-    .eq("status", "REQUESTED")
-    .select("submission_id, raw_response")
-    .maybeSingle();
+  const { data, error } = await admin.rpc("approve_submission_payment_order", {
+    p_order_id: orderId,
+    p_pg_tid: payload.tid ?? null,
+    p_result_code: payload.result_code ?? null,
+    p_result_message: payload.result_message ?? null,
+    p_raw_response: nextRawResponse,
+    p_paid_at: new Date().toISOString(),
+  });
 
   if (error) {
-    return { ok: false, error, submissionId: null };
-  }
-  if (!updated?.submission_id) {
     return {
       ok: false,
-      error: new Error("결제 요청 상태가 이미 변경되었습니다."),
+      error,
+      submissionId: existingPayment.submission_id,
+    };
+  }
+  const approved = ((data ?? []) as ApprovePaymentRpcRow[])[0] ?? null;
+  if (!approved?.primary_submission_id) {
+    return {
+      ok: false,
+      error: new Error("결제 승인 상태를 저장하지 못했습니다."),
       submissionId: null,
     };
   }
 
-  const submissionIds = getPaymentGroupSubmissionIds(updated);
-  for (const targetSubmissionId of submissionIds) {
-    const { data: submission } = await admin
-      .from("submissions")
-      .select("status")
-      .eq("id", targetSubmissionId)
-      .maybeSingle();
-    const nextSubmissionUpdate: Record<string, unknown> = {
-      payment_status: "PAID",
-      payment_method: "CARD",
+  const submissionIds = normalizeSubmissionIds(
+    approved.primary_submission_id,
+    approved.submission_ids,
+  );
+  if (approved.already_approved) {
+    return {
+      ok: true,
+      error: null,
+      submissionId: approved.primary_submission_id,
     };
-    if (
-      submission?.status === "WAITING_PAYMENT" ||
-      submission?.status === "SUBMITTED"
-    ) {
-      nextSubmissionUpdate.status = "IN_PROGRESS";
-    }
+  }
 
-    const { error: submissionError } = await admin
-      .from("submissions")
-      .update(nextSubmissionUpdate)
-      .eq("id", targetSubmissionId);
-    if (submissionError) {
-      return { ok: false, error: submissionError, submissionId: targetSubmissionId };
-    }
-
-    const { error: eventError } = await admin.from("submission_events").insert({
-      submission_id: targetSubmissionId,
-      event_type: "PAYMENT",
-      message: "KG이니시스 카드 결제 완료",
-    });
-    if (eventError) {
-      return { ok: false, error: eventError, submissionId: targetSubmissionId };
-    }
-
+  for (const targetSubmissionId of submissionIds) {
     const { submission: notificationSubmission } = await findSubmissionById(
       targetSubmissionId,
     );
@@ -638,5 +694,9 @@ export const markPaymentSuccess = async (
     }
   }
 
-  return { ok: !error, error, submissionId: updated?.submission_id ?? null };
+  return {
+    ok: true,
+    error: null,
+    submissionId: approved.primary_submission_id,
+  };
 };

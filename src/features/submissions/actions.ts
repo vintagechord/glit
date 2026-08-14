@@ -1,20 +1,46 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { after } from "next/server";
 import { z } from "zod";
 
-import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { getAlbumReviewDiscountPercent } from "@/lib/album-discount-server";
 import { getDiscountedAlbumPrice } from "@/lib/album-pricing";
+import {
+  type AlbumPriceTier,
+  getAdditionalAlbumPriceKrw,
+} from "@/lib/album-payment-discount";
+import { B2ConfigError, getB2Config } from "@/lib/b2";
 import {
   sendSubmissionBankRequestEmail,
   sendSubmissionReceiptEmail,
 } from "@/lib/email";
 import { ensureArtistByName } from "@/lib/artist";
 import { APP_CONFIG } from "@/lib/config";
+import { clearDashboardStatusCache } from "@/lib/dashboard-status";
+import { canEditSubmission } from "@/lib/submission-edit-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { isApplicationFormFile } from "@/lib/submission-files";
+import {
+  cleanupUnreferencedSubmissionB2Objects,
+  loadSubmissionB2ObjectRefs,
+  type SubmissionB2ObjectRef,
+} from "@/lib/submission-file-cleanup";
+import { isSubmissionObjectKeyOwned } from "@/lib/submission-object-key";
+import { resolveSubmissionSaveState } from "@/lib/submission-save-staging";
+import {
+  validateAlbumSubmittedFields,
+  validateMvSubmittedFields,
+  validateSubmittedFiles,
+} from "@/lib/submission-required-fields";
+import {
+  MV_BASE_ONLINE_PRICE_KRW,
+  MV_STATION_PRICE_KRW,
+  resolveCanonicalAlbumStationSelection,
+  resolveCanonicalMvStationSelection,
+} from "@/lib/submission-station-selection";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 
 export type SubmissionActionState = {
@@ -36,42 +62,13 @@ type SupabaseError = {
 
 type SupabaseClient = Awaited<ReturnType<typeof createServerSupabase>>;
 
-const albumStationCodesByCount: Record<number, string[]> = {
-  3: ["KBS", "MBC", "SBS"],
-  7: ["KBS", "MBC", "SBS", "CBS", "WBS", "TBS", "YTN"],
-  10: ["KBS", "MBC", "SBS", "TBS", "CBS", "PBC", "WBS", "BBS", "YTN", "ARIRANG"],
-  13: [
-    "KBS",
-    "MBC",
-    "SBS",
-    "TBS",
-    "CBS",
-    "PBC",
-    "WBS",
-    "BBS",
-    "YTN",
-    "GYEONGIN_IFM",
-    "TBN",
-    "ARIRANG",
-    "KISS",
-  ],
-  15: [
-    "KBS",
-    "MBC",
-    "SBS",
-    "TBS",
-    "CBS",
-    "PBC",
-    "WBS",
-    "BBS",
-    "YTN",
-    "GYEONGIN_IFM",
-    "TBN",
-    "ARIRANG",
-    "KISS",
-    "FEBC",
-    "GUGAK",
-  ],
+type EditableSubmissionRow = {
+  id: string;
+  user_id: string | null;
+  guest_token: string | null;
+  status: string | null;
+  payment_status: string | null;
+  updated_at: string | null;
 };
 
 const albumOneClickPriceMap: Record<number, number> = {
@@ -82,54 +79,6 @@ const albumOneClickPriceMap: Record<number, number> = {
 };
 
 const albumAdditionalDiscountWindowMs = 30 * 60 * 1000;
-
-const mvBaseOnlinePrice = 30000;
-const mvStationPriceMap: Record<string, number> = {
-  KBS: 50000,
-  MBC: 30000,
-  SBS: 30000,
-  ETN: 30000,
-  MNET: 30000,
-};
-const mvStationCodeSet = new Set(Object.keys(mvStationPriceMap));
-
-const normalizeMvStationCodes = (codes?: string[] | null) =>
-  Array.from(
-    new Set(
-      (codes ?? [])
-        .map((code) => code.trim().toUpperCase())
-        .filter((code) => mvStationCodeSet.has(code)),
-    ),
-  );
-
-const resolveMvStationIdsByCodes = async (
-  db: SupabaseClient,
-  codes: string[],
-) => {
-  const normalizedCodes = normalizeMvStationCodes(codes);
-  if (normalizedCodes.length === 0) {
-    return { stationIds: [], missingCodes: [] as string[] };
-  }
-
-  const { data: stations, error } = await db
-    .from("stations")
-    .select("id, code")
-    .in("code", normalizedCodes);
-
-  if (error) {
-    return { stationIds: [], missingCodes: normalizedCodes };
-  }
-
-  const stationMap = new Map(
-    (stations ?? []).map((station) => [station.code, station.id]),
-  );
-  return {
-    stationIds: normalizedCodes
-      .map((code) => stationMap.get(code))
-      .filter((id): id is string => Boolean(id)),
-    missingCodes: normalizedCodes.filter((code) => !stationMap.has(code)),
-  };
-};
 
 const extractMissingColumn = (error: SupabaseError) => {
   const message = error.message ?? "";
@@ -146,6 +95,7 @@ const hasRecentBaseAlbumForDiscount = async ({
   userId,
   guestToken,
   basePriceKrw,
+  isOneClick,
 }: {
   db: ReturnType<typeof createAdminClient>;
   packageId: string;
@@ -153,20 +103,27 @@ const hasRecentBaseAlbumForDiscount = async ({
   userId?: string | null;
   guestToken?: string | null;
   basePriceKrw: number;
+  isOneClick: boolean;
 }) => {
   if (!userId && !guestToken) return false;
   const cutoff = new Date(Date.now() - albumAdditionalDiscountWindowMs).toISOString();
   let query = db
     .from("submissions")
     .select("id")
+    .eq("type", "ALBUM")
     .eq("package_id", packageId)
+    .eq("is_oneclick", isOneClick)
     .eq("amount_krw", basePriceKrw)
+    .eq("album_base_price_krw", basePriceKrw)
+    .eq("album_price_tier", "FULL")
     .neq("id", submissionId)
     .gte("created_at", cutoff)
     .in("status", ["WAITING_PAYMENT", "IN_PROGRESS", "COMPLETED", "SUBMITTED"])
     .limit(1);
 
-  query = userId ? query.eq("user_id", userId) : query.eq("guest_token", guestToken);
+  query = userId
+    ? query.eq("user_id", userId)
+    : query.is("user_id", null).eq("guest_token", guestToken);
   const { data, error } = await query.maybeSingle();
   if (error) return false;
   return Boolean(data?.id);
@@ -181,21 +138,36 @@ const stripColumn = <T extends Record<string, unknown>>(
   return next;
 };
 
-const upsertWithColumnFallback = async (
+const stageSubmissionWithColumnFallback = async (
   db: SupabaseClient,
   payload: Record<string, unknown>,
+  lease: {
+    submissionId: string;
+    updatedAt: string;
+    token: string;
+  },
 ) => {
-  let currentPayload = { ...payload };
+  let currentPayload = stripColumn(payload, "id");
   const removed = new Set<string>();
   const maxAttempts = Math.max(Object.keys(currentPayload).length, 12);
   let lastError: SupabaseError | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const { error } = await db
+    const query = db
       .from("submissions")
-      .upsert(currentPayload, { onConflict: "id" });
+      .update(currentPayload)
+      .eq("id", lease.submissionId)
+      .eq("save_lease_token", lease.token)
+      .gt("save_lease_expires_at", new Date().toISOString())
+      .eq("updated_at", lease.updatedAt);
+    const { data, error } = await query
+      .select("id, updated_at")
+      .maybeSingle();
     if (!error) {
-      return { error: null };
+      return {
+        data: data as { id: string; updated_at: string } | null,
+        error: null,
+      };
     }
     lastError = error;
     if (error.code === "PGRST204") {
@@ -206,192 +178,186 @@ const upsertWithColumnFallback = async (
         continue;
       }
     }
-    return { error };
+    return { data: null, error };
   }
-  return { error: lastError ?? { message: "업데이트 실패" } };
+  return {
+    data: null,
+    error: lastError ?? { message: "업데이트 실패" },
+  };
 };
 
-const insertWithColumnFallback = async (
-  db: SupabaseClient,
-  table: "album_tracks" | "submission_files",
-  rows: Record<string, unknown>[],
-) => {
-  let currentRows = rows.map((row) => ({ ...row }));
-  const removed = new Set<string>();
-  const maxAttempts = Math.max(
-    Object.keys(currentRows[0] ?? {}).length,
-    12,
-  );
-  let lastError: SupabaseError | null = null;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const { error } = await db.from(table).insert(currentRows);
-    if (!error) {
-      return { error: null };
-    }
-    lastError = error;
-    if (error.code === "PGRST204") {
-      const missing = extractMissingColumn(error);
-      if (missing && missing in currentRows[0] && !removed.has(missing)) {
-        removed.add(missing);
-        currentRows = currentRows.map((row) => stripColumn(row, missing));
-        continue;
-      }
-    }
-    return { error };
+const releaseSubmissionSaveLease = async ({
+  db,
+  submissionId,
+  leaseToken,
+}: {
+  db: SupabaseClient;
+  submissionId: string;
+  leaseToken: string;
+}) => {
+  const { error } = await db.rpc("release_submission_save_lease", {
+    p_submission_id: submissionId,
+    p_lease_token: leaseToken,
+  });
+  if (error) {
+    console.error("Submission save lease release failed", {
+      code: error.code,
+      submissionId,
+    });
   }
-  return { error: lastError ?? { message: "삽입 실패" } };
 };
 
-const ensureStationReviews = async (
+const claimSubmissionSaveLease = async ({
+  db,
+  submissionId,
+  expectedUpdatedAt,
+  expectedUserId,
+  expectedGuestToken,
+}: {
+  db: SupabaseClient;
+  submissionId: string;
+  expectedUpdatedAt: string;
+  expectedUserId?: string | null;
+  expectedGuestToken?: string | null;
+}) => {
+  const leaseToken = randomUUID();
+  const { data, error } = await db.rpc("claim_submission_save_lease", {
+    p_submission_id: submissionId,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_expected_user_id: expectedUserId ?? null,
+    p_expected_guest_token: expectedGuestToken ?? null,
+    p_lease_token: leaseToken,
+  });
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { lease_token?: string; staged_updated_at?: string }
+    | null;
+  return {
+    lease:
+      !error && row?.lease_token === leaseToken && row.staged_updated_at
+        ? { token: leaseToken, updatedAt: row.staged_updated_at }
+        : null,
+    error: error as SupabaseError | null,
+  };
+};
+
+const formatSubmissionLeaseError = (error: SupabaseError | null) => {
+  const message = error?.message ?? "";
+  if (
+    message.includes("SUBMISSION_SAVE_IN_PROGRESS") ||
+    message.includes("SUBMISSION_SAVE_VERSION_CHANGED")
+  ) {
+    return "다른 저장 요청이 진행 중입니다. 잠시 후 최신 내용을 확인해주세요.";
+  }
+  if (message.includes("PAYMENT_IN_PROGRESS")) {
+    return "결제가 진행 중인 신청서는 수정할 수 없습니다.";
+  }
+  return "접수 저장을 시작할 수 없습니다. 잠시 후 다시 시도해주세요.";
+};
+
+const loadEditableSubmissionByActor = async ({
+  db,
+  submissionId,
+  userId,
+  guestToken,
+}: {
+  db: ReturnType<typeof createAdminClient>;
+  submissionId: string;
+  userId?: string | null;
+  guestToken?: string | null;
+}) => {
+  const normalizedUserId = userId?.trim() ?? "";
+  const normalizedGuestToken = guestToken?.trim() ?? "";
+  const columns =
+    "id, user_id, guest_token, status, payment_status, updated_at";
+
+  if (normalizedUserId) {
+    const memberResult = await db
+      .from("submissions")
+      .select(columns)
+      .eq("id", submissionId)
+      .eq("user_id", normalizedUserId)
+      .maybeSingle();
+    if (memberResult.error || memberResult.data) {
+      return {
+        data: memberResult.data as EditableSubmissionRow | null,
+        error: memberResult.error as SupabaseError | null,
+      };
+    }
+  }
+
+  if (!normalizedGuestToken) {
+    return { data: null, error: null };
+  }
+  const guestResult = await db
+    .from("submissions")
+    .select(columns)
+    .eq("id", submissionId)
+    .is("user_id", null)
+    .eq("guest_token", normalizedGuestToken)
+    .maybeSingle();
+  return {
+    data: guestResult.data as EditableSubmissionRow | null,
+    error: guestResult.error as SupabaseError | null,
+  };
+};
+
+const scheduleReplacedSubmissionFileCleanup = (
   db: SupabaseClient,
-  submissionId: string,
-  stationIds: string[],
-  options?: { syncNotSent?: boolean },
+  refs: SubmissionB2ObjectRef[],
 ) => {
-  const uniqueStationIds = Array.from(new Set(stationIds.filter(Boolean)));
+  if (refs.length === 0) return;
+  after(() => cleanupUnreferencedSubmissionB2Objects(db, refs));
+};
 
-  if (options?.syncNotSent) {
-    let deleteQuery = db
-      .from("station_reviews")
-      .delete()
-      .eq("submission_id", submissionId)
-      .eq("status", "NOT_SENT");
+const validateSubmissionFileObjectKeys = ({
+  files,
+  submissionId,
+  userId,
+  guestToken,
+  allowClaimedGuestOwner,
+}: {
+  files?: Array<{ path: string }>;
+  submissionId: string;
+  userId?: string | null;
+  guestToken?: string | null;
+  allowClaimedGuestOwner: boolean;
+}) => {
+  if (!files || files.length === 0) return null;
 
-    if (uniqueStationIds.length > 0) {
-      deleteQuery = deleteQuery.not(
-        "station_id",
-        "in",
-        `(${uniqueStationIds.join(",")})`,
-      );
+  try {
+    const { prefix } = getB2Config();
+    const hasInvalidPath = files.some(
+      (file) =>
+        !isSubmissionObjectKeyOwned({
+          objectKey: file.path,
+          prefix,
+          submissionId,
+          submissionUserId: userId,
+          guestToken,
+          allowClaimedGuestOwner,
+        }),
+    );
+    return hasInvalidPath ? "업로드 파일 경로를 확인할 수 없습니다." : null;
+  } catch (error) {
+    if (!(error instanceof B2ConfigError)) {
+      console.error("Submission file ownership validation crashed", {
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
     }
-
-    const { error: deleteError } = await deleteQuery;
-    if (deleteError) {
-      return { error: deleteError };
-    }
+    return "파일 저장소 설정을 확인할 수 없습니다. 잠시 후 다시 시도해주세요.";
   }
-
-  if (uniqueStationIds.length === 0) {
-    return { error: null };
-  }
-
-  const { data: existingReviews, error: existingError } = await db
-    .from("station_reviews")
-    .select("station_id")
-    .eq("submission_id", submissionId);
-
-  if (existingError) {
-    return { error: existingError };
-  }
-
-  const existingSet = new Set(
-    (existingReviews ?? [])
-      .map((review) => review.station_id)
-      .filter((id): id is string => Boolean(id)),
-  );
-  const missingStations = uniqueStationIds.filter((id) => !existingSet.has(id));
-
-  if (missingStations.length === 0) {
-    return { error: null };
-  }
-
-  const { error: insertError } = await db.from("station_reviews").insert(
-    missingStations.map((stationId) => ({
-      submission_id: submissionId,
-      station_id: stationId,
-      status: "NOT_SENT",
-    })),
-  );
-
-  return { error: insertError ?? null };
 };
 
 const cancelStaleRequestedSubmissionPayments = async (
   db: ReturnType<typeof createAdminClient>,
   submissionId: string,
 ) => {
-  const payload = {
-    status: "CANCELED",
-    result_code: "SUPERSEDED",
-    result_message: "신청서 수정으로 기존 결제 요청이 취소되었습니다.",
-  };
-
-  const direct = await db
-    .from("submission_payments")
-    .update(payload)
-    .eq("submission_id", submissionId)
-    .eq("status", "REQUESTED");
-
-  if (direct.error) {
-    return { error: direct.error };
-  }
-
-  const grouped = await db
-    .from("submission_payments")
-    .update(payload)
-    .contains("raw_response", {
-      paymentGroup: { submissionIds: [submissionId] },
-    })
-    .eq("status", "REQUESTED");
-
-  return { error: grouped.error ?? null };
-};
-
-const resolveAlbumStationIds = async (
-  db: SupabaseClient,
-  packageId: string | undefined,
-) => {
-  if (!packageId) {
-    return { stationIds: [], missingCodes: [] as string[] };
-  }
-
-  const { data: packageRow, error: packageError } = await db
-    .from("packages")
-    .select("station_count, name")
-    .eq("id", packageId)
-    .maybeSingle();
-
-  if (packageError || !packageRow) {
-    return { stationIds: [], missingCodes: [] as string[] };
-  }
-
-  let resolvedCount = packageRow.station_count ?? null;
-  if (!resolvedCount && packageRow.name) {
-    const match = packageRow.name.match(/(\d+)/);
-    if (match) {
-      const parsed = Number(match[1]);
-      if (Number.isFinite(parsed)) {
-        resolvedCount = parsed;
-      }
-    }
-  }
-
-  const expectedCodes = resolvedCount
-    ? albumStationCodesByCount[resolvedCount]
-    : null;
-  if (!expectedCodes || expectedCodes.length === 0) {
-    return { stationIds: [], missingCodes: [] as string[] };
-  }
-
-  const { data: stations, error: stationError } = await db
-    .from("stations")
-    .select("id, code")
-    .in("code", expectedCodes);
-
-  if (stationError) {
-    return { stationIds: [], missingCodes: expectedCodes };
-  }
-
-  const stationMap = new Map(
-    (stations ?? []).map((station) => [station.code, station.id]),
+  const result = await db.rpc(
+    "cancel_requested_submission_payments_for_edit",
+    { p_submission_id: submissionId },
   );
-  const stationIds = expectedCodes
-    .map((code) => stationMap.get(code))
-    .filter((id): id is string => Boolean(id));
-  const missingCodes = expectedCodes.filter((code) => !stationMap.has(code));
 
-  return { stationIds, missingCodes };
+  return { error: result.error ?? null };
 };
 
 const formatSubmissionError = (error: SupabaseError) => {
@@ -540,6 +506,63 @@ const recordEmailDeliveryIssue = async ({
   }
 };
 
+type SubmissionEmailDeliveryJob = {
+  recipientEmail: string;
+  label: string;
+  kind: "receipt" | "bank";
+  send: () => Promise<{
+    ok: boolean;
+    skipped?: boolean;
+    message?: string;
+  }>;
+};
+
+const deliverSubmissionEmails = async ({
+  db,
+  submissionId,
+  jobs,
+}: {
+  db: SupabaseClient;
+  submissionId: string;
+  jobs: SubmissionEmailDeliveryJob[];
+}) => {
+  const results = await Promise.allSettled(jobs.map((job) => job.send()));
+  let receiptSent = false;
+  let bankGuideSent = false;
+  const issueWrites: Array<Promise<void>> = [];
+
+  results.forEach((settled, index) => {
+    const job = jobs[index];
+    if (!job) return;
+
+    if (settled.status === "fulfilled" && settled.value.ok) {
+      if (job.kind === "receipt") receiptSent = true;
+      if (job.kind === "bank") bankGuideSent = true;
+      return;
+    }
+
+    issueWrites.push(
+      recordEmailDeliveryIssue({
+        db,
+        submissionId,
+        recipientEmail: job.recipientEmail,
+        label: job.label,
+        message:
+          settled.status === "fulfilled"
+            ? settled.value.message
+            : "메일 발송 중 예기치 않은 오류가 발생했습니다.",
+        skipped:
+          settled.status === "fulfilled" ? settled.value.skipped : false,
+      }),
+    );
+  });
+
+  // Delivery failures are audit-only after the submission has committed.
+  // Await every event write, but never turn a notification issue into a save error.
+  await Promise.allSettled(issueWrites);
+  return { receiptSent, bankGuideSent };
+};
+
 const loadMemberPhone = async (userId?: string | null) => {
   if (!userId) return null;
   const admin = createAdminClient();
@@ -631,139 +654,161 @@ const validateBankPaymentDocument = (params: {
   return null;
 };
 
+const MAX_SUBMISSION_AMOUNT_KRW = 100_000_000;
+const MAX_STATION_SELECTIONS = 20;
+const MAX_ALBUM_TRACKS = 100;
+const MAX_SUBMISSION_FILES = 100;
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024;
+const shortTextSchema = z.string().max(500);
+const metadataTextSchema = z.string().max(2_000);
+const narrativeTextSchema = z.string().max(200_000);
+const urlTextSchema = z.string().max(2_048);
+const contactTextSchema = z.string().max(320);
+
 const trackSchema = z.object({
-  trackTitle: z.string().optional(),
-  trackTitleKr: z.string().optional(),
-  trackTitleEn: z.string().optional(),
+  trackTitle: shortTextSchema.optional(),
+  trackTitleKr: shortTextSchema.optional(),
+  trackTitleEn: shortTextSchema.optional(),
   trackTitleOfficial: z.enum(["KR", "EN"]).optional(),
-  featuring: z.string().optional(),
-  composer: z.string().optional(),
-  lyricist: z.string().optional(),
-  arranger: z.string().optional(),
-  lyrics: z.string().optional(),
-  translatedLyrics: z.string().optional(),
-  notes: z.string().optional(),
+  featuring: metadataTextSchema.optional(),
+  composer: metadataTextSchema.optional(),
+  lyricist: metadataTextSchema.optional(),
+  arranger: metadataTextSchema.optional(),
+  lyrics: narrativeTextSchema.optional(),
+  translatedLyrics: narrativeTextSchema.optional(),
+  notes: z.string().max(20_000).optional(),
   isTitle: z.boolean().optional(),
   titleRole: z.enum(["MAIN", "SUB"]).optional(),
   broadcastSelected: z.boolean().optional(),
 });
 
 const fileSchema = z.object({
-  path: z.string().min(1),
-  originalName: z.string().min(1),
-  mime: z.string().optional(),
-  size: z.number().int().nonnegative(),
-  checksum: z.string().optional(),
-  durationSeconds: z.number().optional(),
-  accessUrl: z.string().optional(),
+  path: z.string().min(1).max(1_024),
+  originalName: z.string().min(1).max(500),
+  mime: z.string().max(255).optional(),
+  size: z.number().int().nonnegative().max(MAX_UPLOAD_BYTES),
+  checksum: z.string().max(256).optional(),
+  durationSeconds: z.number().finite().nonnegative().max(86_400).optional(),
+  accessUrl: urlTextSchema.optional(),
 });
 
 const albumSubmissionSchema = z.object({
   submissionId: z.string().uuid(),
   packageId: z.string().uuid().optional(),
-  amountKrw: z.number().int().nonnegative().optional(),
-  selectedStationIds: z.array(z.string().uuid()).optional(),
-  title: z.string().optional(),
-  artistName: z.string().optional(),
-  artistNameKr: z.string().optional(),
-  artistNameEn: z.string().optional(),
-  releaseDate: z.string().optional(),
-  genre: z.string().optional(),
-  distributor: z.string().optional(),
-  productionCompany: z.string().optional(),
-  applicantName: z.string().optional(),
-  applicantEmail: z.string().optional(),
-  applicantPhone: z.string().optional(),
-  previousRelease: z.string().optional(),
-  artistType: z.string().optional(),
-  artistGender: z.string().optional(),
-  artistMembers: z.string().optional(),
+  amountKrw: z.number().int().nonnegative().max(MAX_SUBMISSION_AMOUNT_KRW).optional(),
+  selectedStationIds: z
+    .array(z.string().uuid())
+    .max(MAX_STATION_SELECTIONS)
+    .optional(),
+  title: shortTextSchema.optional(),
+  artistName: shortTextSchema.optional(),
+  artistNameKr: shortTextSchema.optional(),
+  artistNameEn: shortTextSchema.optional(),
+  releaseDate: z.string().max(64).optional(),
+  genre: shortTextSchema.optional(),
+  distributor: shortTextSchema.optional(),
+  productionCompany: shortTextSchema.optional(),
+  applicantName: shortTextSchema.optional(),
+  applicantEmail: contactTextSchema.optional(),
+  applicantPhone: z.string().max(64).optional(),
+  previousRelease: metadataTextSchema.optional(),
+  artistType: z.string().max(64).optional(),
+  artistGender: z.string().max(64).optional(),
+  artistMembers: metadataTextSchema.optional(),
   isOneClick: z.boolean().optional(),
-  melonUrl: z.string().optional(),
+  melonUrl: urlTextSchema.optional(),
   aiUsed: z.boolean().optional(),
-  guestToken: z.string().min(8).optional(),
-  guestName: z.string().optional(),
-  guestCompany: z.string().optional(),
-  guestEmail: z.string().optional(),
-  guestPhone: z.string().optional(),
+  guestToken: z.string().min(8).max(120).optional(),
+  guestName: shortTextSchema.optional(),
+  guestCompany: shortTextSchema.optional(),
+  guestEmail: contactTextSchema.optional(),
+  guestPhone: z.string().max(64).optional(),
   preReviewRequested: z.boolean().optional(),
   karaokeRequested: z.boolean().optional(),
   paymentMethod: z.enum(["CARD", "BANK"]).optional(),
-  bankDepositorName: z.string().optional(),
+  bankDepositorName: shortTextSchema.optional(),
   paymentDocumentType: z.enum(paymentDocumentTypeValues).optional(),
   cashReceiptPurpose: z.enum(cashReceiptPurposeValues).optional(),
-  cashReceiptPhone: z.string().optional(),
-  cashReceiptBusinessNumber: z.string().optional(),
-  taxInvoiceBusinessNumber: z.string().optional(),
+  cashReceiptPhone: z.string().max(64).optional(),
+  cashReceiptBusinessNumber: z.string().max(64).optional(),
+  taxInvoiceBusinessNumber: z.string().max(64).optional(),
   deferPayment: z.boolean().optional(),
   status: z.enum(["DRAFT", "PRE_REVIEW", "SUBMITTED"]),
-  tracks: z.array(trackSchema).optional(),
-  files: z.array(fileSchema).optional(),
+  tracks: z.array(trackSchema).max(MAX_ALBUM_TRACKS).optional(),
+  files: z.array(fileSchema).max(MAX_SUBMISSION_FILES).optional(),
   filesSubmittedByEmail: z.boolean().optional(),
+  externalApplicationForm: z.boolean().optional(),
 });
 
 const mvSubmissionSchema = z.object({
   submissionId: z.string().uuid(),
   packageId: z.string().uuid().optional(),
-  amountKrw: z.number().int().nonnegative().optional(),
-  selectedStationIds: z.array(z.string().uuid()).optional(),
-  selectedStationCodes: z.array(z.string()).optional(),
-  title: z.string().optional(),
-  artistName: z.string().optional(),
-  applicantEmail: z.string().optional(),
-  director: z.string().optional(),
-  leadActor: z.string().optional(),
-  storyline: z.string().optional(),
-  productionCompany: z.string().optional(),
-  agency: z.string().optional(),
-  albumTitle: z.string().optional(),
-  productionDate: z.string().optional(),
-  distributionCompany: z.string().optional(),
-  businessRegNo: z.string().optional(),
-  usage: z.string().optional(),
-  desiredRating: z.string().optional(),
-  memo: z.string().optional(),
-  songTitle: z.string().optional(),
-  songTitleKr: z.string().optional(),
-  songTitleEn: z.string().optional(),
-  songTitleOfficial: z.string().optional(),
-  composer: z.string().optional(),
-  lyricist: z.string().optional(),
-  arranger: z.string().optional(),
-  songMemo: z.string().optional(),
-  lyrics: z.string().optional(),
-  artistNameOfficial: z.string().optional(),
-  releaseDate: z.string().optional(),
-  genre: z.string().optional(),
+  amountKrw: z.number().int().nonnegative().max(MAX_SUBMISSION_AMOUNT_KRW).optional(),
+  selectedStationIds: z
+    .array(z.string().uuid())
+    .max(MAX_STATION_SELECTIONS)
+    .optional(),
+  selectedStationCodes: z
+    .array(z.string().max(32))
+    .max(MAX_STATION_SELECTIONS)
+    .optional(),
+  title: shortTextSchema.optional(),
+  artistName: shortTextSchema.optional(),
+  applicantEmail: contactTextSchema.optional(),
+  director: shortTextSchema.optional(),
+  leadActor: metadataTextSchema.optional(),
+  storyline: narrativeTextSchema.optional(),
+  productionCompany: shortTextSchema.optional(),
+  agency: shortTextSchema.optional(),
+  albumTitle: shortTextSchema.optional(),
+  productionDate: z.string().max(64).optional(),
+  distributionCompany: shortTextSchema.optional(),
+  businessRegNo: z.string().max(64).optional(),
+  usage: metadataTextSchema.optional(),
+  desiredRating: z.string().max(64).optional(),
+  memo: z.string().max(20_000).optional(),
+  songTitle: shortTextSchema.optional(),
+  songTitleKr: shortTextSchema.optional(),
+  songTitleEn: shortTextSchema.optional(),
+  songTitleOfficial: shortTextSchema.optional(),
+  composer: metadataTextSchema.optional(),
+  lyricist: metadataTextSchema.optional(),
+  arranger: metadataTextSchema.optional(),
+  songMemo: z.string().max(20_000).optional(),
+  lyrics: narrativeTextSchema.optional(),
+  artistNameOfficial: shortTextSchema.optional(),
+  releaseDate: z.string().max(64).optional(),
+  genre: shortTextSchema.optional(),
   mvType: z.enum(["MV_DISTRIBUTION", "MV_BROADCAST"]),
-  runtime: z.string().optional(),
-  format: z.string().optional(),
+  runtime: z.string().max(64).optional(),
+  format: z.string().max(128).optional(),
   mvBaseSelected: z.boolean().optional(),
   aiUsed: z.boolean().optional(),
-  guestToken: z.string().min(8).optional(),
-  guestName: z.string().optional(),
-  guestCompany: z.string().optional(),
-  guestEmail: z.string().optional(),
-  guestPhone: z.string().optional(),
+  guestToken: z.string().min(8).max(120).optional(),
+  guestName: shortTextSchema.optional(),
+  guestCompany: shortTextSchema.optional(),
+  guestEmail: contactTextSchema.optional(),
+  guestPhone: z.string().max(64).optional(),
   preReviewRequested: z.boolean().optional(),
   karaokeRequested: z.boolean().optional(),
   paymentMethod: z.enum(["CARD", "BANK"]).optional(),
-  bankDepositorName: z.string().optional(),
+  bankDepositorName: shortTextSchema.optional(),
   paymentDocumentType: z.enum(paymentDocumentTypeValues).optional(),
   cashReceiptPurpose: z.enum(cashReceiptPurposeValues).optional(),
-  cashReceiptPhone: z.string().optional(),
-  cashReceiptBusinessNumber: z.string().optional(),
-  taxInvoiceBusinessNumber: z.string().optional(),
+  cashReceiptPhone: z.string().max(64).optional(),
+  cashReceiptBusinessNumber: z.string().max(64).optional(),
+  taxInvoiceBusinessNumber: z.string().max(64).optional(),
   deferPayment: z.boolean().optional(),
   status: z.enum(["DRAFT", "PRE_REVIEW", "SUBMITTED"]),
-  files: z.array(fileSchema).optional(),
+  files: z.array(fileSchema).max(MAX_SUBMISSION_FILES).optional(),
   filesSubmittedByEmail: z.boolean().optional(),
+  externalApplicationForm: z.boolean().optional(),
 });
 
 const submissionFileUrlSchema = z.object({
   submissionId: z.string().uuid(),
   fileId: z.string().uuid(),
-  guestToken: z.string().min(8).optional(),
+  guestToken: z.string().min(8).max(120).optional(),
 });
 
 export async function getSubmissionFileUrlAction(
@@ -785,6 +830,15 @@ export async function getSubmissionFileUrlAction(
   }
 
   if (user) {
+    const { data: ownedSubmission } = await supabase
+      .from("submissions")
+      .select("id, user_id, guest_token")
+      .eq("id", parsed.data.submissionId)
+      .maybeSingle();
+    if (!ownedSubmission) {
+      return { error: "접근 권한이 없습니다." };
+    }
+
     const { data: fileRow } = await supabase
       .from("submission_files")
       .select("file_path, storage_provider, object_key")
@@ -799,6 +853,18 @@ export async function getSubmissionFileUrlAction(
     if (fileRow.storage_provider === "b2" && fileRow.object_key) {
       try {
         const b2 = await import("@/lib/b2");
+        if (
+          !isSubmissionObjectKeyOwned({
+            objectKey: fileRow.object_key,
+            prefix: b2.getB2Config().prefix,
+            submissionId: parsed.data.submissionId,
+            submissionUserId: ownedSubmission.user_id,
+            guestToken: ownedSubmission.guest_token,
+            allowClaimedGuestOwner: Boolean(ownedSubmission.user_id),
+          })
+        ) {
+          return { error: "파일 경로에 대한 접근 권한이 없습니다." };
+        }
         const url = await b2.presignGetUrl(fileRow.object_key, 300);
         return { url };
       } catch (error) {
@@ -832,6 +898,8 @@ export async function getSubmissionFileUrlAction(
     .from("submissions")
     .select("id, guest_token")
     .eq("id", parsed.data.submissionId)
+    .is("user_id", null)
+    .eq("guest_token", parsed.data.guestToken)
     .maybeSingle();
 
   if (!submission || submission.guest_token !== parsed.data.guestToken) {
@@ -852,6 +920,16 @@ export async function getSubmissionFileUrlAction(
   if (fileRow.storage_provider === "b2" && fileRow.object_key) {
     try {
       const b2 = await import("@/lib/b2");
+      if (
+        !isSubmissionObjectKeyOwned({
+          objectKey: fileRow.object_key,
+          prefix: b2.getB2Config().prefix,
+          submissionId: parsed.data.submissionId,
+          guestToken: submission.guest_token,
+        })
+      ) {
+        return { error: "파일 경로에 대한 접근 권한이 없습니다." };
+      }
       const url = await b2.presignGetUrl(fileRow.object_key, 300);
       return { url };
     } catch (error) {
@@ -899,21 +977,20 @@ export async function saveAlbumSubmissionAction(
   const isSubmitted = parsed.data.status === "SUBMITTED";
   const deferPayment = isSubmitted && parsed.data.deferPayment === true;
   const isAdminReviewer = isAdminReviewEmail(user?.email);
+  const usesExternalApplicationForm =
+    parsed.data.externalApplicationForm === true;
   const isOneClick = parsed.data.isOneClick ?? false;
   const titleValue = parsed.data.title?.trim() ?? "";
   const artistNameValue = parsed.data.artistName?.trim() ?? "";
   const guestNameValue = parsed.data.guestName?.trim() ?? "";
   const guestEmailValue = parsed.data.guestEmail?.trim() ?? "";
   const guestPhoneValue = parsed.data.guestPhone?.trim() ?? "";
+  const applicantNameValue = parsed.data.applicantName?.trim() ?? "";
   const applicantEmailValue = parsed.data.applicantEmail?.trim() ?? "";
+  const applicantPhoneValue = parsed.data.applicantPhone?.trim() ?? "";
   const bankDepositorNameValue = parsed.data.bankDepositorName?.trim() ?? "";
   const paymentDocumentType = parsed.data.paymentDocumentType;
   const cashReceiptPurpose = parsed.data.cashReceiptPurpose;
-  const hasApplicationFormAttachment =
-    parsed.data.files?.some((file) => isApplicationFormFile(file.originalName)) ??
-    false;
-  const usesExternalApplicationForm =
-    hasApplicationFormAttachment || Boolean(parsed.data.filesSubmittedByEmail);
   const cashReceiptPhoneValue = parsed.data.cashReceiptPhone?.trim() ?? "";
   const cashReceiptBusinessNumberDigits = normalizeDigits(
     parsed.data.cashReceiptBusinessNumber,
@@ -944,48 +1021,160 @@ export async function saveAlbumSubmissionAction(
   }
   if (
     isSubmitted &&
-    !isAdminReviewer &&
-    !isOneClick &&
-    !usesExternalApplicationForm &&
-    !artistNameValue
+    applicantEmailValue &&
+    !isValidEmailFormat(applicantEmailValue)
   ) {
-    return { error: "아티스트명을 입력해주세요." };
-  }
-  if (
-    isSubmitted &&
-    !isAdminReviewer &&
-    !isOneClick &&
-    !usesExternalApplicationForm &&
-    !titleValue
-  ) {
-    return { error: "앨범 제목을 입력해주세요." };
-  }
-  if (isSubmitted && !isAdminReviewer && typeof parsed.data.aiUsed !== "boolean") {
-    return { error: "AI 활용 여부를 선택해주세요." };
+    return { error: "접수자 이메일 형식을 확인해주세요." };
   }
 
   const adminDb = createAdminClient();
-  let db = isGuest ? adminDb : supabase;
+  const { data: existingSubmission, error: existingSubmissionError } =
+    await loadEditableSubmissionByActor({
+      db: adminDb,
+      submissionId: parsed.data.submissionId,
+      userId: user?.id,
+      guestToken: parsed.data.guestToken,
+    });
+  if (existingSubmissionError) {
+    console.error("Submission ownership lookup failed", existingSubmissionError);
+    return { error: "접수 소유권을 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
+  }
+  if (
+    !canEditSubmission(existingSubmission, {
+      userId: user?.id,
+      guestToken: parsed.data.guestToken,
+    })
+  ) {
+    return { error: "접수 수정 권한을 확인할 수 없습니다." };
+  }
+  if (!existingSubmission?.updated_at) {
+    return { error: "접수 저장 상태를 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
+  }
+  let expectedParentVersion = {
+    updatedAt: existingSubmission.updated_at,
+    userId: existingSubmission.user_id,
+    guestToken: existingSubmission.guest_token,
+  };
+  const fileOwnershipError = validateSubmissionFileObjectKeys({
+    files: parsed.data.files,
+    submissionId: parsed.data.submissionId,
+    userId: user?.id ?? null,
+    guestToken: parsed.data.guestToken ?? null,
+    allowClaimedGuestOwner: Boolean(
+      user?.id && existingSubmission?.user_id === user.id,
+    ),
+  });
+  if (fileOwnershipError) {
+    return { error: fileOwnershipError };
+  }
+  const db = adminDb;
+  let effectiveSubmissionFiles = parsed.data.files ?? [];
+  if (
+    isSubmitted &&
+    parsed.data.files === undefined &&
+    !parsed.data.filesSubmittedByEmail
+  ) {
+    const { data: existingFiles, error: existingFilesError } = await db
+      .from("submission_files")
+      .select("original_name, mime")
+      .eq("submission_id", parsed.data.submissionId)
+      .eq("kind", "AUDIO");
+    if (existingFilesError) {
+      return { error: "기존 파일 정보를 확인할 수 없습니다." };
+    }
+    effectiveSubmissionFiles = (existingFiles ?? []).map((file) => ({
+      path: "",
+      originalName: file.original_name ?? "",
+      mime: file.mime ?? undefined,
+      size: 0,
+    }));
+  }
+  if (isSubmitted) {
+    const submittedFilesError = validateSubmittedFiles({
+      kind: "ALBUM",
+      isAdminReviewer,
+      filesSubmittedByEmail: Boolean(parsed.data.filesSubmittedByEmail),
+      externalApplicationForm: usesExternalApplicationForm,
+      files: effectiveSubmissionFiles,
+    });
+    if (submittedFilesError) return { error: submittedFilesError };
+  }
   const albumDiscountPercent = await getAlbumReviewDiscountPercent(adminDb);
 
   const hasPackage = Boolean(parsed.data.packageId);
   let amountKrw = parsed.data.amountKrw ?? 0;
   let packageStationCount: number | null = null;
-  let packageName: string | null = null;
   let serverBasePriceKrw = 0;
+  let albumPriceTier: AlbumPriceTier | null = null;
+  let canonicalAlbumStationIds: string[] = [];
+
+  if (isSubmitted && !parsed.data.packageId) {
+    return { error: "패키지 정보를 확인할 수 없습니다." };
+  }
 
   if (hasPackage && parsed.data.packageId) {
     const { data: selectedPackage, error: packageError } = await db
       .from("packages")
-      .select("price_krw, station_count, name")
+      .select("price_krw, station_count")
       .eq("id", parsed.data.packageId)
+      .eq("is_active", true)
       .maybeSingle();
 
     if (packageError || !selectedPackage) {
       return { error: "패키지 정보를 확인할 수 없습니다." };
     }
     packageStationCount = selectedPackage.station_count ?? null;
-    packageName = selectedPackage.name ?? null;
+
+    if (isSubmitted) {
+      const { data: packageStations, error: packageStationsError } = await db
+        .from("package_stations")
+        .select("station_id")
+        .eq("package_id", parsed.data.packageId);
+      if (packageStationsError) {
+        console.error("Album package station lookup failed", packageStationsError);
+        return { error: "패키지 방송국 정보를 확인할 수 없습니다." };
+      }
+
+      const packageStationIds = Array.from(
+        new Set(
+          (packageStations ?? [])
+            .map((station) => station.station_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+      const activeStationsResult =
+        packageStationIds.length > 0
+          ? await db
+              .from("stations")
+              .select("id")
+              .in("id", packageStationIds)
+              .eq("is_active", true)
+          : { data: [], error: null };
+      if (activeStationsResult.error) {
+        console.error(
+          "Album active package station lookup failed",
+          activeStationsResult.error,
+        );
+        return { error: "패키지 방송국 정보를 확인할 수 없습니다." };
+      }
+
+      const stationSelection = resolveCanonicalAlbumStationSelection({
+        stationIds: (activeStationsResult.data ?? []).map((station) => station.id),
+        expectedCount: packageStationCount,
+      });
+      if (!stationSelection.ok) {
+        console.error("Album package station configuration mismatch", {
+          packageId: parsed.data.packageId,
+          expectedCount: packageStationCount,
+          configuredCount: packageStationIds.length,
+          activeCount: activeStationsResult.data?.length ?? 0,
+          reason: stationSelection.reason,
+        });
+        return { error: "패키지 방송국 구성이 올바르지 않습니다. 관리자에게 문의해주세요." };
+      }
+      canonicalAlbumStationIds = stationSelection.stationIds;
+    }
+
     const serverOriginalBasePriceKrw = Math.max(
       0,
       Math.round(
@@ -1008,27 +1197,45 @@ export async function saveAlbumSubmissionAction(
         0,
         Math.round(Number(parsed.data.amountKrw ?? 0)),
       );
-      const additionalPriceKrw = Math.round(serverBasePriceKrw * 0.5);
+      const additionalPriceKrw = getAdditionalAlbumPriceKrw(serverBasePriceKrw);
       const requestedAdditionalDiscount =
         additionalPriceKrw > 0 && requestedAmount === additionalPriceKrw;
+      // Guest submissions intentionally receive a different token per form.
+      // Preserve the requested tier here so a guest can build one cart with a
+      // full-price base and an additional album. The atomic payment RPC binds
+      // that pair and rejects a discounted item paid on its own. Signed-in
+      // users keep the recent-owner eligibility check for provisional saves.
       const hasRecentBaseAlbum =
-        additionalPriceKrw > 0 &&
-        (await hasRecentBaseAlbumForDiscount({
-          db: adminDb,
-          packageId: parsed.data.packageId,
-          submissionId: parsed.data.submissionId,
-          userId: user?.id ?? null,
-          guestToken: parsed.data.guestToken ?? null,
-          basePriceKrw: serverBasePriceKrw,
-        }));
+        isGuest ||
+        (additionalPriceKrw > 0 &&
+          (await hasRecentBaseAlbumForDiscount({
+            db: adminDb,
+            packageId: parsed.data.packageId,
+            submissionId: parsed.data.submissionId,
+            userId: user?.id ?? null,
+            guestToken: parsed.data.guestToken ?? null,
+            basePriceKrw: serverBasePriceKrw,
+            isOneClick,
+          })));
       const canUseAdditionalDiscount =
         requestedAdditionalDiscount &&
         hasRecentBaseAlbum;
       amountKrw = canUseAdditionalDiscount
         ? additionalPriceKrw
         : serverBasePriceKrw;
-    } else if (amountKrw <= 0) {
-      amountKrw = serverBasePriceKrw;
+      albumPriceTier = canUseAdditionalDiscount ? "ADDITIONAL" : "FULL";
+    } else {
+      const additionalPriceKrw = getAdditionalAlbumPriceKrw(serverBasePriceKrw);
+      const requestedAmount = Math.max(
+        0,
+        Math.round(Number(parsed.data.amountKrw ?? 0)),
+      );
+      const isAdditionalDraft =
+        additionalPriceKrw > 0 &&
+        additionalPriceKrw !== serverBasePriceKrw &&
+        requestedAmount === additionalPriceKrw;
+      amountKrw = isAdditionalDraft ? additionalPriceKrw : serverBasePriceKrw;
+      albumPriceTier = isAdditionalDraft ? "ADDITIONAL" : "FULL";
     }
   }
 
@@ -1064,6 +1271,76 @@ export async function saveAlbumSubmissionAction(
     isSubmitted &&
     !deferPayment &&
     (paymentMethod === "CARD" || Boolean(bankDepositorNameValue));
+  const saveState = resolveSubmissionSaveState({
+    requestedStatus: parsed.data.status,
+    shouldRequestPayment,
+  });
+
+  const submittedTracks = parsed.data.tracks ?? [];
+  const trackRows = submittedTracks.map((track, index) => {
+    const isSingleTrack = submittedTracks.length === 1;
+    const isTitle = isSingleTrack || Boolean(track.isTitle);
+    return {
+      submission_id: parsed.data.submissionId,
+      track_no: index + 1,
+      track_title: track.trackTitle?.trim() || null,
+      track_title_kr: track.trackTitleKr?.trim() || null,
+      track_title_en: track.trackTitleEn?.trim() || null,
+      track_title_official: track.trackTitleOfficial || null,
+      featuring: track.featuring?.trim() || null,
+      composer: track.composer?.trim() || null,
+      lyricist: track.lyricist?.trim() || null,
+      arranger: track.arranger?.trim() || null,
+      lyrics: track.lyrics?.trim() || null,
+      translated_lyrics: track.translatedLyrics?.trim() || null,
+      notes: track.notes || null,
+      is_title: isTitle,
+      title_role: isSingleTrack ? "MAIN" : isTitle ? track.titleRole || "SUB" : null,
+      broadcast_selected: Boolean(track.broadcastSelected),
+    };
+  });
+
+  if (isSubmitted) {
+    const requiredFieldsError = validateAlbumSubmittedFields({
+      isAdminReviewer,
+      externalApplicationForm: usesExternalApplicationForm,
+      isOneClick,
+      applicantName: applicantNameValue,
+      applicantEmail: applicantEmailValue,
+      applicantPhone: applicantPhoneValue,
+      aiUsed: parsed.data.aiUsed,
+      melonUrl: parsed.data.melonUrl,
+      title: titleValue,
+      artistName: artistNameValue,
+      artistNameKr: parsed.data.artistNameKr,
+      artistNameEn: parsed.data.artistNameEn,
+      releaseDate: parsed.data.releaseDate,
+      genre: parsed.data.genre,
+      distributor: parsed.data.distributor,
+      productionCompany: parsed.data.productionCompany,
+      previousRelease: parsed.data.previousRelease,
+      artistType: parsed.data.artistType,
+      artistGender: parsed.data.artistGender,
+      artistMembers: parsed.data.artistMembers,
+      tracks: submittedTracks,
+    });
+    if (requiredFieldsError) return { error: requiredFieldsError };
+
+    if (
+      !isAdminReviewer &&
+      !isOneClick &&
+      trackRows.some(
+        (track) =>
+          hasNonKoreanLyrics(track.lyrics) &&
+          !String(track.translated_lyrics ?? "").trim(),
+      )
+    ) {
+      return {
+        error: "한국어 외 언어가 포함된 가사는 번역본 가사를 함께 입력해주세요.",
+      };
+    }
+  }
+
   const artistId = await ensureArtistByName(artistNameValue);
 
   const submissionPayload = {
@@ -1092,6 +1369,10 @@ export async function saveAlbumSubmissionAction(
       typeof parsed.data.aiUsed === "boolean" ? parsed.data.aiUsed : null,
     package_id: parsed.data.packageId ?? null,
     amount_krw: amountKrw,
+    album_base_price_krw:
+      serverBasePriceKrw > 0 ? serverBasePriceKrw : null,
+    album_price_tier: albumPriceTier,
+    album_discount_base_submission_id: null,
     guest_name: isGuest ? guestNameValue || null : null,
     guest_company: isGuest ? parsed.data.guestCompany?.trim() || null : null,
     guest_email: isGuest ? guestEmailValue || null : null,
@@ -1124,70 +1405,13 @@ export async function saveAlbumSubmissionAction(
       paymentMethod === "BANK" && paymentDocumentType === "TAX_INVOICE"
         ? taxInvoiceBusinessNumberDigits || null
         : null,
-    status:
-      parsed.data.status === "SUBMITTED" && shouldRequestPayment
-        ? "WAITING_PAYMENT"
-        : parsed.data.status,
-    payment_status: shouldRequestPayment ? "PAYMENT_PENDING" : "UNPAID",
+    status: saveState.finalStatus,
+    payment_status: saveState.finalPaymentStatus,
   };
-
-  let submissionError = (await upsertWithColumnFallback(db, submissionPayload))
-    .error;
-
-  if (submissionError) {
-    if (db !== adminDb) {
-      const { data: existingSubmission } = await adminDb
-        .from("submissions")
-        .select("id, user_id, guest_token")
-        .eq("id", parsed.data.submissionId)
-        .maybeSingle();
-
-      if (
-        existingSubmission?.user_id &&
-        user &&
-        existingSubmission.user_id !== user.id
-      ) {
-        return {
-          error:
-            "권한 문제로 접수를 저장할 수 없습니다. 다시 로그인해주세요. (오류 코드: AUTH_MISMATCH)",
-        };
-      }
-
-      if (
-        !existingSubmission?.user_id &&
-        existingSubmission?.guest_token &&
-        parsed.data.guestToken &&
-        existingSubmission.guest_token !== parsed.data.guestToken
-      ) {
-        return {
-          error:
-            "권한 문제로 접수를 저장할 수 없습니다. 다시 로그인해주세요. (오류 코드: AUTH_MISMATCH)",
-        };
-      }
-
-      const fallbackResult = await upsertWithColumnFallback(adminDb, {
-        ...submissionPayload,
-        user_id: user?.id ?? null,
-      });
-      const fallbackError = fallbackResult.error;
-
-      if (fallbackError) {
-        console.error("Submission upsert failed", fallbackError);
-        return { error: formatSubmissionError(fallbackError) };
-      }
-
-      db = adminDb;
-      submissionError = null;
-    } else {
-      console.error("Submission upsert failed", submissionError);
-      return { error: formatSubmissionError(submissionError) };
-    }
-  }
-
-  if (submissionError) {
-    console.error("Submission upsert failed", submissionError);
-    return { error: formatSubmissionError(submissionError) };
-  }
+  const finalSubmissionState = {
+    status: submissionPayload.status,
+    paymentStatus: submissionPayload.payment_status,
+  };
 
   if (parsed.data.status === "SUBMITTED") {
     const stalePaymentResult = await cancelStaleRequestedSubmissionPayments(
@@ -1198,180 +1422,139 @@ export async function saveAlbumSubmissionAction(
       console.error("Stale submission payment cleanup failed", stalePaymentResult.error);
       return { error: "기존 결제 요청을 정리하지 못했습니다. 잠시 후 다시 시도해주세요." };
     }
-  }
 
-  await db
-    .from("album_tracks")
-    .delete()
-    .eq("submission_id", parsed.data.submissionId);
-
-  const trackRows =
-    parsed.data.tracks?.map((track, index) => ({
-      submission_id: parsed.data.submissionId,
-      track_no: index + 1,
-      track_title: track.trackTitle?.trim() || null,
-      track_title_kr: track.trackTitleKr?.trim() || null,
-      track_title_en: track.trackTitleEn?.trim() || null,
-      track_title_official: track.trackTitleOfficial || null,
-      featuring: track.featuring?.trim() || null,
-      composer: track.composer?.trim() || null,
-      lyricist: track.lyricist?.trim() || null,
-      arranger: track.arranger?.trim() || null,
-      lyrics: track.lyrics?.trim() || null,
-      translated_lyrics: track.translatedLyrics?.trim() || null,
-      notes: track.notes || null,
-      is_title: Boolean(track.isTitle),
-      title_role: track.titleRole || null,
-      broadcast_selected: Boolean(track.broadcastSelected),
-    })) ?? [];
-
-  if (
-    isSubmitted &&
-    !isAdminReviewer &&
-    !isOneClick &&
-    !usesExternalApplicationForm
-  ) {
-    if (trackRows.length === 0) {
-      return { error: "트랙 정보를 입력해주세요." };
-    }
-    if (trackRows.some((track) => !track.track_title)) {
-      return { error: "모든 트랙의 곡명을 입력해주세요." };
-    }
-    if (trackRows.some((track) => !track.composer)) {
-      return { error: "모든 트랙의 작곡 정보를 입력해주세요." };
-    }
+    const { data: refreshedSubmission, error: refreshedSubmissionError } =
+      await loadEditableSubmissionByActor({
+        db: adminDb,
+        submissionId: parsed.data.submissionId,
+        userId: user?.id,
+        guestToken: parsed.data.guestToken,
+      });
     if (
-      trackRows.some(
-        (track) =>
-          hasNonKoreanLyrics(track.lyrics) &&
-          !String(track.translated_lyrics ?? "").trim(),
-      )
+      refreshedSubmissionError ||
+      !canEditSubmission(refreshedSubmission, {
+        userId: user?.id,
+        guestToken: parsed.data.guestToken,
+      }) ||
+      !refreshedSubmission?.updated_at
     ) {
-      return {
-        error: "한국어 외 언어가 포함된 가사는 번역본 가사를 함께 입력해주세요.",
-      };
+      console.error(
+        "Submission ownership recheck failed after payment cleanup",
+        refreshedSubmissionError,
+      );
+      return { error: "결제 상태가 변경되어 접수를 수정할 수 없습니다." };
     }
+    expectedParentVersion = {
+      updatedAt: refreshedSubmission.updated_at,
+      userId: refreshedSubmission.user_id,
+      guestToken: refreshedSubmission.guest_token,
+    };
   }
 
-  if (trackRows.length > 0) {
-    const trackResult = await insertWithColumnFallback(
+  const stagedSubmissionPayload = {
+    ...submissionPayload,
+    status: saveState.stagingStatus,
+    payment_status: saveState.stagingPaymentStatus,
+  };
+  const leaseResult = await claimSubmissionSaveLease({
+    db,
+    submissionId: parsed.data.submissionId,
+    expectedUpdatedAt: expectedParentVersion.updatedAt,
+    expectedUserId: expectedParentVersion.userId,
+    expectedGuestToken: expectedParentVersion.guestToken,
+  });
+  if (!leaseResult.lease) {
+    console.error("Submission save lease claim failed", {
+      code: leaseResult.error?.code,
+      submissionId: parsed.data.submissionId,
+    });
+    return { error: formatSubmissionLeaseError(leaseResult.error) };
+  }
+
+  const submissionResult = await stageSubmissionWithColumnFallback(
+    db,
+    stagedSubmissionPayload,
+    {
+      submissionId: parsed.data.submissionId,
+      token: leaseResult.lease.token,
+      updatedAt: leaseResult.lease.updatedAt,
+    },
+  );
+  const submissionError = submissionResult.error;
+
+  if (submissionError) {
+    await releaseSubmissionSaveLease({
       db,
-      "album_tracks",
-      trackRows,
-    );
-    const trackError = trackResult.error;
-
-    if (trackError) {
-      return { error: "트랙 정보를 저장할 수 없습니다." };
-    }
+      submissionId: parsed.data.submissionId,
+      leaseToken: leaseResult.lease.token,
+    });
+    console.error("Submission staged payload update failed", submissionError);
+    return { error: formatSubmissionError(submissionError) };
+  }
+  if (!submissionResult.data?.updated_at) {
+    await releaseSubmissionSaveLease({
+      db,
+      submissionId: parsed.data.submissionId,
+      leaseToken: leaseResult.lease.token,
+    });
+    console.error("Submission staging returned no version", {
+      submissionId: parsed.data.submissionId,
+    });
+    return { error: "접수 저장 상태를 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
   }
 
+  let replacedFileRefs: SubmissionB2ObjectRef[] = [];
   if (parsed.data.files !== undefined) {
-    await db
-      .from("submission_files")
-      .delete()
-      .eq("submission_id", parsed.data.submissionId)
-      .eq("kind", "AUDIO");
-
-    const fileRows =
-      parsed.data.files?.map((file) => ({
-        submission_id: parsed.data.submissionId,
-        kind: "AUDIO",
-        file_path: file.path,
-        object_key: file.path,
-        storage_provider: "b2",
-        status: "UPLOADED",
-        uploaded_at: new Date().toISOString(),
-        original_name: file.originalName,
-        mime: file.mime || null,
-        size: file.size,
-        checksum: file.checksum ?? null,
-        duration_seconds: file.durationSeconds ?? null,
-        access_url: file.accessUrl ?? null,
-      })) ?? [];
-
-    if (fileRows.length > 0) {
-      const fileResult = await insertWithColumnFallback(
-        db,
-        "submission_files",
-        fileRows,
-      );
-      const fileError = fileResult.error;
-
-      if (fileError) {
-        return { error: "파일 정보를 저장할 수 없습니다." };
-      }
-    }
-  }
-
-  if (parsed.data.status === "SUBMITTED") {
-    const selectedStationIds = Array.from(
-      new Set(parsed.data.selectedStationIds ?? []),
-    ).filter(Boolean);
-    let stationIds = selectedStationIds;
-    let missingCodes: string[] = [];
-
-    if (stationIds.length === 0) {
-      const resolved = await resolveAlbumStationIds(
-        db,
-        parsed.data.packageId,
-      );
-      stationIds = resolved.stationIds;
-      missingCodes = resolved.missingCodes;
-    }
-
-    if (stationIds.length === 0) {
-      const { data: packageStations, error: stationError } = await db
-        .from("package_stations")
-        .select("station_id")
-        .eq("package_id", parsed.data.packageId);
-
-      if (stationError) {
-        console.warn("Failed to load package stations", stationError);
-      } else {
-        stationIds =
-          packageStations
-            ?.map((station) => station.station_id)
-            .filter((id): id is string => Boolean(id)) ?? [];
-      }
-    }
-
-    if (stationIds.length === 0) {
-      console.warn("No stations resolved for album submission", {
-        submissionId: parsed.data.submissionId,
-        packageId: parsed.data.packageId,
-        missingCodes,
-      });
-    }
-
-    if (missingCodes.length > 0) {
-      console.warn("Missing station codes for package", {
-        submissionId: parsed.data.submissionId,
-        packageId: parsed.data.packageId,
-        missingCodes,
-      });
-    }
-
-    if (stationIds.length > 0) {
-      const { error: reviewError } = await ensureStationReviews(
-        db,
-        parsed.data.submissionId,
-        stationIds,
-        { syncNotSent: true },
-      );
-
-      if (reviewError) {
-        return { error: "방송국 진행 정보를 저장할 수 없습니다." };
-      }
-    }
-
-    await ensureAlbumStationReviews(
-      db,
+    replacedFileRefs = await loadSubmissionB2ObjectRefs(db, [
       parsed.data.submissionId,
-      packageStationCount,
-      packageName,
-    );
+    ]);
   }
+  const fileRows = (parsed.data.files ?? []).map((file) => ({
+    file_path: file.path,
+    object_key: file.path,
+    uploaded_at: new Date().toISOString(),
+    original_name: file.originalName,
+    mime: file.mime || null,
+    size: file.size,
+    checksum: file.checksum ?? null,
+    duration_seconds: file.durationSeconds ?? null,
+  }));
+  const { data: committedRows, error: commitError } = await db.rpc(
+    "commit_submission_save",
+    {
+      p_submission_id: parsed.data.submissionId,
+      p_lease_token: leaseResult.lease.token,
+      p_expected_updated_at: submissionResult.data.updated_at,
+      p_replace_tracks: true,
+      p_tracks: trackRows,
+      p_replace_files: parsed.data.files !== undefined,
+      p_file_kind: "AUDIO",
+      p_files: fileRows,
+      p_sync_reviews: isSubmitted,
+      p_station_ids: canonicalAlbumStationIds,
+      p_final_status: finalSubmissionState.status,
+      p_final_payment_status: finalSubmissionState.paymentStatus,
+    },
+  );
+  const committed = Array.isArray(committedRows)
+    ? committedRows[0]
+    : committedRows;
+  if (commitError || !committed) {
+    await releaseSubmissionSaveLease({
+      db,
+      submissionId: parsed.data.submissionId,
+      leaseToken: leaseResult.lease.token,
+    });
+    console.error("Submission atomic commit failed", {
+      code: commitError?.code,
+      submissionId: parsed.data.submissionId,
+    });
+    return {
+      error: "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.",
+    };
+  }
+
+  scheduleReplacedSubmissionFileCleanup(db, replacedFileRefs);
 
   const eventMessage =
     parsed.data.status === "SUBMITTED"
@@ -1406,65 +1589,73 @@ export async function saveAlbumSubmissionAction(
         ? buildUrl(`/track/${encodeURIComponent(parsed.data.guestToken)}`, baseUrl)
         : buildUrl(`/dashboard/submissions/${parsed.data.submissionId}`, baseUrl);
 
-    if (recipientEmails.length > 0) {
-      for (const recipientEmail of recipientEmails) {
-        const emailResult = await sendSubmissionReceiptEmail({
-          email: recipientEmail,
-          title: titleValue || "제목 미입력",
-          kind: "ALBUM",
-          submissionId: parsed.data.submissionId,
-          isGuest,
-          guestToken: parsed.data.guestToken ?? undefined,
-          link,
-          siteLink,
-        });
-        if (emailResult.ok) {
-          receiptEmailSent = true;
-        } else {
-          await recordEmailDeliveryIssue({
-            db,
-            submissionId: parsed.data.submissionId,
-            recipientEmail,
-            label: "접수 완료 안내",
-            message: emailResult.message,
-            skipped: emailResult.skipped,
-          });
-        }
-
-        if (shouldRequestPayment && paymentMethod === "BANK" && amountKrw > 0) {
-          const bankEmailResult = await sendSubmissionBankRequestEmail({
+    const emailJobs: SubmissionEmailDeliveryJob[] = [];
+    for (const recipientEmail of recipientEmails) {
+      emailJobs.push({
+        recipientEmail,
+        label: "접수 완료 안내",
+        kind: "receipt",
+        send: () =>
+          sendSubmissionReceiptEmail({
             email: recipientEmail,
             title: titleValue || "제목 미입력",
-            artist: artistNameValue || null,
             kind: "ALBUM",
-            amountKrw,
-            bankDepositorName: bankDepositorNameValue || null,
+            submissionId: parsed.data.submissionId,
+            isGuest,
+            guestToken: parsed.data.guestToken ?? undefined,
             link,
             siteLink,
-          });
-          if (bankEmailResult.ok) {
-            bankGuideEmailSent = true;
-          } else {
-            await recordEmailDeliveryIssue({
-              db,
-              submissionId: parsed.data.submissionId,
-              recipientEmail,
-              label: "무통장 입금 안내",
-              message: bankEmailResult.message,
-              skipped: bankEmailResult.skipped,
-            });
-          }
-        }
+          }),
+      });
+
+      if (shouldRequestPayment && paymentMethod === "BANK" && amountKrw > 0) {
+        emailJobs.push({
+          recipientEmail,
+          label: "무통장 입금 안내",
+          kind: "bank",
+          send: () =>
+            sendSubmissionBankRequestEmail({
+              email: recipientEmail,
+              title: titleValue || "제목 미입력",
+              artist: artistNameValue || null,
+              kind: "ALBUM",
+              amountKrw,
+              bankDepositorName: bankDepositorNameValue || null,
+              link,
+              siteLink,
+            }),
+        });
       }
     }
-
-    const memberPhoneValue = isGuest ? null : await loadMemberPhone(user?.id);
-    await sendKakaoOfficialNotification({
-      phone: parsed.data.applicantPhone?.trim() || guestPhoneValue || memberPhoneValue,
-      title: "음반 심의 접수 완료",
-      message: `${titleValue || "제목 미입력"} 접수가 완료되었습니다. 진행 상황은 온사이드에서 확인할 수 있습니다.`,
-      link,
+    const kakaoDelivery = (async () => {
+      const memberPhoneValue = isGuest ? null : await loadMemberPhone(user?.id);
+      return sendKakaoOfficialNotification({
+        phone:
+          parsed.data.applicantPhone?.trim() ||
+          guestPhoneValue ||
+          memberPhoneValue,
+        title: "음반 심의 접수 완료",
+        message: `${titleValue || "제목 미입력"} 접수가 완료되었습니다. 진행 상황은 온사이드에서 확인할 수 있습니다.`,
+        link,
+      });
+    })().catch((error) => {
+      console.warn("[Kakao][submission] post-commit delivery failed", {
+        submissionId: parsed.data.submissionId,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
     });
+    const emailDelivery = await deliverSubmissionEmails({
+      db,
+      submissionId: parsed.data.submissionId,
+      jobs: emailJobs,
+    });
+    receiptEmailSent = emailDelivery.receiptSent;
+    bankGuideEmailSent = emailDelivery.bankGuideSent;
+    await kakaoDelivery;
+  }
+
+  if (user?.id) {
+    clearDashboardStatusCache(user.id);
   }
 
   return {
@@ -1513,7 +1704,7 @@ export async function saveMvSubmissionAction(
     parsed.data.files?.some((file) => isApplicationFormFile(file.originalName)) ??
     false;
   const usesExternalApplicationForm =
-    hasApplicationFormAttachment || Boolean(parsed.data.filesSubmittedByEmail);
+    parsed.data.externalApplicationForm === true;
   const cashReceiptPhoneValue = parsed.data.cashReceiptPhone?.trim() ?? "";
   const cashReceiptBusinessNumberDigits = normalizeDigits(
     parsed.data.cashReceiptBusinessNumber,
@@ -1524,6 +1715,14 @@ export async function saveMvSubmissionAction(
 
   if (isGuest && !parsed.data.guestToken) {
     return { error: "로그인 정보를 확인할 수 없습니다." };
+  }
+  if (
+    isSubmitted &&
+    usesExternalApplicationForm &&
+    !parsed.data.filesSubmittedByEmail &&
+    !hasApplicationFormAttachment
+  ) {
+    return { error: "작성한 신청서 파일을 업로드하거나 이메일 제출을 선택해주세요." };
   }
   if (
     isSubmitted &&
@@ -1541,58 +1740,118 @@ export async function saveMvSubmissionAction(
   ) {
     return { error: "비회원 이메일 형식을 확인해주세요." };
   }
-  if (
-    isSubmitted &&
-    !isAdminReviewer &&
-    !usesExternalApplicationForm &&
-    !titleValue
-  ) {
-    return { error: "제목을 입력해주세요." };
-  }
-  if (
-    isSubmitted &&
-    !isAdminReviewer &&
-    !usesExternalApplicationForm &&
-    !artistNameValue
-  ) {
-    return { error: "아티스트명을 입력해주세요." };
-  }
-  if (isSubmitted && !isAdminReviewer && typeof parsed.data.aiUsed !== "boolean") {
-    return { error: "AI 활용 여부를 선택해주세요." };
-  }
 
   const adminDb = createAdminClient();
-  let db = isGuest ? adminDb : supabase;
-  const selectedMvStationCodes = normalizeMvStationCodes(
-    parsed.data.selectedStationCodes,
-  );
+  const { data: existingSubmission, error: existingSubmissionError } =
+    await loadEditableSubmissionByActor({
+      db: adminDb,
+      submissionId: parsed.data.submissionId,
+      userId: user?.id,
+      guestToken: parsed.data.guestToken,
+    });
+  if (existingSubmissionError) {
+    console.error("MV submission ownership lookup failed", existingSubmissionError);
+    return { error: "접수 소유권을 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
+  }
+  if (
+    !canEditSubmission(existingSubmission, {
+      userId: user?.id,
+      guestToken: parsed.data.guestToken,
+    })
+  ) {
+    return { error: "접수 수정 권한을 확인할 수 없습니다." };
+  }
+  if (!existingSubmission?.updated_at) {
+    return { error: "접수 저장 상태를 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
+  }
+  let expectedParentVersion = {
+    updatedAt: existingSubmission.updated_at,
+    userId: existingSubmission.user_id,
+    guestToken: existingSubmission.guest_token,
+  };
+  const fileOwnershipError = validateSubmissionFileObjectKeys({
+    files: parsed.data.files,
+    submissionId: parsed.data.submissionId,
+    userId: user?.id ?? null,
+    guestToken: parsed.data.guestToken ?? null,
+    allowClaimedGuestOwner: Boolean(
+      user?.id && existingSubmission?.user_id === user.id,
+    ),
+  });
+  if (fileOwnershipError) {
+    return { error: fileOwnershipError };
+  }
+  const db = adminDb;
+  let effectiveSubmissionFiles = parsed.data.files ?? [];
+  if (
+    isSubmitted &&
+    parsed.data.files === undefined &&
+    !parsed.data.filesSubmittedByEmail
+  ) {
+    const { data: existingFiles, error: existingFilesError } = await db
+      .from("submission_files")
+      .select("original_name, mime")
+      .eq("submission_id", parsed.data.submissionId)
+      .eq("kind", "VIDEO");
+    if (existingFilesError) {
+      return { error: "기존 파일 정보를 확인할 수 없습니다." };
+    }
+    effectiveSubmissionFiles = (existingFiles ?? []).map((file) => ({
+      path: "",
+      originalName: file.original_name ?? "",
+      mime: file.mime ?? undefined,
+      size: 0,
+    }));
+  }
+  if (isSubmitted) {
+    const submittedFilesError = validateSubmittedFiles({
+      kind: "MV",
+      isAdminReviewer,
+      filesSubmittedByEmail: Boolean(parsed.data.filesSubmittedByEmail),
+      externalApplicationForm: usesExternalApplicationForm,
+      files: effectiveSubmissionFiles,
+    });
+    if (submittedFilesError) return { error: submittedFilesError };
+  }
+  let canonicalMvStationIds: string[] = [];
 
   let amountKrw = Math.max(0, Math.round(Number(parsed.data.amountKrw ?? 0)));
   if (isSubmitted) {
-    let selectedCodes = selectedMvStationCodes;
-    if (selectedCodes.length === 0 && parsed.data.selectedStationIds?.length) {
-      const { data: selectedStations, error: stationError } = await adminDb
-        .from("stations")
-        .select("code")
-        .in("id", parsed.data.selectedStationIds);
-      if (stationError) {
-        return { error: "선택한 방송국 정보를 확인할 수 없습니다." };
-      }
-      selectedCodes = (selectedStations ?? [])
-        .map((station) => station.code)
-        .filter((code): code is string => Boolean(code));
+    const { data: canonicalStations, error: stationError } = await adminDb
+      .from("stations")
+      .select("id, code")
+      .in("code", Object.keys(MV_STATION_PRICE_KRW))
+      .eq("is_active", true);
+    if (stationError) {
+      console.error("MV canonical station lookup failed", stationError);
+      return { error: "선택한 방송국 정보를 확인할 수 없습니다." };
     }
 
-    const stationAmountKrw = selectedCodes.reduce(
-      (sum, code) => sum + (mvStationPriceMap[code] ?? 0),
-      0,
-    );
+    const stationSelection = resolveCanonicalMvStationSelection({
+      mvType: parsed.data.mvType,
+      requestedCodes: parsed.data.selectedStationCodes,
+      requestedIds: parsed.data.selectedStationIds,
+      stations: (canonicalStations ?? []).flatMap((station) =>
+        station.id && station.code
+          ? [{ id: station.id, code: station.code }]
+          : [],
+      ),
+    });
+    if (!stationSelection.ok) {
+      console.warn("MV station selection validation failed", {
+        submissionId: parsed.data.submissionId,
+        reason: stationSelection.reason,
+      });
+      return { error: "선택한 방송국 정보가 일치하지 않습니다. 다시 선택해주세요." };
+    }
+
+    canonicalMvStationIds = stationSelection.stationIds;
     const baseAmountKrw =
       parsed.data.mvType === "MV_DISTRIBUTION" &&
       (parsed.data.mvBaseSelected ?? true)
-        ? mvBaseOnlinePrice
+        ? MV_BASE_ONLINE_PRICE_KRW
         : 0;
-    amountKrw = baseAmountKrw + stationAmountKrw;
+    amountKrw = baseAmountKrw + stationSelection.stationAmountKrw;
   }
   if (isSubmitted && amountKrw <= 0) {
     return { error: "결제 금액 정보를 확인할 수 없습니다." };
@@ -1630,27 +1889,40 @@ export async function saveMvSubmissionAction(
   if (bankPaymentDocumentError) {
     return { error: bankPaymentDocumentError };
   }
-  if (
-    isSubmitted &&
-    !isAdminReviewer &&
-    !usesExternalApplicationForm &&
-    !parsed.data.artistNameOfficial?.trim()
-  ) {
-    return { error: "아티스트명 공식 표기를 입력해주세요." };
-  }
-  if (
-    isSubmitted &&
-    !isAdminReviewer &&
-    !usesExternalApplicationForm &&
-    !parsed.data.lyrics?.trim()
-  ) {
-    return { error: "가사를 입력해주세요." };
+  if (isSubmitted) {
+    const requiredFieldsError = validateMvSubmittedFields({
+      isAdminReviewer,
+      externalApplicationForm: usesExternalApplicationForm,
+      aiUsed: parsed.data.aiUsed,
+      title: titleValue,
+      artistName: artistNameValue,
+      artistNameOfficial: parsed.data.artistNameOfficial,
+      releaseDate: parsed.data.releaseDate,
+      director: parsed.data.director,
+      leadActor: parsed.data.leadActor,
+      productionCompany: parsed.data.productionCompany,
+      agency: parsed.data.agency,
+      albumTitle: parsed.data.albumTitle,
+      distributionCompany: parsed.data.distributionCompany,
+      usage: parsed.data.usage,
+      songTitleKr: parsed.data.songTitleKr,
+      songTitleEn: parsed.data.songTitleEn,
+      songTitleOfficial: parsed.data.songTitleOfficial,
+      composer: parsed.data.composer,
+      storyline: parsed.data.storyline,
+      lyrics: parsed.data.lyrics,
+    });
+    if (requiredFieldsError) return { error: requiredFieldsError };
   }
 
   const shouldRequestPayment =
     isSubmitted &&
     !deferPayment &&
     (paymentMethod === "CARD" || Boolean(bankDepositorNameValue));
+  const saveState = resolveSubmissionSaveState({
+    requestedStatus: parsed.data.status,
+    shouldRequestPayment,
+  });
   const artistId = await ensureArtistByName(artistNameValue);
 
   const submissionPayload = {
@@ -1727,70 +1999,13 @@ export async function saveMvSubmissionAction(
       paymentMethod === "BANK" && paymentDocumentType === "TAX_INVOICE"
         ? taxInvoiceBusinessNumberDigits || null
         : null,
-    status:
-      parsed.data.status === "SUBMITTED" && shouldRequestPayment
-        ? "WAITING_PAYMENT"
-        : parsed.data.status,
-    payment_status: shouldRequestPayment ? "PAYMENT_PENDING" : "UNPAID",
+    status: saveState.finalStatus,
+    payment_status: saveState.finalPaymentStatus,
   };
-
-  let submissionError = (await upsertWithColumnFallback(db, submissionPayload))
-    .error;
-
-  if (submissionError) {
-    if (db !== adminDb) {
-      const { data: existingSubmission } = await adminDb
-        .from("submissions")
-        .select("id, user_id, guest_token")
-        .eq("id", parsed.data.submissionId)
-        .maybeSingle();
-
-      if (
-        existingSubmission?.user_id &&
-        user &&
-        existingSubmission.user_id !== user.id
-      ) {
-        return {
-          error:
-            "권한 문제로 접수를 저장할 수 없습니다. 다시 로그인해주세요. (오류 코드: AUTH_MISMATCH)",
-        };
-      }
-
-      if (
-        !existingSubmission?.user_id &&
-        existingSubmission?.guest_token &&
-        parsed.data.guestToken &&
-        existingSubmission.guest_token !== parsed.data.guestToken
-      ) {
-        return {
-          error:
-            "권한 문제로 접수를 저장할 수 없습니다. 다시 로그인해주세요. (오류 코드: AUTH_MISMATCH)",
-        };
-      }
-
-      const fallbackResult = await upsertWithColumnFallback(adminDb, {
-        ...submissionPayload,
-        user_id: user?.id ?? null,
-      });
-      const fallbackError = fallbackResult.error;
-
-      if (fallbackError) {
-        console.error("MV submission upsert failed", fallbackError);
-        return { error: formatSubmissionError(fallbackError) };
-      }
-
-      db = adminDb;
-      submissionError = null;
-    } else {
-      console.error("MV submission upsert failed", submissionError);
-      return { error: formatSubmissionError(submissionError) };
-    }
-  }
-
-  if (submissionError) {
-    console.error("MV submission upsert failed", submissionError);
-    return { error: formatSubmissionError(submissionError) };
-  }
+  const finalSubmissionState = {
+    status: submissionPayload.status,
+    paymentStatus: submissionPayload.payment_status,
+  };
 
   if (parsed.data.status === "SUBMITTED") {
     const stalePaymentResult = await cancelStaleRequestedSubmissionPayments(
@@ -1801,89 +2016,139 @@ export async function saveMvSubmissionAction(
       console.error("Stale MV payment cleanup failed", stalePaymentResult.error);
       return { error: "기존 결제 요청을 정리하지 못했습니다. 잠시 후 다시 시도해주세요." };
     }
+
+    const { data: refreshedSubmission, error: refreshedSubmissionError } =
+      await loadEditableSubmissionByActor({
+        db: adminDb,
+        submissionId: parsed.data.submissionId,
+        userId: user?.id,
+        guestToken: parsed.data.guestToken,
+      });
+    if (
+      refreshedSubmissionError ||
+      !canEditSubmission(refreshedSubmission, {
+        userId: user?.id,
+        guestToken: parsed.data.guestToken,
+      }) ||
+      !refreshedSubmission?.updated_at
+    ) {
+      console.error(
+        "MV submission ownership recheck failed after payment cleanup",
+        refreshedSubmissionError,
+      );
+      return { error: "결제 상태가 변경되어 접수를 수정할 수 없습니다." };
+    }
+    expectedParentVersion = {
+      updatedAt: refreshedSubmission.updated_at,
+      userId: refreshedSubmission.user_id,
+      guestToken: refreshedSubmission.guest_token,
+    };
   }
 
-  if (parsed.data.files !== undefined) {
-    await db
-      .from("submission_files")
-      .delete()
-      .eq("submission_id", parsed.data.submissionId)
-      .eq("kind", "VIDEO");
-
-    const fileRows =
-      parsed.data.files?.map((file) => ({
-        submission_id: parsed.data.submissionId,
-        kind: "VIDEO",
-        file_path: file.path,
-        object_key: file.path,
-        storage_provider: "b2",
-        status: "UPLOADED",
-        uploaded_at: new Date().toISOString(),
-        original_name: file.originalName,
-        mime: file.mime || null,
-        size: file.size,
-        checksum: file.checksum ?? null,
-        duration_seconds: file.durationSeconds ?? null,
-        access_url: file.accessUrl ?? null,
-      })) ?? [];
-
-    if (fileRows.length > 0) {
-      const fileResult = await insertWithColumnFallback(
-        db,
-        "submission_files",
-        fileRows,
-      );
-      const fileError = fileResult.error;
-
-      if (fileError) {
-        return { error: "파일 정보를 저장할 수 없습니다." };
-      }
-    }
+  const stagedSubmissionPayload = {
+    ...submissionPayload,
+    status: saveState.stagingStatus,
+    payment_status: saveState.stagingPaymentStatus,
+  };
+  const leaseResult = await claimSubmissionSaveLease({
+    db,
+    submissionId: parsed.data.submissionId,
+    expectedUpdatedAt: expectedParentVersion.updatedAt,
+    expectedUserId: expectedParentVersion.userId,
+    expectedGuestToken: expectedParentVersion.guestToken,
+  });
+  if (!leaseResult.lease) {
+    console.error("MV submission save lease claim failed", {
+      code: leaseResult.error?.code,
+      submissionId: parsed.data.submissionId,
+    });
+    return { error: formatSubmissionLeaseError(leaseResult.error) };
   }
 
-  if (isSubmitted) {
-    let stationIds = parsed.data.selectedStationIds ?? [];
-    if (stationIds.length === 0 && selectedMvStationCodes.length > 0) {
-      const resolved = await resolveMvStationIdsByCodes(
-        adminDb,
-        selectedMvStationCodes,
-      );
-      stationIds = resolved.stationIds;
-      if (resolved.missingCodes.length > 0) {
-        console.warn("Missing MV station codes", {
-          submissionId: parsed.data.submissionId,
-          missingCodes: resolved.missingCodes,
-        });
-      }
-    }
+  const submissionResult = await stageSubmissionWithColumnFallback(
+    db,
+    stagedSubmissionPayload,
+    {
+      submissionId: parsed.data.submissionId,
+      token: leaseResult.lease.token,
+      updatedAt: leaseResult.lease.updatedAt,
+    },
+  );
+  const submissionError = submissionResult.error;
 
-    if (stationIds.length === 0 && parsed.data.packageId) {
-      const { data: packageStations, error: stationError } = await db
-        .from("package_stations")
-        .select("station_id")
-        .eq("package_id", parsed.data.packageId);
-
-      if (stationError) {
-        return { error: "방송국 정보를 불러올 수 없습니다." };
-      }
-
-      stationIds =
-        packageStations
-          ?.map((station) => station.station_id)
-          .filter((id): id is string => Boolean(id)) ?? [];
-    }
-
-    const { error: reviewError } = await ensureStationReviews(
+  if (submissionError) {
+    await releaseSubmissionSaveLease({
       db,
-      parsed.data.submissionId,
-      stationIds,
-      { syncNotSent: true },
-    );
-
-    if (reviewError) {
-      return { error: "방송국 진행 정보를 저장할 수 없습니다." };
-    }
+      submissionId: parsed.data.submissionId,
+      leaseToken: leaseResult.lease.token,
+    });
+    console.error("MV submission staged payload update failed", submissionError);
+    return { error: formatSubmissionError(submissionError) };
   }
+  if (!submissionResult.data?.updated_at) {
+    await releaseSubmissionSaveLease({
+      db,
+      submissionId: parsed.data.submissionId,
+      leaseToken: leaseResult.lease.token,
+    });
+    console.error("MV submission staging returned no version", {
+      submissionId: parsed.data.submissionId,
+    });
+    return { error: "접수 저장 상태를 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
+  }
+
+  let replacedFileRefs: SubmissionB2ObjectRef[] = [];
+  if (parsed.data.files !== undefined) {
+    replacedFileRefs = await loadSubmissionB2ObjectRefs(db, [
+      parsed.data.submissionId,
+    ]);
+  }
+  const fileRows = (parsed.data.files ?? []).map((file) => ({
+    file_path: file.path,
+    object_key: file.path,
+    uploaded_at: new Date().toISOString(),
+    original_name: file.originalName,
+    mime: file.mime || null,
+    size: file.size,
+    checksum: file.checksum ?? null,
+    duration_seconds: file.durationSeconds ?? null,
+  }));
+  const { data: committedRows, error: commitError } = await db.rpc(
+    "commit_submission_save",
+    {
+      p_submission_id: parsed.data.submissionId,
+      p_lease_token: leaseResult.lease.token,
+      p_expected_updated_at: submissionResult.data.updated_at,
+      p_replace_tracks: false,
+      p_tracks: [],
+      p_replace_files: parsed.data.files !== undefined,
+      p_file_kind: "VIDEO",
+      p_files: fileRows,
+      p_sync_reviews: isSubmitted,
+      p_station_ids: canonicalMvStationIds,
+      p_final_status: finalSubmissionState.status,
+      p_final_payment_status: finalSubmissionState.paymentStatus,
+    },
+  );
+  const committed = Array.isArray(committedRows)
+    ? committedRows[0]
+    : committedRows;
+  if (commitError || !committed) {
+    await releaseSubmissionSaveLease({
+      db,
+      submissionId: parsed.data.submissionId,
+      leaseToken: leaseResult.lease.token,
+    });
+    console.error("MV submission atomic commit failed", {
+      code: commitError?.code,
+      submissionId: parsed.data.submissionId,
+    });
+    return {
+      error: "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.",
+    };
+  }
+
+  scheduleReplacedSubmissionFileCleanup(db, replacedFileRefs);
 
   const eventMessage =
     parsed.data.status === "SUBMITTED"
@@ -1918,65 +2183,70 @@ export async function saveMvSubmissionAction(
         ? buildUrl(`/track/${encodeURIComponent(parsed.data.guestToken)}`, baseUrl)
         : buildUrl(`/dashboard/submissions/${parsed.data.submissionId}`, baseUrl);
 
-    if (recipientEmails.length > 0) {
-      for (const recipientEmail of recipientEmails) {
-        const emailResult = await sendSubmissionReceiptEmail({
-          email: recipientEmail,
-          title: titleValue || "제목 미입력",
-          kind: "MV",
-          submissionId: parsed.data.submissionId,
-          isGuest,
-          guestToken: parsed.data.guestToken ?? undefined,
-          link,
-          siteLink,
-        });
-        if (emailResult.ok) {
-          receiptEmailSent = true;
-        } else {
-          await recordEmailDeliveryIssue({
-            db,
-            submissionId: parsed.data.submissionId,
-            recipientEmail,
-            label: "접수 완료 안내",
-            message: emailResult.message,
-            skipped: emailResult.skipped,
-          });
-        }
-
-        if (shouldRequestPayment && paymentMethod === "BANK" && amountKrw > 0) {
-          const bankEmailResult = await sendSubmissionBankRequestEmail({
+    const emailJobs: SubmissionEmailDeliveryJob[] = [];
+    for (const recipientEmail of recipientEmails) {
+      emailJobs.push({
+        recipientEmail,
+        label: "접수 완료 안내",
+        kind: "receipt",
+        send: () =>
+          sendSubmissionReceiptEmail({
             email: recipientEmail,
             title: titleValue || "제목 미입력",
-            artist: artistNameValue || null,
             kind: "MV",
-            amountKrw,
-            bankDepositorName: bankDepositorNameValue || null,
+            submissionId: parsed.data.submissionId,
+            isGuest,
+            guestToken: parsed.data.guestToken ?? undefined,
             link,
             siteLink,
-          });
-          if (bankEmailResult.ok) {
-            bankGuideEmailSent = true;
-          } else {
-            await recordEmailDeliveryIssue({
-              db,
-              submissionId: parsed.data.submissionId,
-              recipientEmail,
-              label: "무통장 입금 안내",
-              message: bankEmailResult.message,
-              skipped: bankEmailResult.skipped,
-            });
-          }
-        }
+          }),
+      });
+
+      if (shouldRequestPayment && paymentMethod === "BANK" && amountKrw > 0) {
+        emailJobs.push({
+          recipientEmail,
+          label: "무통장 입금 안내",
+          kind: "bank",
+          send: () =>
+            sendSubmissionBankRequestEmail({
+              email: recipientEmail,
+              title: titleValue || "제목 미입력",
+              artist: artistNameValue || null,
+              kind: "MV",
+              amountKrw,
+              bankDepositorName: bankDepositorNameValue || null,
+              link,
+              siteLink,
+            }),
+        });
       }
     }
-
-    const memberPhoneValue = isGuest ? null : await loadMemberPhone(user?.id);
-    await sendKakaoOfficialNotification({
-      phone: guestPhoneValue || memberPhoneValue,
-      title: "뮤직비디오 심의 접수 완료",
-      message: `${titleValue || "제목 미입력"} 접수가 완료되었습니다. 진행 상황은 온사이드에서 확인할 수 있습니다.`,
-      link,
+    const kakaoDelivery = (async () => {
+      const memberPhoneValue = isGuest ? null : await loadMemberPhone(user?.id);
+      return sendKakaoOfficialNotification({
+        phone: guestPhoneValue || memberPhoneValue,
+        title: "뮤직비디오 심의 접수 완료",
+        message: `${titleValue || "제목 미입력"} 접수가 완료되었습니다. 진행 상황은 온사이드에서 확인할 수 있습니다.`,
+        link,
+      });
+    })().catch((error) => {
+      console.warn("[Kakao][submission] post-commit delivery failed", {
+        submissionId: parsed.data.submissionId,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
     });
+    const emailDelivery = await deliverSubmissionEmails({
+      db,
+      submissionId: parsed.data.submissionId,
+      jobs: emailJobs,
+    });
+    receiptEmailSent = emailDelivery.receiptSent;
+    bankGuideEmailSent = emailDelivery.bankGuideSent;
+    await kakaoDelivery;
+  }
+
+  if (user?.id) {
+    clearDashboardStatusCache(user.id);
   }
 
   return {

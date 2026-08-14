@@ -1,848 +1,131 @@
+import Docxtemplater from "docxtemplater";
 import PizZip from "pizzip";
 
-type DocText = string | number | boolean | null | undefined;
+type TemplatePrimitive = string | number | boolean | null | undefined;
 
-type ParagraphOptions = {
-  align?: "left" | "center" | "right";
-  bold?: boolean;
-  keepNext?: boolean;
-  pageBreakBefore?: boolean;
-  size?: number;
-  spacingAfter?: number;
-  spacingBefore?: number;
-};
+export type ReviewDocTemplateValue =
+  | TemplatePrimitive
+  | ReviewDocTemplateValue[]
+  | { [key: string]: ReviewDocTemplateValue };
 
-type CellOptions = ParagraphOptions & {
-  colspan?: number;
-  fill?: string;
-  width?: number;
-};
+export class ReviewDocTemplateRenderError extends Error {
+  templateName: string;
 
-type TableCell = {
-  text: DocText | DocText[];
-  options?: CellOptions;
-};
-
-type TableOptions = {
-  align?: "left" | "center" | "right";
-  width?: number;
-  columns?: number[];
-  rowHeights?: number[];
-  borderSize?: number;
-  allowRowSplit?: boolean;
-  fixedLayout?: boolean;
-  cellMargins?: {
-    top?: number;
-    right?: number;
-    bottom?: number;
-    left?: number;
-  };
-};
-
-type DocOptions = {
-  landscape?: boolean;
-  margin?: {
-    top?: number;
-    right?: number;
-    bottom?: number;
-    left?: number;
-  };
-};
-
-const DOC_FONT = "맑은 고딕";
-
-const normalizeDocText = (value: DocText) =>
-  String(value ?? "").normalize("NFC");
-
-type TrackDocData = Record<string, unknown> & {
-  track_no: number;
-  track_no_padded: string;
-  track_title: string;
-  track_title_for_docs: string;
-  track_title_for_filename: string;
-  composer: string;
-  lyricist: string;
-  lyricist_display: string;
-  arranger: string;
-  featuring: string;
-  performer: string;
-  notes: string;
-  lyrics_display: string;
-  is_title: boolean;
-  is_instrumental: boolean;
-};
-
-type SubmissionDocData = Record<string, unknown> & {
-  album_title: string;
-  artist_name: string;
-  genre: string;
-  distributor: string;
-  actual_company: string;
-  review_company: string;
-  contact_name: string;
-  contact_phone: string;
-  contact_email: string;
-  today_long: string;
-  today_year: string;
-  today_mmdd: string;
-  release_date_long: string;
-  release_date_short: string;
-  release_date_mmdd: string;
-  production_date_long: string;
-  production_date_short: string;
-  track_count: number;
-  track_count_label: string;
-  genre_checkbox_line: string;
-  title_track_title: string;
-  integrated_song_titles: string;
-  tracks: TrackDocData[];
-};
-
-const xmlEscape = (value: DocText) =>
-  normalizeDocText(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-
-const cleanLines = (value: DocText | DocText[]) => {
-  const raw = Array.isArray(value)
-    ? value.map((item) => normalizeDocText(item)).join("\n")
-    : normalizeDocText(value);
-  return raw.replace(/\r\n?/g, "\n").split("\n");
-};
-
-const run = (text: DocText, options?: ParagraphOptions) => {
-  const size = options?.size ?? 11;
-  return `<w:r><w:rPr><w:rFonts w:ascii="${DOC_FONT}" w:hAnsi="${DOC_FONT}" w:eastAsia="${DOC_FONT}" w:cs="${DOC_FONT}"/><w:sz w:val="${size * 2}"/><w:szCs w:val="${size * 2}"/><w:lang w:val="en-US" w:eastAsia="ko-KR"/>${options?.bold ? "<w:b/><w:bCs/>" : ""}</w:rPr><w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r>`;
-};
-
-const paragraph = (text: DocText, options?: ParagraphOptions) => {
-  const align = options?.align ? `<w:jc w:val="${options.align}"/>` : "";
-  const keepNext = options?.keepNext ? "<w:keepNext/>" : "";
-  const pageBreakBefore = options?.pageBreakBefore ? "<w:pageBreakBefore/>" : "";
-  const before =
-    typeof options?.spacingBefore === "number"
-      ? ` w:before="${options.spacingBefore}"`
-      : "";
-  const after =
-    typeof options?.spacingAfter === "number"
-      ? ` w:after="${options.spacingAfter}"`
-      : ' w:after="80"';
-  return `<w:p><w:pPr>${pageBreakBefore}${keepNext}${align}<w:spacing${before}${after}/></w:pPr>${run(
-    text,
-    options,
-  )}</w:p>`;
-};
-
-const multilineParagraphs = (text: DocText | DocText[], options?: ParagraphOptions) =>
-  cleanLines(text)
-    .map((line) => paragraph(line, options))
-    .join("");
-
-const pageBreak = () => '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
-
-const cellSpan = (item: TableCell) => Math.max(1, item.options?.colspan ?? 1);
-
-const getColumnCount = (rows: TableCell[][]) =>
-  Math.max(
-    1,
-    ...rows.map((cells) =>
-      cells.reduce((sum, item) => sum + cellSpan(item), 0),
-    ),
-  );
-
-const getTableColumns = (width: number, columnCount: number, columns?: number[]) => {
-  if (columns?.length) {
-    const normalized = columns.slice(0, columnCount);
-    if (normalized.length < columnCount) {
-      const usedWidth = normalized.reduce((sum, col) => sum + col, 0);
-      const fallbackWidth = Math.max(
-        1,
-        Math.floor((width - usedWidth) / (columnCount - normalized.length)),
-      );
-      while (normalized.length < columnCount) normalized.push(fallbackWidth);
-    }
-    return normalized;
+  constructor(templateName: string, detail = "") {
+    super(
+      `심의자료 템플릿을 읽거나 렌더링할 수 없습니다: ${templateName}.${
+        detail ? ` ${detail}` : ""
+      } templates/review-docs의 파일을 확인해주세요.`,
+    );
+    this.name = "ReviewDocTemplateRenderError";
+    this.templateName = templateName;
   }
-
-  const baseWidth = Math.max(1, Math.floor(width / columnCount));
-  const normalized = Array.from({ length: columnCount }, () => baseWidth);
-  normalized[normalized.length - 1] += width - baseWidth * columnCount;
-  return normalized;
-};
-
-const widthForSpan = (columns: number[], start: number, span: number) =>
-  columns
-    .slice(start, start + span)
-    .reduce((sum, col) => sum + col, 0);
-
-const cell = (
-  text: DocText | DocText[],
-  options?: CellOptions,
-  computedWidth?: number,
-) => {
-  const widthValue = options?.width ?? computedWidth;
-  const width = widthValue ? `<w:tcW w:w="${widthValue}" w:type="dxa"/>` : "";
-  const colspan = options?.colspan ? `<w:gridSpan w:val="${options.colspan}"/>` : "";
-  const fill = options?.fill ? `<w:shd w:fill="${options.fill}"/>` : "";
-  const paragraphOptions = {
-    ...options,
-    spacingAfter: options?.spacingAfter ?? 0,
-  };
-  return `<w:tc><w:tcPr>${width}${colspan}<w:vAlign w:val="center"/>${fill}</w:tcPr>${multilineParagraphs(
-    text,
-    paragraphOptions,
-  )}</w:tc>`;
-};
-
-const row = (
-  cells: TableCell[],
-  columns: number[],
-  height?: number,
-  allowRowSplit = false,
-) => {
-  const rowSplit = allowRowSplit ? "" : "<w:cantSplit/>";
-  const trPr =
-    rowSplit || height
-      ? `<w:trPr>${rowSplit}${height ? `<w:trHeight w:val="${height}"/>` : ""}</w:trPr>`
-      : "";
-  let columnIndex = 0;
-  return `<w:tr>${trPr}${cells
-    .map((item) => {
-      const span = cellSpan(item);
-      const computedWidth = widthForSpan(columns, columnIndex, span);
-      columnIndex += span;
-      return cell(item.text, item.options, computedWidth);
-    })
-    .join("")}</w:tr>`;
-};
-
-const table = (rows: TableCell[][], options?: TableOptions) => {
-  const width = options?.width ?? 9300;
-  const columns = getTableColumns(width, getColumnCount(rows), options?.columns);
-  const borderSize = options?.borderSize ?? 8;
-  const align = options?.align ? `<w:jc w:val="${options.align}"/>` : "";
-  const fixedLayout =
-    options?.fixedLayout === false ? "" : '<w:tblLayout w:type="fixed"/>';
-  const margins = options?.cellMargins;
-  const cellMar = margins
-    ? `<w:tblCellMar><w:top w:w="${margins.top ?? 0}" w:type="dxa"/><w:left w:w="${
-        margins.left ?? 0
-      }" w:type="dxa"/><w:bottom w:w="${margins.bottom ?? 0}" w:type="dxa"/><w:right w:w="${
-        margins.right ?? 0
-      }" w:type="dxa"/></w:tblCellMar>`
-    : "";
-  const grid = `<w:tblGrid>${columns
-    .map((col) => `<w:gridCol w:w="${col}"/>`)
-    .join("")}</w:tblGrid>`;
-  return `<w:tbl><w:tblPr><w:tblW w:w="${width}" w:type="dxa"/>${align}${fixedLayout}<w:tblBorders><w:top w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="${borderSize}" w:space="0" w:color="000000"/></w:tblBorders>${cellMar}</w:tblPr>${grid}${rows
-    .map((cells, index) =>
-      row(cells, columns, options?.rowHeights?.[index], options?.allowRowSplit),
-    )
-    .join("")}</w:tbl>`;
-};
-
-const documentXml = (body: string[], options?: DocOptions) => {
-  const landscape = options?.landscape === true;
-  const pageSize = landscape
-    ? '<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>'
-    : '<w:pgSz w:w="11906" w:h="16838"/>';
-  const margin = options?.margin ?? {};
-  const pageMargin = `<w:pgMar w:top="${margin.top ?? 900}" w:right="${margin.right ?? 900}" w:bottom="${margin.bottom ?? 900}" w:left="${margin.left ?? 900}" w:header="720" w:footer="720" w:gutter="0"/>`;
-
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    ${body.join("\n")}
-    <w:sectPr>${pageSize}${pageMargin}<w:cols w:space="425"/><w:docGrid w:linePitch="360"/></w:sectPr>
-  </w:body>
-</w:document>`;
-};
-
-const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
-  <Override PartName="/word/webSettings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.webSettings+xml"/>
-  <Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/>
-  <Override PartName="/word/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
-  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
-  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
-</Types>`;
-
-const rootRelationshipsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
-</Relationships>`;
-
-const documentRelationshipsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings" Target="webSettings.xml"/>
-  <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/>
-  <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
-</Relationships>`;
-
-const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults>
-    <w:rPrDefault>
-      <w:rPr>
-        <w:rFonts w:ascii="${DOC_FONT}" w:hAnsi="${DOC_FONT}" w:eastAsia="${DOC_FONT}" w:cs="${DOC_FONT}"/>
-        <w:kern w:val="2"/>
-        <w:sz w:val="22"/>
-        <w:szCs w:val="22"/>
-        <w:lang w:val="en-US" w:eastAsia="ko-KR"/>
-      </w:rPr>
-    </w:rPrDefault>
-    <w:pPrDefault>
-      <w:pPr>
-        <w:spacing w:after="160" w:line="259" w:lineRule="auto"/>
-        <w:jc w:val="both"/>
-      </w:pPr>
-    </w:pPrDefault>
-  </w:docDefaults>
-  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
-    <w:name w:val="Normal"/>
-    <w:qFormat/>
-    <w:rPr>
-      <w:rFonts w:ascii="${DOC_FONT}" w:hAnsi="${DOC_FONT}" w:eastAsia="${DOC_FONT}" w:cs="${DOC_FONT}"/>
-      <w:sz w:val="22"/>
-      <w:szCs w:val="22"/>
-      <w:lang w:val="en-US" w:eastAsia="ko-KR"/>
-    </w:rPr>
-  </w:style>
-  <w:style w:type="table" w:default="1" w:styleId="TableNormal">
-    <w:name w:val="Normal Table"/>
-    <w:uiPriority w:val="99"/>
-    <w:semiHidden/>
-    <w:unhideWhenUsed/>
-    <w:tblPr>
-      <w:tblInd w:w="0" w:type="dxa"/>
-      <w:tblCellMar>
-        <w:top w:w="0" w:type="dxa"/>
-        <w:left w:w="108" w:type="dxa"/>
-        <w:bottom w:w="0" w:type="dxa"/>
-        <w:right w:w="108" w:type="dxa"/>
-      </w:tblCellMar>
-    </w:tblPr>
-  </w:style>
-</w:styles>`;
-
-const settingsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:zoom w:percent="100"/>
-  <w:proofState w:spelling="clean" w:grammar="clean"/>
-  <w:defaultTabStop w:val="800"/>
-  <w:characterSpacingControl w:val="doNotCompress"/>
-  <w:compat>
-    <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
-    <w:compatSetting w:name="overrideTableStyleFontSizeAndJustification" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
-    <w:compatSetting w:name="enableOpenTypeFeatures" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
-    <w:compatSetting w:name="differentiateMultirowTableHeaders" w:uri="http://schemas.microsoft.com/office/word" w:val="1"/>
-  </w:compat>
-  <w:themeFontLang w:val="en-US" w:eastAsia="ko-KR"/>
-</w:settings>`;
-
-const webSettingsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:webSettings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:optimizeForBrowser/>
-</w:webSettings>`;
-
-const fontTableXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:font w:name="${DOC_FONT}">
-    <w:panose1 w:val="020B0503020000020004"/>
-    <w:charset w:val="81"/>
-    <w:family w:val="swiss"/>
-    <w:pitch w:val="variable"/>
-  </w:font>
-  <w:font w:name="Times New Roman">
-    <w:panose1 w:val="02020603050405020304"/>
-    <w:charset w:val="00"/>
-    <w:family w:val="roman"/>
-    <w:pitch w:val="variable"/>
-  </w:font>
-</w:fonts>`;
-
-const themeXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">
-  <a:themeElements>
-    <a:clrScheme name="Office">
-      <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
-      <a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
-      <a:dk2><a:srgbClr val="1F1F1F"/></a:dk2>
-      <a:lt2><a:srgbClr val="F2F2F2"/></a:lt2>
-      <a:accent1><a:srgbClr val="1565C0"/></a:accent1>
-      <a:accent2><a:srgbClr val="F2CF27"/></a:accent2>
-      <a:accent3><a:srgbClr val="1F8A5B"/></a:accent3>
-      <a:accent4><a:srgbClr val="E53935"/></a:accent4>
-      <a:accent5><a:srgbClr val="7E57C2"/></a:accent5>
-      <a:accent6><a:srgbClr val="00897B"/></a:accent6>
-      <a:hlink><a:srgbClr val="0000FF"/></a:hlink>
-      <a:folHlink><a:srgbClr val="800080"/></a:folHlink>
-    </a:clrScheme>
-    <a:fontScheme name="Office">
-      <a:majorFont>
-        <a:latin typeface="${DOC_FONT}"/>
-        <a:ea typeface="${DOC_FONT}"/>
-        <a:cs typeface="${DOC_FONT}"/>
-        <a:font script="Hang" typeface="${DOC_FONT}"/>
-      </a:majorFont>
-      <a:minorFont>
-        <a:latin typeface="${DOC_FONT}"/>
-        <a:ea typeface="${DOC_FONT}"/>
-        <a:cs typeface="${DOC_FONT}"/>
-        <a:font script="Hang" typeface="${DOC_FONT}"/>
-      </a:minorFont>
-    </a:fontScheme>
-    <a:fmtScheme name="Office">
-      <a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst>
-      <a:lnStyleLst><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln></a:lnStyleLst>
-      <a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst>
-      <a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst>
-    </a:fmtScheme>
-  </a:themeElements>
-</a:theme>`;
-
-const corePropertiesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:creator>ONSIDE</dc:creator>
-  <cp:lastModifiedBy>ONSIDE</cp:lastModifiedBy>
-  <dcterms:created xsi:type="dcterms:W3CDTF">2026-07-04T00:00:00Z</dcterms:created>
-  <dcterms:modified xsi:type="dcterms:W3CDTF">2026-07-04T00:00:00Z</dcterms:modified>
-</cp:coreProperties>`;
-
-const appPropertiesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>ONSIDE</Application>
-  <DocSecurity>0</DocSecurity>
-  <ScaleCrop>false</ScaleCrop>
-</Properties>`;
-
-const makeDocx = (body: string[], options?: DocOptions) => {
-  const zip = new PizZip();
-  zip.file("[Content_Types].xml", contentTypesXml);
-  zip.folder("_rels").file(".rels", rootRelationshipsXml);
-  zip.folder("docProps").file("core.xml", corePropertiesXml);
-  zip.folder("docProps").file("app.xml", appPropertiesXml);
-  const word = zip.folder("word");
-  word.file("document.xml", documentXml(body, options));
-  word.folder("_rels").file("document.xml.rels", documentRelationshipsXml);
-  word.file("styles.xml", stylesXml);
-  word.file("settings.xml", settingsXml);
-  word.file("webSettings.xml", webSettingsXml);
-  word.file("fontTable.xml", fontTableXml);
-  word.folder("theme").file("theme1.xml", themeXml);
-  return zip.generate({ type: "nodebuffer", compression: "DEFLATE" });
-};
-
-const headerCell = (text: DocText, colspan = 1): TableCell => ({
-  text,
-  options: {
-    colspan,
-    bold: true,
-    align: "center",
-    fill: "EDEDED",
-    size: 10,
-  },
-});
-
-const valueCell = (text: DocText | DocText[], colspan = 1, size = 10): TableCell => ({
-  text,
-  options: { colspan, align: "center", size },
-});
-
-const formLabelCell = (text: DocText, colspan = 1): TableCell => ({
-  text,
-  options: { colspan, align: "center", size: 11 },
-});
-
-const formValueCell = (
-  text: DocText | DocText[],
-  colspan = 1,
-  align: "left" | "center" | "right" = "center",
-): TableCell => ({
-  text,
-  options: { colspan, align, size: 11 },
-});
-
-const isBlank = (value: DocText) => !String(value ?? "").trim();
-
-const lyricText = (track: TrackDocData) =>
-  isBlank(track.lyrics_display) ? "가사 없음 / Instrumental" : track.lyrics_display;
-
-const compactLyricLines = (value: DocText | DocText[]) =>
-  cleanLines(value)
-    .map((line) => line.replace(/[ \t]+$/g, ""))
-    .reduce<string[]>((lines, line) => {
-      if (!line.trim() && !lines[lines.length - 1]?.trim()) return lines;
-      lines.push(line);
-      return lines;
-    }, []);
-
-export function createSongReviewRequestDocx(data: SubmissionDocData) {
-  const rowHeights = [
-    650,
-    650,
-    540,
-    540,
-    420,
-    520,
-    ...data.tracks.map(() => 620),
-  ];
-  const rows: TableCell[][] = [
-    [
-      headerCell("음반제목", 2),
-      valueCell(data.album_title, 2),
-      headerCell("발매일"),
-      valueCell(data.release_date_long),
-      headerCell("기획사(제작사)"),
-      valueCell(data.review_company, 2),
-    ],
-    [
-      headerCell("제작일", 2),
-      valueCell(data.production_date_long, 2),
-      headerCell("유통사"),
-      valueCell(data.distributor),
-      headerCell("담당자(연락처)"),
-      valueCell([`${data.contact_name}(${data.contact_phone})`, data.contact_email], 2),
-    ],
-    [headerCell("음반장르", 2), valueCell(data.genre_checkbox_line, 7)],
-    [
-      headerCell("심의요청곡수", 2),
-      valueCell(data.track_count_label, 2),
-      headerCell("음반형태", 2),
-      valueCell("디지털■  일반□  컴필□", 3),
-    ],
-    [
-      valueCell(
-        `(음반형태가 디지털앨범일 경우) 디지털음원  ${data.track_count} 곡은 CD로 유통하지 않고 온라인, 모바일을 통해 디지털로만 유통되고 있음을 증명합니다.`,
-        9,
-      ),
-    ],
-    [
-      headerCell("트랙"),
-      headerCell("곡명"),
-      headerCell("곡장르"),
-      headerCell("가수"),
-      headerCell("피처링"),
-      headerCell("편곡"),
-      headerCell("작사"),
-      headerCell("작곡"),
-      headerCell("연주가(악기명)"),
-    ],
-    ...data.tracks.map((track) => [
-      valueCell(track.track_no_padded),
-      valueCell(track.track_title),
-      valueCell(data.genre),
-      valueCell(data.artist_name),
-      valueCell(track.featuring),
-      valueCell(track.arranger),
-      valueCell(track.lyricist_display),
-      valueCell(track.composer),
-      valueCell(track.performer),
-    ]),
-  ];
-
-  return makeDocx(
-    [
-      paragraph("- 가요 심의 요청 양식 -", {
-        align: "center",
-        bold: true,
-        size: 14,
-        spacingAfter: 120,
-      }),
-      paragraph(
-        `접수일자 :  ${data.today_long}                                                                       음반접수용(KBS가요심의곡)`,
-        { size: 10, spacingAfter: 140 },
-      ),
-      table(rows, {
-        align: "center",
-        width: 15000,
-        columns: [900, 3000, 1500, 1700, 1500, 1500, 1500, 1500, 1900],
-        rowHeights,
-        cellMargins: { top: 60, right: 80, bottom: 60, left: 80 },
-      }),
-      paragraph(""),
-      paragraph(
-        "※ 저작권법에서는 저작물(음반)에 대한 저작자(작곡자, 작사자)와 실연자(가수, 연주자, 지휘자)의 성명을 표시하도록 하고 있습니다.(저작권법 제12조, 제66조)",
-        { size: 9 },
-      ),
-      paragraph(
-        "음반에 대한 저작자와 실연자의 성명 또는 예명을 기재하지 않을 경우 이들의 성명표시권 침해가 되어 법적 분쟁이 발생될 수 있으니 번거로우시더라도 음반 심의 신청 시 작곡자, 작사자, 편곡자, 피쳐링, 가수와 곡연자주(연주악기명)의 성명 또는 예명을 필히 기재하여 주시기 바랍니다.",
-        { size: 9 },
-      ),
-    ],
-    {
-      landscape: true,
-      margin: { top: 400, right: 700, bottom: 400, left: 700 },
-    },
-  );
 }
 
-export function createReviewFormDocx(data: SubmissionDocData, title: string) {
-  void title;
+const REQUIRED_TEMPLATE_MARKERS: Record<string, string[]> = {
+  "song-review-request.docx": [
+    "{#tracks}",
+    "{/tracks}",
+    "{album_title}",
+    "{production_company_for_review}",
+  ],
+  "review-form.docx": [
+    "{#tracks}",
+    "{/tracks}",
+    "{album_title}",
+    "{company_name}",
+    "{lyrics_with_translation}",
+  ],
+  "lyrics-all.docx": [
+    "{#tracks}",
+    "{/tracks}",
+    "{manager_name}",
+    "{lyrics_with_translation}",
+  ],
+  "lyrics-track.docx": [
+    "{manager_name}",
+    "{track_title_with_title_mark}",
+    "{lyrics_with_translation}",
+  ],
+  "tbs-integrated.docx": [
+    "{#albums}",
+    "{/albums}",
+    "{company_actual}",
+    "{release_date_md}",
+  ],
+  "wbs-integrated.docx": [
+    "{#albums}",
+    "{/albums}",
+    "{company_actual}",
+    "{review_songs_text}",
+  ],
+  "pbc-integrated.docx": [
+    "{#albums}",
+    "{/albums}",
+    "{album_title}",
+    "{company_actual}",
+  ],
+};
 
-  const body: string[] = [
-    table(
-      [
-        [
-          {
-            text: data.album_title,
-            options: { colspan: 2, bold: true, align: "center", size: 18 },
-          },
-        ],
-        ...[
-          ["가수명", data.artist_name],
-          ["발매일", data.release_date_short],
-          ["제작일", data.production_date_short],
-          ["기획사", data.company_name as string],
-          ["유통사", data.distributor],
-        ].map(([label, value]) => [formLabelCell(label), formValueCell(value)]),
-      ],
-      {
-        align: "center",
-        width: 9249,
-        columns: [2376, 6873],
-        rowHeights: [1690, 833, 831, 842, 841, 853],
-      },
-    ),
-    paragraph("", { spacingAfter: 4200 }),
-    table(
-      [
-        [formLabelCell("담당자"), formValueCell(data.contact_name)],
-        [formLabelCell("연락처"), formValueCell(data.contact_phone)],
-        [formLabelCell("e-mail"), formValueCell(data.contact_email)],
-      ],
-      {
-        align: "center",
-        width: 4863,
-        columns: [1242, 3621],
-        rowHeights: [558, 558, 558],
-      },
-    ),
-  ];
-
-  data.tracks.forEach((track) => {
-    body.push(pageBreak());
-    body.push(
-      table(
-        [
-          [
-            formLabelCell("트랙번호"),
-            formValueCell(track.track_no_padded),
-            formValueCell(track.track_title_for_docs),
-          ],
-          [formLabelCell("작사", 2), formValueCell(track.lyricist_display)],
-          [formLabelCell("작곡", 2), formValueCell(track.composer)],
-          [formLabelCell("편곡", 2), formValueCell(track.arranger)],
-          [formLabelCell("실연", 2), formValueCell(track.performer)],
-          [
-            {
-              text: lyricText(track),
-              options: { colspan: 3, size: 11, align: "left" },
-            },
-          ],
-        ],
-        {
-          align: "center",
-          width: 9016,
-          columns: [1097, 1098, 6821],
-          rowHeights: [703, 700, 696, 705, 687, 1406],
-        },
-      ),
+const sanitizeTemplateValue = (
+  value: ReviewDocTemplateValue,
+): ReviewDocTemplateValue => {
+  if (typeof value === "string") {
+    return value
+      .normalize("NFC")
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "");
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeTemplateValue(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        sanitizeTemplateValue(item),
+      ]),
     );
-  });
-
-  return makeDocx(body, {
-    margin: { top: 850, right: 907, bottom: 850, left: 907 },
-  });
-}
-
-const lyricHeader = (data: SubmissionDocData, size: number) => [
-  paragraph(`담당자 : ${data.contact_name}`, { size, spacingAfter: 20 }),
-  paragraph(`연락처 : ${data.contact_phone}`, { size, spacingAfter: 160 }),
-  paragraph(`${data.artist_name} - ${data.album_title}  (장르 : ${data.genre})`, {
-    size,
-    bold: true,
-    spacingAfter: 160,
-  }),
-];
-
-const creditLine = (track: TrackDocData) => {
-  const parts = [];
-  if (!track.is_instrumental && track.lyricist_display) parts.push(`작사: ${track.lyricist_display}`);
-  if (track.composer) parts.push(`작곡: ${track.composer}`);
-  if (track.arranger) parts.push(`편곡: ${track.arranger}`);
-  return parts.length ? `(${parts.join("   ")})` : "";
+  }
+  return value;
 };
 
-export function createLyricsAllDocx(data: SubmissionDocData) {
-  const body = lyricHeader(data, 11);
-  data.tracks.forEach((track, index) => {
-    if (index > 0) body.push(paragraph("", { spacingAfter: 80 }));
-    body.push(
-      paragraph(`${track.track_no_padded}. ${track.track_title_for_docs}`, {
-        bold: true,
-        size: 11,
-        keepNext: true,
-        spacingAfter: 40,
-      }),
+export function renderReviewDocTemplate({
+  template,
+  templateName,
+  data,
+}: {
+  template: Buffer;
+  templateName: string;
+  data: Record<string, ReviewDocTemplateValue>;
+}) {
+  try {
+    const zip = new PizZip(template);
+    const document = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+      nullGetter: () => "",
+    });
+    const templateText = document.getFullText();
+    const missingMarkers = (REQUIRED_TEMPLATE_MARKERS[templateName] ?? []).filter(
+      (marker) => !templateText.includes(marker),
     );
-    const credits = creditLine(track);
-    if (credits) body.push(paragraph(credits, { size: 10, spacingAfter: 40 }));
-    body.push(
-      ...compactLyricLines(lyricText(track)).map((line) =>
-        paragraph(line, { size: 10, spacingAfter: 12 }),
-      ),
+    if (missingMarkers.length > 0) {
+      throw new ReviewDocTemplateRenderError(
+        templateName,
+        `필수 placeholder가 없습니다: ${missingMarkers.join(", ")}.`,
+      );
+    }
+
+    document.render(
+      sanitizeTemplateValue(data) as Record<string, ReviewDocTemplateValue>,
     );
-  });
-  return makeDocx(body, { margin: { top: 720, right: 900, bottom: 720, left: 900 } });
-}
 
-export function createLyricsTrackDocx(data: SubmissionDocData, track: TrackDocData) {
-  const body = lyricHeader(data, 11);
-  body.push(
-    paragraph(`${track.track_no_padded}. ${track.track_title_for_docs}`, {
-      bold: true,
-      size: 11,
-      spacingAfter: 60,
-    }),
-  );
-  const credits = creditLine(track);
-  if (credits) body.push(paragraph(credits, { size: 11, spacingAfter: 80 }));
-  body.push(
-    ...compactLyricLines(lyricText(track)).map((line) =>
-      paragraph(line, { size: 11, spacingAfter: 30 }),
-    ),
-  );
-  return makeDocx(body);
-}
-
-export function createTbsIntegratedDocx(submissions: SubmissionDocData[]) {
-  const rows: TableCell[][] = [
-    [
-      headerCell("일자"),
-      headerCell("가수명 / 타이틀명"),
-      headerCell("CD수량"),
-      headerCell("기획사"),
-      headerCell("연락처"),
-      headerCell("비고(발매예정일)"),
-    ],
-    ...submissions.map((item) => [
-      valueCell(item.today_mmdd),
-      valueCell(`${item.artist_name} / ${item.title_track_title}`),
-      valueCell("1"),
-      valueCell(item.actual_company),
-      valueCell(item.contact_phone),
-      valueCell(item.release_date_mmdd),
-    ]),
-  ];
-  return makeDocx(
-    [
-      paragraph("심의 음반 접수 목록", { align: "center", bold: true, size: 16 }),
-      table(rows, {
-        align: "center",
-        width: 9300,
-        columns: [900, 2800, 800, 1900, 1400, 1500],
-        cellMargins: { top: 60, right: 80, bottom: 60, left: 80 },
-      }),
-    ],
-    { margin: { top: 1100, right: 1200, bottom: 900, left: 1200 } },
-  );
-}
-
-export function createWbsIntegratedDocx(submissions: SubmissionDocData[]) {
-  const rows: TableCell[][] = [
-    [
-      headerCell("순서"),
-      headerCell("신청일자"),
-      headerCell("가수"),
-      headerCell("제작사"),
-      headerCell("연락처"),
-      headerCell("심의신청곡"),
-      headerCell("장르"),
-      headerCell("음원 공개일자"),
-      headerCell("신청자"),
-    ],
-    ...submissions.map((item, index) => [
-      valueCell(index + 1),
-      valueCell(item.today_mmdd),
-      valueCell(item.artist_name),
-      valueCell(item.actual_company),
-      valueCell(item.contact_phone),
-      valueCell(item.integrated_song_titles),
-      valueCell(item.genre),
-      valueCell(item.release_date_mmdd),
-      valueCell(item.contact_name),
-    ]),
-  ];
-  return makeDocx(
-    [
-      paragraph(`${submissions[0]?.today_year ?? ""}년 WBS 원음방송 가요심의신청`, {
-        align: "center",
-        bold: true,
-        size: 15,
-      }),
-      paragraph("준비사항 : 앨범 1장(심의제출용), 가사집 1부", { size: 10 }),
-      paragraph("가사집 내 필수기재사항 : 가수, 곡명, 장르, 타이틀곡, 영문가사는 번역본", {
-        size: 10,
-      }),
-      paragraph(
-        "※ 심의 신청 양식 빠짐 없이 기재 부탁드립니다. 심의받을 곡(최대3곡) 누락 시 트랙 1,2,3번으로 심의하겠습니다.",
-        { size: 9 },
-      ),
-      table(rows, {
-        align: "center",
-        width: 15000,
-        columns: [700, 1100, 1600, 1900, 1600, 3100, 1300, 1600, 2100],
-        cellMargins: { top: 60, right: 80, bottom: 60, left: 80 },
-      }),
-    ],
-    { landscape: true, margin: { top: 700, right: 700, bottom: 700, left: 700 } },
-  );
-}
-
-export function createPbcIntegratedDocx(submissions: SubmissionDocData[]) {
-  const rows: TableCell[][] = [
-    [
-      headerCell("일자"),
-      headerCell("가수"),
-      headerCell("신청자"),
-      headerCell("앨범명"),
-      headerCell("타이틀곡명"),
-      headerCell("회사명"),
-      headerCell("연락처"),
-    ],
-    ...submissions.map((item) => [
-      valueCell(item.today_mmdd),
-      valueCell(item.artist_name),
-      valueCell(item.contact_name),
-      valueCell(item.album_title),
-      valueCell(item.title_track_title),
-      valueCell(item.actual_company),
-      valueCell(item.contact_phone),
-    ]),
-  ];
-  return makeDocx(
-    [
-      paragraph("음원심의신청서", { align: "center", bold: true, size: 16 }),
-      table(rows, {
-        align: "center",
-        width: 9300,
-        columns: [900, 1400, 1300, 2200, 1600, 1000, 900],
-        cellMargins: { top: 60, right: 80, bottom: 60, left: 80 },
-      }),
-    ],
-    { margin: { top: 1100, right: 1200, bottom: 900, left: 1200 } },
-  );
+    return document.getZip().generate({
+      type: "nodebuffer",
+      compression: "DEFLATE",
+    });
+  } catch (error) {
+    if (error instanceof ReviewDocTemplateRenderError) throw error;
+    throw new ReviewDocTemplateRenderError(templateName);
+  }
 }

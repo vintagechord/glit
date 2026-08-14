@@ -1,271 +1,244 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { isInicisSuccessCode, requestBillingPayment } from "@/lib/inicis/api";
 import { getBillingConfig } from "@/lib/inicis/config";
+import { readBoundedInicisCallbackForm } from "@/lib/inicis/callback-request";
 import {
-  activateSubscription,
-  getHistoryByOrderId,
-  storeBillingKey,
-  updateHistory,
+  completeClaimedSubscriptionCharge,
+  scrubSubscriptionGatewayPayload,
+  validateSubscriptionBillKeyBinding,
+} from "@/lib/subscriptions/payment-callback";
+import {
+  claimSubscriptionBillingCallback,
+  failSubscriptionBillingCallback,
 } from "@/lib/subscriptions/service";
 import { getBaseUrl, getClientIp } from "../../../../lib/url";
 
-const successRedirect = (baseUrl: string, orderId: string, status: string) =>
-  NextResponse.redirect(
-    `${baseUrl}/subscription/result?orderId=${encodeURIComponent(orderId)}&status=${status}`,
-  );
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-const failureResponse = (
+const redirectToResult = (
   baseUrl: string,
   orderId: string,
-  message: string,
-  statusCode = 400,
-) =>
-  NextResponse.redirect(
-    `${baseUrl}/subscription/result?orderId=${encodeURIComponent(orderId)}&status=fail&message=${encodeURIComponent(message)}`,
-    { status: statusCode },
-  );
-
-const normalizeAmount = (value: string | number | null | undefined) => {
-  if (value == null) return 0;
-  const text = String(value).replace(/,/g, "").trim();
-  if (!text) return 0;
-  const parsed = Number(text);
-  return Number.isFinite(parsed) ? parsed : NaN;
+  status: "success" | "fail" | "pending",
+  message?: string,
+) => {
+  // The result page resolves the owner-bound database row by order ID. Do not
+  // persist gateway/status messages in browser history or proxy access logs.
+  void status;
+  void message;
+  const url = new URL("/subscription/result", baseUrl);
+  url.searchParams.set("orderId", orderId);
+  return NextResponse.redirect(url, 303);
 };
 
-const toCode = (value: string | number | null | undefined, fallback: string) =>
-  value == null ? fallback : String(value);
+const formString = (form: FormData, ...keys: string[]) => {
+  for (const key of keys) {
+    const value = form.get(key);
+    if (typeof value !== "string") continue;
+    const normalized = value.trim();
+    if (normalized) return normalized;
+  }
+  return "";
+};
+
+const formExactString = (form: FormData, ...keys: string[]) => {
+  for (const key of keys) {
+    const value = form.get(key);
+    if (typeof value === "string" && value) return value;
+  }
+  return "";
+};
 
 export async function POST(req: NextRequest) {
   const baseUrl = getBaseUrl(req);
-  const form = await req.formData().catch(() => {
-    const fallback = new FormData();
-    req.nextUrl.searchParams.forEach((value, key) => {
-      fallback.append(key, value);
-    });
-    return fallback;
-  });
-  const callbackPayload = Object.fromEntries(form.entries());
-
-  const orderId = (
-    (form.get("orderid") as string | null) ??
-    (form.get("P_OID") as string | null) ??
-    ""
-  ).trim();
-  const mid = ((form.get("mid") as string | null) ?? "").trim();
-  const resultCode = (
-    (form.get("resultcode") as string | null) ??
-    (form.get("resultCode") as string | null) ??
-    (form.get("P_STATUS") as string | null) ??
-    ""
-  ).trim();
-  const resultMessage = (
-    (form.get("resultMsg") as string | null) ??
-    (form.get("resultmessage") as string | null) ??
-    (form.get("P_RMESG1") as string | null) ??
-    ""
-  ).trim();
-  const billKey = (
-    (form.get("billkey") as string | null) ??
-    (form.get("CARD_BillKey") as string | null) ??
-    (form.get("P_BILLKEY") as string | null) ??
-    ""
-  ).trim();
-  const tid = (
-    (form.get("tid") as string | null) ??
-    (form.get("P_TID") as string | null) ??
-    ""
-  ).trim();
-  const priceRaw = (
-    (form.get("price") as string | null) ??
-    (form.get("P_AMT") as string | null) ??
-    ""
-  ).trim();
-
-  if (!orderId) {
+  const formResult = await readBoundedInicisCallbackForm(req);
+  if (!formResult.ok) {
     return NextResponse.json(
-      { error: "Missing order id in mobile callback" },
+      { error: "Invalid mobile billing callback payload." },
+      { status: formResult.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const form = formResult.form;
+
+  const orderId = formString(form, "orderid", "orderId", "P_OID");
+  const callbackState = formExactString(
+    form,
+    "merchantreserved",
+    "merchantReserved",
+  );
+  const mid = formString(form, "mid", "MID");
+  const resultCode = formString(
+    form,
+    "resultcode",
+    "resultCode",
+    "P_STATUS",
+  );
+  const resultMessage = formString(
+    form,
+    "resultmsg",
+    "resultMsg",
+    "resultmessage",
+    "P_RMESG1",
+  );
+  const callbackPayload = Object.fromEntries(form.entries());
+  const safeCallback = scrubSubscriptionGatewayPayload({
+    callback: callbackPayload,
+  }) as Record<string, unknown>;
+
+  if (!orderId || callbackState.length < 32 || !mid) {
+    return NextResponse.json(
+      { error: "Missing order, merchant state, or MID in mobile callback." },
       { status: 400 },
     );
   }
 
-  const config = getBillingConfig();
-  if (mid && mid !== config.mid) {
-    return failureResponse(baseUrl, orderId, "MID mismatch", 400);
-  }
-
-  const { history, error: historyError } = await getHistoryByOrderId(orderId);
-  if (historyError || !history) {
-    return failureResponse(baseUrl, orderId, "Unknown order id", 404);
-  }
-  if (!history.user_id) {
-    return failureResponse(baseUrl, orderId, "구독 사용자 정보를 찾을 수 없습니다.", 400);
-  }
-
-  const historyPrice = normalizeAmount(history.amount_krw ?? 0);
-  const paidPrice = normalizeAmount(priceRaw ?? 0);
-  const isSuccess = isInicisSuccessCode(resultCode);
-  if (!Number.isFinite(historyPrice) || historyPrice <= 0) {
-    return failureResponse(baseUrl, orderId, "결제 금액이 유효하지 않습니다.", 400);
-  }
-
-  await updateHistory(orderId, {
-    result_code: resultCode || "MOBILE_RETURN",
-    result_message: resultMessage || "모바일 콜백 수신",
-    raw_response: { callback: callbackPayload },
-  });
-
-  if (!isSuccess) {
-    await updateHistory(orderId, {
-      status: "FAILED",
-      result_code: resultCode || "FAIL",
-      result_message: resultMessage || "모바일 결제 실패",
-      raw_response: { callback: callbackPayload },
+  let config: ReturnType<typeof getBillingConfig>;
+  try {
+    config = getBillingConfig();
+  } catch (error) {
+    console.error("[Inicis][subscription-mobile] billing config unavailable", {
+      orderId,
+      message: error instanceof Error ? error.message : "unknown",
     });
-    return failureResponse(
+    return redirectToResult(
       baseUrl,
       orderId,
-      resultMessage || "모바일 결제 실패",
-      400,
+      "fail",
+      "결제 설정을 확인할 수 없습니다.",
     );
   }
 
-  if (!billKey) {
-    await updateHistory(orderId, {
-      status: "FAILED",
-      result_code: "NO_BILLKEY",
-      result_message: "빌링키가 전달되지 않았습니다.",
-      raw_response: { callback: callbackPayload },
-    });
-    return failureResponse(baseUrl, orderId, "빌링키가 없습니다.", 400);
+  if (mid !== config.mid) {
+    return redirectToResult(baseUrl, orderId, "fail", "MID mismatch");
   }
 
-  if (historyPrice > 0 && paidPrice > 0 && historyPrice !== paidPrice) {
-    await updateHistory(orderId, {
-      status: "FAILED",
-      result_code: "PRICE_MISMATCH",
-      result_message: `가격 불일치 (${paidPrice} != ${historyPrice})`,
-      raw_response: { callback: callbackPayload },
-    });
-    return failureResponse(baseUrl, orderId, "결제 금액이 일치하지 않습니다.", 400);
-  }
-
-  if (!tid) {
-    await updateHistory(orderId, {
-      status: "FAILED",
-      result_code: "NO_TID",
-      result_message: "승인 거래번호(TID)를 수신하지 못했습니다.",
-      raw_response: { callback: callbackPayload },
-    });
-    return failureResponse(baseUrl, orderId, "승인 거래번호를 확인할 수 없습니다.", 400);
-  }
-
-  const { billing, error: billingError } = await storeBillingKey({
-    userId: history.user_id,
-    billKey,
-    pgTid: tid,
-    pgMid: config.mid,
-    lastResultCode: resultCode || "0000",
-    lastResultMessage: resultMessage || "빌링키 발급 완료",
-  });
-
-  if (billingError || !billing) {
-    await updateHistory(orderId, {
-      status: "FAILED",
-      result_code: "BILLING_STORE_FAIL",
-      result_message: "빌링키 저장 실패",
-      raw_response: { callback: callbackPayload, billingError },
-    });
-    return failureResponse(baseUrl, orderId, "빌링키 저장 실패", 500);
-  }
-
-  await updateHistory(orderId, {
-    status: "BILLKEY_ISSUED",
-    billing_id: billing.id,
-    result_code: resultCode || "0000",
-    result_message: resultMessage || "빌링키 발급 완료",
-    raw_response: { callback: callbackPayload },
-  });
-
-  const billingResult = await requestBillingPayment({
-    billKey,
+  const claimed = await claimSubscriptionBillingCallback({
     orderId,
-    amountKrw: historyPrice,
-    goodName: history.product_name ?? "Subscription",
-    buyerName: history.product_name ?? "회원",
-    buyerEmail: null,
-    buyerTel: null,
-    clientIp: getClientIp(req),
-    url: baseUrl,
+    callbackState,
+    channel: "MOBILE",
   });
-
-  if (!billingResult.ok || !billingResult.data) {
-    await updateHistory(orderId, {
-      status: "FAILED",
-      result_code: toCode(billingResult.data?.resultCode, "BILLING_FAIL"),
-      result_message:
-        billingResult.data?.resultMsg != null
-          ? String(billingResult.data.resultMsg)
-          : "정기결제(빌링) 요청 실패",
-      raw_response: { callback: callbackPayload, billing: billingResult.data },
+  if (claimed.error || !claimed.claim) {
+    console.warn("[Inicis][subscription-mobile] callback claim rejected", {
+      orderId,
+      code: claimed.error?.code ?? null,
+      message: claimed.error?.message ?? null,
     });
-    return failureResponse(
+    return redirectToResult(
       baseUrl,
       orderId,
-      billingResult.data?.resultMsg != null
-        ? String(billingResult.data.resultMsg)
-        : "첫 결제 승인 실패",
-      400,
+      "fail",
+      "유효하지 않거나 종료된 결제 요청입니다.",
+    );
+  }
+  if (claimed.claim.already_approved) {
+    return redirectToResult(baseUrl, orderId, "success");
+  }
+  if (claimed.claim.already_processing) {
+    return redirectToResult(
+      baseUrl,
+      orderId,
+      "pending",
+      "이미 처리 중인 결제입니다.",
     );
   }
 
-  const billingData = billingResult.data as Record<string, string | number | null | undefined>;
-  const tidPaid = billingData.tid ?? billingData.TID ?? billingData.P_TID ?? billingData.tid;
-  const tidPaidStr = tidPaid != null ? String(tidPaid).trim() : null;
-  if (!tidPaidStr) {
-    await updateHistory(orderId, {
-      status: "FAILED",
-      result_code: "NO_TID",
-      result_message: "빌링 결제 거래번호(TID)를 수신하지 못했습니다.",
-      raw_response: { callback: callbackPayload, billing: billingData },
-    });
-    return failureResponse(baseUrl, orderId, "빌링 결제 거래번호를 확인할 수 없습니다.", 400);
+  const claimToken = claimed.claim.claim_token;
+  if (!claimToken) {
+    return redirectToResult(
+      baseUrl,
+      orderId,
+      "fail",
+      "결제 요청을 확인할 수 없습니다.",
+    );
   }
 
-  const { subscription, error: subscriptionError } = await activateSubscription({
-    userId: history.user_id,
-    billingId: billing.id,
-    amountKrw: historyPrice,
-    productName: history.product_name ?? "Subscription",
-  });
-  if (subscriptionError || !subscription) {
-    await updateHistory(orderId, {
-      status: "FAILED",
-      result_code: "SUBSCRIPTION_ACTIVATE_FAIL",
-      result_message: "구독 활성화에 실패했습니다.",
-      raw_response: {
-        callback: callbackPayload,
-        billing: billingData,
-        subscriptionError,
-      },
+  if (resultCode !== "00") {
+    await failSubscriptionBillingCallback({
+      orderId,
+      claimToken,
+      resultCode: resultCode || "MOBILE_BILLKEY_FAIL",
+      resultMessage: resultMessage || "모바일 빌링키 발급 실패",
+      rawResponse: safeCallback,
     });
-    return failureResponse(baseUrl, orderId, "구독 활성화에 실패했습니다.", 500);
+    return redirectToResult(
+      baseUrl,
+      orderId,
+      "fail",
+      resultMessage || "모바일 결제에 실패했습니다.",
+    );
   }
 
-  await updateHistory(orderId, {
-    status: "APPROVED",
-    pg_tid: tidPaidStr,
-    result_code: toCode(billingData.resultCode, "00"),
-    result_message:
-      billingData.resultMsg != null ? String(billingData.resultMsg) : "결제 완료",
-    raw_response: { callback: callbackPayload, billing: billingData },
-    billing_id: billing.id,
-    subscription_id: subscription.id,
-    paid_at: new Date().toISOString(),
+  const billKey = formString(form, "billkey", "CARD_BillKey", "P_BILLKEY");
+  const issueTid = formString(form, "tid", "P_TID");
+  const callbackAmount = formString(form, "price", "P_AMT");
+  const bindingError = validateSubscriptionBillKeyBinding({
+    expectedOrderId: orderId,
+    expectedAmount: claimed.claim.history_amount_krw,
+    expectedMid: config.mid,
+    actualOrderId: formString(form, "orderid", "orderId", "P_OID"),
+    actualAmount: callbackAmount || null,
+    actualMid: mid,
+    issueTid,
+    requireAmount: false,
   });
 
-  return successRedirect(baseUrl, orderId, "success");
+  if (!billKey || bindingError) {
+    const code = !billKey ? "BILLKEY_MISSING" : bindingError!;
+    await failSubscriptionBillingCallback({
+      orderId,
+      claimToken,
+      resultCode: code,
+      resultMessage: "빌링키 발급 응답 검증에 실패했습니다.",
+      rawResponse: safeCallback,
+    });
+    return redirectToResult(
+      baseUrl,
+      orderId,
+      "fail",
+      "빌링키 발급 응답을 확인할 수 없습니다.",
+    );
+  }
+
+  const completed = await completeClaimedSubscriptionCharge({
+    orderId,
+    claim: claimed.claim,
+    billKey,
+    billKeyIssueTid: issueTid,
+    pgMid: config.mid,
+    cardCode: formString(form, "cardcd", "CARD_Code") || null,
+    cardName: formString(form, "cardname", "CARD_Name") || null,
+    cardNumber: formString(form, "cardno", "CARD_Num") || null,
+    cardQuota: formString(form, "cardquota", "CARD_Quota") || null,
+    issueResultCode: resultCode,
+    issueResultMessage: resultMessage || "빌링키 발급 완료",
+    issueAudit: safeCallback,
+    buyerName: formString(form, "buyername", "buyerName") || null,
+    buyerEmail: formString(form, "buyeremail", "buyerEmail") || null,
+    buyerTel: formString(form, "buyertel", "buyerTel") || null,
+    clientIp: getClientIp(req),
+    baseUrl,
+  });
+
+  if (!completed.ok) {
+    const uncertain =
+      completed.error === "BILLING_OUTCOME_UNKNOWN" ||
+      completed.error === "BILLING_PERSIST_UNKNOWN";
+    return redirectToResult(
+      baseUrl,
+      orderId,
+      uncertain ? "pending" : "fail",
+      uncertain
+        ? "승인 결과를 확인 중입니다. 자동으로 다시 결제하지 마세요."
+        : "첫 정기결제 승인에 실패했습니다.",
+    );
+  }
+
+  return redirectToResult(baseUrl, orderId, "success");
 }
 
-export const GET = POST;
+export function GET() {
+  return NextResponse.json(
+    { error: "Method not allowed." },
+    { status: 405, headers: { Allow: "POST" } },
+  );
+}

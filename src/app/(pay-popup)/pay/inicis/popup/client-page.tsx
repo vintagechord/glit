@@ -3,6 +3,10 @@
 import React from "react";
 
 import { parseInicisContext, type InicisPaymentContext } from "@/lib/inicis/context";
+import {
+  consumeInicisPopupHandoff,
+  type InicisPopupHandoffPayload,
+} from "@/lib/inicis/popup-handoff";
 
 type StdPayInit = {
   ok?: boolean;
@@ -121,35 +125,32 @@ const parseCommaList = (value: string | undefined) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
-const parseGuestTokenPairs = (value: string | undefined) =>
-  parseCommaList(value).reduce<Record<string, string>>((acc, pair) => {
-    const separatorIndex = pair.indexOf(":");
-    if (separatorIndex <= 0) return acc;
-    const submissionId = pair.slice(0, separatorIndex).trim();
-    const token = pair.slice(separatorIndex + 1).trim();
-    if (submissionId && token) {
-      acc[submissionId] = token;
-    }
-    return acc;
-  }, {});
-
 export default function InicisPopupClientPage({ searchParams }: Props) {
   usePopupChromeStyles();
 
-  const ctxValue = firstParam(searchParams.context);
-  const modeValue = firstParam(searchParams.mode);
-  const submissionId = firstParam(searchParams.submissionId);
-  const submissionIdsParam = firstParam(searchParams.submissionIds);
-  const submissionIds = React.useMemo(
-    () => parseCommaList(submissionIdsParam),
-    [submissionIdsParam],
+  const handoffId = firstParam(searchParams.handoff);
+  const [handoff, setHandoff] = React.useState<InicisPopupHandoffPayload | null>(
+    null,
   );
-  const requestId = firstParam(searchParams.requestId);
-  const guestToken = firstParam(searchParams.guestToken);
-  const guestTokensParam = firstParam(searchParams.guestTokens);
+  const [handoffResolved, setHandoffResolved] = React.useState(!handoffId);
+  const ctxValue = handoff?.context ?? (!handoffId ? firstParam(searchParams.context) : undefined);
+  const modeValue = firstParam(searchParams.mode);
+  const submissionId = handoff?.submissionId ?? (!handoffId ? firstParam(searchParams.submissionId) : undefined);
+  const submissionIdsParam = !handoffId
+    ? firstParam(searchParams.submissionIds)
+    : undefined;
+  const submissionIds = React.useMemo(
+    () => handoff?.submissionIds ?? parseCommaList(submissionIdsParam),
+    [handoff?.submissionIds, submissionIdsParam],
+  );
+  const requestId = handoff?.requestId ?? (!handoffId ? firstParam(searchParams.requestId) : undefined);
+  // Guest bearer tokens are accepted only through the one-time same-tab
+  // sessionStorage handoff. Query-string compatibility is intentionally not
+  // provided because URLs are retained in browser and proxy logs.
+  const guestToken = handoff?.guestToken;
   const guestTokensBySubmissionId = React.useMemo(
-    () => parseGuestTokenPairs(guestTokensParam),
-    [guestTokensParam],
+    () => handoff?.guestTokensBySubmissionId ?? {},
+    [handoff?.guestTokensBySubmissionId],
   );
   const debug = firstParam(searchParams.debug) === "1";
 
@@ -159,6 +160,23 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
   const [initData, setInitData] = React.useState<StdPayInit | null>(null);
   const [loadingBarVisible, setLoadingBarVisible] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!handoffId) {
+      setHandoffResolved(true);
+      return;
+    }
+    const payload = consumeInicisPopupHandoff(handoffId);
+    // The nonce is single-use too; remove it from browser history after the
+    // sessionStorage entry has been consumed.
+    window.history.replaceState(null, "", "/pay/inicis/popup");
+    setHandoff(payload);
+    setHandoffResolved(true);
+    if (!payload) {
+      setError("결제 정보가 만료되었거나 이미 사용되었습니다. 다시 시도해주세요.");
+      setLoadingBarVisible(false);
+    }
+  }, [handoffId]);
 
   const triggerPay = React.useCallback(() => {
     if (!initData) return;
@@ -185,13 +203,16 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
 
   React.useEffect(() => {
     let cancelled = false;
+
+    if (!handoffResolved) return;
+    if (handoffId && !handoff) return;
     setError(null);
 
     if (!context) {
-      const rawParams = Object.fromEntries(
-        Object.entries(searchParams).map(([key, value]) => [key, firstParam(value)]),
-      );
-      console.warn("[Inicis][STDPay][popup] invalid context", { ctxValue, rawParams });
+      console.warn("[Inicis][STDPay][popup] invalid context", {
+        context: ctxValue ?? null,
+        paramKeys: Object.keys(searchParams).slice(0, 20),
+      });
       setError("알 수 없는 결제 컨텍스트입니다.");
       setLoadingBarVisible(false);
       return;
@@ -239,7 +260,6 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
           const message = json?.error ?? `초기화 실패 (status ${res.status})`;
           console.error("[Inicis][STDPay][popup][init-error]", {
             status: res.status,
-            body: raw,
             context,
             submissionId,
             guestToken: Boolean(guestToken),
@@ -269,6 +289,9 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
     ctxValue,
     guestToken,
     guestTokensBySubmissionId,
+    handoff,
+    handoffId,
+    handoffResolved,
     isKaraoke,
     requestId,
     searchParams,

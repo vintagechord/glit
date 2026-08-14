@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/format";
 import { updateArtistAction } from "@/features/admin/actions";
@@ -20,6 +21,7 @@ export default async function AdminArtistDetailPage({
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ id?: string | string[]; saved?: string | string[] }>;
 }) {
+  await requireAdminPage();
   // Next 16: params가 Promise로 전달되므로 먼저 언랩한다.
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
@@ -128,10 +130,10 @@ export default async function AdminArtistDetailPage({
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12 space-y-6">
       {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           {artist.thumbnail_url ? (
-            <div className="relative h-16 w-16 overflow-hidden rounded-2xl">
+            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl">
               <Image
                 src={artist.thumbnail_url}
                 alt={artist.name}
@@ -142,15 +144,15 @@ export default async function AdminArtistDetailPage({
               />
             </div>
           ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-200 via-lime-200 to-emerald-400 text-lg font-bold text-emerald-900">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-200 via-lime-200 to-emerald-400 text-lg font-bold text-emerald-900">
               {(artist.name || "A").charAt(0).toUpperCase()}
             </div>
           )}
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               관리자
             </p>
-            <h1 className="font-display mt-1 text-3xl text-foreground">
+            <h1 className="font-display mt-1 break-words text-2xl text-foreground sm:text-3xl">
               {artist.name}
             </h1>
             <p className="text-xs text-muted-foreground">
@@ -211,8 +213,14 @@ export default async function AdminArtistDetailPage({
             연관 심의 조회에 실패했습니다. ({submissionsError})
           </p>
         ) : null}
-        <div className="mt-4 overflow-x-auto">
+        <div
+          className="mt-4 overflow-x-auto"
+          role="region"
+          aria-label="아티스트 관련 심의 목록"
+          tabIndex={0}
+        >
           <table className="min-w-[700px] w-full rounded-[24px] border border-border/60 bg-background/80 text-left text-sm">
+            <caption className="sr-only">아티스트 관련 심의 접수 목록</caption>
             <thead className="border-b border-border/60 bg-muted/40 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-semibold">제목</th>

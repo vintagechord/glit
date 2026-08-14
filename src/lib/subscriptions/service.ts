@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
+
 import { createAdminClient } from "@/lib/supabase/admin";
-import { makeOrderId } from "@/lib/inicis/crypto";
+import { makeOrderId, sha256 } from "@/lib/inicis/crypto";
 
 type HistoryStatus =
   | "REQUESTED"
@@ -10,6 +12,16 @@ type HistoryStatus =
 
 type SubscriptionStatus = "PENDING" | "ACTIVE" | "PAUSED" | "CANCELED" | "FAILED";
 
+export type SubscriptionCallbackClaim = {
+  history_id: string;
+  history_user_id: string;
+  history_amount_krw: number;
+  history_product_name: string | null;
+  claim_token: string | null;
+  already_approved: boolean;
+  already_processing: boolean;
+};
+
 export const createHistoryAttempt = async (params: {
   userId: string;
   amountKrw: number;
@@ -18,6 +30,7 @@ export const createHistoryAttempt = async (params: {
 }) => {
   const admin = createAdminClient();
   const orderId = params.orderId ?? makeOrderId("SUB");
+  const callbackState = randomUUID();
 
   const { data, error } = await admin
     .from("subscription_history")
@@ -27,11 +40,156 @@ export const createHistoryAttempt = async (params: {
       amount_krw: params.amountKrw,
       product_name: params.productName,
       status: "REQUESTED",
+      callback_state_hash: sha256(callbackState),
+      callback_phase: "READY",
     })
     .select("*")
     .single();
 
-  return { orderId, history: data, error };
+  return { orderId, callbackState, history: data, error };
+};
+
+export const claimSubscriptionBillingCallback = async (params: {
+  orderId: string;
+  callbackState: string;
+  channel: "PC" | "MOBILE";
+}) => {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc(
+    "claim_subscription_billing_callback",
+    {
+      p_order_id: params.orderId,
+      p_callback_state: params.callbackState,
+      p_channel: params.channel,
+    },
+  );
+  return {
+    claim:
+      ((data ?? []) as SubscriptionCallbackClaim[])[0] ?? null,
+    error,
+  };
+};
+
+export const recordSubscriptionBillKeyForCallback = async (params: {
+  orderId: string;
+  claimToken: string;
+  billKey: string;
+  billKeyIssueTid: string;
+  pgMid: string;
+  cardCode?: string | null;
+  cardName?: string | null;
+  cardNumber?: string | null;
+  cardQuota?: string | null;
+  resultCode?: string | null;
+  resultMessage?: string | null;
+  rawResponse?: Record<string, unknown> | null;
+}) => {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc(
+    "record_subscription_billkey_for_callback",
+    {
+      p_order_id: params.orderId,
+      p_claim_token: params.claimToken,
+      p_bill_key: params.billKey,
+      p_billkey_issue_tid: params.billKeyIssueTid,
+      p_pg_mid: params.pgMid,
+      p_card_code: params.cardCode ?? null,
+      p_card_name: params.cardName ?? null,
+      p_card_number: params.cardNumber ?? null,
+      p_card_quota: params.cardQuota ?? null,
+      p_result_code: params.resultCode ?? null,
+      p_result_message: params.resultMessage ?? null,
+      p_raw_response: params.rawResponse ?? null,
+    },
+  );
+  return {
+    billing:
+      ((data ?? []) as Array<{
+        billing_id: string;
+        already_recorded: boolean;
+      }>)[0] ?? null,
+    error,
+  };
+};
+
+export const failSubscriptionBillingCallback = async (params: {
+  orderId: string;
+  claimToken: string;
+  resultCode: string;
+  resultMessage: string;
+  rawResponse?: Record<string, unknown> | null;
+}) => {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc(
+    "fail_subscription_billing_callback",
+    {
+      p_order_id: params.orderId,
+      p_claim_token: params.claimToken,
+      p_result_code: params.resultCode,
+      p_result_message: params.resultMessage,
+      p_raw_response: params.rawResponse ?? null,
+    },
+  );
+  const row = ((data ?? []) as Array<{ final_status: string | null }>)[0];
+  return { ok: row?.final_status === "FAILED", error };
+};
+
+export const recordSubscriptionBillingUncertain = async (params: {
+  orderId: string;
+  claimToken: string;
+  resultCode: string;
+  resultMessage: string;
+  rawResponse?: Record<string, unknown> | null;
+}) => {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc(
+    "record_subscription_billing_uncertain",
+    {
+      p_order_id: params.orderId,
+      p_claim_token: params.claimToken,
+      p_result_code: params.resultCode,
+      p_result_message: params.resultMessage,
+      p_raw_response: params.rawResponse ?? null,
+    },
+  );
+  const row = ((data ?? []) as Array<{ recorded: boolean | null }>)[0];
+  return { ok: Boolean(row?.recorded), error };
+};
+
+export const finalizeSubscriptionBillingCallback = async (params: {
+  orderId: string;
+  claimToken: string;
+  billingTid: string;
+  amountKrw: number;
+  resultCode?: string | null;
+  resultMessage?: string | null;
+  rawResponse?: Record<string, unknown> | null;
+  paidAt?: string | null;
+}) => {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc(
+    "finalize_subscription_billing_callback",
+    {
+      p_order_id: params.orderId,
+      p_claim_token: params.claimToken,
+      p_billing_tid: params.billingTid,
+      p_amount_krw: params.amountKrw,
+      p_result_code: params.resultCode ?? null,
+      p_result_message: params.resultMessage ?? null,
+      p_raw_response: params.rawResponse ?? null,
+      p_paid_at: params.paidAt ?? new Date().toISOString(),
+    },
+  );
+  return {
+    finalized:
+      ((data ?? []) as Array<{
+        history_id: string;
+        billing_id: string;
+        subscription_id: string;
+        already_finalized: boolean;
+      }>)[0] ?? null,
+    error,
+  };
 };
 
 export const getHistoryByOrderId = async (orderId: string) => {
@@ -208,7 +366,9 @@ export const getActiveSubscription = async (userId: string) => {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("subscriptions")
-    .select("*, billing:subscription_billing(*)")
+    .select(
+      "id, user_id, status, amount_krw, product_name, started_at, last_billed_at, next_billing_at, canceled_at",
+    )
     .eq("user_id", userId)
     .eq("status", "ACTIVE")
     .maybeSingle();

@@ -190,6 +190,7 @@ html[lang="en"] {
     line-height: var(--app-line-height);
     letter-spacing: var(--app-letter-spacing);
     min-height: 100vh;
+    min-height: 100dvh;
     font-feature-settings: "kern" 1, "liga" 1;
     background-image:
       linear-gradient(var(--bauhaus-grid) 1px, transparent 1px),
@@ -459,6 +460,15 @@ html[lang="en"] {
   }
 }
 
+/* Prevent mobile browsers from zooming the viewport when compact form fields receive focus. */
+@media (max-width: 639px) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 .font-display {
   font-family: var(--font-onside-display);
 }
@@ -486,13 +496,18 @@ html[lang="en"] {
   }
 }
 
-.animate-marquee {
-  animation: marquee 18s linear infinite;
+.promotion-marquee-track {
+  animation: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .animate-marquee {
-    animation: none;
+@media (min-width: 640px) and (prefers-reduced-motion: no-preference) {
+  .promotion-marquee-track {
+    animation: marquee 18s linear infinite;
+  }
+
+  .promotion-marquee-viewport:hover .promotion-marquee-track,
+  .promotion-marquee-viewport:focus-within .promotion-marquee-track {
+    animation-play-state: paused;
   }
 }
 

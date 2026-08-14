@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { ShoppingCart } from "lucide-react";
+import {
+  LogIn,
+  LogOut,
+  ShoppingCart,
+  UserPlus,
+  UserRound,
+} from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -38,9 +44,9 @@ const navLinkClass =
 const mobileNavLinkClass =
   "inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-transparent px-2 py-2 text-center text-[12px] font-black leading-tight tracking-normal transition";
 const subtleButtonClass =
-  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-3 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
+  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-0 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:w-auto sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 const primaryButtonClass =
-  "inline-flex h-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-white dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
+  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-0 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-white dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:w-auto sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 const cartButtonClass =
   "relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:w-11 sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 
@@ -284,9 +290,12 @@ export function SiteHeader() {
       className="sticky top-0 z-[90] isolate border-b-2 border-[#111111] bg-[rgba(247,245,239,0.92)] backdrop-blur-[18px] dark:border-[#f2cf27] dark:bg-[rgba(16,16,16,0.92)]"
     >
       <div className="mx-auto flex w-full max-w-6xl items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6">
-        <SiteLogo />
+        <SiteLogo href={isEnglishRoute ? "/en" : "/"} />
 
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 lg:flex">
+        <nav
+          aria-label={isEnglishRoute ? "Primary navigation" : "주요 메뉴"}
+          className="hidden min-w-0 flex-1 items-center justify-center gap-2 lg:flex"
+        >
           {activeNavLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
             return (
@@ -330,16 +339,31 @@ export function SiteHeader() {
           </ReliableLink>
           {authState === "authenticated" ? (
             <>
-              <form action="/logout" method="post">
-                <button type="submit" className={subtleButtonClass}>
-                  {isEnglishRoute ? "Logout" : "로그아웃"}
+              <form
+                action={isEnglishRoute ? "/logout?next=%2Fen" : "/logout"}
+                method="post"
+                className="shrink-0"
+              >
+                <button
+                  type="submit"
+                  className={subtleButtonClass}
+                  aria-label={isEnglishRoute ? "Logout" : "로그아웃"}
+                >
+                  <LogOut className="h-4 w-4 sm:hidden" aria-hidden="true" />
+                  <span className="hidden sm:inline">
+                    {isEnglishRoute ? "Logout" : "로그아웃"}
+                  </span>
                 </button>
               </form>
               <ReliableLink
                 href={isEnglishRoute ? "/en/mypage/history" : "/mypage/history"}
                 className={subtleButtonClass}
+                aria-label={isEnglishRoute ? "My Page" : "마이페이지"}
               >
-                {isEnglishRoute ? "My Page" : "마이페이지"}
+                <UserRound className="h-4 w-4 sm:hidden" aria-hidden="true" />
+                <span className="hidden sm:inline">
+                  {isEnglishRoute ? "My Page" : "마이페이지"}
+                </span>
               </ReliableLink>
             </>
           ) : (
@@ -347,21 +371,32 @@ export function SiteHeader() {
               <ReliableLink
                 href={isEnglishRoute ? "/en/login" : "/login"}
                 className={subtleButtonClass}
+                aria-label={isEnglishRoute ? "Login" : "로그인"}
               >
-                {isEnglishRoute ? "Login" : "로그인"}
+                <LogIn className="h-4 w-4 sm:hidden" aria-hidden="true" />
+                <span className="hidden sm:inline">
+                  {isEnglishRoute ? "Login" : "로그인"}
+                </span>
               </ReliableLink>
               <ReliableLink
                 href={isEnglishRoute ? "/en/signup" : "/signup"}
                 className={primaryButtonClass}
+                aria-label={isEnglishRoute ? "Sign Up" : "회원가입"}
               >
-                {isEnglishRoute ? "Sign Up" : "회원가입"}
+                <UserPlus className="h-4 w-4 sm:hidden" aria-hidden="true" />
+                <span className="hidden sm:inline">
+                  {isEnglishRoute ? "Sign Up" : "회원가입"}
+                </span>
               </ReliableLink>
             </>
           )}
         </div>
       </div>
 
-      <nav className="border-t-2 border-[#111111] px-3 py-2.5 lg:hidden dark:border-[#f2cf27]">
+      <nav
+        aria-label={isEnglishRoute ? "Mobile navigation" : "모바일 주요 메뉴"}
+        className="border-t-2 border-[#111111] px-3 py-2.5 lg:hidden dark:border-[#f2cf27]"
+      >
         <div className="mx-auto grid w-full max-w-6xl grid-cols-4 gap-1.5 sm:gap-2">
           {activeNavLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);

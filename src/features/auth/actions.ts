@@ -2,13 +2,20 @@
 
 import { z } from "zod";
 import { redirect } from "next/navigation";
+import { headers as nextHeaders } from "next/headers";
 
 import {
   sendPasswordResetEmail,
   sendWelcomeEmail,
 } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
+import { getSafeInternalPath } from "@/lib/safe-internal-path";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { buildUrl, getBaseUrl } from "@/lib/url";
 
 export type ActionState = {
   error?: string;
@@ -63,18 +70,18 @@ const mapSignupError = (
 };
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  next: z.string().optional(),
+  email: z.string().trim().email().max(254),
+  password: z.string().min(8).max(128),
+  next: z.string().max(2048).optional(),
 });
 
 const signupSchema = z.object({
-  name: z.string().trim().optional(),
-  company: z.string().trim().optional(),
-  phone: z.string().trim().optional(),
-  email: z.string().email(),
-  password: z.string().min(8),
-  confirmPassword: z.string().min(8),
+  name: z.string().trim().max(100).optional(),
+  company: z.string().trim().max(200).optional(),
+  phone: z.string().trim().max(40).optional(),
+  email: z.string().trim().email().max(254),
+  password: z.string().min(8).max(128),
+  confirmPassword: z.string().min(8).max(128),
   agreeAge: z.literal("on"),
   agreeTerms: z.literal("on"),
   agreePrivacy: z.literal("on"),
@@ -86,15 +93,21 @@ const signupSchema = z.object({
 });
 
 const profileSchema = z.object({
-  name: z.string().min(2),
-  company: z.string().optional(),
-  phone: z.string().min(7),
+  name: z.string().trim().min(2).max(100),
+  company: z.string().trim().max(200).optional(),
+  phone: z.string().trim().min(7).max(40),
 });
 
 const passwordUpdateSchema = z
   .object({
-    newPassword: z.string().min(8, "비밀번호는 8자 이상 입력해주세요."),
-    confirmPassword: z.string().min(8, "비밀번호는 8자 이상 입력해주세요."),
+    newPassword: z
+      .string()
+      .min(8, "비밀번호는 8자 이상 입력해주세요.")
+      .max(128, "비밀번호는 128자 이하로 입력해주세요."),
+    confirmPassword: z
+      .string()
+      .min(8, "비밀번호는 8자 이상 입력해주세요.")
+      .max(128, "비밀번호는 128자 이하로 입력해주세요."),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     path: ["confirmPassword"],
@@ -109,6 +122,36 @@ function toFieldErrors(
     .filter(([, value]) => Boolean(value));
   return Object.fromEntries(entries) as Record<string, string>;
 }
+
+const checkAuthRateLimit = async ({
+  namespace,
+  email,
+  ipLimit,
+  emailLimit,
+  windowMs,
+}: {
+  namespace: string;
+  email: string;
+  ipLimit: number;
+  emailLimit: number;
+  windowMs: number;
+}) => {
+  const requestHeaders = await nextHeaders();
+  const requestIdentifier = getRequestIdentifier(requestHeaders);
+  const byIp = consumeRateLimit({
+    namespace: `${namespace}-ip`,
+    identifier: requestIdentifier,
+    limit: ipLimit,
+    windowMs,
+  });
+  const byEmail = consumeRateLimit({
+    namespace: `${namespace}-email`,
+    identifier: email,
+    limit: emailLimit,
+    windowMs,
+  });
+  return byIp.allowed && byEmail.allowed;
+};
 
 export async function loginAction(
   _prevState: ActionState,
@@ -127,6 +170,18 @@ export async function loginAction(
     };
   }
 
+  if (
+    !(await checkAuthRateLimit({
+      namespace: "login",
+      email: parsed.data.email,
+      ipLimit: 20,
+      emailLimit: 10,
+      windowMs: 15 * 60 * 1_000,
+    }))
+  ) {
+    return { error: "로그인 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." };
+  }
+
   const supabase = await createServerSupabase();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
 
@@ -139,12 +194,14 @@ export async function loginAction(
     return { error: message };
   }
 
+  const internalNext = getSafeInternalPath(parsed.data.next);
   const safeNext =
-    parsed.data.next &&
-    parsed.data.next.startsWith("/") &&
-    !parsed.data.next.startsWith("//") &&
-    !parsed.data.next.startsWith("/login")
-      ? parsed.data.next
+    internalNext &&
+    internalNext !== "/login" &&
+    !internalNext.startsWith("/login/") &&
+    internalNext !== "/en/login" &&
+    !internalNext.startsWith("/en/login/")
+      ? internalNext
       : null;
 
   redirect(safeNext ?? "/mypage");
@@ -172,6 +229,18 @@ export async function signupAction(
     return {
       fieldErrors: toFieldErrors(parsed.error.flatten().fieldErrors),
     };
+  }
+
+  if (
+    !(await checkAuthRateLimit({
+      namespace: "signup",
+      email: parsed.data.email,
+      ipLimit: 5,
+      emailLimit: 3,
+      windowMs: 60 * 60 * 1_000,
+    }))
+  ) {
+    return { error: "회원가입 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." };
   }
 
   try {
@@ -222,18 +291,25 @@ export async function resetPasswordAction(
   if (!email) {
     return { fieldErrors: { resetEmail: "이메일을 입력해주세요." } };
   }
-  const parsed = z.string().email().safeParse(email);
+  const parsed = z.string().email().max(254).safeParse(email);
   if (!parsed.success) {
     return { fieldErrors: { resetEmail: "유효한 이메일을 입력해주세요." } };
   }
 
+  if (
+    !(await checkAuthRateLimit({
+      namespace: "password-reset",
+      email: parsed.data,
+      ipLimit: 10,
+      emailLimit: 5,
+      windowMs: 60 * 60 * 1_000,
+    }))
+  ) {
+    return { error: "재설정 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." };
+  }
+
   try {
-    const appUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      process.env.NEXT_PUBLIC_APP_URL ??
-      process.env.APP_URL ??
-      "https://onside17.com";
-    const redirectTo = `${appUrl.replace(/\/+$/, "")}/reset-password`;
+    const redirectTo = buildUrl("/reset-password", getBaseUrl());
     let customMailError: string | undefined;
 
     try {

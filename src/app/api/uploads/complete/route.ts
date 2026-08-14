@@ -2,8 +2,20 @@ import { NextResponse } from "next/server";
 import { HeadObjectCommand } from "@aws-sdk/client-s3";
 import { z } from "zod";
 
-import { B2ConfigError, getB2Config, presignGetUrl } from "@/lib/b2";
+import {
+  B2ConfigError,
+  deleteObject,
+  getB2Config,
+  presignGetUrl,
+} from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import { getStorageLogId } from "@/lib/guest-storage-owner";
+import { readBoundedJsonBody } from "@/lib/request-body";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
+import { isSubmissionObjectKeyOwned } from "@/lib/submission-object-key";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -13,16 +25,15 @@ export const maxDuration = 120;
 const schema = z
   .object({
     submissionId: z.string().uuid(),
-    key: z.string().min(1).optional(),
-    objectKey: z.string().min(1).optional(),
-    filename: z.string().min(1).optional(),
-    kind: z.string().optional(),
-    mimeType: z.string().optional(),
+    key: z.string().min(1).max(1024).optional(),
+    objectKey: z.string().min(1).max(1024).optional(),
+    filename: z.string().min(1).max(255).optional(),
+    kind: z.string().max(64).optional(),
+    mimeType: z.string().max(255).optional(),
     sizeBytes: z.number().int().positive(),
-    checksum: z.string().min(8).optional(),
+    checksum: z.string().min(8).max(512).optional(),
     durationSeconds: z.number().nonnegative().optional(),
-    accessUrl: z.string().url().optional(),
-    guestToken: z.string().min(8).optional(),
+    guestToken: z.string().min(8).max(120).optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.key && !data.objectKey) {
@@ -56,13 +67,32 @@ const inferKind = (filename: string | undefined, mimeType: string | undefined): 
   return "ETC";
 };
 
-const keyMatchesSubmission = (key: string, submissionId: string) =>
-  key.includes(`/${submissionId}/`);
-
 export async function POST(request: Request) {
   const startedAt = Date.now();
-  const body = await request.json().catch(() => null);
-  const parsed = schema.safeParse(body);
+  let deleteUnreferencedObjectOnFailure = false;
+  const requestLimit = consumeRateLimit({
+    namespace: "upload-complete-ip",
+    identifier: getRequestIdentifier(request.headers),
+    limit: 60,
+    windowMs: 60 * 60 * 1_000,
+  });
+  if (!requestLimit.allowed) {
+    return NextResponse.json(
+      { error: "업로드 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
+      },
+    );
+  }
+  const body = await readBoundedJsonBody(request, 16 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "업로드 정보를 확인해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = schema.safeParse(body.value);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -84,14 +114,13 @@ export async function POST(request: Request) {
   const normalizedKind = parsed.data.kind
     ? mapKind(parsed.data.kind)
     : inferKind(normalizedFilename, normalizedMime);
-  const providedAccessUrl = parsed.data.accessUrl;
 
   if (!normalizedKey) {
     return NextResponse.json({ error: "업로드 정보를 확인해주세요." }, { status: 400 });
   }
 
   console.info("[Upload][complete] normalized", {
-    submissionId,
+    submissionIdHash: getStorageLogId(submissionId),
     hadKey: Boolean(parsed.data.key),
     hadObjectKey: Boolean(parsed.data.objectKey),
     inferredKind: !parsed.data.kind,
@@ -108,7 +137,17 @@ export async function POST(request: Request) {
     if (error === "FORBIDDEN") {
       return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
     }
-    if (!keyMatchesSubmission(normalizedKey, submissionId)) {
+    const { prefix } = getB2Config();
+    if (
+      !isSubmissionObjectKeyOwned({
+        objectKey: normalizedKey,
+        prefix,
+        submissionId,
+        submissionUserId: submission?.user_id ?? user?.id,
+        guestToken,
+        allowClaimedGuestOwner: Boolean(submission?.user_id),
+      })
+    ) {
       return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
     }
 
@@ -122,6 +161,13 @@ export async function POST(request: Request) {
 
     const contentLength = head.ContentLength ?? 0;
     if (contentLength !== sizeBytes) {
+      await deleteObject(normalizedKey).catch((cleanupError) => {
+        console.error("[Upload][complete] mismatched object cleanup failed", {
+          submissionIdHash: getStorageLogId(submissionId),
+          errorName:
+            cleanupError instanceof Error ? cleanupError.name : "UnknownError",
+        });
+      });
       return NextResponse.json(
         {
           error: "업로드된 파일 크기가 일치하지 않습니다.",
@@ -133,11 +179,8 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
-    let accessUrl: string | null = providedAccessUrl ?? null;
-    if (!accessUrl) {
-      const expires = Number(process.env.B2_ACCESS_URL_EXPIRES_SECONDS ?? "86400");
-      accessUrl = await presignGetUrl(normalizedKey, expires).catch(() => null);
-    }
+    const expires = Number(process.env.B2_ACCESS_URL_EXPIRES_SECONDS ?? "86400");
+    const accessUrl = await presignGetUrl(normalizedKey, expires).catch(() => null);
     const payload = {
       submission_id: submissionId,
       kind: normalizedKind,
@@ -166,7 +209,11 @@ export async function POST(request: Request) {
         .limit(1)
         .maybeSingle();
 
-      if (!existingResult.error && existingResult.data?.id) {
+      if (existingResult.error) {
+        throw new Error(existingResult.error.message);
+      }
+
+      if (existingResult.data?.id) {
         existingId = existingResult.data.id;
       }
 
@@ -199,6 +246,7 @@ export async function POST(request: Request) {
         }
         attachmentId = existingId;
       } else {
+        deleteUnreferencedObjectOnFailure = true;
         let insertPayload = { ...payload } as Record<string, unknown>;
         let inserted:
           | { id?: string | null }
@@ -231,23 +279,28 @@ export async function POST(request: Request) {
         if (insertError) {
           throw new Error(insertError.message || "파일 정보를 저장할 수 없습니다.");
         }
-        attachmentId = inserted?.id ?? null;
+        if (!inserted?.id) {
+          throw new Error("파일 정보를 저장할 수 없습니다.");
+        }
+        attachmentId = inserted.id;
+        deleteUnreferencedObjectOnFailure = false;
       }
     } catch (error) {
       console.error("[Upload][complete] failed to record file", {
-        submissionId,
-        key: normalizedKey,
-        message: error instanceof Error ? error.message : String(error),
+        submissionIdHash: getStorageLogId(submissionId),
+        objectKeyId: getStorageLogId(normalizedKey),
+        errorName: error instanceof Error ? error.name : "UnknownError",
       });
+      throw error;
     }
 
     console.info("[Upload][complete] ok", {
-      submissionId,
+      submissionIdHash: getStorageLogId(submissionId),
       kind: normalizedKind,
-      key: normalizedKey,
+      objectKeyId: getStorageLogId(normalizedKey),
       sizeBytes,
-      etag: head.ETag,
-      user: user?.id ?? null,
+      etagId: head.ETag ? getStorageLogId(head.ETag) : null,
+      userIdHash: user?.id ? getStorageLogId(user.id) : null,
       guest: Boolean(submission?.guest_token ?? guestToken),
       tookMs: Date.now() - startedAt,
     });
@@ -263,18 +316,33 @@ export async function POST(request: Request) {
       accessUrl,
     });
   } catch (error) {
-    const message =
-      error instanceof B2ConfigError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : "업로드 확인 중 오류가 발생했습니다.";
+    if (deleteUnreferencedObjectOnFailure) {
+      const admin = createAdminClient();
+      const referenceResult = await admin
+        .from("submission_files")
+        .select("id")
+        .eq("submission_id", submissionId)
+        .eq("file_path", normalizedKey)
+        .limit(1)
+        .maybeSingle();
+      if (!referenceResult.error && !referenceResult.data) {
+        await deleteObject(normalizedKey).catch(() => undefined);
+      }
+    }
+    const isConfig = error instanceof B2ConfigError;
     console.error("[Upload][complete] error", {
-      submissionId,
+      submissionIdHash: getStorageLogId(submissionId),
       kind: normalizedKind,
-      key: normalizedKey,
-      message,
+      objectKeyId: getStorageLogId(normalizedKey),
+      errorName: error instanceof Error ? error.name : "UnknownError",
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: isConfig
+          ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
+          : "업로드 확인 중 오류가 발생했습니다. 다시 시도해주세요.",
+      },
+      { status: isConfig ? 503 : 500 },
+    );
   }
 }

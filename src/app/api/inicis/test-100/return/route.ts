@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { areServerDevToolsEnabled } from "@/lib/dev-tools";
 import { requestStdPayApproval, isInicisSuccessCode } from "@/lib/inicis/api";
+import { readBoundedInicisCallbackForm } from "@/lib/inicis/callback-request";
 import { getStdPayConfig } from "@/lib/inicis/config";
 import { getBaseUrl } from "@/lib/url";
 
@@ -32,18 +33,18 @@ async function handler(req: NextRequest) {
   }
 
   const baseUrl = getBaseUrl(req);
-  let params: Record<string, string> = {};
-  let formKeys: string[] = [];
-
-  try {
-    const form = await req.formData();
-    formKeys = Array.from(form.keys());
-    params = Object.fromEntries(
-      Array.from(form.entries()).map(([k, v]) => [k, String(v)]),
+  const formResult = await readBoundedInicisCallbackForm(req);
+  if (!formResult.ok) {
+    return NextResponse.json(
+      { error: "Invalid test callback payload." },
+      { status: formResult.reason === "too_large" ? 413 : 400 },
     );
-  } catch (error) {
-    console.warn("[Inicis][STDPay][test-1000][callback] formData parse error", error);
   }
+  const params = Object.fromEntries(formResult.form.entries()) as Record<
+    string,
+    string
+  >;
+  const formKeys = Array.from(formResult.form.keys());
 
   const pick = (k: string) => (typeof params[k] === "string" ? String(params[k]) : "");
   const mask = (v: string) => (!v ? "" : v.length <= 4 ? `${v[0] ?? ""}*` : `${v.slice(0, 4)}***${v.slice(-2)}`);

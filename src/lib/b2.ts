@@ -36,6 +36,17 @@ let cachedConfig:
   | (z.infer<typeof envSchema> & { client: S3Client; signExpiry: number })
   | null = null;
 
+const clampExpirySeconds = (
+  value: number | undefined,
+  fallback: number,
+  maximum: number,
+) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? Math.min(maximum, Math.max(60, Math.trunc(numeric)))
+    : fallback;
+};
+
 export function getB2Config() {
   if (cachedConfig) return cachedConfig;
 
@@ -93,7 +104,11 @@ export function getB2Config() {
     endpoint,
     prefix,
     client,
-    signExpiry: parsed.data.presignExpiresSeconds,
+    signExpiry: clampExpirySeconds(
+      parsed.data.presignExpiresSeconds,
+      900,
+      60 * 60,
+    ),
   };
   return cachedConfig;
 }
@@ -128,12 +143,14 @@ export function buildObjectKey(opts: {
 export async function presignPutUrl(params: {
   objectKey: string;
   contentType?: string;
+  contentLength?: number;
 }) {
   const { client, bucket, signExpiry } = getB2Config();
 
   const command = new PutObjectCommand({
     Bucket: bucket,
     Key: params.objectKey,
+    ContentLength: params.contentLength,
     // ContentType은 서명에 영향을 줄 수 있어서 우선 제외해도 됨.
     // 필요하다면 프론트에서 PUT시 헤더를 아예 빼고, 여기만 세팅하는 식으로 맞추기.
     // ContentType: params.contentType,
@@ -166,6 +183,7 @@ export async function presignUploadPart(params: {
   objectKey: string;
   uploadId: string;
   partNumber: number;
+  contentLength: number;
   expiresInSeconds?: number;
 }) {
   const { client, bucket, signExpiry } = getB2Config();
@@ -174,9 +192,14 @@ export async function presignUploadPart(params: {
     Key: params.objectKey,
     UploadId: params.uploadId,
     PartNumber: params.partNumber,
+    ContentLength: params.contentLength,
   });
   return getSignedUrl(client, command, {
-    expiresIn: params.expiresInSeconds ?? signExpiry,
+    expiresIn: clampExpirySeconds(
+      params.expiresInSeconds,
+      signExpiry,
+      60 * 60,
+    ),
   });
 }
 
@@ -223,7 +246,11 @@ export async function presignGetUrl(objectKey: string, expiresIn?: number) {
     Key: objectKey,
   });
   const url = await getSignedUrl(client, command, {
-    expiresIn: expiresIn ?? signExpiry,
+    expiresIn: clampExpirySeconds(
+      expiresIn,
+      signExpiry,
+      7 * 24 * 60 * 60,
+    ),
   });
   return url;
 }

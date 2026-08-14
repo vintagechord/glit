@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import * as React from "react";
 import { ArrowRight, CreditCard } from "lucide-react";
 import { normalizeStationReviewStatus } from "@/constants/review-status";
@@ -489,6 +490,9 @@ export function HomeReviewPanel({
   initialTab?: TabKey;
   guestToken?: string;
 }) {
+  const pathname = usePathname();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const supabase = React.useMemo(
     () => (isLoggedIn ? createClient() : null),
     [isLoggedIn],
@@ -737,12 +741,13 @@ export function HomeReviewPanel({
 
   const needsPayment =
     Boolean(activeSubmission) && activeSubmission?.payment_status !== "PAID";
+  const isCompactPaymentState = compact && needsPayment;
   const activeSubmissionType =
     activeSubmission?.type ?? (tab === "album" ? "ALBUM" : "MV_DISTRIBUTION");
   const editHref =
     activeSubmissionType === "ALBUM"
-      ? "/dashboard/new/album?from=drafts"
-      : "/dashboard/new/mv?from=drafts";
+      ? `${localePrefix}/dashboard/new/album?from=drafts`
+      : `${localePrefix}/dashboard/new/mv?from=drafts`;
   const prepareActiveSubmissionEdit = React.useCallback(() => {
     if (!viewerId || !activeSubmission) return;
     try {
@@ -774,6 +779,25 @@ export function HomeReviewPanel({
       // Ignore storage failures; the detail/cart paths remain available.
     }
   }, [activeSubmission, activeSubmissionType, viewerId]);
+  const paymentActions = activeSubmission ? (
+    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+      <Link
+        href={editHref}
+        onClick={prepareActiveSubmissionEdit}
+        className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black tracking-normal text-[#111111] shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#fff7cf] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] sm:w-auto sm:min-w-[8.5rem]"
+      >
+        수정하기
+      </Link>
+      <Link
+        href={`${localePrefix}/mypage/cart?focus=${activeSubmission.id}`}
+        className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] hover:shadow-[5px_5px_0_rgba(17,17,17,0.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] dark:text-[#06111f] dark:hover:bg-[#ff7a72] sm:w-auto sm:min-w-[10.5rem]"
+      >
+        <CreditCard aria-hidden="true" className="h-4 w-4" />
+        결제하기
+        <ArrowRight aria-hidden="true" className="h-4 w-4" />
+      </Link>
+    </div>
+  ) : null;
   const totalCount = needsPayment ? 0 : activeStations.length;
   const activeStationDisplayStatuses = activeStations.map((review) =>
     getDisplayStatusForReview(
@@ -826,7 +850,9 @@ export function HomeReviewPanel({
   const tabSpacingClass = compact ? "mt-3" : "mt-4 sm:mt-5";
   const pagerSpacingClass = compact ? "mt-2.5" : "mt-3";
   const bodySpacingClass = compact
-    ? "mt-4 flex flex-1 flex-col gap-3"
+    ? `mt-4 flex flex-1 flex-col gap-3 ${
+        isCompactPaymentState ? "justify-center" : ""
+      }`
     : "mt-5 space-y-4 sm:mt-6 sm:space-y-5";
   const sectionPaddingClass = compact ? "p-3" : "p-4";
   const stationSectionClass = compact ? "flex flex-1 flex-col" : "";
@@ -875,12 +901,12 @@ export function HomeReviewPanel({
 
   const openSubmissionDownload = React.useCallback(
     async (submissionId: string, assetPath: MvReviewAssetPath) => {
-      const params = new URLSearchParams();
-      if (guestToken) params.set("guestToken", guestToken);
-      const query = params.toString();
       await downloadEndpointFile(
-        `/api/submissions/${submissionId}/${assetPath}${query ? `?${query}` : ""}`,
+        `/api/submissions/${submissionId}/${assetPath}`,
         mvReviewFallbackFilenames[assetPath],
+        guestToken
+          ? { headers: { "X-Submission-Guest-Token": guestToken } }
+          : undefined,
       );
     },
     [guestToken],
@@ -1145,67 +1171,60 @@ export function HomeReviewPanel({
         <div className={`rounded-2xl border border-dashed border-border/80 bg-background/70 ${sectionPaddingClass}`}>
           <p className="sr-only">접수 현황</p>
           {activeSubmission ? (
-            <div className={progressBodyClass}>
-              <div className={`rounded-xl border border-border/60 bg-background/80 ${innerCardPaddingClass}`}>
-                <div className="flex items-center justify-between gap-3 text-sm font-semibold text-foreground">
-                  <span className="min-w-0 truncate">{progressText}</span>
-                  {currentSubmissionStatus ? (
-                    <span
-                      className={`bauhaus-status-chip bauhaus-status-chip--compact shrink-0 ${currentSubmissionStatus.tone}`}
-                    >
-                      {currentSubmissionStatus.label}
-                    </span>
-                  ) : null}
+            isCompactPaymentState ? (
+              <div className="rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-3 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm font-black sm:text-base">결제 대기</p>
+                  {paymentActions}
                 </div>
-                <div
-                  className="mt-2 h-2 w-full rounded-full bg-muted"
-                  role="progressbar"
-                  aria-label="심의 완료율"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={progressPercent}
-                >
+              </div>
+            ) : (
+              <div className={progressBodyClass}>
+                <div className={`rounded-xl border border-border/60 bg-background/80 ${innerCardPaddingClass}`}>
+                  <div className="flex items-center justify-between gap-3 text-sm font-semibold text-foreground">
+                    <span className="min-w-0 truncate">{progressText}</span>
+                    {currentSubmissionStatus ? (
+                      <span
+                        className={`bauhaus-status-chip bauhaus-status-chip--compact shrink-0 ${currentSubmissionStatus.tone}`}
+                      >
+                        {currentSubmissionStatus.label}
+                      </span>
+                    ) : null}
+                  </div>
                   <div
-                    className="h-2 rounded-full bg-primary transition-all dark:bg-[#2997ff]"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-                {needsPayment && activeSubmission ? (
-                  <div className="mt-4 rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-3 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-black uppercase tracking-normal">
-                          결제 대기
-                        </p>
-                        <p className="mt-1 text-sm font-black sm:text-base">
-                          결제가 완료되지 않았습니다.
-                        </p>
-                        <p className="mt-1 text-xs font-semibold text-[#111111]/72">
-                          결제 후 심의가 진행됩니다.
-                        </p>
-                      </div>
-                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                        <Link
-                          href={editHref}
-                          onClick={prepareActiveSubmissionEdit}
-                          className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black tracking-normal text-[#111111] shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#fff7cf] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] sm:w-auto sm:min-w-[8.5rem]"
-                        >
-                          수정하기
-                        </Link>
-                        <Link
-                          href={`/mypage/cart?focus=${activeSubmission.id}`}
-                          className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] hover:shadow-[5px_5px_0_rgba(17,17,17,0.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] dark:text-[#06111f] dark:hover:bg-[#ff7a72] sm:w-auto sm:min-w-[10.5rem]"
-                        >
-                          <CreditCard aria-hidden="true" className="h-4 w-4" />
-                          결제하기
-                          <ArrowRight aria-hidden="true" className="h-4 w-4" />
-                        </Link>
+                    className="mt-2 h-2 w-full rounded-full bg-muted"
+                    role="progressbar"
+                    aria-label="심의 완료율"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={progressPercent}
+                  >
+                    <div
+                      className="h-2 rounded-full bg-primary transition-all dark:bg-[#2997ff]"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                  {needsPayment ? (
+                    <div className="mt-4 rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-3 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-black uppercase tracking-normal">
+                            결제 대기
+                          </p>
+                          <p className="mt-1 text-sm font-black sm:text-base">
+                            결제가 완료되지 않았습니다.
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-[#111111]/72">
+                            결제 후 심의가 진행됩니다.
+                          </p>
+                        </div>
+                        {paymentActions}
                       </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
               </div>
-            </div>
+            )
           ) : (
             <div className="mt-2 rounded-xl border border-border/60 bg-background/80 px-3 py-3">
               <p className="text-sm font-semibold text-foreground">
@@ -1230,178 +1249,180 @@ export function HomeReviewPanel({
           )}
         </div>
 
-        <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass} ${stationSectionClass}`}>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                방송국별 현황
-              </p>
-              {!needsPayment && latestStationUpdatedAt ? (
-                <p
-                  className="mt-1 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
-                  title={formatDate(latestStationUpdatedAt)}
-                  aria-label={`Updated ${formatDate(latestStationUpdatedAt)}`}
-                >
-                  Updated{" "}
-                  <span className="text-foreground/72">
-                    {formatDate(latestStationUpdatedAt)}
-                  </span>
+        {!isCompactPaymentState ? (
+          <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass} ${stationSectionClass}`}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  방송국별 현황
                 </p>
-              ) : null}
+                {!needsPayment && latestStationUpdatedAt ? (
+                  <p
+                    className="mt-1 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
+                    title={formatDate(latestStationUpdatedAt)}
+                    aria-label={`Updated ${formatDate(latestStationUpdatedAt)}`}
+                  >
+                    Updated{" "}
+                    <span className="text-foreground/72">
+                      {formatDate(latestStationUpdatedAt)}
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrev}
+                  disabled={needsPayment || !canScrollUp}
+                  className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0`}
+                  aria-label="이전 방송국 상태"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={needsPayment || !canScrollDown}
+                  className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0`}
+                  aria-label="다음 방송국 상태"
+                >
+                  ↓
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handlePrev}
-                disabled={needsPayment || !canScrollUp}
-                className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0`}
-                aria-label="이전 방송국 상태"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                onClick={handleNext}
-                disabled={needsPayment || !canScrollDown}
-                className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0`}
-                aria-label="다음 방송국 상태"
-              >
-                ↓
-              </button>
-            </div>
-          </div>
-          <div className={stationTableShellClass}>
-            {!needsPayment && activeStations.length > 0 ? (
-              <div
-                ref={stationListRef}
-                className={`overflow-y-auto overscroll-contain ${listPaddingClass} touch-pan-y ${
-                  isMouseDraggingList
-                    ? "cursor-grabbing select-none"
-                    : "cursor-auto sm:cursor-grab"
-                }`}
-                style={{ maxHeight: `${listViewportHeight}px` }}
-                onScroll={handleStationListScroll}
-                onPointerDown={handleStationListPointerDown}
-                onPointerMove={handleStationListPointerMove}
-                onPointerUp={handleStationListPointerUp}
-                onPointerCancel={handleStationListPointerCancel}
-                onPointerLeave={handleStationListPointerCancel}
-              >
-                <div className={stationGridClass}>
-                  {activeStations.map((station, index) => {
-                    const currentStatus = getStationReviewDisplayStatus(
-                      station,
-                      { showPartialTrackBreakdown },
-                    );
-                    const summary = currentStatus.summary;
-                    const canOpenResultModal = shouldOpenResultModal(
-                      station,
-                      summary,
-                      activeSubmission,
-                    );
-                    const displayStatus = getDisplayStatusForReview(
-                      currentStatus,
-                      activeSubmission,
-                    );
-                    const stationName = getStationName(station.station);
-                    return (
-                      <div
-                        key={`${station.id}-${index}`}
-                        className={stationCardClass}
-                      >
+            <div className={stationTableShellClass}>
+              {!needsPayment && activeStations.length > 0 ? (
+                <div
+                  ref={stationListRef}
+                  className={`overflow-y-auto overscroll-contain ${listPaddingClass} touch-pan-y ${
+                    isMouseDraggingList
+                      ? "cursor-grabbing select-none"
+                      : "cursor-auto sm:cursor-grab"
+                  }`}
+                  style={{ maxHeight: `${listViewportHeight}px` }}
+                  onScroll={handleStationListScroll}
+                  onPointerDown={handleStationListPointerDown}
+                  onPointerMove={handleStationListPointerMove}
+                  onPointerUp={handleStationListPointerUp}
+                  onPointerCancel={handleStationListPointerCancel}
+                  onPointerLeave={handleStationListPointerCancel}
+                >
+                  <div className={stationGridClass}>
+                    {activeStations.map((station, index) => {
+                      const currentStatus = getStationReviewDisplayStatus(
+                        station,
+                        { showPartialTrackBreakdown },
+                      );
+                      const summary = currentStatus.summary;
+                      const canOpenResultModal = shouldOpenResultModal(
+                        station,
+                        summary,
+                        activeSubmission,
+                      );
+                      const displayStatus = getDisplayStatusForReview(
+                        currentStatus,
+                        activeSubmission,
+                      );
+                      const stationName = getStationName(station.station);
+                      return (
                         <div
-                          className={stationInfoClass}
-                          title={stationName}
+                          key={`${station.id}-${index}`}
+                          className={stationCardClass}
                         >
-                          <StationLogo
-                            station={station.station ?? undefined}
-                            compact={compact}
-                          />
-                          <div className="min-w-0">
-                            <span className={stationNameClass}>
-                              {stationName}
-                            </span>
-                            {!canOpenResultModal && displayStatus.summaryText ? (
-                              <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground">
-                                {displayStatus.summaryText}
+                          <div
+                            className={stationInfoClass}
+                            title={stationName}
+                          >
+                            <StationLogo
+                              station={station.station ?? undefined}
+                              compact={compact}
+                            />
+                            <div className="min-w-0">
+                              <span className={stationNameClass}>
+                                {stationName}
                               </span>
-                            ) : null}
+                              {!canOpenResultModal && displayStatus.summaryText ? (
+                                <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground">
+                                  {displayStatus.summaryText}
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
+                          {canOpenResultModal ? (
+                            <button
+                              type="button"
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onClick={() =>
+                                setTrackResultModal(
+                                  buildResultModalState(
+                                    station,
+                                    summary,
+                                    displayStatus,
+                                    activeSubmission,
+                                  ),
+                                )
+                              }
+                              className={`bauhaus-status-chip bauhaus-status-chip--compact ${stationStatusActionClass} shrink-0 flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
+                            >
+                              <span>{displayStatus.label}</span>
+                              {displayStatus.summaryText ? (
+                                <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
+                                  {displayStatus.summaryText}
+                                </span>
+                              ) : null}
+                            </button>
+                          ) : (
+                            <span
+                              className={`bauhaus-status-chip bauhaus-status-chip--compact ${stationStatusActionClass} shrink-0 flex-col ${displayStatus.tone}`}
+                            >
+                              <span>{displayStatus.label}</span>
+                              {displayStatus.summaryText ? (
+                                <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
+                                  {displayStatus.summaryText}
+                                </span>
+                              ) : null}
+                            </span>
+                          )}
                         </div>
-                        {canOpenResultModal ? (
-                          <button
-                            type="button"
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={() =>
-                              setTrackResultModal(
-                                buildResultModalState(
-                                  station,
-                                  summary,
-                                  displayStatus,
-                                  activeSubmission,
-                                ),
-                              )
-                            }
-                            className={`bauhaus-status-chip bauhaus-status-chip--compact ${stationStatusActionClass} shrink-0 flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
-                          >
-                            <span>{displayStatus.label}</span>
-                            {displayStatus.summaryText ? (
-                              <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                {displayStatus.summaryText}
-                              </span>
-                            ) : null}
-                          </button>
-                        ) : (
-                          <span
-                            className={`bauhaus-status-chip bauhaus-status-chip--compact ${stationStatusActionClass} shrink-0 flex-col ${displayStatus.tone}`}
-                          >
-                            <span>{displayStatus.label}</span>
-                            {displayStatus.summaryText ? (
-                              <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                {displayStatus.summaryText}
-                              </span>
-                            ) : null}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className={stationEmptyClass}>
-                {isRemoteError
-                  ? "심의 현황을 불러오지 못했습니다."
-                  : needsPayment
-                    ? "입금 확인 후 방송국별 현황이 표시됩니다."
-                    : "방송국별 현황이 없습니다."}
-              </div>
-            )}
-          </div>
-          {activeSubmission && showDetailLink ? (
-            <div className="mt-4 flex justify-center">
-              <Link
-                href={`/dashboard/submissions/${activeSubmission.id}`}
-                className="rounded-full border border-primary bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground shadow-[0_12px_28px_rgba(0,113,227,0.18)] transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
-              >
-                자세히 보기
-              </Link>
+              ) : (
+                <div className={stationEmptyClass}>
+                  {isRemoteError
+                    ? "심의 현황을 불러오지 못했습니다."
+                    : needsPayment
+                      ? "입금 확인 후 방송국별 현황이 표시됩니다."
+                      : "방송국별 현황이 없습니다."}
+                </div>
+              )}
             </div>
-          ) : null}
-        </div>
+            {activeSubmission && showDetailLink ? (
+              <div className="mt-4 flex justify-center">
+                <Link
+                  href={`${localePrefix}/dashboard/submissions/${activeSubmission.id}`}
+                  className="rounded-full border border-primary bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground shadow-[0_12px_28px_rgba(0,113,227,0.18)] transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+                >
+                  자세히 보기
+                </Link>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
       </div>
 
       {trackResultModal ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4"
           onClick={() => setTrackResultModal(null)}
           role="dialog"
           aria-modal="true"
           aria-label={`${trackResultModal.stationName} 심의 결과`}
         >
           <div
-            className="w-full max-w-lg rounded-2xl border border-border/60 bg-background p-4 shadow-xl sm:p-6"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-border/60 bg-background p-4 shadow-xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">

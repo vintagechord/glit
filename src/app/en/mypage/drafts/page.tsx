@@ -1,12 +1,12 @@
 import {
-  defaultDashboardTabs,
+  englishDefaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
 import { DraftSubmissionsPageView } from "@/app/dashboard/drafts/page";
 
 export { metadata } from "@/app/mypage/drafts/page";
 
-const tabs: DashboardTab[] = defaultDashboardTabs;
+const tabs: DashboardTab[] = englishDefaultDashboardTabs;
 
 export default async function EnglishMyPageDraftsPage() {
   return DraftSubmissionsPageView({

@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
+import { readBoundedJsonBody } from "@/lib/request-body";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -10,7 +15,9 @@ export const dynamic = "force-dynamic";
 
 const schema = z.object({
   type: z.enum(["ALBUM", "MV_DISTRIBUTION", "MV_BROADCAST"]).default("ALBUM"),
-  guestToken: z.string().min(8).optional(),
+  // New guest drafts must use a cryptographically random identifier. Legacy
+  // lookup tokens remain supported by read/edit routes.
+  guestToken: z.string().uuid().optional(),
 });
 
 const draftStatuses = ["DRAFT", "PRE_REVIEW"] as const;
@@ -35,7 +42,9 @@ async function findExistingDraftId(
   if (params.userId) {
     query = query.eq("user_id", params.userId);
   } else if (params.guestToken) {
-    query = query.eq("guest_token", params.guestToken);
+    query = query
+      .is("user_id", null)
+      .eq("guest_token", params.guestToken);
   }
 
   const { data } = await query.maybeSingle();
@@ -43,8 +52,29 @@ async function findExistingDraftId(
 }
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null);
-  const parsed = schema.safeParse(body ?? {});
+  const requestLimit = consumeRateLimit({
+    namespace: "submission-draft-create-ip",
+    identifier: getRequestIdentifier(request.headers),
+    limit: 60,
+    windowMs: 60 * 60 * 1_000,
+  });
+  if (!requestLimit.allowed) {
+    return NextResponse.json(
+      { error: "초안 생성 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
+      },
+    );
+  }
+  const body = await readBoundedJsonBody(request, 8 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "요청 정보를 확인해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = schema.safeParse(body.value ?? {});
   if (!parsed.success) {
     return NextResponse.json({ error: "요청 정보를 확인해주세요." }, { status: 400 });
   }

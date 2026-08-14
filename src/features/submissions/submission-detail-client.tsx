@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 import {
   normalizeStationReviewStatus,
@@ -530,6 +530,9 @@ export function SubmissionDetailClient({
   refreshIntervalMs?: number;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const supabase = React.useMemo(
     () => (enableRealtime ? createClient() : null),
     [enableRealtime],
@@ -657,12 +660,12 @@ export function SubmissionDetailClient({
         : stationReviews;
   const openSubmissionDownload = React.useCallback(
     async (assetPath: MvReviewAssetPath) => {
-      const params = new URLSearchParams();
-      if (guestToken) params.set("guestToken", guestToken);
-      const query = params.toString();
       await downloadEndpointFile(
-        `/api/submissions/${submission.id}/${assetPath}${query ? `?${query}` : ""}`,
+        `/api/submissions/${submission.id}/${assetPath}`,
         mvReviewFallbackFilenames[assetPath],
+        guestToken
+          ? { headers: { "X-Submission-Guest-Token": guestToken } }
+          : undefined,
       );
     },
     [guestToken, submission.id],
@@ -744,7 +747,7 @@ export function SubmissionDetailClient({
     );
   const canRetryCardPayment =
     submission.payment_method !== "BANK" && submission.payment_status !== "PAID";
-  const retryPaymentHref = `/mypage/cart?focus=${submission.id}`;
+  const retryPaymentHref = `${localePrefix}/mypage/cart?focus=${submission.id}`;
   const openCartForPayment = () => {
     if (guestToken) {
       addGuestSubmissionCartEntries([
@@ -1392,14 +1395,19 @@ export function SubmissionDetailClient({
         </div>
       ) : null}
       {showPaymentInfo ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 py-4">
           <button
             type="button"
             onClick={() => setShowPaymentInfo(false)}
             className="absolute inset-0 bg-black/50"
             aria-label="결제 안내 닫기"
           />
-          <div className="relative z-10 w-full max-w-xl rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="결제 안내"
+            className="relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-6"
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className={detailKickerClass}>
@@ -2096,11 +2104,14 @@ export function SubmissionDetailClient({
 
       {trackResultModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4"
           onClick={() => setTrackResultModal(null)}
         >
           <div
-            className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]"
+            role="dialog"
+            aria-modal="true"
+            aria-label={trackResultModal.mvReviewAssets ? "심의 결과" : "트랙별 결과"}
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-5 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <p className={detailKickerClass}>
@@ -2250,11 +2261,14 @@ export function SubmissionDetailClient({
 
       {radioLinksModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4"
           onClick={closeRadioLinks}
         >
           <div
-            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="라디오 신청 제안"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-5 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <p className={detailKickerClass}>

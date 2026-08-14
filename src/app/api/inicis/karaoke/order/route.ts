@@ -1,22 +1,74 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 import { createKaraokePaymentOrder, ensureKaraokeRequestOwner } from "@/lib/payments/karaoke";
 import { getBaseUrl } from "@/lib/url";
 import { parseInicisContext } from "@/lib/inicis/context";
+import { readBoundedJsonBody } from "@/lib/request-body";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
+
+const requestSchema = z
+  .object({
+    requestId: z.string().uuid(),
+    context: z.literal("karaoke"),
+  })
+  .strict();
 
 export async function POST(req: NextRequest) {
+  const ipLimit = consumeRateLimit({
+    namespace: "inicis-karaoke-order-ip",
+    identifier: getRequestIdentifier(req.headers),
+    limit: 20,
+    windowMs: 15 * 60 * 1_000,
+  });
+  if (!ipLimit.allowed) {
+    return NextResponse.json(
+      { error: "결제 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(ipLimit.retryAfterSeconds) },
+      },
+    );
+  }
   try {
-    const body = await req.json().catch(() => ({}));
-    const requestId = String(body.requestId ?? "").trim();
-    const context = parseInicisContext(body.context);
+    const body = await readBoundedJsonBody(req, 16 * 1024);
+    if (!body.ok) {
+      return NextResponse.json(
+        { error: "결제 요청 정보를 확인해주세요." },
+        { status: body.reason === "too_large" ? 413 : 400 },
+      );
+    }
+    const parsed = requestSchema.safeParse(body.value);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "결제 요청 정보를 확인해주세요." },
+        { status: 400 },
+      );
+    }
+    const requestId = parsed.data.requestId;
+    const requestLimit = consumeRateLimit({
+      namespace: "inicis-karaoke-order-request",
+      identifier: requestId,
+      limit: 10,
+      windowMs: 15 * 60 * 1_000,
+    });
+    if (!requestLimit.allowed) {
+      return NextResponse.json(
+        { error: "결제 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
+        },
+      );
+    }
+    const context = parseInicisContext(parsed.data.context);
 
     if (!context || context !== "karaoke") {
       return NextResponse.json({ error: "context가 올바르지 않습니다." }, { status: 400 });
     }
-    if (!requestId) {
-      return NextResponse.json({ error: "requestId가 필요합니다." }, { status: 400 });
-    }
-
     const ownership = await ensureKaraokeRequestOwner(requestId);
     if (ownership.error === "UNAUTHORIZED") {
       return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { presignGetUrl } from "@/lib/b2";
 import { createAttachmentResponseFromUrl } from "@/lib/download-response";
@@ -37,6 +38,9 @@ export async function GET(
   }
 
   const { id: submissionId } = await context.params;
+  if (!z.string().uuid().safeParse(submissionId).success) {
+    return NextResponse.json({ error: "유효하지 않은 접수 ID입니다." }, { status: 400 });
+  }
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("submissions")

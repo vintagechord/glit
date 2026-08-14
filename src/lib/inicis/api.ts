@@ -105,6 +105,69 @@ type InicisApprovalResult = {
   error?: unknown;
 };
 
+type InicisNetCancelResult = {
+  ok: boolean;
+  data: InicisResponseData | null;
+  error?: unknown;
+};
+
+const buildStdAuthFormBody = (authToken: string, timestamp: string) => {
+  const { mid } = getStdPayConfig();
+  return new URLSearchParams({
+    mid,
+    authToken,
+    signature: makeAuthRequestSignature({ authToken, timestamp }),
+    timestamp,
+    charset: "UTF-8",
+    format: "JSON",
+  });
+};
+
+export async function requestStdPayNetCancel({
+  netCancelUrl,
+  authToken,
+  timestamp,
+}: {
+  netCancelUrl?: string | null;
+  authToken: string;
+  timestamp: string;
+}): Promise<InicisNetCancelResult> {
+  if (
+    !netCancelUrl ||
+    !isTrustedInicisUrl(netCancelUrl) ||
+    !authToken.trim() ||
+    !timestamp.trim()
+  ) {
+    return {
+      ok: false,
+      data: null,
+      error: new Error("망취소 요청 정보가 유효하지 않습니다."),
+    };
+  }
+
+  try {
+    const response = await fetchWithTimeout(netCancelUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: buildStdAuthFormBody(authToken, timestamp),
+      cache: "no-store",
+    });
+    const data = await readJsonBody(response);
+    const resultCode =
+      data?.resultCode ?? data?.resultcode ?? data?.P_STATUS ?? null;
+    const gatewayAccepted =
+      resultCode == null || isInicisSuccessCode(resultCode);
+    return {
+      ok: response.ok && gatewayAccepted,
+      data,
+    };
+  } catch (error) {
+    return { ok: false, data: null, error };
+  }
+}
+
 export async function requestStdPayApproval({
   authUrl,
   netCancelUrl,
@@ -150,34 +213,11 @@ export async function requestStdPayApproval({
   }
 
   const { mid, signKey } = getStdPayConfig();
-  const signature = makeAuthRequestSignature({ authToken, timestamp });
-  const payload = {
-    mid,
-    authToken,
-    signature,
-    timestamp,
-    charset: "UTF-8",
-    format: "JSON",
-  };
-
-  const formBody = new URLSearchParams(
-    Object.entries(payload).map(([k, v]) => [k, String(v ?? "")]),
-  );
+  const formBody = buildStdAuthFormBody(authToken, timestamp);
 
   const doNetCancel = async () => {
     if (!netCancelUrl || skipNetCancel) return null;
-    try {
-      await fetchWithTimeout(netCancelUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: formBody,
-        cache: "no-store",
-      });
-    } catch {
-      // swallow network cancel errors
-    }
+    await requestStdPayNetCancel({ netCancelUrl, authToken, timestamp });
     return null;
   };
 
@@ -327,7 +367,10 @@ export async function requestBillingPayment(payload: BillingRequest): Promise<{
     const dataResponse = await readJsonBody(res);
     const resultCode =
       dataResponse?.resultCode != null ? String(dataResponse.resultCode) : "";
-    const ok = res.ok && (resultCode === "00" || resultCode === "01");
+    // KG Inicis documents only "00" as a successful billing approval.
+    // Treat every other code as a failure so an unapproved response can never
+    // activate a subscription.
+    const ok = res.ok && resultCode === "00";
 
     return { ok, data: dataResponse };
   } catch (error) {

@@ -1,4 +1,8 @@
 import { type InicisPaymentContext } from "@/lib/inicis/context";
+import {
+  createInicisPopupHandoff,
+  type InicisPopupHandoffPayload,
+} from "@/lib/inicis/popup-handoff";
 
 export type InicisPopupContext = InicisPaymentContext;
 
@@ -13,14 +17,7 @@ type StdPayInit = {
   error?: string;
 };
 
-type OpenPopupOptions = {
-  context: InicisPopupContext;
-  submissionId?: string;
-  submissionIds?: string[];
-  guestToken?: string;
-  guestTokensBySubmissionId?: Record<string, string>;
-  orderId?: string;
-  requestId?: string;
+type OpenPopupOptions = InicisPopupHandoffPayload & {
   popupName?: string;
   preferRedirectOnMobile?: boolean;
 };
@@ -176,21 +173,16 @@ const isMobileUa = (ua: string) =>
   /iphone|ipad|ipod|android|windows phone|mobile/i.test(ua);
 
 const buildPopupUrl = (options: OpenPopupOptions) => {
-  const params = new URLSearchParams({ mode: "card", context: options.context });
-  if (options.submissionId) params.set("submissionId", options.submissionId);
-  if (options.submissionIds?.length) {
-    params.set("submissionIds", options.submissionIds.join(","));
-  }
-  if (options.guestToken) params.set("guestToken", options.guestToken);
-  if (options.guestTokensBySubmissionId) {
-    const tokenPairs = Object.entries(options.guestTokensBySubmissionId)
-      .filter(([, token]) => token)
-      .map(([submissionId, token]) => `${submissionId}:${token}`);
-    if (tokenPairs.length) params.set("guestTokens", tokenPairs.join(","));
-  }
-  if (options.orderId) params.set("orderId", options.orderId);
-  if (options.requestId) params.set("requestId", options.requestId);
-  return `/pay/inicis/popup?${params.toString()}`;
+  const handoff = createInicisPopupHandoff({
+    context: options.context,
+    submissionId: options.submissionId,
+    submissionIds: options.submissionIds,
+    guestToken: options.guestToken,
+    guestTokensBySubmissionId: options.guestTokensBySubmissionId,
+    orderId: options.orderId,
+    requestId: options.requestId,
+  });
+  return `/pay/inicis/popup?handoff=${encodeURIComponent(handoff)}`;
 };
 
 const fetchStdPayInit = async (
@@ -324,8 +316,15 @@ export const openInicisCardPopup = async (
 
   const { preferRedirectOnMobile = true } = options;
   if (preferRedirectOnMobile && isMobileUa(window.navigator.userAgent || "")) {
-    window.location.assign(buildPopupUrl(options));
-    return { ok: true, redirected: true };
+    try {
+      window.location.assign(buildPopupUrl(options));
+      return { ok: true, redirected: true };
+    } catch {
+      return {
+        ok: false,
+        error: "모바일 결제 정보를 안전하게 전달하지 못했습니다. 다시 시도해주세요.",
+      };
+    }
   }
 
   try {

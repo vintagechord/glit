@@ -16,6 +16,21 @@ export const statusDashboardTabs: DashboardTab[] = [
   { key: "history", label: "나의 심의 내역", href: "/dashboard/history" },
 ];
 
+const prefixTabHrefs = (tabs: DashboardTab[], prefix: string) =>
+  tabs.map((tab) => ({
+    ...tab,
+    href: `${prefix}${tab.href}`,
+  }));
+
+export const englishDefaultDashboardTabs: DashboardTab[] = prefixTabHrefs(
+  defaultDashboardTabs,
+  "/en",
+);
+export const englishStatusDashboardTabs: DashboardTab[] = prefixTabHrefs(
+  statusDashboardTabs,
+  "/en",
+);
+
 export function DashboardShell({
   title,
   description,

@@ -1,6 +1,17 @@
-import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { clearDashboardStatusCache } from "@/lib/dashboard-status";
+import {
+  cleanupDeletedSubmissionB2Objects,
+  loadSubmissionB2ObjectRefs,
+} from "@/lib/submission-file-cleanup";
+import { readBoundedJsonBody } from "@/lib/request-body";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -9,12 +20,15 @@ export const dynamic = "force-dynamic";
 
 const schema = z.object({
   type: z.enum(["ALBUM", "MV"]),
-  ids: z.array(z.string().uuid()).optional(),
-  guestToken: z.string().min(8).optional(),
+  ids: z.array(z.string().uuid()).max(100).optional(),
+  guestToken: z.string().min(8).max(120).optional(),
+  guestTokensBySubmissionId: z
+    .record(z.string().uuid(), z.string().min(8).max(120))
+    .optional(),
 });
 
 const deleteSchema = schema.extend({
-  ids: z.array(z.string().uuid()).min(1),
+  ids: z.array(z.string().uuid()).min(1).max(100),
 });
 
 const selectAlbumColumns = [
@@ -164,9 +178,44 @@ const dropColumnFromSelect = (selectClause: string, column: string) =>
     .filter((item) => !item.includes(column))
     .join(",");
 
+const getDraftRateLimitResponse = (
+  request: Request,
+  namespace: string,
+  limit: number,
+) => {
+  const result = consumeRateLimit({
+    namespace,
+    identifier: getRequestIdentifier(request.headers),
+    limit,
+    windowMs: 15 * 60 * 1_000,
+  });
+  return result.allowed
+    ? null
+    : NextResponse.json(
+        { error: "임시저장 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(result.retryAfterSeconds) },
+        },
+      );
+};
+
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null);
-  const parsed = schema.safeParse(body ?? {});
+  const rateLimitResponse = getDraftRateLimitResponse(
+    request,
+    "submission-drafts-read-ip",
+    120,
+  );
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const body = await readBoundedJsonBody(request, 32 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "요청 정보를 확인해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = schema.safeParse(body.value ?? {});
   if (!parsed.success) {
     return NextResponse.json({ error: "요청 정보를 확인해주세요." }, { status: 400 });
   }
@@ -177,9 +226,29 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   const isGuest = !user;
-  if (isGuest && !parsed.data.guestToken) {
+  const guestTokensBySubmissionId =
+    parsed.data.guestTokensBySubmissionId ?? {};
+  const guestTokenEntries = Object.entries(guestTokensBySubmissionId);
+  const guestTokens = Array.from(
+    new Set(guestTokenEntries.map(([, token]) => token)),
+  );
+  if (guestTokenEntries.length > 100) {
+    return NextResponse.json({ error: "요청 정보를 확인해주세요." }, { status: 400 });
+  }
+  if (
+    isGuest &&
+    !parsed.data.guestToken &&
+    guestTokenEntries.length === 0
+  ) {
     return NextResponse.json({ error: "로그인 또는 게스트 토큰이 필요합니다." }, { status: 401 });
   }
+  const requestedIds = Array.from(
+    new Set(
+      parsed.data.ids?.length
+        ? parsed.data.ids
+        : guestTokenEntries.map(([submissionId]) => submissionId),
+    ),
+  );
 
   const admin = createAdminClient();
   let selectClause =
@@ -203,17 +272,23 @@ export async function POST(request: Request) {
       submissionQuery.in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
     }
 
-    if (parsed.data.ids && parsed.data.ids.length > 0) {
-      submissionQuery.in("id", parsed.data.ids);
+    if (requestedIds.length > 0) {
+      submissionQuery.in("id", requestedIds);
     }
 
     if (user?.id) {
       submissionQuery.eq("user_id", user.id);
+    } else if (guestTokenEntries.length > 0) {
+      submissionQuery
+        .is("user_id", null)
+        .in("guest_token", guestTokens);
     } else if (parsed.data.guestToken) {
-      submissionQuery.eq("guest_token", parsed.data.guestToken);
+      submissionQuery
+        .is("user_id", null)
+        .eq("guest_token", parsed.data.guestToken);
     }
 
-    submissionQuery.order("updated_at", { ascending: false }).limit(10);
+    submissionQuery.order("updated_at", { ascending: false }).limit(100);
     submissionResult = await submissionQuery;
     if (!submissionResult.error) {
       break;
@@ -250,9 +325,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "임시 저장 정보를 불러올 수 없습니다." }, { status: 500 });
   }
 
-  const submissions = (submissionResult.data ?? []) as unknown as Array<
+  const loadedSubmissions = (submissionResult.data ?? []) as unknown as Array<
     Record<string, unknown>
   >;
+  const submissions =
+    isGuest && guestTokenEntries.length > 0
+      ? loadedSubmissions.filter((row) => {
+          const submissionId = String(row.id ?? "");
+          return (
+            !row.user_id &&
+            typeof row.guest_token === "string" &&
+            guestTokensBySubmissionId[submissionId] === row.guest_token
+          );
+        })
+      : loadedSubmissions;
   const submissionIds = submissions
     .map((row) => String(row.id ?? ""))
     .filter(Boolean);
@@ -378,8 +464,21 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const body = await request.json().catch(() => null);
-  const parsed = deleteSchema.safeParse(body ?? {});
+  const rateLimitResponse = getDraftRateLimitResponse(
+    request,
+    "submission-drafts-delete-ip",
+    60,
+  );
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const body = await readBoundedJsonBody(request, 32 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "요청 정보를 확인해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = deleteSchema.safeParse(body.value ?? {});
   if (!parsed.success) {
     return NextResponse.json({ error: "요청 정보를 확인해주세요." }, { status: 400 });
   }
@@ -390,11 +489,71 @@ export async function DELETE(request: Request) {
   } = await supabase.auth.getUser();
 
   const isGuest = !user;
-  if (isGuest && !parsed.data.guestToken) {
+  const guestTokensBySubmissionId =
+    parsed.data.guestTokensBySubmissionId ?? {};
+  const guestTokenEntries = Object.entries(guestTokensBySubmissionId);
+  const guestTokens = Array.from(
+    new Set(guestTokenEntries.map(([, token]) => token)),
+  );
+  if (guestTokenEntries.length > 100) {
+    return NextResponse.json({ error: "요청 정보를 확인해주세요." }, { status: 400 });
+  }
+  if (
+    isGuest &&
+    !parsed.data.guestToken &&
+    guestTokenEntries.length === 0
+  ) {
     return NextResponse.json({ error: "로그인 또는 게스트 토큰이 필요합니다." }, { status: 401 });
   }
 
   const admin = createAdminClient();
+  const requestedIds = Array.from(new Set(parsed.data.ids));
+  let eligibilityQuery = admin
+    .from("submissions")
+    .select("id, user_id, guest_token")
+    .or(incompletePaymentFilter)
+    .in("status", deletableDraftStatuses)
+    .in("id", requestedIds);
+
+  eligibilityQuery =
+    parsed.data.type === "ALBUM"
+      ? eligibilityQuery.eq("type", "ALBUM")
+      : eligibilityQuery.in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
+  eligibilityQuery = user?.id
+    ? eligibilityQuery.eq("user_id", user.id)
+    : guestTokenEntries.length > 0
+      ? eligibilityQuery
+          .is("user_id", null)
+          .in("guest_token", guestTokens)
+      : eligibilityQuery
+          .is("user_id", null)
+          .eq("guest_token", parsed.data.guestToken as string);
+
+  const { data: eligibleRows, error: eligibilityError } = await eligibilityQuery;
+  if (eligibilityError) {
+    return NextResponse.json(
+      { error: "삭제할 임시저장 항목을 확인하지 못했습니다." },
+      { status: 500 },
+    );
+  }
+  const authorizedEligibleRows =
+    isGuest && guestTokenEntries.length > 0
+      ? (eligibleRows ?? []).filter(
+          (row) =>
+            !row.user_id &&
+            typeof row.guest_token === "string" &&
+            guestTokensBySubmissionId[row.id] === row.guest_token,
+        )
+      : (eligibleRows ?? []);
+  if (authorizedEligibleRows.length !== requestedIds.length) {
+    return NextResponse.json(
+      { error: "삭제할 수 없는 임시저장 항목이 포함되어 있습니다." },
+      { status: 409 },
+    );
+  }
+
+  const b2ObjectRefs = await loadSubmissionB2ObjectRefs(admin, requestedIds);
+
   const deleteQuery = admin
     .from("submissions")
     .delete()
@@ -407,18 +566,48 @@ export async function DELETE(request: Request) {
     deleteQuery.in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
   }
 
-  deleteQuery.in("id", parsed.data.ids);
+  deleteQuery.in("id", requestedIds);
 
   if (user?.id) {
     deleteQuery.eq("user_id", user.id);
+  } else if (guestTokenEntries.length > 0) {
+    deleteQuery
+      .is("user_id", null)
+      .in("guest_token", guestTokens);
   } else {
-    deleteQuery.eq("guest_token", parsed.data.guestToken as string);
+    deleteQuery
+      .is("user_id", null)
+      .eq("guest_token", parsed.data.guestToken as string);
   }
 
-  const { error } = await deleteQuery;
+  const { data: deletedRows, error } = await deleteQuery.select("id");
   if (error) {
     return NextResponse.json({ error: "임시저장 삭제에 실패했습니다." }, { status: 500 });
   }
+  const deletedIds = (deletedRows ?? []).map((row) => String(row.id));
+  if (deletedIds.length > 0 && b2ObjectRefs.length > 0) {
+    after(() =>
+      cleanupDeletedSubmissionB2Objects(admin, b2ObjectRefs, deletedIds),
+    );
+  }
+  if ((deletedRows ?? []).length !== requestedIds.length) {
+    return NextResponse.json(
+      { error: "일부 임시저장 항목이 변경되어 삭제하지 못했습니다." },
+      { status: 409 },
+    );
+  }
+
+  if (user) {
+    clearDashboardStatusCache(user.id);
+  }
+  revalidatePath("/dashboard");
+  revalidatePath("/mypage");
+  revalidatePath("/dashboard/drafts");
+  revalidatePath("/mypage/drafts");
+  revalidatePath("/en/dashboard");
+  revalidatePath("/en/mypage");
+  revalidatePath("/en/dashboard/drafts");
+  revalidatePath("/en/mypage/drafts");
 
   return NextResponse.json({ ok: true });
 }

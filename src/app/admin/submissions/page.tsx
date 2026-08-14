@@ -20,6 +20,7 @@ import {
 } from "@/constants/review-status";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
 import {
   ReviewDocsBulkToolbar,
@@ -163,6 +164,7 @@ type SubmissionRow = {
   payment_currency?: string | null;
   payment_amount?: number | null;
   created_from?: string | null;
+  is_oneclick?: boolean | null;
   package?:
     | Array<{ name?: string | null }>
     | { name?: string | null }
@@ -205,9 +207,9 @@ export default async function AdminSubmissionsPage({
       : 1;
   const offset = (page - 1) * PAGE_SIZE;
   const baseSelect =
-    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, package:packages ( name )";
+    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, package:packages ( name )";
   const globalSelect =
-    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
+    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
   const globalGuestSelect = `${globalSelect}, guest_name`;
 
   const buildQuery = (
@@ -317,7 +319,11 @@ export default async function AdminSubmissionsPage({
 
   const isDraftView = filters.status === "DRAFT";
   const reviewDocSelectableIds =
-    activeType === "ALBUM" ? submissions.map((submission) => submission.id) : [];
+    activeType === "ALBUM"
+      ? submissions
+          .filter((submission) => !submission.is_oneclick)
+          .map((submission) => submission.id)
+      : [];
 
   const buildPageHref = (targetPage: number) => {
     const params = new URLSearchParams(
@@ -328,6 +334,19 @@ export default async function AdminSubmissionsPage({
     params.set("page", String(targetPage));
     return `/admin/submissions?${params.toString()}`;
   };
+
+  const currentListParams = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (key === "page" || !value) return;
+    currentListParams.set(key, value);
+  });
+  if (page > 1) currentListParams.set("page", String(page));
+  const currentListHref = `/admin/submissions?${currentListParams.toString()}`;
+  const buildDetailHref = (submissionId: string) =>
+    buildAdminSubmissionDetailPath({
+      submissionId,
+      returnTo: currentListHref,
+    });
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
@@ -562,16 +581,24 @@ export default async function AdminSubmissionsPage({
                       : "lg:grid-cols-[minmax(0,1.45fr)_minmax(190px,0.75fr)_minmax(190px,0.75fr)_auto]",
                   ].join(" ")}
                 >
-                  {activeType === "ALBUM" ? (
+                  {activeType === "ALBUM" && !submission.is_oneclick ? (
                     <ReviewDocsRowCheckbox
                       id={submission.id}
                       label={submission.title || "제목 미입력"}
                     />
+                  ) : activeType === "ALBUM" ? (
+                    <span
+                      className="mt-1 inline-flex h-4 w-4 items-center justify-center text-[10px] font-black text-muted-foreground"
+                      title="원클릭 접수는 자동 생성 대상이 아닙니다."
+                      aria-label="원클릭 접수 자동 생성 제외"
+                    >
+                      —
+                    </span>
                   ) : null}
                   <div className="min-w-0">
                     <Link
                       prefetch={false}
-                      href={`/admin/submissions/${submission.id}`}
+                      href={buildDetailHref(submission.id)}
                       className="block min-w-0 text-base font-black leading-6 text-foreground hover:underline"
                     >
                       <span className="block truncate">
@@ -640,7 +667,7 @@ export default async function AdminSubmissionsPage({
                     <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                       <Link
                         prefetch={false}
-                        href={`/admin/submissions/${submission.id}`}
+                        href={buildDetailHref(submission.id)}
                         className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-border bg-background px-3 text-[11px] font-black text-foreground transition hover:border-[#111111] dark:hover:border-[#f2cf27]"
                       >
                         상세보기

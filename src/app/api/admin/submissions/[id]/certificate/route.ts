@@ -1,7 +1,8 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
-import { B2ConfigError, getB2Config, sanitizeFileName } from "@/lib/b2";
+import { B2ConfigError, deleteObject, getB2Config, sanitizeFileName } from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -15,6 +16,22 @@ const ALLOWED_TYPES = new Set([
   "image/jpeg",
 ]);
 const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+
+const detectCertificateMimeType = (body: Buffer) => {
+  if (body.subarray(0, 5).toString("ascii") === "%PDF-") return "application/pdf";
+  if (
+    body.length >= 8 &&
+    body.subarray(0, 8).equals(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    )
+  ) {
+    return "image/png";
+  }
+  if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) {
+    return "image/jpeg";
+  }
+  return null;
+};
 
 const normalizeUploadedFilename = (value: string) => {
   const trimmed = value.trim();
@@ -73,12 +90,22 @@ export async function POST(
   if (!req.body) {
     return NextResponse.json({ error: "업로드 데이터를 찾을 수 없습니다." }, { status: 400 });
   }
+  const contentLength = Number(req.headers.get("content-length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_SIZE_BYTES + 64 * 1024) {
+    return NextResponse.json(
+      { error: "파일 크기가 허용 범위를 초과했습니다." },
+      { status: 413 },
+    );
+  }
 
   const { id: submissionId } = await context.params;
+  if (!z.string().uuid().safeParse(submissionId).success) {
+    return NextResponse.json({ error: "유효하지 않은 접수 ID입니다." }, { status: 400 });
+  }
   const admin = createAdminClient();
   const { data: submission } = await admin
     .from("submissions")
-    .select("id, type")
+    .select("id, type, certificate_b2_path")
     .eq("id", submissionId)
     .maybeSingle();
 
@@ -141,6 +168,13 @@ export async function POST(
   try {
     const { client, bucket } = getB2Config();
     const body = Buffer.from(await fileValue.arrayBuffer());
+    const detectedMimeType = detectCertificateMimeType(body);
+    if (!detectedMimeType || detectedMimeType !== mimeType) {
+      return NextResponse.json(
+        { error: "파일 내용과 형식이 일치하지 않습니다." },
+        { status: 400 },
+      );
+    }
 
     await client.send(
       new PutObjectCommand({
@@ -164,7 +198,23 @@ export async function POST(
       .eq("id", submissionId);
 
     if (updateError) {
+      await deleteObject(uploadedObjectKey).catch((cleanupError) => {
+        console.warn("[certificate][upload] rollback delete failed", {
+          uploadedObjectKey,
+          cleanupError,
+        });
+      });
       return NextResponse.json({ error: "필증 정보를 저장하지 못했습니다." }, { status: 500 });
+    }
+
+    const previousObjectKey = submission.certificate_b2_path?.trim();
+    if (previousObjectKey && previousObjectKey !== uploadedObjectKey) {
+      await deleteObject(previousObjectKey).catch((cleanupError) => {
+        console.warn("[certificate][upload] previous delete failed", {
+          previousObjectKey,
+          cleanupError,
+        });
+      });
     }
 
     return NextResponse.json({

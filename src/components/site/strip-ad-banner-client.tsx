@@ -110,7 +110,8 @@ function normalizeHref(input?: string | null): string | null {
   if (!input) return null;
   let raw = input.trim();
   if (!raw) return null;
-  if (raw.startsWith("/")) return raw;
+  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  if (raw.startsWith("//")) return null;
   if (/^(mailto:|tel:|sms:)/i.test(raw)) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
   if (/^https?\/\/+/i.test(raw)) {
@@ -133,7 +134,7 @@ function normalizeHref(input?: string | null): string | null {
     raw = raw.replace(/^ht+tps?\/\/+/i, "https://");
     return raw;
   }
-  if (raw.includes("://")) return raw;
+  if (raw.includes("://")) return null;
   return `https://${raw}`;
 }
 

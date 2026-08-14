@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { PAYMENT_RESULT_GRANT_COOKIE } from "@/lib/payment-result-grant-cookie";
 import { middleware as updateSession } from "@/lib/supabase/middleware";
 
 const devStdPayCsp =
@@ -20,102 +21,18 @@ function withCookies(target: NextResponse, source: NextResponse) {
 }
 
 const supabaseAuthCookiePattern = /^sb-[a-z0-9]+-auth-token(?:\.\d+)?$/i;
-const authCheckedCookieName = "glit_auth_checked_at";
-const adminCheckedCookieName = "glit_admin_checked_at";
-const adminCheckedUserCookieName = "glit_admin_checked_user";
-const adminRoleCheckedCookieName = "glit_admin_role_checked_at";
-const adminRoleCheckedUserCookieName = "glit_admin_role_checked_user";
-const authCheckBypassTtlMs = 60_000;
-const adminCheckBypassTtlMs = 300_000;
-const adminRoleCheckBypassTtlMs = 300_000;
-
-function secondsFromMs(ms: number) {
-  return Math.max(1, Math.ceil(ms / 1000));
-}
+const adminSubmissionCookieOptions = {
+  path: "/admin/submissions",
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: 60 * 60,
+};
 
 function hasSupabaseAuthCookie(request: NextRequest) {
   return request.cookies
     .getAll()
     .some((cookie) => supabaseAuthCookiePattern.test(cookie.name));
-}
-
-function withAuthCheckedCookie(response: NextResponse) {
-  response.cookies.set(authCheckedCookieName, String(Date.now()), {
-    path: "/",
-    maxAge: secondsFromMs(authCheckBypassTtlMs),
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-  return response;
-}
-
-function withAdminCheckedCookie(response: NextResponse, userId: string) {
-  response.cookies.set(adminCheckedCookieName, String(Date.now()), {
-    path: "/",
-    maxAge: secondsFromMs(adminCheckBypassTtlMs),
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-  response.cookies.set(adminCheckedUserCookieName, userId, {
-    path: "/",
-    maxAge: secondsFromMs(adminCheckBypassTtlMs),
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-  return response;
-}
-
-function withAdminRoleCheckedCookie(response: NextResponse, userId: string) {
-  response.cookies.set(adminRoleCheckedCookieName, String(Date.now()), {
-    path: "/",
-    maxAge: secondsFromMs(adminRoleCheckBypassTtlMs),
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-  response.cookies.set(adminRoleCheckedUserCookieName, userId, {
-    path: "/",
-    maxAge: secondsFromMs(adminRoleCheckBypassTtlMs),
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-  return response;
-}
-
-function clearAdminCheckedCookies(response: NextResponse) {
-  response.cookies.set(adminCheckedCookieName, "", {
-    path: "/",
-    maxAge: 0,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-  response.cookies.set(adminCheckedUserCookieName, "", {
-    path: "/",
-    maxAge: 0,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-  response.cookies.set(adminRoleCheckedCookieName, "", {
-    path: "/",
-    maxAge: 0,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-  response.cookies.set(adminRoleCheckedUserCookieName, "", {
-    path: "/",
-    maxAge: 0,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-  return response;
 }
 
 export default async function proxy(request: NextRequest) {
@@ -135,11 +52,20 @@ export default async function proxy(request: NextRequest) {
   const isMypageRoute = authPathname.startsWith("/mypage");
   const isPublicCartRoute =
     authPathname === "/mypage/cart" || authPathname === "/dashboard/cart";
+  const isSubmissionDetailRoute =
+    /^\/dashboard\/submissions\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      authPathname,
+    );
+  // Cookie presence only bypasses the session redirect. The server page
+  // decrypts it and checks the exact submission + DB guest token before any
+  // submission data is rendered.
+  const hasPaymentResultGrant = Boolean(
+    request.cookies.get(PAYMENT_RESULT_GRANT_COOKIE)?.value,
+  );
   const isPublicDashboardRoute =
     authPathname.startsWith("/dashboard/new") ||
     isPublicCartRoute ||
-    (authPathname.startsWith("/dashboard/pay/") &&
-      Boolean(request.nextUrl.searchParams.get("guestToken")));
+    (isSubmissionDetailRoute && hasPaymentResultGrant);
   const isUserProtectedRoute =
     (isDashboardRoute && !isPublicDashboardRoute) ||
     (isMypageRoute && !isPublicCartRoute);
@@ -167,46 +93,6 @@ export default async function proxy(request: NextRequest) {
     return redirectRes;
   }
 
-  const lastCheckedAt = Number(request.cookies.get(authCheckedCookieName)?.value ?? "");
-  const isAuthCheckFresh =
-    Number.isFinite(lastCheckedAt) && Date.now() - lastCheckedAt < authCheckBypassTtlMs;
-  const lastAdminCheckedAt = Number(
-    request.cookies.get(adminCheckedCookieName)?.value ?? "",
-  );
-  const lastAdminCheckedUserId =
-    request.cookies.get(adminCheckedUserCookieName)?.value ?? "";
-  const lastAdminRoleCheckedAt = Number(
-    request.cookies.get(adminRoleCheckedCookieName)?.value ?? "",
-  );
-  const lastAdminRoleCheckedUserId =
-    request.cookies.get(adminRoleCheckedUserCookieName)?.value ?? "";
-  const isAdminCheckFresh =
-    Number.isFinite(lastAdminCheckedAt) &&
-    Date.now() - lastAdminCheckedAt < adminCheckBypassTtlMs;
-  const isAdminRoleCheckFresh =
-    Number.isFinite(lastAdminRoleCheckedAt) &&
-    Date.now() - lastAdminRoleCheckedAt < adminRoleCheckBypassTtlMs;
-
-  // Skip repeated auth round-trips during quick tab/page moves.
-  if (isUserProtectedRoute && isAuthCheckFresh) {
-    const passthrough = withAuthCheckedCookie(NextResponse.next());
-    if (isDev && isDevStdPayPath) {
-      passthrough.headers.set("Content-Security-Policy", devStdPayCsp);
-    }
-    return passthrough;
-  }
-
-  if (isAdminRoute && isAuthCheckFresh && isAdminCheckFresh && lastAdminCheckedUserId) {
-    const passthrough = withAdminCheckedCookie(
-      withAuthCheckedCookie(NextResponse.next()),
-      lastAdminCheckedUserId,
-    );
-    if (isDev && isDevStdPayPath) {
-      passthrough.headers.set("Content-Security-Policy", devStdPayCsp);
-    }
-    return passthrough;
-  }
-
   const session = await updateSession(request);
   const response =
     session instanceof NextResponse ? session : (session?.response as NextResponse | undefined);
@@ -226,13 +112,13 @@ export default async function proxy(request: NextRequest) {
     url.searchParams.set("id", submissionMatch[1]);
     const redirectRes = NextResponse.redirect(url);
     redirectRes.cookies.set("admin_submission_id", submissionMatch[1], {
-      path: "/admin/submissions",
+      ...adminSubmissionCookieOptions,
     });
     return withCookies(redirectRes, response);
   }
   if (submissionMatch && !response.cookies.get("admin_submission_id")) {
     response.cookies.set("admin_submission_id", submissionMatch[1], {
-      path: "/admin/submissions",
+      ...adminSubmissionCookieOptions,
     });
   }
 
@@ -241,9 +127,7 @@ export default async function proxy(request: NextRequest) {
     const nextPath = `${pathname}${request.nextUrl.search}`;
     redirectUrl.pathname = isEnglishRoute ? "/en/login" : "/login";
     redirectUrl.searchParams.set("next", nextPath);
-    const redirectRes = clearAdminCheckedCookies(
-      withCookies(NextResponse.redirect(redirectUrl), response),
-    );
+    const redirectRes = withCookies(NextResponse.redirect(redirectUrl), response);
     if (isDev && isDevStdPayPath) {
       redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
     }
@@ -254,32 +138,7 @@ export default async function proxy(request: NextRequest) {
     if (isDev && isDevStdPayPath) {
       response.headers.set("Content-Security-Policy", devStdPayCsp);
     }
-    return withAuthCheckedCookie(response);
-  }
-
-  if (
-    isAuthCheckFresh &&
-    isAdminCheckFresh &&
-    user &&
-    lastAdminCheckedUserId === user.id
-  ) {
-    if (isDev && isDevStdPayPath) {
-      response.headers.set("Content-Security-Policy", devStdPayCsp);
-    }
-    return withAdminRoleCheckedCookie(
-      withAdminCheckedCookie(withAuthCheckedCookie(response), user.id),
-      user.id,
-    );
-  }
-
-  if (isAdminRoute && isAdminRoleCheckFresh && lastAdminRoleCheckedUserId === user.id) {
-    if (isDev && isDevStdPayPath) {
-      response.headers.set("Content-Security-Policy", devStdPayCsp);
-    }
-    return withAdminRoleCheckedCookie(
-      withAdminCheckedCookie(withAuthCheckedCookie(response), user.id),
-      user.id,
-    );
+    return response;
   }
 
   if (isAdminRoute && user) {
@@ -293,9 +152,7 @@ export default async function proxy(request: NextRequest) {
       if (!profile || profile.role !== "admin") {
         const redirectUrl = request.nextUrl.clone();
         redirectUrl.pathname = isEnglishRoute ? "/en/dashboard" : "/dashboard";
-        const redirectRes = clearAdminCheckedCookies(
-          withCookies(NextResponse.redirect(redirectUrl), response),
-        );
+        const redirectRes = withCookies(NextResponse.redirect(redirectUrl), response);
         if (isDev && isDevStdPayPath) {
           redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
         }
@@ -304,9 +161,7 @@ export default async function proxy(request: NextRequest) {
     } else {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = isEnglishRoute ? "/en/dashboard" : "/dashboard";
-      const redirectRes = clearAdminCheckedCookies(
-        withCookies(NextResponse.redirect(redirectUrl), response),
-      );
+      const redirectRes = withCookies(NextResponse.redirect(redirectUrl), response);
       if (isDev && isDevStdPayPath) {
         redirectRes.headers.set("Content-Security-Policy", devStdPayCsp);
       }
@@ -318,10 +173,7 @@ export default async function proxy(request: NextRequest) {
     response.headers.set("Content-Security-Policy", devStdPayCsp);
   }
 
-  return withAdminRoleCheckedCookie(
-    withAdminCheckedCookie(withAuthCheckedCookie(response), user.id),
-    user.id,
-  );
+  return response;
 }
 
 export const config = {

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { MelonReviewDocsDownloadForm } from "@/components/admin/review-docs-download";
+import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -120,6 +121,7 @@ function SummaryCard({
 }
 
 export default async function AdminPage() {
+  await requireAdminPage();
   const summary = await getDashboardSummary();
 
   return (

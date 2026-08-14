@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import * as React from "react";
 
 import { showCenteredConfirm } from "@/lib/centered-dialog";
@@ -115,6 +116,9 @@ const getPaymentMethodLabel = (method?: string | null) =>
   method ? paymentMethodLabels[method] ?? method : null;
 
 export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
+  const pathname = usePathname();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const [items, setItems] = React.useState<HistoryItem[]>(initialItems);
   const [filter, setFilter] = React.useState<"ALL" | "ALBUM" | "MV">("ALL");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
@@ -317,7 +321,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               </button>
               {submission.paymentStatus !== "PAID" ? (
                 <Link
-                  href={`/mypage/cart?focus=${submission.id}`}
+                  href={`${localePrefix}/mypage/cart?focus=${submission.id}`}
                   className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
                 >
                   결제하기
@@ -330,19 +334,22 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
 
       {activeSubmission && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4"
           onClick={() => setActiveSubmission(null)}
         >
           <div
-            className="w-full max-w-3xl rounded-[32px] border border-border/60 bg-background/95 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.35)]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="방송국별 심의 현황"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-[24px] border border-border/60 bg-background/95 p-4 shadow-[0_24px_80px_rgba(15,23,42,0.35)] sm:rounded-[32px] sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   방송국별 현황
                 </p>
-                <h3 className="mt-2 text-2xl font-semibold text-foreground">
+                <h3 className="mt-2 break-words text-xl font-semibold text-foreground sm:text-2xl">
                   {activeSubmission.title || "제목 미입력"}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
@@ -352,7 +359,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               <button
                 type="button"
                 onClick={() => setActiveSubmission(null)}
-                className="rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-foreground"
+                className="shrink-0 rounded-full border border-border/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-foreground"
               >
                 닫기
               </button>
@@ -466,10 +473,10 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
             </div>
 
             <div className="mt-5 overflow-hidden rounded-2xl border border-border/60 bg-background/80">
-              <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(100px,auto)] items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px]">
                 <span>방송국</span>
                 <span className="justify-self-center text-center">현재 상태</span>
-                <span className="text-right">Updated</span>
+                <span className="hidden text-right sm:block">Updated</span>
               </div>
               {activeSubmission.stationReviews.length > 0 ? (
                 <div className="space-y-2 px-3 py-3 text-xs">
@@ -484,7 +491,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                       return (
                         <div
                           key={`${station.id}-${index}`}
-                          className="grid min-h-[48px] grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-[11px]"
+                          className="grid min-h-[48px] grid-cols-[minmax(0,1fr)_minmax(100px,auto)] items-center gap-2 rounded-xl border border-border/50 bg-background/80 px-3 py-2 text-[11px] sm:grid-cols-[minmax(0,1.4fr)_minmax(110px,0.8fr)_96px]"
                         >
                           <span className="truncate font-semibold text-foreground">
                             {station.station?.name ?? "-"}
@@ -495,7 +502,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                             {currentStatus.label}
                           </span>
                           <span
-                            className="text-right text-[10px] text-muted-foreground"
+                            className="hidden text-right text-[10px] text-muted-foreground sm:block"
                             title={formatDate(station.updated_at)}
                             aria-label={`Updated ${formatDate(station.updated_at)}`}
                           >

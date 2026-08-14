@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
 
@@ -14,36 +15,50 @@ export default async function SubscriptionResult({
   const orderId = Array.isArray(params.orderId)
     ? params.orderId[0]
     : params.orderId;
-  const status = Array.isArray(params.status)
-    ? params.status[0]
-    : params.status ?? "pending";
-  const messageParam = Array.isArray(params.message)
-    ? params.message[0]
-    : params.message;
 
   const supabase = await createServerSupabase();
-  const { data: history } = orderId
-    ? await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const userId = user?.id ?? null;
+  const safeOrderId =
+    typeof orderId === "string" && orderId.trim().length <= 160
+      ? orderId.trim()
+      : "";
+
+  // subscription_history contains raw PG payloads and billing identifiers.
+  // Read it only on the trusted server, bind the row to the authenticated
+  // owner, and project the exact non-secret fields rendered below.
+  const admin = userId && safeOrderId ? createAdminClient() : null;
+  const { data: history } = admin
+    ? await admin
         .from("subscription_history")
-        .select("*")
-        .eq("order_id", orderId)
+        .select(
+          "order_id, status, amount_krw, product_name, result_code, result_message, requested_at, paid_at, refunded_at",
+        )
+        .eq("order_id", safeOrderId)
+        .eq("user_id", userId as string)
         .maybeSingle()
     : { data: null };
 
   const amount = history?.amount_krw ?? 0;
+  const status = history?.status ?? "pending";
   const title =
-    status === "success"
+    status === "APPROVED"
       ? "정기결제가 완료되었습니다."
-      : status === "refunded"
+      : status === "CANCELED"
         ? "결제가 취소되었습니다."
-        : status === "fail"
+        : status === "FAILED"
           ? "결제에 실패했습니다."
           : "결제 진행 중입니다.";
 
   const message =
-    messageParam ??
     history?.result_message ??
-    "자세한 내역은 아래에서 확인할 수 있습니다.";
+    (userId
+      ? "결제 내역을 확인할 수 없습니다. 잠시 후 다시 시도해주세요."
+      : "로그인 후 본인의 결제 내역을 확인할 수 있습니다.");
+
+  const processedAt = history?.refunded_at ?? history?.paid_at ?? null;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
@@ -59,7 +74,9 @@ export default async function SubscriptionResult({
             <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
               주문번호
             </span>
-            <span className="break-all font-mono sm:text-right">{orderId ?? "-"}</span>
+            <span className="break-all font-mono sm:text-right">
+              {history?.order_id ?? "-"}
+            </span>
           </div>
           <div className="grid gap-1 sm:grid-cols-[120px_1fr] sm:items-center">
             <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -77,10 +94,16 @@ export default async function SubscriptionResult({
           </div>
           <div className="grid gap-1 sm:grid-cols-[120px_1fr] sm:items-center">
             <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              TID
+              처리일시
             </span>
             <span className="break-all font-mono text-xs sm:text-right">
-              {history?.pg_tid ?? "미수신"}
+              {processedAt
+                ? new Intl.DateTimeFormat("ko-KR", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                    timeZone: "Asia/Seoul",
+                  }).format(new Date(processedAt))
+                : "-"}
             </span>
           </div>
         </div>

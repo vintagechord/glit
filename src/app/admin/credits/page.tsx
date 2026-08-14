@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { upsertCreditRewardFormAction } from "@/features/credits/actions";
 import type { CreditReward } from "@/lib/credits";
+import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = {
@@ -108,6 +109,7 @@ export default async function AdminCreditsPage({
     error?: string | string[];
   }>;
 }) {
+  await requireAdminPage();
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const savedFlag = Array.isArray(resolvedSearchParams?.saved)
     ? resolvedSearchParams?.saved[0]

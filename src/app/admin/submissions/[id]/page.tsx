@@ -10,7 +10,11 @@ type AdminSubmissionDetailByIdSearchParams = {
   saved?: string | string[];
   savedError?: string | string[];
   savedWarning?: string | string[];
+  returnTo?: string | string[];
 };
+
+const firstParam = (value?: string | string[]) =>
+  Array.isArray(value) ? value[0] : value;
 
 export default async function AdminSubmissionDetailById({
   params,
@@ -23,15 +27,10 @@ export default async function AdminSubmissionDetailById({
 }) {
   const resolvedParams = await Promise.resolve(params);
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
-  const saved = Array.isArray(resolvedSearchParams.saved)
-    ? resolvedSearchParams.saved[0]
-    : resolvedSearchParams.saved;
-  const savedError = Array.isArray(resolvedSearchParams.savedError)
-    ? resolvedSearchParams.savedError[0]
-    : resolvedSearchParams.savedError;
-  const savedWarning = Array.isArray(resolvedSearchParams.savedWarning)
-    ? resolvedSearchParams.savedWarning[0]
-    : resolvedSearchParams.savedWarning;
+  const saved = firstParam(resolvedSearchParams.saved);
+  const savedError = firstParam(resolvedSearchParams.savedError);
+  const savedWarning = firstParam(resolvedSearchParams.savedWarning);
+  const returnTo = firstParam(resolvedSearchParams.returnTo);
 
   return await AdminSubmissionDetailPage({
     params: resolvedParams,
@@ -40,6 +39,7 @@ export default async function AdminSubmissionDetailById({
       saved,
       savedError,
       savedWarning,
+      returnTo,
     },
   });
 }

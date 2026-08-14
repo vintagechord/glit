@@ -468,14 +468,14 @@ export function SiteFooter() {
 
       {activeModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4"
           onClick={closeModal}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby={modalTitleId}
-            className="w-full max-w-3xl overflow-hidden rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] shadow-[6px_6px_0_#111111]"
+            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] shadow-[6px_6px_0_#111111]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b-2 border-[#111111] px-4 py-3 sm:px-6 sm:py-4">
@@ -498,7 +498,7 @@ export function SiteFooter() {
                 {isEnglishRoute ? "Close" : "닫기"}
               </button>
             </div>
-            <div className="max-h-[70vh] overflow-y-auto px-4 py-4 text-xs leading-relaxed text-black/80 whitespace-pre-line sm:px-6 sm:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-line px-4 py-4 text-xs leading-relaxed text-black/80 sm:px-6 sm:py-5">
               {modalContent}
             </div>
           </div>

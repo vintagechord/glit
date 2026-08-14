@@ -63,14 +63,14 @@ export function CreditActionNotice({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 px-4 py-6"
       role="presentation"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-md rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-[#111111] shadow-[6px_6px_0_#111111]"
+        className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-[#111111] shadow-[6px_6px_0_#111111]"
       >
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#1f7a5a] text-white">

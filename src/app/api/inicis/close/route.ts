@@ -2,9 +2,18 @@ import { NextResponse } from "next/server";
 
 import { markPaymentCanceled } from "@/lib/payments/submission";
 import { markKaraokePaymentCanceled } from "@/lib/payments/karaoke";
+import {
+  createPaymentResultGrant,
+  setPaymentResultGrantCookie,
+} from "@/lib/payment-result-grant";
+import { serializeInlineScriptJson } from "@/lib/inline-script-json";
+
+const orderIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
+const callbackStatePattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const postMessageResponse = (payloadData: Record<string, unknown> = {}) => {
-  const payload = JSON.stringify({
+  const payload = serializeInlineScriptJson({
     type: "INICIS:CANCEL",
     payload: {
       message: "사용자가 결제를 취소했습니다.",
@@ -49,11 +58,16 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const orderId = url.searchParams.get("oid")?.trim();
+  const rawOrderId = url.searchParams.get("oid") ?? "";
+  const rawCloseState = url.searchParams.get("state") ?? "";
+  const orderId = orderIdPattern.test(rawOrderId) ? rawOrderId : null;
+  const closeState = callbackStatePattern.test(rawCloseState)
+    ? rawCloseState
+    : "";
   const payloadData: Record<string, unknown> = {};
+  let paymentResultGrant: string | null = null;
 
-  if (orderId) {
-    payloadData.orderId = orderId;
+  if (orderId && closeState) {
     const rawResponse = {
       closeUrl: true,
       cancel: url.searchParams.get("cancel") ?? null,
@@ -63,18 +77,29 @@ export async function GET(req: Request) {
         result_code: "CANCELED",
         result_message: "사용자가 결제창을 닫았습니다.",
         raw_response: rawResponse,
+        close_state: closeState,
       }),
       markKaraokePaymentCanceled(orderId, {
         result_code: "CANCELED",
         result_message: "사용자가 결제창을 닫았습니다.",
         raw_response: rawResponse,
+        close_state: closeState,
       }),
     ]);
     if (submissionResult.submissionId) {
       payloadData.submissionId = submissionResult.submissionId;
     }
-    if (submissionResult.guestToken) {
-      payloadData.guestToken = submissionResult.guestToken;
+    if (
+      submissionResult.ok &&
+      submissionResult.submissionId &&
+      submissionResult.guestToken
+    ) {
+      paymentResultGrant = createPaymentResultGrant({
+        provider: "inicis",
+        submissionId: submissionResult.submissionId,
+        orderId,
+        guestToken: submissionResult.guestToken,
+      });
     }
     if (karaokeResult.requestId) {
       payloadData.requestId = karaokeResult.requestId;
@@ -86,9 +111,17 @@ export async function GET(req: Request) {
         karaokeError: karaokeResult.error,
       });
     }
+  } else if (orderId) {
+    console.warn("[Inicis][close] missing authenticated close state", {
+      orderId,
+    });
   }
 
-  return postMessageResponse(payloadData);
+  const response = postMessageResponse(payloadData);
+  if (paymentResultGrant) {
+    setPaymentResultGrantCookie(response, paymentResultGrant);
+  }
+  return response;
 }
 
 export const POST = GET;

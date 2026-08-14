@@ -1,41 +1,53 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireAdminForApi } from "@/lib/admin/api-auth";
+import { readBoundedJsonBody } from "@/lib/request-body";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const MAX_BODY_BYTES = 16 * 1024;
 
-const schema = z.object({
-  submissionId: z.string().min(3),
-  kind: z.enum(["MV_RESULT_FILE"]),
-  objectKey: z.string().min(1),
-  filename: z.string().min(1),
-  mimeType: z.string().min(1),
-  sizeBytes: z.number().int().positive(),
-});
-
-const isAdminUser = async () => {
-  const supabase = await createServerSupabase();
-  const { data } = await supabase.rpc("is_admin");
-  return Boolean(data);
-};
+const schema = z
+  .object({
+    submissionId: z.string().uuid(),
+    kind: z.enum(["MV_RESULT_FILE"]),
+    objectKey: z.string().trim().min(1).max(1024),
+    filename: z.string().trim().min(1).max(255),
+    mimeType: z.string().trim().min(1).max(127),
+    sizeBytes: z.number().int().positive().max(20 * 1024 * 1024),
+  })
+  .strict();
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null);
-  const parsed = schema.safeParse(body);
+  // Authenticate before reading the body so unauthenticated callers cannot
+  // force this privileged route to parse attacker-controlled large JSON.
+  const auth = await requireAdminForApi();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const body = await readBoundedJsonBody(request, MAX_BODY_BYTES);
+  if (!body.ok) {
+    return NextResponse.json(
+      {
+        error:
+          body.reason === "too_large"
+            ? "업로드 정보 요청이 너무 큽니다."
+            : "업로드 정보를 확인해주세요.",
+      },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+
+  const parsed = schema.safeParse(body.value);
 
   if (!parsed.success) {
     return NextResponse.json(
       { error: "업로드 정보를 확인해주세요." },
       { status: 400 },
     );
-  }
-
-  const isAdmin = await isAdminUser();
-  if (!isAdmin) {
-    return NextResponse.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
   }
 
   const admin = createAdminClient();

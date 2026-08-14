@@ -1,12 +1,19 @@
 import { revalidatePath } from "next/cache";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
+import { partitionGuestCartClaimEntries } from "@/lib/guest-cart-claim";
+import { isPaymentInProgressDatabaseError } from "@/lib/payment-group";
+import { readBoundedJsonBody } from "@/lib/request-body";
 import {
-  hasPaymentGroupIntersection,
-  type SubmissionPaymentGroupRecord,
-} from "@/lib/payment-group";
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
+import {
+  cleanupDeletedSubmissionB2Objects,
+  loadSubmissionB2ObjectRefs,
+} from "@/lib/submission-file-cleanup";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
@@ -34,6 +41,7 @@ type CartDeleteSubmission = {
   guest_token: string | null;
   status: string | null;
   payment_status: string | null;
+  user_deleted_at: string | null;
 };
 
 const cartItemSelect =
@@ -55,10 +63,44 @@ const hasGuestOwnership = (
   Boolean(row.guest_token) &&
   guestTokensBySubmissionId[row.id] === row.guest_token;
 
+const getCartRateLimitResponse = (
+  request: Request,
+  namespace: string,
+  limit: number,
+) => {
+  const result = consumeRateLimit({
+    namespace,
+    identifier: getRequestIdentifier(request.headers),
+    limit,
+    windowMs: 15 * 60 * 1_000,
+  });
+  return result.allowed
+    ? null
+    : NextResponse.json(
+        { error: "장바구니 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(result.retryAfterSeconds) },
+        },
+      );
+};
+
 export async function POST(request: Request) {
-  const parsed = guestCartSchema.safeParse(
-    await request.json().catch(() => null),
+  const rateLimitResponse = getCartRateLimitResponse(
+    request,
+    "cart-items-read-ip",
+    120,
   );
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const body = await readBoundedJsonBody(request, 32 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "장바구니 정보를 확인해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = guestCartSchema.safeParse(body.value);
   const entries = parsed.success
     ? Object.entries(parsed.data.guestTokensBySubmissionId)
     : [];
@@ -72,11 +114,14 @@ export async function POST(request: Request) {
 
   const guestTokensBySubmissionId = Object.fromEntries(entries);
   const submissionIds = entries.map(([submissionId]) => submissionId);
+  const guestTokens = Array.from(new Set(entries.map(([, token]) => token)));
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("submissions")
     .select(cartItemSelect)
     .in("id", submissionIds)
+    .is("user_id", null)
+    .in("guest_token", guestTokens)
     .in("status", ["SUBMITTED", "WAITING_PAYMENT"])
     .or(cartPaymentFilter)
     .is("user_deleted_at", null)
@@ -117,11 +162,142 @@ export async function POST(request: Request) {
   });
 }
 
+export async function PATCH(request: Request) {
+  const rateLimitResponse = getCartRateLimitResponse(
+    request,
+    "cart-items-claim-ip",
+    30,
+  );
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const supabase = await createServerSupabase();
+  const user = await getServerSessionUser(supabase);
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
+  const body = await readBoundedJsonBody(request, 32 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "연결할 비회원 장바구니 정보를 확인해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = guestCartSchema.safeParse(body.value);
+  const entries = parsed.success
+    ? Object.entries(parsed.data.guestTokensBySubmissionId)
+    : [];
+  if (!parsed.success || entries.length < 1 || entries.length > 100) {
+    return NextResponse.json(
+      { error: "연결할 비회원 장바구니 정보를 확인해주세요." },
+      { status: 400 },
+    );
+  }
+
+  const guestTokensBySubmissionId = Object.fromEntries(entries);
+  const submissionIds = entries.map(([submissionId]) => submissionId);
+  const guestTokens = Array.from(new Set(entries.map(([, token]) => token)));
+  const admin = createAdminClient();
+  const { data: rows, error: loadError } = await admin
+    .from("submissions")
+    .select(
+      "id, user_id, guest_token, status, payment_status, user_deleted_at",
+    )
+    .in("id", submissionIds)
+    .is("user_id", null)
+    .in("guest_token", guestTokens);
+
+  if (loadError) {
+    console.error("[CartItems] guest claim lookup failed", loadError);
+    return NextResponse.json(
+      { error: "비회원 장바구니 항목을 확인하지 못했습니다." },
+      { status: 500 },
+    );
+  }
+
+  const { claimableEntries, invalidSubmissionIds } =
+    partitionGuestCartClaimEntries(
+      guestTokensBySubmissionId,
+      (rows ?? []) as CartDeleteSubmission[],
+    );
+  const claimableIds = Object.keys(claimableEntries);
+  if (claimableIds.length === 0) {
+    return NextResponse.json({ claimedIds: [], invalidSubmissionIds });
+  }
+
+  const { data: claimedRows, error: claimError } = await admin.rpc(
+    "claim_guest_cart_submissions",
+    {
+      p_user_id: user.id,
+      p_entries: claimableEntries,
+    },
+  );
+  if (claimError) {
+    console.error("[CartItems] guest claim failed", {
+      code: claimError.code,
+      message: claimError.message,
+    });
+    const status =
+      claimError.code === "P0001" || claimError.code === "55000" ? 409 : 500;
+    return NextResponse.json(
+      {
+        error:
+          status === 409
+            ? claimError.code === "55000"
+              ? "진행 중인 카드 결제가 있습니다. 결제창을 닫거나 결제를 취소한 뒤 다시 로그인해주세요."
+              : "장바구니 항목 상태가 변경되었습니다. 다시 시도해주세요."
+            : "비회원 장바구니를 계정에 연결하지 못했습니다.",
+        invalidSubmissionIds,
+      },
+      { status },
+    );
+  }
+
+  const claimedIds = ((claimedRows ?? []) as Array<{ submission_id: string }>).map(
+    (row) => row.submission_id,
+  );
+  if (claimedIds.length !== claimableIds.length) {
+    return NextResponse.json(
+      { error: "일부 비회원 장바구니 항목을 연결하지 못했습니다." },
+      { status: 500 },
+    );
+  }
+
+  clearDashboardStatusCache(user.id);
+  revalidatePath("/dashboard");
+  revalidatePath("/mypage");
+  revalidatePath("/dashboard/cart");
+  revalidatePath("/mypage/cart");
+  revalidatePath("/en/dashboard");
+  revalidatePath("/en/mypage");
+  revalidatePath("/en/dashboard/cart");
+  revalidatePath("/en/mypage/cart");
+
+  return NextResponse.json({
+    claimedIds,
+    invalidSubmissionIds,
+  });
+}
+
 export async function DELETE(request: Request) {
+  const rateLimitResponse = getCartRateLimitResponse(
+    request,
+    "cart-items-delete-ip",
+    60,
+  );
+  if (rateLimitResponse) return rateLimitResponse;
+
   const supabase = await createServerSupabase();
   const user = await getServerSessionUser(supabase);
 
-  const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
+  const body = await readBoundedJsonBody(request, 32 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "삭제할 장바구니 항목을 선택해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = deleteSchema.safeParse(body.value);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "삭제할 장바구니 항목을 선택해주세요." },
@@ -132,6 +308,9 @@ export async function DELETE(request: Request) {
   const submissionIds = Array.from(new Set(parsed.data.submissionIds));
   const guestTokensBySubmissionId =
     parsed.data.guestTokensBySubmissionId ?? {};
+  const guestTokens = Array.from(
+    new Set(Object.values(guestTokensBySubmissionId)),
+  );
   if (
     !user &&
     submissionIds.some((id) => !guestTokensBySubmissionId[id])
@@ -143,11 +322,15 @@ export async function DELETE(request: Request) {
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let loadQuery = admin
     .from("submissions")
     .select("id, user_id, guest_token, status, payment_status")
     .in("id", submissionIds)
     .or(cartPaymentFilter);
+  loadQuery = user
+    ? loadQuery.eq("user_id", user.id)
+    : loadQuery.is("user_id", null).in("guest_token", guestTokens);
+  const { data, error } = await loadQuery;
 
   if (error) {
     console.error("[CartItems] load failed", error);
@@ -177,11 +360,10 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const { data: requestedPayments, error: requestedPaymentError } = await admin
-    .from("submission_payments")
-    .select("submission_id, raw_response")
-    .eq("status", "REQUESTED")
-    .limit(1000);
+  const { data: hasRequestedPayment, error: requestedPaymentError } =
+    await admin.rpc("has_requested_submission_payments", {
+      p_submission_ids: submissionIds,
+    });
   if (requestedPaymentError) {
     console.error("[CartItems] requested payment check failed", {
       code: requestedPaymentError.code,
@@ -195,10 +377,6 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const hasRequestedPayment = hasPaymentGroupIntersection(
-    (requestedPayments ?? []) as SubmissionPaymentGroupRecord[],
-    submissionIds,
-  );
   if (hasRequestedPayment) {
     return NextResponse.json(
       {
@@ -208,6 +386,8 @@ export async function DELETE(request: Request) {
       { status: 409 },
     );
   }
+
+  const b2ObjectRefs = await loadSubmissionB2ObjectRefs(admin, submissionIds);
 
   // All submission relations use ON DELETE CASCADE (migration 0071). Deleting
   // the parent rows in one statement keeps the cleanup atomic and prevents the
@@ -220,7 +400,9 @@ export async function DELETE(request: Request) {
     .or(cartPaymentFilter);
   deleteQuery = user
     ? deleteQuery.eq("user_id", user.id)
-    : deleteQuery.is("user_id", null);
+    : deleteQuery
+        .is("user_id", null)
+        .in("guest_token", guestTokens);
   const { data: deletedRows, error: deleteError } = await deleteQuery.select(
     "id",
   );
@@ -232,6 +414,15 @@ export async function DELETE(request: Request) {
       details: deleteError.details,
       hint: deleteError.hint,
     });
+    if (isPaymentInProgressDatabaseError(deleteError)) {
+      return NextResponse.json(
+        {
+          error:
+            "카드 결제가 진행 중인 신청서는 삭제할 수 없습니다. 결제창을 닫거나 결제를 취소한 뒤 다시 시도해주세요.",
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(
       { error: "장바구니 항목 삭제에 실패했습니다." },
       { status: 500 },
@@ -239,6 +430,11 @@ export async function DELETE(request: Request) {
   }
 
   const deletedIds = (deletedRows ?? []).map((row) => row.id as string);
+  if (deletedIds.length > 0 && b2ObjectRefs.length > 0) {
+    after(() =>
+      cleanupDeletedSubmissionB2Objects(admin, b2ObjectRefs, deletedIds),
+    );
+  }
   if (deletedIds.length !== submissionIds.length) {
     return NextResponse.json(
       { error: "일부 장바구니 항목이 변경되어 삭제하지 못했습니다." },

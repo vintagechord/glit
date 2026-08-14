@@ -11,6 +11,7 @@ import {
 export function CenteredDialogHost() {
   const [queue, setQueue] = React.useState<CenteredDialogRequest[]>([]);
   const active = queue[0] ?? null;
+  const dialogRef = React.useRef<HTMLDivElement | null>(null);
   const primaryButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   React.useEffect(() => {
@@ -39,16 +40,48 @@ export function CenteredDialogHost() {
 
   React.useEffect(() => {
     if (!active) return;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     primaryButtonRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      active.resolve(active.kind === "alert");
-      setQueue((current) => current.slice(1));
+      if (event.key === "Escape") {
+        event.preventDefault();
+        active.resolve(active.kind === "alert");
+        setQueue((current) => current.slice(1));
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable || focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previouslyFocused?.isConnected) {
+        previouslyFocused.focus();
+      }
+    };
   }, [active]);
 
   if (!active) return null;
@@ -63,15 +96,16 @@ export function CenteredDialogHost() {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 px-4 py-6"
+      className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black/45 px-4 py-6"
       role="presentation"
     >
       <div
+        ref={dialogRef}
         role={isConfirm ? "alertdialog" : "dialog"}
         aria-modal="true"
         aria-labelledby={`centered-dialog-title-${active.id}`}
         aria-describedby={`centered-dialog-message-${active.id}`}
-        className="w-full max-w-sm rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-center text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]"
+        className="my-auto max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-center text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]"
       >
         <p
           id={`centered-dialog-title-${active.id}`}
@@ -81,7 +115,7 @@ export function CenteredDialogHost() {
         </p>
         <p
           id={`centered-dialog-message-${active.id}`}
-          className="mt-3 whitespace-pre-line break-keep text-sm font-semibold leading-6"
+          className="mt-3 whitespace-pre-line break-keep break-words text-sm font-semibold leading-6"
         >
           {active.message}
         </p>

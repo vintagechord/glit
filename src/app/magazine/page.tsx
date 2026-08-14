@@ -49,7 +49,7 @@ type MagazineRequestRow = {
   published_url: string | null;
 };
 
-type MagazinePageSearchParams = {
+export type MagazinePageSearchParams = {
   tab?: string | string[];
   error?: string | string[];
   redeemed?: string | string[];
@@ -72,6 +72,7 @@ const noticeText = (
   error?: string | string[],
   redeemed?: string | string[],
   studioRequested?: string | string[],
+  localePrefix: "" | "/en" = "",
 ): CreditActionNoticeState | null => {
   const rawError = firstParam(error);
   if (rawError) {
@@ -87,7 +88,7 @@ const noticeText = (
       type: "success" as const,
       title: "서비스 이용 요청 접수",
       text: "서비스 이용 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.",
-      actionHref: "/mypage/credits#credit-requests",
+      actionHref: `${localePrefix}/mypage/credits#credit-requests`,
       actionLabel: "요청 내역 보기",
       clearQueryParams: ["redeemed"],
     };
@@ -99,7 +100,7 @@ const noticeText = (
       title: "녹음실 사용 신청 완료",
       text:
         "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.\n적어주신 연락처로 녹음실 사용 안내를 드립니다.",
-      actionHref: "/mypage/credits#credit-requests",
+      actionHref: `${localePrefix}/mypage/credits#credit-requests`,
       actionLabel: "요청 내역 보기",
       clearQueryParams: ["studioRequested"],
     };
@@ -164,11 +165,13 @@ function CreditServiceRewardCard({
   availableCredits,
   isAuthenticated,
   contactDefaults,
+  localePrefix,
 }: {
   reward: CreditReward;
   availableCredits: number;
   isAuthenticated: boolean;
   contactDefaults?: StudioReservationContactDefaults;
+  localePrefix: "" | "/en";
 }) {
   const canRedeem = isAuthenticated && availableCredits >= reward.credits_required;
   const studioUrl = getCreditRewardStudioUrl(reward.title);
@@ -216,7 +219,7 @@ function CreditServiceRewardCard({
 
         {!isAuthenticated ? (
           <Link
-            href={`/login?next=${encodeURIComponent("/magazine?tab=services#credit-use")}`}
+            href={`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/magazine?tab=services#credit-use`)}`}
             className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5"
           >
             로그인 후 이용
@@ -225,7 +228,7 @@ function CreditServiceRewardCard({
           <StudioReservationForm
             reward={reward}
             canRedeem={canRedeem}
-            redirectTo="/magazine?tab=services#credit-use"
+            redirectTo={`${localePrefix}/magazine?tab=services#credit-use`}
             contactDefaults={contactDefaults}
           />
         ) : (
@@ -247,11 +250,13 @@ function CreditServiceRewardsPanel({
   creditSummary,
   isAuthenticated,
   contactDefaults,
+  localePrefix,
 }: {
   rewards: CreditReward[];
   creditSummary: CreditSummary;
   isAuthenticated: boolean;
   contactDefaults?: StudioReservationContactDefaults;
+  localePrefix: "" | "/en";
 }) {
   return (
     <section className="space-y-5">
@@ -288,6 +293,7 @@ function CreditServiceRewardsPanel({
               availableCredits={creditSummary.available}
               isAuthenticated={isAuthenticated}
               contactDefaults={contactDefaults}
+              localePrefix={localePrefix}
             />
           ))
         ) : (
@@ -299,7 +305,7 @@ function CreditServiceRewardsPanel({
 
       {isAuthenticated ? (
         <Link
-          href="/mypage/credits#credit-requests"
+          href={`${localePrefix}/mypage/credits#credit-requests`}
           className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-5 py-3 text-sm font-black text-foreground transition hover:-translate-y-0.5 hover:border-[#1556a4] hover:bg-[#eaf2fb] dark:hover:bg-[#102033]"
         >
           <Ticket className="h-4 w-4" aria-hidden="true" />
@@ -316,10 +322,12 @@ function CreditServiceRewardsPanel({
   );
 }
 
-export default async function MagazinePage({
+export async function MagazinePageView({
   searchParams,
+  localePrefix = "",
 }: {
   searchParams?: Promise<MagazinePageSearchParams>;
+  localePrefix?: "" | "/en";
 }) {
   const supabase = await createServerSupabase();
   const {
@@ -334,6 +342,7 @@ export default async function MagazinePage({
     resolvedSearchParams?.error,
     resolvedSearchParams?.redeemed,
     resolvedSearchParams?.studioRequested,
+    localePrefix,
   );
   const admin = createAdminClient();
   const [{ existingRequests, creditSummary }, rewards, profileResult] =
@@ -414,6 +423,7 @@ export default async function MagazinePage({
                   phone: profile?.phone,
                   email: user?.email,
                 }}
+                localePrefix={localePrefix}
               />
             }
           />
@@ -421,4 +431,12 @@ export default async function MagazinePage({
       </div>
     </div>
   );
+}
+
+export default async function MagazinePage({
+  searchParams,
+}: {
+  searchParams?: Promise<MagazinePageSearchParams>;
+}) {
+  return MagazinePageView({ searchParams });
 }

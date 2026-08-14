@@ -1,4 +1,5 @@
 import type { PostgrestError } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import type React from "react";
 
@@ -9,6 +10,10 @@ import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { getStationLogoPath } from "@/lib/station-logos";
 import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-reviews";
 import { normalizeTrackResults } from "@/lib/track-results";
+import {
+  PAYMENT_RESULT_GRANT_COOKIE,
+  readPaymentResultGrant,
+} from "@/lib/payment-result-grant";
 import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 
 export const metadata = {
@@ -149,6 +154,11 @@ export default async function SubmissionDetailPage({
 
   const supabase = await createServerSupabase();
   const user = await getServerSessionUser(supabase);
+  const cookieStore = await cookies();
+  const paymentResultGrant = readPaymentResultGrant(
+    cookieStore.get(PAYMENT_RESULT_GRANT_COOKIE)?.value,
+    { submissionId },
+  );
 
   const extractMissingColumn = (error: PostgrestError | null) => {
     const msg = error?.message ?? "";
@@ -196,8 +206,39 @@ export default async function SubmissionDetailPage({
   };
 
   const admin = createAdminClient();
-  const { submission: adminSubmission, error: adminError } =
-    await fetchSubmission(admin);
+  const memberResult = user
+    ? await fetchSubmission(supabase)
+    : { submission: null, error: null };
+  let adminSubmission = memberResult.submission;
+  let hasGuestPaymentResultGrant = false;
+
+  // A service-role detail read is allowed only after a signed result grant is
+  // bound to this exact guest submission. Ordinary member access stays on RLS.
+  if (!adminSubmission && paymentResultGrant?.guestToken) {
+    const { data: guestGrantMatch, error: guestGrantError } = await admin
+      .from("submissions")
+      .select("id")
+      .eq("id", submissionId)
+      .is("user_id", null)
+      .eq("guest_token", paymentResultGrant.guestToken)
+      .maybeSingle();
+    if (guestGrantError) {
+      console.error(
+        "[Dashboard SubmissionDetail] payment result grant verification failed",
+        guestGrantError,
+      );
+    } else if (guestGrantMatch?.id) {
+      const guestResult = await fetchSubmission(admin);
+      adminSubmission = guestResult.submission;
+      if (guestResult.error) {
+        console.error(
+          "[Dashboard SubmissionDetail] authorized guest detail load failed",
+          guestResult.error,
+        );
+      }
+      hasGuestPaymentResultGrant = Boolean(guestResult.submission);
+    }
+  }
 
   const fallbackPackage =
     adminSubmission?.package_id && !adminSubmission.package
@@ -243,16 +284,13 @@ export default async function SubmissionDetailPage({
             </Link>
           ) : null}
         </div>
-        {adminError ? (
-          <div className="mt-2 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-            상세: {adminError.message}
-          </div>
-        ) : null}
       </div>
     );
   }
 
-  if (!user || adminSubmission.user_id !== user.id) {
+  const isMemberOwner = Boolean(memberResult.submission);
+
+  if (!isMemberOwner && !hasGuestPaymentResultGrant) {
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-12">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -288,7 +326,7 @@ export default async function SubmissionDetailPage({
     );
   }
 
-  const { submission: userSubmission } = await fetchSubmission(supabase);
+  const userSubmission = memberResult.submission;
 
   const resolvedSubmission = {
     ...(userSubmission ?? adminSubmission),
@@ -302,7 +340,7 @@ export default async function SubmissionDetailPage({
 
   if (resolvedSubmission.type === "ALBUM") {
     await ensureAlbumStationReviews(
-      supabase,
+      admin,
       resolvedSubmission.id,
       packageInfo?.station_count ?? null,
       packageInfo?.name ?? null,

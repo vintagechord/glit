@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import PizZip from "pizzip";
 
-import { buildReviewDocsZip } from "../src/lib/admin/review-docs";
+import {
+  buildReviewDocsZip,
+  recordReviewDocsGeneratedEvents,
+  REVIEW_DOC_TEMPLATE_FILES,
+  ReviewDocsRenderError,
+  ReviewDocsTemplateMissingError,
+} from "../src/lib/admin/review-docs";
 
 const stripWordNamespaces = (xml: string) =>
   xml
@@ -33,6 +42,40 @@ const getTableSummaries = (xml: string) =>
       hasShading: /<shd/.test(tableXml),
     };
   });
+
+const templateSourceDir = path.join(
+  process.cwd(),
+  "templates",
+  "review-docs",
+);
+
+const templateSourceFixture = () => [
+  {
+    submission: {
+      id: "33333333-3333-4333-8333-333333333333",
+      type: "ALBUM",
+      title: "템플릿 검증 앨범",
+      artist_name: "템플릿 검증 가수",
+      release_date: "2026-08-15",
+      production_company: "검증 제작사",
+      distributor: "검증 유통사",
+      genre: "발라드",
+    },
+    tracks: [
+      {
+        track_no: 1,
+        track_title: "검증곡",
+        lyricist: "작사가",
+        composer: "작곡가",
+        arranger: "편곡가",
+        lyrics: "첫 줄\n둘째 줄",
+        is_title: true,
+      },
+    ],
+    files: [],
+    events: [],
+  },
+];
 
 test("admin selected submission review docs zip uses example-like docx packaging and tables", async () => {
   const decomposedTitle = "별고양이".normalize("NFD");
@@ -176,4 +219,298 @@ test("admin selected submission review docs zip uses example-like docx packaging
   assert.match(reviewFormXml, /바람결에 나부끼는 저 햇살은/);
   assert.doesNotMatch(reviewFormXml, /별고양이/);
   assert.match(albumInfoXml, /BA MUSIC/);
+  assert.equal(
+    reviewFormXml.replaceAll("빈티지코드", "__COMPANY__"),
+    albumInfoXml.replaceAll("BA MUSIC", "__COMPANY__"),
+    "심의폼과 앨범정보는 회사명 외에 동일한 템플릿 결과여야 합니다.",
+  );
+});
+
+test("review docs normalize artist, company, dates, filenames, lyrics, and instrumental tracks", async () => {
+  const zipBuffer = await buildReviewDocsZip([
+    {
+      submission: {
+        id: "22222222-2222-4222-8222-222222222222",
+        type: "ALBUM",
+        title: "앨범\u200B명\u0001",
+        artist_name: "Stage",
+        artist_name_kr: "한국명",
+        artist_name_en: "English",
+        release_date: "2026-99-99",
+        production_company: "",
+        guest_company: "Guest Company",
+        genre: "Pop",
+        distributor: "Distributor",
+      },
+      tracks: [
+        {
+          submission_id: "22222222-2222-4222-8222-222222222222",
+          track_no: 1,
+          track_title: "Voice\u2060 Song",
+          lyricist: "Writer",
+          composer: "Composer",
+          arranger: "Arranger",
+          lyrics: "",
+          is_title: false,
+        },
+        {
+          submission_id: "22222222-2222-4222-8222-222222222222",
+          track_no: 2,
+          track_title: "Karaoke Version",
+          lyricist: "Hidden Writer",
+          composer: "Composer",
+          lyrics: "original lyrics",
+          is_title: false,
+        },
+        {
+          submission_id: "22222222-2222-4222-8222-222222222222",
+          track_no: 3,
+          track_title: "No Vocal",
+          lyricist: "",
+          composer: "Composer",
+          lyrics: "",
+          is_title: false,
+        },
+        {
+          submission_id: "22222222-2222-4222-8222-222222222222",
+          track_no: 4,
+          track_title: "Hello",
+          lyricist: "Writer",
+          composer: "Composer",
+          lyrics: "Hello",
+          translated_lyrics: "안녕",
+          is_title: false,
+        },
+      ],
+      files: [],
+      events: [],
+    },
+  ]);
+
+  const zip = new PizZip(zipBuffer);
+  const fileNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir);
+  assert.equal(fileNames.length, 11);
+  assert.ok(
+    fileNames.every((name) => !/[\u0000-\u001F\u200B-\u200D\u2060\uFEFF]/.test(name)),
+  );
+
+  const xmlByName = new Map(
+    fileNames.map((name) => [
+      name,
+      getDocXml(zip.file(name)?.asNodeBuffer() ?? Buffer.alloc(0)),
+    ]),
+  );
+  const allXml = Array.from(xmlByName.values()).join("\n");
+  assert.match(allXml, /Stage \/ 한국명 \/ English/);
+  assert.match(allXml, /Guest Company/);
+  assert.doesNotMatch(allXml, /2026\. 99\. 99\.|26\.99\.99|99\/99/);
+  assert.doesNotMatch(allXml, /\u0001/);
+  assert.doesNotMatch(allXml, /\(타이틀\)/);
+  assert.match(allXml, /\(번역 : 안녕\)/);
+
+  const voiceName = fileNames.find((name) => name.includes("/01_Voice Song.docx"));
+  const karaokeName = fileNames.find((name) =>
+    name.includes("/02_Karaoke Version.docx"),
+  );
+  const inferredInstrumentalName = fileNames.find((name) =>
+    name.includes("/03_No Vocal.docx"),
+  );
+  assert.ok(voiceName);
+  assert.ok(karaokeName);
+  assert.ok(inferredInstrumentalName);
+
+  const voiceXml = xmlByName.get(voiceName) ?? "";
+  const karaokeXml = xmlByName.get(karaokeName) ?? "";
+  const inferredInstrumentalXml = xmlByName.get(inferredInstrumentalName) ?? "";
+  assert.match(voiceXml, /Writer/);
+  assert.doesNotMatch(voiceXml, /가사 없음 \/ Instrumental/);
+  assert.match(karaokeXml, /가사 없음 \/ Instrumental/);
+  assert.doesNotMatch(karaokeXml, /Hidden Writer/);
+  assert.match(inferredInstrumentalXml, /No Vocal \(Inst\.\)/);
+  assert.match(inferredInstrumentalXml, /가사 없음 \/ Instrumental/);
+});
+
+test("integrated templates repeat one preserved table row per selected album", async () => {
+  const first = templateSourceFixture()[0];
+  const second = {
+    ...first,
+    submission: {
+      ...first.submission,
+      id: "55555555-5555-4555-8555-555555555555",
+      title: "두 번째 앨범",
+      artist_name: "두 번째 가수",
+      production_company: "두 번째 제작사",
+    },
+    tracks: [
+      {
+        ...first.tracks[0],
+        track_title: "두 번째 타이틀곡",
+      },
+    ],
+  };
+  const zip = new PizZip(await buildReviewDocsZip([first, second]));
+  const fileNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir);
+  assert.equal(fileNames.length, 13);
+
+  const expectedColumns = new Map([
+    ["TBS신청서_통합.docx", 6],
+    ["WBS신청서_통합.docx", 9],
+    ["PBC신청서_통합.docx", 7],
+  ]);
+  for (const [filename, cellCount] of expectedColumns) {
+    const archiveName = `통합신청서/${filename}`;
+    const xml = getDocXml(zip.file(archiveName)?.asNodeBuffer() ?? Buffer.alloc(0));
+    const tables = getTableSummaries(xml);
+    assert.equal(tables.length, 1, filename);
+    assert.equal(tables[0].rowCount, 3, filename);
+    assert.deepEqual(tables[0].cellCounts, [cellCount, cellCount, cellCount]);
+    assert.equal(tables[0].hasFixedLayout, true);
+    assert.equal(tables[0].hasCantSplitRows, true);
+    assert.match(xml, /검증 제작사/);
+    assert.match(xml, /두 번째 제작사/);
+    assert.doesNotMatch(xml, /\{[#/]?albums\}/);
+  }
+});
+
+test("review docs audit events use the authenticated administrator and deduplicate ids", async () => {
+  let insertedRows: Array<Record<string, unknown>> = [];
+  const supabase = {
+    from(table: string) {
+      assert.equal(table, "submission_events");
+      return {
+        async insert(rows: Array<Record<string, unknown>>) {
+          insertedRows = rows;
+          return { error: null };
+        },
+      };
+    },
+  };
+
+  await recordReviewDocsGeneratedEvents({
+    supabase: supabase as never,
+    submissionIds: ["submission-1", "submission-1", "submission-2"],
+    actorUserId: "admin-user",
+    mode: "bulk",
+  });
+
+  assert.equal(insertedRows.length, 2);
+  assert.deepEqual(
+    insertedRows.map((row) => row.submission_id),
+    ["submission-1", "submission-2"],
+  );
+  assert.ok(
+    insertedRows.every(
+      (row) =>
+        row.actor_user_id === "admin-user" &&
+        row.event_type === "REVIEW_DOCS_GENERATED" &&
+        String(row.message).includes("선택 2건"),
+    ),
+  );
+});
+
+test("review docs render directly from the configured DOCX files", async (context) => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "review-doc-templates-"));
+  const templateDir = path.join(tempRoot, "review-docs");
+  context.after(async () => {
+    await rm(tempRoot, { recursive: true, force: true });
+  });
+  await cp(templateSourceDir, templateDir, { recursive: true });
+
+  const filename = REVIEW_DOC_TEMPLATE_FILES.songReviewRequest;
+  const filePath = path.join(templateDir, filename);
+  const sourceZip = new PizZip(await readFile(filePath));
+  const documentFile = sourceZip.file("word/document.xml");
+  assert.ok(documentFile);
+  sourceZip.file(
+    "word/document.xml",
+    documentFile
+      .asText()
+      .replace(
+        "<w:sectPr>",
+        '<w:p><w:r><w:t>TEMPLATE-SOURCE-CHANGE</w:t></w:r></w:p><w:sectPr>',
+      ),
+  );
+  await writeFile(
+    filePath,
+    sourceZip.generate({ type: "nodebuffer", compression: "DEFLATE" }),
+  );
+
+  const rendered = new PizZip(
+    await buildReviewDocsZip(templateSourceFixture(), { templateDir }),
+  );
+  const requestName = Object.keys(rendered.files).find((name) =>
+    name.includes("/가요심의요청서_"),
+  );
+  const reviewFormName = Object.keys(rendered.files).find((name) =>
+    name.includes("/심의폼_"),
+  );
+  assert.ok(requestName);
+  assert.ok(reviewFormName);
+  assert.match(
+    getDocXml(rendered.file(requestName)?.asNodeBuffer() ?? Buffer.alloc(0)),
+    /TEMPLATE-SOURCE-CHANGE/,
+  );
+  assert.doesNotMatch(
+    getDocXml(rendered.file(reviewFormName)?.asNodeBuffer() ?? Buffer.alloc(0)),
+    /TEMPLATE-SOURCE-CHANGE/,
+  );
+});
+
+test("review docs fail clearly when a template is missing or corrupt", async (context) => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "review-doc-errors-"));
+  const templateDir = path.join(tempRoot, "review-docs");
+  context.after(async () => {
+    await rm(tempRoot, { recursive: true, force: true });
+  });
+  await cp(templateSourceDir, templateDir, { recursive: true });
+
+  const missingFilename = REVIEW_DOC_TEMPLATE_FILES.lyricsTrack;
+  await rm(path.join(templateDir, missingFilename));
+  await assert.rejects(
+    () => buildReviewDocsZip(templateSourceFixture(), { templateDir }),
+    (error) =>
+      error instanceof ReviewDocsTemplateMissingError &&
+      error.missing.includes(missingFilename),
+  );
+
+  await cp(
+    path.join(templateSourceDir, missingFilename),
+    path.join(templateDir, missingFilename),
+  );
+  const corruptFilename = REVIEW_DOC_TEMPLATE_FILES.reviewForm;
+  await writeFile(path.join(templateDir, corruptFilename), "not-a-docx");
+  await assert.rejects(
+    () => buildReviewDocsZip(templateSourceFixture(), { templateDir }),
+    (error) =>
+      error instanceof ReviewDocsRenderError &&
+      error.message.includes(corruptFilename),
+  );
+
+  await cp(
+    path.join(templateSourceDir, corruptFilename),
+    path.join(templateDir, corruptFilename),
+  );
+  const invalidContractFilename = REVIEW_DOC_TEMPLATE_FILES.lyricsAll;
+  const invalidContractPath = path.join(templateDir, invalidContractFilename);
+  const invalidContractZip = new PizZip(await readFile(invalidContractPath));
+  const invalidContractDocument = invalidContractZip.file("word/document.xml");
+  assert.ok(invalidContractDocument);
+  invalidContractZip.file(
+    "word/document.xml",
+    invalidContractDocument
+      .asText()
+      .replace("{#tracks}", "")
+      .replace("{/tracks}", ""),
+  );
+  await writeFile(
+    invalidContractPath,
+    invalidContractZip.generate({ type: "nodebuffer", compression: "DEFLATE" }),
+  );
+  await assert.rejects(
+    () => buildReviewDocsZip(templateSourceFixture(), { templateDir }),
+    (error) =>
+      error instanceof ReviewDocsRenderError &&
+      error.message.includes(invalidContractFilename) &&
+      error.message.includes("필수 placeholder"),
+  );
 });

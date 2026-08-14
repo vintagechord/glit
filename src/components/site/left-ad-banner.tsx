@@ -1,5 +1,6 @@
 import Image from "next/image";
 
+import { isAllowedImageSource } from "@/lib/image-source";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 type AdBanner = {
@@ -17,6 +18,20 @@ function isBannerActive(banner: AdBanner, now: Date) {
   return startsOk && endsOk;
 }
 
+const getSafeBannerHref = (value: string | null) => {
+  const href = value?.trim();
+  if (!href) return null;
+  if (href.startsWith("/") && !href.startsWith("//")) return href;
+  try {
+    const parsed = new URL(href);
+    return parsed.protocol === "https:" || parsed.protocol === "http:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+};
+
 export async function LeftAdBanner() {
   const supabase = await createServerSupabase();
   const { data } = await supabase
@@ -31,7 +46,8 @@ export async function LeftAdBanner() {
   const now = new Date();
   const banner = data.find((item) => isBannerActive(item, now));
 
-  if (!banner) return null;
+  if (!banner || !isAllowedImageSource(banner.image_url)) return null;
+  const bannerHref = getSafeBannerHref(banner.link_url);
 
   const content = (
     <div className="rounded-[28px] border border-border/60 bg-card/90 p-3 shadow-[0_18px_60px_rgba(15,23,42,0.2)]">
@@ -50,9 +66,9 @@ export async function LeftAdBanner() {
 
   return (
     <div className="pointer-events-none fixed left-6 top-28 z-30 hidden w-[180px] xl:block">
-      {banner.link_url ? (
+      {bannerHref ? (
         <a
-          href={banner.link_url}
+          href={bannerHref}
           target="_blank"
           rel="noreferrer"
           className="pointer-events-auto block"

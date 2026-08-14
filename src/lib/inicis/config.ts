@@ -62,8 +62,18 @@ const loadStdPayConfig = (mode: InicisMode): StdPayEnvConfig => {
     );
   }
 
-  const isProdJs = stdJsUrl.includes("stdpay.inicis.com");
-  const isStgJs = stdJsUrl.includes("stgstdpay.inicis.com");
+  let stdJsHost = "";
+  try {
+    const parsedStdJsUrl = new URL(stdJsUrl);
+    if (parsedStdJsUrl.protocol !== "https:") {
+      throw new Error("STDPay JS URL must use HTTPS.");
+    }
+    stdJsHost = parsedStdJsUrl.hostname.toLowerCase();
+  } catch {
+    throw new Error("[Inicis] STDPay JS URL is invalid or not HTTPS.");
+  }
+  const isProdJs = stdJsHost === "stdpay.inicis.com";
+  const isStgJs = stdJsHost === "stgstdpay.inicis.com";
   if (mode === "stg" && isProdJs) {
     throw new Error("[Inicis] STDPay config mismatch: stg mode requires stgstdpay.inicis.com JS URL.");
   }

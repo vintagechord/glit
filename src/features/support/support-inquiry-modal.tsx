@@ -105,14 +105,14 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
 
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 px-4 py-6"
           onClick={closeModal}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="max-h-[min(720px,calc(100vh-48px))] w-full max-w-lg overflow-y-auto rounded-[12px] border-2 border-[#111111] bg-card shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]"
+            className="max-h-[min(720px,calc(100dvh-48px))] w-full max-w-lg overflow-y-auto rounded-[12px] border-2 border-[#111111] bg-card shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 border-b-2 border-[#111111] bg-[#111111] px-5 py-4 text-white dark:border-[#f2cf27]">

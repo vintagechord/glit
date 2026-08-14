@@ -17,6 +17,11 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const signupHref = isEnglishRoute ? "/en/signup" : "/signup";
+  const forgotPasswordHref = isEnglishRoute
+    ? "/en/forgot-password"
+    : "/forgot-password";
+  const trackHref = isEnglishRoute ? "/en/track" : "/track";
+  const effectiveNextPath = nextPath ?? (isEnglishRoute ? "/en/mypage" : null);
 
   const SubmitButton = () => {
     const { pending } = useFormStatus();
@@ -41,20 +46,26 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
   return (
     <div className="space-y-5">
       <form action={formAction} className="space-y-5">
-        {nextPath ? <input type="hidden" name="next" value={nextPath} /> : null}
+        {effectiveNextPath ? (
+          <input type="hidden" name="next" value={effectiveNextPath} />
+        ) : null}
         <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <label
+            htmlFor="login-email"
+            className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+          >
             이메일
           </label>
           <input
+            id="login-email"
             name="email"
             type="email"
             autoComplete="email"
             required
-          value={emailValue}
-          onChange={(event) => {
-            setEmailValue(event.target.value);
-          }}
+            value={emailValue}
+            onChange={(event) => {
+              setEmailValue(event.target.value);
+            }}
             className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.email && (
@@ -62,10 +73,14 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
           )}
         </div>
         <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <label
+            htmlFor="login-password"
+            className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+          >
             비밀번호
           </label>
           <input
+            id="login-password"
             name="password"
             type="password"
             autoComplete="current-password"
@@ -86,7 +101,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
       <div className="space-y-2 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3">
         <div className="flex justify-center">
           <Link
-            href="/forgot-password"
+            href={forgotPasswordHref}
             className="inline-flex w-full justify-center rounded-[8px] border-2 border-border px-4 py-2 text-xs font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white sm:w-auto dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
           >
             비밀번호 찾기
@@ -109,7 +124,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
           className="inline-flex items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         />
         <Link
-          href="/track"
+          href={trackHref}
           className="inline-flex items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         >
           조회 코드 찾기

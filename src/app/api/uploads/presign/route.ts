@@ -1,8 +1,22 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { B2ConfigError, buildObjectKey, presignPutUrl } from "@/lib/b2";
+import {
+  B2ConfigError,
+  buildObjectKey,
+  getB2Config,
+  presignPutUrl,
+} from "@/lib/b2";
+import {
+  getGuestStorageOwnerId,
+  getStorageLogId,
+} from "@/lib/guest-storage-owner";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import { readBoundedJsonBody } from "@/lib/request-body";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
 import {
   isApplicationFormFile,
   isApplicationFormMime,
@@ -13,11 +27,11 @@ import { createServerSupabase } from "@/lib/supabase/server";
 
 const schema = z.object({
   submissionId: z.string().uuid(),
-  filename: z.string().min(1),
-  mimeType: z.string().optional(),
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().max(255).optional(),
   sizeBytes: z.number().int().positive(),
-  title: z.string().optional(),
-  guestToken: z.string().min(8).optional(),
+  title: z.string().max(200).optional(),
+  guestToken: z.string().min(8).max(120).optional(),
   kind: z.enum(["audio", "video"]).optional(),
   scope: z
     .enum(["submission", "karaoke_request", "karaoke_recommendation"])
@@ -26,7 +40,9 @@ const schema = z.object({
 
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
-const MAX_GENERIC_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
+const MAX_GENERIC_BYTES = 512 * 1024 * 1024; // 512MB
+const KARAOKE_UPLOAD_LIMIT = 10;
+const KARAOKE_UPLOAD_WINDOW_MS = 60 * 60 * 1_000;
 
 const isAllowedSubmissionUploadFile = (
   kind: "audio" | "video",
@@ -48,13 +64,34 @@ const isAllowedSubmissionUploadFile = (
 };
 
 export async function POST(request: Request) {
+  const requestLimit = consumeRateLimit({
+    namespace: "upload-init-ip",
+    identifier: getRequestIdentifier(request.headers),
+    limit: 60,
+    windowMs: 60 * 60 * 1_000,
+  });
+  if (!requestLimit.allowed) {
+    return NextResponse.json(
+      { error: "업로드 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
+      },
+    );
+  }
   const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const body = await request.json().catch(() => null);
-  const parsed = schema.safeParse(body);
+  const body = await readBoundedJsonBody(request, 16 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "업로드 정보를 확인해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = schema.safeParse(body.value);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -132,7 +169,9 @@ export async function POST(request: Request) {
       objectOwnerId =
         submission?.user_id ??
         ownerUser?.id ??
-        `guest-${guestToken ?? submission?.guest_token ?? "new"}`;
+        getGuestStorageOwnerId(
+          guestToken ?? submission?.guest_token ?? "new",
+        );
     } else if (scope === "karaoke_recommendation") {
       if (!user) {
         return NextResponse.json(
@@ -142,13 +181,31 @@ export async function POST(request: Request) {
       }
       objectOwnerId = user.id;
     } else {
-      if (!user && !guestToken) {
+      // Karaoke attachments are uploaded before a request row exists, so a
+      // caller-provided UUID cannot prove guest ownership. Fail closed for
+      // guests and bind authenticated uploads to the verified account.
+      if (!user) {
         return NextResponse.json(
-          { error: "로그인 또는 게스트 토큰이 필요합니다." },
+          { error: "비회원 첨부 파일은 지원하지 않습니다. 로그인 후 첨부해주세요." },
           { status: 401 },
         );
       }
-      objectOwnerId = user?.id ?? `guest-${guestToken}`;
+      const karaokeLimit = consumeRateLimit({
+        namespace: "upload-karaoke-request-user",
+        identifier: user.id,
+        limit: KARAOKE_UPLOAD_LIMIT,
+        windowMs: KARAOKE_UPLOAD_WINDOW_MS,
+      });
+      if (!karaokeLimit.allowed) {
+        return NextResponse.json(
+          { error: "첨부 파일 업로드 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+          {
+            status: 429,
+            headers: { "Retry-After": String(karaokeLimit.retryAfterSeconds) },
+          },
+        );
+      }
+      objectOwnerId = user.id;
     }
     if (!objectOwnerId) {
       return NextResponse.json(
@@ -167,14 +224,15 @@ export async function POST(request: Request) {
     const uploadUrl = await presignPutUrl({
       objectKey,
       contentType: mimeType,
+      contentLength: sizeBytes,
     });
 
     console.info("[Upload][presign] ok", {
-      submissionId,
-      objectKey,
+      submissionIdHash: getStorageLogId(submissionId),
+      objectKeyId: getStorageLogId(objectKey),
       sizeBytes,
       scope,
-      user: user?.id ?? objectOwnerId ?? null,
+      userIdHash: getStorageLogId(user?.id ?? objectOwnerId),
       guest: Boolean(guestToken),
     });
 
@@ -182,7 +240,7 @@ export async function POST(request: Request) {
       uploadUrl,
       objectKey,
       scope,
-      expiresIn: Number(process.env.B2_PRESIGN_EXPIRES_SECONDS ?? "900"),
+      expiresIn: getB2Config().signExpiry,
     });
   } catch (error) {
     const message =
@@ -190,10 +248,10 @@ export async function POST(request: Request) {
         ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
         : "업로드 URL을 생성할 수 없습니다.";
     console.error("[Upload][presign] error", {
-      submissionId,
-      user: user?.id ?? null,
+      submissionIdHash: getStorageLogId(submissionId),
+      userIdHash: user?.id ? getStorageLogId(user.id) : null,
       guest: Boolean(guestToken),
-      message: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : "UnknownError",
     });
     if (error instanceof B2ConfigError) {
       return NextResponse.json(

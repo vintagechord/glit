@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 import {
@@ -12,7 +12,10 @@ import {
 import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
-import { addGuestSubmissionCartEntries } from "@/lib/guest-submission-cart";
+import {
+  addGuestSubmissionCartEntries,
+  toGuestTokensBySubmissionId,
+} from "@/lib/guest-submission-cart";
 import {
   cleanupInicisPaymentLayer,
   openInicisCardPopup,
@@ -214,6 +217,8 @@ const uploadMaxMb = Number(
   "4096",
 );
 const uploadMaxBytes = uploadMaxMb * 1024 * 1024;
+const directUploadMaxBytes = 128 * 1024 * 1024;
+const albumMultipartThresholdBytes = 32 * 1024 * 1024;
 const uploadMaxLabel =
   uploadMaxMb >= 1024
     ? `${Math.round(uploadMaxMb / 1024)}GB`
@@ -278,6 +283,31 @@ type AlbumDraft = {
   emailSubmitConfirmed: boolean;
 };
 
+const getAlbumDraftGuestTokens = (drafts: AlbumDraft[]) =>
+  toGuestTokensBySubmissionId(
+    drafts.map((draft) => ({
+      submissionId: draft.submissionId,
+      guestToken: draft.guestToken,
+    })),
+  );
+
+const getStoredAlbumDraftGuestTokens = (
+  drafts: Array<Record<string, unknown>>,
+  storedTokens: Record<string, string> = {},
+  fallbackToken = "",
+) =>
+  toGuestTokensBySubmissionId(
+    drafts.map((draft) => {
+      const submissionId = String(draft.id ?? "");
+      const rowToken =
+        typeof draft.guest_token === "string" ? draft.guest_token : "";
+      return {
+        submissionId,
+        guestToken: rowToken || storedTokens[submissionId] || fallbackToken,
+      };
+    }),
+  );
+
 export function AlbumWizard({
   packages,
   userId,
@@ -294,7 +324,10 @@ export function AlbumWizard({
   albumDiscountPercent?: number;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const isGuest = !userId;
   const isAdminReviewer =
     userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
@@ -377,6 +410,7 @@ export function AlbumWizard({
   const [resumePrompt, setResumePrompt] = React.useState<{
     drafts: Array<Record<string, unknown>>;
     storedGuestToken?: string;
+    storedGuestTokensBySubmissionId?: Record<string, string>;
   } | null>(null);
   const [isClearingResumeDrafts, setIsClearingResumeDrafts] = React.useState(false);
   const resumePromptHandledRef = React.useRef(false);
@@ -566,6 +600,7 @@ export function AlbumWizard({
         ids?: string[];
         updatedAt?: number;
         guestToken?: string;
+        guestTokensBySubmissionId?: Record<string, string>;
       };
     } catch {
       return null;
@@ -575,6 +610,7 @@ export function AlbumWizard({
   const writeDraftStorage = React.useCallback((payload: {
     ids: string[];
     guestToken?: string | null;
+    guestTokensBySubmissionId?: Record<string, string>;
   }) => {
     if (typeof window === "undefined") return;
     try {
@@ -583,6 +619,8 @@ export function AlbumWizard({
         JSON.stringify({
           ids: payload.ids,
           guestToken: payload.guestToken ?? null,
+          guestTokensBySubmissionId:
+            payload.guestTokensBySubmissionId ?? {},
           updatedAt: Date.now(),
         }),
       );
@@ -603,12 +641,14 @@ export function AlbumWizard({
   const clearServerDrafts = React.useCallback(async (options: {
     ids?: string[];
     guestToken?: string | null;
+    guestTokensBySubmissionId?: Record<string, string>;
   }) => {
     const ids = (options.ids ?? []).filter(Boolean);
     const payload: {
       type: "ALBUM";
       ids?: string[];
       guestToken?: string;
+      guestTokensBySubmissionId?: Record<string, string>;
     } = {
       type: "ALBUM",
     };
@@ -618,6 +658,13 @@ export function AlbumWizard({
     if (isGuest) {
       const guestToken = options.guestToken ?? currentGuestToken;
       if (guestToken) payload.guestToken = guestToken;
+      if (
+        options.guestTokensBySubmissionId &&
+        Object.keys(options.guestTokensBySubmissionId).length > 0
+      ) {
+        payload.guestTokensBySubmissionId =
+          options.guestTokensBySubmissionId;
+      }
     }
 
     const controller = new AbortController();
@@ -836,9 +883,9 @@ export function AlbumWizard({
       if (status === "SUCCESS") {
         clearDraftStorage();
         if (guestPaymentToken) {
-          window.location.href = `/track/${encodeURIComponent(guestPaymentToken)}?payment=success`;
+          window.location.href = `${localePrefix}/track/${encodeURIComponent(guestPaymentToken)}?payment=success`;
         } else if (submissionIdFromMsg) {
-          window.location.href = `/dashboard/submissions/${encodeURIComponent(submissionIdFromMsg)}?payment=success`;
+          window.location.href = `${localePrefix}/dashboard/submissions/${encodeURIComponent(submissionIdFromMsg)}?payment=success`;
         }
         return;
       }
@@ -849,11 +896,11 @@ export function AlbumWizard({
             : paymentFailureDraftNotice;
         const paymentState = status.toLowerCase();
         if (guestPaymentToken) {
-          window.location.href = `/track/${encodeURIComponent(guestPaymentToken)}?payment=${paymentState}`;
+          window.location.href = `${localePrefix}/track/${encodeURIComponent(guestPaymentToken)}?payment=${paymentState}`;
           return;
         }
         if (submissionIdFromMsg) {
-          window.location.href = `/dashboard/submissions/${encodeURIComponent(submissionIdFromMsg)}?payment=${paymentState}`;
+          window.location.href = `${localePrefix}/dashboard/submissions/${encodeURIComponent(submissionIdFromMsg)}?payment=${paymentState}`;
           return;
         }
         setNotice({ error: message });
@@ -861,7 +908,13 @@ export function AlbumWizard({
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [clearDraftStorage, currentGuestToken, currentSubmissionId, isGuest]);
+  }, [
+    clearDraftStorage,
+    currentGuestToken,
+    currentSubmissionId,
+    isGuest,
+    localePrefix,
+  ]);
 
   const stepLabels = (
     <div className="grid gap-3 md:grid-cols-5">
@@ -1305,6 +1358,336 @@ export function AlbumWizard({
     }
   };
 
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const getMultipartConcurrency = () => {
+    if (
+      typeof navigator !== "undefined" &&
+      /iphone|ipad|ipod|android|mobile/i.test(navigator.userAgent)
+    ) {
+      return 3;
+    }
+    const cores =
+      typeof navigator !== "undefined" ? navigator.hardwareConcurrency ?? 8 : 8;
+    if (cores >= 12) return 8;
+    if (cores >= 8) return 7;
+    return 6;
+  };
+
+  const putBlobWithProgress = (
+    url: string,
+    blob: Blob,
+    onProgress: (loaded: number, total: number) => void,
+  ) =>
+    new Promise<string | null>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        onProgress(event.loaded, event.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(xhr.getResponseHeader("ETag"));
+          return;
+        }
+        reject(new Error(`Upload failed (status ${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error("Upload failed (network/CORS)"));
+      xhr.open("PUT", url);
+      xhr.send(blob);
+    });
+
+  type MultipartResumeState = {
+    grantId: string;
+    uploadId: string;
+    key: string;
+    partSize: number;
+    parts: Record<number, string>;
+    createdAt: number;
+  };
+
+  const buildMultipartResumeKey = (submissionId: string, file: File) =>
+    `album-multipart:${submissionId}:${file.name}:${file.size}:${file.lastModified}`;
+
+  const loadMultipartResumeState = (
+    resumeKey: string,
+  ): MultipartResumeState | null => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(resumeKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as MultipartResumeState;
+      if (!parsed.grantId || !parsed.uploadId || !parsed.key || !parsed.partSize) {
+        window.localStorage.removeItem(resumeKey);
+        return null;
+      }
+      if (Date.now() - (parsed.createdAt ?? 0) > 24 * 60 * 60 * 1_000) {
+        window.localStorage.removeItem(resumeKey);
+        return null;
+      }
+      return parsed;
+    } catch {
+      window.localStorage.removeItem(resumeKey);
+      return null;
+    }
+  };
+
+  const saveMultipartResumeState = (
+    resumeKey: string,
+    state: MultipartResumeState,
+  ) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(resumeKey, JSON.stringify(state));
+    } catch {
+      // Upload remains usable when private browsing disables localStorage.
+    }
+  };
+
+  const clearMultipartResumeState = (resumeKey: string) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(resumeKey);
+  };
+
+  const presignMultipartParts = async (params: {
+    grantId: string;
+    resumeKey: string;
+    submissionId: string;
+    key: string;
+    uploadId: string;
+    partNumbers: number[];
+  }) => {
+    const urlMap = new Map<number, string>();
+    for (let index = 0; index < params.partNumbers.length; index += 100) {
+      const partNumbers = params.partNumbers.slice(index, index + 100);
+      const response = await fetch("/api/uploads/multipart/presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          grantId: params.grantId,
+          submissionId: params.submissionId,
+          key: params.key,
+          uploadId: params.uploadId,
+          partNumbers,
+          guestToken: isGuest ? currentGuestTokenRef.current : undefined,
+        }),
+      });
+      const json = (await response.json().catch(() => ({}))) as {
+        urls?: Array<{ partNumber: number; url: string }>;
+        error?: string;
+      };
+      if (!response.ok || !json.urls) {
+        if ([400, 403, 409, 410].includes(response.status)) {
+          clearMultipartResumeState(params.resumeKey);
+        }
+        throw new Error(json.error || "업로드 URL을 생성할 수 없습니다.");
+      }
+      json.urls.forEach((item) => urlMap.set(item.partNumber, item.url));
+    }
+    return urlMap;
+  };
+
+  const uploadMultipartAudioFile = async (
+    file: File,
+    onProgress: (percent: number) => void,
+  ) => {
+    const submissionId = requireSubmissionId();
+    const mimeType = file.type || "application/octet-stream";
+    const resumeKey = buildMultipartResumeKey(submissionId, file);
+    const resumeState = loadMultipartResumeState(resumeKey);
+
+    let grantId = resumeState?.grantId ?? null;
+    let uploadId = resumeState?.uploadId ?? null;
+    let key = resumeState?.key ?? null;
+    let partSize = resumeState?.partSize ?? null;
+
+    if (!grantId || !uploadId || !key || !partSize) {
+      const initResponse = await fetch("/api/uploads/multipart/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId,
+          kind: "audio",
+          filename: file.name,
+          mimeType,
+          sizeBytes: file.size,
+          guestToken: isGuest ? currentGuestTokenRef.current : undefined,
+          title: title.trim() || undefined,
+        }),
+      });
+      const initJson = (await initResponse.json().catch(() => ({}))) as {
+        grantId?: string;
+        key?: string;
+        uploadId?: string;
+        partSize?: number;
+        error?: string;
+      };
+      if (
+        !initResponse.ok ||
+        !initJson.grantId ||
+        !initJson.key ||
+        !initJson.uploadId ||
+        !initJson.partSize
+      ) {
+        throw new Error(
+          initJson.error || "대용량 음원 업로드를 시작할 수 없습니다.",
+        );
+      }
+      grantId = initJson.grantId;
+      uploadId = initJson.uploadId;
+      key = initJson.key;
+      partSize = initJson.partSize;
+      saveMultipartResumeState(resumeKey, {
+        grantId,
+        uploadId,
+        key,
+        partSize,
+        parts: {},
+        createdAt: Date.now(),
+      });
+    }
+
+    const partCount = Math.ceil(file.size / partSize);
+    const uploadedParts: Record<number, string> = {
+      ...(resumeState?.parts ?? {}),
+    };
+    const partsToUpload: number[] = [];
+    let totalLoaded = 0;
+    for (let partNumber = 1; partNumber <= partCount; partNumber += 1) {
+      if (uploadedParts[partNumber]) {
+        const start = (partNumber - 1) * partSize;
+        totalLoaded += Math.min(partSize, file.size - start);
+      } else {
+        partsToUpload.push(partNumber);
+      }
+    }
+    if (totalLoaded > 0) {
+      onProgress(Math.min(100, Math.round((totalLoaded / file.size) * 100)));
+    }
+
+    const urlMap =
+      partsToUpload.length > 0
+        ? await presignMultipartParts({
+            grantId,
+            resumeKey,
+            submissionId,
+            key,
+            uploadId,
+            partNumbers: partsToUpload,
+          })
+        : new Map<number, string>();
+    const partProgress = new Map<number, number>();
+    const partsResult: Array<{ partNumber: number; etag: string } | null> =
+      Array.from({ length: partCount }, () => null);
+    Object.entries(uploadedParts).forEach(([partNumber, etag]) => {
+      const index = Number(partNumber) - 1;
+      if (index >= 0 && index < partsResult.length) {
+        partsResult[index] = { partNumber: Number(partNumber), etag };
+      }
+    });
+
+    let cursor = 0;
+    const uploadPart = async (partNumber: number) => {
+      const start = (partNumber - 1) * partSize;
+      const end = Math.min(start + partSize, file.size);
+      const blob = file.slice(start, end);
+      for (let attempt = 0; attempt <= 5; attempt += 1) {
+        let url = urlMap.get(partNumber);
+        if (!url) {
+          const refreshed = await presignMultipartParts({
+            grantId,
+            resumeKey,
+            submissionId,
+            key,
+            uploadId,
+            partNumbers: [partNumber],
+          });
+          url = refreshed.get(partNumber);
+          if (url) urlMap.set(partNumber, url);
+        }
+        if (!url) throw new Error("업로드 URL을 생성할 수 없습니다.");
+        try {
+          const etagRaw = await putBlobWithProgress(
+            url,
+            blob,
+            (loaded, total) => {
+              const previous = partProgress.get(partNumber) ?? 0;
+              const boundedLoaded = Math.min(loaded, total);
+              partProgress.set(partNumber, boundedLoaded);
+              totalLoaded += boundedLoaded - previous;
+              onProgress(
+                Math.min(100, Math.round((totalLoaded / file.size) * 100)),
+              );
+            },
+          );
+          const etag = etagRaw?.replace(/\"/g, "") ?? "";
+          if (!etag) {
+            throw new Error("ETag를 확인할 수 없습니다. CORS 설정을 확인해주세요.");
+          }
+          uploadedParts[partNumber] = etag;
+          partsResult[partNumber - 1] = { partNumber, etag };
+          saveMultipartResumeState(resumeKey, {
+            grantId,
+            uploadId,
+            key,
+            partSize,
+            parts: uploadedParts,
+            createdAt: Date.now(),
+          });
+          return;
+        } catch (error) {
+          if (attempt >= 5) throw error;
+          await sleep(Math.min(2_000, 400 * 2 ** attempt));
+        }
+      }
+    };
+
+    const workers = Array.from(
+      { length: Math.min(getMultipartConcurrency(), partsToUpload.length) },
+      async () => {
+        while (cursor < partsToUpload.length) {
+          const partNumber = partsToUpload[cursor];
+          cursor += 1;
+          await uploadPart(partNumber);
+        }
+      },
+    );
+    await Promise.all(workers);
+
+    const completeResponse = await fetch("/api/uploads/multipart/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grantId,
+        submissionId,
+        key,
+        uploadId,
+        parts: partsResult.filter(
+          (part): part is { partNumber: number; etag: string } => Boolean(part),
+        ),
+        filename: file.name,
+        mimeType,
+        sizeBytes: file.size,
+        kind: "AUDIO",
+        guestToken: isGuest ? currentGuestTokenRef.current : undefined,
+      }),
+    });
+    const completeJson = (await completeResponse.json().catch(() => ({}))) as {
+      key?: string;
+      error?: string;
+    };
+    if (!completeResponse.ok || !completeJson.key) {
+      if ([400, 403, 409, 410].includes(completeResponse.status)) {
+        clearMultipartResumeState(resumeKey);
+      }
+      throw new Error(completeJson.error || "업로드 확인에 실패했습니다.");
+    }
+
+    clearMultipartResumeState(resumeKey);
+    return { objectKey: completeJson.key };
+  };
+
   const uploadWithProgress = async (
     file: File,
     onProgress: (percent: number) => void,
@@ -1336,8 +1719,15 @@ export function AlbumWizard({
       }
       return { objectKey: completeJson.key };
     };
-    const directUploadFallback = () =>
-      new Promise<{ objectKey: string }>((resolve, reject) => {
+    const directUploadFallback = () => {
+      if (file.size > directUploadMaxBytes) {
+        return Promise.reject(
+          new Error(
+            "128MB를 초과한 파일은 보안 업로드 URL로만 전송할 수 있습니다. 네트워크를 확인한 뒤 다시 시도해주세요.",
+          ),
+        );
+      }
+      return new Promise<{ objectKey: string }>((resolve, reject) => {
         const formData = new FormData();
         formData.append("submissionId", submissionId);
         formData.append("filename", file.name);
@@ -1380,35 +1770,46 @@ export function AlbumWizard({
         xhr.open("POST", "/api/uploads/direct");
         xhr.send(formData);
       });
+    };
 
     if (isApplicationFormUpload) {
       const directUpload = await directUploadFallback();
       return completeUpload(directUpload.objectKey);
     }
 
-    const initRes = await fetch("/api/uploads/init", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        submissionId,
-        kind: "audio",
-        filename: file.name,
-        mimeType,
-        sizeBytes: file.size,
-        guestToken: isGuest ? currentGuestTokenRef.current : undefined,
-        title: title.trim() || undefined,
-      }),
-    });
+    if (file.size >= albumMultipartThresholdBytes) {
+      return uploadMultipartAudioFile(file, onProgress);
+    }
 
-    const initJson = (await initRes.json().catch(() => ({}))) as {
+    let initRes: Response | null = null;
+    let initJson: {
       key?: string;
       uploadUrl?: string;
       headers?: Record<string, string>;
       error?: string;
-    };
-    if (!initRes.ok || !initJson.key || !initJson.uploadUrl) {
+    } = {};
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      initRes = await fetch("/api/uploads/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId,
+          kind: "audio",
+          filename: file.name,
+          mimeType,
+          sizeBytes: file.size,
+          guestToken: isGuest ? currentGuestTokenRef.current : undefined,
+          title: title.trim() || undefined,
+        }),
+      });
+      initJson = (await initRes.json().catch(() => ({}))) as typeof initJson;
+      if (initRes.ok && initJson.key && initJson.uploadUrl) break;
+      if (initRes.status < 500 || attempt === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 400 * 2 ** attempt));
+    }
+    if (!initRes?.ok || !initJson.key || !initJson.uploadUrl) {
       console.warn("[Upload][album] init failed, fallback to direct", {
-        status: initRes.status,
+        status: initRes?.status,
         error: initJson.error,
       });
       const fallback = await directUploadFallback();
@@ -1418,8 +1819,8 @@ export function AlbumWizard({
     const { key, uploadUrl, headers } = initJson;
     const contentType = headers?.["Content-Type"] || mimeType;
 
-    try {
-      await new Promise<void>((resolve, reject) => {
+    const putPresignedFile = () =>
+      new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.upload.onprogress = (event) => {
           if (!event.lengthComputable) return;
@@ -1438,6 +1839,23 @@ export function AlbumWizard({
         xhr.setRequestHeader("Content-Type", contentType);
         xhr.send(file);
       });
+    try {
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          await putPresignedFile();
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (attempt < 2) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 400 * 2 ** attempt),
+            );
+          }
+        }
+      }
+      if (lastError) throw lastError;
     } catch (error) {
       console.warn("[Upload][album] presigned PUT failed, fallback to direct", error);
       const fallback = await directUploadFallback();
@@ -1560,9 +1978,9 @@ export function AlbumWizard({
     setEmailSubmitConfirmed(false);
     setNotice({});
     setCurrentSubmissionId(null);
+    draftInitAttemptedRef.current = false;
     draftErrorRef.current = null;
     setDraftError(null);
-    void createDraft();
     const nextGuestToken = safeRandomUUID();
     currentGuestTokenRef.current = nextGuestToken;
     setCurrentGuestToken(nextGuestToken);
@@ -1787,12 +2205,18 @@ export function AlbumWizard({
     resumePromptHandledRef.current = true;
     const fallbackGuestToken =
       resumePrompt.storedGuestToken ?? currentGuestToken ?? safeRandomUUID();
+    const restoredGuestTokens = getStoredAlbumDraftGuestTokens(
+      resumePrompt.drafts,
+      resumePrompt.storedGuestTokensBySubmissionId,
+      fallbackGuestToken,
+    );
     applyStoredDrafts(resumePrompt.drafts, fallbackGuestToken);
     writeDraftStorage({
       ids: resumePrompt.drafts
         .map((draft) => String(draft.id ?? ""))
         .filter(Boolean),
       guestToken: isGuest ? fallbackGuestToken : null,
+      guestTokensBySubmissionId: isGuest ? restoredGuestTokens : undefined,
     });
     setResumePrompt(null);
     setResumeChecked(true);
@@ -1809,9 +2233,21 @@ export function AlbumWizard({
     resumePromptHandledRef.current = true;
     setIsClearingResumeDrafts(true);
     const guestToken = resumePrompt.storedGuestToken ?? currentGuestToken;
+    const ids = resumePrompt.drafts
+      .map((draft) => String(draft.id ?? ""))
+      .filter(Boolean);
+    const guestTokensBySubmissionId = getStoredAlbumDraftGuestTokens(
+      resumePrompt.drafts,
+      resumePrompt.storedGuestTokensBySubmissionId,
+      guestToken,
+    );
     clearDraftStorage();
     try {
-      await clearServerDrafts({ guestToken });
+      await clearServerDrafts({
+        ids,
+        guestToken,
+        guestTokensBySubmissionId,
+      });
     } catch (error) {
       console.warn("[AlbumDraft][resume-clear] failed", error);
     } finally {
@@ -1846,10 +2282,15 @@ export function AlbumWizard({
         stored?.guestToken ??
         (isGuest ? currentGuestToken : null) ??
         undefined;
+      const storedGuestTokensBySubmissionId =
+        stored?.guestTokensBySubmissionId ?? {};
       const payload = {
         type: "ALBUM",
         ids: stored?.ids,
         guestToken: isGuest ? storedGuestToken : undefined,
+        guestTokensBySubmissionId: isGuest
+          ? storedGuestTokensBySubmissionId
+          : undefined,
       };
       try {
         const res = await fetch("/api/submissions/drafts", {
@@ -1869,6 +2310,7 @@ export function AlbumWizard({
         setResumePrompt({
           drafts,
           storedGuestToken: storedGuestToken ?? undefined,
+          storedGuestTokensBySubmissionId,
         });
       } catch (error) {
         if (cancelled) return;
@@ -2328,6 +2770,7 @@ export function AlbumWizard({
           aiUsed: draft.aiUsed ?? undefined,
           filesSubmittedByEmail:
             isDownloadedApplicationFlow && draft.emailSubmitConfirmed,
+          externalApplicationForm: isDownloadedApplicationFlow,
           melonUrl: isOneClick ? draft.melonUrl || undefined : undefined,
           guestToken: draft.guestToken,
           guestName: applicantNameValue,
@@ -2379,6 +2822,9 @@ export function AlbumWizard({
       writeDraftStorage({
         ids: storedIds,
         guestToken: isGuest ? currentGuestTokenRef.current : null,
+        guestTokensBySubmissionId: isGuest
+          ? getAlbumDraftGuestTokens(drafts)
+          : undefined,
       });
       setNotice({ submissionId: submissionIds[0] ?? currentSubmissionId });
       return true;
@@ -2509,6 +2955,9 @@ export function AlbumWizard({
       writeDraftStorage({
         ids: allDrafts.map((draft) => draft.submissionId),
         guestToken: isGuest ? currentGuestTokenRef.current : null,
+        guestTokensBySubmissionId: isGuest
+          ? getAlbumDraftGuestTokens(allDrafts)
+          : undefined,
       });
       setUploadDrafts(allDrafts);
       setUploadDraftIndex(0);
@@ -2721,6 +3170,7 @@ export function AlbumWizard({
           aiUsed: draft.aiUsed ?? undefined,
           filesSubmittedByEmail:
             isDownloadedApplicationFlow && draft.emailSubmitConfirmed,
+          externalApplicationForm: isDownloadedApplicationFlow,
           melonUrl: isOneClick ? draft.melonUrl || undefined : undefined,
           guestToken: draft.guestToken,
           guestName: applicantNameValue,
@@ -2809,7 +3259,9 @@ export function AlbumWizard({
             );
           }
           if (options?.redirectToCart) {
-            router.push(`/mypage/cart?added=${encodeURIComponent(submissionIds[0])}`);
+            router.push(
+              `${localePrefix}/mypage/cart?added=${encodeURIComponent(submissionIds[0])}`,
+            );
             return;
           }
           setNotice({
@@ -2877,11 +3329,12 @@ export function AlbumWizard({
         label={step <= 3 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
       />
       {resumePrompt && !isFromDraftsTab ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-4 py-6">
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-md rounded-[28px] border border-border/60 bg-background p-6 text-foreground shadow-xl"
+            aria-label="임시저장 신청서 불러오기"
+            className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto rounded-[24px] border border-border/60 bg-background p-5 text-foreground shadow-xl sm:rounded-[28px] sm:p-6"
           >
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               임시저장 알림
@@ -4929,7 +5382,7 @@ export function AlbumWizard({
       )}
 
       {step === 5 && (
-        <div className="rounded-[32px] border border-border/60 bg-card/80 p-10 text-center">
+        <div className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-center sm:rounded-[32px] sm:p-10">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             STEP 05
           </p>
@@ -4939,7 +5392,7 @@ export function AlbumWizard({
           <p className="mt-3 text-sm text-muted-foreground">
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
-          <div className="mx-auto mt-6 max-w-3xl rounded-[28px] border border-black/6 bg-white/88 p-6 text-left shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+          <div className="mx-auto mt-6 max-w-3xl rounded-[20px] border border-black/6 bg-white/88 p-4 text-left shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none sm:rounded-[28px] sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               다음 단계 안내
             </p>
@@ -4973,7 +5426,9 @@ export function AlbumWizard({
           {completionId && !shouldShowGuestLookup && (
             <button
               type="button"
-              onClick={() => router.push("/dashboard?tab=album&refresh=1")}
+              onClick={() =>
+                router.push(`${localePrefix}/dashboard?tab=album&refresh=1`)
+              }
               className="mt-6 rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5"
             >
               진행 상황 보기
@@ -4991,8 +5446,8 @@ export function AlbumWizard({
                     <span className="font-semibold text-foreground">
                       {item.title || `앨범 ${index + 1}`}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-foreground">
+                    <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+                      <span className="max-w-full break-all font-mono text-foreground">
                         {item.token}
                       </span>
                       <button
@@ -5008,7 +5463,11 @@ export function AlbumWizard({
                       </button>
                       <button
                         type="button"
-                        onClick={() => router.push(`/track/${item.token}`)}
+                        onClick={() =>
+                          router.push(
+                            `${localePrefix}/track/${encodeURIComponent(item.token)}`,
+                          )
+                        }
                         className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-black hover:bg-black hover:text-white"
                       >
                         조회
@@ -5024,11 +5483,14 @@ export function AlbumWizard({
 
       {packageConfirmTarget && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4"
           onClick={handleCancelPackage}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border border-border/60 bg-background p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="패키지 선택 확인"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-border/60 bg-background p-5 shadow-xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -5064,8 +5526,13 @@ export function AlbumWizard({
       )}
 
       {notice.error && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="입력 확인"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-border/60 bg-background p-5 shadow-xl sm:p-6"
+          >
             <p className="text-sm font-semibold text-foreground">
               입력 확인이 필요합니다.
             </p>
@@ -5087,11 +5554,14 @@ export function AlbumWizard({
 
       {showCdInfo && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4"
           onClick={() => setShowCdInfo(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="CD 발송 및 제작 안내"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-border/60 bg-background p-5 shadow-xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <p className="text-sm font-semibold text-foreground">
@@ -5127,8 +5597,13 @@ export function AlbumWizard({
       )}
 
       {showOneclickNotice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="원클릭 접수 안내"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-border/60 bg-background p-5 shadow-xl sm:p-6"
+          >
             <p className="text-sm font-semibold text-foreground">
               원클릭 접수는 이미 발매된 앨범만 진행 가능합니다. 확인하셨나요?
             </p>

@@ -602,6 +602,56 @@ const exactTranslations: Record<string, string> = {
   "예금주": "Account Holder",
   "문의하기": "Contact",
   "나의 심의 내역으로": "Go to My Review History",
+  "장바구니": "Cart",
+  "마이페이지 - 장바구니": "My Page - Cart",
+  "마이페이지 - 장바구니 | 온사이드": "My Page - Cart | Onside",
+  "작성 완료된 미결제 신청서를 담아 두고 한 번에 결제할 수 있습니다.":
+    "Keep completed unpaid applications here and pay for them together.",
+  "장바구니를 불러오는 중입니다...": "Loading your cart...",
+  "장바구니에 담긴 미결제 신청서가 없습니다.":
+    "There are no unpaid applications in your cart.",
+  "새 신청서 작성": "Create a New Application",
+  "전체 선택": "Select All",
+  "전체 해제": "Clear All",
+  "선택 삭제": "Delete Selected",
+  "삭제 중": "Deleting",
+  "수정": "Edit",
+  "삭제": "Delete",
+  "삭제 확인": "Confirm Deletion",
+  "취소": "Cancel",
+  "결제 요약": "Payment Summary",
+  "선택한 신청서": "Selected Applications",
+  "총 결제 금액": "Total Payment",
+  "선택 결제하기": "Pay for Selected Items",
+  "결제 준비 중": "Preparing Payment",
+  "무통장 입금으로 선택": "Continue with Bank Transfer",
+  "계좌": "Account",
+  "입금 금액": "Transfer Amount",
+  "패키지 미지정": "Package Not Selected",
+  "금액 확인 필요": "Amount Requires Review",
+  "확인이 필요합니다.": "Action Required",
+  "완료되었습니다.": "Completed",
+  "안내": "Notice",
+  "결제할 신청서를 선택해주세요.": "Select at least one application to pay.",
+  "결제 금액을 확인할 수 없습니다.": "The payment amount could not be verified.",
+  "신청서가 장바구니에 담겼습니다. 결제할 신청서를 선택해주세요.":
+    "The application was added to your cart. Select the applications you want to pay for.",
+  "선택한 신청서를 한 번에 입금 대기 상태로 변경합니다.":
+    "Move all selected applications to bank-transfer pending status.",
+  "선택한 신청서를 KG이니시스 카드 결제로 한 번에 결제합니다.":
+    "Pay for all selected applications together by card through KG Inicis.",
+  "이 장바구니 항목을 삭제할까요? 연결된 접수 현황도 함께 삭제되며 복구할 수 없습니다.":
+    "Delete this cart item? Its linked submission status will also be deleted and cannot be restored.",
+  "장바구니 항목이 삭제되었습니다.": "The cart item was deleted.",
+  "장바구니 항목 삭제에 실패했습니다.": "The cart item could not be deleted.",
+  "장바구니 항목 삭제 중 오류가 발생했습니다.":
+    "An error occurred while deleting the cart item.",
+  "무통장 입금 대기 상태로 변경되었습니다. 아래 계좌로 총액을 입금해주세요.":
+    "Bank-transfer pending status is set. Please transfer the total amount to the account below.",
+  "결제가 완료되지 않았습니다. 신청서는 장바구니에 유지됩니다.":
+    "Payment was not completed. Your applications remain in the cart.",
+  "결제가 취소되었습니다. 신청서는 장바구니에 유지됩니다.":
+    "Payment was canceled. Your applications remain in the cart.",
   "방송국 패키지 선택": "Broadcaster Package",
   "신청서 작성": "Application Form",
   "파일 업로드": "File Upload",
@@ -1041,6 +1091,14 @@ const exactTranslations: Record<string, string> = {
 };
 
 const phraseTranslations: Array<[RegExp, string]> = [
+  [/(\d+)건 대기/g, "$1 pending"],
+  [/(\d+)개 비회원 신청서를 로그인 계정의 장바구니로 연결했습니다\./g,
+    "$1 guest applications were moved to your account cart."],
+  [/(\d+)개 장바구니 항목이 삭제되었습니다\./g,
+    "$1 cart items were deleted."],
+  [/선택한 (\d+)개 장바구니 항목을 삭제할까요\? 연결된 접수 현황도 함께 삭제되며 복구할 수 없습니다\./g,
+    "Delete the $1 selected cart items? Their linked submission statuses will also be deleted and cannot be restored."],
+  [/최근 수정/g, "Last updated"],
   [/진행률\s*:\s*총\s*(\d+)곳\s*중\s*(\d+)곳\s*완료/g, "Progress: $2 of $1 completed"],
   [/총\s*(\d+)곳\s*중\s*(\d+)곳\s*완료/g, "$2 of $1 completed"],
   [/보유\s*크레딧\s*([\d,]+)개/g, "$1 available credits"],

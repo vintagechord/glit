@@ -52,11 +52,25 @@ type SubmissionUpdateEmailPayload = {
   subject?: string;
 };
 
+type GuestSubmissionLookupEmailPayload = {
+  email: string;
+  name?: string | null;
+  items: Array<{
+    token: string;
+    title?: string | null;
+    type?: string | null;
+    createdAt?: string | null;
+    link: string;
+  }>;
+};
+
 type EmailSendResult = {
   ok: boolean;
   skipped?: boolean;
   message?: string;
 };
+
+const EMAIL_REQUEST_TIMEOUT_MS = 10_000;
 
 const getEmailFrom = () =>
   process.env.RESEND_FROM?.trim() ||
@@ -67,33 +81,23 @@ const getResendConfig = () => ({
   from: getEmailFrom(),
 });
 
+const logEmailTransportError = (operation: string, error: unknown) => {
+  // Transport errors can carry request metadata. Keep production logs useful
+  // without serializing recipient addresses, message bodies, or auth headers.
+  console.error(`[Email] ${operation} failed`, {
+    errorName: error instanceof Error ? error.name : "UnknownError",
+  });
+};
+
 const readEmailFailureMessage = async (
   response: Response,
   fallback: string,
 ) => {
   try {
-    const body = await response.text();
-    if (!body) {
-      return fallback;
-    }
-    try {
-      const parsed = JSON.parse(body) as {
-        message?: unknown;
-        error?: unknown;
-        name?: unknown;
-      };
-      const detail =
-        typeof parsed.message === "string"
-          ? parsed.message
-          : typeof parsed.error === "string"
-            ? parsed.error
-            : typeof parsed.name === "string"
-              ? parsed.name
-              : body;
-      return `${fallback} (${response.status}: ${detail})`;
-    } catch {
-      return `${fallback} (${response.status}: ${body})`;
-    }
+    // Drain the response so the connection can be reused, but do not surface
+    // provider payloads: they may echo recipient or request metadata.
+    await response.text();
+    return `${fallback} (${response.status})`;
   } catch {
     return `${fallback} (${response.status})`;
   }
@@ -125,6 +129,7 @@ export async function sendWelcomeEmail(payload: WelcomeEmailPayload) {
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -145,7 +150,15 @@ export async function sendWelcomeEmail(payload: WelcomeEmailPayload) {
 const normalizeAbsoluteUrl = (value?: string) => {
   if (!value) return "";
   try {
-    return new URL(value).toString();
+    const parsed = new URL(value);
+    if (
+      (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return "";
+    }
+    return parsed.toString();
   } catch {
     return "";
   }
@@ -181,6 +194,7 @@ export async function sendPasswordResetEmail(
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -203,7 +217,7 @@ export async function sendPasswordResetEmail(
 
     return { ok: true };
   } catch (error) {
-    console.error("sendPasswordResetEmail error", error);
+    logEmailTransportError("password reset", error);
     return {
       ok: false,
       skipped: false,
@@ -278,6 +292,7 @@ export async function sendSubmissionReceiptEmail(
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -302,7 +317,7 @@ export async function sendSubmissionReceiptEmail(
     }
     return { ok: true };
   } catch (error) {
-    console.error("sendSubmissionReceiptEmail error", error);
+    logEmailTransportError("submission receipt", error);
     return {
       ok: false,
       skipped: false,
@@ -359,6 +374,7 @@ export async function sendResultEmail(
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -381,7 +397,7 @@ export async function sendResultEmail(
 
     return { ok: true };
   } catch (error) {
-    console.error("sendResultEmail error", error);
+    logEmailTransportError("review result", error);
     return {
       ok: false,
       skipped: false,
@@ -473,6 +489,7 @@ export async function sendSubmissionBankRequestEmail(
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -498,7 +515,7 @@ export async function sendSubmissionBankRequestEmail(
 
     return { ok: true };
   } catch (error) {
-    console.error("sendSubmissionBankRequestEmail error", error);
+    logEmailTransportError("bank payment request", error);
     return {
       ok: false,
       skipped: false,
@@ -565,6 +582,7 @@ export async function sendSubmissionUpdateEmail(
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -587,11 +605,94 @@ export async function sendSubmissionUpdateEmail(
 
     return { ok: true };
   } catch (error) {
-    console.error("sendSubmissionUpdateEmail error", error);
+    logEmailTransportError("submission update", error);
     return {
       ok: false,
       skipped: false,
       message: "업데이트 알림 메일 발송에 실패했습니다.",
+    };
+  }
+}
+
+export async function sendGuestSubmissionLookupEmail(
+  payload: GuestSubmissionLookupEmailPayload,
+): Promise<EmailSendResult> {
+  const { apiKey, from } = getResendConfig();
+  if (!apiKey) {
+    return {
+      ok: false,
+      skipped: true,
+      message: "이메일 발송 설정이 되어 있지 않습니다.",
+    };
+  }
+
+  const safeName = escapeHtml(payload.name?.trim() || "신청자");
+  const itemRows = payload.items
+    .slice(0, 10)
+    .map((item) => {
+      const safeTitle = escapeHtml(item.title?.trim() || "제목 미입력");
+      const kindLabel = item.type?.startsWith("MV") ? "뮤직비디오" : "음반";
+      const safeToken = escapeHtml(item.token);
+      const safeLink = escapeHtml(normalizeAbsoluteUrl(item.link) || item.link);
+      const createdAt = item.createdAt ? new Date(item.createdAt) : null;
+      const createdLabel =
+        createdAt && !Number.isNaN(createdAt.getTime())
+          ? createdAt.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })
+          : "";
+      return `
+        <div style="margin-top: 14px; border: 1px solid #d5dbe5; border-radius: 12px; padding: 14px 16px; background: #f8fafc;">
+          <p style="margin: 0; font-size: 14px; font-weight: 700; color: #0f172a;">${safeTitle}</p>
+          <p style="margin: 5px 0 0; font-size: 12px; color: #64748b;">${kindLabel}${createdLabel ? ` · ${escapeHtml(createdLabel)}` : ""}</p>
+          <p style="margin: 10px 0 0; font-size: 12px; color: #475569;">조회 코드</p>
+          <p style="margin: 4px 0 0; font-family: monospace; font-size: 13px; overflow-wrap: anywhere; color: #0f172a;">${safeToken}</p>
+          <a href="${safeLink}" style="display: inline-block; margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: #f2cf27; color: #111111; font-size: 12px; font-weight: 700; text-decoration: none;">진행상황 확인</a>
+        </div>
+      `;
+    })
+    .join("");
+
+  const html = `
+    <div style="margin: 0; padding: 28px 12px; background: #eef2f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #0f172a;">
+      <div style="max-width: 580px; margin: 0 auto; border-radius: 20px; overflow: hidden; border: 1px solid #d5dbe5; background: #ffffff; padding: 24px;">
+        <h2 style="margin: 0; font-size: 22px;">비회원 접수 조회 코드</h2>
+        <p style="margin: 10px 0 0; color: #475569; line-height: 1.6;">${safeName}님이 요청한 온사이드 접수 조회 정보입니다. 본인이 요청하지 않았다면 이 메일을 무시해주세요.</p>
+        ${itemRows}
+      </div>
+    </div>
+  `;
+
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: payload.email,
+        subject: "[onside] 비회원 접수 조회 코드 안내",
+        html,
+      }),
+    });
+    if (!response.ok) {
+      return {
+        ok: false,
+        skipped: false,
+        message: await readEmailFailureMessage(
+          response,
+          "조회 코드 메일 발송에 실패했습니다.",
+        ),
+      };
+    }
+    return { ok: true };
+  } catch (error) {
+    logEmailTransportError("guest lookup", error);
+    return {
+      ok: false,
+      skipped: false,
+      message: "조회 코드 메일 발송에 실패했습니다.",
     };
   }
 }

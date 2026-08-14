@@ -4,6 +4,11 @@ import { z } from "zod";
 
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
 import { sendSubmissionBankRequestEmail } from "@/lib/email";
+import { readBoundedJsonBody } from "@/lib/request-body";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -48,10 +53,33 @@ const getKind = (type?: string | null): "ALBUM" | "MV" =>
   type === "ALBUM" ? "ALBUM" : "MV";
 
 export async function POST(req: NextRequest) {
+  const requestLimit = consumeRateLimit({
+    namespace: "cart-bank-payment-ip",
+    identifier: getRequestIdentifier(req.headers),
+    limit: 20,
+    windowMs: 15 * 60 * 1_000,
+  });
+  if (!requestLimit.allowed) {
+    return NextResponse.json(
+      { error: "결제 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
+      },
+    );
+  }
+
   const supabase = await createServerSupabase();
   const user = await getServerSessionUser(supabase);
 
-  const parsed = requestSchema.safeParse(await req.json().catch(() => null));
+  const body = await readBoundedJsonBody(req, 32 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "결제할 신청서를 선택해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = requestSchema.safeParse(body.value);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "결제할 신청서를 선택해주세요." },
@@ -62,14 +90,23 @@ export async function POST(req: NextRequest) {
   const submissionIds = Array.from(new Set(parsed.data.submissionIds));
   const guestTokensBySubmissionId =
     parsed.data.guestTokensBySubmissionId ?? {};
+  const guestTokens = Array.from(
+    new Set(Object.values(guestTokensBySubmissionId)),
+  );
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let submissionQuery = admin
     .from("submissions")
     .select(
       "id, user_id, guest_token, type, title, artist_name, amount_krw, status, payment_status, applicant_email, guest_email",
     )
     .in("id", submissionIds)
     .or("payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)");
+  submissionQuery = user
+    ? submissionQuery.eq("user_id", user.id)
+    : submissionQuery
+        .is("user_id", null)
+        .in("guest_token", guestTokens);
+  const { data, error } = await submissionQuery;
 
   if (error) {
     console.error("[CartBank] load failed", error);
@@ -125,42 +162,40 @@ export async function POST(req: NextRequest) {
     0,
   );
 
-  let updateQuery = admin
-    .from("submissions")
-    .update({
-      payment_method: "BANK",
-      payment_status: "PAYMENT_PENDING",
-      status: "WAITING_PAYMENT",
-    })
-    .in("id", submissionIds)
-    .in("status", ["SUBMITTED", "WAITING_PAYMENT"])
-    .neq("payment_status", "PAID");
-  updateQuery = user
-    ? updateQuery.eq("user_id", user.id)
-    : updateQuery.is("user_id", null);
-  const { data: updatedRows, error: updateError } = await updateQuery.select(
-    "id",
+  const { data: updatedRows, error: updateError } = await admin.rpc(
+    "begin_submission_bank_payment",
+    {
+      p_submission_ids: submissionIds,
+      p_user_id: user?.id ?? null,
+    },
   );
 
   if (updateError || (updatedRows ?? []).length !== submissionIds.length) {
     console.error("[CartBank] update failed", updateError);
-    return NextResponse.json(
-      { error: "무통장 입금 대기 상태로 변경하지 못했습니다." },
-      { status: 500 },
+    const invalidAlbumPrice = updateError?.message?.includes(
+      "ALBUM_PRICE_SNAPSHOT_INVALID",
     );
-  }
-
-  const eventRows = submissionIds.map((submissionId) => ({
-    submission_id: submissionId,
-    actor_user_id: user?.id ?? null,
-    event_type: "PAYMENT_UPDATE",
-    message: "장바구니에서 무통장 입금 대기 상태로 변경되었습니다.",
-  }));
-  const { error: eventError } = await admin
-    .from("submission_events")
-    .insert(eventRows);
-  if (eventError) {
-    console.warn("[CartBank] event insert failed", eventError);
+    const invalidAlbumDiscount = updateError?.message?.includes(
+      "ALBUM_DISCOUNT_NOT_ELIGIBLE",
+    );
+    const conflict =
+      invalidAlbumPrice ||
+      invalidAlbumDiscount ||
+      (updateError?.code === "55000" &&
+        (updateError.message?.includes("PAYMENT_ALREADY_IN_PROGRESS") ||
+          updateError.message?.includes("SUBMISSION_NOT_PAYABLE")));
+    return NextResponse.json(
+      {
+        error: invalidAlbumPrice
+          ? "앨범 신청서의 결제 금액이 변경되었습니다. 신청서를 다시 저장해주세요."
+          : invalidAlbumDiscount
+            ? "추가 앨범 할인 결제에는 같은 패키지의 정가 앨범을 함께 선택하거나 먼저 결제해야 합니다."
+            : conflict
+              ? "이미 결제가 진행 중이거나 결제 대기 상태인 신청서가 포함되어 있습니다."
+              : "무통장 입금 대기 상태로 변경하지 못했습니다.",
+      },
+      { status: conflict ? 409 : 500 },
+    );
   }
 
   const baseUrl = getBaseUrl(req);
@@ -192,7 +227,6 @@ export async function POST(req: NextRequest) {
           if (!result.ok && !result.skipped) {
             console.warn("[CartBank] bank email failed", {
               submissionId: submission.id,
-              email,
               message: result.message,
             });
           }

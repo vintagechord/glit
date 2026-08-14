@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 
 import { showCenteredConfirm } from "@/lib/centered-dialog";
@@ -82,8 +82,10 @@ const getDraftGroupType = (type: string): DraftGroupType =>
 const getTypeLabel = (type: DraftGroupType) =>
   type === "ALBUM" ? "앨범" : "뮤직비디오";
 
-const getResumePath = (type: DraftGroupType) =>
-  type === "ALBUM" ? "/dashboard/new/album" : "/dashboard/new/mv";
+const getResumePath = (type: DraftGroupType, localePrefix = "") =>
+  type === "ALBUM"
+    ? `${localePrefix}/dashboard/new/album`
+    : `${localePrefix}/dashboard/new/mv`;
 
 const buildDisplayTitle = (item: DraftSubmissionItem) => {
   const artist = item.artistName?.trim() || "아티스트 미입력";
@@ -106,6 +108,9 @@ export function DraftSubmissionList({
   initialItems: DraftSubmissionItem[];
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const [items, setItems] = React.useState<DraftSubmissionItem[]>(initialItems);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
     () => new Set(),
@@ -212,7 +217,7 @@ export function DraftSubmissionList({
         // ignore storage errors
       }
     }
-    router.push(`${getResumePath(draftGroup)}?from=drafts`);
+    router.push(`${getResumePath(draftGroup, localePrefix)}?from=drafts`);
   };
 
   const handleDelete = async () => {
@@ -292,7 +297,7 @@ export function DraftSubmissionList({
           작성중 신청서가 없습니다.
         </div>
         <Link
-          href="/dashboard/new"
+          href={`${localePrefix}/dashboard/new`}
           className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-4 text-xs font-black tracking-normal text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5"
         >
           새 신청서 작성
@@ -398,7 +403,7 @@ export function DraftSubmissionList({
                     type="button"
                     onClick={() => {
                       if (shouldOpenPayment) {
-                        router.push(`/dashboard/pay/${item.id}`);
+                        router.push(`${localePrefix}/dashboard/pay/${item.id}`);
                         return;
                       }
                       handleResume(item, Date.now());

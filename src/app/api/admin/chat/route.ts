@@ -18,8 +18,12 @@ const replySchema = z.object({
 
 const statusSchema = z.object({
   conversationId: z.string().uuid(),
-  status: z.enum(["OPEN", "WAITING_ADMIN", "WAITING_VISITOR", "CLOSED"]),
+  status: z
+    .enum(["OPEN", "WAITING_ADMIN", "WAITING_VISITOR", "CLOSED"])
+    .optional(),
   markRead: z.boolean().optional(),
+}).refine((value) => Boolean(value.status || value.markRead), {
+  message: "status or markRead is required",
 });
 
 const deleteSchema = z.object({
@@ -145,7 +149,6 @@ export async function GET(request: NextRequest) {
   }
 
   const conversationId = request.nextUrl.searchParams.get("conversationId");
-  const markRead = request.nextUrl.searchParams.get("markRead") === "admin";
   const admin = createAdminClient();
 
   try {
@@ -153,18 +156,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ conversations: await listConversations() });
     }
 
-    const query = markRead
-      ? admin
-          .from("support_chat_conversations")
-          .update({ unread_admin_count: 0 })
-          .eq("id", conversationId)
-          .select(conversationSelect)
-      : admin
-          .from("support_chat_conversations")
-          .select(conversationSelect)
-          .eq("id", conversationId);
-
-    const { data, error } = await query.maybeSingle();
+    const { data, error } = await admin
+      .from("support_chat_conversations")
+      .select(conversationSelect)
+      .eq("id", conversationId)
+      .maybeSingle();
 
     if (error || !data) {
       throw error ?? new Error("conversation missing");
@@ -275,9 +271,10 @@ export async function PATCH(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const updatePayload: Record<string, unknown> = {
-    status: parsed.data.status,
-  };
+  const updatePayload: Record<string, unknown> = {};
+  if (parsed.data.status) {
+    updatePayload.status = parsed.data.status;
+  }
   if (parsed.data.markRead) {
     updatePayload.unread_admin_count = 0;
   }

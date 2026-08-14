@@ -4,7 +4,16 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { z } from "zod";
 
 import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
+import {
+  getGuestStorageOwnerId,
+  getStorageLogId,
+} from "@/lib/guest-storage-owner";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import { readBoundedJsonBody } from "@/lib/request-body";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
 import {
   isApplicationFormFile,
   isApplicationFormMime,
@@ -19,16 +28,27 @@ export const maxDuration = 120;
 const schema = z.object({
   submissionId: z.string().uuid(),
   kind: z.enum(["audio", "video"]),
-  filename: z.string().min(1),
-  mimeType: z.string().min(1),
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(255),
   sizeBytes: z.number().int().positive(),
-  title: z.string().optional(),
-  guestToken: z.string().min(8).optional(),
+  title: z.string().max(255).optional(),
+  guestToken: z.string().min(8).max(120).optional(),
 });
 
-const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
-const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
-const EXPIRES_SECONDS = Number(process.env.B2_PRESIGN_EXPIRES_SECONDS ?? "900");
+// A single PUT has no server callback if the browser abandons it after B2 has
+// accepted the object. Keep that untracked exposure small; larger files use the
+// owner-bound multipart grant flow, whose expired parts can be aborted.
+const MAX_SINGLE_PUT_BYTES = 128 * 1024 * 1024;
+const BYTE_QUOTA_UNIT = 1024 * 1024;
+const SINGLE_PUT_SUBMISSION_DAILY_MIB = 4 * 1024;
+const SINGLE_PUT_OWNER_DAILY_MIB = 8 * 1024;
+const SINGLE_PUT_IP_DAILY_MIB = 8 * 1024;
+const configuredExpiresSeconds = Number(
+  process.env.B2_PRESIGN_EXPIRES_SECONDS ?? "900",
+);
+const EXPIRES_SECONDS = Number.isFinite(configuredExpiresSeconds)
+  ? Math.min(60 * 60, Math.max(60, Math.trunc(configuredExpiresSeconds)))
+  : 900;
 
 const isAllowedUploadFile = (
   kind: "audio" | "video",
@@ -51,8 +71,30 @@ const isAllowedUploadFile = (
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
-  const body = await request.json().catch(() => null);
-  const parsed = schema.safeParse(body);
+  const requestLimit = consumeRateLimit({
+    namespace: "upload-init-ip",
+    identifier: getRequestIdentifier(request.headers),
+    limit: 60,
+    windowMs: 60 * 60 * 1_000,
+  });
+  if (!requestLimit.allowed) {
+    return NextResponse.json(
+      { error: "업로드 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
+      },
+    );
+  }
+
+  const body = await readBoundedJsonBody(request, 16 * 1024);
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: "업로드 정보를 확인해주세요." },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    );
+  }
+  const parsed = schema.safeParse(body.value);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -64,14 +106,10 @@ export async function POST(request: Request) {
   const { submissionId, kind, filename, mimeType, sizeBytes, title, guestToken } =
     parsed.data;
 
-  const maxSize = kind === "audio" ? MAX_AUDIO_BYTES : MAX_VIDEO_BYTES;
-  if (sizeBytes > maxSize) {
+  if (sizeBytes > MAX_SINGLE_PUT_BYTES) {
     return NextResponse.json(
       {
-        error:
-          kind === "audio"
-            ? "음원 파일은 최대 4GB까지 업로드할 수 있습니다."
-            : "뮤직비디오는 최대 4GB까지 업로드할 수 있습니다.",
+        error: "128MB를 초과한 파일은 멀티파트 업로드를 이용해주세요.",
       },
       { status: 413 },
     );
@@ -103,12 +141,64 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
     }
 
+    const effectiveGuestToken = guestToken ?? submission?.guest_token;
+    const ownerIdentifier = submission?.user_id
+      ? `user:${submission.user_id}`
+      : effectiveGuestToken
+        ? `guest:${getGuestStorageOwnerId(effectiveGuestToken)}`
+        : user?.id
+          ? `user:${user.id}`
+          : null;
+    if (!ownerIdentifier) {
+      return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+    }
+
+    const quotaCost = Math.max(1, Math.ceil(sizeBytes / BYTE_QUOTA_UNIT));
+    const quotaChecks = [
+      {
+        namespace: "upload-single-put-bytes-submission",
+        identifier: submissionId,
+        limit: SINGLE_PUT_SUBMISSION_DAILY_MIB,
+      },
+      {
+        namespace: "upload-single-put-bytes-owner",
+        identifier: ownerIdentifier,
+        limit: SINGLE_PUT_OWNER_DAILY_MIB,
+      },
+      {
+        namespace: "upload-single-put-bytes-ip",
+        identifier: getRequestIdentifier(request.headers),
+        limit: SINGLE_PUT_IP_DAILY_MIB,
+      },
+    ];
+    for (const quota of quotaChecks) {
+      const result = consumeRateLimit({
+        ...quota,
+        cost: quotaCost,
+        windowMs: 24 * 60 * 60 * 1_000,
+      });
+      if (!result.allowed) {
+        return NextResponse.json(
+          {
+            error:
+              "단일 파일 업로드 허용량을 초과했습니다. 잠시 후 다시 시도하거나 멀티파트 업로드를 이용해주세요.",
+          },
+          {
+            status: 429,
+            headers: { "Retry-After": String(result.retryAfterSeconds) },
+          },
+        );
+      }
+    }
+
     const { client, bucket } = getB2Config();
     const key = buildObjectKey({
       userId:
         submission?.user_id ??
         user?.id ??
-        `guest-${guestToken ?? submission?.guest_token ?? "new"}`,
+        getGuestStorageOwnerId(
+          guestToken ?? submission?.guest_token ?? "new",
+        ),
       submissionId,
       title,
       filename,
@@ -118,17 +208,18 @@ export async function POST(request: Request) {
       Bucket: bucket,
       Key: key,
       ContentType: mimeType,
+      ContentLength: sizeBytes,
     });
     const uploadUrl = await getSignedUrl(client, command, { expiresIn: EXPIRES_SECONDS });
 
     console.info("[Upload][init] ok", {
-      submissionId,
+      submissionIdHash: getStorageLogId(submissionId),
       kind,
       sizeBytes,
-      key,
+      objectKeyId: getStorageLogId(key),
       bucket,
       tookMs: Date.now() - startedAt,
-      user: user?.id ?? null,
+      userIdHash: user?.id ? getStorageLogId(user.id) : null,
       guest: Boolean(submission?.guest_token ?? guestToken),
     });
 
@@ -139,27 +230,24 @@ export async function POST(request: Request) {
       uploadUrl,
       method: "PUT",
       headers: { "Content-Type": mimeType },
-      maxSizeBytes: maxSize,
+      maxSizeBytes: MAX_SINGLE_PUT_BYTES,
       expiresInSeconds: EXPIRES_SECONDS,
       submissionId,
     });
   } catch (error) {
     const isConfig = error instanceof B2ConfigError;
-    const message =
-      isConfig
-        ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
-        : error instanceof Error
-          ? error.message
-          : "업로드 URL을 생성할 수 없습니다.";
     console.error("[Upload][init] error", {
-      submissionId,
+      submissionIdHash: getStorageLogId(submissionId),
       kind,
       sizeBytes,
-      user: null,
-      raw: error instanceof Error ? error.message : error,
+      errorName: error instanceof Error ? error.name : "UnknownError",
     });
     return NextResponse.json(
-      { error: message },
+      {
+        error: isConfig
+          ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
+          : "업로드 URL을 생성할 수 없습니다.",
+      },
       { status: isConfig ? 503 : 500 },
     );
   }

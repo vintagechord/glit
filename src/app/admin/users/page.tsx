@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDateTime } from "@/lib/format";
 
@@ -20,6 +21,7 @@ type UserRow = {
 };
 
 export default async function AdminUsersPage() {
+  await requireAdminPage();
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("profiles")
@@ -54,7 +56,7 @@ export default async function AdminUsersPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             관리자
@@ -85,8 +87,14 @@ export default async function AdminUsersPage() {
         </div>
       )}
 
-      <div className="mt-6 overflow-x-auto">
+      <div
+        className="mt-6 overflow-x-auto"
+        role="region"
+        aria-label="회원 목록"
+        tabIndex={0}
+      >
         <table className="min-w-[900px] w-full rounded-[24px] border border-border/60 bg-card/80 text-left text-sm shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+          <caption className="sr-only">회원 기본 정보 및 연락처 목록</caption>
           <thead className="border-b border-border/60 bg-muted/40 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
             <tr>
               <th className="px-4 py-3 font-semibold">이메일</th>

@@ -12,6 +12,8 @@ type KakaoSendResult = {
   message?: string;
 };
 
+const KAKAO_REQUEST_TIMEOUT_MS = 10_000;
+
 const normalizePhone = (value?: string | null) =>
   (value ?? "").replace(/[^0-9]/g, "");
 
@@ -33,6 +35,7 @@ export async function sendKakaoOfficialNotification(
   try {
     const response = await fetch(endpoint, {
       method: "POST",
+      signal: AbortSignal.timeout(KAKAO_REQUEST_TIMEOUT_MS),
       headers: {
         "Content-Type": "application/json",
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
@@ -59,7 +62,9 @@ export async function sendKakaoOfficialNotification(
 
     return { ok: true };
   } catch (error) {
-    console.error("[kakao][official][send-error]", error);
+    console.error("[kakao][official][send-error]", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
     return {
       ok: false,
       skipped: false,

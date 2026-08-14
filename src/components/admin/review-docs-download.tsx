@@ -9,6 +9,8 @@ type ReviewDocsSelectionContextValue = {
   toggleId: (id: string) => void;
   selectAll: () => void;
   clear: () => void;
+  isDownloading: boolean;
+  setIsDownloading: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
 const ReviewDocsSelectionContext =
@@ -69,7 +71,7 @@ async function downloadFromResponse(response: Response, fallbackFilename: string
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
 export function ReviewDocsSelectionProvider({
@@ -81,6 +83,7 @@ export function ReviewDocsSelectionProvider({
 }) {
   const availableIds = React.useMemo(() => Array.from(new Set(ids)), [ids]);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
+  const [isDownloading, setIsDownloading] = React.useState(false);
 
   React.useEffect(() => {
     setSelectedIds((current) => {
@@ -117,8 +120,10 @@ export function ReviewDocsSelectionProvider({
       toggleId,
       selectAll,
       clear,
+      isDownloading,
+      setIsDownloading,
     }),
-    [availableIds, clear, selectAll, selectedIds, toggleId],
+    [availableIds, clear, isDownloading, selectAll, selectedIds, toggleId],
   );
 
   return (
@@ -135,7 +140,7 @@ export function ReviewDocsRowCheckbox({
   id: string;
   label: string;
 }) {
-  const { selectedIds, toggleId } = useReviewDocsSelection();
+  const { selectedIds, toggleId, isDownloading } = useReviewDocsSelection();
   const checked = selectedIds.has(id);
 
   return (
@@ -144,6 +149,7 @@ export function ReviewDocsRowCheckbox({
         type="checkbox"
         checked={checked}
         onChange={() => toggleId(id)}
+        disabled={isDownloading}
         className="mt-1 h-4 w-4 rounded border-2 border-border accent-[#1556a4]"
         aria-label={`${label} 심의자료 다운로드 선택`}
       />
@@ -153,9 +159,15 @@ export function ReviewDocsRowCheckbox({
 }
 
 export function ReviewDocsBulkToolbar() {
-  const { availableIds, selectedIds, selectAll, clear } = useReviewDocsSelection();
+  const {
+    availableIds,
+    selectedIds,
+    selectAll,
+    clear,
+    isDownloading,
+    setIsDownloading,
+  } = useReviewDocsSelection();
   const [error, setError] = React.useState("");
-  const [isDownloading, setIsDownloading] = React.useState(false);
   const selectedCount = selectedIds.size;
   const allSelected = availableIds.length > 0 && selectedCount === availableIds.length;
 
@@ -203,6 +215,7 @@ export function ReviewDocsBulkToolbar() {
             type="button"
             onClick={allSelected ? clear : selectAll}
             disabled={availableIds.length === 0 || isDownloading}
+            aria-pressed={allSelected}
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border-2 border-border bg-background px-3 py-2 text-xs font-black text-foreground transition hover:border-[#111111] disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-[#f2cf27]"
           >
             {allSelected ? (
@@ -239,7 +252,10 @@ export function ReviewDocsBulkToolbar() {
         </div>
       </div>
       {error ? (
-        <p className="mt-3 rounded-[8px] border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700">
+        <p
+          role="alert"
+          className="mt-3 rounded-[8px] border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700"
+        >
           {error}
         </p>
       ) : null}
@@ -337,7 +353,10 @@ export function MelonReviewDocsDownloadForm() {
         </button>
       </div>
       {error ? (
-        <p className="rounded-[8px] border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700">
+        <p
+          role="alert"
+          className="rounded-[8px] border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700"
+        >
           {error}
         </p>
       ) : null}
@@ -388,7 +407,10 @@ export function ReviewDocsSingleDownloadButton({
         <span>{isDownloading ? "생성 중" : "심의자료 DOCX ZIP 다운로드"}</span>
       </button>
       {error ? (
-        <p className="rounded-[8px] border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700">
+        <p
+          role="alert"
+          className="rounded-[8px] border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700"
+        >
           {error}
         </p>
       ) : null}

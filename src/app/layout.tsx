@@ -26,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" suppressHydrationWarning>
-      <body className="min-h-screen font-sans antialiased">
+      <body className="min-h-dvh font-sans antialiased">
         <ThemeProvider>
           {enableNavigationLatencyLogger ? (
             <Suspense fallback={null}>

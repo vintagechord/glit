@@ -1,41 +1,32 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-
-import { APP_CONFIG } from "@/lib/config";
+import { usePathname, useRouter } from "next/navigation";
 
 export function TrackLookupForm({
   onSuccess,
 }: {
   onSuccess?: () => void;
 }) {
-  const noMatchLookupError = "일치하는 접수 내역이 없습니다. 입력값을 다시 확인해주세요.";
   const router = useRouter();
+  const pathname = usePathname();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const [token, setToken] = React.useState("");
   const [error, setError] = React.useState("");
   const [validating, setValidating] = React.useState(false);
   const [lookupName, setLookupName] = React.useState("");
   const [lookupEmail, setLookupEmail] = React.useState("");
   const [lookupError, setLookupError] = React.useState("");
-  const [noMatchAttemptCount, setNoMatchAttemptCount] = React.useState(0);
+  const [lookupMessage, setLookupMessage] = React.useState("");
   const [lookupBusy, setLookupBusy] = React.useState(false);
-  const [copiedToken, setCopiedToken] = React.useState<string | null>(null);
-  const [lookupResults, setLookupResults] = React.useState<
-    Array<{
-      token: string;
-      title?: string | null;
-      type?: string | null;
-      createdAt?: string | null;
-    }>
-  >([]);
 
   const openTrack = React.useCallback(
     (value: string) => {
       onSuccess?.();
-      router.push(`/track/${encodeURIComponent(value)}`);
+      router.push(`${localePrefix}/track/${encodeURIComponent(value)}`);
     },
-    [onSuccess, router],
+    [localePrefix, onSuccess, router],
   );
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -72,12 +63,13 @@ export function TrackLookupForm({
     const email = lookupEmail.trim();
     if (!name || !email) {
       setLookupError("이름과 이메일을 입력해주세요.");
-      setNoMatchAttemptCount(0);
+      setLookupMessage("");
       return;
     }
 
     setLookupBusy(true);
     setLookupError("");
+    setLookupMessage("");
     try {
       const response = await fetch("/api/track/lookup-code", {
         method: "POST",
@@ -88,18 +80,11 @@ export function TrackLookupForm({
         | {
             ok?: boolean;
             error?: string;
-            items?: Array<{
-              token?: string;
-              title?: string | null;
-              type?: string | null;
-              createdAt?: string | null;
-            }>;
+            message?: string;
           }
         | null;
 
       if (!response.ok || !payload?.ok) {
-        setLookupResults([]);
-        setNoMatchAttemptCount(0);
         setLookupError(
           payload?.error ??
             "조회 코드를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.",
@@ -107,49 +92,16 @@ export function TrackLookupForm({
         return;
       }
 
-      const rows =
-        payload.items
-          ?.filter((item) => typeof item.token === "string")
-          .map((item) => ({
-            token: String(item.token),
-            title: item.title ?? null,
-            type: item.type ?? null,
-            createdAt: item.createdAt ?? null,
-          })) ?? [];
-
-      setLookupResults(rows);
-      if (rows.length === 0) {
-        setLookupError(noMatchLookupError);
-        setNoMatchAttemptCount((prev) => prev + 1);
-      } else {
-        setLookupError("");
-        setNoMatchAttemptCount(0);
-      }
+      setLookupError("");
+      setLookupMessage(
+        payload.message ??
+          "입력한 정보와 일치하는 접수가 있으면 해당 이메일로 조회 코드를 보내드립니다.",
+      );
     } catch {
-      setLookupResults([]);
-      setNoMatchAttemptCount(0);
+      setLookupMessage("");
       setLookupError("조회 코드를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
       setLookupBusy(false);
-    }
-  };
-
-  const formatCreatedAt = (value?: string | null) => {
-    if (!value) return "";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleDateString("ko-KR");
-  };
-
-  const handleCopyToken = async (value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopiedToken(value);
-      window.setTimeout(() => {
-        setCopiedToken((current) => (current === value ? null : current));
-      }, 1600);
-    } catch {
-      setLookupError("코드를 복사하지 못했습니다. 직접 선택해 복사해주세요.");
     }
   };
 
@@ -192,7 +144,7 @@ export function TrackLookupForm({
           조회 코드 찾기
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
-          조회 코드를 잊은 경우 접수자 이름과 이메일로 조회 코드를 확인할 수 있습니다.
+          조회 코드를 잊은 경우 접수자 이름과 이메일을 확인한 뒤 등록된 이메일로 조회 코드를 보내드립니다.
         </p>
         <form onSubmit={handleLookupCode} className="mt-3 space-y-3">
           <label
@@ -233,59 +185,17 @@ export function TrackLookupForm({
           </button>
         </form>
         {lookupError ? (
-          <div className="mt-3 space-y-1">
-            <p className="text-xs text-red-500">{lookupError}</p>
-            {lookupError === noMatchLookupError && noMatchAttemptCount >= 2 ? (
-              <p className="text-xs text-muted-foreground">
-                접수 정보를 잊었다면{" "}
-                <a
-                  href={`mailto:${APP_CONFIG.supportEmail}`}
-                  className="font-semibold text-foreground underline underline-offset-2"
-                >
-                  {APP_CONFIG.supportEmail}
-                </a>
-                로 문의해주세요.
-              </p>
-            ) : null}
-          </div>
+          <p className="mt-3 text-xs text-red-500" role="alert">
+            {lookupError}
+          </p>
         ) : null}
-
-        {lookupResults.length > 0 ? (
-          <div className="mt-3 space-y-2">
-            {lookupResults.map((item, index) => (
-              <div
-                key={`${item.token}-${index}`}
-                className="rounded-[8px] border-2 border-border bg-card px-3 py-3 text-xs"
-              >
-                <p className="font-semibold text-foreground">
-                  {item.title?.trim() || `접수 ${index + 1}`}
-                </p>
-                <p className="mt-1 text-muted-foreground">
-                  {(item.type ?? "").startsWith("MV") ? "뮤직비디오" : "음반"}
-                  {item.createdAt ? ` · ${formatCreatedAt(item.createdAt)}` : ""}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <code className="rounded-md bg-black/5 px-2 py-1 text-[11px] text-foreground dark:bg-white/10">
-                    {item.token}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => void handleCopyToken(item.token)}
-                    className="rounded-[6px] border-2 border-border px-2 py-1 text-[10px] font-black uppercase tracking-normal text-foreground transition hover:border-black hover:bg-black hover:text-white"
-                  >
-                    {copiedToken === item.token ? "복사됨" : "복사"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openTrack(item.token)}
-                    className="rounded-[6px] border-2 border-border px-2 py-1 text-[10px] font-black uppercase tracking-normal text-foreground transition hover:border-black hover:bg-black hover:text-white"
-                  >
-                    조회
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+        {lookupMessage ? (
+          <p
+            className="mt-3 rounded-[8px] border-2 border-[#1556a4] bg-[#1556a4]/10 px-3 py-3 text-xs font-semibold leading-5 text-foreground"
+            role="status"
+          >
+            {lookupMessage}
+          </p>
         ) : null}
       </div>
     </div>

@@ -22,6 +22,7 @@ import { formatDateTime } from "@/lib/format";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
+import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { AdminSaveToast } from "@/components/admin/save-toast";
@@ -33,6 +34,7 @@ import { StationReviewForm } from "@/components/admin/station-review-form";
 import { updateStationReviewFormAction } from "@/features/admin/actions";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { ReviewDocsSingleDownloadButton } from "@/components/admin/review-docs-download";
+import { safeAdminSubmissionsReturnTo } from "@/lib/admin/submission-navigation";
 
 export const metadata = {
   title: "접수 상세 관리",
@@ -151,6 +153,7 @@ type AdminSubmissionDetailSearchParams = {
   saved?: string | string[];
   savedError?: string | string[];
   savedWarning?: string | string[];
+  returnTo?: string | string[];
 };
 
 type AdminSubmissionDetailParams = {
@@ -199,6 +202,7 @@ export default async function AdminSubmissionDetailPage({
     | AdminSubmissionDetailSearchParams;
   params?: Promise<AdminSubmissionDetailParams> | AdminSubmissionDetailParams;
 }) {
+  await requireAdminPage();
   const resolvedParams = await Promise.resolve(params ?? {});
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
   const paramId = resolvedParams.id;
@@ -212,6 +216,10 @@ export default async function AdminSubmissionDetailPage({
   const savedWarningParam = Array.isArray(resolvedSearchParams.savedWarning)
     ? resolvedSearchParams.savedWarning[0]
     : resolvedSearchParams.savedWarning;
+  const returnToParam = Array.isArray(resolvedSearchParams.returnTo)
+    ? resolvedSearchParams.returnTo[0]
+    : resolvedSearchParams.returnTo;
+  const initialAdminSubmissionListHref = safeAdminSubmissionsReturnTo(returnToParam);
   const urlId = Array.isArray(searchId)
     ? searchId.find((v) => typeof v === "string" && uuidPattern.test(v)) ?? ""
     : typeof searchId === "string"
@@ -296,7 +304,7 @@ export default async function AdminSubmissionDetailPage({
         </p>
         <div className="mt-3 flex gap-3">
           <Link
-            href="/admin/submissions"
+            href={initialAdminSubmissionListHref}
             className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
             목록으로 돌아가기
@@ -320,7 +328,7 @@ export default async function AdminSubmissionDetailPage({
         </p>
         <div className="mt-3 flex gap-3">
           <Link
-            href="/admin/submissions"
+            href={initialAdminSubmissionListHref}
             className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
             목록으로 돌아가기
@@ -342,7 +350,7 @@ export default async function AdminSubmissionDetailPage({
       </p>
       <div className="mt-3 flex gap-3">
         <Link
-          href="/admin/submissions"
+          href={initialAdminSubmissionListHref}
           className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
         >
           목록으로 돌아가기
@@ -439,7 +447,7 @@ export default async function AdminSubmissionDetailPage({
         </div>
         <div className="mt-3 flex gap-3">
           <Link
-            href="/admin/submissions"
+            href={initialAdminSubmissionListHref}
             className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
             목록으로 돌아가기
@@ -461,9 +469,13 @@ export default async function AdminSubmissionDetailPage({
   const isMvDistribution = submission.type === "MV_DISTRIBUTION";
   const isMvBroadcast = submission.type === "MV_BROADCAST";
   const isMvSubmission = isMvDistribution || isMvBroadcast;
-  const adminSubmissionListHref = typeLabels[submission.type]
+  const submissionTypeListHref = typeLabels[submission.type]
     ? `/admin/submissions?type=${encodeURIComponent(submission.type)}`
     : "/admin/submissions?type=ALBUM";
+  const adminSubmissionListHref = safeAdminSubmissionsReturnTo(
+    returnToParam,
+    submissionTypeListHref,
+  );
   const statusLabel = reviewStatusLabelMap[submission.status] ?? submission.status;
   const paymentLabel =
     submission.payment_status && paymentStatusLabelMap[submission.payment_status]
@@ -831,7 +843,7 @@ export default async function AdminSubmissionDetailPage({
           <span className="text-muted-foreground">
             Updated {formatDateTime(submission.updated_at ?? submission.created_at)}
           </span>
-          {submission.type === "ALBUM" ? (
+          {submission.type === "ALBUM" && !submission.is_oneclick ? (
             <ReviewDocsSingleDownloadButton
               id={submission.id}
               className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-white transition hover:bg-[#1556a4] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
@@ -959,6 +971,7 @@ export default async function AdminSubmissionDetailPage({
             id="admin-save-form"
           >
             <input type="hidden" name="submissionId" value={submission.id} />
+            <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
 
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -1207,6 +1220,7 @@ export default async function AdminSubmissionDetailPage({
                   className="mt-5 grid gap-4 rounded-2xl border border-border/60 bg-background/70 p-4 md:grid-cols-[220px_1fr_auto]"
                 >
                   <input type="hidden" name="submissionId" value={submission.id} />
+                  <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
                   <label className="space-y-2">
                     <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       결과
@@ -1320,6 +1334,7 @@ export default async function AdminSubmissionDetailPage({
                       trackResults={trackResults}
                       statusOptions={stationReviewStatusOptions}
                       action={updateStationReviewFormAction}
+                      returnTo={adminSubmissionListHref}
                     />
                   );
                 })
@@ -1567,6 +1582,7 @@ export default async function AdminSubmissionDetailPage({
                           className="m-0"
                         >
                           <input type="hidden" name="submissionId" value={submission.id} />
+                          <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
                           <input type="hidden" name="trackId" value={track.id} />
                           <button
                             type="submit"
@@ -1608,6 +1624,7 @@ export default async function AdminSubmissionDetailPage({
                 message="트랙을 추가하시겠습니까?"
               >
                 <input type="hidden" name="submissionId" value={submission.id} />
+                <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground">트랙 번호</label>
                   <input

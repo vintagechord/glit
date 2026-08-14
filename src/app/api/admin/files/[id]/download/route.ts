@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { B2ConfigError, presignGetUrl } from "@/lib/b2";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -10,6 +11,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  if (!z.string().uuid().safeParse(id).success) {
+    return NextResponse.json({ error: "유효하지 않은 파일 ID입니다." }, { status: 400 });
+  }
   const supabase = await createServerSupabase();
   const {
     data: { user },

@@ -205,9 +205,7 @@ export function AdminChatClient({
       setError(null);
       try {
         const params = new URLSearchParams({ conversationId });
-        if (options?.markRead ?? isDocumentVisible()) {
-          params.set("markRead", "admin");
-        }
+        const shouldMarkRead = options?.markRead ?? isDocumentVisible();
         const response = await fetch(`/api/admin/chat?${params.toString()}`, {
           cache: "no-store",
         });
@@ -218,8 +216,26 @@ export function AdminChatClient({
           throw new Error(payload?.error ?? "대화를 불러오지 못했습니다.");
         }
         if (requestId !== threadRequestIdRef.current) return;
+        let nextConversation = payload.conversation;
+        if (shouldMarkRead && nextConversation.unreadAdminCount) {
+          const markResponse = await fetch("/api/admin/chat", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conversationId, markRead: true }),
+          });
+          const markPayload = (await markResponse.json().catch(() => null)) as
+            | ReplyPayload
+            | null;
+          if (!markResponse.ok || !markPayload?.conversation) {
+            throw new Error(
+              markPayload?.error ?? "채팅 읽음 상태를 저장하지 못했습니다.",
+            );
+          }
+          nextConversation = markPayload.conversation;
+        }
+        if (requestId !== threadRequestIdRef.current) return;
         setConversations((current) =>
-          upsertConversation(current, payload.conversation!),
+          upsertConversation(current, nextConversation),
         );
         setMessages(payload.messages ?? []);
       } catch (loadError) {

@@ -29,6 +29,9 @@ export async function PATCH(
   }
 
   const { id: submissionId } = await context.params;
+  if (!z.string().uuid().safeParse(submissionId).success) {
+    return NextResponse.json({ error: "유효하지 않은 접수 ID입니다." }, { status: 400 });
+  }
   const body = await req.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {

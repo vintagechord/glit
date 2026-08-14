@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, ImageUp, Info, SendHorizontal } from "lucide-react";
 
@@ -70,6 +70,9 @@ export function MagazineRequestForm({
   availableCredits: number;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const [isPending, startTransition] = React.useTransition();
   const [notice, setNotice] = React.useState<{
     type: "success" | "error";
@@ -149,7 +152,7 @@ export function MagazineRequestForm({
               로그인 후 보유 크레딧으로 매거진 등록을 신청할 수 있습니다.
             </p>
             <Link
-              href={`/login?next=${encodeURIComponent("/magazine#credit-use")}`}
+              href={`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/magazine#credit-use`)}`}
               className="mt-4 inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black text-white transition hover:-translate-y-0.5"
             >
               로그인 후 크레딧 사용
@@ -415,14 +418,14 @@ export function MagazineRequestForm({
 
       {notice?.type === "success" ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 px-4 py-6"
           role="presentation"
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby={successTitleId}
-            className="w-full max-w-md rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-[#111111] shadow-[6px_6px_0_#111111]"
+            className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-[#111111] shadow-[6px_6px_0_#111111]"
           >
             <div className="flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#1f7a5a] text-white">
@@ -439,7 +442,7 @@ export function MagazineRequestForm({
             </div>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               <Link
-                href="/mypage/credits#credit-requests"
+                href={`${localePrefix}/mypage/credits#credit-requests`}
                 className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
               >
                 요청 내역 보기

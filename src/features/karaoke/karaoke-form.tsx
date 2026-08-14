@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
@@ -19,7 +20,8 @@ type UploadState = {
   path?: string;
 };
 
-const uploadMaxBytes = APP_CONFIG.uploadMaxMb * 1024 * 1024;
+const karaokeUploadMaxMb = Math.min(APP_CONFIG.uploadMaxMb, 512);
+const uploadMaxBytes = karaokeUploadMaxMb * 1024 * 1024;
 
 export function KaraokeForm({
   userId,
@@ -29,6 +31,7 @@ export function KaraokeForm({
   userId?: string | null;
   // creditBalance?: number;
 }) {
+  const router = useRouter();
   const isGuest = !userId;
   const [title, setTitle] = React.useState("");
   const [artist, setArtist] = React.useState("");
@@ -73,9 +76,15 @@ export function KaraokeForm({
       setUpload({ name: "", progress: 0, status: "idle" });
       return;
     }
+    if (isGuest) {
+      setNotice({
+        error: "비회원은 첨부 없이 신청할 수 있습니다. 파일 첨부는 로그인 후 이용해주세요.",
+      });
+      return;
+    }
     if (selected.size > uploadMaxBytes) {
       setNotice({
-        error: `파일 용량은 ${APP_CONFIG.uploadMaxMb}MB 이하만 가능합니다.`,
+        error: `파일 용량은 ${karaokeUploadMaxMb}MB 이하만 가능합니다.`,
       });
       return;
     }
@@ -227,6 +236,7 @@ export function KaraokeForm({
         guestName: isGuest ? guestName : undefined,
         guestEmail: isGuest ? guestEmail : undefined,
         guestPhone: isGuest ? contact : undefined,
+        guestToken: isGuest ? guestTokenRef.current ?? undefined : undefined,
       });
 
       if (result.error) {
@@ -291,7 +301,7 @@ export function KaraokeForm({
       if (!type || !String(type).startsWith("INICIS:")) return;
       const status = String(type).replace("INICIS:", "");
       if (status === "SUCCESS") {
-        window.location.href = "/karaoke-request?payment=success";
+        router.push("/karaoke-request?payment=success");
         return;
       }
       if ((status === "FAIL" || status === "CANCEL" || status === "ERROR") && typeof payload.message === "string") {
@@ -300,7 +310,7 @@ export function KaraokeForm({
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, []);
+  }, [router]);
 
   return (
     <div className="space-y-8">
@@ -535,7 +545,9 @@ export function KaraokeForm({
             파일/링크
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            음원 또는 참고 자료를 업로드하세요.
+            {isGuest
+              ? "비회원은 첨부 없이 신청할 수 있습니다. 파일 첨부는 로그인 후 이용해주세요."
+              : `음원 또는 참고 자료를 업로드하세요. (최대 ${karaokeUploadMaxMb}MB)`}
           </p>
           <div className="mt-4">
             <label
@@ -556,10 +568,19 @@ export function KaraokeForm({
               <input
                 type="file"
                 onChange={onFileChange}
+                disabled={isGuest}
                 className="hidden"
               />
-              <span className="flex w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
-                파일 첨부 (드래그 앤 드롭 가능)
+              <span
+                className={`flex w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold transition ${
+                  isGuest
+                    ? "cursor-not-allowed text-muted-foreground opacity-70"
+                    : "text-foreground hover:border-foreground"
+                }`}
+              >
+                {isGuest
+                  ? "로그인 후 파일 첨부 가능"
+                  : "파일 첨부 (드래그 앤 드롭 가능)"}
               </span>
               {isDraggingOver && (
                 <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-[#f6d64a] bg-black/10 backdrop-blur-[1px]" />

@@ -5,7 +5,9 @@ services:
     plan: starter
     buildCommand: npm ci && npm run build
     startCommand: npm run start
-    healthCheckPath: /healthz
+    # Fail a rollout when required payment/storage/auth configuration is
+    # missing; the public payload intentionally omits secret/env details.
+    healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NEXT_PUBLIC_SUPABASE_URL

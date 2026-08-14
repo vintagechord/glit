@@ -1,8 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 import { ensureSubmissionOwner, createSubmissionPaymentOrder } from "../../../../../lib/payments/submission";
 import { getBaseUrl } from "../../../../../lib/url";
 import { parseInicisContext } from "@/lib/inicis/context";
+import { readBoundedJsonBody } from "@/lib/request-body";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const maxSubmissionCount = 100;
+const guestTokenSchema = z
+  .string()
+  .min(8)
+  .max(120)
+  .refine((value) => value === value.trim() && !/[\u0000-\u001f\u007f]/.test(value));
+const requestSchema = z
+  .object({
+    submissionId: z.string().uuid(),
+    submissionIds: z
+      .union([
+        z.string().max(4_000),
+        z.array(z.string().uuid()).max(maxSubmissionCount),
+      ])
+      .optional(),
+    guestToken: guestTokenSchema.optional(),
+    guestTokensBySubmissionId: z
+      .record(z.string().uuid(), guestTokenSchema)
+      .optional(),
+    context: z.string().min(1).max(32),
+  })
+  .strict();
 
 const normalizeStringList = (value: unknown): string[] => {
   if (Array.isArray(value)) {
@@ -17,37 +48,68 @@ const normalizeStringList = (value: unknown): string[] => {
     .filter(Boolean);
 };
 
-const normalizeGuestTokenMap = (value: unknown) => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {} as Record<string, string>;
-  }
-  return Object.entries(value as Record<string, unknown>).reduce<
-    Record<string, string>
-  >((acc, [submissionId, token]) => {
-    if (typeof token === "string" && token.trim()) {
-      acc[submissionId] = token.trim();
-    }
-    return acc;
-  }, {});
-};
-
 export async function POST(req: NextRequest) {
+  const ipLimit = consumeRateLimit({
+    namespace: "inicis-submission-order-ip",
+    identifier: getRequestIdentifier(req.headers),
+    limit: 20,
+    windowMs: 15 * 60 * 1_000,
+  });
+  if (!ipLimit.allowed) {
+    return NextResponse.json(
+      { error: "결제 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(ipLimit.retryAfterSeconds) },
+      },
+    );
+  }
   try {
-    const body = await req.json().catch(() => ({}));
-    const submissionId = String(body.submissionId ?? "").trim();
-    const requestedSubmissionIds = normalizeStringList(body.submissionIds);
+    const body = await readBoundedJsonBody(req, 32 * 1024);
+    if (!body.ok) {
+      return NextResponse.json(
+        { error: "결제 요청 정보를 확인해주세요." },
+        { status: body.reason === "too_large" ? 413 : 400 },
+      );
+    }
+    const parsed = requestSchema.safeParse(body.value);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "결제 요청 정보를 확인해주세요." },
+        { status: 400 },
+      );
+    }
+    const submissionId = parsed.data.submissionId;
+    const submissionLimit = consumeRateLimit({
+      namespace: "inicis-submission-order-submission",
+      identifier: submissionId,
+      limit: 10,
+      windowMs: 15 * 60 * 1_000,
+    });
+    if (!submissionLimit.allowed) {
+      return NextResponse.json(
+        { error: "결제 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(submissionLimit.retryAfterSeconds),
+          },
+        },
+      );
+    }
+    const requestedSubmissionIds = normalizeStringList(parsed.data.submissionIds);
     const submissionIds = Array.from(
       new Set([submissionId, ...requestedSubmissionIds].filter(Boolean)),
     );
-    const guestToken = body.guestToken ? String(body.guestToken).trim() : undefined;
-    const guestTokensBySubmissionId = normalizeGuestTokenMap(
-      body.guestTokensBySubmissionId,
-    );
-    const context = parseInicisContext(body.context);
+    const guestToken = parsed.data.guestToken;
+    const guestTokensBySubmissionId =
+      parsed.data.guestTokensBySubmissionId ?? {};
+    const guestTokenEntries = Object.entries(guestTokensBySubmissionId);
+    const context = parseInicisContext(parsed.data.context);
 
     if (!context) {
       return NextResponse.json(
-        { error: "context가 올바르지 않습니다.", received: body.context ?? null },
+        { error: "context가 올바르지 않습니다." },
         { status: 400 },
       );
     }
@@ -59,8 +121,16 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    if (!submissionId) {
-      return NextResponse.json({ error: "submissionId가 필요합니다." }, { status: 400 });
+    if (
+      submissionIds.length > maxSubmissionCount ||
+      submissionIds.some((id) => !uuidPattern.test(id)) ||
+      guestTokenEntries.length > maxSubmissionCount ||
+      guestTokenEntries.some(([id]) => !submissionIds.includes(id))
+    ) {
+      return NextResponse.json(
+        { error: "결제할 접수 ID를 확인해주세요." },
+        { status: 400 },
+      );
     }
 
     const ownership = await ensureSubmissionOwner(
@@ -108,7 +178,7 @@ export async function POST(req: NextRequest) {
         error,
       });
       const status =
-        error?.includes("이미 결제가 완료") || error?.includes("시작할 수 없습니다")
+        error?.includes("이미 결제가") || error?.includes("시작할 수 없습니다")
           ? 409
           : 400;
       return NextResponse.json({ error: error ?? "결제 요청 생성 실패" }, { status });

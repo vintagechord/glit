@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import * as React from "react";
 import { Check } from "lucide-react";
 
@@ -110,6 +111,9 @@ function SubmissionManagementRow({
   onToggleSelection: (id: string) => void;
   onDelete: (item: SubmissionItem) => void;
 }) {
+  const pathname = usePathname();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   return (
     <div
       className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center ${
@@ -147,7 +151,7 @@ function SubmissionManagementRow({
         </span>
       </label>
       <Link
-        href={`/dashboard/submissions/${encodeURIComponent(item.id)}`}
+        href={`${localePrefix}/dashboard/submissions/${encodeURIComponent(item.id)}`}
         prefetch={false}
         className="min-w-0"
       >
@@ -198,6 +202,10 @@ function ArtistCard({
   onToggleSelection: (id: string) => void;
   onDelete: (item: SubmissionItem) => void;
 }) {
+  const pathname = usePathname();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
+
   return (
     <div className="overflow-hidden rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--card)] p-4 shadow-[5px_5px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
@@ -213,7 +221,7 @@ function ArtistCard({
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
           {group.artistId ? (
             <Link
-              href={`/dashboard/artists/${group.artistId}`}
+              href={`${localePrefix}/dashboard/artists/${encodeURIComponent(group.artistId)}`}
               className={`${outlineControlClass} whitespace-nowrap`}
             >
               아티스트 상세

@@ -94,7 +94,14 @@ const safeUserCreditsPath = (redirectTo?: string) => {
     const url = new URL(raw, base);
     if (url.origin !== base) return "/mypage/credits";
 
-    const allowedPaths = ["/mypage/credits", "/dashboard/credits", "/magazine"];
+    const allowedPaths = [
+      "/mypage/credits",
+      "/dashboard/credits",
+      "/magazine",
+      "/en/mypage/credits",
+      "/en/dashboard/credits",
+      "/en/magazine",
+    ];
     if (!allowedPaths.includes(url.pathname)) return "/mypage/credits";
 
     return `${url.pathname}${url.search}${url.hash}`;
@@ -180,6 +187,7 @@ export async function redeemCreditRewardFormAction(
 export async function createStudioReservationFormAction(
   formData: FormData,
 ): Promise<void> {
+  const rawRedirectTo = String(formData.get("redirectTo") ?? "");
   const parsed = studioReservationSchema.safeParse({
     rewardId: formData.get("rewardId"),
     preferredDate: formData.get("preferredDate"),
@@ -188,10 +196,10 @@ export async function createStudioReservationFormAction(
     contactPhone: formData.get("contactPhone"),
     contactEmail: formData.get("contactEmail"),
     notes: formData.get("notes"),
-    redirectTo: formData.get("redirectTo"),
+    redirectTo: rawRedirectTo,
   });
   const redirectPath = safeUserCreditsPath(
-    parsed.success ? parsed.data.redirectTo : undefined,
+    parsed.success ? parsed.data.redirectTo : rawRedirectTo,
   );
 
   if (!parsed.success) {
@@ -232,6 +240,7 @@ export async function createStudioReservationFormAction(
   revalidatePath("/mypage/credits");
   revalidatePath("/dashboard/credits");
   revalidatePath("/magazine");
+  revalidatePath("/en/magazine");
   revalidatePath("/admin/credits");
   revalidatePath("/admin/credits/requests");
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -14,6 +14,9 @@ const initialState: ActionState = {};
 export function SignupForm() {
   const [state, formAction] = useActionState(signupAction, initialState);
   const router = useRouter();
+  const pathname = usePathname();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const didRedirect = useRef(false);
   const [activeModal, setActiveModal] = useState<"terms" | "privacy" | null>(null);
   const modalTitleId = useId();
@@ -29,10 +32,10 @@ export function SignupForm() {
     if (!state.message || didRedirect.current) return;
     didRedirect.current = true;
     const timer = window.setTimeout(() => {
-      router.push("/login?signup=success");
+      router.push(`${localePrefix}/login?signup=success`);
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [state.message, router]);
+  }, [localePrefix, state.message, router]);
 
   useEffect(() => {
     const order = [
@@ -102,11 +105,15 @@ export function SignupForm() {
   return (
     <form action={formAction} className="space-y-4">
       <div className="space-y-2">
-        <label className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        <label
+          htmlFor="signup-email"
+          className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+        >
           <span>이메일</span>
           <span className="text-rose-500">*</span>
         </label>
         <input
+          id="signup-email"
           name="email"
           type="email"
           autoComplete="email"
@@ -120,11 +127,15 @@ export function SignupForm() {
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <label className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <label
+            htmlFor="signup-password"
+            className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+          >
             <span>비밀번호</span>
             <span className="text-rose-500">*</span>
           </label>
           <input
+            id="signup-password"
             name="password"
             type="password"
             autoComplete="new-password"
@@ -137,11 +148,15 @@ export function SignupForm() {
           )}
         </div>
         <div className="space-y-2">
-          <label className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <label
+            htmlFor="signup-confirm-password"
+            className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+          >
             <span>비밀번호 확인</span>
             <span className="text-rose-500">*</span>
           </label>
           <input
+            id="signup-confirm-password"
             name="confirmPassword"
             type="password"
             autoComplete="new-password"
@@ -265,20 +280,23 @@ export function SignupForm() {
       <SubmitButton />
       <p className="text-center text-xs text-muted-foreground">
         이미 계정이 있나요?{" "}
-        <Link href="/login" className="font-semibold text-foreground">
+        <Link
+          href={`${localePrefix}/login`}
+          className="font-semibold text-foreground"
+        >
           로그인
         </Link>
       </p>
       {activeModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-4 py-6"
           onClick={closeModal}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby={currentModalTitleId}
-            className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background px-6 py-5 text-sm text-foreground shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]"
+            className="max-h-[calc(100dvh-3rem)] w-full max-w-3xl overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background px-5 py-5 text-sm text-foreground shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] sm:px-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">

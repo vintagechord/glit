@@ -171,10 +171,14 @@ function ResetPasswordContent() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <label
+              htmlFor="new-password"
+              className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+            >
               새 비밀번호
             </label>
             <input
+              id="new-password"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -185,10 +189,14 @@ function ResetPasswordContent() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <label
+              htmlFor="confirm-new-password"
+              className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+            >
               새 비밀번호 확인
             </label>
             <input
+              id="confirm-new-password"
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}

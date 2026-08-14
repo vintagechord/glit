@@ -16,23 +16,31 @@ import { createServerSupabase } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
 
 const getObjectKeyFromRequest = (request: Request) => {
   const url = new URL(request.url);
-  return decodeURIComponent(url.searchParams.get("objectKey")?.trim() ?? "");
-};
-
-const isAllowedAdminFreeKey = (objectKey: string) => {
+  const value = url.searchParams.get("objectKey")?.trim() ?? "";
   try {
-    const { prefix } = getB2Config();
-    return (
-      objectKey.startsWith(`${prefix}admin-free/`) ||
-      objectKey.startsWith(`${prefix}artist-thumbnails/`)
-    );
+    return decodeURIComponent(value);
   } catch {
-    return false;
+    return "";
   }
 };
+
+const getAllowedKeyKind = (objectKey: string) => {
+  try {
+    const { prefix } = getB2Config();
+    if (objectKey.startsWith(`${prefix}artist-thumbnails/`)) return "thumbnail";
+    if (objectKey.startsWith(`${prefix}admin-free/`)) return "admin";
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const isAllowedAdminFreeKey = (objectKey: string) =>
+  getAllowedKeyKind(objectKey) !== null;
 
 const ensureAdmin = async () => {
   const supabase = await createServerSupabase();
@@ -45,8 +53,18 @@ const ensureAdmin = async () => {
 
 export async function GET(request: Request) {
   const objectKey = getObjectKeyFromRequest(request);
-  if (!objectKey || !isAllowedAdminFreeKey(objectKey)) {
+  const keyKind = objectKey ? getAllowedKeyKind(objectKey) : null;
+  if (!keyKind) {
     return new NextResponse("Not Found", { status: 404 });
+  }
+
+  // Artist thumbnails are intentionally rendered in member-facing pages.
+  // Other files in this admin upload area must never be anonymously presigned.
+  if (keyKind === "admin") {
+    const { user, isAdmin } = await ensureAdmin();
+    if (!user || isAdmin !== true) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
   }
 
   try {
@@ -82,6 +100,7 @@ export async function POST(request: Request) {
     stream: PassThrough;
     filename?: string;
     mimeType?: string;
+    sizeBytes: number;
   };
 
   const fields: Record<string, string> = {};
@@ -91,7 +110,16 @@ export async function POST(request: Request) {
   let parseErrorStatus: number | null = null;
   let parseErrorBody: { error: string; detail?: string } | null = null;
 
-  const busboy = Busboy({ headers: { "content-type": contentType } });
+  const busboy = Busboy({
+    headers: { "content-type": contentType },
+    limits: {
+      files: 1,
+      fileSize: MAX_UPLOAD_SIZE_BYTES,
+      fields: 16,
+      fieldSize: 8 * 1024,
+      parts: 17,
+    },
+  });
 
   busboy.on("field", (name, value) => {
     fields[name] = value;
@@ -113,18 +141,40 @@ export async function POST(request: Request) {
   });
 
   busboy.on("file", (_name, file, info) => {
-    if (filePart) {
+    if (filePart || parseErrorStatus !== null) {
       file.resume();
       return;
     }
     const pass = new PassThrough();
-    file.pipe(pass);
-    filePart = {
+    const nextFilePart: FilePart = {
       stream: pass,
       filename: info.filename,
       mimeType: info.mimeType,
+      sizeBytes: 0,
     };
+    file.on("data", (chunk: Buffer) => {
+      nextFilePart.sizeBytes += chunk.length;
+    });
+    file.on("limit", () => {
+      parseErrorStatus = 413;
+      parseErrorBody = { error: "파일 크기는 20MB 이하만 허용됩니다." };
+    });
+    file.pipe(pass);
+    filePart = nextFilePart;
     tryStartUpload();
+  });
+
+  busboy.on("filesLimit", () => {
+    parseErrorStatus = 400;
+    parseErrorBody = { error: "파일은 하나만 업로드할 수 있습니다." };
+  });
+  busboy.on("fieldsLimit", () => {
+    parseErrorStatus = 400;
+    parseErrorBody = { error: "업로드 필드가 너무 많습니다." };
+  });
+  busboy.on("partsLimit", () => {
+    parseErrorStatus = 400;
+    parseErrorBody = { error: "업로드 항목이 너무 많습니다." };
   });
 
   const tryStartUpload = () => {
@@ -132,11 +182,10 @@ export async function POST(request: Request) {
 
     const filename = filePart.filename || fields.filename || "unnamed";
     const mimeType = filePart.mimeType || fields.mimeType || "application/octet-stream";
-    const sizeBytes = Number(fields.sizeBytes || 0);
     const label = fields.label?.trim() || "free-upload";
     const isArtistThumbnail = label === "artist-thumbnail";
 
-    if (!filename || !sizeBytes || Number.isNaN(sizeBytes)) {
+    if (!filename) {
       return;
     }
 
@@ -158,7 +207,6 @@ export async function POST(request: Request) {
           Key: nextObjectKey,
           Body: filePart.stream,
           ContentType: mimeType || undefined,
-          ContentLength: sizeBytes,
         },
         leavePartsOnError: false,
       });
@@ -176,11 +224,21 @@ export async function POST(request: Request) {
     }
   };
 
+  const cleanupStartedUpload = async () => {
+    const startedUpload = uploadPromise as Promise<unknown> | null;
+    const startedObjectKey = objectKey as string | null;
+    await startedUpload?.catch(() => undefined);
+    if (startedObjectKey) {
+      await deleteObject(startedObjectKey).catch(() => undefined);
+    }
+  };
+
   try {
     const webStream = request.body as unknown as NodeReadableStream;
     Readable.fromWeb(webStream).pipe(busboy as unknown as NodeJS.WritableStream);
     await parsePromise;
   } catch (error) {
+    await cleanupStartedUpload();
     return NextResponse.json(
       { error: "업로드 데이터를 읽지 못했습니다.", detail: error instanceof Error ? error.message : String(error) },
       { status: 400 },
@@ -190,24 +248,35 @@ export async function POST(request: Request) {
   tryStartUpload();
 
   if (parseErrorStatus !== null && parseErrorBody) {
+    await cleanupStartedUpload();
     return NextResponse.json(parseErrorBody, { status: parseErrorStatus });
   }
 
-  if (!filePart) {
+  const parsedFilePart = filePart as FilePart | null;
+  const startedObjectKey = objectKey as string | null;
+  const startedUpload = uploadPromise as Promise<unknown> | null;
+
+  if (!parsedFilePart) {
     return NextResponse.json({ error: "파일이 포함되어 있지 않습니다." }, { status: 400 });
   }
 
-  if (!objectKey || !uploadPromise) {
+  if (!startedObjectKey || !startedUpload) {
     return NextResponse.json(
       { error: "파일 업로드를 시작하지 못했습니다." },
       { status: 400 },
     );
   }
 
+  if (parsedFilePart.sizeBytes <= 0) {
+    await startedUpload.catch(() => undefined);
+    await deleteObject(startedObjectKey).catch(() => undefined);
+    return NextResponse.json({ error: "빈 파일은 업로드할 수 없습니다." }, { status: 400 });
+  }
+
   try {
-    await uploadPromise;
-    const previewUrl = `/api/admin/uploads/free?objectKey=${encodeURIComponent(objectKey)}`;
-    return NextResponse.json({ ok: true, objectKey, previewUrl });
+    await startedUpload;
+    const previewUrl = `/api/admin/uploads/free?objectKey=${encodeURIComponent(startedObjectKey)}`;
+    return NextResponse.json({ ok: true, objectKey: startedObjectKey, previewUrl });
   } catch (error) {
     const message =
       error instanceof B2ConfigError
@@ -228,7 +297,12 @@ export async function DELETE(request: Request) {
   const body = (await request.json().catch(() => null)) as
     | { objectKey?: string }
     | null;
-  const objectKey = decodeURIComponent(body?.objectKey?.trim() ?? "");
+  let objectKey = "";
+  try {
+    objectKey = decodeURIComponent(body?.objectKey?.trim() ?? "");
+  } catch {
+    objectKey = "";
+  }
 
   if (!objectKey) {
     return NextResponse.json({ error: "objectKey가 필요합니다." }, { status: 400 });

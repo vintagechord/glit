@@ -31,8 +31,15 @@ const readDownloadError = async (response: Response) => {
   return text || "파일을 다운로드하지 못했습니다.";
 };
 
-export const downloadEndpointFile = async (url: string, fallbackFilename: string) => {
-  const response = await fetch(url, { cache: "no-store" });
+export const downloadEndpointFile = async (
+  url: string,
+  fallbackFilename: string,
+  options?: { headers?: HeadersInit },
+) => {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: options?.headers,
+  });
   if (!response.ok) {
     throw new Error(await readDownloadError(response));
   }

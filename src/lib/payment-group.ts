@@ -44,3 +44,18 @@ export const hasPaymentGroupIntersection = (
     getPaymentGroupSubmissionIds(payment).some((id) => targetIds.has(id)),
   );
 };
+
+type DatabaseErrorLike = {
+  code?: string | null;
+  message?: string | null;
+};
+
+export const isPaymentInProgressDatabaseError = (
+  error?: DatabaseErrorLike | null,
+) =>
+  error?.code === "55000" &&
+  Boolean(error.message?.includes("PAYMENT_IN_PROGRESS"));
+
+export const canHandlePaymentApprovalCallback = (
+  status?: string | null,
+) => status === "REQUESTED" || status === "APPROVED";

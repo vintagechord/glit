@@ -1,73 +1,37 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
-import { ensureSubmissionOwner } from "@/lib/payments/submission";
-import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
 
-const uploadSchema = z.object({
-  submissionId: z.string().uuid(),
-  guestToken: z.string().min(8).optional(),
-  kind: z.enum([
-    "audio",
-    "video",
-    "karaoke",
-    "karaoke_vote",
-    "karaoke_recommendation",
-    "lyrics",
-    "etc",
-  ]),
-  fileName: z.string().min(1),
-});
-
-const sanitizeFileName = (name: string) =>
-  name
-    .replace(/[^a-zA-Z0-9._-]/g, "_")
-    .replace(/_+/g, "_")
-    .slice(0, 120);
-
+/**
+ * Supabase's legacy signed-upload URL does not bind the declared content
+ * length. All current clients use the size-bound B2 upload endpoints, so keep
+ * this old endpoint fail-closed instead of issuing an unmetered storage grant.
+ */
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null);
-  const parsed = uploadSchema.safeParse(body);
-
-  if (!parsed.success) {
+  const requestLimit = consumeRateLimit({
+    namespace: "upload-init-ip",
+    identifier: getRequestIdentifier(request.headers),
+    limit: 60,
+    windowMs: 60 * 60 * 1_000,
+  });
+  if (!requestLimit.allowed) {
     return NextResponse.json(
-      { error: "Invalid upload payload." },
-      { status: 400 },
+      { error: "업로드 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
+      },
     );
   }
 
-  const safeName = sanitizeFileName(parsed.data.fileName);
-  const { user, submission, error: ownershipError } = await ensureSubmissionOwner(
-    parsed.data.submissionId,
-    parsed.data.guestToken,
+  return NextResponse.json(
+    {
+      error:
+        "이전 업로드 방식은 더 이상 지원하지 않습니다. 화면을 새로고침한 뒤 다시 시도해주세요.",
+    },
+    { status: 410 },
   );
-  if (ownershipError === "NOT_FOUND") {
-    return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
-  }
-  if (ownershipError === "UNAUTHORIZED") {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
-  }
-  if (ownershipError === "FORBIDDEN") {
-    return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
-  }
-
-  const ownerSegment =
-    submission?.user_id ??
-    user?.id ??
-    `guest-${parsed.data.guestToken ?? submission?.guest_token ?? "unknown"}`;
-  const path = `${ownerSegment}/${parsed.data.submissionId}/${parsed.data.kind}/${Date.now()}-${safeName}`;
-
-  const admin = createAdminClient();
-  const { data, error } = await admin.storage
-    .from("submissions")
-    .createSignedUploadUrl(path, { upsert: true });
-
-  if (error || !data) {
-    return NextResponse.json(
-      { error: "Failed to create signed upload url." },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({ signedUrl: data.signedUrl, path: data.path });
 }

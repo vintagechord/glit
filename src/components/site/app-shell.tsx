@@ -62,14 +62,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (isPaymentPopupRoute) {
     return (
-      <div className="min-h-screen bg-white text-slate-900">
+      <div className="min-h-dvh bg-white text-slate-900">
         {children}
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-dvh flex-col bg-background text-foreground">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-[8px] focus:border-2 focus:border-[#111111] focus:bg-[#f2cf27] focus:px-4 focus:py-2 focus:text-sm focus:font-black focus:text-[#111111] focus:shadow-[3px_3px_0_#111111]"

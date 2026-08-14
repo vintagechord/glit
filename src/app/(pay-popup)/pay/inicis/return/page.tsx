@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { removeGuestSubmissionCartEntries } from "@/lib/guest-submission-cart";
+
 type Status = "SUCCESS" | "FAIL" | "CANCEL" | "ERROR";
 
 const normalizeStatus = (value: string | null): Status => {
@@ -14,36 +16,41 @@ const normalizeStatus = (value: string | null): Status => {
   return "ERROR";
 };
 
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const parseSubmissionIds = (value: string | null) =>
+  Array.from(
+    new Set(
+      (value ?? "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => uuidPattern.test(id)),
+    ),
+  ).slice(0, 100);
+
 function ReturnBridgeContent() {
   const searchParams = useSearchParams();
   const status = normalizeStatus(searchParams.get("status"));
 
   const payload = useMemo(
-    () => {
-      const amountRaw = searchParams.get("amount");
-      return {
-        orderId: searchParams.get("orderId"),
-        submissionId: searchParams.get("submissionId"),
-        guestToken: searchParams.get("guestToken"),
-        requestId: searchParams.get("requestId"),
-        message: searchParams.get("message"),
-        resultCode: searchParams.get("resultCode"),
-        tid: searchParams.get("tid"),
-        amount: amountRaw ? Number(amountRaw) : undefined,
-      };
-    },
+    () => ({
+      submissionId: searchParams.get("submissionId"),
+      submissionIds: parseSubmissionIds(searchParams.get("submissionIds")),
+      requestId: searchParams.get("requestId"),
+    }),
     [searchParams],
   );
 
   useEffect(() => {
+    if (status === "SUCCESS" && payload.submissionIds.length > 0) {
+      removeGuestSubmissionCartEntries(payload.submissionIds);
+    }
     const message = { type: `INICIS:${status}`, payload };
     const hasOpener = typeof window !== "undefined" && !!window.opener && window.opener !== window;
     const buildRedirectTarget = () => {
       const statusParam = status.toLowerCase();
       if (status === "SUCCESS") {
-        if (payload.guestToken) {
-          return `/track/${payload.guestToken}?payment=success`;
-        }
         if (payload.submissionId) {
           return `/dashboard/submissions/${payload.submissionId}?payment=success`;
         }
@@ -51,9 +58,6 @@ function ReturnBridgeContent() {
           return `/karaoke-request?payment=success&requestId=${payload.requestId}`;
         }
       } else {
-        if (payload.guestToken) {
-          return `/track/${payload.guestToken}?payment=${statusParam}`;
-        }
         if (payload.submissionId) {
           return `/dashboard/submissions/${payload.submissionId}?payment=${statusParam}`;
         }
@@ -106,18 +110,12 @@ function ReturnBridgeContent() {
         ? "결제를 취소했습니다."
         : "결제 처리에 실패했습니다.";
   const detail =
-    payload.message ??
-    (status === "SUCCESS"
+    status === "SUCCESS"
       ? "결제 결과를 전달하는 중입니다. 잠시만 기다려주세요."
-      : "결제 결과를 전달하는 중입니다. 창을 닫지 말고 기다려주세요.");
-
-  const formatPrice = (value?: number) =>
-    typeof value === "number" && Number.isFinite(value)
-      ? new Intl.NumberFormat("ko-KR").format(value) + "원"
-      : "알 수 없음";
+      : "결제 결과를 전달하는 중입니다. 창을 닫지 말고 기다려주세요.";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white px-6 py-10">
+    <div className="flex min-h-dvh items-center justify-center bg-white px-4 py-10 sm:px-6">
       <div className="w-full max-w-md text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
           Inicis Payment
@@ -127,46 +125,6 @@ function ReturnBridgeContent() {
         <p className="mt-6 text-xs text-slate-500">
           창이 자동으로 닫히지 않으면 수동으로 닫아주세요.
         </p>
-        {(payload.orderId || payload.submissionId || payload.tid || payload.amount) && (
-          <div className="mt-6 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm text-slate-700 shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                주문 정보
-              </span>
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                {status === "SUCCESS"
-                  ? "결제성공"
-                  : status === "CANCEL"
-                    ? "취소"
-                    : "실패"}
-              </span>
-            </div>
-            {payload.orderId ? (
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-xs text-slate-500">주문번호</span>
-                <span className="font-semibold text-slate-900">{payload.orderId}</span>
-              </div>
-            ) : null}
-            {payload.tid ? (
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-xs text-slate-500">거래번호(TID)</span>
-                <span className="font-medium text-slate-900">{payload.tid}</span>
-              </div>
-            ) : null}
-            {typeof payload.amount === "number" ? (
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-xs text-slate-500">결제금액</span>
-                <span className="font-semibold text-slate-900">{formatPrice(payload.amount)}</span>
-              </div>
-            ) : null}
-            {payload.resultCode ? (
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-xs text-slate-500">결과코드</span>
-                <span className="font-medium text-slate-900">{payload.resultCode}</span>
-              </div>
-            ) : null}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -176,7 +134,7 @@ export default function ReturnBridgePage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-white px-6 py-10">
+        <div className="flex min-h-dvh items-center justify-center bg-white px-4 py-10 sm:px-6">
           <p className="text-sm text-slate-600">결제 결과를 준비 중입니다...</p>
         </div>
       }

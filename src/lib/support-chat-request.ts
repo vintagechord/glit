@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const accessTokenSchema = z.preprocess(
   (value) => (value === null || value === "" ? undefined : value),
-  z.string().trim().min(20).optional(),
+  z.string().trim().min(20).max(128).optional(),
 );
 
 const visitorChatMessageSchema = z.object({
@@ -11,7 +11,7 @@ const visitorChatMessageSchema = z.object({
 });
 
 const visitorChatLeaveSchema = z.object({
-  accessToken: z.string().trim().min(20),
+  accessToken: z.string().trim().min(20).max(128),
 });
 
 export type VisitorChatMessagePayload = z.infer<typeof visitorChatMessageSchema>;

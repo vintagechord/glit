@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
@@ -144,8 +144,8 @@ const multipartThresholdMbRaw = Number(
   process.env.NEXT_PUBLIC_UPLOAD_MULTIPART_THRESHOLD_MB ?? "200",
 );
 const multipartThresholdMb = Number.isFinite(multipartThresholdMbRaw)
-  ? multipartThresholdMbRaw
-  : 200;
+  ? Math.max(5, Math.min(128, multipartThresholdMbRaw))
+  : 128;
 const multipartThresholdBytes = multipartThresholdMb * 1024 * 1024;
 
 const baseOnlinePrice = 30000;
@@ -311,7 +311,10 @@ export function MvWizard({
   profanityFilterV2Enabled?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const localePrefix =
+    pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const isGuest = !userId;
   const isAdminReviewer =
     userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
@@ -688,11 +691,11 @@ export function MvWizard({
       if (status === "SUCCESS") {
         clearDraftStorage();
         if (guestPaymentToken) {
-          window.location.href = `/track/${encodeURIComponent(guestPaymentToken)}?payment=success`;
+          window.location.href = `${localePrefix}/track/${encodeURIComponent(guestPaymentToken)}?payment=success`;
           return;
         }
         if (submissionFromMsg) {
-          window.location.href = `/dashboard/submissions/${encodeURIComponent(submissionFromMsg)}?payment=success`;
+          window.location.href = `${localePrefix}/dashboard/submissions/${encodeURIComponent(submissionFromMsg)}?payment=success`;
           return;
         }
       }
@@ -703,11 +706,11 @@ export function MvWizard({
             : paymentFailureDraftNotice;
         const paymentState = status.toLowerCase();
         if (guestPaymentToken) {
-          window.location.href = `/track/${encodeURIComponent(guestPaymentToken)}?payment=${paymentState}`;
+          window.location.href = `${localePrefix}/track/${encodeURIComponent(guestPaymentToken)}?payment=${paymentState}`;
           return;
         }
         if (submissionFromMsg) {
-          window.location.href = `/dashboard/submissions/${encodeURIComponent(submissionFromMsg)}?payment=${paymentState}`;
+          window.location.href = `${localePrefix}/dashboard/submissions/${encodeURIComponent(submissionFromMsg)}?payment=${paymentState}`;
           return;
         }
         setNotice({ error: message });
@@ -715,7 +718,7 @@ export function MvWizard({
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [clearDraftStorage, isGuest]);
+  }, [clearDraftStorage, isGuest, localePrefix]);
 
   const requireSubmissionId = React.useCallback(() => {
     if (submissionIdRef.current) return submissionIdRef.current;
@@ -1154,6 +1157,7 @@ export function MvWizard({
     });
 
   type MultipartResumeState = {
+    grantId: string;
     uploadId: string;
     key: string;
     partSize: number;
@@ -1170,7 +1174,10 @@ export function MvWizard({
       const raw = window.localStorage.getItem(resumeKey);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as MultipartResumeState;
-      if (!parsed.uploadId || !parsed.key || !parsed.partSize) return null;
+      if (!parsed.grantId || !parsed.uploadId || !parsed.key || !parsed.partSize) {
+        window.localStorage.removeItem(resumeKey);
+        return null;
+      }
       const age = Date.now() - (parsed.createdAt ?? 0);
       if (age > 1000 * 60 * 60 * 24) {
         window.localStorage.removeItem(resumeKey);
@@ -1197,6 +1204,8 @@ export function MvWizard({
   };
 
   const presignMultipartParts = async (params: {
+    grantId: string;
+    resumeKey: string;
     submissionId: string;
     key: string;
     uploadId: string;
@@ -1210,6 +1219,7 @@ export function MvWizard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          grantId: params.grantId,
           submissionId: params.submissionId,
           key: params.key,
           uploadId: params.uploadId,
@@ -1222,6 +1232,9 @@ export function MvWizard({
         error?: string;
       };
       if (!res.ok || !json.urls) {
+        if ([400, 403, 409, 410].includes(res.status)) {
+          clearResumeState(params.resumeKey);
+        }
         throw new Error(json.error || "업로드 URL을 생성할 수 없습니다.");
       }
       json.urls.forEach((item) => {
@@ -1315,10 +1328,11 @@ export function MvWizard({
     const resumeState = loadResumeState(resumeKey);
 
     let uploadId = resumeState?.uploadId ?? null;
+    let grantId = resumeState?.grantId ?? null;
     let key = resumeState?.key ?? null;
     let partSize = resumeState?.partSize ?? null;
 
-    if (!uploadId || !key || !partSize) {
+    if (!grantId || !uploadId || !key || !partSize) {
       const initRes = await fetch("/api/uploads/multipart/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1333,18 +1347,27 @@ export function MvWizard({
         }),
       });
       const initJson = (await initRes.json().catch(() => ({}))) as {
+        grantId?: string;
         key?: string;
         uploadId?: string;
         partSize?: number;
         error?: string;
       };
-      if (!initRes.ok || !initJson.key || !initJson.uploadId || !initJson.partSize) {
+      if (
+        !initRes.ok ||
+        !initJson.grantId ||
+        !initJson.key ||
+        !initJson.uploadId ||
+        !initJson.partSize
+      ) {
         throw new Error(initJson.error || "멀티파트 업로드를 시작할 수 없습니다.");
       }
+      grantId = initJson.grantId;
       uploadId = initJson.uploadId;
       key = initJson.key;
       partSize = initJson.partSize;
       saveResumeState(resumeKey, {
+        grantId,
         uploadId,
         key,
         partSize,
@@ -1382,6 +1405,8 @@ export function MvWizard({
     const urlMap =
       partsToUpload.length > 0
         ? await presignMultipartParts({
+          grantId: grantId!,
+          resumeKey,
           submissionId,
           key: key!,
           uploadId: uploadId!,
@@ -1423,6 +1448,8 @@ export function MvWizard({
         let url = urlMap.get(partNumber);
         if (!url) {
           const refreshed = await presignMultipartParts({
+            grantId: grantId!,
+            resumeKey,
             submissionId,
             key: key!,
             uploadId: uploadId!,
@@ -1447,6 +1474,7 @@ export function MvWizard({
           uploadedParts[partNumber] = etag;
           partsResult[partNumber - 1] = { partNumber, etag };
           saveResumeState(resumeKey, {
+            grantId: grantId!,
             uploadId: uploadId!,
             key: key!,
             partSize: partSize!,
@@ -1484,6 +1512,7 @@ export function MvWizard({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        grantId,
         submissionId,
         key,
         uploadId,
@@ -1502,6 +1531,9 @@ export function MvWizard({
       error?: string;
     };
     if (!completeRes.ok || !completeJson.key) {
+      if ([400, 403, 409, 410].includes(completeRes.status)) {
+        clearResumeState(resumeKey);
+      }
       throw new Error(completeJson.error || "업로드 확인에 실패했습니다.");
     }
 
@@ -2457,6 +2489,7 @@ export function MvWizard({
         status: "DRAFT",
         files: uploaded,
         filesSubmittedByEmail: emailSubmitConfirmed,
+        externalApplicationForm: isDownloadedApplicationFlow,
       });
 
       if (result.error) {
@@ -2602,6 +2635,7 @@ export function MvWizard({
         status: "SUBMITTED",
         files: uploaded,
         filesSubmittedByEmail: emailSubmitConfirmed,
+        externalApplicationForm: isDownloadedApplicationFlow,
       });
 
       if (result.error) {
@@ -2625,7 +2659,9 @@ export function MvWizard({
             ]);
           }
           if (options?.redirectToCart) {
-            router.push(`/mypage/cart?added=${encodeURIComponent(result.submissionId)}`);
+            router.push(
+              `${localePrefix}/mypage/cart?added=${encodeURIComponent(result.submissionId)}`,
+            );
             return;
           }
           setNotice({
@@ -2819,11 +2855,12 @@ export function MvWizard({
         <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
       )}
       {resumePrompt && !isFromDraftsTab ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-4 py-6">
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-md rounded-[28px] border border-border/60 bg-background p-6 text-foreground shadow-xl"
+            aria-label="임시저장 신청서 불러오기"
+            className="max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto rounded-[24px] border border-border/60 bg-background p-5 text-foreground shadow-xl sm:rounded-[28px] sm:p-6"
           >
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               임시저장 알림
@@ -2857,13 +2894,14 @@ export function MvWizard({
       ) : null}
       {confirmModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-4 py-6"
           onClick={handleCancelOnlineOption}
         >
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-xl rounded-[28px] border border-border/60 bg-background p-6 text-foreground shadow-xl"
+            aria-label={confirmModal.title}
+            className="max-h-[calc(100dvh-3rem)] w-full max-w-xl overflow-y-auto rounded-[24px] border border-border/60 bg-background p-5 text-foreground shadow-xl sm:rounded-[28px] sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -4475,7 +4513,7 @@ export function MvWizard({
       )}
 
       {step === 5 && (
-        <div className="rounded-[32px] border border-border/60 bg-card/80 p-10 text-center">
+        <div className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-center sm:rounded-[32px] sm:p-10">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             STEP 05
           </p>
@@ -4493,7 +4531,9 @@ export function MvWizard({
           {completionId && !shouldShowGuestLookup && (
             <button
               type="button"
-              onClick={() => router.push("/dashboard?tab=mv&refresh=1")}
+              onClick={() =>
+                router.push(`${localePrefix}/dashboard?tab=mv&refresh=1`)
+              }
               className="mt-6 rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5"
             >
               진행 상황 보기
@@ -4503,13 +4543,17 @@ export function MvWizard({
             <div className="mt-6 space-y-3">
               <p className="text-xs text-muted-foreground">
                 조회 코드:{" "}
-                <span className="font-semibold text-foreground">
+                <span className="break-all font-semibold text-foreground">
                   {guestLookupCode}
                 </span>
               </p>
               <button
                 type="button"
-                onClick={() => router.push(`/track/${guestLookupCode}`)}
+                onClick={() =>
+                  router.push(
+                    `${localePrefix}/track/${encodeURIComponent(guestLookupCode)}`,
+                  )
+                }
                 className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5"
               >
                 진행 상황 조회

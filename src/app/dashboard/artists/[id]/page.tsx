@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import {
   DashboardShell,
+  type DashboardTab,
   statusDashboardTabs,
 } from "@/components/dashboard/dashboard-shell";
 import { paymentStatusLabelMap } from "@/constants/review-status";
@@ -63,17 +64,22 @@ const isMissingUserDeletedAt = (error?: { code?: string; message?: string }) =>
         error.message?.toLowerCase().includes("user_deleted_at")),
   );
 
-export default async function DashboardArtistDetailPage({
+export async function DashboardArtistDetailPageView({
   params,
+  localePrefix = "",
+  tabs = statusDashboardTabs,
 }: {
   params: Promise<{ id: string }>;
+  localePrefix?: "" | "/en";
+  tabs?: DashboardTab[];
 }) {
   const { id } = await params;
   const supabase = await createServerSupabase();
   const user = await getServerSessionUser(supabase);
 
   if (!user) {
-    redirect("/login");
+    const nextPath = `${localePrefix}/dashboard/artists/${encodeURIComponent(id)}`;
+    redirect(`${localePrefix}/login?next=${encodeURIComponent(nextPath)}`);
   }
 
   const uuidPattern =
@@ -96,7 +102,7 @@ export default async function DashboardArtistDetailPage({
         </div>
         <div className="mt-3">
           <Link
-            href="/dashboard/history"
+            href={`${localePrefix}/dashboard/history`}
             className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
             나의 심의 내역으로 돌아가기
@@ -126,7 +132,7 @@ export default async function DashboardArtistDetailPage({
         </div>
         <div className="mt-3">
           <Link
-            href="/dashboard/history"
+            href={`${localePrefix}/dashboard/history`}
             className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
             나의 심의 내역으로 돌아가기
@@ -143,7 +149,8 @@ export default async function DashboardArtistDetailPage({
         "id, title, artist_name, status, type, payment_status, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )",
       )
       .eq("user_id", user.id)
-      .eq("artist_id", artistId);
+      .eq("artist_id", artistId)
+      .eq("payment_status", "PAID");
     if (includeUserVisibility) {
       query = query.is("user_deleted_at", null);
     }
@@ -161,6 +168,7 @@ export default async function DashboardArtistDetailPage({
       )
       .eq("user_id", user.id)
       .eq("artist_id", artistId)
+      .eq("payment_status", "PAID")
       .order("created_at", { ascending: false });
     if (legacyError) {
       console.error("[ArtistDetailPage] legacy submissions query failed", legacyError);
@@ -182,7 +190,7 @@ export default async function DashboardArtistDetailPage({
       title={displayArtistName}
       description="해당 아티스트의 접수 내역을 확인합니다."
       activeTab="history"
-      tabs={statusDashboardTabs}
+      tabs={tabs}
       contextLabel="진행상황"
     >
       <div className="space-y-6">
@@ -219,7 +227,7 @@ export default async function DashboardArtistDetailPage({
             {list.map((submission) => (
               <Link
                 key={submission.id}
-                href={`/dashboard/submissions/${submission.id}`}
+                href={`${localePrefix}/dashboard/submissions/${encodeURIComponent(submission.id)}`}
                 className="block rounded-2xl border border-border/60 bg-card/80 p-4 transition hover:border-foreground"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -260,4 +268,12 @@ export default async function DashboardArtistDetailPage({
       </div>
     </DashboardShell>
   );
+}
+
+export default async function DashboardArtistDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return DashboardArtistDetailPageView({ params });
 }

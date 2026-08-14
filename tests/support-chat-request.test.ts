@@ -37,6 +37,15 @@ test("visitor chat payload rejects malformed access token", () => {
   assert.equal(parsed.success, false);
 });
 
+test("visitor chat payload rejects oversized access token", () => {
+  const parsed = parseVisitorChatMessagePayload({
+    accessToken: "x".repeat(129),
+    body: "문의합니다.",
+  });
+
+  assert.equal(parsed.success, false);
+});
+
 test("visitor chat leave payload requires access token", () => {
   const parsed = parseVisitorChatLeavePayload({
     accessToken: "visitor-access-token-with-enough-length",

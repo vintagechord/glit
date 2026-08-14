@@ -136,7 +136,7 @@ export default function Home() {
                     <ReliableLink
                       key={cta.title}
                       href={cta.href}
-                      className="group flex h-[166px] flex-col overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] dark:hover:shadow-[8px_8px_0_#f2cf27] sm:h-[188px]"
+                      className="group flex min-h-[166px] flex-col overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] dark:hover:shadow-[8px_8px_0_#f2cf27] sm:min-h-[188px]"
                     >
                       <div
                         className={`flex flex-1 items-center justify-center ${cta.visual}`}

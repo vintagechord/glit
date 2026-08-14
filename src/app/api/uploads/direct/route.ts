@@ -4,8 +4,20 @@ import { PassThrough, Readable } from "stream";
 import { ReadableStream as NodeReadableStream } from "stream/web";
 import { z } from "zod";
 
-import { B2ConfigError, buildObjectKey, getB2Config } from "@/lib/b2";
+import {
+  buildObjectKey,
+  deleteObject,
+  getB2Config,
+} from "@/lib/b2";
+import {
+  getGuestStorageOwnerId,
+  getStorageLogId,
+} from "@/lib/guest-storage-owner";
 import { ensureSubmissionOwner, findSubmissionById } from "@/lib/payments/submission";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
 import {
   isApplicationFormFile,
   isApplicationFormMime,
@@ -21,15 +33,24 @@ export const maxDuration = 120;
 
 const schema = z.object({
   submissionId: z.string().uuid(),
-  title: z.string().optional(),
-  guestToken: z.string().min(8).optional(),
-  filename: z.string().min(1),
-  mimeType: z.string().optional(),
+  title: z.string().max(255).optional(),
+  guestToken: z.string().min(8).max(120).optional(),
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().max(255).optional(),
   sizeBytes: z.coerce.number().int().positive(),
 });
 
-const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
-const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
+// This route streams through the application worker and is only a small-file
+// compatibility fallback. Large media must use size-bound PUT/multipart URLs.
+const MAX_DIRECT_UPLOAD_BYTES = 128 * 1024 * 1024;
+const MAX_MULTIPART_OVERHEAD_BYTES = 256 * 1024;
+const MAX_MULTIPART_FIELDS = 16;
+const MAX_MULTIPART_FIELD_BYTES = 8 * 1024;
+const MAX_MULTIPART_PARTS = MAX_MULTIPART_FIELDS + 1;
+const BYTE_QUOTA_UNIT = 1024 * 1024;
+const SINGLE_PUT_SUBMISSION_DAILY_MIB = 4 * 1024;
+const SINGLE_PUT_OWNER_DAILY_MIB = 8 * 1024;
+const SINGLE_PUT_IP_DAILY_MIB = 8 * 1024;
 
 const resultAttachmentPattern = /\.(pdf|jpg|jpeg|png|webp|txt)$/i;
 
@@ -60,11 +81,13 @@ const isAllowedDirectUploadFile = (
 
 class UploadRequestError extends Error {
   status: number;
+  retryAfterSeconds?: number;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, retryAfterSeconds?: number) {
     super(message);
     this.name = "UploadRequestError";
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -74,11 +97,10 @@ type DirectUploadResult = {
   guest: boolean;
 };
 
-const isVideoLike = (mime?: string | null, filename?: string | null) => {
-  const lowerMime = (mime || "").toLowerCase();
-  const lowerName = (filename || "").toLowerCase();
-  if (lowerMime.startsWith("video/")) return true;
-  return /\.(mp4|mov|mkv|webm|avi|wmv|m4v|mpg|mpeg)$/.test(lowerName);
+type DirectUploadControl = {
+  aborted: boolean;
+  objectKey: string | null;
+  uploader: Upload | null;
 };
 
 const ensureUploadAccess = async (
@@ -124,6 +146,8 @@ const startValidatedUpload = async (
     filename?: string;
     mimeType?: string;
   },
+  control: DirectUploadControl,
+  requestIdentifier: string,
 ): Promise<DirectUploadResult> => {
   try {
     const { user, submission } = await ensureUploadAccess(
@@ -133,9 +157,47 @@ const startValidatedUpload = async (
 
     const objectOwnerId =
       submission.user_id ??
-      (submission.guest_token ? `guest-${submission.guest_token}` : null) ??
+      (submission.guest_token
+        ? getGuestStorageOwnerId(submission.guest_token)
+        : null) ??
       user?.id ??
-      `guest-${data.guestToken ?? "new"}`;
+      getGuestStorageOwnerId(data.guestToken ?? "new");
+    const ownerIdentifier = submission.user_id
+      ? `user:${submission.user_id}`
+      : `guest:${getGuestStorageOwnerId(
+          submission.guest_token ?? data.guestToken ?? "new",
+        )}`;
+    const quotaCost = Math.max(1, Math.ceil(data.sizeBytes / BYTE_QUOTA_UNIT));
+    for (const quota of [
+      {
+        namespace: "upload-single-put-bytes-submission",
+        identifier: data.submissionId,
+        limit: SINGLE_PUT_SUBMISSION_DAILY_MIB,
+      },
+      {
+        namespace: "upload-single-put-bytes-owner",
+        identifier: ownerIdentifier,
+        limit: SINGLE_PUT_OWNER_DAILY_MIB,
+      },
+      {
+        namespace: "upload-single-put-bytes-ip",
+        identifier: requestIdentifier,
+        limit: SINGLE_PUT_IP_DAILY_MIB,
+      },
+    ]) {
+      const result = consumeRateLimit({
+        ...quota,
+        cost: quotaCost,
+        windowMs: 24 * 60 * 60 * 1_000,
+      });
+      if (!result.allowed) {
+        throw new UploadRequestError(
+          "단일 파일 업로드 허용량을 초과했습니다. 잠시 후 다시 시도하거나 멀티파트 업로드를 이용해주세요.",
+          429,
+          result.retryAfterSeconds,
+        );
+      }
+    }
 
     const key = buildObjectKey({
       userId: objectOwnerId,
@@ -143,6 +205,11 @@ const startValidatedUpload = async (
       title: data.title,
       filename: data.filename,
     });
+    control.objectKey = key;
+
+    if (control.aborted) {
+      throw new UploadRequestError("파일 용량이 허용 한도를 초과했습니다.", 413);
+    }
 
     const { client, bucket } = getB2Config();
     const uploader = new Upload({
@@ -156,6 +223,11 @@ const startValidatedUpload = async (
       },
       leavePartsOnError: false,
     });
+    control.uploader = uploader;
+    if (control.aborted) {
+      await uploader.abort().catch(() => undefined);
+      throw new UploadRequestError("파일 용량이 허용 한도를 초과했습니다.", 413);
+    }
     await uploader.done();
 
     return {
@@ -170,35 +242,62 @@ const startValidatedUpload = async (
 };
 
 export async function POST(request: Request) {
+  const requestIdentifier = getRequestIdentifier(request.headers);
+  const requestLimit = consumeRateLimit({
+    namespace: "upload-init-ip",
+    identifier: requestIdentifier,
+    limit: 60,
+    windowMs: 60 * 60 * 1_000,
+  });
+  if (!requestLimit.allowed) {
+    return NextResponse.json(
+      { error: "업로드 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
+      },
+    );
+  }
+
   const contentType = request.headers.get("content-type");
   const contentLength = request.headers.get("content-length");
-  const userAgent = request.headers.get("user-agent");
-  const forwardedFor = request.headers.get("x-forwarded-for");
+  const contentLengthBytes = /^\d{1,12}$/.test(contentLength ?? "")
+    ? Number(contentLength)
+    : null;
 
   console.info("[Upload][direct] request received", {
-    contentType,
-    contentLength,
-    userAgent,
-    forwardedFor,
+    contentType: contentType?.split(";", 1)[0] ?? null,
+    contentLengthBytes,
   });
 
   if (!contentType || !contentType.toLowerCase().startsWith("multipart/form-data")) {
-    console.error("[Upload][direct] invalid content-type", { contentType });
+    console.error("[Upload][direct] invalid content-type", {
+      contentType: contentType?.split(";", 1)[0] ?? null,
+    });
     return NextResponse.json(
       {
         error: "업로드 데이터를 읽을 수 없습니다.",
-        detail: "지원되지 않는 Content-Type",
-        receivedContentType: contentType,
       },
       { status: 415 },
     );
   }
   if (!request.body || !contentType) {
     console.error("[Upload][direct] missing body or content-type", {
-      contentType,
-      contentLength,
+      contentType: contentType?.split(";", 1)[0] ?? null,
+      contentLengthBytes,
     });
     return NextResponse.json({ error: "업로드 데이터를 읽을 수 없습니다." }, { status: 400 });
+  }
+
+  const declaredRequestBytes = Number(contentLength ?? Number.NaN);
+  if (
+    Number.isFinite(declaredRequestBytes) &&
+    declaredRequestBytes > MAX_DIRECT_UPLOAD_BYTES + MAX_MULTIPART_OVERHEAD_BYTES
+  ) {
+    return NextResponse.json(
+      { error: "직접 업로드는 최대 128MB까지 지원합니다." },
+      { status: 413 },
+    );
   }
 
   const fields: Record<string, string> = {};
@@ -211,10 +310,36 @@ export async function POST(request: Request) {
         stream: PassThrough;
         filename?: string;
         mimeType?: string;
+        sizeBytes: number;
+        truncated: boolean;
       }
     | null = null;
 
-  const busboy = Busboy({ headers: { "content-type": contentType } });
+  const uploadControl: DirectUploadControl = {
+    aborted: false,
+    objectKey: null,
+    uploader: null,
+  };
+
+  const cleanupStartedUpload = async () => {
+    uploadControl.aborted = true;
+    await uploadControl.uploader?.abort().catch(() => undefined);
+    await uploadPromise?.catch(() => undefined);
+    if (uploadControl.objectKey) {
+      await deleteObject(uploadControl.objectKey).catch(() => undefined);
+    }
+  };
+
+  const busboy = Busboy({
+    headers: { "content-type": contentType },
+    limits: {
+      files: 1,
+      fileSize: MAX_DIRECT_UPLOAD_BYTES,
+      fields: MAX_MULTIPART_FIELDS,
+      fieldSize: MAX_MULTIPART_FIELD_BYTES,
+      parts: MAX_MULTIPART_PARTS,
+    },
+  });
   busboy.on("field", (name, value) => {
     fields[name] = value;
     tryStartUpload();
@@ -226,28 +351,66 @@ export async function POST(request: Request) {
       file.resume();
       return;
     }
+    if (!fields.submissionId || !fields.sizeBytes) {
+      parseErrorStatus = 400;
+      parseErrorBody = {
+        error: "파일보다 업로드 정보가 먼저 전송되어야 합니다.",
+      };
+      file.resume();
+      return;
+    }
 
     const pass = new PassThrough();
-    file.pipe(pass);
-    filePart = {
+    const nextFilePart = {
       stream: pass,
       filename: info.filename,
       mimeType: info.mimeType,
+      sizeBytes: 0,
+      truncated: false,
     };
+    filePart = nextFilePart;
+    file.on("data", (chunk: Buffer) => {
+      nextFilePart.sizeBytes += chunk.length;
+    });
+    file.on("limit", () => {
+      nextFilePart.truncated = true;
+      uploadControl.aborted = true;
+      parseErrorStatus = 413;
+      parseErrorBody = {
+        error: "직접 업로드는 최대 128MB까지 지원합니다.",
+      };
+      file.unpipe(pass);
+      pass.destroy();
+      file.resume();
+      void uploadControl.uploader?.abort().catch(() => undefined);
+    });
+    file.pipe(pass);
     tryStartUpload();
+  });
+
+  busboy.on("filesLimit", () => {
+    parseErrorStatus = 400;
+    parseErrorBody = { error: "파일은 하나만 업로드할 수 있습니다." };
+  });
+  busboy.on("fieldsLimit", () => {
+    parseErrorStatus = 400;
+    parseErrorBody = { error: "업로드 필드가 너무 많습니다." };
+  });
+  busboy.on("partsLimit", () => {
+    parseErrorStatus = 400;
+    parseErrorBody = { error: "업로드 항목이 너무 많습니다." };
   });
 
   const parsePromise = new Promise<void>((resolve, reject) => {
     busboy.on("finish", resolve);
     busboy.on("error", (error) => {
       console.error("[Upload][direct] busboy error", {
-        message: error instanceof Error ? error.message : String(error),
+        errorName: error instanceof Error ? error.name : "UnknownError",
       });
       if (parseErrorStatus === null) {
         parseErrorStatus = 400;
         parseErrorBody = {
           error: "업로드 데이터를 읽을 수 없습니다.",
-          detail: error instanceof Error ? error.message : String(error),
         };
       }
       reject(error);
@@ -269,16 +432,14 @@ export async function POST(request: Request) {
 
     if (!parsed.success) {
       console.error("[Upload][direct] validation failed", {
-        errors: parsed.error.flatten().fieldErrors,
-        submissionId: fields.submissionId,
-        filename: filePart.filename ?? fields.filename,
-        mimeType: filePart.mimeType ?? fields.mimeType,
-        sizeBytes: fields.sizeBytes,
+        invalidFields: Object.keys(parsed.error.flatten().fieldErrors),
+        submissionIdHash: fields.submissionId
+          ? getStorageLogId(fields.submissionId)
+          : null,
       });
       parseErrorStatus = 400;
       parseErrorBody = {
         error: "업로드 정보를 확인해주세요.",
-        detail: parsed.error.message,
       };
       filePart.stream.resume();
       return;
@@ -286,15 +447,10 @@ export async function POST(request: Request) {
 
     parsedData = parsed.data;
 
-    const videoLike = isVideoLike(
-      filePart.mimeType || parsed.data.mimeType,
-      filePart.filename || parsed.data.filename,
-    );
-    const maxSizeBytes = videoLike ? MAX_VIDEO_BYTES : MAX_AUDIO_BYTES;
-    if (parsed.data.sizeBytes > maxSizeBytes) {
-      parseErrorStatus = 400;
+    if (parsed.data.sizeBytes > MAX_DIRECT_UPLOAD_BYTES) {
+      parseErrorStatus = 413;
       parseErrorBody = {
-        error: "파일 용량이 허용 한도(4GB)를 초과했습니다.",
+        error: "직접 업로드는 최대 128MB까지 지원합니다.",
       };
       filePart.stream.resume();
       return;
@@ -314,7 +470,14 @@ export async function POST(request: Request) {
       return;
     }
 
-    uploadPromise = startValidatedUpload(parsed.data, filePart);
+    const startedUpload = startValidatedUpload(
+      parsed.data,
+      filePart,
+      uploadControl,
+      requestIdentifier,
+    );
+    void startedUpload.catch(() => undefined);
+    uploadPromise = startedUpload;
   };
 
   try {
@@ -325,13 +488,14 @@ export async function POST(request: Request) {
     Readable.fromWeb(webStream).pipe(busboy as unknown as NodeJS.WritableStream);
     await parsePromise;
   } catch (error) {
+    await cleanupStartedUpload();
     console.error("[Upload][direct] multipart parse error", {
-      message: error instanceof Error ? error.message : String(error),
-      contentType,
-      contentLength,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      contentType: contentType?.split(";", 1)[0] ?? null,
+      contentLengthBytes,
     });
     return NextResponse.json(
-      { error: "업로드 데이터를 읽을 수 없습니다.", detail: String(error) },
+      { error: "업로드 데이터를 읽을 수 없습니다." },
       { status: 400 },
     );
   }
@@ -339,7 +503,35 @@ export async function POST(request: Request) {
   // Attempt one last time in case required fields arrived after the file began streaming.
   tryStartUpload();
 
+  const completedFilePart = filePart as
+    | {
+        stream: PassThrough;
+        filename?: string;
+        mimeType?: string;
+        sizeBytes: number;
+        truncated: boolean;
+      }
+    | null;
+  const completedParsedData = parsedData as z.infer<typeof schema> | null;
+  if (completedFilePart && completedParsedData && parseErrorStatus === null) {
+    if (
+      completedFilePart.truncated ||
+      completedFilePart.sizeBytes > MAX_DIRECT_UPLOAD_BYTES
+    ) {
+      parseErrorStatus = 413;
+      parseErrorBody = {
+        error: "직접 업로드는 최대 128MB까지 지원합니다.",
+      };
+    } else if (completedFilePart.sizeBytes !== completedParsedData.sizeBytes) {
+      parseErrorStatus = 400;
+      parseErrorBody = {
+        error: "전송된 파일 크기가 요청 정보와 일치하지 않습니다.",
+      };
+    }
+  }
+
   if (parseErrorStatus !== null && parseErrorBody) {
+    await cleanupStartedUpload();
     return NextResponse.json(parseErrorBody, { status: parseErrorStatus });
   }
 
@@ -351,9 +543,9 @@ export async function POST(request: Request) {
 
   if (missing.length > 0 || !parsedData || !uploadPromiseResolved) {
     console.error("[Upload][direct] missing file or parsed data", {
-      contentType,
-      contentLength,
-      fieldNames: Object.keys(fields),
+      contentType: contentType?.split(";", 1)[0] ?? null,
+      contentLengthBytes,
+      fieldCount: Object.keys(fields).length,
       missing,
     });
     return NextResponse.json({ error: "업로드 정보를 확인해주세요.", missing }, { status: 400 });
@@ -366,29 +558,36 @@ export async function POST(request: Request) {
     const uploadResult = await uploadTask;
 
     console.info("[Upload][direct] ok", {
-      submissionId: uploadDetails.submissionId,
-      objectKey: uploadResult.objectKey,
+      submissionIdHash: getStorageLogId(uploadDetails.submissionId),
+      objectKeyId: getStorageLogId(uploadResult.objectKey),
       sizeBytes: uploadDetails.sizeBytes,
-      user: uploadResult.userId,
+      userIdHash: uploadResult.userId
+        ? getStorageLogId(uploadResult.userId)
+        : null,
       guest: uploadResult.guest,
     });
 
     return NextResponse.json({ objectKey: uploadResult.objectKey });
   } catch (error) {
     if (error instanceof UploadRequestError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json(
+        { error: error.message },
+        {
+          status: error.status,
+          headers: error.retryAfterSeconds
+            ? { "Retry-After": String(error.retryAfterSeconds) }
+            : undefined,
+        },
+      );
     }
-    const message =
-      error instanceof B2ConfigError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : "업로드 중 오류가 발생했습니다.";
     console.error("[Upload][direct] error", {
-      submissionId: uploadDetails.submissionId,
+      submissionIdHash: getStorageLogId(uploadDetails.submissionId),
       guest: Boolean(uploadDetails.guestToken),
-      message,
+      errorName: error instanceof Error ? error.name : "UnknownError",
     });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "업로드 중 오류가 발생했습니다." },
+      { status: 500 },
+    );
   }
 }

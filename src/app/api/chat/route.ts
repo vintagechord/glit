@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 import {
   type SupportChatConversation,
@@ -10,10 +11,24 @@ import {
   parseVisitorChatLeavePayload,
   parseVisitorChatMessagePayload,
 } from "@/lib/support-chat-request";
+import {
+  consumeRateLimit,
+  getRequestIdentifier,
+} from "@/lib/request-rate-limit";
+import { readBoundedJsonBody } from "@/lib/request-body";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+const MAX_CHAT_WRITE_BODY_BYTES = 8 * 1024;
+const CHAT_WRITE_LIMIT = 30;
+const CHAT_WRITE_WINDOW_MS = 60_000;
+
+const markReadSchema = z
+  .object({
+    accessToken: z.string().trim().min(20).max(128),
+  })
+  .strict();
 
 type ConversationRow = {
   id: string;
@@ -77,13 +92,47 @@ const mapMessage = (row: MessageRow): SupportChatMessage => ({
 
 const makeAccessToken = () => randomBytes(24).toString("base64url");
 
+const enforceVisitorWriteLimit = (request: NextRequest) => {
+  const result = consumeRateLimit({
+    namespace: "support-chat-write",
+    identifier: getRequestIdentifier(request.headers),
+    limit: CHAT_WRITE_LIMIT,
+    windowMs: CHAT_WRITE_WINDOW_MS,
+  });
+  if (result.allowed) return null;
+  return NextResponse.json(
+    { error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+    {
+      status: 429,
+      headers: { "Retry-After": String(result.retryAfterSeconds) },
+    },
+  );
+};
+
+const readVisitorWritePayload = async (request: NextRequest) => {
+  const body = await readBoundedJsonBody(request, MAX_CHAT_WRITE_BODY_BYTES);
+  if (body.ok) return { value: body.value, response: null };
+  return {
+    value: null,
+    response: NextResponse.json(
+      {
+        error:
+          body.reason === "too_large"
+            ? "메시지 요청 크기가 너무 큽니다."
+            : "메시지 내용을 확인해주세요.",
+      },
+      { status: body.reason === "too_large" ? 413 : 400 },
+    ),
+  };
+};
+
 const normalizeAccessTokens = (values: string[]) =>
   Array.from(
     new Set(
       values
         .flatMap((value) => value.split(","))
         .map((value) => value.trim())
-        .filter((value) => value.length >= 20),
+        .filter((value) => value.length >= 20 && value.length <= 128),
     ),
   ).slice(0, 50);
 
@@ -182,14 +231,16 @@ async function listVisitorConversations(params: {
 }
 
 export async function GET(request: NextRequest) {
-  const token = request.nextUrl.searchParams.get("accessToken")?.trim();
+  // Bearer-like visitor tokens must never enter URLs, referrers or edge logs.
+  const tokenCandidate = request.headers.get("x-support-chat-token")?.trim();
+  const token =
+    tokenCandidate && tokenCandidate.length >= 20 && tokenCandidate.length <= 128
+      ? tokenCandidate
+      : null;
   const listMode = request.nextUrl.searchParams.get("list") === "1";
   const accessTokens = normalizeAccessTokens([
-    ...request.nextUrl.searchParams.getAll("accessToken"),
-    request.nextUrl.searchParams.get("accessTokens") ?? "",
+    request.headers.get("x-support-chat-tokens") ?? "",
   ]);
-  const markVisitorRead =
-    request.nextUrl.searchParams.get("markRead") === "visitor";
   const { user } = await getViewer();
   const admin = createAdminClient();
 
@@ -245,23 +296,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    let conversation = conversationResult.data as ConversationRow;
-    if (markVisitorRead && conversation.unread_visitor_count) {
-      const { data: updated, error: updateError } = await admin
-        .from("support_chat_conversations")
-        .update({ unread_visitor_count: 0 })
-        .eq("id", conversation.id)
-        .select(conversationSelect)
-        .maybeSingle();
-
-      if (updateError) {
-        console.error("[support-chat][get] read update error", updateError);
-      } else if (updated) {
-        conversation = updated as ConversationRow;
-      }
-    }
-
-    return NextResponse.json(await buildPayload(conversation));
+    return NextResponse.json(
+      await buildPayload(conversationResult.data as ConversationRow),
+    );
   } catch (error) {
     console.error("[support-chat][get] messages error", error);
     return NextResponse.json(
@@ -271,10 +308,51 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  const limitResponse = enforceVisitorWriteLimit(request);
+  if (limitResponse) return limitResponse;
+
+  const payload = await readVisitorWritePayload(request);
+  if (payload.response) return payload.response;
+  const parsed = markReadSchema.safeParse(payload.value);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "읽음 처리할 채팅방을 확인해주세요." },
+      { status: 400 },
+    );
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("support_chat_conversations")
+    .update({ unread_visitor_count: 0 })
+    .eq("access_token", parsed.data.accessToken)
+    .is("visitor_left_at", null)
+    .select(conversationSelect)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[support-chat][patch] read update error", {
+      code: error.code,
+    });
+    return NextResponse.json(
+      { error: "채팅 읽음 상태를 저장하지 못했습니다." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    conversation: data ? mapConversation(data as ConversationRow) : null,
+  });
+}
+
 export async function POST(request: NextRequest) {
-  const parsed = parseVisitorChatMessagePayload(
-    await request.json().catch(() => null),
-  );
+  const limitResponse = enforceVisitorWriteLimit(request);
+  if (limitResponse) return limitResponse;
+
+  const payload = await readVisitorWritePayload(request);
+  if (payload.response) return payload.response;
+  const parsed = parseVisitorChatMessagePayload(payload.value);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "메시지 내용을 확인해주세요." },
@@ -387,9 +465,12 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const parsed = parseVisitorChatLeavePayload(
-    await request.json().catch(() => null),
-  );
+  const limitResponse = enforceVisitorWriteLimit(request);
+  if (limitResponse) return limitResponse;
+
+  const payload = await readVisitorWritePayload(request);
+  if (payload.response) return payload.response;
+  const parsed = parseVisitorChatLeavePayload(payload.value);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "나갈 채팅방을 확인해주세요." },

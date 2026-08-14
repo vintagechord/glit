@@ -21,6 +21,11 @@ export type StdPayRequestParams = {
   buyerTel?: string | null;
   returnUrl: string;
   closeUrl?: string;
+  merchantData?: string;
+  billing?: {
+    callbackState: string;
+    offerPeriod?: string;
+  };
 };
 
 export type MobileBillingParams = {
@@ -31,6 +36,8 @@ export type MobileBillingParams = {
   buyerEmail?: string | null;
   buyerTel?: string | null;
   returnUrl: string;
+  callbackState: string;
+  period?: string;
 };
 
 export const buildStdPayRequest = (
@@ -56,9 +63,11 @@ export const buildStdPayRequest = (
 
   const mKey = sha256(config.signKey);
 
+  const billing = params.billing;
+  const merchantData = billing?.callbackState ?? params.merchantData?.trim();
   const stdParams = {
     version: "1.0",
-    gopaymethod: "Card",
+    gopaymethod: billing ? "" : "Card",
     currency: "WON",
     mid: config.mid,
     oid,
@@ -73,12 +82,15 @@ export const buildStdPayRequest = (
     buyeremail: params.buyerEmail ?? "",
     returnUrl: params.returnUrl,
     closeUrl: params.closeUrl ?? params.returnUrl,
+    ...(merchantData ? { merchantData } : {}),
+    ...(billing
+      ? {
+          use_chkfake: "Y",
+          acceptmethod: "BILLAUTH(Card):centerCd(Y)",
+          offerPeriod: billing.offerPeriod ?? "M2",
+        }
+      : {}),
   };
-
-  // 이니시스 STDPay에서 계약되지 않은 본인인증(BILLAUTH) 방식으로 전환되는 것을 방지
-  if ("acceptmethod" in stdParams) {
-    delete stdParams.acceptmethod;
-  }
 
   return stdParams;
 };
@@ -106,6 +118,8 @@ export const buildMobileBillingRequest = (params: MobileBillingParams) => {
     timestamp,
     hashdata,
     returnurl: params.returnUrl,
+    period: params.period ?? "M2",
+    merchantreserved: params.callbackState,
     currency: "WON",
   };
 };

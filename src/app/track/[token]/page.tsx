@@ -4,6 +4,7 @@ import { SubmissionDetailClient } from "@/features/submissions/submission-detail
 import { normalizeTrackResults } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { decodeTrackToken } from "@/lib/track-token";
 
 export const metadata = {
   title: "비회원 진행 상황",
@@ -23,12 +24,12 @@ export default async function TrackDetailPage({
 }) {
   const resolvedParams = await params;
   const resolvedSearchParams = (await searchParams) ?? {};
-  const token = decodeURIComponent(resolvedParams.token ?? "");
+  const token = decodeTrackToken(resolvedParams.token);
   const paymentState = Array.isArray(resolvedSearchParams.payment)
     ? resolvedSearchParams.payment[0]
     : resolvedSearchParams.payment;
 
-  if (!token || token.length < 8 || token.length > 120) {
+  if (!token) {
     notFound();
   }
 
@@ -72,6 +73,7 @@ export default async function TrackDetailPage({
     const { data, error } = await admin
       .from("submissions")
       .select(baseSelect)
+      .is("user_id", null)
       .eq("guest_token", value)
       .maybeSingle();
 
@@ -80,6 +82,7 @@ export default async function TrackDetailPage({
     const { data: fallback } = await admin
       .from("submissions")
       .select(fallbackSelect)
+      .is("user_id", null)
       .eq("guest_token", value)
       .maybeSingle();
 

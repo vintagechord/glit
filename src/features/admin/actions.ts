@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
 import {
   paymentStatusLabelMap,
@@ -27,6 +28,7 @@ import { sendResultEmail, sendSubmissionUpdateEmail } from "@/lib/email";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isAllowedImageSource } from "@/lib/image-source";
 import { isRatingCode } from "@/lib/mv-assets";
 import {
   completeMvReviewFlow,
@@ -37,6 +39,13 @@ import {
   ALBUM_REVIEW_DISCOUNT_SETTING_KEY,
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
+import { requireAdminAction } from "@/lib/admin/action-auth";
+import { safeAdminRedirectPath } from "@/lib/admin/redirect";
+import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
+import {
+  cleanupDeletedSubmissionB2Objects,
+  loadSubmissionB2ObjectRefs,
+} from "@/lib/submission-file-cleanup";
 
 export type AdminActionState = {
   error?: string;
@@ -276,6 +285,17 @@ const withSavedQuery = (path: string, savedValue = "1") => {
   return hash ? `${nextPath}#${hash}` : nextPath;
 };
 
+const buildSubmissionFormRedirect = (
+  formData: FormData,
+  submissionId: string,
+  state: Record<string, string | null | undefined>,
+) =>
+  buildAdminSubmissionDetailPath({
+    submissionId,
+    returnTo: String(formData.get("returnTo") ?? ""),
+    state,
+  });
+
 const normalizeEmailValue = (value?: string | null) =>
   value?.trim().toLowerCase() ?? "";
 
@@ -432,7 +452,6 @@ const sendSubmissionUpdateNotificationById = async ({
     if (!result.ok && !result.skipped) {
       console.warn("[Email][update] send failed", {
         submissionId,
-        email: recipientEmail,
         message: result.message,
       });
     }
@@ -516,7 +535,6 @@ const sendSubmissionResultNotificationById = async ({
     failedCount += 1;
     console.warn("[Email][result] send failed", {
       submissionId,
-      email: recipientEmail,
       message: result.message,
     });
   }
@@ -569,12 +587,42 @@ const albumReviewDiscountSchema = z.object({
   discountPercent: z.number().min(0).max(100),
 });
 
+const isSafeBannerUrl = (value: string, allowContactProtocols = false) => {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) return true;
+  try {
+    const protocol = new URL(trimmed).protocol.toLowerCase();
+    return (
+      protocol === "http:" ||
+      protocol === "https:" ||
+      (allowContactProtocols && ["mailto:", "tel:", "sms:"].includes(protocol))
+    );
+  } catch {
+    return false;
+  }
+};
+
 const adBannerSchema = z.object({
   id: z.string().uuid().optional(),
-  title: z.string().min(1),
-  description: z.string().optional(),
-  imageUrl: z.string().optional(),
-  linkUrl: z.string().optional(),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(1000).optional(),
+  imageUrl: z
+    .string()
+    .max(2048)
+    .refine(
+      (value) => isAllowedImageSource(value),
+      "지원되는 이미지 URL이 아닙니다.",
+    )
+    .optional(),
+  linkUrl: z
+    .string()
+    .max(2048)
+    .refine(
+      (value) => isSafeBannerUrl(value, true),
+      "안전한 링크 URL이 아닙니다.",
+    )
+    .optional(),
   placement: z.enum(["STRIP", "HOME_HERO", "LEFT"]).optional(),
   sortOrder: z.number().int().min(0).max(9999).optional(),
   isActive: z.boolean(),
@@ -600,6 +648,7 @@ const deleteArtistsSchema = z.object({
 });
 
 const bannerBucket = "banners";
+const maxBannerImageSizeBytes = 10 * 1024 * 1024;
 const bannerFolders = {
   STRIP: "strip",
   HOME_HERO: "home-hero",
@@ -629,10 +678,12 @@ const guessImageContentType = (file: File) => {
 
 const isLikelyImageFile = (file: File) => {
   if (file.type) {
-    return file.type.startsWith("image/");
+    return ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(
+      file.type.toLowerCase(),
+    );
   }
   const lowerName = file.name.toLowerCase();
-  return /\.(png|jpe?g|gif|webp|svg)$/i.test(lowerName);
+  return /\.(png|jpe?g|gif|webp)$/i.test(lowerName);
 };
 
 const uploadBannerImage = async (
@@ -640,7 +691,10 @@ const uploadBannerImage = async (
   placement: keyof typeof bannerFolders = "STRIP",
 ) => {
   if (!isLikelyImageFile(file)) {
-    return { error: "이미지 파일만 업로드 가능합니다." };
+    return { error: "PNG, JPG, GIF, WebP 이미지만 업로드 가능합니다." };
+  }
+  if (file.size <= 0 || file.size > maxBannerImageSizeBytes) {
+    return { error: "배너 이미지는 10MB 이하만 업로드 가능합니다." };
   }
 
   const admin = await createServerSupabase();
@@ -685,6 +739,7 @@ async function insertEvent(
 export async function updateSubmissionStatusAction(
   payload: z.infer<typeof submissionStatusSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = submissionStatusSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "입력값을 확인해주세요." };
@@ -743,9 +798,10 @@ export async function updateSubmissionStatusFormAction(
     console.error(result.error);
     if (submissionId) {
       redirect(
-        `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
-          result.error,
-        )}`,
+        buildSubmissionFormRedirect(formData, submissionId, {
+          saved: "error",
+          savedError: result.error,
+        }),
       );
     }
     redirect(
@@ -773,6 +829,7 @@ const mvRatingSchema = z.object({
 export async function updateSubmissionMvRatingAction(
   payload: z.infer<typeof mvRatingSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = mvRatingSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "등급 값을 확인해주세요." };
@@ -847,6 +904,7 @@ export async function updateSubmissionMvRatingFormAction(
 export async function updateSubmissionBasicInfoAction(
   payload: z.infer<typeof submissionBasicInfoSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = submissionBasicInfoSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "입력값을 확인해주세요." };
@@ -928,6 +986,7 @@ export async function updateSubmissionBasicInfoFormAction(
 export async function updatePaymentStatusAction(
   payload: z.infer<typeof paymentStatusSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = paymentStatusSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "입력값을 확인해주세요." };
@@ -1034,6 +1093,7 @@ export async function updatePaymentStatusFormAction(
 export async function updateStationReviewAction(
   payload: z.infer<typeof stationReviewPayloadSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = stationReviewPayloadSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "입력값을 확인해주세요." };
@@ -1542,6 +1602,7 @@ export async function updateStationReviewAction(
 export async function updateStationReviewFormAction(
   formData: FormData,
 ): Promise<void> {
+  await requireAdminAction();
   const getFormValue = (key: string) => {
     const direct = formData.get(key);
     if (direct !== null) return direct;
@@ -1578,9 +1639,10 @@ export async function updateStationReviewFormAction(
       hasTrackJson: hasTrackResultsInput,
     });
     redirect(
-      `/admin/submissions/${submissionId || ""}?saved=station_error&savedError=${encodeURIComponent(
-        "필수 값이 누락되었습니다.",
-      )}`,
+      buildSubmissionFormRedirect(formData, submissionId || "", {
+        saved: "station_error",
+        savedError: "필수 값이 누락되었습니다.",
+      }),
     );
   }
 
@@ -1593,9 +1655,10 @@ export async function updateStationReviewFormAction(
         error: fallback.error,
       });
       redirect(
-        `/admin/submissions/${submissionId}?saved=station_error&savedError=${encodeURIComponent(
-          fallback.error ?? "방송국 ID를 확인할 수 없습니다.",
-        )}`,
+        buildSubmissionFormRedirect(formData, submissionId, {
+          saved: "station_error",
+          savedError: fallback.error ?? "방송국 ID를 확인할 수 없습니다.",
+        }),
       );
     }
     stationId = fallback.stationId;
@@ -1700,9 +1763,10 @@ export async function updateStationReviewFormAction(
     });
     if (submissionId) {
       redirect(
-        `/admin/submissions/${submissionId}?saved=station_error&savedError=${encodeURIComponent(
-          result.error,
-        )}`,
+        buildSubmissionFormRedirect(formData, submissionId, {
+          saved: "station_error",
+          savedError: result.error,
+        }),
       );
     }
     return;
@@ -1728,12 +1792,17 @@ export async function updateStationReviewFormAction(
     const warningMessages = [...trackResultsWarnings, result.warning].filter(Boolean);
     if (warningMessages.length > 0) {
       redirect(
-        `/admin/submissions/${submissionId}?saved=station_warning&savedWarning=${encodeURIComponent(
-          warningMessages.join(" / "),
-        )}`,
+        buildSubmissionFormRedirect(formData, submissionId, {
+          saved: "station_warning",
+          savedWarning: warningMessages.join(" / "),
+        }),
       );
     }
-    redirect(`/admin/submissions/${submissionId}?saved=station`);
+    redirect(
+      buildSubmissionFormRedirect(formData, submissionId, {
+        saved: "station",
+      }),
+    );
   }
 }
 
@@ -1754,6 +1823,7 @@ const deleteTrackSchema = z.object({
 export async function createTrackForSubmissionAction(
   formData: FormData,
 ): Promise<void> {
+  await requireAdminAction();
   const parsed = createTrackSchema.safeParse({
     submissionId: formData.get("submissionId"),
     trackTitle: formData.get("trackTitle"),
@@ -1797,12 +1867,17 @@ export async function createTrackForSubmissionAction(
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${parsed.data.submissionId}`);
   revalidateUserDashboards(parsed.data.submissionId);
-  redirect(`/admin/submissions/${parsed.data.submissionId}?saved=track`);
+  redirect(
+    buildSubmissionFormRedirect(formData, parsed.data.submissionId, {
+      saved: "track",
+    }),
+  );
 }
 
 export async function deleteTrackForSubmissionAction(
   formData: FormData,
 ): Promise<void> {
+  await requireAdminAction();
   const parsed = deleteTrackSchema.safeParse({
     submissionId: formData.get("submissionId"),
     trackId: formData.get("trackId"),
@@ -1906,12 +1981,17 @@ export async function deleteTrackForSubmissionAction(
   revalidatePath(`/admin/submissions/detail?id=${parsed.data.submissionId}`);
   revalidateUserDashboards(parsed.data.submissionId);
   revalidatePath("/");
-  redirect(`/admin/submissions/${parsed.data.submissionId}?saved=track_deleted`);
+  redirect(
+    buildSubmissionFormRedirect(formData, parsed.data.submissionId, {
+      saved: "track_deleted",
+    }),
+  );
 }
 
 export async function updateSubmissionResultAction(
   payload: z.infer<typeof submissionResultSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = submissionResultSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "입력값을 확인해주세요." };
@@ -2024,9 +2104,10 @@ export async function updateSubmissionResultFormAction(
     console.error(result.error);
     if (submissionId) {
       redirect(
-        `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
-          result.error,
-        )}`,
+        buildSubmissionFormRedirect(formData, submissionId, {
+          saved: "error",
+          savedError: result.error,
+        }),
       );
     }
     return;
@@ -2043,22 +2124,29 @@ export async function updateSubmissionResultFormAction(
     });
     if (mailResult.warning) {
       redirect(
-        `/admin/submissions/${submissionId}?saved=result_warning&savedWarning=${encodeURIComponent(
-          mailResult.warning,
-        )}`,
+        buildSubmissionFormRedirect(formData, submissionId, {
+          saved: "result_warning",
+          savedWarning: mailResult.warning,
+        }),
       );
     }
-    redirect(withSavedQuery(`/admin/submissions/${submissionId}`, "result"));
+    redirect(
+      buildSubmissionFormRedirect(formData, submissionId, {
+        saved: "result",
+      }),
+    );
   }
 }
 
 export async function notifySubmissionResultAction(): Promise<AdminActionState> {
+  await requireAdminAction();
   return {
     error: "현재 환경에 result_status 컬럼이 없어 결과 통보 기능을 사용할 수 없습니다.",
   };
 }
 
 export async function updateArtistAction(formData: FormData): Promise<void> {
+  await requireAdminAction();
   const artistId = String(formData.get("artistId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const thumbnailUrl = String(formData.get("thumbnailUrl") ?? "").trim();
@@ -2084,6 +2172,7 @@ export async function updateArtistAction(formData: FormData): Promise<void> {
 export async function upsertPackageAction(
   payload: z.infer<typeof packageSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = packageSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "패키지 정보를 확인해주세요." };
@@ -2129,6 +2218,7 @@ export async function upsertPackageFormAction(
 export async function upsertStationAction(
   payload: z.infer<typeof stationSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = stationSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "방송국 정보를 확인해주세요." };
@@ -2170,6 +2260,7 @@ export async function upsertStationFormAction(
 export async function updatePackageStationsAction(
   payload: z.infer<typeof packageStationsSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = packageStationsSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "방송국 코드를 확인해주세요." };
@@ -2231,6 +2322,7 @@ export async function updatePackageStationsFormAction(
 export async function updateAlbumReviewDiscountAction(
   payload: z.infer<typeof albumReviewDiscountSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = albumReviewDiscountSchema.safeParse({
     discountPercent: normalizeAlbumDiscountPercent(payload.discountPercent),
   });
@@ -2277,6 +2369,7 @@ export async function updateAlbumReviewDiscountFormAction(
 export async function deletePackageAction(
   payload: { id: string },
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   if (!payload.id) {
     return { error: "패키지 ID를 확인해주세요." };
   }
@@ -2304,6 +2397,7 @@ export async function deletePackageFormAction(
 export async function deleteStationAction(
   payload: { id: string },
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   if (!payload.id) {
     return { error: "방송국 ID를 확인해주세요." };
   }
@@ -2331,6 +2425,7 @@ export async function deleteStationFormAction(
 export async function upsertAdBannerAction(
   payload: z.infer<typeof adBannerSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = adBannerSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "배너 정보를 확인해주세요." };
@@ -2369,6 +2464,7 @@ export async function upsertAdBannerAction(
 export async function upsertAdBannerFormAction(
   formData: FormData,
 ): Promise<void> {
+  await requireAdminAction();
   const id = String(formData.get("id") ?? "");
   const placementValue = String(formData.get("placement") ?? "STRIP");
   const placement =
@@ -2409,6 +2505,7 @@ export async function upsertAdBannerFormAction(
 export async function deleteAdBannerAction(
   payload: { id: string },
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   if (!payload.id) {
     return { error: "배너 ID를 확인해주세요." };
   }
@@ -2447,6 +2544,7 @@ export async function deleteAdBannerFormAction(
 export async function upsertProfanityTermAction(
   payload: z.infer<typeof profanityTermSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = profanityTermSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "욕설/비속어 정보를 확인해주세요." };
@@ -2491,6 +2589,7 @@ export async function upsertProfanityTermFormAction(
 export async function deleteProfanityTermAction(
   payload: { id: string },
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   if (!payload.id) {
     return { error: "욕설/비속어 ID를 확인해주세요." };
   }
@@ -2525,20 +2624,31 @@ export async function deleteProfanityTermFormAction(
 export async function deleteSubmissionsAction(
   payload: z.infer<typeof deleteSubmissionsSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = deleteSubmissionsSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "삭제할 접수 ID를 확인해주세요." };
   }
 
   const supabase = await createAdminClient();
-  const { error } = await supabase
+  const ids = Array.from(new Set(parsed.data.ids));
+  const b2ObjectRefs = await loadSubmissionB2ObjectRefs(supabase, ids);
+  const { data: deletedRows, error } = await supabase
     .from("submissions")
     .delete()
-    .in("id", parsed.data.ids);
+    .in("id", ids)
+    .select("id");
 
   if (error) {
     console.error("admin delete submissions error", error);
     return { error: "접수 삭제에 실패했습니다." };
+  }
+
+  const deletedIds = (deletedRows ?? []).map((row) => String(row.id));
+  if (deletedIds.length > 0 && b2ObjectRefs.length > 0) {
+    after(() =>
+      cleanupDeletedSubmissionB2Objects(supabase, b2ObjectRefs, deletedIds),
+    );
   }
 
   revalidatePath("/admin/submissions");
@@ -2546,7 +2656,7 @@ export async function deleteSubmissionsAction(
   revalidatePath("/dashboard/history");
   revalidatePath("/mypage");
   revalidatePath("/");
-  parsed.data.ids.forEach((id) => {
+  ids.forEach((id) => {
     revalidatePath(`/admin/submissions/${id}`);
     revalidatePath(`/admin/submissions/detail?id=${id}`);
   });
@@ -2561,7 +2671,10 @@ export async function deleteSubmissionsFormAction(
     .split(",")
     .map((id) => id.trim())
     .filter(Boolean);
-  const redirectTo = String(formData.get("redirectTo") ?? "");
+  const redirectTo = safeAdminRedirectPath(
+    String(formData.get("redirectTo") ?? ""),
+    "/admin/submissions",
+  );
 
   const result = await deleteSubmissionsAction({ ids });
   if (result.error) {
@@ -2569,14 +2682,13 @@ export async function deleteSubmissionsFormAction(
     return;
   }
 
-  if (redirectTo) {
-    redirect(redirectTo);
-  }
+  redirect(redirectTo);
 }
 
 export async function deleteArtistAction(
   payload: z.infer<typeof deleteArtistSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = deleteArtistSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "삭제할 아티스트 ID를 확인해주세요." };
@@ -2609,6 +2721,7 @@ export async function deleteArtistAction(
 export async function deleteArtistsAction(
   payload: z.infer<typeof deleteArtistsSchema>,
 ): Promise<AdminActionState> {
+  await requireAdminAction();
   const parsed = deleteArtistsSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "삭제할 아티스트 ID를 확인해주세요." };
@@ -2645,7 +2758,10 @@ export async function deleteArtistsAction(
 
 export async function deleteArtistFormAction(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");
-  const redirectTo = String(formData.get("redirectTo") ?? "/admin/artists");
+  const redirectTo = safeAdminRedirectPath(
+    String(formData.get("redirectTo") ?? ""),
+    "/admin/artists",
+  );
   const result = await deleteArtistAction({ id });
   if (result.error) {
     console.error(result.error);
@@ -2655,7 +2771,10 @@ export async function deleteArtistFormAction(formData: FormData): Promise<void> 
 }
 
 export async function deleteArtistsFormAction(formData: FormData): Promise<void> {
-  const redirectTo = String(formData.get("redirectTo") ?? "/admin/artists");
+  const redirectTo = safeAdminRedirectPath(
+    String(formData.get("redirectTo") ?? ""),
+    "/admin/artists",
+  );
   const ids = formData
     .getAll("ids")
     .map((value) => String(value))
@@ -2673,6 +2792,7 @@ export async function deleteArtistsFormAction(formData: FormData): Promise<void>
 export async function saveSubmissionAdminFormAction(
   formData: FormData,
 ): Promise<void> {
+  await requireAdminAction();
   const submissionId = String(formData.get("submissionId") ?? "").trim();
   if (!submissionId) {
     return;
@@ -2680,9 +2800,10 @@ export async function saveSubmissionAdminFormAction(
 
   const redirectWithError = (message: string): never => {
     redirect(
-      `/admin/submissions/${submissionId}?saved=error&savedError=${encodeURIComponent(
-        message,
-      )}`,
+      buildSubmissionFormRedirect(formData, submissionId, {
+        saved: "error",
+        savedError: message,
+      }),
     );
   };
 
@@ -2864,11 +2985,16 @@ export async function saveSubmissionAdminFormAction(
 
   if (savedWarning) {
     redirect(
-      `/admin/submissions/${submissionId}?saved=status_warning&savedWarning=${encodeURIComponent(
+      buildSubmissionFormRedirect(formData, submissionId, {
+        saved: "status_warning",
         savedWarning,
-      )}`,
+      }),
     );
   } else {
-    redirect(`/admin/submissions/${submissionId}?saved=status`);
+    redirect(
+      buildSubmissionFormRedirect(formData, submissionId, {
+        saved: "status",
+      }),
+    );
   }
 }

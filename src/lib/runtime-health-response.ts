@@ -19,7 +19,9 @@ export function buildRuntimeHealthPayload() {
       ok: summary.ok,
       errorCount: summary.errorCount,
       warningCount: summary.warningCount,
-      checks,
+      // Public probes need state, not deployment internals such as the exact
+      // missing environment-variable names.
+      checks: checks.map(({ name, ok, severity }) => ({ name, ok, severity })),
     },
     status: summary.ok ? 200 : 503,
   };

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { areServerDevToolsEnabled } from "@/lib/dev-tools";
+import { serializeInlineScriptJson } from "@/lib/inline-script-json";
 
 const postMessageResponse = () => {
-  const payload = JSON.stringify({
+  const payload = serializeInlineScriptJson({
     type: "INICIS:CANCEL",
     payload: { message: "사용자가 결제를 취소했습니다." },
   });

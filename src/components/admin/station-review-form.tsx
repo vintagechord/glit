@@ -24,6 +24,7 @@ type StationReviewFormProps = {
   trackResults: TrackResultInput[];
   statusOptions: Array<{ value: string; label: string }>;
   action: (formData: FormData) => Promise<void>;
+  returnTo?: string;
 };
 
 export function StationReviewForm({
@@ -37,6 +38,7 @@ export function StationReviewForm({
   trackResults,
   statusOptions,
   action,
+  returnTo,
 }: StationReviewFormProps) {
   const normalizedInitialStatus = statusOptions.some(
     (option) => option.value === initialStatus,
@@ -77,6 +79,7 @@ export function StationReviewForm({
       <input type="hidden" name="station_id" value={stationId ?? ""} />
       <input type="hidden" name="review_id" value={reviewId ?? ""} />
       <input type="hidden" name="track_results_json" value={trackResultsJson} />
+      {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
 
       <div>
         <p className="text-sm font-semibold text-foreground">

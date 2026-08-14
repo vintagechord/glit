@@ -12,8 +12,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id: submissionId } = await context.params;
-  const url = new URL(req.url);
-  const guestToken = url.searchParams.get("guestToken") || undefined;
+  const guestToken = req.headers.get("x-submission-guest-token") || undefined;
 
   const { submission, error } = await ensureSubmissionOwner(submissionId, guestToken);
   if (error === "UNAUTHORIZED") {

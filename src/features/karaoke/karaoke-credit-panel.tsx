@@ -218,8 +218,13 @@ export function KaraokeCreditPanel({
         </p>
         <div className="mt-4">
           {promotions.length > 0 ? (
-            <div className="overflow-hidden">
-              <div className="flex w-max gap-4 animate-marquee hover:[animation-play-state:paused]">
+            <div
+              className="promotion-marquee-viewport overflow-x-auto sm:overflow-hidden"
+              role="region"
+              aria-label="진행 중인 크레딧 홍보 요청"
+              tabIndex={0}
+            >
+              <div className="promotion-marquee-track flex w-max gap-4">
                 {promotionStream.map((promotion, index) => {
                   const isSelected = promotion.id === promotionId;
                   const title = getPromotionTitle(promotion);

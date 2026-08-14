@@ -47,6 +47,11 @@ type SendApiPayload = {
   error?: string;
 };
 
+type MarkReadApiPayload = {
+  conversation?: SupportChatConversation | null;
+  error?: string;
+};
+
 type LeaveApiPayload = {
   ok?: boolean;
   leftId?: string | null;
@@ -314,11 +319,13 @@ export function ChatbotWidget() {
       setError(null);
       try {
         const params = new URLSearchParams({ list: "1" });
-        for (const token of options?.tokens ?? storedTokensRef.current) {
-          params.append("accessToken", token);
-        }
+        const requestTokens = options?.tokens ?? storedTokensRef.current;
         const response = await fetch(`/api/chat?${params.toString()}`, {
           cache: "no-store",
+          headers:
+            requestTokens.length > 0
+              ? { "X-Support-Chat-Tokens": requestTokens.join(",") }
+              : undefined,
         });
         const payload = (await response.json().catch(() => null)) as
           | ChatListApiPayload
@@ -360,12 +367,9 @@ export function ChatbotWidget() {
       }
       setError(null);
       try {
-        const params = new URLSearchParams({ accessToken: token });
-        if (options?.markRead) {
-          params.set("markRead", "visitor");
-        }
-        const response = await fetch(`/api/chat?${params.toString()}`, {
+        const response = await fetch("/api/chat", {
           cache: "no-store",
+          headers: { "X-Support-Chat-Token": token },
         });
         const payload = (await response.json().catch(() => null)) as
           | ChatApiPayload
@@ -374,12 +378,30 @@ export function ChatbotWidget() {
           throw new Error(payload?.error ?? "채팅 내역을 불러오지 못했습니다.");
         }
         if (requestId !== threadRequestIdRef.current) return;
-        if (payload.conversation) {
-          setConversation(payload.conversation);
+        let nextConversation = payload.conversation;
+        if (options?.markRead && nextConversation?.unreadVisitorCount) {
+          const markResponse = await fetch("/api/chat", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accessToken: token }),
+          });
+          const markPayload = (await markResponse.json().catch(() => null)) as
+            | MarkReadApiPayload
+            | null;
+          if (!markResponse.ok || !markPayload) {
+            throw new Error(
+              markPayload?.error ?? "채팅 읽음 상태를 저장하지 못했습니다.",
+            );
+          }
+          nextConversation = markPayload.conversation ?? nextConversation;
+        }
+        if (requestId !== threadRequestIdRef.current) return;
+        if (nextConversation) {
+          setConversation(nextConversation);
           setConversations((current) =>
-            upsertConversation(current, payload.conversation!),
+            upsertConversation(current, nextConversation!),
           );
-          rememberAccessToken(payload.conversation.accessToken);
+          rememberAccessToken(nextConversation.accessToken);
         } else {
           forgetAccessToken(token);
           if (activeTokenRef.current === token) {
@@ -1165,7 +1187,7 @@ export function ChatbotWidget() {
     <>
       {open ? (
         <div
-          className="fixed bottom-4 right-3 z-50 flex h-[min(720px,calc(100vh-var(--site-header-height,76px)-20px))] w-[min(430px,calc(100vw-24px))] flex-col overflow-hidden rounded-[22px] border-2 border-[#111111] bg-card shadow-[7px_7px_0_#111111] dark:border-[#f2cf27] dark:shadow-[7px_7px_0_#f2cf27] sm:bottom-6 sm:right-6"
+          className="fixed bottom-4 right-3 z-50 flex h-[min(720px,calc(100dvh-var(--site-header-height,76px)-20px))] w-[min(430px,calc(100vw-24px))] flex-col overflow-hidden rounded-[22px] border-2 border-[#111111] bg-card shadow-[7px_7px_0_#111111] dark:border-[#f2cf27] dark:shadow-[7px_7px_0_#f2cf27] sm:bottom-6 sm:right-6"
           role="dialog"
           aria-label="온사이드 실시간 채팅"
         >

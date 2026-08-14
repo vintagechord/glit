@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { StripAdBannerClient } from "@/components/site/strip-ad-banner-client";
+import { isAllowedImageSource } from "@/lib/image-source";
 import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
 
 type AdBanner = {
@@ -54,7 +55,11 @@ export async function StripAdBanner() {
   }
 
   const now = new Date();
-  const activeBanners = data?.filter((item) => isBannerActive(item, now)) ?? [];
+  const activeBanners =
+    data?.filter(
+      (item) =>
+        isBannerActive(item, now) && isAllowedImageSource(item.image_url),
+    ) ?? [];
 
   const bannersToShow =
     activeBanners.length > 0

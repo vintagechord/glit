@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -24,8 +25,8 @@ export async function GET(
   }
 
   const { id: submissionId } = await params;
-  if (!submissionId) {
-    return NextResponse.json({ error: "Submission ID missing" }, { status: 400 });
+  if (!z.string().uuid().safeParse(submissionId).success) {
+    return NextResponse.json({ error: "유효하지 않은 접수 ID입니다." }, { status: 400 });
   }
 
   const supabase = createAdminClient();
@@ -56,7 +57,7 @@ export async function GET(
 
   if (error || !data) {
     return NextResponse.json(
-      { error: "Submission not found", detail: error?.message },
+      { error: "접수를 찾을 수 없습니다." },
       { status: 404 },
     );
   }
@@ -67,6 +68,8 @@ export async function GET(
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Content-Disposition": `attachment; filename="submission-${submissionId}.json"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }

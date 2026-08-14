@@ -1,12 +1,12 @@
 import {
-  defaultDashboardTabs,
+  englishDefaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
 import { ProfilePageView } from "@/app/dashboard/profile/page";
 
 export { metadata } from "@/app/mypage/profile/page";
 
-const tabs: DashboardTab[] = defaultDashboardTabs;
+const tabs: DashboardTab[] = englishDefaultDashboardTabs;
 
 export default async function EnglishMyPageProfilePage() {
   return ProfilePageView({

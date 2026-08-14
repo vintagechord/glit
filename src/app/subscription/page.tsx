@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -8,23 +7,13 @@ import {
   buildStdPayRequest,
   resolveSubscriptionPrice,
 } from "@/lib/inicis/stdpay";
-import { getStdPayConfig } from "@/lib/inicis/config";
-import { buildUrl } from "@/lib/url";
+import { getBillingConfig, getStdPayConfig } from "@/lib/inicis/config";
+import { buildUrl, getBaseUrl } from "@/lib/url";
 import {
   createHistoryAttempt,
   getActiveSubscription,
 } from "@/lib/subscriptions/service";
 import { SubscriptionPayButtons } from "@/features/subscriptions/subscription-pay";
-
-const resolveBaseUrl = async () => {
-  const headerList = await headers();
-  const proto = headerList.get("x-forwarded-proto") ?? "https";
-  const host =
-    headerList.get("x-forwarded-host") ??
-    headerList.get("host") ??
-    "localhost:3000";
-  return `${proto}://${host}`.replace(/\/+$/, "");
-};
 
 const maskMid = (mid: string) => {
   if (!mid) return "";
@@ -66,6 +55,10 @@ export default async function SubscriptionPage() {
   let configError: string | null = null;
   try {
     config = getStdPayConfig();
+    const billingConfig = getBillingConfig();
+    if (billingConfig.mid !== config.mid) {
+      throw new Error("이니시스 일반결제 MID와 빌링 MID가 일치하지 않습니다.");
+    }
   } catch (error) {
     configError =
       error instanceof Error
@@ -89,7 +82,7 @@ export default async function SubscriptionPage() {
     );
   }
 
-  const baseUrl = await resolveBaseUrl();
+  const baseUrl = getBaseUrl();
   const productName = "온사이드 정기 구독";
 
   let stdParams:
@@ -109,7 +102,11 @@ export default async function SubscriptionPage() {
       productName,
     });
 
-    if (orderCreate.error || !orderCreate.orderId) {
+    if (
+      orderCreate.error ||
+      !orderCreate.orderId ||
+      !orderCreate.callbackState
+    ) {
       return (
         <div className="mx-auto w-full max-w-3xl px-6 py-12">
           <p className="bauhaus-kicker">
@@ -139,6 +136,10 @@ export default async function SubscriptionPage() {
         `/subscription/result?orderId=${encodeURIComponent(orderId)}`,
         baseUrl,
       ),
+      billing: {
+        callbackState: orderCreate.callbackState,
+        offerPeriod: "M2",
+      },
     });
 
     mobileParams = buildMobileBillingRequest({
@@ -149,6 +150,8 @@ export default async function SubscriptionPage() {
       buyerEmail: user.email ?? "",
       returnUrl: mobileReturnUrl,
       buyerTel: "",
+      callbackState: orderCreate.callbackState,
+      period: "M2",
     });
   }
 
@@ -188,7 +191,7 @@ export default async function SubscriptionPage() {
       ) : null}
 
       <div className="mt-6 text-xs text-muted-foreground">
-        <p>테스트 MID: {maskMid(config.mid)}</p>
+        <p>결제 MID: {maskMid(config.mid)}</p>
         <p>콜백 URL: {returnUrl}</p>
         <p>모바일 콜백 URL: {mobileReturnUrl}</p>
       </div>

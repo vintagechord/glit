@@ -8,6 +8,7 @@ import {
   contentDispositionAttachment,
   getReviewDocsErrorPayload,
   loadReviewDocSubmissionBundles,
+  recordReviewDocsGeneratedEvents,
 } from "@/lib/admin/review-docs";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -41,6 +42,12 @@ export async function GET(
     const bundles = await loadReviewDocSubmissionBundles(supabase, [parsed.data.id]);
     const zip = await buildReviewDocsZip(bundles);
     const filename = buildReviewDocsZipFilename(bundles);
+    await recordReviewDocsGeneratedEvents({
+      supabase,
+      submissionIds: [parsed.data.id],
+      actorUserId: auth.user.id,
+      mode: "single",
+    });
 
     return new NextResponse(new Uint8Array(zip), {
       status: 200,

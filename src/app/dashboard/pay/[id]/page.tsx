@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { paymentStatusLabelMap } from "@/constants/review-status";
@@ -17,7 +16,6 @@ const uuidPattern =
 type PaymentSubmission = {
   id: string;
   user_id: string | null;
-  guest_token?: string | null;
   title: string | null;
   artist_name: string | null;
   amount_krw: number | null;
@@ -81,17 +79,11 @@ export default async function PayPage({
 }: {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{
-    guestToken?: string | string[] | undefined;
     payment?: string | string[] | undefined;
   }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = (await searchParams) ?? {};
-  const guestTokenRaw = Array.isArray(resolvedSearchParams.guestToken)
-    ? resolvedSearchParams.guestToken[0]
-    : resolvedSearchParams.guestToken;
-  const guestToken =
-    typeof guestTokenRaw === "string" ? guestTokenRaw.trim() : "";
   const paymentStateRaw = Array.isArray(resolvedSearchParams.payment)
     ? resolvedSearchParams.payment[0]
     : resolvedSearchParams.payment;
@@ -113,13 +105,19 @@ export default async function PayPage({
   const supabase = await createServerSupabase();
   const user = await getServerSessionUser(supabase);
 
-  const admin = createAdminClient();
-  const { data: submission, error } = await admin
+  if (!user) {
+    redirect(
+      `/login?next=${encodeURIComponent(`/dashboard/pay/${submissionId}`)}`,
+    );
+  }
+
+  const { data: submission, error } = await supabase
     .from("submissions")
     .select(
-      "id, user_id, guest_token, title, artist_name, amount_krw, payment_status, payment_method, status, type, is_oneclick",
+      "id, user_id, title, artist_name, amount_krw, payment_status, payment_method, status, type, is_oneclick",
     )
     .eq("id", submissionId)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (error || !submission) {
@@ -133,23 +131,9 @@ export default async function PayPage({
   }
 
   const paymentSubmission = submission as PaymentSubmission;
-  const hasUserAccess =
-    Boolean(paymentSubmission.user_id) &&
-    Boolean(user) &&
-    paymentSubmission.user_id === user?.id;
-  const hasGuestAccess =
-    !paymentSubmission.user_id &&
-    Boolean(paymentSubmission.guest_token) &&
-    Boolean(guestToken) &&
-    paymentSubmission.guest_token === guestToken;
+  const hasUserAccess = paymentSubmission.user_id === user.id;
 
-  if (!hasUserAccess && !hasGuestAccess) {
-    if (!user && !guestToken) {
-      redirect(
-        `/login?next=${encodeURIComponent(`/dashboard/pay/${submissionId}`)}`,
-      );
-    }
-
+  if (!hasUserAccess) {
     return (
       <PaymentPageMessage
         title="접수 권한이 없습니다."
@@ -178,9 +162,7 @@ export default async function PayPage({
         ? "oneclick"
         : "music"
       : "mv";
-  const detailHref = hasGuestAccess
-    ? `/track/${encodeURIComponent(guestToken)}`
-    : `/dashboard/submissions/${paymentSubmission.id}`;
+  const detailHref = `/dashboard/submissions/${paymentSubmission.id}`;
   const successHref = `${detailHref}?payment=success`;
 
   return (
@@ -233,7 +215,6 @@ export default async function PayPage({
           <PaymentMethodChoiceClient
             submissionId={paymentSubmission.id}
             context={paymentContext}
-            guestToken={hasGuestAccess ? guestToken : undefined}
             detailHref={detailHref}
             successHref={successHref}
             paymentState={paymentState}
@@ -246,10 +227,10 @@ export default async function PayPage({
 
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
-            href={hasGuestAccess ? detailHref : "/dashboard"}
+            href="/dashboard"
             className="rounded-[8px] border-2 border-border px-4 py-2 text-xs font-black uppercase tracking-normal text-foreground transition hover:border-foreground"
           >
-            {hasGuestAccess ? "접수 상세로" : "접수 현황으로"}
+            접수 현황으로
           </Link>
           <a
             href={`mailto:${APP_CONFIG.supportEmail}`}
