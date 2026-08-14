@@ -3,6 +3,7 @@
 import Link from "next/link";
 import * as React from "react";
 
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { formatCurrency, formatDate, formatDateTime, formatShortDate } from "@/lib/format";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
 
@@ -136,12 +137,9 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
     });
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (selectedIds.size === 0 || isDeleting) return;
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("선택한 심의 내역을 삭제할까요?")
-    ) {
+    if (!(await showCenteredConfirm("선택한 심의 내역을 삭제할까요?"))) {
       return;
     }
 

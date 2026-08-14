@@ -9,6 +9,7 @@ import {
   getDiscountedAlbumPrice,
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { addGuestSubmissionCartEntries } from "@/lib/guest-submission-cart";
@@ -955,7 +956,7 @@ export function AlbumWizard({
     });
   };
 
-  const handleProfanityCheck = () => {
+  const handleProfanityCheck = async () => {
     const lyrics = activeTrack.lyrics.trim();
     if (!lyrics) return;
     const v1HasProfanity = profanityTestPattern
@@ -968,7 +969,7 @@ export function AlbumWizard({
       v2Options: { extraRules: profanityExtraRules },
     });
     if (hasProfanity) {
-      const shouldProceed = window.confirm(
+      const shouldProceed = await showCenteredConfirm(
         "욕설이 감지되었습니다. 욕설이 있는 경우 심의 부적격 가능성이 높습니다",
       );
       if (!shouldProceed) return;
@@ -1949,11 +1950,10 @@ export function AlbumWizard({
     };
   };
 
-  const confirmEmailSubmission = React.useCallback(() => {
+  const confirmEmailSubmission = React.useCallback(async () => {
     const message =
       "음원 파일 첨부가 완료되지 않으면 파일 없이 다음 단계로 진행할 수 있습니다. 예전 온사이드 사이트에서도 동일하게 접수할 수 있습니다.\n파일 없이 계속 진행하시겠습니까?";
-    const confirmed =
-      typeof window !== "undefined" ? window.confirm(message) : false;
+    const confirmed = await showCenteredConfirm(message);
     if (confirmed) {
       setEmailSubmitConfirmed(true);
       setNotice({});
@@ -2139,7 +2139,7 @@ export function AlbumWizard({
     return true;
   };
 
-  const validateUploadStep = (drafts: AlbumDraft[]) => {
+  const validateUploadStep = async (drafts: AlbumDraft[]) => {
     if (uploads.some((upload) => upload.status === "error")) {
       setNotice({ error: "업로드에 실패한 파일이 있습니다." });
       return false;
@@ -2156,7 +2156,7 @@ export function AlbumWizard({
       if (isAdminReviewer) {
         return true;
       }
-      if (missingUploads.length === 1 && confirmEmailSubmission()) {
+      if (missingUploads.length === 1 && (await confirmEmailSubmission())) {
         return true;
       }
       setNotice({
@@ -2250,7 +2250,7 @@ export function AlbumWizard({
     return true;
   };
 
-  const startEditingDraft = (index: number) => {
+  const startEditingDraft = async (index: number) => {
     if (editingIndex !== null && editingIndex !== index) {
       setNotice({ error: "수정 중인 앨범을 먼저 저장해주세요." });
       return;
@@ -2264,10 +2264,7 @@ export function AlbumWizard({
       return;
     }
 
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("해당 앨범 정보를 불러오겠습니까?")
-    ) {
+    if (!(await showCenteredConfirm("해당 앨범 정보를 불러오겠습니까?"))) {
       return;
     }
 
@@ -2575,7 +2572,7 @@ export function AlbumWizard({
   const handleStep3Next = async () => {
     const draftsForUpload = resolveUploadDrafts();
     if (!draftsForUpload) return;
-    if (!validateUploadStep(draftsForUpload)) {
+    if (!(await validateUploadStep(draftsForUpload))) {
       return;
     }
     const saved = await saveAlbumDrafts(draftsForUpload, { includeFiles: true });
@@ -2646,7 +2643,10 @@ export function AlbumWizard({
         return;
       }
     }
-    if (status === "SUBMITTED" && !validateUploadStep(draftsForSubmit)) {
+    if (
+      status === "SUBMITTED" &&
+      !(await validateUploadStep(draftsForSubmit))
+    ) {
       return;
     }
 
@@ -3901,7 +3901,7 @@ export function AlbumWizard({
                     {albumDrafts.map((draft, index) => (
                       <div
                         key={draft.submissionId}
-                        onClick={() => startEditingDraft(index)}
+                        onClick={() => void startEditingDraft(index)}
                         role="button"
                         tabIndex={0}
                         className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${editingIndex === index

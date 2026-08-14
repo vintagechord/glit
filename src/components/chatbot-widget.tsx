@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 import {
   supportChatAdminChannelName,
   supportChatChannelName,
@@ -705,7 +706,7 @@ export function ChatbotWidget() {
       return;
     }
 
-    const confirmed = window.confirm(
+    const confirmed = await showCenteredConfirm(
       "이 채팅창을 나가면 사용자 대화 목록에서 사라집니다. 채팅창을 나갈까요?",
     );
     if (!confirmed) return;

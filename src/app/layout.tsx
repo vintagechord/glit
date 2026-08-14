@@ -4,6 +4,7 @@ import "./globals.css";
 import { NavigationLatencyLogger } from "@/components/perf/navigation-latency-logger";
 import { AppShell } from "@/components/site/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
+import { CenteredDialogHost } from "@/components/ui/centered-dialog-host";
 
 const enableNavigationLatencyLogger =
   process.env.NODE_ENV !== "production" ||
@@ -32,6 +33,7 @@ export default function RootLayout({
               <NavigationLatencyLogger />
             </Suspense>
           ) : null}
+          <CenteredDialogHost />
           <AppShell>{children}</AppShell>
         </ThemeProvider>
       </body>

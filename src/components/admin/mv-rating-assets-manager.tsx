@@ -4,6 +4,7 @@ import * as React from "react";
 import { ImageUp, RotateCcw } from "lucide-react";
 
 import { AdminSaveToast } from "@/components/admin/save-toast";
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 
 type RatingAsset = {
   code: "ALL" | "12" | "15" | "19";
@@ -153,8 +154,9 @@ export function MvRatingAssetsManager() {
   const handleReset = async (asset: RatingAsset) => {
     if (!asset.isCustom) return;
     if (
-      typeof window !== "undefined" &&
-      !window.confirm(`${asset.label} 이미지를 기본 이미지로 되돌릴까요?`)
+      !(await showCenteredConfirm(
+        `${asset.label} 이미지를 기본 이미지로 되돌릴까요?`,
+      ))
     ) {
       return;
     }

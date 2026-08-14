@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { deleteSubmissionsFormAction } from "@/features/admin/actions";
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 
 export function AdminDeleteButton({
   ids,
@@ -15,13 +16,21 @@ export function AdminDeleteButton({
   className?: string;
   label?: string;
 }) {
+  const confirmedSubmitRef = React.useRef(false);
+
   return (
     <form
       action={deleteSubmissionsFormAction}
-      onSubmit={(event) => {
-        if (!window.confirm("삭제하시겠습니까?")) {
-          event.preventDefault();
+      onSubmit={async (event) => {
+        if (confirmedSubmitRef.current) {
+          confirmedSubmitRef.current = false;
+          return;
         }
+        event.preventDefault();
+        const form = event.currentTarget;
+        if (!(await showCenteredConfirm("삭제하시겠습니까?"))) return;
+        confirmedSubmitRef.current = true;
+        form.requestSubmit();
       }}
     >
       <input type="hidden" name="ids" value={ids.join(",")} />

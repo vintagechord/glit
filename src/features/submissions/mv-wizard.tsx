@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { PendingOverlay } from "@/components/ui/pending-overlay";
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { addGuestSubmissionCartEntries } from "@/lib/guest-submission-cart";
@@ -2039,7 +2040,7 @@ export function MvWizard({
         v2Options: { extraRules },
       });
       if (hasProfanity) {
-        const shouldProceed = window.confirm(
+        const shouldProceed = await showCenteredConfirm(
           "욕설이 감지되었습니다. 욕설이 있는 경우 심의 부적격 가능성이 높습니다",
         );
         if (!shouldProceed) return;

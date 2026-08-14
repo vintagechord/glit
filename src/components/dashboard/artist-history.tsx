@@ -5,6 +5,7 @@ import Link from "next/link";
 import * as React from "react";
 import { Check } from "lucide-react";
 
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { formatDate } from "@/lib/format";
 
 type SubmissionItem = {
@@ -359,10 +360,7 @@ export function ArtistHistoryTabs({
   const handleDelete = React.useCallback(async (item: SubmissionItem) => {
     if (!item.id || deletingIds.has(item.id)) return;
     const label = item.title || "제목 미입력";
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(`"${label}" 심의 내역을 삭제할까요?`)
-    ) {
+    if (!(await showCenteredConfirm(`"${label}" 심의 내역을 삭제할까요?`))) {
       return;
     }
 
@@ -411,8 +409,9 @@ export function ArtistHistoryTabs({
     const ids = selectedVisibleIds;
     if (ids.length === 0) return;
     if (
-      typeof window !== "undefined" &&
-      !window.confirm(`선택한 심의 내역 ${ids.length}건을 삭제할까요?`)
+      !(await showCenteredConfirm(
+        `선택한 심의 내역 ${ids.length}건을 삭제할까요?`,
+      ))
     ) {
       return;
     }

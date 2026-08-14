@@ -11,6 +11,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 import {
   supportChatAdminChannelName,
   supportChatChannelName,
@@ -475,7 +476,7 @@ export function AdminChatClient({
   const deleteConversation = async (conversation: SupportChatConversation) => {
     if (deletingId) return;
 
-    const confirmed = window.confirm(
+    const confirmed = await showCenteredConfirm(
       `${getConversationTitle(conversation)} 상담을 삭제할까요?\n삭제한 상담과 메시지는 복구할 수 없습니다.`,
     );
     if (!confirmed) return;

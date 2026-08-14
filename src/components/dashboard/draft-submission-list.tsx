@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { formatDateTime } from "@/lib/format";
 
 export type DraftSubmissionItem = {
@@ -214,12 +215,9 @@ export function DraftSubmissionList({
     router.push(`${getResumePath(draftGroup)}?from=drafts`);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (selectedIds.size === 0 || isDeleting) return;
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("선택한 작성중 신청서를 삭제할까요?")
-    ) {
+    if (!(await showCenteredConfirm("선택한 작성중 신청서를 삭제할까요?"))) {
       return;
     }
 
