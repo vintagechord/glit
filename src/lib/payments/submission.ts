@@ -6,6 +6,7 @@ import { buildStdPayRequest } from "@/lib/inicis/stdpay";
 import { getInicisMode, getStdPayConfig } from "@/lib/inicis/config";
 import { sendSubmissionUpdateEmail } from "@/lib/email";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
+import { getPaymentGroupSubmissionIds } from "@/lib/payment-group";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 
 export type StdPayInitResult = {
@@ -81,20 +82,6 @@ const normalizeSubmissionIds = (...values: unknown[]) =>
         .filter(Boolean),
     ),
   );
-
-const getPaymentGroupSubmissionIds = (payment?: {
-  submission_id?: string | null;
-  raw_response?: unknown;
-} | null) => {
-  const baseIds = normalizeSubmissionIds(payment?.submission_id);
-  const raw = payment?.raw_response;
-  if (!isRecord(raw) || !isRecord(raw.paymentGroup)) return baseIds;
-  return normalizeSubmissionIds(
-    baseIds,
-    raw.paymentGroup.submissionIds,
-    raw.paymentGroup.relatedSubmissionIds,
-  );
-};
 
 const mergePaymentRawResponse = (
   previousRaw: unknown,
@@ -492,6 +479,27 @@ export const markPaymentSuccess = async (
 ) => {
   const admin = createAdminClient();
   const existingPayment = await getPaymentMetadataByOrderId(admin, orderId);
+  if (!existingPayment) {
+    return {
+      ok: false,
+      error: new Error("결제 요청 정보를 찾을 수 없습니다."),
+      submissionId: null,
+    };
+  }
+  if (existingPayment.status === "APPROVED") {
+    return {
+      ok: true,
+      error: null,
+      submissionId: existingPayment.submission_id,
+    };
+  }
+  if (existingPayment.status !== "REQUESTED") {
+    return {
+      ok: false,
+      error: new Error("취소되거나 종료된 결제 요청입니다."),
+      submissionId: existingPayment.submission_id,
+    };
+  }
   const nextRawResponse = mergePaymentRawResponse(
     existingPayment?.raw_response,
     payload.raw_response,
@@ -507,14 +515,22 @@ export const markPaymentSuccess = async (
       paid_at: new Date().toISOString(),
     })
     .eq("order_id", orderId)
+    .eq("status", "REQUESTED")
     .select("submission_id, raw_response")
     .maybeSingle();
 
   if (error) {
     return { ok: false, error, submissionId: null };
   }
+  if (!updated?.submission_id) {
+    return {
+      ok: false,
+      error: new Error("결제 요청 상태가 이미 변경되었습니다."),
+      submissionId: null,
+    };
+  }
 
-  const submissionIds = getPaymentGroupSubmissionIds(updated ?? existingPayment);
+  const submissionIds = getPaymentGroupSubmissionIds(updated);
   for (const targetSubmissionId of submissionIds) {
     const { data: submission } = await admin
       .from("submissions")

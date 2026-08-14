@@ -133,12 +133,16 @@ export default async function proxy(request: NextRequest) {
   const isAdminRoute = authPathname.startsWith("/admin");
   const isDashboardRoute = authPathname.startsWith("/dashboard");
   const isMypageRoute = authPathname.startsWith("/mypage");
+  const isPublicCartRoute =
+    authPathname === "/mypage/cart" || authPathname === "/dashboard/cart";
   const isPublicDashboardRoute =
     authPathname.startsWith("/dashboard/new") ||
+    isPublicCartRoute ||
     (authPathname.startsWith("/dashboard/pay/") &&
       Boolean(request.nextUrl.searchParams.get("guestToken")));
   const isUserProtectedRoute =
-    (isDashboardRoute && !isPublicDashboardRoute) || isMypageRoute;
+    (isDashboardRoute && !isPublicDashboardRoute) ||
+    (isMypageRoute && !isPublicCartRoute);
   const requiresSessionCookie =
     isUserProtectedRoute || isAdminRoute;
 

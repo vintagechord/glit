@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { clearDashboardStatusCache } from "@/lib/dashboard-status";
 import { sendSubmissionBankRequestEmail } from "@/lib/email";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -13,10 +14,15 @@ export const runtime = "nodejs";
 
 const requestSchema = z.object({
   submissionIds: z.array(z.string().uuid()).min(1).max(100),
+  guestTokensBySubmissionId: z
+    .record(z.string().uuid(), z.string().min(8).max(120))
+    .optional(),
 });
 
 type CartBankSubmission = {
   id: string;
+  user_id: string | null;
+  guest_token: string | null;
   type: string | null;
   title: string | null;
   artist_name: string | null;
@@ -24,6 +30,7 @@ type CartBankSubmission = {
   status: string | null;
   payment_status: string | null;
   applicant_email: string | null;
+  guest_email: string | null;
 };
 
 const cartStatuses = new Set(["SUBMITTED", "WAITING_PAYMENT"]);
@@ -44,10 +51,6 @@ export async function POST(req: NextRequest) {
   const supabase = await createServerSupabase();
   const user = await getServerSessionUser(supabase);
 
-  if (!user) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
-  }
-
   const parsed = requestSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
@@ -57,14 +60,15 @@ export async function POST(req: NextRequest) {
   }
 
   const submissionIds = Array.from(new Set(parsed.data.submissionIds));
+  const guestTokensBySubmissionId =
+    parsed.data.guestTokensBySubmissionId ?? {};
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("submissions")
     .select(
-      "id, type, title, artist_name, amount_krw, status, payment_status, applicant_email",
+      "id, user_id, guest_token, type, title, artist_name, amount_krw, status, payment_status, applicant_email, guest_email",
     )
     .in("id", submissionIds)
-    .eq("user_id", user.id)
     .or("payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)");
 
   if (error) {
@@ -81,6 +85,21 @@ export async function POST(req: NextRequest) {
   if (submissions.length !== submissionIds.length) {
     return NextResponse.json(
       { error: "결제할 수 없는 신청서가 포함되어 있습니다." },
+      { status: 403 },
+    );
+  }
+
+  const hasInvalidOwner = submissions.some((submission) => {
+    if (user) return submission.user_id !== user.id;
+    return !(
+      !submission.user_id &&
+      submission.guest_token &&
+      guestTokensBySubmissionId[submission.id] === submission.guest_token
+    );
+  });
+  if (hasInvalidOwner) {
+    return NextResponse.json(
+      { error: "결제할 신청서의 소유권을 확인할 수 없습니다." },
       { status: 403 },
     );
   }
@@ -106,7 +125,7 @@ export async function POST(req: NextRequest) {
     0,
   );
 
-  const { data: updatedRows, error: updateError } = await admin
+  let updateQuery = admin
     .from("submissions")
     .update({
       payment_method: "BANK",
@@ -114,9 +133,14 @@ export async function POST(req: NextRequest) {
       status: "WAITING_PAYMENT",
     })
     .in("id", submissionIds)
-    .eq("user_id", user.id)
-    .neq("payment_status", "PAID")
-    .select("id");
+    .in("status", ["SUBMITTED", "WAITING_PAYMENT"])
+    .neq("payment_status", "PAID");
+  updateQuery = user
+    ? updateQuery.eq("user_id", user.id)
+    : updateQuery.is("user_id", null);
+  const { data: updatedRows, error: updateError } = await updateQuery.select(
+    "id",
+  );
 
   if (updateError || (updatedRows ?? []).length !== submissionIds.length) {
     console.error("[CartBank] update failed", updateError);
@@ -128,7 +152,7 @@ export async function POST(req: NextRequest) {
 
   const eventRows = submissionIds.map((submissionId) => ({
     submission_id: submissionId,
-    actor_user_id: user.id,
+    actor_user_id: user?.id ?? null,
     event_type: "PAYMENT_UPDATE",
     message: "장바구니에서 무통장 입금 대기 상태로 변경되었습니다.",
   }));
@@ -142,7 +166,11 @@ export async function POST(req: NextRequest) {
   const baseUrl = getBaseUrl(req);
   await Promise.all(
     submissions.map(async (submission) => {
-      const recipients = collectEmails(user.email, submission.applicant_email);
+      const recipients = collectEmails(
+        user?.email,
+        submission.applicant_email,
+        submission.guest_email,
+      );
       if (recipients.length === 0) return;
       await Promise.all(
         recipients.map(async (email) => {
@@ -153,7 +181,12 @@ export async function POST(req: NextRequest) {
             kind: getKind(submission.type),
             amountKrw: Math.round(Number(submission.amount_krw ?? 0)),
             bankDepositorName: null,
-            link: buildUrl(`/dashboard/submissions/${submission.id}`, baseUrl),
+            link: buildUrl(
+              submission.guest_token
+                ? `/track/${encodeURIComponent(submission.guest_token)}`
+                : `/dashboard/submissions/${submission.id}`,
+              baseUrl,
+            ),
             siteLink: buildUrl("/", baseUrl),
           });
           if (!result.ok && !result.skipped) {
@@ -174,6 +207,11 @@ export async function POST(req: NextRequest) {
   revalidatePath("/en/mypage/cart");
   revalidatePath("/dashboard");
   revalidatePath("/mypage");
+  revalidatePath("/en/dashboard");
+  revalidatePath("/en/mypage");
+  if (user) {
+    clearDashboardStatusCache(user.id);
+  }
 
   return NextResponse.json({
     ok: true,

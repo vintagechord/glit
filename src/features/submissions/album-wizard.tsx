@@ -11,6 +11,7 @@ import {
 } from "@/lib/album-pricing";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
+import { addGuestSubmissionCartEntries } from "@/lib/guest-submission-cart";
 import {
   cleanupInicisPaymentLayer,
   openInicisCardPopup,
@@ -144,6 +145,7 @@ const deferredPaymentNotice =
   "결제가 완료되지 않아 신청서만 저장되었습니다.";
 const paymentFailureDraftNotice =
   "결제가 완료되지 않았습니다. 작성한 신청서는 접수 현황과 장바구니에 보관되어 있으니 다시 작성하지 않아도 됩니다.";
+const usesSubmissionCartCheckout = true;
 
 const selectedBadgeClass =
   "inline-flex items-center rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
@@ -2796,7 +2798,17 @@ export function AlbumWizard({
       if (status === "SUBMITTED" && submissionIds.length > 0) {
         if (deferPayment) {
           clearDraftStorage();
-          if (options?.redirectToCart && !isGuest) {
+          if (isGuest) {
+            addGuestSubmissionCartEntries(
+              Object.entries(guestTokensBySubmissionId).map(
+                ([submissionId, guestToken]) => ({
+                  submissionId,
+                  guestToken,
+                }),
+              ),
+            );
+          }
+          if (options?.redirectToCart) {
             router.push(`/mypage/cart?added=${encodeURIComponent(submissionIds[0])}`);
             return;
           }
@@ -4383,12 +4395,10 @@ export function AlbumWizard({
                 STEP 04
               </p>
               <h2 className="font-display mt-2 text-2xl text-foreground">
-                {isGuest ? "결제하기" : "장바구니에 담기"}
+                장바구니에 담기
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                {isGuest
-                  ? "무통장 입금 또는 카드 결제를 선택할 수 있습니다."
-                  : "신청서를 장바구니에 담은 뒤 여러 심의건을 한 번에 결제할 수 있습니다."}
+                신청서를 장바구니에 담은 뒤 여러 심의건을 한 번에 결제할 수 있습니다.
               </p>
             </div>
           </div>
@@ -4591,7 +4601,7 @@ export function AlbumWizard({
             </div>
           </div>
 
-          {isGuest ? (
+          {isGuest && !usesSubmissionCartCheckout ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 결제 방식 선택
@@ -4639,7 +4649,7 @@ export function AlbumWizard({
             </div>
           )}
 
-          {isGuest && paymentMethod === "BANK" && (
+          {isGuest && !usesSubmissionCartCheckout && paymentMethod === "BANK" && (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 무통장 입금 안내
@@ -4879,7 +4889,7 @@ export function AlbumWizard({
             </div>
           )}
 
-          {isGuest && paymentMethod === "CARD" && (
+          {isGuest && !usesSubmissionCartCheckout && paymentMethod === "CARD" && (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
               카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
             </div>
@@ -4899,22 +4909,20 @@ export function AlbumWizard({
               disabled={isSaving || isAddingAlbum || !albumPaymentReady}
               className="rounded-full border border-border/70 bg-background px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isGuest ? "(임시)저장하고 다음에 결제" : "장바구니에 담고 나중에 결제"}
+              장바구니에 담고 나중에 결제
             </button>
             <button
               type="button"
               onClick={() =>
-                isGuest
-                  ? handleSave("SUBMITTED")
-                  : handleSave("SUBMITTED", {
-                    deferPayment: true,
-                    redirectToCart: true,
-                  })
+                handleSave("SUBMITTED", {
+                  deferPayment: true,
+                  redirectToCart: true,
+                })
               }
               disabled={isSaving || isAddingAlbum || !albumPaymentReady}
               className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
             >
-              {isGuest ? "결제하기" : "장바구니에서 결제하기"}
+              장바구니에서 결제하기
             </button>
           </div>
         </div>

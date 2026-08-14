@@ -68,11 +68,11 @@ export default async function TrackDetailPage({
       | null;
   };
 
-  const fetchSubmission = async (column: "guest_token" | "id", value: string) => {
+  const fetchSubmission = async (value: string) => {
     const { data, error } = await admin
       .from("submissions")
       .select(baseSelect)
-      .eq(column, value)
+      .eq("guest_token", value)
       .maybeSingle();
 
     if (!error && data) return data;
@@ -80,23 +80,13 @@ export default async function TrackDetailPage({
     const { data: fallback } = await admin
       .from("submissions")
       .select(fallbackSelect)
-      .eq(column, value)
+      .eq("guest_token", value)
       .maybeSingle();
 
     return fallback;
   };
 
-  let submission = (await fetchSubmission("guest_token", token)) as TrackSubmission | null;
-
-  if (!submission) {
-    const isUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        token,
-      );
-    if (isUuid) {
-      submission = (await fetchSubmission("id", token)) as TrackSubmission | null;
-    }
-  }
+  const submission = (await fetchSubmission(token)) as TrackSubmission | null;
 
   if (!submission) {
     notFound();

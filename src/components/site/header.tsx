@@ -5,6 +5,11 @@ import { usePathname } from "next/navigation";
 import { ShoppingCart } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import {
+  GUEST_SUBMISSION_CART_STORAGE_KEY,
+  readGuestSubmissionCartEntries,
+  SUBMISSION_CART_UPDATED_EVENT,
+} from "@/lib/guest-submission-cart";
 
 import { ReliableLink } from "./reliable-link";
 // import { ThemeToggle } from "./theme-toggle";
@@ -193,22 +198,54 @@ export function SiteHeader() {
 
     void syncSession();
 
+    const handlePageShow = () => void syncSession();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void syncSession();
+      }
+    };
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       persist(session?.user ? "authenticated" : "unauthenticated");
     });
 
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       active = false;
       subscription.unsubscribe();
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [pathname]);
 
   React.useEffect(() => {
     if (authState !== "authenticated") {
-      setCartCount(0);
-      return;
+      const loadGuestCartCount = () => {
+        setCartCount(readGuestSubmissionCartEntries().length);
+      };
+      const handleStorage = (event: StorageEvent) => {
+        if (
+          event.key === null ||
+          event.key === GUEST_SUBMISSION_CART_STORAGE_KEY
+        ) {
+          loadGuestCartCount();
+        }
+      };
+
+      loadGuestCartCount();
+      window.addEventListener(SUBMISSION_CART_UPDATED_EVENT, loadGuestCartCount);
+      window.addEventListener("storage", handleStorage);
+      return () => {
+        window.removeEventListener(
+          SUBMISSION_CART_UPDATED_EVENT,
+          loadGuestCartCount,
+        );
+        window.removeEventListener("storage", handleStorage);
+      };
     }
 
     const controller = new AbortController();
@@ -233,11 +270,11 @@ export function SiteHeader() {
     };
 
     void loadCartCount();
-    window.addEventListener("onside:cart-updated", loadCartCount);
+    window.addEventListener(SUBMISSION_CART_UPDATED_EVENT, loadCartCount);
 
     return () => {
       controller.abort();
-      window.removeEventListener("onside:cart-updated", loadCartCount);
+      window.removeEventListener(SUBMISSION_CART_UPDATED_EVENT, loadCartCount);
     };
   }, [authState, pathname]);
 
@@ -278,6 +315,19 @@ export function SiteHeader() {
             {isEnglishRoute ? "KR" : "EN"}
           </a>
           {/* <ThemeToggle /> */}
+          <ReliableLink
+            href={cartHref}
+            className={cartButtonClass}
+            aria-label={isEnglishRoute ? "Cart" : "장바구니"}
+            title={isEnglishRoute ? "Cart" : "장바구니"}
+          >
+            <ShoppingCart size={18} strokeWidth={2.6} />
+            {cartCount > 0 ? (
+              <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-1 text-[10px] font-black leading-none text-white dark:border-[#f2cf27] dark:text-[#06111f]">
+                {cartCount > 99 ? "99+" : cartCount}
+              </span>
+            ) : null}
+          </ReliableLink>
           {authState === "authenticated" ? (
             <>
               <form action="/logout" method="post">
@@ -290,19 +340,6 @@ export function SiteHeader() {
                 className={subtleButtonClass}
               >
                 {isEnglishRoute ? "My Page" : "마이페이지"}
-              </ReliableLink>
-              <ReliableLink
-                href={cartHref}
-                className={cartButtonClass}
-                aria-label={isEnglishRoute ? "Cart" : "장바구니"}
-                title={isEnglishRoute ? "Cart" : "장바구니"}
-              >
-                <ShoppingCart size={18} strokeWidth={2.6} />
-                {cartCount > 0 ? (
-                  <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-1 text-[10px] font-black leading-none text-white dark:border-[#f2cf27] dark:text-[#06111f]">
-                    {cartCount > 99 ? "99+" : cartCount}
-                  </span>
-                ) : null}
               </ReliableLink>
             </>
           ) : (

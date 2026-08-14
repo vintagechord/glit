@@ -91,6 +91,10 @@ const dashboardStatusCache = new Map<
   { expiresAt: number; data: DashboardStatusData }
 >();
 
+export const clearDashboardStatusCache = (userId: string) => {
+  dashboardStatusCache.delete(userId);
+};
+
 export const getDashboardStatusData = async (
   userId: string,
   options: DashboardStatusOptions = {},

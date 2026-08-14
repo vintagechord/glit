@@ -16,6 +16,11 @@ import * as React from "react";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import {
+  readGuestSubmissionCartEntries,
+  removeGuestSubmissionCartEntries,
+  toGuestTokensBySubmissionId,
+} from "@/lib/guest-submission-cart";
+import {
   cleanupInicisPaymentLayer,
   openInicisCardPopup,
   type InicisPopupContext,
@@ -33,6 +38,7 @@ type CartItem = {
   isOneclick: boolean | null;
   updatedAt: string | null;
   packageName: string | null;
+  guestToken: string | null;
 };
 
 type PaymentMethod = "CARD" | "BANK";
@@ -43,7 +49,10 @@ const normalizePackageName = (item: SubmissionCartItem) => {
   return raw?.name ?? null;
 };
 
-export const mapSubmissionCartItem = (item: SubmissionCartItem): CartItem => ({
+export const mapSubmissionCartItem = (
+  item: SubmissionCartItem,
+  guestToken: string | null = null,
+): CartItem => ({
   id: item.id,
   type: item.type,
   status: item.status,
@@ -54,6 +63,7 @@ export const mapSubmissionCartItem = (item: SubmissionCartItem): CartItem => ({
   isOneclick: item.is_oneclick ?? null,
   updatedAt: item.updated_at,
   packageName: normalizePackageName(item),
+  guestToken,
 });
 
 const getTypeLabel = (item: CartItem) => {
@@ -79,6 +89,13 @@ const getPayableAmount = (item: CartItem) => {
   return Number.isFinite(amount) && amount > 0 ? amount : 0;
 };
 
+const getGuestTokensForItems = (items: CartItem[]) =>
+  Object.fromEntries(
+    items
+      .filter((item) => Boolean(item.guestToken))
+      .map((item) => [item.id, item.guestToken as string]),
+  );
+
 const normalizeInicisStatus = (type: string) => {
   const rawStatus = type.replace("INICIS:", "").toUpperCase();
   if (rawStatus.startsWith("SUCCESS")) return "SUCCESS";
@@ -92,7 +109,7 @@ export function SubmissionCartCheckout({
   userId,
   initialItems,
 }: {
-  userId: string;
+  userId: string | null;
   initialItems: SubmissionCartItem[];
 }) {
   const router = useRouter();
@@ -104,11 +121,14 @@ export function SubmissionCartCheckout({
   const focusedSubmissionId =
     searchParams.get("focus") ?? searchParams.get("added");
   const [cartItems, setCartItems] = React.useState<CartItem[]>(() =>
-    initialItems.map(mapSubmissionCartItem),
+    initialItems.map((item) => mapSubmissionCartItem(item)),
   );
+  const [isLoadingGuestCart, setIsLoadingGuestCart] = React.useState(!userId);
   React.useEffect(() => {
-    setCartItems(initialItems.map(mapSubmissionCartItem));
-  }, [initialItems]);
+    if (!userId) return;
+    setCartItems(initialItems.map((item) => mapSubmissionCartItem(item)));
+    setIsLoadingGuestCart(false);
+  }, [initialItems, userId]);
   const items = cartItems;
   const payableIds = React.useMemo(
     () => items.filter((item) => getPayableAmount(item) > 0).map((item) => item.id),
@@ -121,6 +141,9 @@ export function SubmissionCartCheckout({
     React.useState<PaymentMethod>("CARD");
   const [isOpening, setIsOpening] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [pendingDeleteIds, setPendingDeleteIds] = React.useState<string[] | null>(
+    null,
+  );
   const [bankResult, setBankResult] = React.useState<{
     count: number;
     totalAmountKrw: number;
@@ -133,7 +156,9 @@ export function SubmissionCartCheckout({
     if (payment === "success") {
       return {
         type: "success",
-        message: "결제가 완료되었습니다. 결제된 신청서는 나의 심의 내역에서 확인할 수 있습니다.",
+        message: userId
+          ? "결제가 완료되었습니다. 결제된 신청서는 나의 심의 내역에서 확인할 수 있습니다."
+          : "결제가 완료되었습니다. 비회원 조회 코드로 진행 상태를 확인할 수 있습니다.",
       };
     }
     if (payment === "cancel") {
@@ -156,6 +181,71 @@ export function SubmissionCartCheckout({
     }
     return null;
   });
+
+  React.useEffect(() => {
+    if (userId) return;
+
+    const controller = new AbortController();
+    const loadGuestCart = async () => {
+      const entries = readGuestSubmissionCartEntries();
+      if (entries.length === 0) {
+        setCartItems([]);
+        setIsLoadingGuestCart(false);
+        return;
+      }
+
+      try {
+        const guestTokensBySubmissionId =
+          toGuestTokensBySubmissionId(entries);
+        const response = await fetch("/api/cart/items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guestTokensBySubmissionId }),
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          items?: SubmissionCartItem[];
+          invalidSubmissionIds?: string[];
+          error?: string;
+        };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "장바구니 항목을 불러오지 못했습니다.");
+        }
+
+        const nextItems = (payload.items ?? []).map((item) =>
+          mapSubmissionCartItem(
+            item,
+            guestTokensBySubmissionId[item.id] ?? null,
+          ),
+        );
+        if (!controller.signal.aborted) {
+          setCartItems(nextItems);
+          const invalidIds = payload.invalidSubmissionIds ?? [];
+          if (invalidIds.length > 0) {
+            removeGuestSubmissionCartEntries(invalidIds);
+          }
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setNotice({
+            type: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "장바구니 항목을 불러오지 못했습니다.",
+          });
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingGuestCart(false);
+        }
+      }
+    };
+
+    void loadGuestCart();
+    return () => controller.abort();
+  }, [userId]);
 
   React.useEffect(() => {
     setSelectedIds((prev) => {
@@ -190,7 +280,14 @@ export function SubmissionCartCheckout({
     });
   }, [focusedSubmissionId, items]);
 
-  const selectedItems = items.filter((item) => selectedIds.has(item.id));
+  const selectedItems = React.useMemo(
+    () => items.filter((item) => selectedIds.has(item.id)),
+    [items, selectedIds],
+  );
+  const selectedItemsRef = React.useRef(selectedItems);
+  React.useEffect(() => {
+    selectedItemsRef.current = selectedItems;
+  }, [selectedItems]);
   const selectedTotal = selectedItems.reduce(
     (sum, item) => sum + getPayableAmount(item),
     0,
@@ -211,6 +308,11 @@ export function SubmissionCartCheckout({
       const status = normalizeInicisStatus(String(type));
       cleanupInicisPaymentLayer();
       if (status === "SUCCESS") {
+        if (!userId) {
+          removeGuestSubmissionCartEntries(
+            selectedItemsRef.current.map((item) => item.id),
+          );
+        }
         router.push(`${cartHref}?payment=success`);
         router.refresh();
         return;
@@ -231,7 +333,7 @@ export function SubmissionCartCheckout({
 
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [cartHref, router]);
+  }, [cartHref, router, userId]);
 
   const toggleItem = (id: string) => {
     setSelectedIds((prev) => {
@@ -252,15 +354,20 @@ export function SubmissionCartCheckout({
   const getEditHref = (item: CartItem) =>
     item.type === "ALBUM" ? "/dashboard/new/album?from=drafts" : "/dashboard/new/mv?from=drafts";
 
+  const getDetailHref = (item: CartItem) =>
+    item.guestToken
+      ? `/track/${encodeURIComponent(item.guestToken)}`
+      : `/dashboard/submissions/${item.id}`;
+
   const prepareEditStorage = (item: CartItem) => {
     if (typeof window === "undefined") return;
     try {
       if (item.type === "ALBUM") {
         window.localStorage.setItem(
-          `onside:draft:album:${userId}`,
+          `onside:draft:album:${userId ?? "guest"}`,
           JSON.stringify({
             ids: [item.id],
-            guestToken: null,
+            guestToken: item.guestToken,
             updatedAt: Date.now(),
           }),
         );
@@ -268,10 +375,10 @@ export function SubmissionCartCheckout({
       }
 
       window.localStorage.setItem(
-        `onside:draft:mv:${userId}`,
+        `onside:draft:mv:${userId ?? "guest"}`,
         JSON.stringify({
           id: item.id,
-          guestToken: null,
+          guestToken: item.guestToken,
           mvType:
             item.type === "MV_BROADCAST"
               ? "MV_BROADCAST"
@@ -284,31 +391,29 @@ export function SubmissionCartCheckout({
     }
   };
 
-  const handleDeleteItems = async (ids: string[]) => {
+  const handleDeleteItems = (ids: string[]) => {
     if (isDeleting || isOpening) return;
     const targetIds = Array.from(new Set(ids.filter(Boolean)));
     if (targetIds.length === 0) {
       setNotice({ type: "error", message: "삭제할 장바구니 항목을 선택해주세요." });
       return;
     }
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(
-        targetIds.length === 1
-          ? "이 장바구니 항목을 삭제할까요? 삭제한 신청서는 복구할 수 없습니다."
-          : `선택한 ${targetIds.length}개 장바구니 항목을 삭제할까요? 삭제한 신청서는 복구할 수 없습니다.`,
-      )
-    ) {
-      return;
-    }
+    setPendingDeleteIds(targetIds);
+  };
 
+  const confirmDeleteItems = async (targetIds: string[]) => {
     setIsDeleting(true);
     setNotice(null);
     try {
       const response = await fetch("/api/cart/items", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ submissionIds: targetIds }),
+        body: JSON.stringify({
+          submissionIds: targetIds,
+          guestTokensBySubmissionId: getGuestTokensForItems(
+            items.filter((item) => targetIds.includes(item.id)),
+          ),
+        }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -330,6 +435,9 @@ export function SubmissionCartCheckout({
         return next;
       });
       setBankResult(null);
+      if (!userId) {
+        removeGuestSubmissionCartEntries(Array.from(deletedIds));
+      }
       setNotice({
         type: "success",
         message:
@@ -352,6 +460,7 @@ export function SubmissionCartCheckout({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         submissionIds: selectedItems.map((item) => item.id),
+        guestTokensBySubmissionId: getGuestTokensForItems(selectedItems),
       }),
     });
     const payload = (await response.json().catch(() => ({}))) as {
@@ -426,6 +535,8 @@ export function SubmissionCartCheckout({
       context: getPaymentContext(primaryItem),
       submissionId: primaryItem.id,
       submissionIds: selectedItems.map((item) => item.id),
+      guestToken: primaryItem.guestToken ?? undefined,
+      guestTokensBySubmissionId: getGuestTokensForItems(selectedItems),
     });
 
     if (!ok) {
@@ -443,6 +554,14 @@ export function SubmissionCartCheckout({
       message: "결제 모듈을 실행했습니다. 결제를 완료해주세요.",
     });
   };
+
+  if (isLoadingGuestCart) {
+    return (
+      <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-5 py-8 text-sm font-semibold text-muted-foreground">
+        장바구니를 불러오는 중입니다...
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -474,6 +593,21 @@ export function SubmissionCartCheckout({
           type={notice.type}
           message={notice.message}
           onClose={() => setNotice(null)}
+        />
+      ) : null}
+      {pendingDeleteIds ? (
+        <ConfirmDialog
+          message={
+            pendingDeleteIds.length === 1
+              ? "이 장바구니 항목을 삭제할까요? 연결된 접수 현황도 함께 삭제되며 복구할 수 없습니다."
+              : `선택한 ${pendingDeleteIds.length}개 장바구니 항목을 삭제할까요? 연결된 접수 현황도 함께 삭제되며 복구할 수 없습니다.`
+          }
+          onCancel={() => setPendingDeleteIds(null)}
+          onConfirm={() => {
+            const targetIds = pendingDeleteIds;
+            setPendingDeleteIds(null);
+            void confirmDeleteItems(targetIds);
+          }}
         />
       ) : null}
       <div className="space-y-4">
@@ -565,7 +699,7 @@ export function SubmissionCartCheckout({
                 </span>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <Link
-                    href={`/dashboard/submissions/${item.id}`}
+                    href={getDetailHref(item)}
                     className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
                     aria-label={`${getDisplayTitle(item)} 확인`}
                   >
@@ -698,7 +832,7 @@ function NoticeDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4 py-6"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-6"
       role="presentation"
     >
       <div
@@ -717,6 +851,58 @@ function NoticeDialog({
         >
           확인
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  message,
+  onCancel,
+  onConfirm,
+}: {
+  message: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 px-4 py-6"
+      role="presentation"
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="cart-delete-dialog-title"
+        aria-describedby="cart-delete-dialog-description"
+        className="w-full max-w-sm rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-center text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]"
+      >
+        <p id="cart-delete-dialog-title" className="text-base font-black">
+          삭제 확인
+        </p>
+        <p
+          id="cart-delete-dialog-description"
+          className="mt-3 whitespace-pre-line text-sm font-semibold leading-6"
+        >
+          {message}
+        </p>
+        <div className="mt-5 flex justify-center gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-10 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-4 text-xs font-black text-[#111111] transition hover:-translate-y-0.5"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            autoFocus
+            className="inline-flex h-10 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-4 text-xs font-black text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 dark:text-[#06111f]"
+          >
+            삭제
+          </button>
+        </div>
       </div>
     </div>
   );

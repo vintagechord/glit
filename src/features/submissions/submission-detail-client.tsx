@@ -32,6 +32,7 @@ import { createClient } from "@/lib/supabase/client";
 import { APP_CONFIG } from "@/lib/config";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { downloadEndpointFile } from "@/lib/browser-download";
+import { addGuestSubmissionCartEntries } from "@/lib/guest-submission-cart";
 
 type Submission = {
   id: string;
@@ -743,9 +744,15 @@ export function SubmissionDetailClient({
     );
   const canRetryCardPayment =
     submission.payment_method !== "BANK" && submission.payment_status !== "PAID";
-  const retryPaymentHref = guestToken
-    ? `/dashboard/pay/${submission.id}?guestToken=${encodeURIComponent(guestToken)}`
-    : `/mypage/cart?focus=${submission.id}`;
+  const retryPaymentHref = `/mypage/cart?focus=${submission.id}`;
+  const openCartForPayment = () => {
+    if (guestToken) {
+      addGuestSubmissionCartEntries([
+        { submissionId: submission.id, guestToken },
+      ]);
+    }
+    router.push(retryPaymentHref);
+  };
   const mvSongTitleDisplay =
     submission.mv_song_title_official ||
     submission.mv_song_title ||
@@ -1468,10 +1475,10 @@ export function SubmissionDetailClient({
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => router.push(retryPaymentHref)}
+                  onClick={openCartForPayment}
                   className="rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-4 py-2 text-xs font-black uppercase tracking-normal text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
                 >
-                  {guestToken ? "카드 결제하기" : "장바구니에서 결제하기"}
+                  장바구니에서 결제하기
                 </button>
               </div>
             </div>
