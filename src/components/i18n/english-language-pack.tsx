@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 
 const exactTranslations: Record<string, string> = {
   "본문으로 바로가기": "Skip to content",
-  "신청 · 결제 · 결과를 한곳에서.": "Apply, pay, and get results in one place.",
+  "내 작품의 심의 기록을 한곳에서 관리하세요":
+    "Manage your work's review records in one place.",
   "서비스": "Services",
   "어떤 심의가 필요한가요?": "Which review do you need?",
   "구버전 접수": "Legacy Site",

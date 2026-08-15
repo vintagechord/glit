@@ -121,7 +121,7 @@ export default function Home() {
                   결과 확인까지
                 </h1>
                 <p className="max-w-xl break-keep text-base font-semibold leading-7 text-foreground/74 dark:text-white/76">
-                  신청 · 결제 · 결과를 한곳에서.
+                  내 작품의 심의 기록을 한곳에서 관리하세요
                 </p>
               </div>
               <HomeHeroAdBanner />

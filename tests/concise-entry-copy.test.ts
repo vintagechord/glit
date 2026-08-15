@@ -5,6 +5,20 @@ import test from "node:test";
 const readSource = (relativePath: string) =>
   readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
+test("the home hero uses the review-record message", () => {
+  const homePage = readSource("src/app/page.tsx");
+  const translations = readSource(
+    "src/components/i18n/english-language-pack.tsx",
+  );
+
+  assert.match(homePage, /내 작품의 심의 기록을 한곳에서 관리하세요/);
+  assert.doesNotMatch(homePage, /신청 · 결제 · 결과를 한곳에서/);
+  assert.match(
+    translations,
+    /"내 작품의 심의 기록을 한곳에서 관리하세요":/,
+  );
+});
+
 test("application entry headers keep essentials without repeating the wizard steps", () => {
   const albumIntro = readSource(
     "src/features/submissions/album-intro-panel.tsx",
