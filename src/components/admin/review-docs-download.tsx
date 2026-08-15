@@ -247,7 +247,7 @@ export function ReviewDocsBulkToolbar() {
             ) : (
               <Download className="h-4 w-4" aria-hidden="true" />
             )}
-            <span>{isDownloading ? "생성 중" : "선택 건 심의자료 ZIP 다운로드"}</span>
+            <span>{isDownloading ? "생성 중" : "선택 ZIP 다운로드"}</span>
           </button>
         </div>
       </div>
@@ -312,7 +312,7 @@ export function MelonReviewDocsDownloadForm() {
       <div className="grid gap-3 md:grid-cols-2">
         <label className="grid gap-2">
           <span className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-            Genie album links · priority
+            지니 링크 · 우선
           </span>
           <textarea
             value={genieLinksText}
@@ -324,7 +324,7 @@ export function MelonReviewDocsDownloadForm() {
         </label>
         <label className="grid gap-2">
           <span className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-            Melon album links · fallback
+            멜론 링크 · 보완
           </span>
           <textarea
             value={melonLinksText}
@@ -349,7 +349,7 @@ export function MelonReviewDocsDownloadForm() {
           ) : (
             <Download className="h-4 w-4" aria-hidden="true" />
           )}
-          <span>{isDownloading ? "생성 중" : "전체 심의자료 ZIP 다운로드"}</span>
+          <span>{isDownloading ? "생성 중" : "전체 ZIP 다운로드"}</span>
         </button>
       </div>
       {error ? (
@@ -404,7 +404,7 @@ export function ReviewDocsSingleDownloadButton({
         ) : (
           <Download className="h-4 w-4" aria-hidden="true" />
         )}
-        <span>{isDownloading ? "생성 중" : "심의자료 DOCX ZIP 다운로드"}</span>
+        <span>{isDownloading ? "생성 중" : "DOCX ZIP 다운로드"}</span>
       </button>
       {error ? (
         <p

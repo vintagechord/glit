@@ -1,12 +1,11 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 
 import { faqItems } from "@/lib/onside-content";
 
 export const metadata = {
   title: "FAQ",
 };
-
-const categories = Array.from(new Set(faqItems.map((item) => item.category)));
 
 export default function FaqPage() {
   return (
@@ -15,22 +14,7 @@ export default function FaqPage() {
       <h1 className="font-display mt-4 text-3xl font-black text-foreground">
         자주 묻는 질문
       </h1>
-      <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
-        준비물, 결제, 진행 확인, 결과 수령에서 자주 묻는 내용을 정리했습니다.
-      </p>
-
-      <div className="mt-6 flex flex-wrap gap-2">
-        {categories.map((category) => (
-          <span
-            key={category}
-            className="rounded-[6px] border-2 border-border bg-card px-3 py-1 text-xs font-black text-foreground"
-          >
-            {category}
-          </span>
-        ))}
-      </div>
-
-      <section className="mt-8 grid gap-4">
+      <section className="mt-7 grid gap-3">
         {faqItems.map((item) => (
           <details
             key={item.question}
@@ -45,9 +29,8 @@ export default function FaqPage() {
                   {item.question}
                 </span>
               </span>
-              <span className="rounded-[6px] border-2 border-border px-2 py-1 text-xs font-black text-muted-foreground group-open:bg-[#f2cf27] group-open:text-[#111111]">
-                <span className="group-open:hidden">열기</span>
-                <span className="hidden group-open:inline">닫기</span>
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-border text-muted-foreground transition group-open:bg-[#f2cf27] group-open:text-[#111111]">
+                <Plus className="h-4 w-4 transition-transform group-open:rotate-45" aria-hidden="true" />
               </span>
             </summary>
             <p className="mt-4 text-sm font-semibold leading-6 text-muted-foreground">
@@ -59,13 +42,13 @@ export default function FaqPage() {
 
       <div className="mt-8 flex flex-wrap gap-3">
         <Link href="/dashboard/new" className="bauhaus-button px-5 py-3 text-sm">
-          지금 심의 신청
+          심의 신청
         </Link>
         <Link
           href="/support"
           className="inline-flex items-center rounded-[8px] border-2 border-[#111111] bg-card px-5 py-3 text-sm font-black text-foreground shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
         >
-          고객센터 보기
+          1:1 문의
         </Link>
       </div>
     </div>

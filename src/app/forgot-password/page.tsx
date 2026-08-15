@@ -26,7 +26,7 @@ function SubmitButton() {
           <span>메일 발송 중...</span>
         </span>
       ) : (
-        "재설정 메일 보내기"
+        "링크 보내기"
       )}
     </button>
   );
@@ -45,13 +45,10 @@ export default function ForgotPasswordPage() {
         <div className="space-y-3 text-center">
           <p className="bauhaus-kicker mx-auto">비밀번호 재설정</p>
           <h1 className="font-display text-3xl font-black leading-tight tracking-normal text-foreground">
-            비밀번호를 다시 설정하세요
+            재설정 링크 받기
           </h1>
           <p className="mx-auto max-w-md text-sm font-semibold text-muted-foreground sm:text-base">
-            가입한 이메일을 입력하면 재설정 링크를 보내드립니다.
-          </p>
-          <p className="mx-auto max-w-md text-xs font-semibold leading-5 text-muted-foreground">
-            비회원 접수 내역을 찾는 경우 비밀번호 재설정이 아니라 조회 코드 찾기를 이용해주세요.
+            가입 이메일을 입력하세요.
           </p>
         </div>
 
@@ -99,13 +96,13 @@ export default function ForgotPasswordPage() {
               href="/login"
               className="inline-flex items-center rounded-[8px] border-2 border-border px-4 py-2 text-sm font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
             >
-              로그인으로 돌아가기
+              로그인
             </Link>
             <Link
               href="/track"
               className="inline-flex items-center rounded-[8px] border-2 border-border px-4 py-2 text-sm font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
             >
-              조회 코드 찾기
+              비회원 조회
             </Link>
           </div>
         </div>

@@ -140,10 +140,10 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                   ✓
                 </div>
                 <p className="mt-4 text-lg font-black text-foreground">
-                  문의가 접수되었습니다.
+                  접수 완료
                 </p>
                 <p className="mt-2 text-sm font-semibold leading-6 text-muted-foreground">
-                  남겨주신 연락처로 확인 후 안내드리겠습니다.
+                  남겨주신 연락처로 답변드릴게요.
                 </p>
                 <button
                   type="button"
@@ -162,7 +162,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                     onChange={(event) => setTitle(event.target.value)}
                     required
                     maxLength={120}
-                    placeholder="문의 제목을 입력하세요."
+                    placeholder="무엇이 궁금한가요?"
                     className={fieldClass}
                   />
                 </label>
@@ -174,7 +174,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                     required
                     maxLength={4000}
                     rows={7}
-                    placeholder="문의 내용을 입력하세요."
+                    placeholder="필요한 내용을 적어주세요."
                     className={`${fieldClass} resize-y leading-6`}
                   />
                 </label>
@@ -185,7 +185,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                     onChange={(event) => setContact(event.target.value)}
                     required
                     maxLength={160}
-                    placeholder="답변받을 이메일 또는 전화번호"
+                    placeholder="답변받을 연락처"
                     className={fieldClass}
                   />
                 </label>
@@ -214,7 +214,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                     ) : (
                       <SendHorizontal className="h-4 w-4" aria-hidden="true" />
                     )}
-                    문의 접수
+                    보내기
                   </button>
                 </div>
               </form>

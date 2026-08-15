@@ -300,7 +300,7 @@ export default async function AdminSubmissionDetailPage({
         </p>
         <h1 className="font-display mt-2 text-2xl text-foreground">접수 상세</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
-          접수 ID가 전달되지 않았습니다. (비어 있음)
+          접수 ID가 없습니다.
         </p>
         <div className="mt-3 flex gap-3">
           <Link
@@ -310,9 +310,14 @@ export default async function AdminSubmissionDetailPage({
             목록으로 돌아가기
           </Link>
         </div>
-        <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-          디버그 - searchParams.id: {Array.isArray(searchId) ? searchId.join(",") : searchId ?? "없음"}
-        </div>
+        <details className="mt-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-semibold text-foreground">
+            요청 정보
+          </summary>
+          <p className="mt-2 break-words rounded-2xl border border-border/60 bg-background px-4 py-3">
+            검색 ID: {Array.isArray(searchId) ? searchId.join(",") : searchId ?? "없음"}
+          </p>
+        </details>
       </div>
     );
   }
@@ -324,7 +329,7 @@ export default async function AdminSubmissionDetailPage({
         </p>
         <h1 className="font-display mt-2 text-2xl text-foreground">접수 상세</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
-          접수 ID가 유효한 UUID 형식이 아닙니다. (전달된 값: {rawSubmissionId})
+          접수 ID 형식이 올바르지 않습니다.
         </p>
         <div className="mt-3 flex gap-3">
           <Link
@@ -334,6 +339,14 @@ export default async function AdminSubmissionDetailPage({
             목록으로 돌아가기
           </Link>
         </div>
+        <details className="mt-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-semibold text-foreground">
+            요청 정보
+          </summary>
+          <p className="mt-2 break-all rounded-2xl border border-border/60 bg-background px-4 py-3">
+            {rawSubmissionId}
+          </p>
+        </details>
       </div>
     );
   }
@@ -356,14 +369,15 @@ export default async function AdminSubmissionDetailPage({
           목록으로 돌아가기
         </Link>
       </div>
-      <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-        요청 ID: {submissionId}
-      </div>
-      {reason ? (
-        <div className="mt-2 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-          상세: {reason}
+      <details className="mt-3 text-xs text-muted-foreground">
+        <summary className="cursor-pointer font-semibold text-foreground">
+          요청 정보
+        </summary>
+        <div className="mt-2 space-y-1 rounded-2xl border border-border/60 bg-background px-4 py-3">
+          <p className="break-all">ID: {submissionId}</p>
+          {reason ? <p className="break-words">{reason}</p> : null}
         </div>
-      ) : null}
+      </details>
     </div>
   );
 
@@ -439,12 +453,17 @@ export default async function AdminSubmissionDetailPage({
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           서버 오류로 접수 정보를 불러오지 못했습니다.
         </p>
-        <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-          요청 ID: {submissionId}
-        </div>
-        <div className="mt-2 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-          상세: {submissionError.message ?? "알 수 없는 오류"}
-        </div>
+        <details className="mt-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-semibold text-foreground">
+            오류 상세
+          </summary>
+          <div className="mt-2 space-y-1 rounded-2xl border border-border/60 bg-background px-4 py-3">
+            <p className="break-all">ID: {submissionId}</p>
+            <p className="break-words">
+              {submissionError.message ?? "알 수 없는 오류"}
+            </p>
+          </div>
+        </details>
         <div className="mt-3 flex gap-3">
           <Link
             href={initialAdminSubmissionListHref}
@@ -859,11 +878,6 @@ export default async function AdminSubmissionDetailPage({
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               심의 흐름
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {isMvSubmission
-                ? "신청 완료, 결제 완료, 접수 진행, 결과 통보 4단계로 관리합니다."
-                : "신청접수, 결제완료, 심의진행, 결과 통보 4단계로 관리합니다."}
-            </p>
           </div>
           <Link
             href={adminSubmissionListHref}
@@ -978,7 +992,7 @@ export default async function AdminSubmissionDetailPage({
                 기본 정보 보정
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                원클릭 접수 등에서 누락된 아티스트명과 제목만 빠르게 보완합니다.
+                누락된 표시 정보를 보완합니다.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -1152,7 +1166,7 @@ export default async function AdminSubmissionDetailPage({
                     3. 접수 진행 / 4. 결과 통보
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    뮤직비디오 심의는 방송국별 적격/부적격을 따로 입력하지 않고, 이 카드에서 결과 통보를 완료합니다.
+                    이 카드에서 결과 통보를 완료합니다.
                   </p>
                 </div>
                 <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground">
@@ -1201,7 +1215,7 @@ export default async function AdminSubmissionDetailPage({
                       심의 필증
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      사용자가 결과 화면에서 심의등급 이미지, 필증, 사용 가이드를 함께 받을 수 있도록 필증을 업로드합니다.
+                      사용자에게 제공할 필증을 업로드합니다.
                     </p>
                     <div className="mt-3">
                       <CertificateUploader
@@ -1616,7 +1630,7 @@ export default async function AdminSubmissionDetailPage({
                 원클릭 트랙 추가
               </p>
               <p className="text-xs text-muted-foreground">
-                원클릭 접수에는 트랙 정보가 없어 관리자 등록이 필요합니다. 추가 후 방송국별 진행 관리에서 트랙별 적격/부적격을 설정하세요.
+                트랙을 추가한 뒤 방송국별 결과를 설정하세요.
               </p>
               <ConfirmForm
                 action={createTrackForSubmissionAction}

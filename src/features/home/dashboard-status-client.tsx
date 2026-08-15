@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { LoaderCircle, RefreshCw } from "lucide-react";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { HomeReviewPanel } from "@/features/home/home-review-panel";
@@ -153,7 +154,7 @@ export function DashboardStatusClient({
 }: {
   viewerId: string;
   title: string;
-  description: string;
+  description?: string;
   tabs: React.ComponentProps<typeof DashboardShell>["tabs"];
   contextLabel?: string;
   activeTab?: string;
@@ -233,8 +234,9 @@ export function DashboardStatusClient({
       contextLabel={contextLabel}
     >
       {loading ? (
-        <div className="rounded-[10px] border-2 border-[#111111] bg-card p-8 text-sm font-semibold text-muted-foreground shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
-          진행 현황을 불러오는 중입니다...
+        <div className="flex min-h-40 items-center justify-center rounded-[10px] border-2 border-[#111111] bg-card p-8 text-muted-foreground shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
+          <LoaderCircle className="h-7 w-7 animate-spin" aria-hidden="true" />
+          <span className="sr-only">진행 현황을 불러오는 중</span>
         </div>
       ) : error ? (
         <div className="rounded-[10px] border-2 border-[#d9362c] bg-[#d9362c]/10 p-8 text-sm font-semibold text-[#d9362c]">
@@ -244,7 +246,8 @@ export function DashboardStatusClient({
             onClick={() => setReloadSeq((value) => value + 1)}
             className="mt-4 rounded-[8px] border-2 border-[#111111] bg-white px-4 py-2 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5"
           >
-            다시 불러오기
+            <RefreshCw className="mr-1.5 inline h-3.5 w-3.5" aria-hidden="true" />
+            다시
           </button>
         </div>
       ) : data ? (

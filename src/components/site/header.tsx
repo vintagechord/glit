@@ -22,17 +22,17 @@ import { ReliableLink } from "./reliable-link";
 import { SiteLogo } from "./site-logo";
 
 const navLinks = [
-  { label: "심의 신청", href: "/dashboard/new", match: "prefix" as const },
-  { label: "결과 조회", href: "/track", match: "prefix" as const },
-  { label: "크레딧", href: "/magazine", match: "prefix" as const },
-  { label: "이용가이드", href: "/guide", match: "prefix" as const },
+  { label: "심의 신청", mobileLabel: "신청", href: "/dashboard/new", match: "prefix" as const },
+  { label: "결과 조회", mobileLabel: "조회", href: "/track", match: "prefix" as const },
+  { label: "크레딧", mobileLabel: "크레딧", href: "/magazine", match: "prefix" as const },
+  { label: "이용가이드", mobileLabel: "가이드", href: "/guide", match: "prefix" as const },
 ];
 
 const englishNavLinks = [
-  { label: "Apply", href: "/en/dashboard/new", match: "prefix" as const },
-  { label: "Results", href: "/en/track", match: "prefix" as const },
-  { label: "Credits", href: "/en/magazine", match: "prefix" as const },
-  { label: "Guide", href: "/en/guide", match: "prefix" as const },
+  { label: "Apply", mobileLabel: "Apply", href: "/en/dashboard/new", match: "prefix" as const },
+  { label: "Results", mobileLabel: "Results", href: "/en/track", match: "prefix" as const },
+  { label: "Credits", mobileLabel: "Credits", href: "/en/magazine", match: "prefix" as const },
+  { label: "Guide", mobileLabel: "Guide", href: "/en/guide", match: "prefix" as const },
 ];
 
 const authStorageKey = "onside:header-auth-state";
@@ -410,7 +410,7 @@ export function SiteHeader() {
                     : "bg-transparent text-foreground/72 hover:border-[#111111] hover:bg-white hover:text-foreground dark:text-white/74 dark:hover:border-[#f2cf27] dark:hover:bg-[#171717] dark:hover:text-white"
                 }`}
               >
-                <span>{link.label}</span>
+                <span>{link.mobileLabel}</span>
               </ReliableLink>
             );
           })}

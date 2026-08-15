@@ -152,7 +152,6 @@ export async function HistoryPageView(config?: ShellConfig) {
   return (
     <DashboardShell
       title="나의 심의 내역"
-      description="결제 완료된 심의 기록을 발매 음원 단위로 확인합니다."
       activeTab="history"
       tabs={config?.tabs ?? statusDashboardTabs}
       contextLabel={config?.contextLabel ?? "진행상황"}

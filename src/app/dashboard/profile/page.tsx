@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Mail, UserRound } from "lucide-react";
 
 import {
   DashboardShell,
@@ -36,20 +37,17 @@ export async function ProfilePageView(config?: ShellConfig) {
   return (
     <DashboardShell
       title="계정 정보"
-      description="접수 진행 및 결과 통보를 위한 정보입니다."
       activeTab="profile"
       tabs={config?.tabs ?? defaultDashboardTabs}
       contextLabel={config?.contextLabel ?? "마이페이지"}
     >
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
-          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-            프로필 수정
-          </p>
-          <h2 className="mt-3 text-xl font-black text-foreground">
-            접수 진행 및 결과 통보를 위한 정보입니다.
+          <h2 className="flex items-center gap-2 text-lg font-black text-foreground">
+            <UserRound className="h-5 w-5" aria-hidden="true" />
+            프로필
           </h2>
-          <div className="mt-6">
+          <div className="mt-5">
             <ProfileForm
               defaultValues={{
                 name: profile?.name ?? user.user_metadata?.name ?? "",
@@ -60,18 +58,17 @@ export async function ProfilePageView(config?: ShellConfig) {
           </div>
         </div>
 
-        <div className="space-y-4 rounded-[10px] border-2 border-[#111111] bg-background/80 p-6 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
-          <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-            계정 요약
-          </p>
-          <div className="rounded-[8px] border-2 border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground">로그인 이메일</p>
-            <p className="mt-2 text-sm font-semibold text-foreground">
-              {user.email}
-            </p>
-          </div>
-          <div className="rounded-[8px] border-2 border-dashed border-border bg-background/80 p-4 text-xs font-semibold text-muted-foreground">
-            저장된 정보는 접수 확인 및 심의 통보에 활용됩니다.
+        <div className="h-fit rounded-[10px] border-2 border-[#111111] bg-background/80 p-5 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#f2cf27] text-[#111111]">
+              <Mail className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-black text-muted-foreground">로그인 이메일</p>
+              <p className="mt-1 break-all text-sm font-semibold text-foreground">
+                {user.email}
+              </p>
+            </div>
           </div>
         </div>
       </div>

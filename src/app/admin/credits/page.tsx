@@ -139,21 +139,19 @@ export default async function AdminCreditsPage({
       </h1>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-3xl text-sm text-muted-foreground">
-          사용자가 크레딧으로 신청할 수 있는 서비스를 등록합니다. 접수된 요청은
-          크레딧 요청 관리에서 처리합니다.
+          크레딧 서비스와 노출 상태를 관리합니다.
         </p>
         <Link
           href="/admin/credits/requests"
           className="rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold text-foreground transition hover:border-foreground"
         >
-          크레딧 요청 관리
+          요청 보기
         </Link>
       </div>
 
       {errorFlag ? (
         <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-          저장 또는 상태 변경 중 오류가 발생했습니다. 입력값과 마이그레이션 적용
-          상태를 확인해주세요.
+          저장하지 못했습니다. 입력값을 확인해주세요.
         </div>
       ) : null}
 
@@ -165,8 +163,7 @@ export default async function AdminCreditsPage({
                 등록된 서비스
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                노출 체크를 끄면 사용자는 해당 서비스를 새로 신청할 수 없습니다.
-                신청 내용은 크레딧 요청 관리에 접수됩니다.
+                비노출 서비스는 신규 신청에서 제외됩니다.
               </p>
             </div>
             <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">

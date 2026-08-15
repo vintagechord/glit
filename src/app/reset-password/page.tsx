@@ -140,10 +140,10 @@ function ResetPasswordContent() {
 
   const heading =
     status.state === "error"
-      ? "링크를 확인해주세요"
+      ? "링크 확인"
       : status.state === "success"
-        ? "완료되었습니다"
-        : "새 비밀번호 설정";
+        ? "변경 완료"
+        : "새 비밀번호";
 
   return (
     <div className="relative mx-auto flex w-full max-w-4xl flex-1 items-center justify-center px-6 py-16">
@@ -153,9 +153,9 @@ function ResetPasswordContent() {
         <div className="space-y-2 text-center">
           <p className="bauhaus-kicker mx-auto">비밀번호 재설정</p>
           <h1 className="font-display text-2xl font-black text-foreground">{heading}</h1>
-          <p className="text-sm font-semibold text-muted-foreground">
-            비밀번호를 재설정한 뒤 새 비밀번호로 로그인해주세요.
-          </p>
+          {status.state !== "error" && status.state !== "success" ? (
+            <p className="text-sm font-semibold text-muted-foreground">8자 이상 입력</p>
+          ) : null}
         </div>
 
         {status.state === "error" && (
@@ -216,7 +216,7 @@ function ResetPasswordContent() {
             disabled={status.state === "verifying"}
             className="bauhaus-button w-full px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {status.state === "verifying" ? "처리 중..." : "비밀번호 변경하기"}
+            {status.state === "verifying" ? "확인 중..." : "변경하기"}
           </button>
         </form>
       </div>

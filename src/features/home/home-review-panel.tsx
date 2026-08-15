@@ -1069,7 +1069,7 @@ export function HomeReviewPanel({
               실시간
             </>
           ) : (
-            "진행 현황 예시"
+            "미리보기"
           )}
         </span>
       </div>
@@ -1108,10 +1108,10 @@ export function HomeReviewPanel({
             : isRemoteLoading
               ? "확인 중"
               : "표시할 내역 없음"}
-          {tab === "album" && activeList.length > 0
+          {!compact && tab === "album" && activeList.length > 0
             ? ` · 진행중 ${activeList.length}건`
             : null}
-          {tab === "mv" && activeList.length > 0
+          {!compact && tab === "mv" && activeList.length > 0
             ? ` · 진행중 ${activeList.length}건`
             : null}
         </span>

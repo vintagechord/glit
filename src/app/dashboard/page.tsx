@@ -51,7 +51,6 @@ export async function StatusPageView(config?: ShellConfig) {
     <DashboardStatusClient
       viewerId={user.id}
       title="접수 현황"
-      description="접수한 심의의 현재 상태를 확인할 수 있습니다."
       activeTab="status"
       tabs={config?.tabs ?? statusDashboardTabs}
       contextLabel={config?.contextLabel ?? "진행상황"}

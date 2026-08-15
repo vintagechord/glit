@@ -103,8 +103,7 @@ export default async function AdminMagazinePage({
         매거진 발행 요청 관리
       </h1>
       <p className="mt-3 text-sm text-muted-foreground">
-        보유 크레딧으로 접수된 워터멜론 매거진 요청을 확인하고 발행 상태를
-        관리합니다.
+        발행 상태와 공개 URL을 관리합니다.
       </p>
 
       <form className="mt-6 flex flex-wrap items-center gap-3 rounded-[28px] border border-border/60 bg-card/80 p-4">
@@ -131,7 +130,11 @@ export default async function AdminMagazinePage({
       <div className="mt-6 space-y-4">
         {error ? (
           <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-            요청 목록을 불러오지 못했습니다. ({error.message})
+            <p className="font-semibold">요청 목록을 불러오지 못했습니다.</p>
+            <details className="mt-1">
+              <summary className="cursor-pointer font-semibold">오류 상세</summary>
+              <p className="mt-1 break-words">{error.message}</p>
+            </details>
           </div>
         ) : requests.length > 0 ? (
           requests.map((request) => (
@@ -223,23 +226,23 @@ export default async function AdminMagazinePage({
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <div className="rounded-[10px] border border-border/60 bg-background p-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                <details className="rounded-[10px] border border-border/60 bg-background p-4">
+                  <summary className="cursor-pointer text-xs font-black text-foreground">
                     기사 내용
-                  </p>
+                  </summary>
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
                     {request.article_body || "직접 작성 내용 없음"}
                   </p>
-                </div>
-                <div className="rounded-[10px] border border-border/60 bg-background p-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                </details>
+                <details className="rounded-[10px] border border-border/60 bg-background p-4">
+                  <summary className="cursor-pointer text-xs font-black text-foreground">
                     크레딧 / 요청사항
-                  </p>
+                  </summary>
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
                     {[request.credits_text, request.notes].filter(Boolean).join("\n\n") ||
                       "추가 요청사항 없음"}
                   </p>
-                </div>
+                </details>
               </div>
 
               <form

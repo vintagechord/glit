@@ -42,6 +42,7 @@ import {
 } from "./actions";
 import { AiUsageSelector } from "./ai-usage-selector";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
+import { SubmissionProgress } from "./submission-progress";
 
 declare global {
   interface Window {
@@ -874,51 +875,7 @@ export function MvWizard({
   const mvUploadReady = emailSubmitConfirmed || uploadedFiles.length > 0;
   const mvPaymentReady = canProceed && mvUploadReady && totalAmount > 0;
 
-  const selectedStepTone = React.useMemo(() => {
-    if (mvType === "MV_BROADCAST") {
-      const selectedCode = tvStationCodes.find((code) =>
-        tvStations.includes(code),
-      );
-      if (!selectedCode) return null;
-      const index = tvStationCodes.indexOf(selectedCode);
-      return mvOptionToneClasses[index % mvOptionToneClasses.length] ?? null;
-    }
-
-    if (onlineBaseSelected) {
-      return mvOptionToneClasses[0] ?? null;
-    }
-    const selectedCode = onlineOptionCodes.find((code) =>
-      onlineOptions.includes(code),
-    );
-    if (!selectedCode) return null;
-    const index = onlineOptionCodes.indexOf(selectedCode);
-    return mvOptionToneClasses[(index + 1) % mvOptionToneClasses.length] ?? null;
-  }, [mvType, onlineBaseSelected, onlineOptions, tvStations]);
-
-  const activeStepTone =
-    selectedStepTone ?? "border-[#cfe3fb] bg-[#eaf3ff] text-[#123152]";
-
-  const stepLabels = (
-    <div className="grid gap-3 md:grid-cols-5">
-      {steps.map((label, index) => {
-        const active = index + 1 <= step;
-        return (
-          <div
-            key={label}
-            className={`rounded-2xl border px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] ${active
-              ? activeStepTone
-              : "border-border/60 bg-background text-muted-foreground"
-              }`}
-          >
-            STEP {String(index + 1).padStart(2, "0")}
-            <p className="mt-2 text-[11px] font-medium tracking-normal">
-              {label}
-            </p>
-          </div>
-        );
-      })}
-    </div>
-  );
+  const stepLabels = <SubmissionProgress steps={steps} currentStep={step} />;
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
@@ -2950,32 +2907,19 @@ export function MvWizard({
 
       {step === 1 && (
         <div className="space-y-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 01
-              </p>
-              <h2 className="font-display mt-2 text-2xl text-foreground">
-                뮤직비디오 심의 목적을 선택하세요.
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                TV 송출용 심의와 유통/온라인 업로드 목적 심의를 구분합니다.
-              </p>
-            </div>
-          </div>
+          <h2 className="font-display text-2xl text-foreground">심의 목적 선택</h2>
 
           <div className="grid gap-4 md:grid-cols-2">
             {[
               {
                 value: "MV_DISTRIBUTION",
                 label: "유통사 제출 & 온라인 업로드",
-                description: "온라인 유통을 위한 일반 뮤직비디오 심의입니다.",
+                description: "멜론·지니·유튜브 등 온라인 유통",
               },
               {
                 value: "MV_BROADCAST",
                 label: "TV 송출 목적의 심의",
-                description:
-                  "방송국별로 개별 심의를 진행해야하며, 음원 심의가 완료된 앨범의 뮤비에 한하여 심의가 가능합니다.",
+                description: "음원 심의 완료 앨범만 신청 가능",
               },
             ].map((item) => {
               const active = mvType === item.value;
@@ -3003,10 +2947,7 @@ export function MvWizard({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
-                        심의 목적
-                      </p>
-                      <h3 className="mt-2 text-lg font-semibold">{item.label}</h3>
+                      <h3 className="text-lg font-semibold">{item.label}</h3>
                     </div>
                     {active ? (
                       <span className={selectedBadgeClass}>
@@ -3022,12 +2963,12 @@ export function MvWizard({
 
           {mvType === "MV_BROADCAST" ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                TV 송출 목적의 심의
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                방송국별 개별 심의가 필요하며, 모든 방송국 접수됩니다.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-semibold text-foreground">방송국 선택</h3>
+                <span className="rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-muted-foreground">
+                  방송국별 개별 심의
+                </span>
+              </div>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {tvStationCodes.map((code, index) => {
                   const active = tvStations.includes(code);
@@ -3070,12 +3011,7 @@ export function MvWizard({
             </div>
           ) : (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                유통사 제출 & 온라인 업로드
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                일반 뮤직비디오 심의는 바로 신청할 수 있고, 방송국의 경우 접수 조건 확인 후 진행합니다.
-              </p>
+              <h3 className="font-semibold text-foreground">옵션 선택</h3>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <button
                   type="button"
@@ -3149,11 +3085,6 @@ export function MvWizard({
                       <p className="mt-2 text-xs opacity-80">
                         {details?.note}
                       </p>
-                      {isConditional ? (
-                        <p className="mt-3 text-xs font-semibold opacity-90">
-                          조건 확인 후 담당자 확인을 거쳐 진행됩니다.
-                        </p>
-                      ) : null}
                     </button>
                   );
                 })}
@@ -3188,16 +3119,7 @@ export function MvWizard({
 
       {step === 2 && (
         <div className="space-y-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 02
-              </p>
-              <h2 className="font-display mt-2 text-2xl text-foreground">
-                뮤직비디오 신청서 정보를 입력하세요.
-              </h2>
-            </div>
-          </div>
+          <h2 className="font-display text-2xl text-foreground">신청서 작성</h2>
 
           <ApplicationFormModeTabs
             mode={applicationFormMode}
@@ -3206,16 +3128,7 @@ export function MvWizard({
 
           {isDownloadedApplicationFlow ? (
             <div className="rounded-[28px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-muted-foreground">
-                신청서 파일 작성
-              </p>
-              <h3 className="mt-3 text-xl font-black text-foreground">
-                신청서를 내려받아 작성한 뒤 다음 단계에서 업로드하세요.
-              </h3>
-              <p className="mt-2 text-sm font-semibold leading-6 text-muted-foreground">
-                HWP 또는 Word 파일 중 편한 형식을 선택하세요. 다운로드를 누르면
-                파일 업로드 단계로 이동합니다.
-              </p>
+              <h3 className="text-xl font-black text-foreground">신청서 양식</h3>
               <div className="mt-5 flex flex-wrap gap-3">
                 {mvApplicationForms.map((form) => (
                   <a
@@ -3890,19 +3803,7 @@ export function MvWizard({
 
       {step === 3 && (
         <div className="space-y-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 03
-              </p>
-              <h2 className="font-display mt-2 text-2xl text-foreground">
-                파일 업로드
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                방송국 심의 규격에 맞는 영상과 작성한 신청서 파일을 업로드해주세요.
-              </p>
-            </div>
-          </div>
+          <h2 className="font-display text-2xl text-foreground">파일 첨부</h2>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="mt-1 text-xs font-semibold text-foreground">
@@ -4140,19 +4041,7 @@ export function MvWizard({
 
       {step === 4 && (
         <div className="space-y-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 04
-              </p>
-              <h2 className="font-display mt-2 text-2xl text-foreground">
-                장바구니에 담기
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                신청서를 장바구니에 담은 뒤 여러 심의건을 한 번에 결제할 수 있습니다.
-              </p>
-            </div>
-          </div>
+          <h2 className="font-display text-2xl text-foreground">신청 내용 확인</h2>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -4224,8 +4113,11 @@ export function MvWizard({
               </div>
             </div>
           ) : (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm font-semibold leading-6 text-muted-foreground">
-              신청서 작성과 파일 업로드/이메일 제출 선택이 완료되었습니다. 다음 버튼을 누르면 이 신청서가 장바구니에 담기고, 장바구니에서 다른 신청서와 함께 선택 결제할 수 있습니다.
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-emerald-500/30 bg-emerald-500/8 px-5 py-4">
+              <span className="font-semibold text-foreground">✓ 장바구니 준비 완료</span>
+              <span className="rounded-full bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
+                여러 건 동시 결제
+              </span>
             </div>
           )}
 
@@ -4514,12 +4406,10 @@ export function MvWizard({
 
       {step === 5 && (
         <div className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-center sm:rounded-[32px] sm:p-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            STEP 05
-          </p>
-          <h2 className="font-display mt-3 text-3xl text-foreground">
-            접수 완료
-          </h2>
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
+            ✓
+          </div>
+          <h2 className="font-display mt-4 text-3xl text-foreground">접수 완료</h2>
           <p className="mt-3 text-sm text-muted-foreground">
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>

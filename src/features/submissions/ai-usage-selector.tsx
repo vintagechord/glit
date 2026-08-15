@@ -14,13 +14,11 @@ const contextCopy = {
 const options = [
   {
     value: false,
-    title: "AI 사용 안 함",
-    description: "제작 과정에 생성형 AI를 활용하지 않았습니다.",
+    title: "사용 안 함",
   },
   {
     value: true,
-    title: "AI 활용함",
-    description: "일부 또는 전체 제작 과정에 생성형 AI를 활용했습니다.",
+    title: "사용함",
   },
 ] as const;
 
@@ -30,18 +28,12 @@ export function AiUsageSelector({
   context,
 }: AiUsageSelectorProps) {
   return (
-    <div className="rounded-2xl border-2 border-[#111111] bg-[#fffaf0] p-4 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[4px_4px_0_#f2cf27]">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#1556a4] dark:text-[#f2cf27]">
-            AI 활용 여부 *
-          </p>
-          <p className="mt-2 break-keep text-sm font-semibold leading-6 text-foreground/72 dark:text-white/76">
-            {contextCopy[context]} 방송국 및 영등위 확인 항목입니다.
-          </p>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+    <fieldset className="rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-4 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[4px_4px_0_#f2cf27]">
+      <legend className="px-1 text-sm font-black text-foreground">
+        생성형 AI를 사용했나요? <span aria-hidden="true">*</span>
+        <span className="sr-only"> (필수)</span>
+      </legend>
+      <div className="grid gap-2 sm:grid-cols-2">
         {options.map((option) => {
           const selected = value === option.value;
           return (
@@ -50,15 +42,15 @@ export function AiUsageSelector({
               type="button"
               aria-pressed={selected}
               onClick={() => onChange(option.value)}
-              className={`min-h-[86px] rounded-[10px] border-2 px-4 py-3 text-left transition ${
+              className={`min-h-12 rounded-[8px] border-2 px-4 py-2 text-left transition ${
                 selected
-                  ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[4px_4px_0_#f2cf27]"
-                  : "border-border/70 bg-background text-foreground hover:border-[#111111] hover:bg-white dark:hover:border-[#f2cf27] dark:hover:bg-[#101010]"
+                  ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
+                  : "border-border/70 bg-background text-foreground hover:border-[#111111] dark:hover:border-[#f2cf27]"
               }`}
             >
               <span className="flex items-center gap-2 text-sm font-black">
                 <span
-                  className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border-2 text-[12px] ${
+                  className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[12px] ${
                     selected
                       ? "border-[#111111] bg-[#111111] text-[#f2cf27]"
                       : "border-border bg-background text-transparent"
@@ -69,13 +61,18 @@ export function AiUsageSelector({
                 </span>
                 {option.title}
               </span>
-              <span className="mt-2 block break-keep text-xs font-semibold leading-5 opacity-75">
-                {option.description}
-              </span>
             </button>
           );
         })}
       </div>
-    </div>
+      <details className="mt-3 text-xs text-muted-foreground">
+        <summary className="w-fit cursor-pointer font-semibold text-foreground underline-offset-4 hover:underline">
+          판단 기준
+        </summary>
+        <p className="mt-2 break-keep leading-5">
+          {contextCopy[context]}
+        </p>
+      </details>
+    </fieldset>
   );
 }

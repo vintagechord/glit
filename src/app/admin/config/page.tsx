@@ -142,9 +142,17 @@ export default async function AdminConfigPage({
                 음반 심의 일괄 할인
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                패키지 원래 금액은 유지하고, 사용자 화면과 실제 결제/입금 요청 금액에만 할인율을 적용합니다.
-                모든 음반 심의 패키지에 관리자 설정 할인율이 동일하게 적용됩니다.
+                모든 음반 패키지에 같은 할인율을 적용합니다.
               </p>
+              <details className="mt-2 text-xs text-muted-foreground">
+                <summary className="cursor-pointer font-semibold text-foreground">
+                  적용 범위
+                </summary>
+                <p className="mt-2 max-w-2xl leading-5">
+                  패키지 원가는 유지되며 사용자 표시 금액과 실제 카드·입금 요청
+                  금액에 할인이 적용됩니다.
+                </p>
+              </details>
             </div>
             <span className="rounded-full border border-[#1556a4]/30 bg-[#1556a4]/10 px-3 py-1 text-xs font-black text-[#1556a4] dark:border-[#3f8ad8]/40 dark:bg-[#3f8ad8]/15 dark:text-[#8bc3ff]">
               전체 패키지 {albumDiscountPercent}%

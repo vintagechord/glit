@@ -127,7 +127,7 @@ export function CertificateUploader({
           uploadedAt: json.certificate.uploadedAt,
         });
       }
-      const successMessage = "필증 업로드가 완료되었습니다.";
+      const successMessage = "필증을 업로드했습니다.";
       setNotice(successMessage);
       setSavePopup({ id: Date.now(), message: successMessage });
       setFile(null);

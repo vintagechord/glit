@@ -70,17 +70,27 @@ export default async function AdminBannersPage({
       </p>
       <h1 className="font-display mt-2 text-3xl text-foreground">배너 관리</h1>
       <p className="mt-3 text-sm text-muted-foreground">
-        홈 화면 띠배너와 메인 상단 광고판의 이미지, 링크, 노출 여부를 관리합니다.
+        홈 배너의 이미지·링크·노출을 관리합니다.
       </p>
 
       <div className="mt-8 space-y-6">
         {bannersError && (
           <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-            {bannerTableMissing
-              ? "배너 테이블이 아직 생성되지 않았습니다. Supabase 마이그레이션을 실행해주세요."
-              : bannerColumnMissing
-                ? "배너 위치 관리 컬럼이 아직 반영되지 않았습니다. 최신 Supabase 마이그레이션을 실행해주세요."
-              : `배너 목록을 불러오지 못했습니다. (${bannersError.message})`}
+            <p className="font-semibold">
+              {bannerTableMissing || bannerColumnMissing
+                ? "배너 설정을 준비하지 못했습니다."
+                : "배너 목록을 불러오지 못했습니다."}
+            </p>
+            <details className="mt-1">
+              <summary className="cursor-pointer font-semibold">해결 방법</summary>
+              <p className="mt-1 break-words">
+                {bannerTableMissing
+                  ? "Supabase 배너 마이그레이션을 적용해주세요."
+                  : bannerColumnMissing
+                    ? "최신 배너 위치 마이그레이션을 적용해주세요."
+                    : bannersError.message}
+              </p>
+            </details>
           </div>
         )}
         <section className="space-y-4 rounded-[32px] border border-border/60 bg-card/80 p-6">

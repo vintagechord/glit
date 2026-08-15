@@ -91,13 +91,16 @@ export default async function AdminChatPage() {
         실시간 채팅 관리
       </h1>
       <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
-        사이트 우측 하단 실시간 채팅으로 들어온 문의를 확인하고 관리자 답변을
-        보냅니다.
+        실시간 문의를 확인하고 답변합니다.
       </p>
 
       {error ? (
         <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-          채팅 목록을 불러오지 못했습니다. ({error.message})
+          <p className="font-semibold">채팅 목록을 불러오지 못했습니다.</p>
+          <details className="mt-1">
+            <summary className="cursor-pointer font-semibold">오류 상세</summary>
+            <p className="mt-1 break-words">{error.message}</p>
+          </details>
         </div>
       ) : null}
 

@@ -378,21 +378,20 @@ export default async function AdminCreditRequestsPage({
             크레딧 요청 관리
           </h1>
           <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
-            크레딧으로 접수된 매거진 발행 요청과 서비스 이용 요청을 처리합니다.
+            요청 상태와 처리 결과를 관리합니다.
           </p>
         </div>
         <Link
           href="/admin/credits"
           className="rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold text-foreground transition hover:border-foreground"
         >
-          크레딧 서비스 관리
+          서비스 설정
         </Link>
       </div>
 
       {errorFlag ? (
         <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-          요청 상태 저장 중 오류가 발생했습니다. 입력값과 마이그레이션 적용 상태를
-          확인해주세요.
+          요청 상태를 저장하지 못했습니다.
         </div>
       ) : null}
 
@@ -427,8 +426,7 @@ export default async function AdminCreditRequestsPage({
               매거진 발행 요청
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              발행 URL을 저장하고 상태를 발행 완료로 바꾸면 사용자 화면에서 바로
-              발행 링크가 표시됩니다.
+              발행 완료 시 저장된 링크가 사용자에게 표시됩니다.
             </p>
           </div>
           <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
@@ -438,7 +436,11 @@ export default async function AdminCreditRequestsPage({
 
         {magazineResult.error ? (
           <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-            매거진 요청을 불러오지 못했습니다. ({magazineResult.error.message})
+            <p className="font-semibold">매거진 요청을 불러오지 못했습니다.</p>
+            <details className="mt-1">
+              <summary className="cursor-pointer font-semibold">오류 상세</summary>
+              <p className="mt-1 break-words">{magazineResult.error.message}</p>
+            </details>
           </div>
         ) : magazineRequests.length > 0 ? (
           <div className="space-y-4">
@@ -569,7 +571,7 @@ export default async function AdminCreditRequestsPage({
               서비스 이용 요청
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              요청접수, 승인/안내 완료, 사용완료까지 이 화면에서 처리합니다.
+              접수부터 사용 완료까지 상태를 관리합니다.
             </p>
           </div>
           <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
@@ -579,7 +581,11 @@ export default async function AdminCreditRequestsPage({
 
         {studioResult.error ? (
           <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-            서비스 이용 요청을 불러오지 못했습니다. ({studioResult.error.message})
+            <p className="font-semibold">서비스 요청을 불러오지 못했습니다.</p>
+            <details className="mt-1">
+              <summary className="cursor-pointer font-semibold">오류 상세</summary>
+              <p className="mt-1 break-words">{studioResult.error.message}</p>
+            </details>
           </div>
         ) : studioRequests.length > 0 ? (
           <div className="space-y-4">
@@ -623,10 +629,15 @@ export default async function AdminCreditRequestsPage({
                         {profile?.company ? ` · ${profile.company}` : ""} ·{" "}
                         {request.contact_phone} · {request.contact_email ?? "-"}
                       </p>
-                    {request.notes ? (
-                        <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
-                          요청사항: {request.notes}
-                        </p>
+                      {request.notes ? (
+                        <details className="mt-2 text-xs text-muted-foreground">
+                          <summary className="cursor-pointer font-semibold text-foreground">
+                            요청 사항
+                          </summary>
+                          <p className="mt-2 whitespace-pre-wrap break-words leading-5">
+                            {request.notes}
+                          </p>
+                        </details>
                       ) : null}
                     </div>
                     {redemption ? (

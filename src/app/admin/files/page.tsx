@@ -302,8 +302,7 @@ export default function AdminFilesPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-      const successMessage =
-        "필증 업로드가 완료되었습니다. 회원 결과 조회에서 필증 다운로드가 가능합니다.";
+      const successMessage = "필증을 업로드했습니다.";
       setNotice(successMessage);
       setSavePopup({ id: Date.now(), message: successMessage });
     } catch (uploadError) {
@@ -335,8 +334,17 @@ export default function AdminFilesPage() {
         뮤직비디오 필증 업로드
       </h1>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        접수된 온라인 뮤직비디오 심의를 선택해 영등위 필증을 업로드합니다. 등급 이미지는 선택된 심의의 결과 등급에 따라 자동으로 제공되며, 회원 결과 조회에서 등급 이미지·가이드·필증을 다운로드할 수 있습니다.
+        접수별 영등위 필증을 업로드합니다.
       </p>
+      <details className="mt-2 text-xs text-muted-foreground">
+        <summary className="cursor-pointer font-semibold text-foreground">
+          사용자 제공 파일
+        </summary>
+        <p className="mt-2 max-w-3xl leading-5">
+          결과 등급에 맞는 이미지와 가이드는 자동 제공되며, 업로드한 필증도 결과
+          화면에서 함께 다운로드할 수 있습니다.
+        </p>
+      </details>
 
       <div className="mt-6 grid gap-5 rounded-[28px] border border-border/70 bg-card/80 p-6">
         <label className="space-y-2">
@@ -373,9 +381,12 @@ export default function AdminFilesPage() {
                 <p className="text-lg font-black text-foreground">
                   {selectedSubmission.label}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  접수 ID {selectedSubmission.id}
-                </p>
+                <details className="mt-1 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer font-semibold">
+                    ID {selectedSubmission.id.slice(0, 8)}
+                  </summary>
+                  <p className="mt-1 break-all">{selectedSubmission.id}</p>
+                </details>
               </div>
               <span className="rounded-full border border-[#1556a4]/30 bg-[#1556a4]/10 px-3 py-1 text-xs font-black text-[#1556a4]">
                 {selectedSubmission.ratingLabel ?? "등급 미설정"}

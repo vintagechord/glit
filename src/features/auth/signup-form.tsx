@@ -19,6 +19,13 @@ export function SignupForm() {
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const didRedirect = useRef(false);
   const [activeModal, setActiveModal] = useState<"terms" | "privacy" | null>(null);
+  const [agreements, setAgreements] = useState({
+    age: false,
+    terms: false,
+    privacy: false,
+    refund: false,
+    marketing: false,
+  });
   const modalTitleId = useId();
   const emailRef = useRef<HTMLInputElement | null>(null);
   const passwordRef = useRef<HTMLInputElement | null>(null);
@@ -68,6 +75,11 @@ export function SignupForm() {
 
   const closeModal = () => setActiveModal(null);
   const currentModalTitleId = `${modalTitleId}-${activeModal ?? "closed"}`;
+  const allRequiredAgreed =
+    agreements.age &&
+    agreements.terms &&
+    agreements.privacy &&
+    agreements.refund;
 
   useEffect(() => {
     if (!activeModal) return;
@@ -170,89 +182,122 @@ export function SignupForm() {
         </div>
       </div>
 
-      <div className="space-y-3 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3 text-sm text-foreground">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            약관 동의
-          </p>
-          <div className="flex gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setActiveModal("terms")}
-              className="rounded-[8px] border-2 border-border px-3 py-1 font-black text-foreground transition hover:bg-foreground hover:text-background"
-            >
-              이용약관 보기
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveModal("privacy")}
-              className="rounded-[8px] border-2 border-border px-3 py-1 font-black text-foreground transition hover:bg-foreground hover:text-background"
-            >
-              개인정보처리방침 보기
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 text-xs">
+      <fieldset className="space-y-2 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3 text-sm text-foreground">
+        <legend className="sr-only">약관 동의</legend>
+        <label className="flex cursor-pointer items-center gap-2 rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111]">
+          <input
+            type="checkbox"
+            checked={allRequiredAgreed}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setAgreements((current) => ({
+                ...current,
+                age: checked,
+                terms: checked,
+                privacy: checked,
+                refund: checked,
+              }));
+            }}
+            aria-controls="agreeAge agreeTerms agreePrivacy agreeRefund"
+            className="h-4 w-4 rounded border-[#111111]"
+          />
+          필수 항목 전체 동의
+        </label>
+        <div className="flex min-h-9 items-center gap-2 text-xs">
           <input
             id="agreeAge"
             name="agreeAge"
             type="checkbox"
             required
             ref={agreeAgeRef}
+            checked={agreements.age}
+            onChange={(event) =>
+              setAgreements((current) => ({ ...current, age: event.target.checked }))
+            }
             className="h-4 w-4 rounded border-border"
           />
           <label htmlFor="agreeAge" className="text-foreground">
-            만 14세 이상입니다.
+            만 14세 이상
           </label>
         </div>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex min-h-9 items-center gap-2 text-xs">
           <input
             id="agreeTerms"
             name="agreeTerms"
             type="checkbox"
             required
             ref={agreeTermsRef}
+            checked={agreements.terms}
+            onChange={(event) =>
+              setAgreements((current) => ({ ...current, terms: event.target.checked }))
+            }
             className="h-4 w-4 rounded border-border"
           />
           <label htmlFor="agreeTerms" className="text-foreground">
-            이용약관에 동의합니다.
+            이용약관 <span className="text-muted-foreground">(필수)</span>
           </label>
+          <button
+            type="button"
+            onClick={() => setActiveModal("terms")}
+            className="ml-auto rounded-[6px] border border-border px-2 py-1 font-black text-muted-foreground transition hover:border-foreground hover:text-foreground"
+          >
+            보기
+          </button>
         </div>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex min-h-9 items-center gap-2 text-xs">
           <input
             id="agreePrivacy"
             name="agreePrivacy"
             type="checkbox"
             required
             ref={agreePrivacyRef}
+            checked={agreements.privacy}
+            onChange={(event) =>
+              setAgreements((current) => ({ ...current, privacy: event.target.checked }))
+            }
             className="h-4 w-4 rounded border-border"
           />
           <label htmlFor="agreePrivacy" className="text-foreground">
-            개인정보처리방침에 동의합니다.
+            개인정보 처리 <span className="text-muted-foreground">(필수)</span>
           </label>
+          <button
+            type="button"
+            onClick={() => setActiveModal("privacy")}
+            className="ml-auto rounded-[6px] border border-border px-2 py-1 font-black text-muted-foreground transition hover:border-foreground hover:text-foreground"
+          >
+            보기
+          </button>
         </div>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex min-h-9 items-center gap-2 text-xs">
           <input
             id="agreeRefund"
             name="agreeRefund"
             type="checkbox"
             required
             ref={agreeRefundRef}
+            checked={agreements.refund}
+            onChange={(event) =>
+              setAgreements((current) => ({ ...current, refund: event.target.checked }))
+            }
             className="h-4 w-4 rounded border-border"
           />
           <label htmlFor="agreeRefund" className="text-foreground">
-            결제/환불 정책을 확인했습니다.
+            결제·환불 정책 <span className="text-muted-foreground">(필수)</span>
           </label>
         </div>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex min-h-9 items-center gap-2 text-xs">
           <input
             id="agreeMarketing"
             name="agreeMarketing"
             type="checkbox"
+            checked={agreements.marketing}
+            onChange={(event) =>
+              setAgreements((current) => ({ ...current, marketing: event.target.checked }))
+            }
             className="h-4 w-4 rounded border-border"
           />
           <label htmlFor="agreeMarketing" className="text-foreground">
-            심의 안내 및 서비스 소식 수신에 동의합니다. (선택)
+            소식 받기 <span className="text-muted-foreground">(선택)</span>
           </label>
         </div>
         {(state.fieldErrors?.agreeAge ||
@@ -263,7 +308,7 @@ export function SignupForm() {
             필수 약관과 정책에 동의해야 가입이 가능합니다.
           </p>
         )}
-      </div>
+      </fieldset>
       {state.error && (
         <p className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
           {state.error}

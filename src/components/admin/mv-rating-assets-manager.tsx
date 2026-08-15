@@ -196,7 +196,7 @@ export function MvRatingAssetsManager() {
           뮤직비디오 연령등급 이미지
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          사용자 결과 조회에서 다운로드되는 연령등급 PNG를 등급별로 관리합니다. 별도 업로드가 없으면 기본 이미지가 사용됩니다.
+          등급별 PNG를 관리합니다. 미등록 등급은 기본 이미지를 사용합니다.
         </p>
       </div>
 

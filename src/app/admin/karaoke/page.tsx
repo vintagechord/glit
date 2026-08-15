@@ -117,6 +117,9 @@ export default async function AdminKaraokePage({
       <h1 className="font-display mt-2 text-3xl text-foreground">
         노래방 등록 관리
       </h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        등록 요청과 결제 상태를 관리합니다.
+      </p>
 
       <form className="mt-6 flex flex-wrap items-center gap-3 rounded-[28px] border border-border/60 bg-card/80 p-4">
         <select
@@ -142,7 +145,11 @@ export default async function AdminKaraokePage({
       <div className="mt-6 space-y-4">
         {requestsError ? (
           <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-            요청 목록을 불러오지 못했습니다. ({requestsError.message})
+            <p className="font-semibold">요청 목록을 불러오지 못했습니다.</p>
+            <details className="mt-1">
+              <summary className="cursor-pointer font-semibold">오류 상세</summary>
+              <p className="mt-1 break-words">{requestsError.message}</p>
+            </details>
           </div>
         ) : requests && requests.length > 0 ? (
           requests.map((request) => (
@@ -159,20 +166,26 @@ export default async function AdminKaraokePage({
                     {request.artist ?? "-"} · {request.contact}
                     {hasGuestColumns && request.guest_name ? " · 비회원" : ""}
                   </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    결제: {request.payment_status} · 방식:{" "}
-                    {request.payment_method} · 금액:{" "}
-                    {request.amount_krw?.toLocaleString() ?? "-"}원
-                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
+                    <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                      결제 {request.payment_status}
+                    </span>
+                    <span className="rounded-full border border-border bg-background px-2.5 py-1 text-muted-foreground">
+                      {request.payment_method}
+                    </span>
+                    <span className="rounded-full border border-border bg-background px-2.5 py-1 text-muted-foreground">
+                      {request.amount_krw?.toLocaleString() ?? "-"}원
+                    </span>
+                    <span className="rounded-full border border-border bg-background px-2.5 py-1 text-muted-foreground">
+                      TJ {request.tj_requested ? "요청" : "미요청"} · KY{" "}
+                      {request.ky_requested ? "요청" : "미요청"}
+                    </span>
+                  </div>
                   {request.bank_depositor_name && (
                     <p className="mt-1 text-xs text-muted-foreground">
                       입금자명: {request.bank_depositor_name}
                     </p>
                   )}
-	                  <p className="mt-1 text-xs text-muted-foreground">
-	                    태진 {request.tj_requested ? "요청" : "미요청"} · 금영{" "}
-	                    {request.ky_requested ? "요청" : "미요청"}
-	                  </p>
                     {/* 크레딧 운영 보류: 추천 공개 상태 숨김
                     <p className="mt-1 text-xs text-muted-foreground">
                       추천 요청 {request.recommendation_public ? "공개" : "비공개"}
@@ -198,9 +211,16 @@ export default async function AdminKaraokePage({
                   />
                 </div>
               )}
-              <p className="mt-3 text-xs text-muted-foreground">
-                {request.notes ?? "요청 사항 없음"}
-              </p>
+              {request.notes ? (
+                <details className="mt-3 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer font-semibold text-foreground">
+                    요청 사항
+                  </summary>
+                  <p className="mt-2 whitespace-pre-wrap break-words leading-5">
+                    {request.notes}
+                  </p>
+                </details>
+              ) : null}
               <form
                 action={updateKaraokeStatusFormAction}
                 className="mt-4 flex flex-wrap items-center gap-3"

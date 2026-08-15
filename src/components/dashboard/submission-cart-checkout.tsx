@@ -8,6 +8,7 @@ import {
   Eye,
   Landmark,
   Pencil,
+  Plus,
   ShoppingCart,
   Trash2,
 } from "lucide-react";
@@ -68,10 +69,10 @@ export const mapSubmissionCartItem = (
 
 const getTypeLabel = (item: CartItem) => {
   if (item.type === "ALBUM") {
-    return item.isOneclick ? "원클릭 음반 심의" : "음반 심의";
+    return item.isOneclick ? "원클릭 음반" : "음반";
   }
-  if (item.type === "MV_DISTRIBUTION") return "일반 뮤직비디오 심의";
-  if (item.type === "MV_BROADCAST") return "방송용 뮤직비디오 심의";
+  if (item.type === "MV_DISTRIBUTION") return "MV · 온라인";
+  if (item.type === "MV_BROADCAST") return "MV · 방송";
   return "심의";
 };
 
@@ -160,26 +161,26 @@ export function SubmissionCartCheckout({
       return {
         type: "success",
         message: userId
-          ? "결제가 완료되었습니다. 결제된 신청서는 나의 심의 내역에서 확인할 수 있습니다."
-          : "결제가 완료되었습니다. 비회원 조회 코드로 진행 상태를 확인할 수 있습니다.",
+          ? "심의 내역에서 확인하세요."
+          : "조회 코드로 진행 상태를 확인하세요.",
       };
     }
     if (payment === "cancel") {
       return {
         type: "error",
-        message: "결제가 취소되었습니다. 필요한 신청서를 다시 선택해 결제할 수 있습니다.",
+        message: "결제가 취소되었습니다.",
       };
     }
     if (payment === "fail" || payment === "error") {
       return {
         type: "error",
-        message: "결제가 완료되지 않았습니다. 신청서는 장바구니에 유지됩니다.",
+        message: "결제를 완료하지 못했습니다.",
       };
     }
     if (searchParams.get("added")) {
       return {
         type: "success",
-        message: "신청서가 장바구니에 담겼습니다. 결제할 신청서를 선택해주세요.",
+        message: "장바구니에 담았습니다.",
       };
     }
     return null;
@@ -400,8 +401,8 @@ export function SubmissionCartCheckout({
         setNotice({
           type: "success",
           message: userId
-            ? "결제가 완료되었습니다. 결제된 신청서는 나의 심의 내역에서 확인할 수 있습니다."
-            : "결제가 완료되었습니다. 비회원 조회 코드로 진행 상태를 확인할 수 있습니다.",
+            ? "심의 내역에서 확인하세요."
+            : "조회 코드로 진행 상태를 확인하세요.",
         });
         setIsOpening(false);
         router.push(`${cartHref}?payment=success`);
@@ -414,8 +415,8 @@ export function SubmissionCartCheckout({
           typeof payload.message === "string"
             ? payload.message
             : status === "CANCEL"
-              ? "결제가 취소되었습니다. 신청서는 장바구니에 유지됩니다."
-              : "결제가 완료되지 않았습니다. 다시 시도해주세요.";
+              ? "결제가 취소되었습니다."
+              : "결제를 완료하지 못했습니다.";
         setNotice({ type: "error", message });
         setIsOpening(false);
         router.refresh();
@@ -590,7 +591,7 @@ export function SubmissionCartCheckout({
     setBankResult(nextResult);
     setNotice({
       type: "success",
-      message: "무통장 입금 대기 상태로 변경되었습니다. 아래 계좌로 총액을 입금해주세요.",
+      message: "입금 신청이 완료되었습니다.",
     });
     router.refresh();
   };
@@ -615,8 +616,8 @@ export function SubmissionCartCheckout({
       type: "info",
       message:
         selectedMethod === "BANK"
-          ? "무통장 입금 대기 상태로 변경 중입니다."
-          : "이니시스 결제 모듈을 준비 중입니다.",
+          ? "입금 신청 중"
+          : "결제창 준비 중",
     });
 
     if (selectedMethod === "BANK") {
@@ -656,7 +657,7 @@ export function SubmissionCartCheckout({
 
     setNotice({
       type: "info",
-      message: "결제 모듈을 실행했습니다. 결제를 완료해주세요.",
+      message: "결제창을 열었습니다.",
     });
   };
 
@@ -679,12 +680,13 @@ export function SubmissionCartCheckout({
           />
         ) : null}
         <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-5 py-8 text-sm font-semibold text-muted-foreground">
-          장바구니에 담긴 미결제 신청서가 없습니다.
+          장바구니가 비어 있습니다.
         </div>
         <Link
           href={newSubmissionHref}
           className="inline-flex h-10 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-4 text-xs font-black tracking-normal text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5"
         >
+          <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           새 신청서 작성
         </Link>
       </div>
@@ -704,8 +706,8 @@ export function SubmissionCartCheckout({
         <ConfirmDialog
           message={
             pendingDeleteIds.length === 1
-              ? "이 장바구니 항목을 삭제할까요? 연결된 접수 현황도 함께 삭제되며 복구할 수 없습니다."
-              : `선택한 ${pendingDeleteIds.length}개 장바구니 항목을 삭제할까요? 연결된 접수 현황도 함께 삭제되며 복구할 수 없습니다.`
+              ? "접수 현황도 함께 삭제됩니다. 삭제할까요?"
+              : `${pendingDeleteIds.length}건의 접수 현황도 함께 삭제됩니다. 삭제할까요?`
           }
           onCancel={() => setPendingDeleteIds(null)}
           onConfirm={() => {
@@ -726,8 +728,9 @@ export function SubmissionCartCheckout({
               type="button"
               onClick={toggleAll}
               disabled={payableIds.length === 0 || isDeleting}
-              className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
             >
+              <Check size={14} strokeWidth={2.8} aria-hidden="true" />
               {isAllSelected ? "전체 해제" : "전체 선택"}
             </button>
             <button
@@ -751,7 +754,7 @@ export function SubmissionCartCheckout({
               <div
                 id={`cart-item-${item.id}`}
                 key={item.id}
-                className={`grid gap-3 rounded-[8px] border-2 px-4 py-4 transition md:grid-cols-[32px_minmax(0,1fr)_auto_auto] md:items-center ${
+                className={`grid grid-cols-[36px_minmax(0,1fr)] gap-3 rounded-[8px] border-2 px-3 py-4 transition sm:px-4 md:grid-cols-[36px_minmax(0,1fr)_auto_auto] md:items-center ${
                   selected
                     ? "border-[var(--bauhaus-ink)] bg-[#fff4bd] shadow-[4px_4px_0_var(--bauhaus-shadow)] dark:bg-[#f2cf27]/18"
                     : "border-border bg-[var(--card)] hover:border-[var(--bauhaus-ink)]"
@@ -765,7 +768,7 @@ export function SubmissionCartCheckout({
                   disabled={disabled || isDeleting}
                   aria-pressed={selected}
                   aria-label={`${getDisplayTitle(item)} 선택`}
-                  className={`flex h-7 w-7 items-center justify-center rounded-[6px] border-2 ${
+                  className={`flex h-9 w-9 items-center justify-center rounded-[6px] border-2 ${
                     selected
                       ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-ink)] text-[var(--background)]"
                       : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-transparent"
@@ -794,15 +797,17 @@ export function SubmissionCartCheckout({
                   <span className="mt-2 block truncate text-sm font-black text-foreground">
                     {getDisplayTitle(item)}
                   </span>
-                  <span className="mt-1 block text-xs font-semibold leading-5 text-muted-foreground">
-                    {item.packageName ?? "패키지 미지정"} · 최근 수정{" "}
-                    {formatDateTime(item.updatedAt)}
+                  <span
+                    className="mt-1 block truncate text-xs font-semibold leading-5 text-muted-foreground"
+                    title={`최근 수정 ${formatDateTime(item.updatedAt)}`}
+                  >
+                    {item.packageName ?? "패키지 미지정"}
                   </span>
                 </button>
-                <span className="text-right text-base font-black text-foreground md:min-w-[112px]">
+                <span className="col-start-2 text-left text-base font-black text-foreground md:col-start-auto md:min-w-[112px] md:text-right">
                   {amount > 0 ? `${formatCurrency(amount)}원` : "금액 확인 필요"}
                 </span>
-                <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="col-start-2 flex flex-wrap items-center justify-start gap-2 md:col-start-auto md:justify-end">
                   <Link
                     href={getDetailHref(item)}
                     className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
@@ -837,9 +842,9 @@ export function SubmissionCartCheckout({
         </div>
       </div>
 
-      <aside className="h-fit rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--card)] p-5 shadow-[6px_6px_0_var(--bauhaus-shadow)]">
+      <aside className="h-fit rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--card)] p-5 shadow-[6px_6px_0_var(--bauhaus-shadow)] lg:sticky lg:top-24">
         <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-          결제 요약
+          결제
         </p>
         <div className="mt-4 grid gap-2">
           <button
@@ -869,11 +874,11 @@ export function SubmissionCartCheckout({
         </div>
         <div className="mt-4 space-y-3 text-sm font-semibold text-foreground">
           <div className="flex items-center justify-between gap-3">
-            <span>선택한 신청서</span>
+            <span>선택</span>
             <span>{selectedItems.length}건</span>
           </div>
           <div className="flex items-center justify-between gap-3 border-t-2 border-border pt-3">
-            <span>총 결제 금액</span>
+            <span>결제 금액</span>
             <span className="text-xl font-black">
               {formatCurrency(selectedTotal)}원
             </span>
@@ -891,26 +896,24 @@ export function SubmissionCartCheckout({
             <CreditCard size={18} strokeWidth={2.6} />
           )}
           {isOpening
-            ? "결제 준비 중"
+            ? "준비 중"
             : selectedMethod === "BANK"
-              ? "무통장 입금으로 선택"
-              : "선택 결제하기"}
+              ? "입금 신청"
+              : "결제하기"}
         </button>
-        <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
-          {selectedMethod === "BANK"
-            ? "선택한 신청서를 한 번에 입금 대기 상태로 변경합니다."
-            : "선택한 신청서를 KG이니시스 카드 결제로 한 번에 결제합니다."}
-        </p>
         {selectedMethod === "BANK" || bankResult ? (
-          <div className="mt-4 rounded-[8px] border-2 border-border bg-[var(--background)] p-3 text-xs font-semibold leading-5 text-foreground">
-            <p className="font-black">무통장 입금 안내</p>
-            <p className="mt-2">은행: {APP_CONFIG.bankName}</p>
-            <p>계좌: {APP_CONFIG.bankAccount}</p>
-            <p>예금주: {APP_CONFIG.bankHolder}</p>
-            <p className="mt-2 text-[var(--bauhaus-red)]">
-              입금 금액: {formatCurrency(bankResult?.totalAmountKrw ?? selectedTotal)}원
-            </p>
-          </div>
+          <dl className="mt-4 grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-1 rounded-[8px] border-2 border-border bg-[var(--background)] p-3 text-xs font-semibold leading-5 text-foreground">
+            <dt className="text-muted-foreground">은행</dt>
+            <dd>{APP_CONFIG.bankName}</dd>
+            <dt className="text-muted-foreground">계좌</dt>
+            <dd className="break-all">{APP_CONFIG.bankAccount}</dd>
+            <dt className="text-muted-foreground">예금주</dt>
+            <dd>{APP_CONFIG.bankHolder}</dd>
+            <dt className="text-muted-foreground">입금액</dt>
+            <dd className="font-black text-[var(--bauhaus-red)]">
+              {formatCurrency(bankResult?.totalAmountKrw ?? selectedTotal)}원
+            </dd>
+          </dl>
         ) : null}
       </aside>
     </div>
@@ -933,7 +936,7 @@ function NoticeDialog({
         ? "border-[#1f7a5a] bg-[#f3fbf7] text-[#1f7a5a]"
         : "border-[#1556a4] bg-[#f5f9ff] text-[#1556a4]";
   const title =
-    type === "error" ? "확인이 필요합니다." : type === "success" ? "완료되었습니다." : "안내";
+    type === "error" ? "확인 필요" : type === "success" ? "완료" : "처리 중";
 
   return (
     <div
@@ -943,10 +946,12 @@ function NoticeDialog({
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby="cart-notice-dialog-title"
+        aria-describedby="cart-notice-dialog-description"
         className={`max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto rounded-[10px] border-2 p-5 text-center shadow-[6px_6px_0_#111111] ${tone}`}
       >
-        <p className="text-base font-black">{title}</p>
-        <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6">
+        <p id="cart-notice-dialog-title" className="text-base font-black">{title}</p>
+        <p id="cart-notice-dialog-description" className="mt-3 whitespace-pre-line text-sm font-semibold leading-6">
           {message}
         </p>
         <button

@@ -53,8 +53,8 @@ function buildExampleState() {
 
   const sampleAlbum: SubmissionSummary = {
     id: "sample-album",
-    title: "방송국별 진행 현황 예시",
-    artist_name: "비회원 조회 코드 화면",
+    title: "앨범 심의",
+    artist_name: "진행 예시",
     status: "IN_PROGRESS",
     payment_status: "PAID",
     updated_at: new Date(now).toISOString(),
@@ -62,8 +62,8 @@ function buildExampleState() {
 
   const sampleMv: SubmissionSummary = {
     id: "sample-mv",
-    title: "뮤직비디오 결과 수령 예시",
-    artist_name: "온라인 유통 심의",
+    title: "MV 심의",
+    artist_name: "결과 예시",
     status: "WAITING_PAYMENT",
     payment_status: "PAYMENT_PENDING",
     updated_at: new Date(now).toISOString(),

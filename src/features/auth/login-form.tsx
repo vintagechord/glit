@@ -98,28 +98,23 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
         )}
         <SubmitButton />
       </form>
-      <div className="space-y-2 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3">
-        <div className="flex justify-center">
-          <Link
-            href={forgotPasswordHref}
-            className="inline-flex w-full justify-center rounded-[8px] border-2 border-border px-4 py-2 text-xs font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white sm:w-auto dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
-          >
-            비밀번호 찾기
-          </Link>
-        </div>
-      </div>
-      <div className="rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-center text-sm font-semibold text-[#111111] dark:border-[#f2cf27]">
-        계정이 없으신가요?{" "}
+      <div className="grid grid-cols-2 gap-2">
+        <Link
+          href={forgotPasswordHref}
+          className="inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-border px-3 py-2 text-xs font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
+        >
+          비밀번호 찾기
+        </Link>
         <Link
           href={signupHref}
-          className="inline-flex rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1.5 text-xs font-black text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5"
+          className="inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5"
         >
           회원가입
         </Link>
       </div>
-      <div className="grid gap-2 text-center text-sm text-muted-foreground sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-2 text-center text-muted-foreground">
         <TrackLookupModalTrigger
-          label="비회원 접수 조회하기"
+          label="비회원 조회"
           modalTitle="비회원 접수 조회"
           className="inline-flex items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         />
@@ -127,7 +122,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
           href={trackHref}
           className="inline-flex items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         >
-          조회 코드 찾기
+          코드 찾기
         </Link>
       </div>
     </div>

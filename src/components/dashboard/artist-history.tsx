@@ -4,7 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
-import { Check } from "lucide-react";
+import {
+  Check,
+  CheckSquare,
+  ExternalLink,
+  LoaderCircle,
+  Trash2,
+} from "lucide-react";
 
 import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { formatDate } from "@/lib/format";
@@ -47,7 +53,7 @@ const dangerControlClass =
   "inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
 
 const smallDangerControlClass =
-  "inline-flex h-8 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-2.5 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
+  "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
 
 const getStageLabel = (item: SubmissionItem) => {
   if (["RESULT_READY", "COMPLETED"].includes(item.status)) {
@@ -159,7 +165,7 @@ function SubmissionManagementRow({
           {item.title || "제목 미입력"}
         </p>
         <p className="truncate text-xs text-muted-foreground">
-          접수일 {formatDate(item.created_at)}
+          {formatDate(item.created_at)}
         </p>
       </Link>
       <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 sm:col-start-auto sm:justify-end">
@@ -170,8 +176,13 @@ function SubmissionManagementRow({
           disabled={deleting}
           className={smallDangerControlClass}
           aria-label={`${item.title || "제목 미입력"} 심의 내역 삭제`}
+          title="삭제"
         >
-          {deleting ? "삭제 중" : "삭제"}
+          {deleting ? (
+            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          )}
         </button>
       </div>
     </div>
@@ -211,11 +222,13 @@ function ArtistCard({
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="flex min-w-0 items-center gap-3">
           <Thumbnail name={group.artistName} src={group.thumbnail} />
-          <div className="min-w-0">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <p className="truncate text-base font-semibold text-foreground">
               {group.artistName}
             </p>
-            <p className="text-sm text-muted-foreground">총 {group.submissions.length}건 접수</p>
+            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-black text-muted-foreground">
+              {group.submissions.length}
+            </span>
           </div>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
@@ -224,7 +237,8 @@ function ArtistCard({
               href={`${localePrefix}/dashboard/artists/${encodeURIComponent(group.artistId)}`}
               className={`${outlineControlClass} whitespace-nowrap`}
             >
-              아티스트 상세
+              상세
+              <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
             </Link>
           ) : null}
         </div>
@@ -444,7 +458,7 @@ export function ArtistHistoryTabs({
                 : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]"
             }`}
           >
-            앨범
+            앨범 {albumItems.reduce((count, group) => count + group.submissions.length, 0)}
           </button>
           <button
             type="button"
@@ -455,7 +469,7 @@ export function ArtistHistoryTabs({
                 : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]"
             }`}
           >
-            뮤직비디오
+            MV {mvItems.reduce((count, group) => count + group.submissions.length, 0)}
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em]">
@@ -465,6 +479,7 @@ export function ArtistHistoryTabs({
             disabled={visibleIds.length === 0}
             className={outlineControlClass}
           >
+            <CheckSquare className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
             {allVisibleSelected ? "전체 해제" : "전체 선택"}
           </button>
           <button
@@ -473,7 +488,8 @@ export function ArtistHistoryTabs({
             disabled={selectedVisibleIds.length === 0 || deletingIds.size > 0}
             className={dangerControlClass}
           >
-            선택 삭제
+            <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            삭제
             {selectedVisibleIds.length > 0 ? ` ${selectedVisibleIds.length}` : ""}
           </button>
         </div>
@@ -490,7 +506,7 @@ export function ArtistHistoryTabs({
 
       {groups.length === 0 ? (
         <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-4 py-6 text-sm text-muted-foreground">
-          아직 접수된 내역이 없습니다.
+          심의 내역이 없습니다.
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

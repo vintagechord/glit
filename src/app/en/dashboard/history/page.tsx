@@ -5,7 +5,7 @@ export { metadata } from "@/app/dashboard/history/page";
 
 export default async function EnglishDashboardHistoryPage() {
   return HistoryPageView({
-    contextLabel: "진행상황",
+    contextLabel: "Status",
     tabs: englishStatusDashboardTabs,
     loginPath: "/en/login",
   });

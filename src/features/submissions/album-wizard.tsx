@@ -50,6 +50,7 @@ import {
 } from "./actions";
 import { AiUsageSelector } from "./ai-usage-selector";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
+import { SubmissionProgress } from "./submission-progress";
 import { safeRandomUUID } from "@/lib/uuid";
 
 declare global {
@@ -799,15 +800,6 @@ export function AlbumWizard({
     }
   }, [searchParams]);
 
-  const selectedPackageIndex = React.useMemo(() => {
-    if (!selectedPackage) return -1;
-    return packages.findIndex((pkg) => pkg.id === selectedPackage.id);
-  }, [packages, selectedPackage]);
-
-  const selectedPackageTone =
-    selectedPackageIndex >= 0
-      ? packageToneClasses[selectedPackageIndex % packageToneClasses.length]
-      : null;
   const activePackageId = packageConfirmTarget?.id ?? selectedPackage?.id ?? null;
   const genderOptions =
     artistType === "GROUP"
@@ -916,52 +908,7 @@ export function AlbumWizard({
     localePrefix,
   ]);
 
-  const stepLabels = (
-    <div className="grid gap-3 md:grid-cols-5">
-      {steps.map((label, index) => {
-        const isCompleted = index + 1 < step;
-        const isCurrent = index + 1 === step;
-        const activeTone = selectedPackageTone
-          ? selectedPackageTone.card
-          : "border-[#0071e3] bg-[#0071e3] text-white dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]";
-        const displayLabel =
-          index === 0 && selectedPackageSummary
-            ? `${getPackageDisplayName(
-              selectedPackageSummary,
-              isOneClick,
-            )} (${formatCurrency(selectedPackageSummary.priceKrw)}원)`
-            : label;
-        return (
-          <div
-            key={label}
-            className={`rounded-[18px] border px-3.5 py-2.5 text-xs ${isCurrent || isCompleted
-              ? activeTone
-              : "border-border/60 bg-background text-muted-foreground"
-              }`}
-          >
-            <div className="flex items-center justify-between gap-1.5">
-              <span className="font-semibold uppercase tracking-[0.2em]">
-                STEP {String(index + 1).padStart(2, "0")}
-              </span>
-              {isCurrent ? (
-                <span className="rounded-full border border-current/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
-                  진행 중
-                </span>
-              ) : null}
-              {isCompleted ? (
-                <span className="rounded-full border border-current/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
-                  완료
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-1.5 text-sm font-semibold tracking-normal">
-              {displayLabel}
-            </p>
-          </div>
-        );
-      })}
-    </div>
-  );
+  const stepLabels = <SubmissionProgress steps={steps} currentStep={step} />;
 
   const updateTrack = <K extends keyof TrackInput>(
     index: number,
@@ -3370,19 +3317,9 @@ export function AlbumWizard({
 
       {step === 1 && (
         <div className="space-y-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 01
-              </p>
-              <h2 className="font-display mt-2 text-2xl text-foreground">
-                패키지를 선택하세요.
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                포함 방송국과 가격을 확인하고 선택하면 다음 단계로 이동합니다.
-              </p>
-            </div>
-          </div>
+          <h2 className="font-display text-2xl text-foreground">
+            패키지 선택
+          </h2>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -3403,10 +3340,7 @@ export function AlbumWizard({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                      일반 접수
-                    </p>
-                    <p className="mt-2 text-sm font-semibold">일반 접수</p>
+                    <p className="text-sm font-semibold">일반 접수</p>
                   </div>
                   {!isOneClick ? (
                     <span className={selectedBadgeClass}>
@@ -3414,9 +3348,7 @@ export function AlbumWizard({
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-2 text-xs opacity-80">
-                  트랙 정보를 직접 입력하는 기본 심의 접수입니다.
-                </p>
+                <p className="mt-2 text-xs opacity-80">트랙 정보 직접 입력</p>
               </button>
               <button
                 type="button"
@@ -3433,10 +3365,7 @@ export function AlbumWizard({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                      원클릭
-                    </p>
-                    <p className="mt-2 text-sm font-semibold">원클릭 접수</p>
+                    <p className="text-sm font-semibold">원클릭 접수</p>
                   </div>
                   {isOneClick ? (
                     <span className={selectedBadgeClass}>
@@ -3444,9 +3373,7 @@ export function AlbumWizard({
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-2 text-xs opacity-80">
-                  발매 완료된 앨범의 멜론 링크와 음원 파일만 제출하면 온사이드가 모든 것을 해결합니다.
-                </p>
+                <p className="mt-2 text-xs opacity-80">멜론 링크로 간편 접수</p>
               </button>
             </div>
             {selectionLocked && (
@@ -3498,16 +3425,13 @@ export function AlbumWizard({
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-xs font-semibold uppercase tracking-[0.3em] opacity-70">
-                          {getPackageDisplayName(pkg, isOneClick)}
-                        </p>
                         {guidance?.badge ? (
                           <span className={`rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}>
                             {guidance.badge}
                           </span>
                         ) : null}
                       </div>
-                      <h3 className="mt-2 text-xl font-semibold">
+                      <h3 className="text-xl font-semibold">
                         {getPackageDisplayName(pkg, isOneClick)}
                       </h3>
                     </div>
@@ -3591,26 +3515,12 @@ export function AlbumWizard({
 
       {step === 2 && (
         <div className="space-y-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 02
-              </p>
-              <h2 className="font-display mt-2 text-2xl text-foreground">
-                신청서 정보를 입력하세요.
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {isOneClick
-                  ? "멜론 링크와 기본 정보를 입력한 뒤 다음 단계에서 음원 파일을 업로드합니다."
-                  : "트랙 정보를 입력한 뒤 다음 단계에서 음원 파일을 업로드합니다."}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                현재 앨범 {albumDrafts.length + 1} 입력 중
-                {albumDrafts.length > 0
-                  ? ` · 추가 앨범 ${albumDrafts.length}건 등록됨`
-                  : ""}
-              </p>
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-2xl text-foreground">신청서 작성</h2>
+            <span className="rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
+              앨범 {albumDrafts.length + 1}
+              {albumDrafts.length > 0 ? ` · 추가 ${albumDrafts.length}건` : ""}
+            </span>
           </div>
 
           <ApplicationFormModeTabs
@@ -3620,16 +3530,7 @@ export function AlbumWizard({
 
           {isDownloadedApplicationFlow ? (
             <div className="rounded-[28px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-muted-foreground">
-                신청서 파일 작성
-              </p>
-              <h3 className="mt-3 text-xl font-black text-foreground">
-                신청서를 내려받아 작성한 뒤 다음 단계에서 업로드하세요.
-              </h3>
-              <p className="mt-2 text-sm font-semibold leading-6 text-muted-foreground">
-                HWP 또는 Word 파일 중 편한 형식을 선택하세요. 다운로드를 누르면
-                파일 업로드 단계로 이동합니다.
-              </p>
+              <h3 className="text-xl font-black text-foreground">신청서 양식</h3>
               <div className="mt-5 flex flex-wrap gap-3">
                 {albumApplicationForms.map((form) => (
                   <a
@@ -3647,9 +3548,8 @@ export function AlbumWizard({
                   </a>
                 ))}
               </div>
-              <div className="mt-5 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs leading-5 text-muted-foreground">
-                다음 단계 파일 업로드에서 작성한 신청서(HWP/DOC/DOCX)와 음원 파일을
-                함께 첨부해주세요.
+              <div className="mt-5 inline-flex rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                다음: 신청서 + 음원 첨부
               </div>
               <div className="mt-5">
                 <AiUsageSelector
@@ -4477,46 +4377,18 @@ export function AlbumWizard({
           {isDraggingOver && (
             <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
           )}
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 03
-              </p>
-              <h2 className="font-display mt-2 text-2xl text-foreground">
-                파일 업로드
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                심의 받을 음원과 작성한 신청서 파일을 업로드해주세요.
-              </p>
-            </div>
-          </div>
+          <h2 className="font-display text-2xl text-foreground">파일 첨부</h2>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            {[
-              {
-                title: "1. 파일 형식",
-                body: "음원은 WAV/MP3 또는 ZIP, 신청서는 HWP/DOC/DOCX로 첨부하세요.",
-              },
-              {
-                title: "2. 트랙 순서",
-                body: "신청서의 트랙 순서와 파일/CD 순서가 같아야 합니다.",
-              },
-              {
-                title: "3. 업로드가 어려울 때",
-                body: "파일 없이 다음 단계로 진행하거나 예전 온사이드 사이트에서 접수할 수 있습니다.",
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="rounded-2xl border border-border/60 bg-background/70 px-4 py-4 text-sm"
-              >
-                <p className="font-semibold text-foreground">{item.title}</p>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {item.body}
-                </p>
-              </div>
-            ))}
-          </div>
+          <details className="rounded-[20px] border border-border/60 bg-background/70 px-5 py-4 text-xs text-muted-foreground">
+            <summary className="cursor-pointer font-semibold text-foreground">
+              파일 준비 기준
+            </summary>
+            <ul className="mt-3 grid gap-2 leading-5 sm:grid-cols-3">
+              <li>WAV·MP3·ZIP / HWP·DOC·DOCX</li>
+              <li>신청서와 음원·CD 트랙 순서 일치</li>
+              <li>업로드가 어려우면 파일 없이 진행 가능</li>
+            </ul>
+          </details>
 
           {uploadDrafts && uploadDrafts.length > 0 && (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -4842,19 +4714,7 @@ export function AlbumWizard({
 
       {step === 4 && (
         <div className="space-y-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                STEP 04
-              </p>
-              <h2 className="font-display mt-2 text-2xl text-foreground">
-                장바구니에 담기
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                신청서를 장바구니에 담은 뒤 여러 심의건을 한 번에 결제할 수 있습니다.
-              </p>
-            </div>
-          </div>
+          <h2 className="font-display text-2xl text-foreground">신청 내용 확인</h2>
 
           <div className="rounded-[28px] border-2 border-[#111111] bg-background p-5 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -5041,17 +4901,17 @@ export function AlbumWizard({
               </div>
             </div>
 
-            <div className="rounded-[24px] border border-border/60 bg-background/70 p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            <details className="rounded-[20px] border border-border/60 bg-background/70 px-5 py-4 text-xs text-muted-foreground">
+              <summary className="cursor-pointer font-semibold text-foreground">
                 결제 전 안내
-              </p>
-              <ul className="mt-3 grid gap-2 text-xs font-semibold leading-5 text-muted-foreground sm:grid-cols-2">
-                <li>예상 진행 기간: 접수 후 영업일 기준 최대 3주</li>
-                <li>결제 방식 선택 후 부가세 및 증빙 요청 가능</li>
-                <li>접수 전 취소 가능 여부를 확인해주세요</li>
-                <li>누락 자료가 있으면 보완 요청 후 진행됩니다</li>
+              </summary>
+              <ul className="mt-3 grid gap-2 leading-5 sm:grid-cols-2">
+                <li>예상 기간 · 영업일 기준 최대 3주</li>
+                <li>부가세·증빙 서류 신청 가능</li>
+                <li>접수 전 취소 조건 확인</li>
+                <li>누락 자료는 보완 후 진행</li>
               </ul>
-            </div>
+            </details>
           </div>
 
           {isGuest && !usesSubmissionCartCheckout ? (
@@ -5097,8 +4957,11 @@ export function AlbumWizard({
               </div>
             </div>
           ) : (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm font-semibold leading-6 text-muted-foreground">
-              신청서 작성과 파일 업로드/이메일 제출 선택이 완료되었습니다. 다음 버튼을 누르면 이 신청서가 장바구니에 담기고, 장바구니에서 다른 신청서와 함께 선택 결제할 수 있습니다.
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-emerald-500/30 bg-emerald-500/8 px-5 py-4">
+              <span className="font-semibold text-foreground">✓ 장바구니 준비 완료</span>
+              <span className="rounded-full bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
+                여러 건 동시 결제
+              </span>
             </div>
           )}
 
@@ -5383,40 +5246,19 @@ export function AlbumWizard({
 
       {step === 5 && (
         <div className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-center sm:rounded-[32px] sm:p-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            STEP 05
-          </p>
-          <h2 className="font-display mt-3 text-3xl text-foreground">
-            접수 완료
-          </h2>
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
+            ✓
+          </div>
+          <h2 className="font-display mt-4 text-3xl text-foreground">접수 완료</h2>
           <p className="mt-3 text-sm text-muted-foreground">
             결제 확인 후 진행 상태가 업데이트됩니다.
           </p>
-          <div className="mx-auto mt-6 max-w-3xl rounded-[20px] border border-black/6 bg-white/88 p-4 text-left shadow-[0_18px_40px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/5 dark:shadow-none sm:rounded-[28px] sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              다음 단계 안내
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
-                <p className="font-semibold">1. 접수 내역 확인</p>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  접수 직후 결제 상태와 방송국 진행 상태가 기록됩니다.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
-                <p className="font-semibold">2. 진행 상태 확인</p>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  마이페이지 또는 조회 코드로 방송국별 처리 현황과 결과를
-                  확인할 수 있습니다.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4 text-sm text-foreground">
-                <p className="font-semibold">3. 업로드 이슈 대응</p>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  파일 업로드가 안 되면 파일 없이 진행하거나 기존 온사이드 사이트에서 접수 가능합니다.
-                </p>
-              </div>
-            </div>
+          <div className="mx-auto mt-6 flex max-w-xl flex-wrap items-center justify-center gap-2 text-xs font-semibold text-muted-foreground">
+            <span className="rounded-full border border-border/60 bg-background px-3 py-1.5">접수 내역</span>
+            <span aria-hidden="true">→</span>
+            <span className="rounded-full border border-border/60 bg-background px-3 py-1.5">진행 현황</span>
+            <span aria-hidden="true">→</span>
+            <span className="rounded-full border border-border/60 bg-background px-3 py-1.5">결과 확인</span>
           </div>
           {notice.emailNotice ? (
             <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">

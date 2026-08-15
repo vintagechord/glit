@@ -44,10 +44,16 @@ export default async function AdminArtistDetailPage({
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           잘못된 아티스트 ID입니다.
         </p>
-        <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-          <p>요청 ID: {artistId || "비어 있음"}</p>
-          <p>params.id: {paramId || "없음"} / searchParams.id: {searchId || "없음"}</p>
-        </div>
+        <details className="mt-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-semibold text-foreground">
+            요청 정보
+          </summary>
+          <div className="mt-2 space-y-1 rounded-2xl border border-border/60 bg-background px-4 py-3">
+            <p>요청 ID: {artistId || "비어 있음"}</p>
+            <p>경로 ID: {paramId || "없음"}</p>
+            <p>검색 ID: {searchId || "없음"}</p>
+          </div>
+        </details>
         <div className="mt-3">
           <Link
             href="/admin/artists"
@@ -75,11 +81,17 @@ export default async function AdminArtistDetailPage({
         </p>
         <h1 className="font-display mt-2 text-2xl text-foreground">아티스트 상세</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
-          아티스트 정보를 불러올 수 없습니다. ({error?.message ?? "not found"})
+          아티스트 정보를 불러올 수 없습니다.
         </p>
-        <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-          요청 ID: {artistId}
-        </div>
+        <details className="mt-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-semibold text-foreground">
+            오류 상세
+          </summary>
+          <div className="mt-2 space-y-1 rounded-2xl border border-border/60 bg-background px-4 py-3">
+            <p>요청 ID: {artistId}</p>
+            <p>{error?.message ?? "not found"}</p>
+          </div>
+        </details>
         <div className="mt-3">
           <Link
             href="/admin/artists"
@@ -183,9 +195,14 @@ export default async function AdminArtistDetailPage({
               defaultValue={artist.name}
               className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
             />
-            <p className="text-[11px] text-muted-foreground">
-              NOTE: 이름 변경 시 모든 연결된 심의는 동일 아티스트를 바라보지만, 표시 텍스트는 바뀔 수 있습니다.
-            </p>
+            <details className="text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer font-semibold text-foreground">
+                이름 변경 안내
+              </summary>
+              <p className="mt-1 leading-5">
+                연결된 심의는 유지되지만 화면의 아티스트 표시는 변경될 수 있습니다.
+              </p>
+            </details>
           </div>
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -209,9 +226,13 @@ export default async function AdminArtistDetailPage({
           연관 심의 목록
         </p>
         {submissionsError ? (
-          <p className="mt-3 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-sm text-black">
-            연관 심의 조회에 실패했습니다. ({submissionsError})
-          </p>
+          <div className="mt-3 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-sm text-black">
+            <p className="font-semibold">연관 심의를 불러오지 못했습니다.</p>
+            <details className="mt-1 text-xs">
+              <summary className="cursor-pointer font-semibold">오류 상세</summary>
+              <p className="mt-1 break-words">{submissionsError}</p>
+            </details>
+          </div>
         ) : null}
         <div
           className="mt-4 overflow-x-auto"

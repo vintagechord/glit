@@ -1,3 +1,5 @@
+import { Clock3, Mail, Phone } from "lucide-react";
+
 import { APP_CONFIG } from "@/lib/config";
 import { SupportInquiryModal } from "@/features/support/support-inquiry-modal";
 
@@ -5,79 +7,44 @@ export const metadata = {
   title: "고객센터",
 };
 
-const supportCards = [
-  {
-    title: "신청 전 상담",
-    description: "목적과 송출처에 맞는 심의 유형을 확인합니다.",
-  },
-  {
-    title: "자료 보완",
-    description: "가사, 번역, 영상 규격, CD 제출 여부를 확인합니다.",
-  },
-  {
-    title: "결과/코드 문의",
-    description: "조회 코드와 결과 파일 확인을 도와드립니다.",
-  },
-];
-
 export default function SupportPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       <p className="bauhaus-kicker">고객센터</p>
       <h1 className="font-display mt-4 text-3xl font-black text-foreground">
-        접수 전후로 필요한 문의를 한 곳에서 확인하세요
+        어떻게 도와드릴까요?
       </h1>
-      <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
-        온라인 접수를 기본으로 운영하며, 파일 업로드가 어려운 경우 구버전 신청서 작성 방식도 안내합니다.
-      </p>
 
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
-        {supportCards.map((card) => (
-          <div
-            key={card.title}
-            className="rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]"
-          >
-            <h2 className="text-lg font-black text-foreground">{card.title}</h2>
-            <p className="mt-2 text-sm font-semibold leading-6 text-muted-foreground">
-              {card.description}
-            </p>
-          </div>
-        ))}
+      <section className="mt-8 grid gap-4 sm:grid-cols-3">
+        <a
+          href={`tel:${APP_CONFIG.supportPhone}`}
+          className="group flex min-h-36 flex-col items-center justify-center gap-3 rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-center text-[#111111] shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]"
+        >
+          <Phone className="h-8 w-8" aria-hidden="true" />
+          <span className="text-base font-black">전화</span>
+          <span className="text-xs font-semibold">{APP_CONFIG.supportPhone}</span>
+        </a>
+        <a
+          href={`mailto:${APP_CONFIG.supportEmail}`}
+          className="group flex min-h-36 flex-col items-center justify-center gap-3 rounded-[10px] border-2 border-[#111111] bg-[#1556a4] p-5 text-center text-white shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]"
+        >
+          <Mail className="h-8 w-8" aria-hidden="true" />
+          <span className="text-base font-black">이메일</span>
+          <span className="max-w-full truncate text-xs font-semibold">
+            {APP_CONFIG.supportEmail}
+          </span>
+        </a>
+        <SupportInquiryModal
+          className="flex min-h-36 w-full flex-col items-center justify-center gap-3 rounded-[10px] border-2 border-[#111111] bg-[var(--bauhaus-red)] p-5 text-center text-base font-black text-white shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[5px_5px_0_#f2cf27]"
+        />
       </section>
 
-      <section className="mt-8 rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-        <div className="flex flex-wrap items-start justify-between gap-6">
-          <div>
-            <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-              연락처
-            </p>
-            <div className="mt-4 space-y-2 text-base font-semibold text-foreground">
-              <p>
-                전화{" "}
-                <a
-                  href={`tel:${APP_CONFIG.supportPhone}`}
-                  className="underline-offset-2 hover:underline"
-                >
-                  {APP_CONFIG.supportPhone}
-                </a>
-              </p>
-              <p>
-                이메일{" "}
-                <a
-                  href={`mailto:${APP_CONFIG.supportEmail}`}
-                  className="underline-offset-2 hover:underline"
-                >
-                  {APP_CONFIG.supportEmail}
-                </a>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                상담시간 {APP_CONFIG.supportHours}
-              </p>
-            </div>
-          </div>
-          <SupportInquiryModal className="inline-flex h-11 items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-5 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5" />
+      <div className="mt-7 flex justify-center">
+        <div className="inline-flex items-center gap-2 rounded-full border-2 border-border bg-card px-4 py-2 text-xs font-black text-muted-foreground">
+          <Clock3 className="h-4 w-4" aria-hidden="true" />
+          <span>{APP_CONFIG.supportHours}</span>
         </div>
-      </section>
+      </div>
     </div>
   );
 }

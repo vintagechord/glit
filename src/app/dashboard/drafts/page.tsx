@@ -64,7 +64,6 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
   return (
     <DashboardShell
       title="작성중 신청서"
-      description="작성 중인 신청서를 확인하고 이어서 진행할 수 있습니다."
       activeTab="drafts"
       tabs={config?.tabs ?? defaultDashboardTabs}
       contextLabel={config?.contextLabel ?? "마이페이지"}

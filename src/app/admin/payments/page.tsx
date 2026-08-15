@@ -67,24 +67,32 @@ export default async function AdminPaymentsPage() {
             관리자
           </p>
           <h1 className="font-display mt-2 text-3xl text-foreground">
-            이니시스 카드 결제 (승인 완료)
+            카드 결제
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            STDPay 승인 완료 건을 최신 순으로 표시합니다. 최대 200건까지 조회됩니다.
-          </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+            <span className="rounded-full border border-emerald-300/70 bg-emerald-50 px-3 py-1 text-emerald-700">
+              승인 완료
+            </span>
+            <span className="rounded-full border border-border bg-background px-3 py-1 text-muted-foreground">
+              최근 200건
+            </span>
+          </div>
         </div>
         <Link
           href="/admin/submissions?type=ALBUM"
           className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
         >
-          접수 관리로 이동
+          접수 관리
         </Link>
       </div>
 
       {error ? (
         <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           <p className="font-semibold">결제 내역을 불러오지 못했습니다.</p>
-          <p className="mt-1 text-xs text-red-500">{error.message}</p>
+          <details className="mt-1 text-xs text-red-500">
+            <summary className="cursor-pointer font-semibold">오류 상세</summary>
+            <p className="mt-1 break-words">{error.message}</p>
+          </details>
         </div>
       ) : null}
 

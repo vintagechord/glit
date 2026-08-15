@@ -35,7 +35,7 @@ export default function AboutPage() {
                 온사이드(onside)
               </h1>
               <p className="mt-3 text-sm font-semibold leading-6 text-[var(--about-ink)]/70">
-                2017년부터 운영된 온사이드 심의 대행 서비스는 현재 (주)빈티지하우스에서 운영합니다.
+                2017년부터 이어온 음반·뮤직비디오 심의.
               </p>
               <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-normal text-[var(--about-ink)]/70">
                 {[

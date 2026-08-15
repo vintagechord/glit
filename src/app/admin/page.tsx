@@ -133,7 +133,7 @@ export default async function AdminPage() {
         관리자 대시보드
       </h1>
       <p className="mt-3 text-sm text-muted-foreground">
-        접수 리스트, 결제 승인, 방송국 상태 관리를 진행하세요.
+        처리할 업무를 선택하세요.
       </p>
 
       <section
@@ -201,9 +201,17 @@ export default async function AdminPage() {
               멜론/지니 링크 심의자료 생성
             </h2>
             <p className="mt-1 text-xs font-semibold leading-5 text-muted-foreground">
-              지니 앨범 링크를 기준으로 가사와 크레딧을 수집하고,
-              멜론 링크를 함께 넣으면 누락된 정보를 보완해 심의자료 ZIP을 생성합니다.
+              앨범 링크로 심의자료 ZIP을 생성합니다.
             </p>
+            <details className="mt-1 text-xs text-muted-foreground">
+              <summary className="cursor-pointer font-semibold text-foreground">
+                생성 기준
+              </summary>
+              <p className="mt-1 max-w-2xl leading-5">
+                지니 정보를 우선 사용하고, 멜론 링크가 있으면 누락된 가사와
+                크레딧을 보완합니다.
+              </p>
+            </details>
           </div>
           <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111]">
             <FileArchive className="h-5 w-5" aria-hidden="true" />

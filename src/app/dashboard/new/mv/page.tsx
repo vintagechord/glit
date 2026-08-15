@@ -13,19 +13,6 @@ const mvChecklist = [
   "TV 송출용은 방송국별 제출 조건 확인",
 ];
 
-const purposeNotes = [
-  {
-    title: "온라인 유통/업로드",
-    description:
-      "멜론·지니·벅스·플로·유튜브 등 유통사 제출이나 온라인 업로드용으로 진행합니다.",
-  },
-  {
-    title: "TV 송출",
-    description:
-      "방송국 송출 목적은 KBS, MBC, SBS 등 방송국별 조건과 편성 여부를 확인한 뒤 접수합니다.",
-  },
-];
-
 const mvStationRows = [
   { id: "", name: "KBS", code: "KBS" },
   { id: "", name: "MBC", code: "MBC" },
@@ -40,55 +27,38 @@ export default async function MvSubmissionPage() {
   const user = await getServerSessionUser(supabase);
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="bauhaus-kicker">뮤직비디오 심의 신청</p>
-          <h1 className="font-display mt-4 text-3xl font-black text-foreground">
-            뮤직비디오 심의 접수
-          </h1>
-          <p className="mt-3 text-base font-semibold text-muted-foreground">
-            비회원도 접수할 수 있으며, 로그인 시 마이페이지에서 진행 상황을
-            확인할 수 있습니다.
-          </p>
-        </div>
-      </div>
-
-      <div className="relative mt-8 rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] sm:p-6">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(360px,1.1fr)] lg:items-stretch">
-          <div className="flex min-h-full flex-col">
-            <p className="text-sm font-black uppercase tracking-normal text-muted-foreground">
-              업로드 전 확인
-            </p>
-            <h2 className="font-display mt-2 text-2xl font-black text-foreground">
-              뮤직비디오 심의, 이것만 확인하세요
-            </h2>
-            <ul className="mt-5 space-y-2 text-sm font-semibold leading-6 text-muted-foreground">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
+      <section className="rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="bauhaus-kicker">뮤직비디오 심의 신청</p>
+            <h1 className="font-display mt-4 text-3xl font-black text-foreground">
+              뮤직비디오 심의 접수
+            </h1>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
+                비회원 가능
+              </span>
+              <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
+                5단계 접수
+              </span>
+            </div>
+          </div>
+          <details className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 sm:w-auto sm:min-w-72">
+            <summary className="cursor-pointer text-sm font-black text-foreground">
+              영상 규격 확인
+            </summary>
+            <ul className="mt-3 grid gap-2 text-xs font-semibold text-muted-foreground">
               {mvChecklist.map((item) => (
-                <li key={item} className="flex gap-2">
-                  <span className="mt-2 h-2 w-2 shrink-0 bg-[#1556a4]" />
-                  <span>{item}</span>
+                <li key={item} className="flex items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 bg-[#1556a4]" aria-hidden="true" />
+                  {item}
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:h-full lg:grid-cols-1 lg:auto-rows-fr">
-            {purposeNotes.map((item) => (
-              <div
-                key={item.title}
-                className="flex min-h-[112px] flex-col justify-center rounded-[8px] border-2 border-border bg-background px-4 py-4 lg:min-h-0"
-              >
-                <p className="text-base font-black text-foreground">
-                  {item.title}
-                </p>
-                <p className="mt-2 break-keep text-sm font-semibold leading-6 text-muted-foreground sm:text-[15px]">
-                  {item.description}
-                </p>
-              </div>
-            ))}
-          </div>
+          </details>
         </div>
-      </div>
+      </section>
 
       <div className="mt-8">
         <MvWizard

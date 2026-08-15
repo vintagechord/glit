@@ -65,7 +65,7 @@ export default async function AdminUsersPage() {
             회원 관리
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            가입한 회원의 기본 정보와 연락처를 확인합니다.
+            회원 정보와 연락처를 확인합니다.
           </p>
         </div>
         <Link
@@ -78,12 +78,20 @@ export default async function AdminUsersPage() {
 
       {error && (
         <div className="mt-6 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
-          회원 정보를 불러오지 못했습니다. ({error.message})
+          <p className="font-semibold">회원 정보를 불러오지 못했습니다.</p>
+          <details className="mt-1 text-xs">
+            <summary className="cursor-pointer font-semibold">오류 상세</summary>
+            <p className="mt-1 break-words">{error.message}</p>
+          </details>
         </div>
       )}
       {emailError && (
         <div className="mt-4 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-2 text-xs text-black">
-          이메일 정보를 불러오는 데 문제가 있습니다. ({emailError})
+          <p className="font-semibold">일부 이메일을 불러오지 못했습니다.</p>
+          <details className="mt-1">
+            <summary className="cursor-pointer font-semibold">오류 상세</summary>
+            <p className="mt-1 break-words">{emailError}</p>
+          </details>
         </div>
       )}
 

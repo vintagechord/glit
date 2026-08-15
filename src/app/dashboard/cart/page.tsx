@@ -36,7 +36,6 @@ export async function SubmissionCartPageView(config?: ShellConfig) {
   return (
     <DashboardShell
       title="장바구니"
-      description="작성 완료된 미결제 신청서를 담아 두고 한 번에 결제할 수 있습니다."
       activeTab="cart"
       tabs={config?.tabs ?? defaultDashboardTabs}
       contextLabel={config?.contextLabel ?? "마이페이지"}

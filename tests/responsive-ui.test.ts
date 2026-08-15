@@ -52,3 +52,56 @@ test("mobile form controls avoid focus zoom", () => {
   assert.match(source, /font-size: 16px/);
   assert.match(source, /min-height: 100vh;\s*min-height: 100dvh;/);
 });
+
+test("dashboard navigation and cart stay compact on narrow screens", () => {
+  const shell = readSource("src/components/dashboard/dashboard-shell.tsx");
+  const cart = readSource(
+    "src/components/dashboard/submission-cart-checkout.tsx",
+  );
+
+  assert.match(shell, /label: "작성중"/);
+  assert.match(shell, /label: "심의내역"/);
+  assert.match(shell, /aria-current=\{activeTab === tab\.key \? "page"/);
+  assert.match(cart, /grid-cols-\[36px_minmax\(0,1fr\)\]/);
+  assert.match(cart, /<dl className="[^"]*grid-cols-\[52px_minmax\(0,1fr\)\]/);
+  assert.doesNotMatch(
+    cart,
+    /선택한 신청서를 KG이니시스 카드 결제로 한 번에 결제합니다/,
+  );
+});
+
+test("credit details use progressive disclosure instead of repeated guidance", () => {
+  const source = readSource("src/app/mypage/credits/page.tsx");
+
+  assert.match(source, /<summary className="cursor-pointer font-black">이용 안내<\/summary>/);
+  assert.match(source, />사용 내역<\/h2>/);
+  assert.match(source, /적립 내역/);
+  assert.doesNotMatch(source, /결제 완료 음반심의 1건 = 1크레딧/);
+  assert.doesNotMatch(source, /지금 교환 가능한 잔여 크레딧/);
+  assert.match(source, /submission\.release_date \?\? "-"/);
+});
+
+test("compact application UX stays translated and accessible", () => {
+  const translations = readSource(
+    "src/components/i18n/english-language-pack.tsx",
+  );
+  const aiSelector = readSource(
+    "src/features/submissions/ai-usage-selector.tsx",
+  );
+
+  for (const label of [
+    "비회원 가능",
+    "로그인 시 자동 저장",
+    "5단계 접수",
+    "영상 규격 확인",
+    "신청 진행 단계",
+    "전체 진행률",
+    "작성 방식",
+    "온라인 작성",
+    "파일로 제출",
+  ]) {
+    assert.match(translations, new RegExp(`"${label}":`));
+  }
+  assert.match(translations, /\\\(현재 단계\\\)/);
+  assert.match(aiSelector, /className="sr-only"> \(필수\)<\/span>/);
+});

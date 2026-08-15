@@ -165,12 +165,20 @@ export default async function AdminArtistsPage({
 
       {queryError && (
         <div className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
-          아티스트 정보를 불러올 수 없습니다. ({queryError.message})
+          <p className="font-semibold">아티스트 정보를 불러올 수 없습니다.</p>
+          <details className="mt-1 text-xs">
+            <summary className="cursor-pointer font-semibold">오류 상세</summary>
+            <p className="mt-1 break-words">{queryError.message}</p>
+          </details>
         </div>
       )}
       {statsError && (
         <div className="mt-4 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-sm text-black">
-          {statsError}
+          <p className="font-semibold">접수 통계를 집계하지 못했습니다.</p>
+          <details className="mt-1 text-xs">
+            <summary className="cursor-pointer font-semibold">오류 상세</summary>
+            <p className="mt-1 break-words">{statsError}</p>
+          </details>
         </div>
       )}
 

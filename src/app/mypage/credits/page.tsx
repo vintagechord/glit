@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -62,17 +63,17 @@ export type MyPageCreditsSearchParams = {
 };
 
 const magazineStatusLabels: Record<string, string> = {
-  REQUESTED: "요청 접수",
-  WRITING: "작성 중",
-  PUBLISHED: "사용 완료",
-  CANCELED: "취소됨",
+  REQUESTED: "접수",
+  WRITING: "진행",
+  PUBLISHED: "완료",
+  CANCELED: "취소",
 };
 
 const studioStatusLabels: Record<string, string> = {
-  REQUESTED: "요청접수",
-  APPROVED: "승인/안내 완료",
-  USED: "사용완료",
-  CANCELED: "취소됨",
+  REQUESTED: "접수",
+  APPROVED: "승인",
+  USED: "사용",
+  CANCELED: "취소",
 };
 
 const channelLabels: Record<string, string> = {
@@ -134,7 +135,7 @@ const getRequestTimestamp = (value?: string | null) => {
 
 const getMagazineRequestStatusLabel = (request: UserMagazineRequest) => {
   if (request.status === "PUBLISHED" || request.published_url) {
-    return "사용 완료";
+    return "완료";
   }
   return magazineStatusLabels[request.status ?? ""] ?? request.status ?? "-";
 };
@@ -190,10 +191,10 @@ const noticeText = (
   if (redeemedFlag) {
     return {
       type: "success" as const,
-      title: "서비스 이용 요청 접수",
-      text: "서비스 이용 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.",
+      title: "요청 완료",
+      text: "승인 결과는 이 화면에서 확인할 수 있습니다.",
       actionHref: `${localePrefix}/mypage/credits#credit-requests`,
-      actionLabel: "요청 내역 보기",
+      actionLabel: "내역 보기",
       clearQueryParams: ["redeemed"],
     };
   }
@@ -203,11 +204,10 @@ const noticeText = (
   if (studioRequestedFlag) {
     return {
       type: "success" as const,
-      title: "녹음실 사용 신청 완료",
-      text:
-        "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.\n적어주신 연락처로 녹음실 사용 안내를 드립니다.",
+      title: "예약 요청 완료",
+      text: "승인 결과는 이 화면과 입력한 연락처로 안내됩니다.",
       actionHref: `${localePrefix}/mypage/credits#credit-requests`,
-      actionLabel: "요청 내역 보기",
+      actionLabel: "내역 보기",
       clearQueryParams: ["studioRequested"],
     };
   }
@@ -217,23 +217,18 @@ const noticeText = (
 function SummaryCard({
   label,
   value,
-  description,
   tone,
 }: {
   label: string;
   value: number;
-  description: string;
   tone: string;
 }) {
   return (
-    <div className={`rounded-[10px] border-2 p-5 ${tone}`}>
+    <div className={`rounded-[10px] border-2 p-3 sm:p-4 ${tone}`}>
       <p className="text-[11px] font-black uppercase tracking-normal opacity-70">
         {label}
       </p>
-      <p className="mt-2 text-4xl font-black">{value.toLocaleString()}</p>
-      <p className="mt-2 text-xs font-semibold leading-5 opacity-75">
-        {description}
-      </p>
+      <p className="mt-1 text-xl font-black sm:text-2xl">{value.toLocaleString()}</p>
     </div>
   );
 }
@@ -242,24 +237,26 @@ function MagazineRequestCard({ request }: { request: UserMagazineRequest }) {
   return (
     <div className="rounded-[10px] border-2 border-border bg-background p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-            Magazine
-          </p>
-          <p className="mt-1 font-black text-foreground">
+        <div className="min-w-0">
+          <p className="truncate font-black text-foreground">
             {request.album_title ?? "제목 미입력"}
           </p>
         </div>
-        <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
-          {getMagazineRequestStatusLabel(request)}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="rounded-[6px] border border-border px-2 py-1 text-[10px] font-black text-muted-foreground">
+            매거진
+          </span>
+          <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
+            {getMagazineRequestStatusLabel(request)}
+          </span>
+        </div>
       </div>
       <p className="mt-2 text-xs font-semibold text-muted-foreground">
         {request.artist_name ?? "-"} ·{" "}
         {channelLabels[request.target_channel ?? ""] ??
           request.target_channel ??
           "-"}{" "}
-        · 요청일 {formatDate(request.created_at)}
+        · {formatDate(request.created_at)}
       </p>
       {request.published_url ? (
         <a
@@ -268,14 +265,17 @@ function MagazineRequestCard({ request }: { request: UserMagazineRequest }) {
           rel="noreferrer"
           className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111] transition hover:-translate-y-0.5"
         >
-          발행 페이지 보기
+          발행 보기
           <ExternalLink className="h-4 w-4" aria-hidden="true" />
         </a>
       ) : null}
       {request.admin_memo ? (
-        <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
-          관리자 메모: {request.admin_memo}
-        </p>
+        <details className="mt-3 rounded-[8px] border border-border bg-card px-3 py-2 text-xs">
+          <summary className="cursor-pointer font-black text-foreground">관리자 메모</summary>
+          <p className="mt-2 whitespace-pre-wrap font-semibold leading-5 text-muted-foreground">
+            {request.admin_memo}
+          </p>
+        </details>
       ) : null}
     </div>
   );
@@ -299,26 +299,25 @@ function StudioReservationCard({
   return (
     <div className="rounded-[10px] border-2 border-border bg-background p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-            Service
-          </p>
-          <p className="mt-1 font-black text-foreground">
+        <div className="min-w-0">
+          <p className="truncate font-black text-foreground">
             {reservation.reward_title}
           </p>
         </div>
-        <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
-          {statusLabel}
-        </span>
+        {statusLabel === studioStatusLabels.CANCELED ? (
+          <span className="rounded-[6px] bg-[#d9362c] px-2.5 py-1 text-[11px] font-black text-white">
+            {statusLabel}
+          </span>
+        ) : null}
       </div>
-      <p className="mt-2 text-xs font-semibold text-muted-foreground">
-        희망일 {formatReservationDateTime(
+      <p className="mt-2 truncate text-xs font-semibold text-muted-foreground">
+        {formatReservationDateTime(
           reservation.preferred_date,
           reservation.preferred_time,
         )}{" "}
         · {reservation.contact_phone}
       </p>
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-3 gap-2">
         {studioRequestSteps.map((step, index) => {
           const isDone = activeStepIndex >= index;
           const isActive = activeStepIndex === index;
@@ -326,7 +325,7 @@ function StudioReservationCard({
             <div
               key={step}
               className={[
-                "rounded-[8px] border-2 px-3 py-2 text-[11px] font-black",
+                "min-w-0 rounded-[8px] border-2 px-1.5 py-2 text-center text-[11px] font-black",
                 isDone
                   ? "border-[#111111] bg-[#1556a4] text-white dark:border-[#8bc3ff] dark:bg-[#8bc3ff] dark:text-[#06111f]"
                   : isActive
@@ -334,19 +333,21 @@ function StudioReservationCard({
                     : "border-border bg-card text-muted-foreground",
               ].join(" ")}
             >
+              {isDone ? <Check className="mr-1 inline h-3 w-3" aria-hidden="true" /> : null}
               {step}
             </div>
           );
         })}
       </div>
       {(reservation.status === "APPROVED" || isUsed) && approvedMessage ? (
-        <div className="mt-3 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black leading-5 text-[#111111]">
-          {approvedMessage}
-        </div>
+        <details className="mt-3 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs text-[#111111]">
+          <summary className="cursor-pointer font-black">이용 안내</summary>
+          <p className="mt-2 whitespace-pre-wrap font-semibold leading-5">{approvedMessage}</p>
+        </details>
       ) : null}
       {isUsed && redemption?.used_at ? (
         <p className="mt-3 text-xs font-semibold text-muted-foreground">
-          사용완료 {formatDate(redemption.used_at)}
+          {formatDate(redemption.used_at)}
         </p>
       ) : null}
       {studioUrl ? (
@@ -356,7 +357,7 @@ function StudioReservationCard({
           rel="noreferrer"
           className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-4 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
         >
-          녹음실 위치 보기
+          위치
           <ExternalLink className="h-4 w-4" aria-hidden="true" />
         </a>
       ) : null}
@@ -377,17 +378,13 @@ function CreditSourceCard({
             {submission.title ?? "앨범명 미입력"}
           </p>
           <p className="mt-1 text-xs font-semibold text-muted-foreground">
-            {submission.artist_name ?? "-"} · 발매일{" "}
-            {submission.release_date ?? "-"}
+            {submission.artist_name ?? "-"} · {submission.release_date ?? "-"}
           </p>
         </div>
         <span className="rounded-[6px] bg-[#f2cf27] px-2.5 py-1 text-[11px] font-black text-[#111111]">
-          +1 크레딧
+          +1
         </span>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        적립일 {formatDate(submission.created_at)}
-      </p>
     </div>
   );
 }
@@ -611,57 +608,45 @@ export async function MyPageCreditsPageView({
   return (
       <DashboardShell
         title="나의 크레딧"
-        description="음반심의 결제 완료 건으로 적립된 크레딧을 매거진 발행이나 서비스 이용 요청에 사용할 수 있습니다."
         activeTab="credits"
         tabs={
           localePrefix === "/en"
             ? englishDefaultDashboardTabs
             : defaultDashboardTabs
         }
-        contextLabel="마이페이지"
+        contextLabel={localePrefix === "/en" ? "My Page" : "마이페이지"}
     >
-      <div className="space-y-8">
+      <div className="space-y-6">
         <CreditActionNotice notice={notice} />
 
-        <section className="rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27]">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+        <section className="rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-4 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="bauhaus-kicker">Credit Wallet</p>
-              <h2 className="mt-3 text-2xl font-black text-foreground">
-                결제 완료 음반심의 1건 = 1크레딧
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-muted-foreground">
-                적립 크레딧은 매거진 발행, 녹음실 이용권 등으로 사용 가능합니다.
+              <p className="text-[11px] font-black text-muted-foreground">보유 크레딧</p>
+              <p className="mt-1 flex items-center gap-2 text-4xl font-black text-foreground">
+                <Coins className="h-7 w-7 text-[#1556a4]" aria-hidden="true" />
+                {summary.available.toLocaleString()}
               </p>
             </div>
-            <span className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-sm font-black text-[#111111]">
+            <span className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111]">
               <Coins className="h-4 w-4" aria-hidden="true" />
-              보유 크레딧 {summary.available.toLocaleString()}개
+              음반 1건 = +1
             </span>
           </div>
-          <div className="mt-6 grid gap-3 md:grid-cols-4">
+          <div className="mt-4 grid grid-cols-3 gap-2">
             <SummaryCard
               label="총 적립"
               value={summary.earned}
-              description="결제 완료 및 지급 크레딧"
               tone="border-[#111111] bg-white text-[#111111]"
-            />
-            <SummaryCard
-              label="보유 크레딧"
-              value={summary.available}
-              description="지금 교환 가능한 잔여 크레딧"
-              tone="border-[#111111] bg-[#f2cf27] text-[#111111]"
             />
             <SummaryCard
               label="매거진 사용"
               value={summary.magazineUsed}
-              description="매거진 발행 요청에 사용"
               tone="border-border bg-card text-foreground"
             />
             <SummaryCard
               label="서비스 사용"
               value={summary.rewardUsed}
-              description="서비스 이용 요청에 사용"
               tone="border-border bg-card text-foreground"
             />
           </div>
@@ -672,12 +657,7 @@ export async function MyPageCreditsPageView({
           className="scroll-mt-28 rounded-[10px] border-2 border-border bg-card p-5"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="bauhaus-kicker">Requests</p>
-              <h2 className="mt-3 text-2xl font-black text-foreground">
-                크레딧 사용 요청 내역
-              </h2>
-            </div>
+            <h2 className="text-xl font-black text-foreground">사용 내역</h2>
             <span className="rounded-[8px] border-2 border-[#111111] bg-background px-3 py-1 text-xs font-black text-foreground">
               {(magazineRequests.length + studioReservations.length).toLocaleString()}건
             </span>
@@ -699,7 +679,7 @@ export async function MyPageCreditsPageView({
             </div>
           ) : (
             <p className="mt-5 rounded-[10px] border-2 border-dashed border-border bg-background p-5 text-sm font-semibold text-muted-foreground">
-              아직 크레딧으로 접수한 매거진 발행 또는 서비스 이용 요청이 없습니다.
+              사용 내역이 없습니다.
             </p>
           )}
         </section>
@@ -717,10 +697,7 @@ export async function MyPageCreditsPageView({
                 />
                 <span>
                   <span className="block text-xl font-black text-foreground">
-                    크레딧 적립 내역
-                  </span>
-                  <span className="mt-1 block text-sm font-semibold leading-6 text-muted-foreground">
-                    결제 완료된 음반심의 건마다 1크레딧이 자동 적립됩니다.
+                    적립 내역
                   </span>
                 </span>
               </span>
@@ -755,7 +732,7 @@ export async function MyPageCreditsPageView({
                 </>
               ) : (
                 <p className="rounded-[8px] border-2 border-dashed border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
-                  아직 크레딧으로 적립된 음반심의 결제 건이 없습니다.
+                  적립 내역이 없습니다.
                 </p>
               )}
             </div>

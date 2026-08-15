@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
+import { CheckSquare, CreditCard, FilePenLine, Plus, Trash2 } from "lucide-react";
 
 import { showCenteredConfirm } from "@/lib/centered-dialog";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatShortDate } from "@/lib/format";
 
 export type DraftSubmissionItem = {
   id: string;
@@ -26,15 +27,15 @@ const draftStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]",
   },
   PRE_REVIEW: {
-    label: "파일/결제 진행중",
+    label: "진행중",
     tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
   },
   SUBMITTED: {
-    label: "결제 진행중",
+    label: "결제 대기",
     tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
   },
   WAITING_PAYMENT: {
-    label: "결제 진행중",
+    label: "결제 대기",
     tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
   },
 };
@@ -64,7 +65,7 @@ const getDraftStatusInfo = (item: DraftSubmissionItem) => {
   }
   if (item.paymentStatus === "UNPAID" && !["DRAFT", "PRE_REVIEW"].includes(item.status)) {
     return {
-      label: "결제 미완료",
+      label: "미결제",
       tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
     };
   }
@@ -294,12 +295,13 @@ export function DraftSubmissionList({
     return (
       <div className="space-y-4">
         <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-5 py-7 text-sm text-muted-foreground">
-          작성중 신청서가 없습니다.
+          작성중인 신청서가 없습니다.
         </div>
         <Link
           href={`${localePrefix}/dashboard/new`}
           className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-4 text-xs font-black tracking-normal text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5"
         >
+          <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           새 신청서 작성
         </Link>
       </div>
@@ -315,21 +317,21 @@ export function DraftSubmissionList({
             onClick={() => setFilter("ALL")}
             className={filterButtonClass(filter === "ALL")}
           >
-            전체
+            전체 {items.length}
           </button>
           <button
             type="button"
             onClick={() => setFilter("ALBUM")}
             className={filterButtonClass(filter === "ALBUM")}
           >
-            앨범
+            앨범 {items.filter((item) => getDraftGroupType(item.type) === "ALBUM").length}
           </button>
           <button
             type="button"
             onClick={() => setFilter("MV")}
             className={filterButtonClass(filter === "MV")}
           >
-            뮤직비디오
+            MV {items.filter((item) => getDraftGroupType(item.type) === "MV").length}
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -338,6 +340,7 @@ export function DraftSubmissionList({
             onClick={handleToggleVisibleAll}
             className={outlineControlClass}
           >
+            <CheckSquare className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
             {isAllVisibleSelected ? "선택 해제" : "전체 선택"}
           </button>
           <button
@@ -346,6 +349,7 @@ export function DraftSubmissionList({
             disabled={selectedIds.size === 0 || isDeleting}
             className={dangerControlClass}
           >
+            <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
             선택 삭제
           </button>
         </div>
@@ -360,7 +364,7 @@ export function DraftSubmissionList({
       <div className="space-y-3">
         {filteredItems.length === 0 ? (
           <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-4 py-6 text-sm text-muted-foreground">
-            선택한 유형의 작성중 신청서가 없습니다.
+            해당 유형의 신청서가 없습니다.
           </div>
         ) : (
           filteredItems.map((item) => {
@@ -378,6 +382,7 @@ export function DraftSubmissionList({
                   type="checkbox"
                   checked={selectedIds.has(item.id)}
                   onChange={() => handleToggleItem(item.id)}
+                  aria-label={`${buildDisplayTitle(item)} 선택`}
                   className="mt-1 h-4 w-4 rounded border-border accent-[var(--bauhaus-ink)] md:mt-0"
                 />
                 <div className="min-w-0">
@@ -394,8 +399,12 @@ export function DraftSubmissionList({
                       {statusInfo.label}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    최근 수정 {formatDateTime(item.updatedAt)}
+                  <p
+                    className="mt-1 text-xs text-muted-foreground"
+                    title={`최근 수정 ${formatDateTime(item.updatedAt)}`}
+                    aria-label={`최근 수정 ${formatDateTime(item.updatedAt)}`}
+                  >
+                    {formatShortDate(item.updatedAt)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 md:justify-end">
@@ -414,6 +423,11 @@ export function DraftSubmissionList({
                         : "bg-[var(--foreground)] text-[var(--background)] hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
                     }`}
                   >
+                    {shouldOpenPayment ? (
+                      <CreditCard className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    ) : (
+                      <FilePenLine className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    )}
                     {shouldOpenPayment ? "결제하기" : "이어쓰기"}
                   </button>
                 </div>

@@ -1,14 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 
 import {
   DashboardShell,
   type DashboardTab,
   statusDashboardTabs,
 } from "@/components/dashboard/dashboard-shell";
-import { paymentStatusLabelMap } from "@/constants/review-status";
-import { formatDateTime } from "@/lib/format";
+import { formatShortDate } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
@@ -21,9 +21,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const typeLabels: Record<string, string> = {
-  ALBUM: "음반 심의",
-  MV_DISTRIBUTION: "뮤직비디오 심의 (유통/온라인)",
-  MV_BROADCAST: "뮤직비디오 심의 (TV 송출)",
+  ALBUM: "음반",
+  MV_DISTRIBUTION: "MV · 온라인",
+  MV_BROADCAST: "MV · 방송",
 };
 
 const statusLabels: Record<string, string> = {
@@ -35,11 +35,6 @@ const statusLabels: Record<string, string> = {
   RESULT_READY: "결과 전달",
   COMPLETED: "완료",
 };
-
-const getPaymentStatusLabel = (status?: string | null) =>
-  status && status in paymentStatusLabelMap
-    ? paymentStatusLabelMap[status as keyof typeof paymentStatusLabelMap]
-    : "미결제";
 
 type SubmissionRow = {
   id: string;
@@ -91,21 +86,15 @@ export async function DashboardArtistDetailPageView({
   if (!artistId) {
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          Artist
-        </p>
         <h1 className="font-display mt-2 text-2xl text-foreground">
-          아티스트 ID가 전달되지 않았습니다.
+          잘못된 아티스트 정보입니다.
         </h1>
-        <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-          요청 ID: {artistId || "없음"}
-        </div>
         <div className="mt-3">
           <Link
             href={`${localePrefix}/dashboard/history`}
             className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
-            나의 심의 내역으로 돌아가기
+            심의 내역
           </Link>
         </div>
       </div>
@@ -116,26 +105,20 @@ export async function DashboardArtistDetailPageView({
   const admin = createAdminClient();
   const { data: artist } = await admin
     .from("artists")
-    .select("id, name, thumbnail_url, created_at, updated_at")
+    .select("id, name, thumbnail_url")
     .eq("id", artistId)
     .maybeSingle();
 
   if (!artist) {
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          Artist
-        </p>
         <h1 className="font-display mt-2 text-2xl text-foreground">아티스트 정보를 찾을 수 없습니다.</h1>
-        <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-          요청 ID: {artistId}
-        </div>
         <div className="mt-3">
           <Link
             href={`${localePrefix}/dashboard/history`}
             className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
-            나의 심의 내역으로 돌아가기
+            심의 내역
           </Link>
         </div>
       </div>
@@ -188,10 +171,9 @@ export async function DashboardArtistDetailPageView({
   return (
     <DashboardShell
       title={displayArtistName}
-      description="해당 아티스트의 접수 내역을 확인합니다."
       activeTab="history"
       tabs={tabs}
-      contextLabel="진행상황"
+      contextLabel={localePrefix === "/en" ? "Status" : "진행상황"}
     >
       <div className="space-y-6">
         <div className="flex items-center gap-3 rounded-[28px] border border-border/60 bg-card/80 p-4">
@@ -211,16 +193,17 @@ export async function DashboardArtistDetailPageView({
               {(artist.name || "A").charAt(0).toUpperCase()}
             </div>
           )}
-          <div className="text-sm text-muted-foreground">
+          <div className="flex min-w-0 items-center gap-2">
             <p className="text-base font-semibold text-foreground">{displayArtistName}</p>
-            <p>생성: {formatDateTime(artist.created_at)}</p>
-            <p>수정: {formatDateTime(artist.updated_at ?? artist.created_at)}</p>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-black text-muted-foreground">
+              {list.length}건
+            </span>
           </div>
         </div>
 
         {list.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
-            해당 아티스트의 접수 내역이 없습니다.
+            심의 내역이 없습니다.
           </div>
         ) : (
           <div className="space-y-3">
@@ -232,33 +215,24 @@ export async function DashboardArtistDetailPageView({
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <p className="text-xs font-black text-muted-foreground">
                       {typeLabels[submission.type] ?? submission.type ?? "심의"}
                     </p>
                     <p className="mt-1 text-lg font-semibold text-foreground">
                       {submission.title || "제목 미입력"}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      생성: {formatDateTime(submission.created_at)} · Updated:{" "}
-                      {formatDateTime(submission.updated_at ?? submission.created_at)}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      패키지:{" "}
                       {Array.isArray(submission.package)
                         ? submission.package[0]?.name ?? "-"
-                        : submission.package?.name ?? "-"}
+                        : submission.package?.name ?? "-"} ·{" "}
+                      {formatShortDate(submission.created_at)}
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-2 text-right text-xs">
                     <span className="rounded-full border border-border/70 px-3 py-1 font-semibold uppercase tracking-[0.2em] text-foreground">
                       {statusLabels[submission.status] ?? submission.status}
                     </span>
-                    <span className="rounded-full border border-border/70 px-3 py-1 font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      결제: {getPaymentStatusLabel(submission.payment_status)}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      상세 보기 →
-                    </span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                   </div>
                 </div>
               </Link>

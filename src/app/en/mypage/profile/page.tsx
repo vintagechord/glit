@@ -10,7 +10,7 @@ const tabs: DashboardTab[] = englishDefaultDashboardTabs;
 
 export default async function EnglishMyPageProfilePage() {
   return ProfilePageView({
-    contextLabel: "마이페이지",
+    contextLabel: "My Page",
     tabs,
     loginPath: "/en/login",
   });

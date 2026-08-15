@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import {
+  ArrowRight,
   Clapperboard,
   Disc3,
+  ExternalLink,
   FileText,
   MousePointerClick,
 } from "lucide-react";
@@ -48,36 +50,30 @@ const scrollRevealBaseClass =
 
 const serviceCards = [
   {
-    label: "방송국별 음반 심의",
+    label: "TV · RADIO",
     title: "음반 심의",
-    description: "TV·라디오 송출용 음원 심의.",
     href: "/dashboard/new/album",
     tone: "album",
     cardClass: "border-[#111111] bg-[#f2cf27] text-[#111111]",
     labelClass: "text-[#111111]/72",
-    descriptionClass: "text-[#111111]/78",
     actionClass: "bg-white text-[#111111]",
   },
   {
-    label: "온라인 유통/업로드",
-    title: "뮤직비디오 온라인 심의",
-    description: "유통사 제출·온라인 업로드용.",
+    label: "유통 · 업로드",
+    title: "MV 온라인",
     href: "/dashboard/new/mv?type=distribution",
     tone: "mv",
     cardClass: "border-[#111111] bg-[#1556a4] text-white",
     labelClass: "text-white/74",
-    descriptionClass: "text-white/82",
     actionClass: "bg-[#111111] text-white",
   },
   {
-    label: "TV 송출 목적",
-    title: "뮤직비디오 TV 송출 심의",
-    description: "방송국별 조건 확인 후 접수.",
+    label: "TV 송출",
+    title: "MV 방송",
     href: "/dashboard/new/mv?type=broadcast",
     tone: "oneclick",
     cardClass: "border-[#111111] bg-[#d9362c] text-white",
     labelClass: "text-white/74",
-    descriptionClass: "text-white/82",
     actionClass: "bg-white text-[#111111]",
   },
 ];
@@ -125,7 +121,7 @@ export default function Home() {
                   결과 확인까지
                 </h1>
                 <p className="max-w-xl break-keep text-base font-semibold leading-7 text-foreground/74 dark:text-white/76">
-                  나의 모든 음반·뮤직비디오 심의를 관리하고, 진행 현황을 실시간으로 확인하세요.
+                  신청 · 결제 · 결과를 한곳에서.
                 </p>
               </div>
               <HomeHeroAdBanner />
@@ -171,9 +167,9 @@ export default function Home() {
           style={{ transitionDelay: "0ms" }}
         >
           <div>
-            <p className="bauhaus-kicker">신청 유형</p>
+            <p className="bauhaus-kicker">서비스</p>
             <h2 className="mt-4 text-2xl font-black text-foreground">
-              필요한 심의만 선택하세요
+              어떤 심의가 필요한가요?
             </h2>
           </div>
           <ReliableLink
@@ -182,7 +178,10 @@ export default function Home() {
             rel="noopener noreferrer"
             className="self-end text-sm font-semibold text-muted-foreground transition hover:text-foreground md:self-auto"
           >
-            예전 온사이드 사이트에서 접수하기 -&gt;
+            <span className="inline-flex items-center gap-1.5">
+              구버전 접수
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
           </ReliableLink>
         </div>
 
@@ -194,23 +193,20 @@ export default function Home() {
               data-scroll-reveal
               data-reveal-state="hidden"
               style={{ transitionDelay: `${120 + index * 120}ms` }}
-              className={`group relative min-h-[258px] overflow-hidden rounded-[10px] border-2 p-5 tracking-normal shadow-[8px_8px_0_#111111] transition duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0_#111111] focus-visible:ring-2 focus-visible:ring-[#111111]/60 dark:shadow-[8px_8px_0_#f2cf27] dark:hover:shadow-[12px_12px_0_#f2cf27] sm:min-h-[282px] sm:p-6 ${scrollRevealBaseClass} ${card.cardClass}`}
+              className={`group relative min-h-[220px] overflow-hidden rounded-[10px] border-2 p-5 tracking-normal shadow-[8px_8px_0_#111111] transition duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0_#111111] focus-visible:ring-2 focus-visible:ring-[#111111]/60 dark:shadow-[8px_8px_0_#f2cf27] dark:hover:shadow-[12px_12px_0_#f2cf27] sm:min-h-[236px] sm:p-6 ${scrollRevealBaseClass} ${card.cardClass}`}
             >
               <div className="pointer-events-none absolute inset-0 transition-transform duration-300 group-hover:scale-[1.02]">
                 <ServiceCardVisual tone={card.tone} />
               </div>
-              <div className="relative z-10 flex min-h-[218px] flex-col pr-16 sm:min-h-[234px] sm:pr-20">
+              <div className="relative z-10 flex min-h-[180px] flex-col pr-16 sm:min-h-[188px] sm:pr-20">
                 <p className={`max-w-[10rem] text-[11px] font-black uppercase leading-4 tracking-normal ${card.labelClass}`}>
                   {card.label}
                 </p>
                 <h3 className="mt-7 max-w-[13rem] break-keep text-3xl font-black leading-none tracking-normal sm:text-4xl">
                   {card.title}
                 </h3>
-                <p className={`mt-4 max-w-[12rem] text-sm font-semibold leading-6 tracking-normal ${card.descriptionClass}`}>
-                  {card.description}
-                </p>
                 <div className={`mt-auto inline-flex w-fit items-center gap-2 px-4 py-3 text-sm font-black tracking-normal transition group-hover:translate-x-1 ${card.actionClass}`}>
-                  접수 <span aria-hidden="true">→</span>
+                  신청 <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </div>
               </div>
             </ReliableLink>

@@ -11,15 +11,20 @@ export function AlbumIntroPanel({
 
   return (
     <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="max-w-3xl">
           <p className="bauhaus-kicker">음반 심의 신청</p>
           <h1 className="font-display mt-4 text-3xl font-black leading-tight text-foreground sm:text-4xl">
             음반 심의 접수
           </h1>
-          <p className="mt-4 max-w-2xl text-sm font-semibold text-muted-foreground sm:text-base">
-            접수 방식을 선택하면 바로 신청서를 작성할 수 있습니다.
-          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
+              비회원 가능
+            </span>
+            <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
+              5단계 접수
+            </span>
+          </div>
         </div>
         <div className="flex flex-col items-start gap-3 sm:items-end">
           <button
@@ -27,7 +32,7 @@ export function AlbumIntroPanel({
             onClick={() => setIsOpen((prev) => !prev)}
             className="bauhaus-button h-11 px-5 text-sm"
           >
-            {isOpen ? "닫기" : "준비물 보기"}
+            {isOpen ? "준비물 닫기" : "준비물"}
           </button>
         </div>
       </div>

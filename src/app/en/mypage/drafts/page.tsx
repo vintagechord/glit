@@ -10,7 +10,7 @@ const tabs: DashboardTab[] = englishDefaultDashboardTabs;
 
 export default async function EnglishMyPageDraftsPage() {
   return DraftSubmissionsPageView({
-    contextLabel: "마이페이지",
+    contextLabel: "My Page",
     tabs,
     loginPath: "/en/login",
   });

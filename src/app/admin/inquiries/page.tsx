@@ -134,8 +134,7 @@ export default async function AdminInquiriesPage({
         1:1 문의 관리
       </h1>
       <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
-        고객센터 1:1 문의 모달로 접수된 제목, 내용, 연락처를 확인하고 처리
-        상태를 관리합니다.
+        문의 내용과 처리 상태를 관리합니다.
       </p>
 
       <form className="mt-6 flex flex-wrap items-center gap-3 rounded-[18px] border border-border/60 bg-card/80 p-4">
@@ -164,15 +163,18 @@ export default async function AdminInquiriesPage({
 
       {errorFlag ? (
         <div className="mt-6 rounded-[10px] border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-600">
-          문의 상태 저장 중 오류가 발생했습니다. 입력값과 마이그레이션 적용 상태를
-          확인해주세요.
+          문의 상태를 저장하지 못했습니다.
         </div>
       ) : null}
 
       <div className="mt-6 space-y-4">
         {error ? (
           <div className="rounded-[10px] border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-600">
-            문의 목록을 불러오지 못했습니다. ({error.message})
+            <p>문의 목록을 불러오지 못했습니다.</p>
+            <details className="mt-1 font-normal">
+              <summary className="cursor-pointer font-semibold">오류 상세</summary>
+              <p className="mt-1 break-words">{error.message}</p>
+            </details>
           </div>
         ) : inquiries.length > 0 ? (
           inquiries.map((inquiry) => {
@@ -219,11 +221,14 @@ export default async function AdminInquiriesPage({
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-[10px] border border-border/70 bg-background p-4">
-                  <p className="whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-foreground">
+                <details className="mt-4 rounded-[10px] border border-border/70 bg-background p-4">
+                  <summary className="cursor-pointer text-sm font-black text-foreground">
+                    문의 내용
+                  </summary>
+                  <p className="mt-3 whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-foreground">
                     {inquiry.body}
                   </p>
-                </div>
+                </details>
 
                 <form
                   action={updateSupportInquiryFormAction}

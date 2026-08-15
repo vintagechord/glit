@@ -128,7 +128,7 @@ export function MvRatingControl({
         </select>
       </label>
       <p className="text-xs text-muted-foreground">
-        저장하면 결과 통보 단계가 완료되고 사용자 상세의 등급 이미지·가이드·필증 다운로드에 적용됩니다.
+        저장 즉시 결과 통보와 다운로드 파일에 반영됩니다.
       </p>
       <div className="flex gap-2">
         <button
@@ -137,7 +137,7 @@ export function MvRatingControl({
           disabled={loading || (!hasChanges && resultNotified)}
           className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading ? "저장 중..." : "결과 통보 저장"}
+          {loading ? "저장 중..." : "등급 저장"}
         </button>
       </div>
       {notice ? (

@@ -106,7 +106,7 @@ export function ArtistThumbnailUploader({ initialUrl }: Props) {
       const nextPreviewUrl = payload?.previewUrl?.trim() || buildPreviewUrl(nextKey);
       setObjectKey(nextKey);
       setThumbnailUrl(nextPreviewUrl);
-      setNotice("썸네일이 업로드되었습니다. 저장 버튼을 눌러 반영하세요.");
+      setNotice("업로드했습니다. 저장하면 반영됩니다.");
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "썸네일 업로드에 실패했습니다.",
@@ -125,7 +125,7 @@ export function ArtistThumbnailUploader({ initialUrl }: Props) {
       }
       setObjectKey(null);
       setThumbnailUrl("");
-      setNotice("썸네일을 삭제했습니다. 저장 버튼을 눌러 반영하세요.");
+      setNotice("삭제했습니다. 저장하면 반영됩니다.");
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "썸네일 삭제에 실패했습니다.",
@@ -183,7 +183,7 @@ export function ArtistThumbnailUploader({ initialUrl }: Props) {
             </button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            이미지를 선택하면 스토리지에 자동 업로드됩니다.
+            선택 즉시 업로드됩니다.
           </p>
           {notice ? <p className="text-[11px] text-muted-foreground">{notice}</p> : null}
         </div>
