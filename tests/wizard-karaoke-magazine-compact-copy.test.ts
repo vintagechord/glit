@@ -53,6 +53,35 @@ test("one-click guidance uses the site card system and scannable required items"
   assert.match(englishLanguagePack, /"멜론 링크": "Melon Link"/);
 });
 
+test("album packages stay compact while preserving comparison and station details", () => {
+  assert.match(
+    albumWizard,
+    /grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5/,
+  );
+  assert.match(albumWizard, /aria-pressed=\{isActive\}/);
+  assert.match(albumWizard, /<details className="group border-t-2/);
+  assert.match(
+    albumWizard,
+    /includedStationsLabel = `포함 방송국 \$\{pkg\.stations\.length\}개`/,
+  );
+  assert.match(albumWizard, /\{pkg\.stations\.map\(\(station\) => \(/);
+  assert.match(albumWizard, /setPackageConfirmTarget\(pkg\)/);
+  assert.match(albumWizard, /setSelectedPackage\(packageConfirmTarget\)/);
+  assert.match(albumWizard, /장르 조건 있음/);
+  assert.match(
+    albumWizard,
+    /packageGuidance\[packageConfirmTarget\.stationCount\]\?\.conditional/,
+  );
+  assert.doesNotMatch(
+    albumWizard,
+    /text-left rounded-\[28px\] border p-6/,
+  );
+  assert.match(
+    englishLanguagePack,
+    /포함 방송국\\s\*\(\\d\+\)개\/g, "\$1 Broadcasters Included"/,
+  );
+});
+
 test("karaoke choices expose state without repeated selection copy", () => {
   const form = readSource("src/features/karaoke/karaoke-form.tsx");
   const status = readSource("src/features/karaoke/karaoke-status-panel.tsx");

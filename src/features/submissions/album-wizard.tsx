@@ -166,10 +166,6 @@ const getPackageDisplayName = (
   isReviewTestPackage(pkg.name)
     ? (pkg.name ?? "테스트 패키지")
     : formatPackageName(pkg.stationCount, isOneClick);
-const formatPackageDescription = (
-  description: string | null | undefined,
-  count: number,
-) => (description ? description.replace(`${count}곳`, `${count}개`) : "");
 const packageGuidance: Record<
   number,
   { recommendation: string; badge?: string; conditional?: string[] }
@@ -195,19 +191,19 @@ const packageGuidance: Record<
 
 const packageToneClasses = [
   {
-    card: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
+    card: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[4px_4px_0_#f2cf27]",
     chip: "border-[#111111]/30 bg-white/45 text-[#111111]",
   },
   {
-    card: "border-[#111111] bg-[#1556a4] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[6px_6px_0_#f2cf27]",
+    card: "border-[#111111] bg-[#1556a4] text-white shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[4px_4px_0_#f2cf27]",
     chip: "border-white/30 bg-white/16 text-white dark:text-[#06111f]",
   },
   {
-    card: "border-[#111111] bg-[#d9362c] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
+    card: "border-[#111111] bg-[#d9362c] text-white shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[4px_4px_0_#f2cf27]",
     chip: "border-white/30 bg-white/16 text-white dark:text-[#111111]",
   },
   {
-    card: "border-[#111111] bg-white text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]",
+    card: "border-[#111111] bg-white text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[4px_4px_0_#f2cf27]",
     chip: "border-[#111111]/30 bg-[#f2cf27] text-[#111111]",
   },
 ];
@@ -3384,7 +3380,7 @@ export function AlbumWizard({
             )}
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {packages.map((pkg, index) => {
               const isActive = activePackageId === pkg.id;
               const isDisabled =
@@ -3407,92 +3403,107 @@ export function AlbumWizard({
                 packageDiscountPercent > 0 &&
                 discountedDisplayPrice < displayPrice;
               const guidance = packageGuidance[pkg.stationCount];
+              const conditionalGuidance = guidance?.conditional ?? [];
+              const includedStationsLabel = `포함 방송국 ${pkg.stations.length}개`;
               return (
-                <button
+                <article
                   key={pkg.id}
-                  type="button"
-                  onClick={() => {
-                    if (selectionLocked && selectedPackage?.id !== pkg.id) {
-                      return;
-                    }
-                    setPackageConfirmTarget(pkg);
-                  }}
-                  disabled={isDisabled}
-                  className={`text-left rounded-[28px] border p-6 transition disabled:cursor-not-allowed disabled:opacity-70 ${isActive
+                  className={`flex h-full flex-col overflow-hidden rounded-[14px] border-2 text-left transition ${isDisabled ? "opacity-60" : ""} ${isActive
                     ? tone.card
-                    : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
+                    : "border-[#111111] bg-card text-foreground hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:hover:shadow-[3px_3px_0_#f2cf27]"
                     }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => {
+                      if (selectionLocked && selectedPackage?.id !== pkg.id) {
+                        return;
+                      }
+                      setPackageConfirmTarget(pkg);
+                    }}
+                    disabled={isDisabled}
+                    className="flex flex-1 flex-col p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-inset disabled:cursor-not-allowed"
+                  >
+                    <div className="flex w-full flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
                         {guidance?.badge ? (
-                          <span className={`rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}>
+                          <span className={`mb-2 inline-flex rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}>
                             {guidance.badge}
                           </span>
                         ) : null}
+                        <h3 className="text-base font-black leading-tight sm:text-lg xl:text-base">
+                          {getPackageDisplayName(pkg, isOneClick)}
+                        </h3>
                       </div>
-                      <h3 className="text-xl font-semibold">
-                        {getPackageDisplayName(pkg, isOneClick)}
-                      </h3>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 text-right">
-                      {isActive ? (
-                        <span className={selectedBadgeClass}>
-                          ✓ 선택됨
-                        </span>
-                      ) : null}
-                      {hasDisplayDiscount ? (
-                        <span className="rounded-[6px] border border-[#111111]/20 bg-white/70 px-2 py-0.5 text-[10px] font-black text-[#111111]">
-                          {packageDiscountPercent}% 할인
-                        </span>
-                      ) : null}
-                      <span className="flex flex-col items-end gap-0.5">
+                      <div className="flex shrink-0 flex-col items-end gap-1.5 text-right">
+                        {isActive ? (
+                          <span className={selectedBadgeClass}>
+                            ✓ 선택됨
+                          </span>
+                        ) : null}
+                        {hasDisplayDiscount ? (
+                          <span className="rounded-[6px] border border-[#111111]/20 bg-white/70 px-2 py-0.5 text-[10px] font-black text-[#111111]">
+                            {packageDiscountPercent}% 할인
+                          </span>
+                        ) : null}
                         {hasDisplayDiscount ? (
                           <span className="text-xs font-semibold opacity-60 line-through">
                             {formatCurrency(displayPrice)}원
                           </span>
                         ) : null}
-                        <span className="text-base font-black">
+                        <span className="text-sm font-black sm:text-base xl:text-sm">
                           {formatCurrency(discountedDisplayPrice)}원
                         </span>
+                      </div>
+                    </div>
+                    {guidance?.recommendation ? (
+                      <p className="mt-3 line-clamp-2 text-xs font-semibold leading-5 opacity-80">
+                        {guidance.recommendation}
+                      </p>
+                    ) : null}
+                    {conditionalGuidance.length > 0 ? (
+                      <span className={`mt-3 inline-flex self-start rounded-[6px] border px-2 py-1 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}>
+                        장르 조건 있음
                       </span>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-xs opacity-70">
-                    {formatPackageDescription(pkg.description, pkg.stationCount)}
-                  </p>
-                  {guidance?.recommendation ? (
-                    <p className="mt-2 text-xs font-semibold leading-5 opacity-90">
-                      추천 상황: {guidance.recommendation}
-                    </p>
-                  ) : null}
-                  {guidance?.conditional ? (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {guidance.conditional.map((item) => (
-                        <span
-                          key={item}
-                          className={`inline-flex max-w-full items-center rounded-[6px] border px-2 py-1 text-[11px] font-black tracking-normal ${isActive ? tone.chip : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}
-                        >
-                          {item}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {pkg.stations.map((station) => (
+                    ) : null}
+                  </button>
+                  <details className="group border-t-2 border-current/25">
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-xs font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-inset [&::-webkit-details-marker]:hidden">
+                      <span>{includedStationsLabel}</span>
                       <span
-                        key={station.id}
-                        className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em] ${isActive
-                          ? tone.chip
-                          : "border-border/60 text-muted-foreground"
-                          }`}
+                        aria-hidden="true"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-[5px] border-2 border-current text-sm font-black transition group-open:rotate-45"
                       >
-                        {station.name}
+                        +
                       </span>
-                    ))}
-                  </div>
-                </button>
+                    </summary>
+                    <div className="space-y-3 px-4 pb-4">
+                      {conditionalGuidance.length > 0 ? (
+                        <div className="space-y-1.5">
+                          <p className="text-[10px] font-black uppercase tracking-[0.12em] opacity-70">
+                            선택 조건
+                          </p>
+                          {conditionalGuidance.map((item) => (
+                            <p key={item} className="text-[11px] font-semibold leading-4">
+                              {item}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="flex flex-wrap gap-1.5">
+                        {pkg.stations.map((station) => (
+                          <span
+                            key={station.id}
+                            className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${isActive ? tone.chip : "border-border/60 text-muted-foreground"}`}
+                          >
+                            {station.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </details>
+                </article>
               );
             })}
           </div>
@@ -5281,6 +5292,22 @@ export function AlbumWizard({
             <p className="mt-3 text-xs text-muted-foreground">
               선택을 확정하면 신청서 작성 단계로 이동합니다.
             </p>
+            {(packageGuidance[packageConfirmTarget.stationCount]?.conditional ?? [])
+              .length > 0 ? (
+              <div className="mt-4 rounded-xl border border-[#f2cf27] bg-[#f2cf27]/15 p-3">
+                <p className="text-xs font-black">선택 조건</p>
+                {(packageGuidance[packageConfirmTarget.stationCount]?.conditional ?? []).map(
+                  (item) => (
+                    <p
+                      key={item}
+                      className="mt-1 text-xs font-semibold leading-5 text-muted-foreground"
+                    >
+                      {item}
+                    </p>
+                  ),
+                )}
+              </div>
+            ) : null}
             <div className="mt-6 flex gap-2">
               <button
                 type="button"
