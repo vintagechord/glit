@@ -1168,7 +1168,7 @@ export function HomeReviewPanel({
           <p className="sr-only">접수 현황</p>
           {activeSubmission ? (
             needsPayment ? (
-              <div className="flex justify-end">
+              <div className="flex justify-center">
                 {paymentActions}
               </div>
             ) : (

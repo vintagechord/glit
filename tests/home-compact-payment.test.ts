@@ -17,6 +17,7 @@ test("the home payment state relies on actions instead of repeated status copy",
   )?.[1];
 
   assert.ok(paymentBranch, "payment action branch must exist");
+  assert.match(paymentBranch, /className="flex justify-center"/);
   assert.match(paymentBranch, /\{paymentActions\}/);
   assert.doesNotMatch(source, /결제 대기/);
   assert.doesNotMatch(source, /결제가 완료되지 않았습니다/);
