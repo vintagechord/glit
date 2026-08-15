@@ -3715,12 +3715,7 @@ export function AlbumWizard({
                           {getPackageDisplayName(pkg, isOneClick)}
                         </h3>
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5 text-right">
-                        {isActive ? (
-                          <span className={selectedBadgeClass}>
-                            ✓ 선택됨
-                          </span>
-                        ) : null}
+                      <div className="flex min-w-[78px] shrink-0 flex-col items-end gap-1.5 text-right">
                         {hasDisplayDiscount ? (
                           <span className="rounded-[6px] border border-[#111111]/20 bg-white/70 px-2 py-0.5 text-[10px] font-black text-[#111111]">
                             {packageDiscountPercent}% 할인
@@ -3744,6 +3739,14 @@ export function AlbumWizard({
                     {conditionalGuidance.length > 0 ? (
                       <span className={`mt-3 inline-flex self-start rounded-[6px] border px-2 py-1 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}>
                         장르 조건 있음
+                      </span>
+                    ) : null}
+                    {isActive ? (
+                      <span
+                        aria-hidden="true"
+                        className="mt-auto flex w-full justify-end pt-3"
+                      >
+                        <span className={selectedBadgeClass}>✓ 선택됨</span>
                       </span>
                     ) : null}
                   </button>

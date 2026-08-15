@@ -82,6 +82,41 @@ test("album packages stay compact while preserving comparison and station detail
   );
 });
 
+test("selected album package badge does not shift the comparison rows", () => {
+  const packageCards = albumWizard.slice(
+    albumWizard.indexOf("{packages.map((pkg, index) =>"),
+    albumWizard.indexOf("추가 앨범이 등록된 경우 패키지는 변경할 수 없습니다."),
+  );
+
+  assert.match(
+    packageCards,
+    /\{isActive \? \(\s*<span\s+aria-hidden="true"\s+className="mt-auto flex w-full justify-end pt-3"[\s\S]*?<span className=\{selectedBadgeClass\}>✓ 선택됨<\/span>/,
+  );
+  assert.match(
+    packageCards,
+    /className="[^"]*min-w-\[78px\][^"]*items-end[^"]*text-right"/,
+  );
+  assert.match(packageCards, /aria-pressed=\{isActive\}/);
+
+  const finalPriceIndex = packageCards.indexOf(
+    "{formatCurrency(discountedDisplayPrice)}원",
+  );
+  const selectedBadgeIndex = packageCards.indexOf(
+    'className="mt-auto flex w-full justify-end pt-3"',
+  );
+  assert.ok(finalPriceIndex >= 0, "package final price should be rendered");
+  assert.ok(
+    selectedBadgeIndex > finalPriceIndex,
+    "selection state should render after the comparable price rows",
+  );
+
+  const priceColumn = packageCards.match(
+    /<div className="[^"]*items-end[^"]*text-right">([\s\S]*?)<\/div>/,
+  )?.[1];
+  assert.ok(priceColumn, "package price column should remain identifiable");
+  assert.doesNotMatch(priceColumn, /✓ 선택됨/);
+});
+
 test("karaoke choices expose state without repeated selection copy", () => {
   const form = readSource("src/features/karaoke/karaoke-form.tsx");
   const status = readSource("src/features/karaoke/karaoke-status-panel.tsx");
