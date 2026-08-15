@@ -3781,14 +3781,36 @@ export function AlbumWizard({
                   </div>
                 ) : (
                   <div className="mt-4 space-y-4">
-                    <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-xs text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em]">
-                        원클릭 접수 안내
+                    <div className="rounded-[14px] border-2 border-[#111111] bg-background p-4 text-foreground shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:p-5">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          aria-hidden="true"
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] text-xs font-black text-[#111111]"
+                        >
+                          1
+                        </span>
+                        <p className="text-sm font-black">
+                          원클릭 접수 안내
+                        </p>
+                      </div>
+                      <p className="mt-3 text-sm font-semibold leading-6 text-foreground/80">
+                        이미 발매된 음원만 신청할 수 있습니다.
                       </p>
-                      <p className="mt-2 text-xs">
-                        이미 발매된 음원에 한정된 서비스입니다. 멜론 링크, 접수자 정보,
-                        음원 파일만 제출하면 접수가 완료됩니다.
-                      </p>
+                      <ul
+                        aria-label="필수 제출 항목"
+                        className="mt-4 grid grid-cols-3 gap-2"
+                      >
+                        {["멜론 링크", "접수자 정보", "음원 파일"].map(
+                          (item) => (
+                            <li
+                              key={item}
+                              className="flex min-h-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-1.5 py-2 text-center text-[11px] font-black leading-4 text-[#111111] sm:px-3 sm:text-xs"
+                            >
+                              {item}
+                            </li>
+                          ),
+                        )}
+                      </ul>
                     </div>
                     <div className="grid gap-4">
                       <div className="space-y-2">

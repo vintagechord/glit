@@ -9,6 +9,9 @@ const albumWizard = readSource(
   "src/features/submissions/album-wizard.tsx",
 );
 const mvWizard = readSource("src/features/submissions/mv-wizard.tsx");
+const englishLanguagePack = readSource(
+  "src/components/i18n/english-language-pack.tsx",
+);
 
 test("submission wizards use concise cart actions and outcome notices", () => {
   for (const source of [albumWizard, mvWizard]) {
@@ -38,6 +41,16 @@ test("album readiness only surfaces incomplete blockers", () => {
   assert.match(albumWizard, /최종 결제 금액/);
   assert.doesNotMatch(albumWizard, />\s*결제금액\s*</);
   assert.doesNotMatch(albumWizard, />\s*총 할인\s*</);
+});
+
+test("one-click guidance uses the site card system and scannable required items", () => {
+  assert.match(albumWizard, /rounded-\[14px\] border-2 border-\[#111111\]/);
+  assert.match(albumWizard, /shadow-\[4px_4px_0_#111111\]/);
+  assert.match(albumWizard, /aria-label="필수 제출 항목"/);
+  assert.match(albumWizard, /\["멜론 링크", "접수자 정보", "음원 파일"\]\.map/);
+  assert.doesNotMatch(albumWizard, /이미 발매된 음원에 한정된 서비스입니다/);
+  assert.match(englishLanguagePack, /"원클릭 접수 안내": "One-Click Submission"/);
+  assert.match(englishLanguagePack, /"멜론 링크": "Melon Link"/);
 });
 
 test("karaoke choices expose state without repeated selection copy", () => {

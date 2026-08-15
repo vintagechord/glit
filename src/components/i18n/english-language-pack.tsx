@@ -694,6 +694,13 @@ const exactTranslations: Record<string, string> = {
   "결제에 실패했습니다.": "Payment failed.",
   "결제가 완료되었습니다.": "Payment completed.",
   "결제가 완료되지 않았습니다.": "Payment was not completed.",
+  "원클릭 접수 안내": "One-Click Submission",
+  "이미 발매된 음원만 신청할 수 있습니다.":
+    "Only released music is eligible.",
+  "필수 제출 항목": "Required Items",
+  "멜론 링크": "Melon Link",
+  "접수자 정보": "Applicant Details",
+  "음원 파일": "Audio File",
   "24시간 내 확인 · 입금자명이 다르면 문의해주세요.":
     "Confirmed within 24 hours · Contact us if the depositor name differs.",
   "유효하지 않은 접수 ID입니다.": "Invalid Submission ID.",
