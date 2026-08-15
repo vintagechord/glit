@@ -146,6 +146,7 @@ const initialTrack: TrackInput = {
 
 const standardSteps = [
   "방송국 패키지 선택",
+  "작성 방식 선택",
   "기본 정보",
   "트랙 정보",
   "파일 업로드",
@@ -155,7 +156,25 @@ const standardSteps = [
 
 const compactSteps = [
   "방송국 패키지 선택",
+  "작성 방식 선택",
   "기본 정보",
+  "파일 업로드",
+  "결제",
+  "접수 완료",
+];
+
+const oneClickSteps = [
+  "방송국 패키지 선택",
+  "기본 정보",
+  "파일 업로드",
+  "결제",
+  "접수 완료",
+];
+
+const uploadFormSteps = [
+  "방송국 패키지 선택",
+  "작성 방식 선택",
+  "신청서 양식",
   "파일 업로드",
   "결제",
   "접수 완료",
@@ -347,7 +366,7 @@ export function AlbumWizard({
   const [step, setStep] = React.useState(1);
   const [isOneClick, setIsOneClick] = React.useState(false);
   const [applicationFormMode, setApplicationFormMode] =
-    React.useState<ApplicationFormMode>("online");
+    React.useState<ApplicationFormMode | null>(null);
   const [selectedPackage, setSelectedPackage] =
     React.useState<PackageOption | null>(packages[0] ?? null);
   const [tracks, setTracks] = React.useState<TrackInput[]>([initialTrack]);
@@ -423,6 +442,7 @@ export function AlbumWizard({
     drafts: Array<Record<string, unknown>>;
     storedGuestToken?: string;
     storedGuestTokensBySubmissionId?: Record<string, string>;
+    storedApplicationFormMode?: ApplicationFormMode;
   } | null>(null);
   const [isClearingResumeDrafts, setIsClearingResumeDrafts] = React.useState(false);
   const resumePromptHandledRef = React.useRef(false);
@@ -473,14 +493,55 @@ export function AlbumWizard({
   const profanityPattern = profanityMatchers?.pattern ?? null;
   const profanityTestPattern = profanityMatchers?.testPattern ?? null;
   const activeTrack = tracks[activeTrackIndex] ?? tracks[0];
-  const isDownloadedApplicationFlow = applicationFormMode === "upload";
-  const hasTrackStep = !isOneClick && !isDownloadedApplicationFlow;
-  const progressSteps = hasTrackStep ? standardSteps : compactSteps;
-  const progressCurrentStep = hasTrackStep
-    ? step
-    : step <= 2
+  const isDownloadedApplicationFlow =
+    !isOneClick && applicationFormMode === "upload";
+  const hasTrackStep =
+    !isOneClick && applicationFormMode === "online";
+  const progressSteps = isOneClick
+    ? oneClickSteps
+    : isDownloadedApplicationFlow
+      ? uploadFormSteps
+      : hasTrackStep
+        ? standardSteps
+        : compactSteps;
+  const progressCurrentStep = isOneClick
+    ? step === 1
+      ? 1
+      : step === 3
+        ? 2
+        : step - 2
+    : hasTrackStep
       ? step
-      : step - 1;
+      : step <= 3
+        ? step
+        : step - 1;
+  const selectApplicationFormMode = (mode: ApplicationFormMode) => {
+    if (mode === "online" && applicationFormMode === "upload") {
+      setFiles((previous) =>
+        previous.filter(
+          (file) =>
+            !isApplicationFormFile(file.name) &&
+            !isApplicationFormMime(file.type),
+        ),
+      );
+      setUploads((previous) =>
+        previous.filter(
+          (file) =>
+            !isApplicationFormFile(file.name) &&
+            !isApplicationFormMime(file.mime ?? ""),
+        ),
+      );
+      setUploadedFiles((previous) =>
+        previous.filter(
+          (file) =>
+            !isApplicationFormFile(file.originalName) &&
+            !isApplicationFormMime(file.mime ?? ""),
+        ),
+      );
+    }
+    setApplicationFormMode(mode);
+    setNotice({});
+  };
   const profanityWords = extractProfanityWords(
     activeTrack.lyrics,
     profanityPattern,
@@ -592,7 +653,7 @@ export function AlbumWizard({
     {
       label: "신청서",
       value: `앨범 ${totalAlbumCount}건 저장됨`,
-      ready: step >= 5 || Boolean(uploadDrafts?.length),
+      ready: step >= 6 || Boolean(uploadDrafts?.length),
     },
     {
       label: "파일",
@@ -617,6 +678,7 @@ export function AlbumWizard({
         updatedAt?: number;
         guestToken?: string;
         guestTokensBySubmissionId?: Record<string, string>;
+        applicationFormMode?: ApplicationFormMode;
       };
     } catch {
       return null;
@@ -627,6 +689,7 @@ export function AlbumWizard({
     ids: string[];
     guestToken?: string | null;
     guestTokensBySubmissionId?: Record<string, string>;
+    applicationFormMode?: ApplicationFormMode;
   }) => {
     if (typeof window === "undefined") return;
     try {
@@ -637,6 +700,7 @@ export function AlbumWizard({
           guestToken: payload.guestToken ?? null,
           guestTokensBySubmissionId:
             payload.guestTokensBySubmissionId ?? {},
+          applicationFormMode: payload.applicationFormMode,
           updatedAt: Date.now(),
         }),
       );
@@ -811,6 +875,7 @@ export function AlbumWizard({
     const mode = searchParams.get("mode");
     if (mode === "oneclick") {
       setIsOneClick(true);
+      setApplicationFormMode("online");
       setShowOneclickNotice(true);
     }
   }, [searchParams]);
@@ -834,7 +899,7 @@ export function AlbumWizard({
     if (!packageConfirmTarget) return;
     setSelectedPackage(packageConfirmTarget);
     setPackageConfirmTarget(null);
-    setStep(2);
+    setStep(isOneClick ? 3 : 2);
   };
 
   const handleCancelPackage = () => setPackageConfirmTarget(null);
@@ -1183,13 +1248,14 @@ export function AlbumWizard({
         invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
         return false;
       }
-      const isAllowed =
-        isAudioUploadFile(file.name, file.type) ||
-        isApplicationFormFile(file.name) ||
-        isApplicationFormMime(file.type);
+      const isAudioFile = isAudioUploadFile(file.name, file.type);
+      const isFormFile =
+        isApplicationFormFile(file.name) || isApplicationFormMime(file.type);
+      const isAllowed = isAudioFile || (isDownloadedApplicationFlow && isFormFile);
       if (!isAllowed) {
-        invalidNotice =
-          "WAV, MP3, ZIP 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다.";
+        invalidNotice = isDownloadedApplicationFlow
+          ? "WAV, MP3, ZIP 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다."
+          : "음원 파일(WAV/MP3/ZIP)만 업로드할 수 있습니다.";
         return false;
       }
       return true;
@@ -2099,6 +2165,7 @@ export function AlbumWizard({
   const applyStoredDrafts = React.useCallback((
     draftRows: Array<Record<string, unknown>>,
     fallbackGuestToken: string,
+    storedApplicationFormMode?: ApplicationFormMode,
   ) => {
     if (draftRows.length === 0) return;
     const sorted = [...draftRows].sort((a, b) => {
@@ -2137,7 +2204,7 @@ export function AlbumWizard({
           typeof row.ai_used === "boolean" ? row.ai_used : null,
         tracks: tracks.length > 0 ? tracks : [initialTrack],
         files,
-        emailSubmitConfirmed: files.length === 0,
+        emailSubmitConfirmed: false,
       } as AlbumDraft;
     });
 
@@ -2151,7 +2218,15 @@ export function AlbumWizard({
     if (matchedPackage) {
       setSelectedPackage(matchedPackage);
     }
-    setIsOneClick(Boolean(baseRow.is_oneclick));
+    const restoredIsOneClick = Boolean(baseRow.is_oneclick);
+    const restoredApplicationFormMode = restoredIsOneClick
+      ? "online"
+      : storedApplicationFormMode === "online" ||
+          storedApplicationFormMode === "upload"
+        ? storedApplicationFormMode
+        : null;
+    setIsOneClick(restoredIsOneClick);
+    setApplicationFormMode(restoredApplicationFormMode);
     setApplicantName(String(baseRow.applicant_name ?? ""));
     setApplicantEmail(String(baseRow.applicant_email ?? ""));
     setApplicantPhone(String(baseRow.applicant_phone ?? ""));
@@ -2183,7 +2258,7 @@ export function AlbumWizard({
     applyDraftToForm(baseDraft, {
       emailSubmitConfirmed: baseDraft.emailSubmitConfirmed,
     });
-    setStep(2);
+    setStep(restoredIsOneClick || restoredApplicationFormMode ? 3 : 2);
   }, [applyDraftToForm, mapDraftFiles, mapDraftTracks, normalizeDateValue, packages]);
 
   const handleResumeDraftConfirm = React.useCallback(() => {
@@ -2196,13 +2271,18 @@ export function AlbumWizard({
       resumePrompt.storedGuestTokensBySubmissionId,
       fallbackGuestToken,
     );
-    applyStoredDrafts(resumePrompt.drafts, fallbackGuestToken);
+    applyStoredDrafts(
+      resumePrompt.drafts,
+      fallbackGuestToken,
+      resumePrompt.storedApplicationFormMode,
+    );
     writeDraftStorage({
       ids: resumePrompt.drafts
         .map((draft) => String(draft.id ?? ""))
         .filter(Boolean),
       guestToken: isGuest ? fallbackGuestToken : null,
       guestTokensBySubmissionId: isGuest ? restoredGuestTokens : undefined,
+      applicationFormMode: resumePrompt.storedApplicationFormMode,
     });
     setResumePrompt(null);
     setResumeChecked(true);
@@ -2297,6 +2377,7 @@ export function AlbumWizard({
           drafts,
           storedGuestToken: storedGuestToken ?? undefined,
           storedGuestTokensBySubmissionId,
+          storedApplicationFormMode: stored?.applicationFormMode,
         });
       } catch (error) {
         if (cancelled) return;
@@ -2828,6 +2909,7 @@ export function AlbumWizard({
         guestTokensBySubmissionId: isGuest
           ? getAlbumDraftGuestTokens(drafts)
           : undefined,
+        applicationFormMode: applicationFormMode ?? undefined,
       });
       setNotice({ submissionId: submissionIds[0] ?? currentSubmissionId });
       return true;
@@ -2883,7 +2965,7 @@ export function AlbumWizard({
         if (!saved) return;
         setAlbumDrafts((prev) => [...prev, draft]);
         resetAlbumForm();
-        setStep(2);
+        setStep(3);
       }
     } catch {
       setNotice({ error: "추가 앨범 등록 중 오류가 발생했습니다." });
@@ -2972,7 +3054,7 @@ export function AlbumWizard({
       applyDraftToForm(allDrafts[0], {
         emailSubmitConfirmed: allDrafts[0].emailSubmitConfirmed,
       });
-      setStep(4);
+      setStep(5);
       return;
     }
 
@@ -2983,7 +3065,7 @@ export function AlbumWizard({
           : track,
       ),
     );
-    setStep(3);
+    setStep(4);
   };
 
   const handleTrackTemporarySave = async () => {
@@ -3059,7 +3141,7 @@ export function AlbumWizard({
     applyDraftToForm(allDrafts[0], {
       emailSubmitConfirmed: allDrafts[0].emailSubmitConfirmed,
     });
-    setStep(4);
+    setStep(5);
   };
 
   const handleDownloadedApplicationContinue = async () => {
@@ -3094,13 +3176,14 @@ export function AlbumWizard({
         guestTokensBySubmissionId: isGuest
           ? getAlbumDraftGuestTokens(allDrafts)
           : undefined,
+        applicationFormMode: applicationFormMode ?? undefined,
       });
       setUploadDrafts(allDrafts);
       setUploadDraftIndex(0);
       applyDraftToForm(allDrafts[0], {
         emailSubmitConfirmed: false,
       });
-      setStep(4);
+      setStep(5);
     } catch (error) {
       setNotice({
         error:
@@ -3162,7 +3245,7 @@ export function AlbumWizard({
     }
     const saved = await saveAlbumDrafts(draftsForUpload, { includeFiles: true });
     if (saved) {
-      setStep(5);
+      setStep(6);
     }
   };
 
@@ -3410,7 +3493,7 @@ export function AlbumWizard({
           if (guestTokens.length > 0) {
             setCompletionTokens(guestTokens);
           }
-          setStep(6);
+          setStep(7);
           return;
         }
         if (paymentMethod === "CARD") {
@@ -3439,7 +3522,7 @@ export function AlbumWizard({
           if (guestTokens.length > 0) {
             setCompletionTokens(guestTokens);
           }
-          setStep(6);
+          setStep(7);
           return;
         } else {
           console.warn("[Inicis][STDPay][init][client] unknown payment method", paymentMethod);
@@ -3462,7 +3545,7 @@ export function AlbumWizard({
     <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving || isAddingAlbum}
-        label={step <= 4 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
+        label={step <= 5 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
       />
       {resumePrompt && !isFromDraftsTab ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-4 py-6">
@@ -3519,6 +3602,9 @@ export function AlbumWizard({
                 type="button"
                 onClick={() => {
                   if (selectionLocked) return;
+                  if (isOneClick) {
+                    setApplicationFormMode(null);
+                  }
                   setIsOneClick(false);
                 }}
                 disabled={selectionLocked}
@@ -3544,6 +3630,7 @@ export function AlbumWizard({
                 onClick={() => {
                   if (selectionLocked) return;
                   setIsOneClick(true);
+                  setApplicationFormMode("online");
                   setShowOneclickNotice(true);
                 }}
                 disabled={selectionLocked}
@@ -3707,7 +3794,14 @@ export function AlbumWizard({
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => {
+                if (isOneClick) {
+                  setApplicationFormMode("online");
+                  setStep(3);
+                  return;
+                }
+                setStep(2);
+              }}
               disabled={!selectedPackage}
               className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
             >
@@ -3717,11 +3811,42 @@ export function AlbumWizard({
         </div>
       )}
 
-      {(step === 2 || step === 3) && (
+      {step === 2 && !isOneClick && (
+        <div className="space-y-6">
+          <ApplicationFormModeTabs
+            mode={applicationFormMode}
+            disabled={selectionLocked && applicationFormMode !== null}
+            onModeChange={selectApplicationFormMode}
+          />
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
+            >
+              이전 단계
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep(3)}
+              disabled={!applicationFormMode}
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
+            >
+              선택하고 계속
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(step === 3 || step === 4) && (
         <div className="space-y-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-2xl text-foreground">
-              {step === 2 ? "기본 정보" : "트랙 정보"}
+              {step === 3
+                ? isDownloadedApplicationFlow
+                  ? "신청서 양식"
+                  : "기본 정보"
+                : "트랙 정보"}
             </h2>
             <span className="rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
               앨범 {albumDrafts.length + 1}
@@ -3729,17 +3854,9 @@ export function AlbumWizard({
             </span>
           </div>
 
-          {step === 2 && (
-            <ApplicationFormModeTabs
-              mode={applicationFormMode}
-              onModeChange={setApplicationFormMode}
-            />
-          )}
-
-          {step === 2 && isDownloadedApplicationFlow ? (
+          {step === 3 && isDownloadedApplicationFlow ? (
             <div className="rounded-[28px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-              <h3 className="text-xl font-black text-foreground">신청서 양식</h3>
-              <div className="mt-5 flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3">
                 {albumApplicationForms.map((form) => (
                   <a
                     key={form.href}
@@ -3777,7 +3894,7 @@ export function AlbumWizard({
               <div className="mt-6 flex flex-wrap justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(2)}
                   disabled={isSaving || isAddingAlbum}
                   className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                 >
@@ -3803,7 +3920,7 @@ export function AlbumWizard({
           ) : (
             <>
 
-              {step === 2 && (
+              {step === 3 && (
                 <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   기본 정보
@@ -4074,7 +4191,7 @@ export function AlbumWizard({
                 </div>
               )}
 
-              {step === 3 && !isOneClick && (
+              {step === 4 && !isOneClick && (
                 <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -4499,7 +4616,7 @@ export function AlbumWizard({
                 </div>
               )}
 
-              {step === 3 && albumDrafts.length > 0 && (
+              {step === 4 && albumDrafts.length > 0 && (
                 <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                     등록 앨범 목록
@@ -4566,13 +4683,13 @@ export function AlbumWizard({
               <div className="flex flex-wrap justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep(step === 2 ? 1 : 2)}
+                  onClick={() => setStep(step === 3 ? (isOneClick ? 1 : 2) : 3)}
                   disabled={isSaving || isAddingAlbum}
                   className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                 >
-                  {step === 2 ? "이전 단계" : "기본 정보 수정"}
+                  {step === 3 ? "이전 단계" : "기본 정보 수정"}
                 </button>
-                {step === 3 && (
+                {step === 4 && (
                   <button
                     type="button"
                     onClick={() => void handleTrackTemporarySave()}
@@ -4582,7 +4699,7 @@ export function AlbumWizard({
                     트랙 임시 저장
                   </button>
                 )}
-                {step === 3 && (
+                {step === 4 && (
                   <button
                     type="button"
                     onClick={handleAddAlbum}
@@ -4595,16 +4712,16 @@ export function AlbumWizard({
                 <button
                   type="button"
                   onClick={
-                    step === 2 ? handleBasicInfoNext : handleTrackInfoNext
+                    step === 3 ? handleBasicInfoNext : handleTrackInfoNext
                   }
                   disabled={
                     isSaving ||
                     isAddingAlbum ||
-                    (step === 3 && editingIndex !== null)
+                    (step === 4 && editingIndex !== null)
                   }
                   className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
                 >
-                  {step === 2
+                  {step === 3
                     ? isOneClick
                       ? "저장하고 파일 업로드"
                       : "저장하고 트랙 정보 입력"
@@ -4616,7 +4733,7 @@ export function AlbumWizard({
         </div>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <div className="space-y-8">
           {isDraggingOver && (
             <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
@@ -4628,8 +4745,16 @@ export function AlbumWizard({
               파일 준비 기준
             </summary>
             <ul className="mt-3 grid gap-2 leading-5 sm:grid-cols-3">
-              <li>WAV·MP3·ZIP / HWP·DOC·DOCX</li>
-              <li>신청서와 음원·CD 트랙 순서 일치</li>
+              <li>
+                {isDownloadedApplicationFlow
+                  ? "WAV·MP3·ZIP + HWP·DOC·DOCX"
+                  : "WAV·MP3·ZIP"}
+              </li>
+              <li>
+                {isDownloadedApplicationFlow
+                  ? "신청서와 음원·CD 트랙 순서 일치"
+                  : "음원·CD 트랙 순서 일치"}
+              </li>
               <li>업로드가 어려우면 파일 없이 진행 가능</li>
             </ul>
           </details>
@@ -4693,7 +4818,7 @@ export function AlbumWizard({
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              전체 음원 파일 업로드
+              {isDownloadedApplicationFlow ? "신청서와 음원 업로드" : "전체 음원 파일 업로드"}
             </p>
             <div className="mt-4 grid gap-2 rounded-2xl border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
               <button
@@ -4767,7 +4892,11 @@ export function AlbumWizard({
                     <input
                       type="file"
                       multiple
-                      accept=".wav,.mp3,.zip,.hwp,.doc,.docx,audio/wav,audio/mpeg,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      accept={
+                        isDownloadedApplicationFlow
+                          ? ".wav,.mp3,.zip,.hwp,.doc,.docx,audio/wav,audio/mpeg,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          : ".wav,.mp3,.zip,audio/wav,audio/mpeg,application/zip"
+                      }
                       onChange={onFileChange}
                       className="hidden"
                       disabled={!currentSubmissionId || isPreparingDraft}
@@ -4781,7 +4910,12 @@ export function AlbumWizard({
                             : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
                       </span>
                       <span className="inline-flex items-center gap-2 rounded-full border border-black bg-gradient-to-br from-black to-slate-900 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm">
-                        허용 형식: <span className="font-mono text-[12px]">WAV/MP3/ZIP/HWP/DOC/DOCX</span>
+                        허용 형식:{" "}
+                        <span className="font-mono text-[12px]">
+                          {isDownloadedApplicationFlow
+                            ? "WAV/MP3/ZIP/HWP/DOC/DOCX"
+                            : "WAV/MP3/ZIP"}
+                        </span>
                         <span className="text-white/70">·</span>
                         최대 <span className="font-mono text-[12px]">{uploadMaxLabel}</span>
                       </span>
@@ -4920,7 +5054,7 @@ export function AlbumWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(hasTrackStep ? 3 : 2)}
+              onClick={() => setStep(hasTrackStep ? 4 : 3)}
               disabled={isSaving || isAddingAlbum}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
             >
@@ -4956,7 +5090,7 @@ export function AlbumWizard({
         </div>
       )}
 
-      {step === 5 && (
+      {step === 6 && (
         <div className="space-y-8">
           <h2 className="font-display text-2xl text-foreground">신청 내용 확인</h2>
 
@@ -5379,7 +5513,7 @@ export function AlbumWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(4)}
+              onClick={() => setStep(5)}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
@@ -5409,7 +5543,7 @@ export function AlbumWizard({
         </div>
       )}
 
-      {step === 6 && (
+      {step === 7 && (
         <div className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-center sm:rounded-[32px] sm:p-10">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
             ✓
@@ -5500,7 +5634,9 @@ export function AlbumWizard({
               )}로 진행할까요?`}
             </p>
             <p className="mt-3 text-xs text-muted-foreground">
-              선택을 확정하면 기본 정보 단계로 이동합니다.
+              {isOneClick
+                ? "선택을 확정하면 기본 정보 단계로 이동합니다."
+                : "선택을 확정하면 작성 방식 단계로 이동합니다."}
             </p>
             {(packageGuidance[packageConfirmTarget.stationCount]?.conditional ?? [])
               .length > 0 ? (
@@ -5625,6 +5761,7 @@ export function AlbumWizard({
                 type="button"
                 onClick={() => {
                   setIsOneClick(false);
+                  setApplicationFormMode(null);
                   setShowOneclickNotice(false);
                 }}
                 className="flex-1 rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:text-slate-900 dark:hover:text-foreground"

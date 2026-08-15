@@ -97,8 +97,13 @@ test("compact application UX stays translated and accessible", () => {
     "신청 진행 단계",
     "전체 진행률",
     "작성 방식",
+    "작성 방식 선택",
+    "두 방식 중 하나만 선택하세요.",
     "온라인 작성",
+    "사이트에서 직접 입력",
     "파일로 제출",
+    "양식을 내려받아 작성 후 첨부",
+    "선택하고 계속",
   ]) {
     assert.match(translations, new RegExp(`"${label}":`));
   }

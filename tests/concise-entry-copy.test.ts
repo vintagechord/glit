@@ -40,19 +40,23 @@ test("application entry headers keep essentials without repeating the wizard ste
   assert.doesNotMatch(mvPage, /5단계 접수/);
 });
 
-test("application mode buttons use labels and pressed state without helper copy", () => {
+test("application mode step makes the two submission methods mutually exclusive", () => {
   const source = readSource(
     "src/features/submissions/application-form-mode-tabs.tsx",
   );
 
   assert.match(source, /온라인 작성/);
   assert.match(source, /파일로 제출/);
-  assert.match(source, /aria-pressed=\{mode === "online"\}/);
-  assert.match(source, /aria-pressed=\{isUploadMode\}/);
-  assert.match(source, /min-h-\[3\.25rem\]/);
+  assert.match(source, /두 방식 중 하나만 선택하세요/);
+  assert.match(source, /사이트에서 직접 입력/);
+  assert.match(source, /양식을 내려받아 작성 후 첨부/);
+  assert.match(source, /role="radiogroup"/);
+  assert.match(source, /role="radio"/);
+  assert.match(source, /aria-checked=\{mode === "online"\}/);
+  assert.match(source, /aria-checked=\{isUploadMode\}/);
+  assert.match(source, /aria-describedby="application-form-mode-help"/);
+  assert.match(source, /min-h-\[7rem\]/);
   assert.match(source, /sm:grid-cols-2/);
-  assert.doesNotMatch(source, /화면에서 바로 입력/);
-  assert.doesNotMatch(source, /양식 작성 후 첨부/);
 });
 
 test("the legacy form page presents one concise explanation and an accessible link", () => {
@@ -105,8 +109,13 @@ test("remaining public labels have exact English translations", () => {
     "영상 규격 확인",
     "사전 준비 사항 닫기",
     "작성 방식",
+    "작성 방식 선택",
+    "두 방식 중 하나만 선택하세요.",
     "온라인 작성",
+    "사이트에서 직접 입력",
     "파일로 제출",
+    "양식을 내려받아 작성 후 첨부",
+    "선택하고 계속",
     "예전 사이트 열기",
     "예전 온사이드 사이트 열기 (새 창)",
     "구버전과 신버전은 오픈 후 1년간 함께 운영되며, 접수 후 심의 절차는 동일합니다.",

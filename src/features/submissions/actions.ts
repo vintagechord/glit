@@ -981,6 +981,9 @@ export async function saveAlbumSubmissionAction(
   const usesExternalApplicationForm =
     parsed.data.externalApplicationForm === true;
   const isOneClick = parsed.data.isOneClick ?? false;
+  if (isOneClick && usesExternalApplicationForm) {
+    return { error: "원클릭 접수와 파일 제출 방식은 함께 선택할 수 없습니다." };
+  }
   const titleValue = parsed.data.title?.trim() ?? "";
   const artistNameValue = parsed.data.artistName?.trim() ?? "";
   const guestNameValue = parsed.data.guestName?.trim() ?? "";

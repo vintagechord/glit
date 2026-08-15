@@ -87,10 +87,15 @@ const exactTranslations: Record<string, string> = {
   "신청 진행 단계": "Application Steps",
   "전체 진행률": "Overall Progress",
   "작성 방식": "How to Complete",
+  "작성 방식 선택": "Choose How to Complete",
+  "두 방식 중 하나만 선택하세요.": "Choose one method.",
   "온라인 작성": "Complete Online",
   "화면에서 바로 입력": "Enter Details Here",
+  "사이트에서 직접 입력": "Enter Details on the Site",
   "파일로 제출": "Submit a File",
   "양식 작성 후 첨부": "Download, Complete, and Attach",
+  "양식을 내려받아 작성 후 첨부": "Download, Complete, and Attach the Form",
+  "선택하고 계속": "Continue with Selection",
   "생성형 AI를 사용했나요?": "Did You Use Generative AI?",
   "판단 기준": "How to Decide",
   "패키지 선택": "Choose a Package",
@@ -121,6 +126,10 @@ const exactTranslations: Record<string, string> = {
   "파일 준비 기준": "File Checklist",
   "신청서와 음원·CD 트랙 순서 일치":
     "Match the Track Order in the Application, Audio, and CD",
+  "음원·CD 트랙 순서 일치": "Match the Audio and CD Track Order",
+  "WAV·MP3·ZIP + HWP·DOC·DOCX": "WAV · MP3 · ZIP + HWP · DOC · DOCX",
+  "WAV·MP3·ZIP": "WAV · MP3 · ZIP",
+  "신청서와 음원 업로드": "Upload Application and Audio",
   "업로드가 어려우면 파일 없이 진행 가능": "Continue Without Files if Upload Is Difficult",
   "심의 신청": "Apply",
   "진행/결과 조회": "Results",
@@ -301,12 +310,20 @@ const exactTranslations: Record<string, string> = {
     "Upload the final video for review and the completed application file.",
   "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX":
     "Allowed formats: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX",
+  "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V + HWP/DOC/DOCX":
+    "Allowed formats: MP4/MOV/WMV/MPG/MPEG/M4V + HWP/DOC/DOCX",
+  "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V":
+    "Allowed formats: MP4/MOV/WMV/MPG/MPEG/M4V",
   "2GB 이상의 영상도 최대 4GB까지 업로드 가능하며, 어려우면 예전 온사이드 사이트에서 접수해주세요.":
     "Videos over 2 GB can be uploaded up to 4 GB. If upload is difficult, submit on the legacy Onside site.",
   "작성한 신청서 파일(HWP/DOC/DOCX)을 함께 업로드해주세요.":
     "Please also upload the completed application file (HWP/DOC/DOCX).",
   "음원 파일(WAV/MP3/ZIP)을 업로드하거나 파일 없이 진행을 선택해주세요.":
     "Upload audio files (WAV/MP3/ZIP) or choose to continue without files.",
+  "음원 파일(WAV/MP3/ZIP)만 업로드할 수 있습니다.":
+    "Only audio files (WAV/MP3/ZIP) can be uploaded.",
+  "영상 파일(MP4/MOV/WMV/MPG)만 업로드할 수 있습니다.":
+    "Only video files (MP4/MOV/WMV/MPG) can be uploaded.",
   "작성한 신청서 파일(HWP/DOC/DOCX)과 영상 파일을 업로드해주세요.":
     "Upload the completed application file (HWP/DOC/DOCX) and video file.",
   "영상 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 다음 단계로 진행하거나 예전 온사이드 사이트에서 접수해주세요.":
@@ -845,6 +862,8 @@ const exactTranslations: Record<string, string> = {
   "현재 참여진을 빈칸에 적용": "Fill Blank Credits",
   "선택을 확정하면 기본 정보 단계로 이동합니다.":
     "Confirm your choice to continue to basic information.",
+  "선택을 확정하면 작성 방식 단계로 이동합니다.":
+    "Confirm your choice to continue to the form method step.",
   "다음": "Next",
   "이전": "Previous",
   "제출": "Submit",

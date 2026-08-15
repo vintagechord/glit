@@ -13,14 +13,17 @@ test("normal album submissions save basic information before track entry", () =>
 
   assert.match(
     source,
-    /const standardSteps = \[[\s\S]*"기본 정보",[\s\S]*"트랙 정보",[\s\S]*"접수 완료"/,
+    /const standardSteps = \[[\s\S]*"작성 방식 선택",[\s\S]*"기본 정보",[\s\S]*"트랙 정보",[\s\S]*"접수 완료"/,
   );
-  assert.match(source, /const compactSteps = \[[\s\S]*"기본 정보",[\s\S]*"파일 업로드"/);
-  assert.match(source, /const hasTrackStep = !isOneClick && !isDownloadedApplicationFlow/);
+  assert.match(source, /const compactSteps = \[[\s\S]*"작성 방식 선택",[\s\S]*"기본 정보",[\s\S]*"파일 업로드"/);
+  assert.match(
+    source,
+    /const hasTrackStep =\s*!isOneClick && applicationFormMode === "online"/,
+  );
   assert.match(basicHandler, /if \(!validateBasicInfoStep\(\)\)/);
   assert.match(basicHandler, /status: "DRAFT"/);
   assert.ok(
-    basicHandler.indexOf('status: "DRAFT"') < basicHandler.indexOf("setStep(3)"),
+    basicHandler.indexOf('status: "DRAFT"') < basicHandler.indexOf("setStep(4)"),
     "the persisted draft must complete before the track step opens",
   );
   assert.match(
@@ -50,13 +53,13 @@ test("track entry preserves compilation overrides and saves before upload", () =
   assert.match(trackHandler, /validateTranslatedLyrics\(\)/);
   assert.match(trackHandler, /status: "PRE_REVIEW"/);
   assert.ok(
-    trackHandler.indexOf('status: "PRE_REVIEW"') < trackHandler.indexOf("setStep(4)"),
+    trackHandler.indexOf('status: "PRE_REVIEW"') < trackHandler.indexOf("setStep(5)"),
     "tracks must be persisted before file upload opens",
   );
   assert.match(source, /aria-pressed=\{active\}/);
 });
 
-test("progress and English UI support both five- and six-step flows", () => {
+test("progress and English UI support dynamic five- to seven-step flows", () => {
   const progress = read("src/features/submissions/submission-progress.tsx");
   const translations = read(
     "src/components/i18n/english-language-pack.tsx",
@@ -70,6 +73,7 @@ test("progress and English UI support both five- and six-step flows", () => {
 
   for (const label of [
     "기본 정보",
+    "작성 방식 선택",
     "트랙 정보",
     "가수명",
     "저장하고 트랙 정보 입력",

@@ -111,6 +111,7 @@ type MvValidationField =
 
 const steps = [
   "목적 선택",
+  "작성 방식 선택",
   "신청서 작성",
   "파일 업로드",
   "결제하기",
@@ -322,7 +323,7 @@ export function MvWizard({
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
   const [applicationFormMode, setApplicationFormMode] =
-    React.useState<ApplicationFormMode>("online");
+    React.useState<ApplicationFormMode | null>(null);
   const requestedType = searchParams?.get("type");
   const [mvType, setMvType] = React.useState<"MV_DISTRIBUTION" | "MV_BROADCAST">(
     requestedType === "broadcast" ? "MV_BROADCAST" : "MV_DISTRIBUTION",
@@ -396,6 +397,7 @@ export function MvWizard({
       onlineOptions?: string[];
       onlineBaseSelected?: boolean;
       emailSubmitConfirmed?: boolean;
+      applicationFormMode?: ApplicationFormMode;
     } | null;
     storedGuestToken?: string | null;
   } | null>(null);
@@ -567,6 +569,7 @@ export function MvWizard({
         onlineOptions?: string[];
         onlineBaseSelected?: boolean;
         emailSubmitConfirmed?: boolean;
+        applicationFormMode?: ApplicationFormMode;
       };
     } catch {
       return null;
@@ -581,6 +584,7 @@ export function MvWizard({
     onlineOptions?: string[];
     onlineBaseSelected?: boolean;
     emailSubmitConfirmed?: boolean;
+    applicationFormMode?: ApplicationFormMode;
   }) => {
     if (typeof window === "undefined") return;
     try {
@@ -594,6 +598,7 @@ export function MvWizard({
           onlineOptions: payload.onlineOptions ?? [],
           onlineBaseSelected: payload.onlineBaseSelected ?? true,
           emailSubmitConfirmed: payload.emailSubmitConfirmed ?? false,
+          applicationFormMode: payload.applicationFormMode,
           updatedAt: Date.now(),
         }),
       );
@@ -827,6 +832,33 @@ export function MvWizard({
       ? tvStations.length > 0
       : onlineBaseSelected || onlineOptions.length > 0;
   const isDownloadedApplicationFlow = applicationFormMode === "upload";
+  const selectApplicationFormMode = (mode: ApplicationFormMode) => {
+    if (mode === "online" && applicationFormMode === "upload") {
+      setFiles((previous) =>
+        previous.filter(
+          (file) =>
+            !isApplicationFormFile(file.name) &&
+            !isApplicationFormMime(file.type),
+        ),
+      );
+      setUploads((previous) =>
+        previous.filter(
+          (file) =>
+            !isApplicationFormFile(file.name) &&
+            !isApplicationFormMime(file.mime ?? ""),
+        ),
+      );
+      setUploadedFiles((previous) =>
+        previous.filter(
+          (file) =>
+            !isApplicationFormFile(file.originalName) &&
+            !isApplicationFormMime(file.mime ?? ""),
+        ),
+      );
+    }
+    setApplicationFormMode(mode);
+    setNotice({});
+  };
   const uploadChips = React.useMemo(() => {
     const chips: string[] = [];
 
@@ -898,13 +930,14 @@ export function MvWizard({
         invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
         return false;
       }
-      const isAllowed =
-        isVideoUploadFile(file.name, file.type) ||
-        isApplicationFormFile(file.name) ||
-        isApplicationFormMime(file.type);
+      const isVideoFile = isVideoUploadFile(file.name, file.type);
+      const isFormFile =
+        isApplicationFormFile(file.name) || isApplicationFormMime(file.type);
+      const isAllowed = isVideoFile || (isDownloadedApplicationFlow && isFormFile);
       if (!isAllowed) {
-        invalidNotice =
-          "영상 파일(MP4/MOV/WMV/MPG) 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다.";
+        invalidNotice = isDownloadedApplicationFlow
+          ? "영상 파일(MP4/MOV/WMV/MPG) 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다."
+          : "영상 파일(MP4/MOV/WMV/MPG)만 업로드할 수 있습니다.";
         return false;
       }
       return true;
@@ -1709,10 +1742,17 @@ export function MvWizard({
       onlineOptions?: string[];
       onlineBaseSelected?: boolean;
       emailSubmitConfirmed?: boolean;
+      applicationFormMode?: ApplicationFormMode;
     } | null,
   ) => {
     const draftType =
       draft.type === "MV_BROADCAST" ? "MV_BROADCAST" : "MV_DISTRIBUTION";
+    const restoredApplicationFormMode =
+      storedSelection?.applicationFormMode === "online" ||
+        storedSelection?.applicationFormMode === "upload"
+        ? storedSelection.applicationFormMode
+        : null;
+    setApplicationFormMode(restoredApplicationFormMode);
     setMvType(draftType);
     setTitle(String(draft.title ?? ""));
     setArtistName(String(draft.artist_name ?? ""));
@@ -1832,7 +1872,7 @@ export function MvWizard({
     }
 
     setNotice({});
-    setStep(2);
+    setStep(restoredApplicationFormMode ? 3 : 2);
   }, [buildUploadsFromFiles, isGuest, mapDraftFiles, normalizeDateValue]);
 
   const handleResumeDraftConfirm = React.useCallback(() => {
@@ -1856,6 +1896,7 @@ export function MvWizard({
           : [],
         onlineBaseSelected: resumePrompt.stored?.onlineBaseSelected ?? true,
         emailSubmitConfirmed: resumePrompt.stored?.emailSubmitConfirmed ?? false,
+        applicationFormMode: resumePrompt.stored?.applicationFormMode,
       });
     }
     setResumePrompt(null);
@@ -2462,6 +2503,7 @@ export function MvWizard({
         onlineOptions,
         onlineBaseSelected,
         emailSubmitConfirmed,
+        applicationFormMode: applicationFormMode ?? undefined,
       });
       setNotice({ submissionId: result.submissionId });
       return true;
@@ -2632,7 +2674,7 @@ export function MvWizard({
           } else if (isGuest) {
             setCompletionGuestToken(guestToken);
           }
-          setStep(5);
+          setStep(6);
           return;
         }
         if (paymentMethod === "CARD") {
@@ -2661,7 +2703,7 @@ export function MvWizard({
           } else if (isGuest) {
             setCompletionGuestToken(guestToken);
           }
-          setStep(5);
+          setStep(6);
           return;
         }
         console.warn(
@@ -2686,7 +2728,7 @@ export function MvWizard({
     if (!validateMvForm()) return;
     const saved = await saveMvDraft({ includeFiles: false });
     if (saved) {
-      setStep(3);
+      setStep(4);
     }
   };
 
@@ -2714,7 +2756,7 @@ export function MvWizard({
     submissionIdRef.current = submissionId;
     const saved = await saveMvDraft({ includeFiles: false });
     if (saved) {
-      setStep(3);
+      setStep(4);
     }
   };
 
@@ -2724,7 +2766,7 @@ export function MvWizard({
       uploads.length > 0 && uploads.every((upload) => upload.status === "done");
     const saved = await saveMvDraft({ includeFiles: uploadsReady });
     if (saved) {
-      setStep(4);
+      setStep(5);
     }
   };
 
@@ -2805,7 +2847,7 @@ export function MvWizard({
     <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving}
-        label={step <= 3 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
+        label={step <= 4 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
       />
 
       {isDraggingOver && (
@@ -3118,18 +3160,40 @@ export function MvWizard({
       )}
 
       {step === 2 && (
-        <div className="space-y-8">
-          <h2 className="font-display text-2xl text-foreground">신청서 작성</h2>
-
+        <div className="space-y-6">
           <ApplicationFormModeTabs
             mode={applicationFormMode}
-            onModeChange={setApplicationFormMode}
+            onModeChange={selectApplicationFormMode}
           />
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
+            >
+              이전 단계
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep(3)}
+              disabled={!applicationFormMode}
+              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
+            >
+              선택하고 계속
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-8">
+          <h2 className="font-display text-2xl text-foreground">
+            {isDownloadedApplicationFlow ? "신청서 양식" : "신청서 작성"}
+          </h2>
 
           {isDownloadedApplicationFlow ? (
             <div className="rounded-[28px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-              <h3 className="text-xl font-black text-foreground">신청서 양식</h3>
-              <div className="mt-5 flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3">
                 {mvApplicationForms.map((form) => (
                   <a
                     key={form.href}
@@ -3163,7 +3227,7 @@ export function MvWizard({
               <div className="mt-6 flex flex-wrap justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(2)}
                   disabled={isSaving}
                   className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                 >
@@ -3770,7 +3834,7 @@ export function MvWizard({
               <div className="flex flex-wrap justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(2)}
                   disabled={isSaving}
                   className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                 >
@@ -3801,13 +3865,15 @@ export function MvWizard({
         </div>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <div className="space-y-8">
           <h2 className="font-display text-2xl text-foreground">파일 첨부</h2>
 
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <p className="mt-1 text-xs font-semibold text-foreground">
-              허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V/HWP/DOC/DOCX
+              {isDownloadedApplicationFlow
+                ? "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V + HWP/DOC/DOCX"
+                : "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V"}
             </p>
             {mvType === "MV_BROADCAST" ? (
               renderBroadcastSpecs()
@@ -3892,7 +3958,11 @@ export function MvWizard({
                     <input
                       type="file"
                       multiple
-                      accept=".mp4,.mov,.wmv,.mpg,.mpeg,.m4v,.hwp,.doc,.docx,video/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      accept={
+                        isDownloadedApplicationFlow
+                          ? ".mp4,.mov,.wmv,.mpg,.mpeg,.m4v,.hwp,.doc,.docx,video/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          : ".mp4,.mov,.wmv,.mpg,.mpeg,.m4v,video/*"
+                      }
                       onChange={onFileChange}
                       className="hidden"
                     />
@@ -4007,7 +4077,7 @@ export function MvWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => setStep(3)}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
@@ -4039,7 +4109,7 @@ export function MvWizard({
         </div>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <div className="space-y-8">
           <h2 className="font-display text-2xl text-foreground">신청 내용 확인</h2>
 
@@ -4367,7 +4437,7 @@ export function MvWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(3)}
+              onClick={() => setStep(4)}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
@@ -4397,7 +4467,7 @@ export function MvWizard({
         </div>
       )}
 
-      {step === 5 && (
+      {step === 6 && (
         <div className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-center sm:rounded-[32px] sm:p-10">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
             ✓
