@@ -47,7 +47,7 @@ const exactTranslations: Record<string, string> = {
   "음반 신청": "Apply for Album Review",
   "MV 신청": "Apply for MV Review",
   "핵심 조건": "Key Details",
-  "준비물": "Materials",
+  "사전 준비 사항": "Preparation",
   "더 궁금한 점": "Need More Help?",
   "2017년부터 이어온 음반·뮤직비디오 심의.":
     "Album and music video reviews since 2017.",
@@ -69,7 +69,7 @@ const exactTranslations: Record<string, string> = {
   "비회원 가능": "Guest Checkout",
   "음반 심의 접수": "Album Review Submission",
   "뮤직비디오 심의 접수": "Music Video Review Submission",
-  "준비물 닫기": "Hide Materials",
+  "사전 준비 사항 닫기": "Hide Preparation",
   "예전 사이트 열기": "Open Legacy Site",
   "예전 온사이드 사이트 열기 (새 창)":
     "Open the Legacy Onside Site (New Tab)",
@@ -212,7 +212,7 @@ const exactTranslations: Record<string, string> = {
   "접수 방식을 선택하면 바로 신청서를 작성할 수 있습니다.":
     "Choose a submission method to start the application form.",
   "알아보기": "Learn More",
-  "준비물 보기": "View Materials",
+  "사전 준비 사항 보기": "View Preparation",
   "기존 사이트 접수": "Legacy Site Submission",
   "진행 중": "In Progress",
   "Review 진행중": "Review in Progress",
@@ -951,20 +951,20 @@ const exactTranslations: Record<string, string> = {
   "Copyright © (주)Vintage House. All Rights Reserved.":
     "Copyright © Vintage House Co., Ltd. All Rights Reserved.",
   "자주 묻는 질문": "Frequently Asked Questions",
-  "Materials, Payment, 진행 확인, Result 수령에서 자주 묻는 내용을 정리했습니다.":
+  "Preparation, Payment, 진행 확인, Result 수령에서 자주 묻는 내용을 정리했습니다.":
     "Frequently asked questions about required materials, payment, progress tracking, and result delivery.",
-  "준비물, Payment, 진행 확인, Result 수령에서 자주 묻는 내용을 정리했습니다.":
+  "사전 준비 사항, Payment, 진행 확인, Result 수령에서 자주 묻는 내용을 정리했습니다.":
     "Frequently asked questions about required materials, payment, progress tracking, and result delivery.",
-  "준비물, 결제, 진행 확인, 결과 수령에서 자주 묻는 내용을 정리했습니다.":
+  "사전 준비 사항, 결제, 진행 확인, 결과 수령에서 자주 묻는 내용을 정리했습니다.":
     "Frequently asked questions about required materials, payment, progress tracking, and result delivery.",
   "자료 준비": "Materials",
   "열기": "Open",
   "고객센터 보기": "View Support",
   "지금 Review 신청": "Apply Now",
   "Review 안내": "Review Guide",
-  "Album과 Music Video Review 흐름, Materials, 자주 묻는 질문을 정리했습니다.":
+  "Album과 Music Video Review 흐름, Preparation, 자주 묻는 질문을 정리했습니다.":
     "Review flow, required materials, and FAQs for album and music video review.",
-  "Album과 Music Video Review 흐름, 준비물, 자주 묻는 질문을 정리했습니다.":
+  "Album과 Music Video Review 흐름, 사전 준비 사항, 자주 묻는 질문을 정리했습니다.":
     "Review flow, required materials, and FAQs for album and music video review.",
   "음반·뮤직비디오 심의의 공통 흐름, 유형별 차이, 준비 항목을 정리했습니다.":
     "Common review flow, service differences, and preparation items for album and music video review.",
@@ -1065,7 +1065,7 @@ const exactTranslations: Record<string, string> = {
   "MUSIC VIDEO REVIEW 신청하러 가기": "Apply for Music Video Review",
   "Music Video Review 신청하러 가기": "Apply for Music Video Review",
   "신청 전 준비": "Pre-Submission Preparation",
-  "Album Review 준비물": "Album Review Materials",
+  "Album Review 사전 준비 사항": "Album Review Preparation",
   "WAV 음원 또는 전체 음원 ZIP": "WAV audio or complete audio ZIP",
   "전체 가사: 반복 후렴, 코러스, 나레이션 포함":
     "Full lyrics including repeated hooks, chorus, and narration",
@@ -1074,7 +1074,7 @@ const exactTranslations: Record<string, string> = {
     "Album title, artist name, release date, genre, distributor, production company",
   "트랙 순서와 실제 발매 앨범의 CD/유통 순서 일치":
     "Track order must match the actual CD/distribution release order",
-  "Music Video Review 준비물": "Music Video Review Materials",
+  "Music Video Review 사전 준비 사항": "Music Video Review Preparation",
   "온라인 유통용/TV 송출용 목적 구분":
     "Separate online distribution and TV broadcast purposes",
   "TV 송출용은 Broadcaster 제출 규격과 편성 조건 확인":
@@ -1415,7 +1415,7 @@ const phraseTranslations: Array<[RegExp, string]> = [
   [/가수/g, "Performer"],
   [/번역/g, "Translation"],
   [/자료/g, "Materials"],
-  [/준비물/g, "Materials"],
+  [/사전 준비 사항/g, "Preparation"],
   [/할인/g, "Discount"],
   [/혜택/g, "Benefit"],
   [/발매/g, "Release"],

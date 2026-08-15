@@ -168,7 +168,7 @@ export default function GuidePage() {
 
       <section className="relative mt-10 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">
         <h2 className="font-display text-2xl font-black text-foreground">
-          준비물
+          사전 준비 사항
         </h2>
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
           <details className="group rounded-[8px] border-2 border-border bg-background p-4">

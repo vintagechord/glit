@@ -30,7 +30,7 @@ export function AlbumIntroPanel({
             aria-controls="album-preparation-checklist"
             className="bauhaus-button h-11 px-5 text-sm"
           >
-            {isOpen ? "준비물 닫기" : "준비물"}
+            {isOpen ? "사전 준비 사항 닫기" : "사전 준비 사항"}
           </button>
         </div>
       </div>

@@ -103,7 +103,7 @@ test("remaining public labels have exact English translations", () => {
     "음반 심의 접수",
     "뮤직비디오 심의 접수",
     "영상 규격 확인",
-    "준비물 닫기",
+    "사전 준비 사항 닫기",
     "작성 방식",
     "온라인 작성",
     "파일로 제출",
