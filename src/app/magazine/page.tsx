@@ -1,6 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import {
+  ArrowRight,
+  Coins,
   ExternalLink,
   Gift,
   Info,
@@ -8,10 +10,7 @@ import {
 } from "lucide-react";
 
 import { CreditUseTabs, type CreditUseTab } from "./credit-use-tabs";
-import {
-  MagazineRequestForm,
-  type MagazineExistingRequest,
-} from "@/features/magazine/magazine-request-form";
+import { MagazineRequestForm } from "@/features/magazine/magazine-request-form";
 import {
   StudioReservationForm,
   type StudioReservationContactDefaults,
@@ -36,17 +35,6 @@ export const metadata = {
   title: "크레딧",
   description:
     "음반심의 결제 완료 건으로 발급되는 온사이드 크레딧을 확인하고 사용하세요.",
-};
-
-type MagazineRequestRow = {
-  id: string;
-  submission_id: string | null;
-  status: string | null;
-  target_channel: string | null;
-  album_title: string | null;
-  artist_name: string | null;
-  created_at: string | null;
-  published_url: string | null;
 };
 
 export type MagazinePageSearchParams = {
@@ -111,44 +99,10 @@ const noticeText = (
 
 async function loadMagazineCreditData(userId?: string | null) {
   if (!userId) {
-    return {
-      existingRequests: [] as MagazineExistingRequest[],
-      creditSummary: emptyCreditSummary,
-    };
+    return emptyCreditSummary;
   }
 
-  const admin = createAdminClient();
-  const creditSummary = await getUserCreditSummary(admin, userId);
-  const existingResult = await admin
-    .from("magazine_requests")
-    .select(
-      "id, submission_id, status, target_channel, album_title, artist_name, created_at, published_url",
-    )
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(30);
-
-  if (existingResult.error) {
-    console.error(
-      "[magazine] failed to load existing requests",
-      existingResult.error,
-    );
-  }
-
-  return {
-    creditSummary,
-    existingRequests: ((existingResult.data ?? []) as MagazineRequestRow[]).map(
-      (request) => ({
-        id: request.id,
-        status: request.status,
-        targetChannel: request.target_channel,
-        albumTitle: request.album_title,
-        artistName: request.artist_name,
-        createdAt: request.created_at,
-        publishedUrl: request.published_url,
-      }),
-    ),
-  };
+  return getUserCreditSummary(createAdminClient(), userId);
 }
 
 async function loadActiveRewards() {
@@ -260,28 +214,13 @@ function CreditServiceRewardsPanel({
 }) {
   return (
     <section className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-foreground">
-            서비스 이용 요청
-          </h2>
-          <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
-            녹음실 예약 등 현재 신청 가능한 서비스입니다.
-          </p>
-        </div>
-        <div className="min-w-[156px] rounded-[8px] border-2 border-border bg-card p-4">
-          <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-            보유 크레딧
-          </p>
-          <p className="mt-2 text-3xl font-black text-foreground">
-            {isAuthenticated ? creditSummary.available.toLocaleString() : "-"}
-          </p>
-          {!isAuthenticated ? (
-            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
-              로그인 필요
-            </p>
-          ) : null}
-        </div>
+      <div>
+        <h2 className="text-2xl font-black text-foreground">
+          서비스 이용 요청
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
+          녹음실 예약 등 현재 신청 가능한 서비스입니다.
+        </p>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
@@ -303,21 +242,13 @@ function CreditServiceRewardsPanel({
         )}
       </div>
 
-      {isAuthenticated ? (
-        <Link
-          href={`${localePrefix}/mypage/credits#credit-requests`}
-          className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-5 py-3 text-sm font-black text-foreground transition hover:-translate-y-0.5 hover:border-[#1556a4] hover:bg-[#eaf2fb] dark:hover:bg-[#102033]"
-        >
-          <Ticket className="h-4 w-4" aria-hidden="true" />
-          크레딧 요청 내역 보기
-        </Link>
-      ) : (
+      {!isAuthenticated ? (
         <p className="flex max-w-2xl gap-2 text-xs font-semibold leading-5 text-muted-foreground">
           <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           크레딧 사용은 보유 크레딧이 있는 회원만 가능합니다. 로그인 후
           이용해주세요.
         </p>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -345,7 +276,7 @@ export async function MagazinePageView({
     localePrefix,
   );
   const admin = createAdminClient();
-  const [{ existingRequests, creditSummary }, rewards, profileResult] =
+  const [creditSummary, rewards, profileResult] =
     await Promise.all([
       loadMagazineCreditData(user?.id),
       loadActiveRewards(),
@@ -364,7 +295,7 @@ export async function MagazinePageView({
 
   return (
     <div className="bg-background">
-      <div className="mx-auto w-full max-w-6xl px-6 py-12">
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
         <section className="relative min-h-[178px] overflow-hidden rounded-[10px] border-2 border-[#111111] bg-[#1556a4] p-5 text-white shadow-[5px_5px_0_#111111] dark:border-[#8bc3ff] dark:shadow-[5px_5px_0_#8bc3ff] md:p-7">
           <Image
             src="/media/banners/credit-wallet.svg"
@@ -390,6 +321,54 @@ export async function MagazinePageView({
         <div id="credit-use" className="mt-8 scroll-mt-28">
           <CreditActionNotice notice={notice} />
 
+          <section
+            aria-label="크레딧 현황"
+            className="mb-8 grid gap-4 sm:grid-cols-2"
+          >
+            <div className="flex min-h-[144px] flex-col justify-between rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[5px_5px_0_#1556a4]">
+              <div className="flex items-start justify-between gap-4">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white">
+                  <Coins className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <span className="rounded-[6px] border border-[#111111]/25 px-2 py-1 text-[11px] font-black">
+                  음반 1건 = +1
+                </span>
+              </div>
+              <div className="mt-5">
+                <p className="text-xs font-black">보유 크레딧</p>
+                <p className="mt-1 text-4xl font-black">
+                  {user ? creditSummary.available.toLocaleString() : "-"}
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href={
+                user
+                  ? `${localePrefix}/mypage/credits#credit-requests`
+                  : `${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/mypage/credits`)}`
+              }
+              className="group flex min-h-[144px] flex-col justify-between rounded-[10px] border-2 border-[#111111] bg-card p-5 text-foreground shadow-[5px_5px_0_#111111] transition hover:-translate-y-1 hover:border-[#1556a4] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1556a4]/35 dark:border-white/70 dark:shadow-[5px_5px_0_#1556a4]"
+              aria-label="요청 내역 보기"
+            >
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-[8px] border-2 border-border bg-background text-[#1556a4]">
+                <Ticket className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="mt-5 flex items-end justify-between gap-4">
+                <span>
+                  <span className="block text-xl font-black">요청 내역</span>
+                  <span className="mt-1 block text-xs font-semibold text-muted-foreground">
+                    매거진 · 서비스
+                  </span>
+                </span>
+                <ArrowRight
+                  className="h-5 w-5 shrink-0 transition group-hover:translate-x-1"
+                  aria-hidden="true"
+                />
+              </span>
+            </Link>
+          </section>
+
           <CreditUseTabs
             initialTab={activeTab}
             magazineAction={
@@ -408,7 +387,6 @@ export async function MagazinePageView({
                 <MagazineRequestForm
                   isAuthenticated={Boolean(user)}
                   requesterPhone={profile?.phone}
-                  existingRequests={existingRequests}
                   availableCredits={creditSummary.available}
                 />
               </div>

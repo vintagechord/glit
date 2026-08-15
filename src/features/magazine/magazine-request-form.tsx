@@ -7,16 +7,6 @@ import { CheckCircle2, ImageUp, Info, SendHorizontal } from "lucide-react";
 
 import { createMagazineRequestAction } from "./actions";
 
-export type MagazineExistingRequest = {
-  id: string;
-  status: string | null;
-  targetChannel: string | null;
-  albumTitle: string | null;
-  artistName: string | null;
-  createdAt: string | null;
-  publishedUrl: string | null;
-};
-
 const channelOptions = [
   {
     value: "DOMESTIC_NEWS",
@@ -30,28 +20,6 @@ const channelOptions = [
   },
 ] as const;
 
-const statusLabels: Record<string, string> = {
-  REQUESTED: "요청 접수",
-  WRITING: "작성 중",
-  PUBLISHED: "발행 완료",
-  CANCELED: "취소",
-};
-
-const channelLabels: Record<string, string> = {
-  DOMESTIC_NEWS: "국내뉴스",
-  MEDIA: "미디어",
-};
-
-const formatDate = (value?: string | null) => {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ko-KR", {
-    dateStyle: "medium",
-    timeZone: "Asia/Seoul",
-  }).format(date);
-};
-
 const fieldClass =
   "w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]";
 
@@ -61,12 +29,10 @@ const labelClass =
 export function MagazineRequestForm({
   isAuthenticated,
   requesterPhone,
-  existingRequests,
   availableCredits,
 }: {
   isAuthenticated: boolean;
   requesterPhone?: string | null;
-  existingRequests: MagazineExistingRequest[];
   availableCredits: number;
 }) {
   const router = useRouter();
@@ -120,8 +86,8 @@ export function MagazineRequestForm({
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_0.88fr]">
-      <section className="rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#111111] dark:border-white/70 dark:shadow-[5px_5px_0_#1556a4] sm:p-6">
+    <div className="w-full">
+      <section className="w-full rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#111111] dark:border-white/70 dark:shadow-[5px_5px_0_#1556a4] sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="bauhaus-kicker">Request</p>
@@ -335,83 +301,6 @@ export function MagazineRequestForm({
           </button>
         </form>
       </section>
-
-      <aside className="space-y-5">
-        <section
-          aria-label="크레딧 요약"
-          className="rounded-[10px] border-2 border-[#111111] bg-background p-5 dark:border-white/70"
-        >
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-[8px] border-2 border-border bg-card p-4">
-              <p className={labelClass}>보유 크레딧</p>
-              <p className="mt-2 text-3xl font-black text-foreground">
-                {isAuthenticated ? availableCredits : "-"}
-              </p>
-            </div>
-            <div className="rounded-[8px] border-2 border-border bg-card p-4">
-              <p className={labelClass}>요청 완료</p>
-              <p className="mt-2 text-3xl font-black text-foreground">
-                {isAuthenticated ? existingRequests.length : "-"}
-              </p>
-            </div>
-          </div>
-          <p className="mt-4 text-xs leading-5 text-muted-foreground">
-            매거진 등록 신청 또는 서비스 이용권 교환 시 잔여 크레딧에서
-            차감됩니다.
-          </p>
-        </section>
-
-        <section className="rounded-[10px] border-2 border-border bg-card p-5">
-          <p className="bauhaus-kicker">Submitted</p>
-          <h2 className="mt-3 text-xl font-black text-foreground">
-            요청 내역
-          </h2>
-          {isAuthenticated && existingRequests.length > 0 ? (
-            <div className="mt-4 space-y-3">
-              {existingRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="rounded-[8px] border-2 border-border bg-background p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-black text-foreground">
-                      {request.albumTitle ?? "제목 미입력"}
-                    </p>
-                    <span className="rounded-[6px] bg-[#eaf2fb] px-2 py-1 text-[10px] font-black text-[#1556a4] dark:bg-[#102033] dark:text-[#8bc3ff]">
-                      {statusLabels[request.status ?? ""] ?? request.status}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {request.artistName ?? "-"} ·{" "}
-                    {channelLabels[request.targetChannel ?? ""] ??
-                      request.targetChannel ??
-                      "-"}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    요청일 {formatDate(request.createdAt)}
-                  </p>
-                  {request.publishedUrl ? (
-                    <a
-                      href={request.publishedUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex rounded-[8px] border-2 border-[#111111] px-3 py-2 text-xs font-black text-foreground transition hover:border-[#1556a4] hover:bg-[#eaf2fb] dark:hover:bg-[#102033]"
-                    >
-                      발행 페이지 보기
-                    </a>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 rounded-[8px] border-2 border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-              {isAuthenticated
-                ? "아직 접수한 매거진 발행 요청이 없습니다."
-                : "로그인 후 크레딧 사용 요청 내역을 확인할 수 있습니다."}
-            </p>
-          )}
-        </section>
-      </aside>
 
       {notice?.type === "success" ? (
         <div

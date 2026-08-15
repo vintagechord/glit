@@ -74,7 +74,7 @@ test("credit details use progressive disclosure instead of repeated guidance", (
   const source = readSource("src/app/mypage/credits/page.tsx");
 
   assert.match(source, /<summary className="cursor-pointer font-black">이용 안내<\/summary>/);
-  assert.match(source, />사용 내역<\/h2>/);
+  assert.match(source, />요청 내역<\/h2>/);
   assert.match(source, /적립 내역/);
   assert.doesNotMatch(source, /결제 완료 음반심의 1건 = 1크레딧/);
   assert.doesNotMatch(source, /지금 교환 가능한 잔여 크레딧/);

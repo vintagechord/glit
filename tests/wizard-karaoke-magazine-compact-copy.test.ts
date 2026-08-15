@@ -103,11 +103,20 @@ test("magazine request keeps one login action and one credit heading", () => {
   const source = readSource(
     "src/features/magazine/magazine-request-form.tsx",
   );
+  const page = readSource("src/app/magazine/page.tsx");
 
-  assert.match(source, /aria-label="크레딧 요약"/);
+  assert.match(page, /aria-label="크레딧 현황"/);
+  assert.match(page, /sm:grid-cols-2/);
+  assert.match(page, /mypage\/credits#credit-requests/);
+  assert.doesNotMatch(source, /lg:grid-cols-\[1fr_0\.88fr\]/);
+  assert.match(source, /<section className="w-full/);
   assert.match(source, />\s*로그인\s*<\/Link>/);
   assert.match(source, /\? "발행 요청"/);
-  assert.equal((source.match(/보유 크레딧/g) ?? []).length, 1);
+  assert.equal(
+    (page.match(/<p className="text-xs font-black">보유 크레딧<\/p>/g) ?? [])
+      .length,
+    1,
+  );
   assert.doesNotMatch(source, /크레딧 사용은 회원만 가능합니다/);
   assert.doesNotMatch(source, /로그인 후 보유 크레딧/);
   assert.doesNotMatch(source, />\s*로그인 후 크레딧 사용\s*<\/Link>/);

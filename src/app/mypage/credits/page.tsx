@@ -1,13 +1,16 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
+  ArrowRight,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Coins,
   ExternalLink,
+  Gift,
   History,
+  Newspaper,
 } from "lucide-react";
 
 import {
@@ -604,6 +607,18 @@ export async function MyPageCreditsPageView({
     (a, b) =>
       getRequestTimestamp(b.createdAt) - getRequestTimestamp(a.createdAt),
   );
+  const [latestCreditRequest, ...olderCreditRequests] = creditRequestItems;
+
+  const renderCreditRequest = (item: (typeof creditRequestItems)[number]) =>
+    item.type === "magazine" ? (
+      <MagazineRequestCard key={item.key} request={item.request} />
+    ) : (
+      <StudioReservationCard
+        key={item.key}
+        reservation={item.reservation}
+        redemption={redemptionMap.get(item.reservation.redemption_id)}
+      />
+    );
 
   return (
       <DashboardShell
@@ -619,69 +634,150 @@ export async function MyPageCreditsPageView({
       <div className="space-y-6">
         <CreditActionNotice notice={notice} />
 
-        <section className="rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-4 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-black text-muted-foreground">보유 크레딧</p>
-              <p className="mt-1 flex items-center gap-2 text-4xl font-black text-foreground">
-                <Coins className="h-7 w-7 text-[#1556a4]" aria-hidden="true" />
-                {summary.available.toLocaleString()}
-              </p>
+        <section
+          aria-label="크레딧 현황"
+          className="grid items-start gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
+        >
+          <section className="rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-4 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[5px_5px_0_#f2cf27] sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-black text-muted-foreground">보유 크레딧</p>
+                <p className="mt-1 flex items-center gap-2 text-4xl font-black text-foreground">
+                  <Coins className="h-7 w-7 text-[#1556a4]" aria-hidden="true" />
+                  {summary.available.toLocaleString()}
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111]">
+                <Coins className="h-4 w-4" aria-hidden="true" />
+                음반 1건 = +1
+              </span>
             </div>
-            <span className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111]">
-              <Coins className="h-4 w-4" aria-hidden="true" />
-              음반 1건 = +1
-            </span>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <SummaryCard
-              label="총 적립"
-              value={summary.earned}
-              tone="border-[#111111] bg-white text-[#111111]"
-            />
-            <SummaryCard
-              label="매거진 사용"
-              value={summary.magazineUsed}
-              tone="border-border bg-card text-foreground"
-            />
-            <SummaryCard
-              label="서비스 사용"
-              value={summary.rewardUsed}
-              tone="border-border bg-card text-foreground"
-            />
-          </div>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <SummaryCard
+                label="총 적립"
+                value={summary.earned}
+                tone="border-[#111111] bg-white text-[#111111]"
+              />
+              <SummaryCard
+                label="매거진 사용"
+                value={summary.magazineUsed}
+                tone="border-border bg-card text-foreground"
+              />
+              <SummaryCard
+                label="서비스 사용"
+                value={summary.rewardUsed}
+                tone="border-border bg-card text-foreground"
+              />
+            </div>
+          </section>
+
+          <section
+            id="credit-requests"
+            className="scroll-mt-28 rounded-[10px] border-2 border-border bg-card p-4 sm:p-5"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-black text-foreground">요청 내역</h2>
+              <span className="rounded-[8px] border-2 border-[#111111] bg-background px-3 py-1 text-xs font-black text-foreground">
+                {creditRequestItems.length.toLocaleString()}건
+              </span>
+            </div>
+
+            {hasCreditRequests && latestCreditRequest ? (
+              <div className="mt-4 space-y-3">
+                {renderCreditRequest(latestCreditRequest)}
+                {olderCreditRequests.length > 0 ? (
+                  <details className="group rounded-[8px] border-2 border-border bg-background">
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2 text-sm font-black text-foreground marker:hidden">
+                      전체 요청 보기
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          +{olderCreditRequests.length.toLocaleString()}
+                        </span>
+                        <ChevronDown
+                          className="h-4 w-4 transition group-open:rotate-180"
+                          aria-hidden="true"
+                        />
+                      </span>
+                    </summary>
+                    <div className="grid gap-3 border-t border-border p-3">
+                      {olderCreditRequests.map(renderCreditRequest)}
+                    </div>
+                  </details>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-4 rounded-[8px] border-2 border-dashed border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
+                요청 내역이 없습니다.
+              </p>
+            )}
+          </section>
         </section>
 
         <section
-          id="credit-requests"
-          className="scroll-mt-28 rounded-[10px] border-2 border-border bg-card p-5"
+          aria-label="크레딧 사용"
+          className="w-full rounded-[10px] border-2 border-border bg-card p-4 sm:p-5"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-black text-foreground">사용 내역</h2>
-            <span className="rounded-[8px] border-2 border-[#111111] bg-background px-3 py-1 text-xs font-black text-foreground">
-              {(magazineRequests.length + studioReservations.length).toLocaleString()}건
-            </span>
+          <div className="mb-4 flex items-center gap-2">
+            <Coins className="h-5 w-5 text-[#1556a4]" aria-hidden="true" />
+            <h2 className="text-xl font-black text-foreground">크레딧 사용하기</h2>
           </div>
-
-          {hasCreditRequests ? (
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              {creditRequestItems.map((item) =>
-                item.type === "magazine" ? (
-                  <MagazineRequestCard key={item.key} request={item.request} />
-                ) : (
-                  <StudioReservationCard
-                    key={item.key}
-                    reservation={item.reservation}
-                    redemption={redemptionMap.get(item.reservation.redemption_id)}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Link
+              href={`${localePrefix}/magazine?tab=magazine#credit-use`}
+              aria-label="매거진 발행 요청하기"
+              className="group flex min-h-[176px] flex-col justify-between rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[5px_5px_0_#1556a4] transition hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#1556a4]/35"
+            >
+              <span className="flex items-start justify-between gap-4">
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white">
+                  <Newspaper className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span className="rounded-[6px] border border-[#111111]/25 px-2 py-1 text-[11px] font-black">
+                  1크레딧
+                </span>
+              </span>
+              <span className="mt-6">
+                <span className="block text-xl font-black">매거진 발행 요청</span>
+                <span className="mt-1 block text-sm font-semibold text-[#111111]/70">
+                  아티스트·앨범 콘텐츠 발행
+                </span>
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-black">
+                  발행 요청하기
+                  <ArrowRight
+                    className="h-4 w-4 transition group-hover:translate-x-1"
+                    aria-hidden="true"
                   />
-                ),
-              )}
-            </div>
-          ) : (
-            <p className="mt-5 rounded-[10px] border-2 border-dashed border-border bg-background p-5 text-sm font-semibold text-muted-foreground">
-              사용 내역이 없습니다.
-            </p>
-          )}
+                </span>
+              </span>
+            </Link>
+
+            <Link
+              href={`${localePrefix}/magazine?tab=services#credit-use`}
+              aria-label="서비스 이용 요청하기"
+              className="group flex min-h-[176px] flex-col justify-between rounded-[10px] border-2 border-[#111111] bg-[#1556a4] p-5 text-white shadow-[5px_5px_0_#f2cf27] transition hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#f2cf27]/40"
+            >
+              <span className="flex items-start justify-between gap-4">
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] border-2 border-white bg-white text-[#1556a4]">
+                  <Gift className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span className="rounded-[6px] border border-white/35 px-2 py-1 text-[11px] font-black text-white/90">
+                  서비스별 차감
+                </span>
+              </span>
+              <span className="mt-6">
+                <span className="block text-xl font-black">서비스 이용 요청</span>
+                <span className="mt-1 block text-sm font-semibold text-white/75">
+                  녹음실 등 연계 서비스 신청
+                </span>
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-black">
+                  신청하기
+                  <ArrowRight
+                    className="h-4 w-4 transition group-hover:translate-x-1"
+                    aria-hidden="true"
+                  />
+                </span>
+              </span>
+            </Link>
+          </div>
         </section>
 
         <section

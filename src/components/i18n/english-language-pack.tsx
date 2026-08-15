@@ -454,7 +454,11 @@ const exactTranslations: Record<string, string> = {
   "MV · 온라인/방송": "MV · Online/Broadcast",
   "나의 심의 내역": "My Review History",
   "나의 크레딧": "My Credits",
+  "크레딧 현황": "Credit Overview",
   "보유 크레딧": "Available Credits",
+  "크레딧 사용": "Use Credits",
+  "음반 1건 = +1": "1 Album = +1 Credit",
+  "1크레딧": "1 Credit",
   "음반심의 결제 완료 건으로 발급되는 온사이드 크레딧을 확인하고 사용하세요.":
     "Check and use Onside credits issued from completed album review payments.",
   "음반심의 결제 완료 건으로 적립된 크레딧을 매거진 발행이나 서비스 이용권으로 사용할 수 있습니다.":
@@ -479,6 +483,9 @@ const exactTranslations: Record<string, string> = {
   "앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 매거진 발행, 녹음실 이용권 등 관리자가 등록한 온사이드 연계 서비스에 사용할 수 있습니다.":
     "Each completed album review payment issues 1 credit. Credits can be used for magazine publication, studio vouchers, and other Onside partner services registered by admins.",
   "매거진 바로가기": "Open Magazine",
+  "매거진 발행 요청": "Magazine Publication Request",
+  "매거진 발행 요청하기": "Request Magazine Publication",
+  "아티스트·앨범 콘텐츠 발행": "Publish Artist and Album Content",
   "발행 요청하기": "Request Publication",
   "발행 요청": "Request Publication",
   "크레딧 요약": "Credit Summary",
@@ -529,11 +536,20 @@ const exactTranslations: Record<string, string> = {
   "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.\n적어주신 연락처로 녹음실 사용 안내를 드립니다.":
     "Your studio booking request has been received. Instructions will appear after admin approval.\nWe will contact you using the contact details you provided.",
   "크레딧 사용 완료": "Credit Use Complete",
+  "요청 내역": "Request History",
+  "매거진 · 서비스": "Magazine · Services",
+  "사용 내역": "Usage History",
+  "적립 내역": "Earning History",
+  "전체 요청 보기": "View All Requests",
+  "요청 내역이 없습니다.": "No request history yet.",
   "요청 내역 보기": "View Request History",
   "크레딧 요청 내역 보기": "View Credit Request History",
   "크레딧 사용 요청 내역": "Credit Use Request History",
   "서비스 이용 신청": "Service Use Request",
   "서비스 이용 요청": "Service Request",
+  "서비스 이용 요청하기": "Request a Service",
+  "요청하기": "Request",
+  "서비스 보기": "View Services",
   "크레딧 사용해서 신청": "Request with Credits",
   "서비스 이용권 신청": "Service Voucher Requests",
   "녹음실 등 연계 서비스 신청":
