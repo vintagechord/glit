@@ -284,6 +284,7 @@ const exactTranslations: Record<string, string> = {
   "극동방송: CCM 음원만 가능": "FEBC: CCM music only",
   "국악방송: 국악 장르만 가능": "Gugak FM: Korean traditional music only",
   "다음 단계": "Next Step",
+  "이전 단계": "Previous Step",
   "온라인 신청서 작성하기": "Fill Out Online Application",
   "신청서 다운로드 & 업로드하기": "Download & Upload Application",
   "신청서 파일 작성": "Application File",

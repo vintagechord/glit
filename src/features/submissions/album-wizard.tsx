@@ -4690,7 +4690,7 @@ export function AlbumWizard({
                   disabled={isSaving || isAddingAlbum}
                   className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                 >
-                  {step === 3 ? "이전 단계" : "기본 정보 수정"}
+                  이전 단계
                 </button>
                 {step === 4 && (
                   <button
@@ -4699,7 +4699,7 @@ export function AlbumWizard({
                     disabled={isSaving || isAddingAlbum}
                     className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                   >
-                    트랙 임시 저장
+                    임시 저장
                   </button>
                 )}
                 {step === 4 && (
@@ -4728,7 +4728,7 @@ export function AlbumWizard({
                     ? isOneClick
                       ? "저장하고 파일 업로드"
                       : "저장하고 트랙 정보 입력"
-                    : "파일 업로드로 이동"}
+                    : "다음 단계"}
                 </button>
               </div>
             </>

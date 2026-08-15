@@ -48,7 +48,13 @@ test("track entry preserves compilation overrides and saves before upload", () =
   assert.match(source, /같은 참여진으로 추가/);
   assert.match(source, /빈 트랙 추가/);
   assert.match(source, /현재 참여진을 빈칸에 적용/);
-  assert.match(source, /트랙 임시 저장/);
+  assert.match(
+    source,
+    /handleTrackTemporarySave\(\)[\s\S]*?>\s*임시 저장\s*<\/button>/,
+  );
+  assert.doesNotMatch(source, /기본 정보 수정/);
+  assert.doesNotMatch(source, /트랙 임시 저장/);
+  assert.match(source, /: "다음 단계"\}\s*<\/button>/);
   assert.match(trackHandler, /validateTrackInfoStep\(\)/);
   assert.match(trackHandler, /validateTranslatedLyrics\(\)/);
   assert.match(trackHandler, /status: "PRE_REVIEW"/);
@@ -78,11 +84,12 @@ test("progress and English UI support dynamic five- to seven-step flows", () => 
     "가수명",
     "저장하고 트랙 정보 입력",
     "저장하고 파일 업로드",
-    "기본 정보 수정",
     "같은 참여진으로 추가",
     "빈 트랙 추가",
     "현재 참여진을 빈칸에 적용",
-    "트랙 임시 저장",
+    "임시 저장",
+    "다음 단계",
+    "이전 단계",
   ]) {
     assert.match(translations, new RegExp(`"${label}":`));
   }
