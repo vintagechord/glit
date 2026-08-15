@@ -36,20 +36,32 @@ test("submitted cart and direct-pay saves remain non-payable while staged", () =
   );
 });
 
-test("draft and pre-review saves remain unpaid", () => {
+test("draft and pre-review saves keep the lease-compatible draft staging state", () => {
   for (const requestedStatus of ["DRAFT", "PRE_REVIEW"] as const) {
     const state = resolveSubmissionSaveState({
       requestedStatus,
       shouldRequestPayment: true,
     });
-    assert.equal(state.stagingStatus, requestedStatus);
+    assert.equal(state.stagingStatus, "DRAFT");
     assert.equal(state.stagingPaymentStatus, "UNPAID");
+    assert.equal(state.finalStatus, requestedStatus);
     assert.equal(state.finalPaymentStatus, "UNPAID");
   }
+
+  assert.equal(
+    resolveSubmissionSaveState({
+      requestedStatus: "PRE_REVIEW",
+      shouldRequestPayment: false,
+    }).requiresFinalization,
+    true,
+  );
 });
 
 test("the DB lease serializes saves and fails closed around payment", () => {
   const migration = read("supabase/migrations/0083_submission_save_lease.sql");
+  const releaseMigration = read(
+    "supabase/migrations/0088_release_submission_save_lease_safely.sql",
+  );
 
   assert.match(migration, /add column if not exists save_lease_token uuid/);
   assert.match(migration, /add column if not exists save_lease_expires_at timestamptz/);
@@ -70,6 +82,38 @@ test("the DB lease serializes saves and fails closed around payment", () => {
   );
   assert.match(migration, /set status = 'DRAFT',\s+payment_status = 'UNPAID'/);
   assert.match(migration, /save_lease_expires_at <= clock_timestamp\(\)/);
+  assert.match(
+    releaseMigration,
+    /set status = 'DRAFT',\s+payment_status = 'UNPAID',\s+save_lease_token = null/,
+  );
+  assert.match(
+    releaseMigration,
+    /save_lease_expires_at <= clock_timestamp\(\)/,
+  );
+  assert.match(
+    releaseMigration,
+    /submission\.save_lease_token = p_lease_token/,
+  );
+  assert.match(
+    releaseMigration,
+    /submission\.status in \('DRAFT', 'PRE_REVIEW', 'SUBMITTED'\)/,
+  );
+  assert.match(
+    releaseMigration,
+    /submission\.payment_status = 'UNPAID'/,
+  );
+  assert.match(
+    releaseMigration,
+    /payment\.status = 'REQUESTED'[\s\S]*submission_payment_includes_submission/,
+  );
+  assert.match(
+    releaseMigration,
+    /revoke all on function public\.release_submission_save_lease\(uuid, uuid\)[\s\S]*from public, anon, authenticated/,
+  );
+  assert.match(
+    releaseMigration,
+    /grant execute on function public\.release_submission_save_lease\(uuid, uuid\)[\s\S]*to service_role/,
+  );
 
   for (const signature of [
     "public.claim_submission_save_lease(\n  uuid, timestamptz, uuid, text, uuid\n)",

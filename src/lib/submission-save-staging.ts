@@ -10,9 +10,10 @@ export type SubmissionSaveStatus =
 export type SubmissionSavePaymentStatus = "UNPAID" | "PAYMENT_PENDING";
 
 /**
- * Submitted writes are staged as an unpaid draft until tracks/files/reviews
- * have all succeeded. Draft and pre-review saves are already non-payable and
- * therefore do not need a second state transition.
+ * Every write stays as an unpaid draft while the save lease is active. The
+ * commit RPC requires that invariant so tracks, files, reviews, and the final
+ * lifecycle state are applied in one transaction. In particular, PRE_REVIEW
+ * must not be exposed before its tracks have committed successfully.
  */
 export const resolveSubmissionSaveState = ({
   requestedStatus,
@@ -29,14 +30,12 @@ export const resolveSubmissionSaveState = ({
   const finalPaymentStatus: SubmissionSavePaymentStatus = requestsPayment
     ? "PAYMENT_PENDING"
     : "UNPAID";
-  const requiresFinalization = requestedStatus === "SUBMITTED";
+  const requiresFinalization = finalStatus !== "DRAFT";
 
   return {
     requiresFinalization,
-    stagingStatus: requiresFinalization ? "DRAFT" : finalStatus,
-    stagingPaymentStatus: requiresFinalization
-      ? "UNPAID"
-      : finalPaymentStatus,
+    stagingStatus: "DRAFT",
+    stagingPaymentStatus: "UNPAID",
     finalStatus,
     finalPaymentStatus,
   } as const;

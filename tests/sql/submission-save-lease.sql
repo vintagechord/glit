@@ -156,6 +156,66 @@ begin
   from public.album_tracks where submission_id = v_album_id;
   assert v_count = 2;
 
+  -- Moving from track entry to file upload must keep the lease-time parent as
+  -- DRAFT, replace a deleted track set atomically, then expose PRE_REVIEW only
+  -- after the surviving copied credits have committed.
+  select updated_at into v_version
+  from public.submissions where id = v_album_id;
+  select * into v_row
+  from public.claim_submission_save_lease(
+    v_album_id, v_version, v_user_id, null, v_lease_c
+  );
+  update public.submissions
+  set title = 'Pre-review staged parent'
+  where id = v_album_id and save_lease_token = v_lease_c;
+  select status, updated_at into v_status, v_version
+  from public.submissions where id = v_album_id;
+  assert v_status = 'DRAFT';
+  perform public.commit_submission_save(
+    v_album_id,
+    v_lease_c,
+    v_version,
+    true,
+    '[{"track_no":1,"track_title":"Surviving track","performer":"Copied singer","composer":"Shared composer","is_title":true,"title_role":"MAIN","broadcast_selected":true}]'::jsonb,
+    false,
+    'AUDIO',
+    '[]'::jsonb,
+    false,
+    '{}'::uuid[],
+    'PRE_REVIEW',
+    'UNPAID'
+  );
+  select status, payment_status, save_lease_token
+    into v_status, v_payment_status, v_token
+  from public.submissions where id = v_album_id;
+  assert v_status = 'PRE_REVIEW';
+  assert v_payment_status = 'UNPAID';
+  assert v_token is null;
+  select count(*), string_agg(performer || ':' || composer, ',' order by track_no)
+    into v_count, v_text
+  from public.album_tracks where submission_id = v_album_id;
+  assert v_count = 1;
+  assert v_text = 'Copied singer:Shared composer';
+
+  -- A defensive release must recover even if an application regression
+  -- exposes PRE_REVIEW before the atomic commit finishes.
+  select updated_at into v_version
+  from public.submissions where id = v_album_id;
+  select * into v_row
+  from public.claim_submission_save_lease(
+    v_album_id, v_version, v_user_id, null, v_lease_d
+  );
+  update public.submissions
+  set status = 'PRE_REVIEW'
+  where id = v_album_id and save_lease_token = v_lease_d;
+  assert public.release_submission_save_lease(v_album_id, v_lease_d);
+  select status, payment_status, save_lease_token
+    into v_status, v_payment_status, v_token
+  from public.submissions where id = v_album_id;
+  assert v_status = 'DRAFT';
+  assert v_payment_status = 'UNPAID';
+  assert v_token is null;
+
   begin
     perform public.commit_submission_save(
       v_album_id, v_lease_a, v_version, true, '[]'::jsonb,

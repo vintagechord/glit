@@ -195,14 +195,15 @@ const releaseSubmissionSaveLease = async ({
   submissionId: string;
   leaseToken: string;
 }) => {
-  const { error } = await db.rpc("release_submission_save_lease", {
+  const { data, error } = await db.rpc("release_submission_save_lease", {
     p_submission_id: submissionId,
     p_lease_token: leaseToken,
   });
-  if (error) {
+  if (error || data !== true) {
     console.error("Submission save lease release failed", {
-      code: error.code,
+      code: error?.code,
       submissionId,
+      released: data === true,
     });
   }
 };
