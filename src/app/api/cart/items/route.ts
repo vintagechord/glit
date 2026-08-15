@@ -397,7 +397,11 @@ export async function DELETE(request: Request) {
     .delete()
     .in("id", submissionIds)
     .in("status", ["SUBMITTED", "WAITING_PAYMENT"])
-    .or(cartPaymentFilter);
+    // PostgREST qualifies columns inside an `or` filter incorrectly for
+    // DELETE requests (`submissions.payment_status` -> SQLSTATE 42703).
+    // payment_status is NOT NULL in the current schema, so the equivalent
+    // explicit IN predicate keeps the final ownership/state check atomic.
+    .in("payment_status", ["UNPAID", "PAYMENT_PENDING"]);
   deleteQuery = user
     ? deleteQuery.eq("user_id", user.id)
     : deleteQuery
