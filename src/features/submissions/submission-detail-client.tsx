@@ -946,7 +946,9 @@ export function SubmissionDetailClient({
           : "결과 등급 통보 대기"
         : hasFinalResultDone
           ? "방송사별 결과 반영 완료"
-          : "방송사별 결과 순차 반영",
+          : hasFinalResultStarted
+            ? "방송사별 결과 순차 반영"
+            : "방송사별 결과 대기",
       state: hasFinalResultDone
         ? "done"
         : hasFinalResultStarted
@@ -954,13 +956,34 @@ export function SubmissionDetailClient({
           : "pending",
     },
   ];
-  const renderProcessSection = () => (
-    <div className="rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]">
-      <p className={detailKickerClass}>심의 진행 단계</p>
-      <div className="mt-4 grid gap-3 md:grid-cols-4">
+  const firstIncompleteProcessStepIndex = processSteps.findIndex(
+    (step) => step.state !== "done",
+  );
+  const currentProcessStepIndex =
+    firstIncompleteProcessStepIndex >= 0
+      ? firstIncompleteProcessStepIndex
+      : processSteps.length - 1;
+  const currentProcessStep = processSteps[currentProcessStepIndex];
+  const currentProcessStageLabel = `현재 ${currentProcessStepIndex + 1}단계`;
+  const currentStatusLabel =
+    !isMvSubmission && isPaymentDone
+      ? currentProcessStep.value
+      : displayStatus.currentLabel;
+  const renderProcessTimeline = () => (
+    <div className="mt-6 border-t-2 border-[#111111] pt-5 dark:border-[#f2cf27]">
+      <h3 id="review-process-heading" className={detailKickerClass}>
+        심의 진행 단계
+      </h3>
+      <ol
+        aria-labelledby="review-process-heading"
+        className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      >
         {processSteps.map((step, index) => (
-          <div
+          <li
             key={step.label}
+            aria-current={
+              index === currentProcessStepIndex ? "step" : undefined
+            }
             className={[
               "rounded-[8px] border-2 px-4 py-3 text-sm transition",
               step.state === "done"
@@ -989,12 +1012,12 @@ export function SubmissionDetailClient({
                   : step.state === "active"
                     ? "진행"
                     : "대기"}
-                </span>
+              </span>
             </div>
             <p className="mt-3 font-black tracking-normal">{step.label}</p>
-          </div>
+          </li>
         ))}
-      </div>
+      </ol>
     </div>
   );
   const renderStationReviewSection = () => (
@@ -1465,7 +1488,7 @@ export function SubmissionDetailClient({
         <div className="pointer-events-none absolute bottom-0 left-0 h-4 w-24 bg-[#d9362c] dark:bg-[#ff6258]" />
         <div className="pointer-events-none absolute bottom-0 right-0 h-4 w-40 bg-[#f2cf27]" />
         <div className="relative z-10">
-          <div className="min-w-0 max-w-4xl">
+          <div className="min-w-0">
             <p className="bauhaus-kicker">
               Submission Detail
             </p>
@@ -1475,7 +1498,7 @@ export function SubmissionDetailClient({
             <p className="mt-3 text-lg font-semibold text-foreground/82 sm:text-xl">
               {submission.artist_name || "아티스트 미입력"}
             </p>
-            <div className="mt-6 max-w-3xl rounded-[8px] border-2 border-[#111111] bg-white/85 p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#111111]/55 dark:shadow-[4px_4px_0_#f2cf27]">
+            <div className="mt-6 w-full rounded-[8px] border-2 border-[#111111] bg-white/85 p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#111111]/55 dark:shadow-[4px_4px_0_#f2cf27]">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                   현재 상태
@@ -1487,9 +1510,16 @@ export function SubmissionDetailClient({
                   </span>
                 </p>
               </div>
-              <h2 className="mt-2 text-2xl font-black text-foreground">
-                {displayStatus.currentLabel}
-              </h2>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <h2 className="text-2xl font-black text-foreground">
+                  {currentStatusLabel}
+                </h2>
+                {!isMvSubmission && isPaymentDone ? (
+                  <span className="rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-2.5 py-1 text-xs font-black text-[#111111]">
+                    {currentProcessStageLabel}
+                  </span>
+                ) : null}
+              </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 {displayStatus.primaryActionLabel ? (
                   <button
@@ -1508,16 +1538,16 @@ export function SubmissionDetailClient({
                   신청서 확인
                 </button>
               </div>
+              {!isMvSubmission && isPaymentDone
+                ? renderProcessTimeline()
+                : null}
             </div>
           </div>
         </div>
       </section>
 
-      {!isMvSubmission && isPaymentDone ? (
-        <div className="mt-8">{renderProcessSection()}</div>
-      ) : null}
       {isPaymentDone ? (
-        <div className={isMvSubmission ? "mt-8" : "mt-6"}>
+        <div className="mt-8">
           {renderStationReviewSection()}
         </div>
       ) : null}

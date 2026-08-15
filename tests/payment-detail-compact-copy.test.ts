@@ -41,7 +41,7 @@ test("submission detail hides future progress until payment is complete", () => 
     "src/features/submissions/submission-detail-client.tsx",
   );
   const visibleStatus = source.slice(
-    source.indexOf("<h2 className=\"mt-2 text-2xl"),
+    source.indexOf('<section className="relative overflow-hidden'),
     source.indexOf("{/* 관리자용 등급/필증 편집 UI"),
   );
 
@@ -50,6 +50,35 @@ test("submission detail hides future progress until payment is complete", () => 
   assert.doesNotMatch(source, /\{step\.value\}/);
   assert.match(source, /!isMvSubmission && isPaymentDone/);
   assert.match(source, /\{isPaymentDone \? \(/);
+});
+
+test("submission detail combines current status and review progress", () => {
+  const source = read(
+    "src/features/submissions/submission-detail-client.tsx",
+  );
+  const heroSection = source.slice(
+    source.indexOf('<section className="relative overflow-hidden'),
+    source.indexOf("{/* 관리자용 등급/필증 편집 UI"),
+  );
+
+  assert.match(heroSection, /\{currentProcessStageLabel\}/);
+  assert.match(heroSection, /renderProcessTimeline\(\)/);
+  assert.match(source, /aria-labelledby="review-process-heading"/);
+  assert.match(source, /sm:grid-cols-2 lg:grid-cols-4/);
+  assert.match(
+    source,
+    /aria-current=\{[\s\S]*?index === currentProcessStepIndex \? "step" : undefined[\s\S]*?\}/,
+  );
+  assert.match(source, /\? currentProcessStep\.value/);
+  assert.match(source, /firstIncompleteProcessStepIndex/);
+  assert.match(source, /hasFinalResultStarted[\s\S]*방송사별 결과 순차 반영[\s\S]*방송사별 결과 대기/);
+  assert.doesNotMatch(source, /renderProcessSection/);
+
+  const translations = read(
+    "src/components/i18n/english-language-pack.tsx",
+  );
+  assert.match(translations, /현재\\s\*\(\\d\+\)단계/);
+  assert.match(translations, /"심의 진행 단계": "Review Progress"/);
 });
 
 test("compact payment actions have exact English labels", () => {
