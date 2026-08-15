@@ -101,6 +101,7 @@ type SubmissionRow = {
         track_title?: string | null;
         track_title_kr?: string | null;
         track_title_en?: string | null;
+        performer?: string | null;
         composer?: string | null;
         lyricist?: string | null;
         arranger?: string | null;

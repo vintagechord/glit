@@ -22,7 +22,13 @@ export function SubmissionProgress({
           {safeStep} / {steps.length}
         </span>
       </div>
-      <ol className="mt-3 grid grid-cols-5 gap-1.5" aria-label="전체 진행률">
+      <ol
+        className="mt-3 grid gap-1.5"
+        style={{
+          gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))`,
+        }}
+        aria-label="전체 진행률"
+      >
         {steps.map((label, index) => {
           const stepNumber = index + 1;
           const reached = stepNumber <= safeStep;

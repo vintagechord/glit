@@ -128,6 +128,7 @@ const selectTrackColumns = [
   "submission_id",
   "track_no",
   "track_title",
+  "performer",
   "featuring",
   "composer",
   "lyricist",

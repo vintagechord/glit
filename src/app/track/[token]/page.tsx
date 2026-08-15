@@ -35,7 +35,7 @@ export default async function TrackDetailPage({
 
   const admin = createAdminClient();
   const baseSelect =
-    "id, user_id, guest_token, title, artist_name, status, payment_status, payment_method, amount_krw, type, created_at, updated_at, applicant_email, applicant_name, applicant_phone, guest_name, guest_email, guest_phone, guest_company, result_status, result_memo, result_notified_at, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, composer, lyricist, arranger, lyrics, is_title ), certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, mv_desired_rating, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_distribution_company, mv_production_company, mv_usage, mv_song_title, mv_composer, mv_lyricist, mv_arranger, mv_album_title";
+    "id, user_id, guest_token, title, artist_name, status, payment_status, payment_method, amount_krw, type, created_at, updated_at, applicant_email, applicant_name, applicant_phone, guest_name, guest_email, guest_phone, guest_company, result_status, result_memo, result_notified_at, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, performer, composer, lyricist, arranger, lyrics, is_title ), certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, mv_desired_rating, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_distribution_company, mv_production_company, mv_usage, mv_song_title, mv_composer, mv_lyricist, mv_arranger, mv_album_title";
 
   const fallbackSelect =
     "id, guest_token, title, artist_name, status, type, payment_status, amount_krw, result_status, result_memo, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title )";
@@ -61,6 +61,7 @@ export default async function TrackDetailPage({
           track_title?: string | null;
           track_title_kr?: string | null;
           track_title_en?: string | null;
+          performer?: string | null;
         }>
       | null;
     package?:

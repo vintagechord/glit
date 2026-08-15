@@ -247,6 +247,7 @@ test("review docs normalize artist, company, dates, filenames, lyrics, and instr
           submission_id: "22222222-2222-4222-8222-222222222222",
           track_no: 1,
           track_title: "Voice\u2060 Song",
+          performer: "Track Singer One",
           lyricist: "Writer",
           composer: "Composer",
           arranger: "Arranger",
@@ -257,6 +258,7 @@ test("review docs normalize artist, company, dates, filenames, lyrics, and instr
           submission_id: "22222222-2222-4222-8222-222222222222",
           track_no: 2,
           track_title: "Karaoke Version",
+          performer: "Track Singer Two",
           lyricist: "Hidden Writer",
           composer: "Composer",
           lyrics: "original lyrics",
@@ -302,6 +304,8 @@ test("review docs normalize artist, company, dates, filenames, lyrics, and instr
   );
   const allXml = Array.from(xmlByName.values()).join("\n");
   assert.match(allXml, /Stage \/ 한국명 \/ English/);
+  assert.match(allXml, /Track Singer One/);
+  assert.match(allXml, /Track Singer Two/);
   assert.match(allXml, /Guest Company/);
   assert.doesNotMatch(allXml, /2026\. 99\. 99\.|26\.99\.99|99\/99/);
   assert.doesNotMatch(allXml, /\u0001/);

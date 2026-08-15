@@ -5,6 +5,10 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 import {
+  applyAlbumTrackCreditsToBlankTracks,
+  createAlbumTrackWithReusableCredits,
+} from "@/lib/album-track-reuse";
+import {
   getAlbumReviewDiscountPercentForPackage,
   getDiscountedAlbumPrice,
   normalizeAlbumDiscountPercent,
@@ -80,6 +84,7 @@ type PackageOption = {
 
 type TrackInput = {
   trackTitle: string;
+  performer: string;
   featuring: string;
   composer: string;
   lyricist: string;
@@ -126,6 +131,7 @@ type DraftSnapshot = {
 
 const initialTrack: TrackInput = {
   trackTitle: "",
+  performer: "",
   featuring: "",
   composer: "",
   lyricist: "",
@@ -138,9 +144,18 @@ const initialTrack: TrackInput = {
   broadcastSelected: false,
 };
 
-const steps = [
+const standardSteps = [
   "방송국 패키지 선택",
-  "신청서 작성",
+  "기본 정보",
+  "트랙 정보",
+  "파일 업로드",
+  "결제",
+  "접수 완료",
+];
+
+const compactSteps = [
+  "방송국 패키지 선택",
+  "기본 정보",
   "파일 업로드",
   "결제",
   "접수 완료",
@@ -459,6 +474,13 @@ export function AlbumWizard({
   const profanityTestPattern = profanityMatchers?.testPattern ?? null;
   const activeTrack = tracks[activeTrackIndex] ?? tracks[0];
   const isDownloadedApplicationFlow = applicationFormMode === "upload";
+  const hasTrackStep = !isOneClick && !isDownloadedApplicationFlow;
+  const progressSteps = hasTrackStep ? standardSteps : compactSteps;
+  const progressCurrentStep = hasTrackStep
+    ? step
+    : step <= 2
+      ? step
+      : step - 1;
   const profanityWords = extractProfanityWords(
     activeTrack.lyrics,
     profanityPattern,
@@ -570,7 +592,7 @@ export function AlbumWizard({
     {
       label: "신청서",
       value: `앨범 ${totalAlbumCount}건 저장됨`,
-      ready: step >= 4 || Boolean(uploadDrafts?.length),
+      ready: step >= 5 || Boolean(uploadDrafts?.length),
     },
     {
       label: "파일",
@@ -585,10 +607,6 @@ export function AlbumWizard({
   ];
   const albumPaymentReady = albumPaymentReadiness.every((item) => item.ready);
   const albumPaymentBlockers = albumPaymentReadiness.filter((item) => !item.ready);
-  const albumQuickSteps = isOneClick
-    ? ["담당자 정보", "멜론 링크", "음원 WAV/MP3/ZIP", "결제"]
-    : ["담당자 정보", "앨범·트랙 정보", "음원 WAV/MP3/ZIP", "결제"];
-
   const readDraftStorage = React.useCallback(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -905,7 +923,12 @@ export function AlbumWizard({
     localePrefix,
   ]);
 
-  const stepLabels = <SubmissionProgress steps={steps} currentStep={step} />;
+  const stepLabels = (
+    <SubmissionProgress
+      steps={progressSteps}
+      currentStep={progressCurrentStep}
+    />
+  );
 
   const updateTrack = <K extends keyof TrackInput>(
     index: number,
@@ -1097,12 +1120,30 @@ export function AlbumWizard({
     });
   };
 
-  const addTrack = () => {
+  const addBlankTrack = () => {
     setTracks((prev) => {
       const next = [...prev, { ...initialTrack }];
       setActiveTrackIndex(next.length - 1);
       return next;
     });
+  };
+
+  const addTrackWithSameCredits = () => {
+    setTracks((prev) => {
+      const source = prev[activeTrackIndex] ?? prev[0] ?? initialTrack;
+      const next = [
+        ...prev,
+        createAlbumTrackWithReusableCredits(initialTrack, source),
+      ];
+      setActiveTrackIndex(next.length - 1);
+      return next;
+    });
+  };
+
+  const applyCurrentCreditsToBlankTracks = () => {
+    setTracks((prev) =>
+      applyAlbumTrackCreditsToBlankTracks(prev, activeTrackIndex),
+    );
   };
 
   const removeTrack = (index: number) => {
@@ -1976,6 +2017,7 @@ export function AlbumWizard({
     (rows: Array<Record<string, unknown>>): TrackInput[] =>
       rows.map((row) => ({
         trackTitle: String(row.track_title ?? ""),
+        performer: String(row.performer ?? ""),
         featuring: String(row.featuring ?? ""),
         composer: String(row.composer ?? ""),
         lyricist: String(row.lyricist ?? ""),
@@ -2400,6 +2442,10 @@ export function AlbumWizard({
     return trackList.map((track) => ({
       ...track,
       trackTitle: track.trackTitle.trim(),
+      performer: track.performer.trim(),
+      composer: track.composer.trim(),
+      lyricist: track.lyricist.trim(),
+      arranger: track.arranger.trim(),
       isTitle: isSingleTrack ? true : Boolean(track.isTitle),
       titleRole: isSingleTrack
         ? "MAIN"
@@ -2410,7 +2456,7 @@ export function AlbumWizard({
     }));
   };
 
-  const validateFormStep = () => {
+  const validateBasicInfoStep = () => {
     if (!selectedPackage) {
       setNotice({ error: "패키지를 선택해주세요." });
       return false;
@@ -2481,27 +2527,40 @@ export function AlbumWizard({
         setNotice({ error: "그룹 팀원 전체 이름을 입력해주세요." });
         return false;
       }
-
-      if (tracks.some((track) => !track.trackTitle.trim())) {
-        setNotice({ error: "모든 트랙의 곡명을 입력해주세요." });
-        return false;
-      }
-
-      if (tracks.some((track) => !track.composer.trim())) {
-        setNotice({ error: "모든 트랙의 작곡 정보를 입력해주세요." });
-        return false;
-      }
-
-      if (effectiveTitleCount === 0) {
-        setNotice({ error: broadcastRequirementMessage });
-        return false;
-      }
-
-      if (requiresBroadcastSelection && broadcastCount !== 3) {
-        setNotice({ error: broadcastRequirementMessage });
-        return false;
-      }
     }
+    return true;
+  };
+
+  const validateTrackInfoStep = () => {
+    if (isAdminReviewer || isOneClick || isDownloadedApplicationFlow) {
+      return true;
+    }
+
+    if (tracks.some((track) => !track.trackTitle.trim())) {
+      setNotice({ error: "모든 트랙의 곡명을 입력해주세요." });
+      return false;
+    }
+
+    if (tracks.some((track) => !track.performer.trim())) {
+      setNotice({ error: "모든 트랙의 가수명을 입력해주세요." });
+      return false;
+    }
+
+    if (tracks.some((track) => !track.composer.trim())) {
+      setNotice({ error: "모든 트랙의 작곡 정보를 입력해주세요." });
+      return false;
+    }
+
+    if (effectiveTitleCount === 0) {
+      setNotice({ error: broadcastRequirementMessage });
+      return false;
+    }
+
+    if (requiresBroadcastSelection && broadcastCount !== 3) {
+      setNotice({ error: broadcastRequirementMessage });
+      return false;
+    }
+
     return true;
   };
 
@@ -2781,7 +2840,11 @@ export function AlbumWizard({
   };
 
   const handleAddAlbum = async () => {
-    if (!validateFormStep()) {
+    if (
+      !validateBasicInfoStep() ||
+      !validateTrackInfoStep() ||
+      !validateTranslatedLyrics()
+    ) {
       return;
     }
     setIsAddingAlbum(true);
@@ -2789,6 +2852,17 @@ export function AlbumWizard({
     try {
       const draft = await buildAlbumDraft({ includeUpload: false });
       if (editingIndex !== null) {
+        const nextAlbumDrafts = albumDrafts.map((item, idx) =>
+          idx === editingIndex ? draft : item,
+        );
+        const draftsForSave = baseDraftSnapshot
+          ? [baseDraftSnapshot.draft, ...nextAlbumDrafts]
+          : nextAlbumDrafts;
+        const saved = await saveAlbumDrafts(draftsForSave, {
+          includeFiles: false,
+          status: "DRAFT",
+        });
+        if (!saved) return;
         setAlbumDrafts((prev) =>
           prev.map((item, idx) => (idx === editingIndex ? draft : item)),
         );
@@ -2802,8 +2876,14 @@ export function AlbumWizard({
           resetAlbumForm();
         }
       } else {
+        const saved = await saveAlbumDrafts([draft, ...albumDrafts], {
+          includeFiles: false,
+          status: "DRAFT",
+        });
+        if (!saved) return;
         setAlbumDrafts((prev) => [...prev, draft]);
         resetAlbumForm();
+        setStep(2);
       }
     } catch {
       setNotice({ error: "추가 앨범 등록 중 오류가 발생했습니다." });
@@ -2829,21 +2909,30 @@ export function AlbumWizard({
     }
   };
 
-  const handleStep2Next = async () => {
+  const handleBasicInfoNext = async () => {
     if (isDownloadedApplicationFlow) {
       await handleDownloadedApplicationContinue();
       return;
     }
-    if (editingIndex !== null) {
-      setNotice({ error: "수정 중인 앨범을 저장한 뒤 진행해주세요." });
+    if (!validateBasicInfoStep()) {
       return;
     }
-    if (!validateFormStep()) {
+
+    const submissionId =
+      currentSubmissionId ?? (await createDraft({ force: true }));
+    if (!submissionId) {
+      setNotice({
+        error:
+          draftError ||
+          draftErrorRef.current ||
+          "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      });
       return;
     }
+
     let currentDraft: AlbumDraft;
     try {
-      currentDraft = captureCurrentDraft();
+      currentDraft = captureCurrentDraft(submissionId);
     } catch (error) {
       setNotice({
         error:
@@ -2856,6 +2945,109 @@ export function AlbumWizard({
       void createDraft();
       return;
     }
+
+    const allDrafts =
+      editingIndex !== null
+        ? baseDraftSnapshot
+          ? [
+            baseDraftSnapshot.draft,
+            ...albumDrafts.map((draft, index) =>
+              index === editingIndex ? currentDraft : draft,
+            ),
+          ]
+          : albumDrafts.map((draft, index) =>
+            index === editingIndex ? currentDraft : draft,
+          )
+        : [currentDraft, ...albumDrafts];
+    const saved = await saveAlbumDrafts(allDrafts, {
+      includeFiles: false,
+      status: "DRAFT",
+    });
+    if (!saved) return;
+    setNotice({});
+
+    if (isOneClick) {
+      setUploadDrafts(allDrafts);
+      setUploadDraftIndex(0);
+      applyDraftToForm(allDrafts[0], {
+        emailSubmitConfirmed: allDrafts[0].emailSubmitConfirmed,
+      });
+      setStep(4);
+      return;
+    }
+
+    setTracks((previousTracks) =>
+      previousTracks.map((track) =>
+        !track.performer.trim()
+          ? { ...track, performer: artistName.trim() }
+          : track,
+      ),
+    );
+    setStep(3);
+  };
+
+  const handleTrackTemporarySave = async () => {
+    const submissionId =
+      currentSubmissionId ?? (await createDraft({ force: true }));
+    if (!submissionId) {
+      setNotice({
+        error:
+          draftError ||
+          draftErrorRef.current ||
+          "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.",
+      });
+      return;
+    }
+
+    const currentDraft = captureCurrentDraft(submissionId);
+    const draftsForSave =
+      editingIndex !== null
+        ? baseDraftSnapshot
+          ? [
+            baseDraftSnapshot.draft,
+            ...albumDrafts.map((draft, index) =>
+              index === editingIndex ? currentDraft : draft,
+            ),
+          ]
+          : albumDrafts.map((draft, index) =>
+            index === editingIndex ? currentDraft : draft,
+          )
+        : [currentDraft, ...albumDrafts];
+    await saveAlbumDrafts(draftsForSave, {
+      includeFiles: false,
+      status: "DRAFT",
+    });
+  };
+
+  const handleTrackInfoNext = async () => {
+    if (editingIndex !== null) {
+      setNotice({ error: "수정 중인 앨범을 저장한 뒤 진행해주세요." });
+      return;
+    }
+    if (
+      !validateBasicInfoStep() ||
+      !validateTrackInfoStep() ||
+      !validateTranslatedLyrics()
+    ) {
+      return;
+    }
+
+    let currentDraft: AlbumDraft;
+    try {
+      currentDraft = captureCurrentDraft();
+    } catch (error) {
+      setNotice({
+        error:
+          draftError ||
+          draftErrorRef.current ||
+          (error instanceof Error
+            ? error.message
+            : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
+      });
+      void createDraft({ force: true });
+      return;
+    }
+
     const allDrafts = [currentDraft, ...albumDrafts];
     const saved = await saveAlbumDrafts(allDrafts, {
       includeFiles: false,
@@ -2867,7 +3059,7 @@ export function AlbumWizard({
     applyDraftToForm(allDrafts[0], {
       emailSubmitConfirmed: allDrafts[0].emailSubmitConfirmed,
     });
-    setStep(3);
+    setStep(4);
   };
 
   const handleDownloadedApplicationContinue = async () => {
@@ -2908,7 +3100,7 @@ export function AlbumWizard({
       applyDraftToForm(allDrafts[0], {
         emailSubmitConfirmed: false,
       });
-      setStep(3);
+      setStep(4);
     } catch (error) {
       setNotice({
         error:
@@ -2970,7 +3162,7 @@ export function AlbumWizard({
     }
     const saved = await saveAlbumDrafts(draftsForUpload, { includeFiles: true });
     if (saved) {
-      setStep(4);
+      setStep(5);
     }
   };
 
@@ -2986,7 +3178,7 @@ export function AlbumWizard({
     if (
       status === "SUBMITTED" &&
       !isDownloadedApplicationFlow &&
-      !validateFormStep()
+      (!validateBasicInfoStep() || !validateTrackInfoStep())
     ) {
       return;
     }
@@ -3218,7 +3410,7 @@ export function AlbumWizard({
           if (guestTokens.length > 0) {
             setCompletionTokens(guestTokens);
           }
-          setStep(5);
+          setStep(6);
           return;
         }
         if (paymentMethod === "CARD") {
@@ -3247,7 +3439,7 @@ export function AlbumWizard({
           if (guestTokens.length > 0) {
             setCompletionTokens(guestTokens);
           }
-          setStep(5);
+          setStep(6);
           return;
         } else {
           console.warn("[Inicis][STDPay][init][client] unknown payment method", paymentMethod);
@@ -3270,7 +3462,7 @@ export function AlbumWizard({
     <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving || isAddingAlbum}
-        label={step <= 3 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
+        label={step <= 4 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
       />
       {resumePrompt && !isFromDraftsTab ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-4 py-6">
@@ -3525,22 +3717,26 @@ export function AlbumWizard({
         </div>
       )}
 
-      {step === 2 && (
+      {(step === 2 || step === 3) && (
         <div className="space-y-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-2xl text-foreground">신청서 작성</h2>
+            <h2 className="font-display text-2xl text-foreground">
+              {step === 2 ? "기본 정보" : "트랙 정보"}
+            </h2>
             <span className="rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
               앨범 {albumDrafts.length + 1}
               {albumDrafts.length > 0 ? ` · 추가 ${albumDrafts.length}건` : ""}
             </span>
           </div>
 
-          <ApplicationFormModeTabs
-            mode={applicationFormMode}
-            onModeChange={setApplicationFormMode}
-          />
+          {step === 2 && (
+            <ApplicationFormModeTabs
+              mode={applicationFormMode}
+              onModeChange={setApplicationFormMode}
+            />
+          )}
 
-          {isDownloadedApplicationFlow ? (
+          {step === 2 && isDownloadedApplicationFlow ? (
             <div className="rounded-[28px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
               <h3 className="text-xl font-black text-foreground">신청서 양식</h3>
               <div className="mt-5 flex flex-wrap gap-3">
@@ -3607,29 +3803,8 @@ export function AlbumWizard({
           ) : (
             <>
 
-              <div className="rounded-[28px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]">
-                <p className="text-xs font-black uppercase tracking-[0.22em]">
-                  빠른 접수 순서
-                </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-4">
-                  {albumQuickSteps.map((item, index) => (
-                    <div
-                      key={item}
-                      className="rounded-xl border border-[#111111]/30 bg-white/45 px-3 py-2 text-sm font-black"
-                    >
-                      <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-[5px] bg-[#111111] text-[11px] text-white">
-                        {index + 1}
-                      </span>
-                      {item}
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-3 text-xs font-semibold leading-5">
-                  헷갈리면 필수 항목만 먼저 입력하고 다음 단계로 이동하세요. 파일이 크거나 업로드가 불안정하면 파일 없이 먼저 진행하거나 예전 온사이드 사이트에서 접수할 수 있습니다.
-                </p>
-              </div>
-
-              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              {step === 2 && (
+                <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   기본 정보
                 </p>
@@ -3896,9 +4071,10 @@ export function AlbumWizard({
                     </div>
                   </div>
                 </div>
-              </div>
+                </div>
+              )}
 
-              {!isOneClick && (
+              {step === 3 && !isOneClick && (
                 <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -3909,15 +4085,17 @@ export function AlbumWizard({
                     </span>
                   </div>
                   <div className="mt-5 grid gap-6 md:grid-cols-[200px_1fr]">
-                    <div className="space-y-2">
-                      {tracks.map((track, index) => {
+                    <div className="space-y-3">
+                      <div className="flex gap-2 overflow-x-auto pb-2 md:max-h-[60vh] md:block md:space-y-2 md:overflow-y-auto md:overflow-x-hidden md:pb-0 md:pr-1">
+                        {tracks.map((track, index) => {
                         const active = index === activeTrackIndex;
                         return (
                           <button
                             key={`track-tab-${index}`}
                             type="button"
+                            aria-pressed={active}
                             onClick={() => setActiveTrackIndex(index)}
-                            className={`w-full rounded-2xl border px-3 py-3 text-left transition ${active
+                            className={`w-[150px] shrink-0 rounded-2xl border px-3 py-3 text-left transition md:w-full ${active
                               ? "border-foreground bg-foreground text-background"
                               : "border-border/60 bg-background text-foreground hover:border-foreground"
                               }`}
@@ -3928,6 +4106,11 @@ export function AlbumWizard({
                             <p className="mt-1 text-xs opacity-80">
                               {getTrackDisplayTitle(track)}
                             </p>
+                            {track.performer.trim() && (
+                              <p className="mt-1 truncate text-[11px] opacity-70">
+                                {track.performer.trim()}
+                              </p>
+                            )}
                             <div
                               className={`mt-2 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] ${active ? "text-background" : ""
                                 }`}
@@ -3961,21 +4144,42 @@ export function AlbumWizard({
                             </div>
                           </button>
                         );
-                      })}
-                      <button
-                        type="button"
-                        onClick={addTrack}
-                        className="w-full rounded-2xl border border-dashed border-border/70 px-3 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
-                      >
-                        + 트랙 추가
-                      </button>
+                        })}
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1">
+                        <button
+                          type="button"
+                          onClick={addTrackWithSameCredits}
+                          className="w-full rounded-2xl border border-foreground bg-foreground px-3 py-3 text-xs font-semibold text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
+                        >
+                          같은 참여진으로 추가
+                        </button>
+                        <button
+                          type="button"
+                          onClick={addBlankTrack}
+                          className="w-full rounded-2xl border border-dashed border-border/70 px-3 py-3 text-xs font-semibold text-muted-foreground transition hover:border-foreground hover:text-foreground"
+                        >
+                          빈 트랙 추가
+                        </button>
+                      </div>
                     </div>
 
                     <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-foreground">
-                          트랙 {activeTrackIndex + 1}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-foreground">
+                            트랙 {activeTrackIndex + 1}
+                          </p>
+                          {tracks.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={applyCurrentCreditsToBlankTracks}
+                              className="rounded-full border border-border/70 bg-background px-3 py-1 text-[11px] font-semibold text-foreground transition hover:border-foreground"
+                            >
+                              현재 참여진을 빈칸에 적용
+                            </button>
+                          )}
+                        </div>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                           <label className="flex items-center gap-2">
                             <input
@@ -4037,6 +4241,22 @@ export function AlbumWizard({
                               updateTrack(
                                 activeTrackIndex,
                                 "trackTitle",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            가수명 *
+                          </label>
+                          <input
+                            value={activeTrack.performer}
+                            onChange={(event) =>
+                              updateTrack(
+                                activeTrackIndex,
+                                "performer",
                                 event.target.value,
                               )
                             }
@@ -4279,7 +4499,7 @@ export function AlbumWizard({
                 </div>
               )}
 
-              {albumDrafts.length > 0 && (
+              {step === 3 && albumDrafts.length > 0 && (
                 <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                     등록 앨범 목록
@@ -4346,59 +4566,49 @@ export function AlbumWizard({
               <div className="flex flex-wrap justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(step === 2 ? 1 : 2)}
                   disabled={isSaving || isAddingAlbum}
                   className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                 >
-                  이전 단계
+                  {step === 2 ? "이전 단계" : "기본 정보 수정"}
                 </button>
-                {!isGuest && (
+                {step === 3 && (
                   <button
                     type="button"
-                    onClick={async () => {
-                      if (editingIndex !== null) {
-                        setNotice({
-                          error: "수정 중인 앨범을 저장한 뒤 진행해주세요.",
-                        });
-                        return;
-                      }
-                      let draftsForSave: AlbumDraft[];
-                      try {
-                        draftsForSave = [captureCurrentDraft(), ...albumDrafts];
-                      } catch (error) {
-                        setNotice({
-                          error:
-                            draftError ||
-                            (error instanceof Error
-                              ? error.message
-                              : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
-                        });
-                        void createDraft();
-                        return;
-                      }
-                      await saveAlbumDrafts(draftsForSave, { includeFiles: false });
-                    }}
+                    onClick={() => void handleTrackTemporarySave()}
                     disabled={isSaving || isAddingAlbum}
                     className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                   >
-                    임시 저장
+                    트랙 임시 저장
+                  </button>
+                )}
+                {step === 3 && (
+                  <button
+                    type="button"
+                    onClick={handleAddAlbum}
+                    disabled={isSaving || isAddingAlbum}
+                    className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
+                  >
+                    {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 등록"}
                   </button>
                 )}
                 <button
                   type="button"
-                  onClick={handleAddAlbum}
-                  disabled={isSaving || isAddingAlbum}
-                  className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
-                >
-                  {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 등록"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleStep2Next}
-                  disabled={isSaving || isAddingAlbum || editingIndex !== null}
+                  onClick={
+                    step === 2 ? handleBasicInfoNext : handleTrackInfoNext
+                  }
+                  disabled={
+                    isSaving ||
+                    isAddingAlbum ||
+                    (step === 3 && editingIndex !== null)
+                  }
                   className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
                 >
-                  다음 단계
+                  {step === 2
+                    ? isOneClick
+                      ? "저장하고 파일 업로드"
+                      : "저장하고 트랙 정보 입력"
+                    : "파일 업로드로 이동"}
                 </button>
               </div>
             </>
@@ -4406,7 +4616,7 @@ export function AlbumWizard({
         </div>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <div className="space-y-8">
           {isDraggingOver && (
             <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
@@ -4710,7 +4920,7 @@ export function AlbumWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => setStep(hasTrackStep ? 3 : 2)}
               disabled={isSaving || isAddingAlbum}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
             >
@@ -4746,7 +4956,7 @@ export function AlbumWizard({
         </div>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <div className="space-y-8">
           <h2 className="font-display text-2xl text-foreground">신청 내용 확인</h2>
 
@@ -5169,7 +5379,7 @@ export function AlbumWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(3)}
+              onClick={() => setStep(4)}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
@@ -5199,7 +5409,7 @@ export function AlbumWizard({
         </div>
       )}
 
-      {step === 5 && (
+      {step === 6 && (
         <div className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-center sm:rounded-[32px] sm:p-10">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
             ✓
@@ -5290,7 +5500,7 @@ export function AlbumWizard({
               )}로 진행할까요?`}
             </p>
             <p className="mt-3 text-xs text-muted-foreground">
-              선택을 확정하면 신청서 작성 단계로 이동합니다.
+              선택을 확정하면 기본 정보 단계로 이동합니다.
             </p>
             {(packageGuidance[packageConfirmTarget.stationCount]?.conditional ?? [])
               .length > 0 ? (

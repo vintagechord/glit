@@ -28,6 +28,7 @@ export const SUBMISSION_USER_DETAIL_SELECT = [
   "updated_at",
   "mv_desired_rating",
   "package:packages ( name, station_count, price_krw )",
+  "album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, track_title_official, performer, featuring, composer, lyricist, arranger, lyrics, notes, is_title, title_role, broadcast_selected )",
 ].join(", ");
 
 export const SUBMISSION_ADMIN_DETAIL_SELECT = [
@@ -99,7 +100,7 @@ export const SUBMISSION_ADMIN_DETAIL_SELECT = [
   "mv_song_memo",
   "mv_lyrics",
   // relations
-  "album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, track_title_official, featuring, composer, lyricist, arranger, lyrics, notes, is_title, title_role, broadcast_selected )",
+  "album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, track_title_official, performer, featuring, composer, lyricist, arranger, lyrics, notes, is_title, title_role, broadcast_selected )",
   // guest fields (nullable; may not exist in older DBs)
   "guest_name",
   "guest_company",

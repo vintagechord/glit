@@ -30,6 +30,7 @@ const validAlbum = {
   tracks: [
     {
       trackTitle: "Song",
+      performer: "Singer",
       composer: "Composer",
       isTitle: true,
       broadcastSelected: true,
@@ -73,13 +74,40 @@ test("normal album submission enforces the same required fields as the wizard", 
   assert.ok(
     validateAlbumSubmittedFields({
       ...validAlbum,
-      tracks: [{ trackTitle: "", composer: "Composer", isTitle: true }],
+      tracks: [
+        {
+          trackTitle: "",
+          performer: "Singer",
+          composer: "Composer",
+          isTitle: true,
+        },
+      ],
     }),
   );
   assert.ok(
     validateAlbumSubmittedFields({
       ...validAlbum,
-      tracks: [{ trackTitle: "Song", composer: "", isTitle: true }],
+      tracks: [
+        {
+          trackTitle: "Song",
+          performer: "Singer",
+          composer: "",
+          isTitle: true,
+        },
+      ],
+    }),
+  );
+  assert.ok(
+    validateAlbumSubmittedFields({
+      ...validAlbum,
+      tracks: [
+        {
+          trackTitle: "Song",
+          performer: "",
+          composer: "Composer",
+          isTitle: true,
+        },
+      ],
     }),
   );
 });
@@ -89,10 +117,10 @@ test("album title/broadcast rules and one-click requirements cannot be bypassed"
     validateAlbumSubmittedFields({
       ...validAlbum,
       tracks: [
-        { trackTitle: "1", composer: "C", isTitle: true, broadcastSelected: true },
-        { trackTitle: "2", composer: "C", broadcastSelected: true },
-        { trackTitle: "3", composer: "C", broadcastSelected: false },
-        { trackTitle: "4", composer: "C", broadcastSelected: false },
+        { trackTitle: "1", performer: "A", composer: "C", isTitle: true, broadcastSelected: true },
+        { trackTitle: "2", performer: "A", composer: "C", broadcastSelected: true },
+        { trackTitle: "3", performer: "B", composer: "C", broadcastSelected: false },
+        { trackTitle: "4", performer: "B", composer: "C", broadcastSelected: false },
       ],
     }),
   );
@@ -100,10 +128,10 @@ test("album title/broadcast rules and one-click requirements cannot be bypassed"
     validateAlbumSubmittedFields({
       ...validAlbum,
       tracks: [
-        { trackTitle: "1", composer: "C", isTitle: true, broadcastSelected: true },
-        { trackTitle: "2", composer: "C", broadcastSelected: true },
-        { trackTitle: "3", composer: "C", broadcastSelected: true },
-        { trackTitle: "4", composer: "C", broadcastSelected: false },
+        { trackTitle: "1", performer: "A", composer: "C", isTitle: true, broadcastSelected: true },
+        { trackTitle: "2", performer: "A", composer: "C", broadcastSelected: true },
+        { trackTitle: "3", performer: "B", composer: "C", broadcastSelected: true },
+        { trackTitle: "4", performer: "B", composer: "C", broadcastSelected: false },
       ],
     }),
     null,

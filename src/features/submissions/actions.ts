@@ -670,6 +670,7 @@ const trackSchema = z.object({
   trackTitleKr: shortTextSchema.optional(),
   trackTitleEn: shortTextSchema.optional(),
   trackTitleOfficial: z.enum(["KR", "EN"]).optional(),
+  performer: metadataTextSchema.optional(),
   featuring: metadataTextSchema.optional(),
   composer: metadataTextSchema.optional(),
   lyricist: metadataTextSchema.optional(),
@@ -1277,6 +1278,12 @@ export async function saveAlbumSubmissionAction(
   });
 
   const submittedTracks = parsed.data.tracks ?? [];
+  // A basic-information draft may intentionally omit tracks so an existing
+  // draft can keep them intact. Final one-click/downloaded-form submissions,
+  // however, must clear any rows left behind after switching application mode.
+  const shouldReplaceTracks =
+    parsed.data.tracks !== undefined ||
+    (isSubmitted && (isOneClick || usesExternalApplicationForm));
   const trackRows = submittedTracks.map((track, index) => {
     const isSingleTrack = submittedTracks.length === 1;
     const isTitle = isSingleTrack || Boolean(track.isTitle);
@@ -1287,6 +1294,7 @@ export async function saveAlbumSubmissionAction(
       track_title_kr: track.trackTitleKr?.trim() || null,
       track_title_en: track.trackTitleEn?.trim() || null,
       track_title_official: track.trackTitleOfficial || null,
+      performer: track.performer?.trim() || artistNameValue || null,
       featuring: track.featuring?.trim() || null,
       composer: track.composer?.trim() || null,
       lyricist: track.lyricist?.trim() || null,
@@ -1525,7 +1533,7 @@ export async function saveAlbumSubmissionAction(
       p_submission_id: parsed.data.submissionId,
       p_lease_token: leaseResult.lease.token,
       p_expected_updated_at: submissionResult.data.updated_at,
-      p_replace_tracks: true,
+      p_replace_tracks: shouldReplaceTracks,
       p_tracks: trackRows,
       p_replace_files: parsed.data.files !== undefined,
       p_file_kind: "AUDIO",

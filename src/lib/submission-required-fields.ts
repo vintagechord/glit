@@ -34,6 +34,7 @@ export const validateAlbumSubmittedFields = (input: {
   artistMembers?: string | null;
   tracks: Array<{
     trackTitle?: string | null;
+    performer?: string | null;
     composer?: string | null;
     isTitle?: boolean | null;
     broadcastSelected?: boolean | null;
@@ -83,6 +84,9 @@ export const validateAlbumSubmittedFields = (input: {
   if (input.tracks.length === 0) return "트랙 정보를 입력해주세요.";
   if (input.tracks.some((track) => !hasText(track.trackTitle))) {
     return "모든 트랙의 곡명을 입력해주세요.";
+  }
+  if (input.tracks.some((track) => !hasText(track.performer))) {
+    return "모든 트랙의 가수명을 입력해주세요.";
   }
   if (input.tracks.some((track) => !hasText(track.composer))) {
     return "모든 트랙의 작곡 정보를 입력해주세요.";

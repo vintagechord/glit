@@ -101,6 +101,7 @@ type Submission = {
     track_title?: string | null;
     track_title_kr?: string | null;
     track_title_en?: string | null;
+    performer?: string | null;
     composer?: string | null;
     lyricist?: string | null;
     arranger?: string | null;
@@ -1855,6 +1856,9 @@ export function SubmissionDetailClient({
                             {track.track_no ?? index + 1}.{" "}
                             {track.track_title || track.track_title_kr || track.track_title_en || "제목 미입력"}
                             {track.is_title ? " · 타이틀" : ""}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            가수 {track.performer || submission.artist_name || "-"}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} / 편곡{" "}

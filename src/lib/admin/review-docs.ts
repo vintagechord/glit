@@ -454,7 +454,15 @@ function buildSubmissionTemplateData(
       const bNo = getNumber(b, "track_no") ?? Number.MAX_SAFE_INTEGER;
       return aNo - bNo;
     })
-    .map(normalizeTrack);
+    .map((track, trackIndex) =>
+      normalizeTrack(
+        {
+          ...track,
+          performer: getText(track, "performer") || artistNameRaw,
+        },
+        trackIndex,
+      ),
+    );
   const files = bundle.files.map(normalizeRecord);
   const events = bundle.events.map(normalizeRecord);
   const applicantName = getText(submission, "applicant_name");

@@ -1810,6 +1810,7 @@ const createTrackSchema = z.object({
   submissionId: z.string().uuid(),
   trackTitle: z.string().min(1, "트랙명을 입력하세요."),
   trackNo: z.coerce.number().int().positive().optional(),
+  performer: z.string().max(2_000).optional(),
   composer: z.string().optional(),
   lyricist: z.string().optional(),
   arranger: z.string().optional(),
@@ -1828,6 +1829,7 @@ export async function createTrackForSubmissionAction(
     submissionId: formData.get("submissionId"),
     trackTitle: formData.get("trackTitle"),
     trackNo: formData.get("trackNo"),
+    performer: formData.get("performer"),
     composer: formData.get("composer"),
     lyricist: formData.get("lyricist"),
     arranger: formData.get("arranger"),
@@ -1839,6 +1841,19 @@ export async function createTrackForSubmissionAction(
   }
 
   const supabase = createAdminClient();
+  let performer = parsed.data.performer?.trim() ?? "";
+  if (!performer) {
+    const { data: submission, error: submissionError } = await supabase
+      .from("submissions")
+      .select("artist_name")
+      .eq("id", parsed.data.submissionId)
+      .maybeSingle();
+    if (submissionError) {
+      console.error("createTrack performer fallback lookup error", submissionError);
+      return;
+    }
+    performer = submission?.artist_name?.trim() ?? "";
+  }
   let trackNo = parsed.data.trackNo;
   if (!trackNo) {
     const { data: existing } = await supabase
@@ -1855,6 +1870,7 @@ export async function createTrackForSubmissionAction(
     submission_id: parsed.data.submissionId,
     track_no: trackNo,
     track_title: parsed.data.trackTitle,
+    performer: performer || null,
     composer: parsed.data.composer || null,
     lyricist: parsed.data.lyricist || null,
     arranger: parsed.data.arranger || null,

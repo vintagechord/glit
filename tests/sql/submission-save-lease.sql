@@ -45,12 +45,12 @@ begin
     (v_station_id, 'Lease Test Active', 'LEASE_ACTIVE', true),
     (v_inactive_station_id, 'Lease Test Inactive', 'LEASE_INACTIVE', false);
   insert into public.submissions (
-    id, user_id, type, title, amount_krw, status, payment_status
+    id, user_id, type, title, artist_name, amount_krw, status, payment_status
   ) values
-    (v_album_id, v_user_id, 'ALBUM', 'Old parent', 1000, 'SUBMITTED', 'UNPAID'),
-    (v_guest_id, null, 'MV_BROADCAST', 'Guest parent', 1000, 'SUBMITTED', 'UNPAID'),
-    (v_atomic_id, v_user_id, 'ALBUM', 'Atomic parent', 1000, 'SUBMITTED', 'UNPAID'),
-    (v_payment_id, v_user_id, 'MV_BROADCAST', 'Payment parent', 1000, 'WAITING_PAYMENT', 'PAYMENT_PENDING');
+    (v_album_id, v_user_id, 'ALBUM', 'Old parent', 'Album Singer', 1000, 'SUBMITTED', 'UNPAID'),
+    (v_guest_id, null, 'MV_BROADCAST', 'Guest parent', null, 1000, 'SUBMITTED', 'UNPAID'),
+    (v_atomic_id, v_user_id, 'ALBUM', 'Atomic parent', 'Atomic Singer', 1000, 'SUBMITTED', 'UNPAID'),
+    (v_payment_id, v_user_id, 'MV_BROADCAST', 'Payment parent', null, 1000, 'WAITING_PAYMENT', 'PAYMENT_PENDING');
   update public.submissions
   set guest_token = 'guest-lease-token-123456'
   where id = v_guest_id;
@@ -97,7 +97,7 @@ begin
     v_lease_a,
     v_version,
     true,
-    '[{"track_no":1,"track_title":"New track","composer":"New composer","is_title":true,"title_role":"MAIN","broadcast_selected":true}]'::jsonb,
+    '[{"track_no":1,"track_title":"New track","performer":"Compilation Singer","composer":"New composer","is_title":true,"title_role":"MAIN","broadcast_selected":true},{"track_no":2,"track_title":"Second track","composer":"New composer"}]'::jsonb,
     true,
     'AUDIO',
     '[{"file_path":"submissions/user/lease-test/audio.wav","object_key":"submissions/user/lease-test/audio.wav","original_name":"audio.wav","mime":"audio/wav","size":123}]'::jsonb,
@@ -114,8 +114,12 @@ begin
   assert v_payment_status = 'UNPAID';
   assert v_token is null;
   select track_title into v_text
-  from public.album_tracks where submission_id = v_album_id;
+  from public.album_tracks
+  where submission_id = v_album_id and track_no = 1;
   assert v_text = 'New track';
+  select string_agg(performer, ',' order by track_no) into v_text
+  from public.album_tracks where submission_id = v_album_id;
+  assert v_text = 'Compilation Singer,Album Singer';
   select count(*) into v_count
   from public.submission_files
   where submission_id = v_album_id
@@ -129,6 +133,28 @@ begin
     and station_id = v_station_id
     and status = 'NOT_SENT';
   assert v_count = 1;
+
+  -- A basic-information-only save omits track replacement and must preserve
+  -- every existing compilation track.
+  select updated_at into v_version
+  from public.submissions where id = v_album_id;
+  select * into v_row
+  from public.claim_submission_save_lease(
+    v_album_id, v_version, v_user_id, null, v_lease_b
+  );
+  update public.submissions
+  set title = 'Basic information updated'
+  where id = v_album_id and save_lease_token = v_lease_b;
+  select updated_at into v_version
+  from public.submissions where id = v_album_id;
+  perform public.commit_submission_save(
+    v_album_id, v_lease_b, v_version, false, '[]'::jsonb,
+    false, 'AUDIO', '[]'::jsonb, false, '{}'::uuid[],
+    'DRAFT', 'UNPAID'
+  );
+  select count(*) into v_count
+  from public.album_tracks where submission_id = v_album_id;
+  assert v_count = 2;
 
   begin
     perform public.commit_submission_save(

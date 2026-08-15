@@ -114,6 +114,40 @@ test("tracks, files, reviews, and final state are one atomic commit", () => {
   assert.match(commit, /save_lease_token = null,\s+save_lease_expires_at = null/);
 });
 
+test("track performers are backfilled and committed without erasing omitted tracks", () => {
+  const migration = read("supabase/migrations/0087_album_track_performer.sql");
+  const source = read("src/features/submissions/actions.ts");
+  const albumStart = source.indexOf("export async function saveAlbumSubmissionAction");
+  const mvStart = source.indexOf("export async function saveMvSubmissionAction");
+  const album = source.slice(albumStart, mvStart);
+
+  assert.match(migration, /add column if not exists performer text/);
+  assert.match(migration, /set performer = submission\.artist_name/);
+  assert.match(migration, /nullif\(btrim\(coalesce\(track\.performer, ''\)\), ''\) is null/);
+  assert.match(migration, /create or replace function public\.commit_submission_save/);
+  assert.match(migration, /insert into public\.album_tracks \([\s\S]*performer,/);
+  assert.match(migration, /row\.performer/);
+  assert.match(migration, /performer text/);
+  assert.match(migration, /v_submission\.artist_name/);
+  assert.doesNotMatch(migration, /ALBUM_TRACK_REPLACEMENT_REQUIRED/);
+  assert.match(
+    migration,
+    /revoke all on function public\.commit_submission_save\([\s\S]*from public, anon, authenticated/,
+  );
+  assert.match(
+    migration,
+    /grant execute on function public\.commit_submission_save\([\s\S]*to service_role/,
+  );
+
+  assert.match(source, /performer: metadataTextSchema\.optional\(\)/);
+  assert.match(album, /performer: track\.performer\?\.trim\(\) \|\| artistNameValue \|\| null/);
+  assert.match(
+    album,
+    /const shouldReplaceTracks =[\s\S]*parsed\.data\.tracks !== undefined[\s\S]*isSubmitted && \(isOneClick \|\| usesExternalApplicationForm\)/,
+  );
+  assert.match(album, /p_replace_tracks: shouldReplaceTracks/);
+});
+
 test("album and MV actions validate, claim, stage, and atomically commit in order", () => {
   const source = read("src/features/submissions/actions.ts");
   const albumStart = source.indexOf("export async function saveAlbumSubmissionAction");

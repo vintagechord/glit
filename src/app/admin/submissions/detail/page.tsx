@@ -101,6 +101,7 @@ type SubmissionRow = {
     track_title_kr?: string | null;
     track_title_en?: string | null;
     track_title_official?: string | null;
+    performer?: string | null;
     featuring?: string | null;
     composer?: string | null;
     lyricist?: string | null;
@@ -1574,6 +1575,9 @@ export default async function AdminSubmissionDetailPage({
                       ) : null}
                     </div>
                     <p className="text-xs text-muted-foreground">
+                      가수 {track.performer || submission.artist_name || "-"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
                       작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} / 편곡{" "}
                       {track.arranger || "-"}
                     </p>
@@ -1600,7 +1604,7 @@ export default async function AdminSubmissionDetailPage({
               </p>
               <ConfirmForm
                 action={createTrackForSubmissionAction}
-                className="grid gap-3 md:grid-cols-[90px_1fr] lg:grid-cols-[90px_1fr_1fr]"
+                className="grid gap-3 md:grid-cols-[90px_1fr] lg:grid-cols-[90px_1fr_1fr_1fr]"
                 message="트랙을 추가하시겠습니까?"
               >
                 <input type="hidden" name="submissionId" value={submission.id} />
@@ -1625,6 +1629,15 @@ export default async function AdminSubmissionDetailPage({
                   />
                 </div>
                 <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">가수명</label>
+                  <input
+                    name="performer"
+                    defaultValue={submission.artist_name || ""}
+                    placeholder="가수명"
+                    className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
                   <label className="text-xs text-muted-foreground">크레딧(선택)</label>
                   <div className="grid grid-cols-3 gap-2">
                     <input
@@ -1644,7 +1657,7 @@ export default async function AdminSubmissionDetailPage({
                     />
                   </div>
                 </div>
-                <div className="md:col-span-2 lg:col-span-3 flex justify-end">
+                <div className="flex justify-end md:col-span-2 lg:col-span-4">
                   <button
                     type="submit"
                     className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background"
