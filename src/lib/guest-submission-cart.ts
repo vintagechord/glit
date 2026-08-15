@@ -82,11 +82,22 @@ export const writeGuestSubmissionCartEntries = (
   }
 };
 
+/**
+ * The submission itself is the cart item. Re-adding an edited submission must
+ * replace its guest token metadata, never create a second cart entry.
+ */
+export const mergeGuestSubmissionCartEntries = (
+  current: GuestSubmissionCartEntry[],
+  incoming: GuestSubmissionCartEntry[],
+) => normalizeGuestSubmissionCartEntries([...current, ...incoming]);
+
 export const addGuestSubmissionCartEntries = (
   entries: GuestSubmissionCartEntry[],
 ) => {
   const current = readGuestSubmissionCartEntries();
-  return writeGuestSubmissionCartEntries([...current, ...entries]);
+  return writeGuestSubmissionCartEntries(
+    mergeGuestSubmissionCartEntries(current, entries),
+  );
 };
 
 export const removeGuestSubmissionCartEntries = (submissionIds: string[]) => {

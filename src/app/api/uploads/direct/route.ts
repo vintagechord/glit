@@ -24,6 +24,10 @@ import {
   isAudioUploadFile,
   isVideoUploadFile,
 } from "@/lib/submission-files";
+import {
+  getSubmissionUploadBlockMessage,
+  getSubmissionUploadBlockReason,
+} from "@/lib/submission-upload-access";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { Upload } from "@aws-sdk/lib-storage";
 
@@ -109,6 +113,15 @@ const ensureUploadAccess = async (
 ) => {
   const ownership = await ensureSubmissionOwner(submissionId, guestToken);
   if (!ownership.error && ownership.submission) {
+    const uploadBlockReason = getSubmissionUploadBlockReason(
+      ownership.submission,
+    );
+    if (uploadBlockReason) {
+      throw new UploadRequestError(
+        getSubmissionUploadBlockMessage(uploadBlockReason),
+        409,
+      );
+    }
     return {
       user: ownership.user,
       submission: ownership.submission,
@@ -127,6 +140,13 @@ const ensureUploadAccess = async (
       const { submission, error } = await findSubmissionById(submissionId);
       if (error || !submission) {
         throw new UploadRequestError("접수를 찾을 수 없습니다.", 404);
+      }
+      const uploadBlockReason = getSubmissionUploadBlockReason(submission);
+      if (uploadBlockReason) {
+        throw new UploadRequestError(
+          getSubmissionUploadBlockMessage(uploadBlockReason),
+          409,
+        );
       }
       return {
         user: ownership.user,

@@ -13,6 +13,10 @@ import {
   consumeRateLimit,
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
+import {
+  getSubmissionUploadBlockMessage,
+  getSubmissionUploadBlockReason,
+} from "@/lib/submission-upload-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -72,6 +76,13 @@ export async function POST(request: Request) {
   }
   if (error === "FORBIDDEN") {
     return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
+  }
+  const uploadBlockReason = getSubmissionUploadBlockReason(submission);
+  if (uploadBlockReason) {
+    return NextResponse.json(
+      { error: getSubmissionUploadBlockMessage(uploadBlockReason) },
+      { status: 409 },
+    );
   }
 
   const ownerKey = getMultipartOwnerKey({

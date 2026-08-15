@@ -107,10 +107,13 @@ test("B2 object deletion contains individual failures and continues", async () =
 test("replacement cleanup deletes only captured keys with no surviving metadata reference", async () => {
   const deleted: string[] = [];
   const admin = {
-    from: () => ({
+    from: (table: string) => ({
       select: () => ({
         in: async () => ({
-          data: [{ object_key: "submissions/member/title/a/shared.wav" }],
+          data:
+            table === "submission_files"
+              ? [{ object_key: "submissions/member/title/a/shared.wav" }]
+              : [{ object_key: "submissions/member/title/a/staged.wav" }],
           error: null,
         }),
       }),
@@ -128,6 +131,10 @@ test("replacement cleanup deletes only captured keys with no surviving metadata 
         submissionId: "a",
         objectKey: "submissions/member/title/a/replaced.wav",
       },
+      {
+        submissionId: "a",
+        objectKey: "submissions/member/title/a/staged.wav",
+      },
     ],
     async (objectKey) => {
       deleted.push(objectKey);
@@ -135,14 +142,13 @@ test("replacement cleanup deletes only captured keys with no surviving metadata 
   );
 
   assert.deepEqual(deleted, ["submissions/member/title/a/replaced.wav"]);
-  assert.deepEqual(result, { deleted: 1, failed: 0, preserved: 1 });
+  assert.deepEqual(result, { deleted: 1, failed: 0, preserved: 2 });
 });
 
 test("hard-delete routes snapshot B2 metadata and defer cleanup until after deletion", () => {
   for (const path of [
     "src/app/api/cart/items/route.ts",
     "src/app/api/submissions/delete/route.ts",
-    "src/app/api/submissions/drafts/route.ts",
   ]) {
     const source = read(path);
     const loadIndex = source.lastIndexOf("loadSubmissionB2ObjectRefs(");
@@ -157,6 +163,28 @@ test("hard-delete routes snapshot B2 metadata and defer cleanup until after dele
     assert.ok(cleanupIndex > deleteIndex, `${path}: cleanup must follow delete`);
     assert.match(source, /after\(\(\) =>[\s\S]*cleanupDeletedSubmissionB2Objects/);
   }
+
+  const draftRoute = read("src/app/api/submissions/drafts/route.ts");
+  const atomicDeleteIndex = draftRoute.indexOf(
+    'rpc("delete_submission_drafts_atomic"',
+  );
+  const returnedRefsIndex = draftRoute.indexOf(
+    "result?.b2ObjectRefs",
+    atomicDeleteIndex,
+  );
+  const cleanupIndex = draftRoute.lastIndexOf(
+    "cleanupDeletedSubmissionB2Objects(",
+  );
+  assert.ok(atomicDeleteIndex >= 0, "draft delete must use the atomic RPC");
+  assert.ok(
+    returnedRefsIndex > atomicDeleteIndex,
+    "draft delete must consume the RPC's pre-delete B2 snapshot",
+  );
+  assert.ok(cleanupIndex > returnedRefsIndex);
+  assert.match(
+    draftRoute,
+    /after\(\(\) =>[\s\S]*cleanupDeletedSubmissionB2Objects/,
+  );
 });
 
 test("admin hard-delete cleanup uses only database-confirmed deleted IDs", () => {

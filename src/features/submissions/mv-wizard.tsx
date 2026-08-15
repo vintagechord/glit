@@ -27,6 +27,16 @@ import {
   isVideoUploadFile,
   mvApplicationForms,
 } from "@/lib/submission-files";
+import {
+  buildMvSubmissionPreflight,
+  type ExistingMvCartSubmissionSnapshot,
+  type SubmissionPreflightTarget,
+} from "@/lib/submission-preflight";
+import { getSubmissionCheckpointStorageKey } from "@/lib/submission-checkpoint";
+import {
+  areSubmissionUploadMetadataEqual,
+  mergeSubmissionUploadMetadata,
+} from "@/lib/submission-upload-metadata";
 import { runProfanityCheck } from "@/lib/profanity/check";
 import {
   buildProfanityExtraRules,
@@ -42,7 +52,10 @@ import {
 } from "./actions";
 import { AiUsageSelector } from "./ai-usage-selector";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
+import { SubmissionPreflightPanel } from "./submission-preflight-panel";
 import { SubmissionProgress } from "./submission-progress";
+import { SubmissionSaveIndicator } from "./submission-save-indicator";
+import { useSubmissionCheckpoint } from "./use-submission-checkpoint";
 
 declare global {
   interface Window {
@@ -67,6 +80,7 @@ type UploadItem = {
   status: "pending" | "uploading" | "done" | "error";
   path?: string;
   mime?: string;
+  localKey?: string;
 };
 
 type UploadResult = {
@@ -79,7 +93,65 @@ type UploadResult = {
   accessUrl?: string;
 };
 
+const stripCheckpointAccessUrl = (file: UploadResult): UploadResult => {
+  const safeFile = { ...file };
+  delete safeFile.accessUrl;
+  return safeFile;
+};
+
 type ApplicationFormMode = "online" | "upload";
+
+type MvCheckpointSnapshot = {
+  step: number;
+  applicationFormMode: ApplicationFormMode | null;
+  mvType: "MV_DISTRIBUTION" | "MV_BROADCAST";
+  tvStations: string[];
+  onlineOptions: string[];
+  onlineBaseSelected: boolean;
+  title: string;
+  artistName: string;
+  artistNameOfficial: string;
+  director: string;
+  leadActor: string;
+  storyline: string;
+  productionCompany: string;
+  agency: string;
+  albumTitle: string;
+  distributionCompany: string;
+  usage: string;
+  desiredRating: string;
+  memo: string;
+  songTitleKr: string;
+  songTitleEn: string;
+  songTitleOfficial: string;
+  composer: string;
+  lyricist: string;
+  arranger: string;
+  songMemo: string;
+  lyrics: string;
+  releaseDate: string;
+  genre: string;
+  runtime: string;
+  format: string;
+  aiUsed: boolean | null;
+  guestName: string;
+  guestCompany: string;
+  guestEmail: string;
+  guestPhone: string;
+  paymentMethod: "CARD" | "BANK";
+  bankDepositorName: string;
+  paymentDocumentType: PaymentDocumentType;
+  cashReceiptPurpose: CashReceiptPurpose;
+  uploadedFiles: UploadResult[];
+  emailSubmitConfirmed: boolean;
+  existingCartSubmission: ExistingMvCartSubmissionSnapshot | null;
+};
+
+type MvCheckpointController = {
+  runExclusive: <T>(task: () => Promise<T>) => Promise<T>;
+  markSaved: (snapshot?: MvCheckpointSnapshot, savedAt?: number) => void;
+  clear: () => void;
+};
 
 type PaymentDocumentType = "" | "CASH_RECEIPT" | "TAX_INVOICE";
 type CashReceiptPurpose =
@@ -114,7 +186,7 @@ const steps = [
   "작성 방식 선택",
   "신청서 작성",
   "파일 업로드",
-  "결제하기",
+  "최종 점검",
   "접수 완료",
 ];
 
@@ -122,6 +194,9 @@ const deferredPaymentNotice = "신청서를 장바구니에 담았습니다.";
 const paymentFailureStorageNotice = "신청서는 장바구니에 보관됩니다.";
 const paymentFailureDraftNotice =
   `결제에 실패했습니다. ${paymentFailureStorageNotice}`;
+
+const getLocalUploadKey = (file: File) =>
+  `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
 
 const selectedBadgeClass =
   "inline-flex items-center rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
@@ -384,6 +459,7 @@ export function MvWizard({
   const [fileDigest, setFileDigest] = React.useState("");
   const [emailSubmitConfirmed, setEmailSubmitConfirmed] = React.useState(false);
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
+  const uploadInProgress = uploads.some((upload) => upload.status === "uploading");
   const [isSaving, setIsSaving] = React.useState(false);
   const [resumeChecked, setResumeChecked] = React.useState(false);
   const [resumePrompt, setResumePrompt] = React.useState<{
@@ -398,6 +474,7 @@ export function MvWizard({
       onlineBaseSelected?: boolean;
       emailSubmitConfirmed?: boolean;
       applicationFormMode?: ApplicationFormMode;
+      existingCartSubmission?: ExistingMvCartSubmissionSnapshot;
     } | null;
     storedGuestToken?: string | null;
   } | null>(null);
@@ -409,11 +486,31 @@ export function MvWizard({
   );
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
-  const [openBroadcastSpec, setOpenBroadcastSpec] = React.useState<string | null>(
-    () => broadcastSpecs[0]?.id ?? null,
+  const [currentServerUpdatedAt, setCurrentServerUpdatedAt] =
+    React.useState<string | null>(null);
+  const [checkpointSeed, setCheckpointSeed] = React.useState<{
+    submissionId: string;
+    initialDataIsServerState: boolean;
+  } | null>(null);
+  const [resumeDeleteError, setResumeDeleteError] = React.useState<string | null>(
+    null,
+  );
+  const [openBroadcastSpec, setOpenBroadcastSpec] =
+    React.useState<string | null>(null);
+  const mvCheckpointControllerRef =
+    React.useRef<MvCheckpointController | null>(null);
+  const draftSaveInFlightRef = React.useRef(false);
+  const submitInFlightRef = React.useRef(false);
+  const serverUploadedFilesRef = React.useRef<UploadResult[]>([]);
+  const checkpointRestoreSourceRef = React.useRef<"recovery" | "previous">(
+    "recovery",
   );
 
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
+  const [existingCartSubmission, setExistingCartSubmission] =
+    React.useState<ExistingMvCartSubmissionSnapshot | null>(null);
+  const [priceChangeAcknowledged, setPriceChangeAcknowledged] =
+    React.useState(false);
   const [invalidField, setInvalidField] =
     React.useState<MvValidationField | null>(null);
   const lyricsOverlayRef = React.useRef<HTMLDivElement | null>(null);
@@ -570,6 +667,7 @@ export function MvWizard({
         onlineBaseSelected?: boolean;
         emailSubmitConfirmed?: boolean;
         applicationFormMode?: ApplicationFormMode;
+        existingCartSubmission?: ExistingMvCartSubmissionSnapshot;
       };
     } catch {
       return null;
@@ -585,6 +683,7 @@ export function MvWizard({
     onlineBaseSelected?: boolean;
     emailSubmitConfirmed?: boolean;
     applicationFormMode?: ApplicationFormMode;
+    existingCartSubmission?: ExistingMvCartSubmissionSnapshot | null;
   }) => {
     if (typeof window === "undefined") return;
     try {
@@ -599,6 +698,7 @@ export function MvWizard({
           onlineBaseSelected: payload.onlineBaseSelected ?? true,
           emailSubmitConfirmed: payload.emailSubmitConfirmed ?? false,
           applicationFormMode: payload.applicationFormMode,
+          existingCartSubmission: payload.existingCartSubmission ?? null,
           updatedAt: Date.now(),
         }),
       );
@@ -607,30 +707,48 @@ export function MvWizard({
     }
   }, [draftStorageKey]);
 
-  const clearDraftStorage = React.useCallback(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(draftStorageKey);
-    } catch {
-      // ignore
-    }
-  }, [draftStorageKey]);
+  const clearDraftStorageForSubmission = React.useCallback(
+    (submissionId: string) => {
+      if (typeof window === "undefined" || !submissionId) return;
+      try {
+        const raw = window.localStorage.getItem(draftStorageKey);
+        if (raw) {
+          const stored = JSON.parse(raw) as { id?: unknown };
+          if (stored.id === submissionId) {
+            window.localStorage.removeItem(draftStorageKey);
+          }
+        }
+      } catch {
+        // Ignore a malformed locator without widening the cleanup scope.
+      }
+      try {
+        window.localStorage.removeItem(
+          getSubmissionCheckpointStorageKey(draftStorageKey, submissionId),
+        );
+      } catch {
+        // A successful server deletion remains authoritative. Exact checkpoint
+        // cleanup is best effort when browser storage is unavailable.
+      }
+    },
+    [draftStorageKey],
+  );
 
   const clearServerDrafts = React.useCallback(async (options: {
-    ids?: string[];
+    ids: string[];
     guestToken?: string | null;
   }) => {
-    const ids = (options.ids ?? []).filter(Boolean);
+    const ids = Array.from(new Set(options.ids.filter(Boolean)));
+    if (ids.length === 0) {
+      throw new Error("삭제할 임시저장 신청서를 확인하지 못했습니다.");
+    }
     const payload: {
       type: "MV";
-      ids?: string[];
+      ids: string[];
       guestToken?: string;
     } = {
       type: "MV",
+      ids,
     };
-    if (ids.length > 0) {
-      payload.ids = ids;
-    }
     if (isGuest) {
       const guestToken = options.guestToken ?? guestTokenRef.current;
       if (guestToken) payload.guestToken = guestToken;
@@ -661,6 +779,27 @@ export function MvWizard({
       throw error;
     } finally {
       window.clearTimeout(timeoutId);
+    }
+  }, [isGuest]);
+
+  const clearCartSubmission = React.useCallback(async (
+    submissionId: string,
+    guestToken?: string | null,
+  ) => {
+    const res = await fetch("/api/cart/items", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        submissionIds: [submissionId],
+        guestTokensBySubmissionId:
+          isGuest && guestToken ? { [submissionId]: guestToken } : undefined,
+      }),
+    });
+    if (!res.ok) {
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(json?.error || "장바구니 신청서를 삭제하지 못했습니다.");
     }
   }, [isGuest]);
 
@@ -695,7 +834,9 @@ export function MvWizard({
         ? guestTokenFromMsg || guestTokenRef.current
         : guestTokenFromMsg;
       if (status === "SUCCESS") {
-        clearDraftStorage();
+        if (submissionFromMsg) {
+          clearDraftStorageForSubmission(submissionFromMsg);
+        }
         if (guestPaymentToken) {
           window.location.href = `${localePrefix}/track/${encodeURIComponent(guestPaymentToken)}?payment=success`;
           return;
@@ -724,7 +865,7 @@ export function MvWizard({
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [clearDraftStorage, isGuest, localePrefix]);
+  }, [clearDraftStorageForSubmission, isGuest, localePrefix]);
 
   const requireSubmissionId = React.useCallback(() => {
     if (submissionIdRef.current) return submissionIdRef.current;
@@ -769,6 +910,22 @@ export function MvWizard({
             }
           }
           submissionIdRef.current = json.submissionId;
+          setCheckpointSeed({
+            submissionId: json.submissionId,
+            initialDataIsServerState: false,
+          });
+          serverUploadedFilesRef.current = [];
+          writeDraftStorage({
+            id: json.submissionId,
+            guestToken: isGuest ? guestTokenRef.current : null,
+            mvType,
+            tvStations,
+            onlineOptions,
+            onlineBaseSelected,
+            emailSubmitConfirmed,
+            applicationFormMode: applicationFormMode ?? undefined,
+            existingCartSubmission,
+          });
           return json.submissionId;
         }
         setDraftError(
@@ -794,7 +951,18 @@ export function MvWizard({
         draftCreationPromiseRef.current = null;
       }
     }
-  }, [guestTokenStorageKey, isGuest, mvType]);
+  }, [
+    applicationFormMode,
+    emailSubmitConfirmed,
+    existingCartSubmission,
+    guestTokenStorageKey,
+    isGuest,
+    mvType,
+    onlineBaseSelected,
+    onlineOptions,
+    tvStations,
+    writeDraftStorage,
+  ]);
 
   React.useEffect(() => {
     if (!resumeChecked) return;
@@ -833,29 +1001,8 @@ export function MvWizard({
       : onlineBaseSelected || onlineOptions.length > 0;
   const isDownloadedApplicationFlow = applicationFormMode === "upload";
   const selectApplicationFormMode = (mode: ApplicationFormMode) => {
-    if (mode === "online" && applicationFormMode === "upload") {
-      setFiles((previous) =>
-        previous.filter(
-          (file) =>
-            !isApplicationFormFile(file.name) &&
-            !isApplicationFormMime(file.type),
-        ),
-      );
-      setUploads((previous) =>
-        previous.filter(
-          (file) =>
-            !isApplicationFormFile(file.name) &&
-            !isApplicationFormMime(file.mime ?? ""),
-        ),
-      );
-      setUploadedFiles((previous) =>
-        previous.filter(
-          (file) =>
-            !isApplicationFormFile(file.originalName) &&
-            !isApplicationFormMime(file.mime ?? ""),
-        ),
-      );
-    }
+    // Keep files when the user changes their mind. Validation and the final
+    // payload are mode-aware, while switching back restores the exact work.
     setApplicationFormMode(mode);
     setNotice({});
   };
@@ -904,17 +1051,118 @@ export function MvWizard({
 
     return items;
   }, [mvType, onlineBaseSelected, onlineOptions, tvStations, stationMap]);
-  const mvUploadReady = emailSubmitConfirmed || uploadedFiles.length > 0;
-  const mvPaymentReady = canProceed && mvUploadReady && totalAmount > 0;
+  const currentSubmissionId = submissionIdRef.current;
+  const mvPreflight = React.useMemo(
+    () =>
+      buildMvSubmissionPreflight({
+        submissionId: currentSubmissionId,
+        mvType,
+        applicationFormMode,
+        selectedOptionCodes:
+          mvType === "MV_BROADCAST" ? tvStations : onlineOptions,
+        onlineBaseSelected,
+        amountKrw: totalAmount,
+        existingCartSubmission,
+        priceChangeAcknowledged,
+        isAdminReviewer,
+        isGuest,
+        title,
+        artistName,
+        artistNameOfficial,
+        releaseDate,
+        director,
+        leadActor,
+        productionCompany,
+        agency,
+        albumTitle,
+        distributionCompany,
+        usage,
+        songTitleKr,
+        songTitleEn,
+        songTitleOfficial,
+        composer,
+        storyline,
+        lyrics,
+        aiUsed,
+        guestName,
+        guestEmail,
+        guestPhone,
+        files: uploadedFiles,
+        uploads,
+        filesSubmittedByEmail: emailSubmitConfirmed,
+      }),
+    [
+      agency,
+      aiUsed,
+      albumTitle,
+      applicationFormMode,
+      artistName,
+      artistNameOfficial,
+      composer,
+      currentSubmissionId,
+      director,
+      distributionCompany,
+      emailSubmitConfirmed,
+      existingCartSubmission,
+      guestEmail,
+      guestName,
+      guestPhone,
+      isAdminReviewer,
+      isGuest,
+      leadActor,
+      lyrics,
+      mvType,
+      onlineBaseSelected,
+      productionCompany,
+      priceChangeAcknowledged,
+      releaseDate,
+      songTitleEn,
+      songTitleKr,
+      songTitleOfficial,
+      storyline,
+      title,
+      totalAmount,
+      tvStations,
+      uploadedFiles,
+      uploads,
+      usage,
+      onlineOptions,
+    ],
+  );
+  React.useEffect(() => {
+    setPriceChangeAcknowledged(false);
+  }, [mvType, onlineBaseSelected, onlineOptions, totalAmount, tvStations]);
+  const navigateFromPreflight = React.useCallback(
+    (target: SubmissionPreflightTarget) => {
+      setNotice({});
+      setStep(target.step);
+      if (typeof window === "undefined") return;
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const element = document.querySelector<HTMLElement>(
+            `[data-preflight-field="${target.field}"], [data-mv-field="${target.field}"]`,
+          );
+          element?.scrollIntoView({ behavior: "smooth", block: "center" });
+          element?.focus({ preventScroll: true });
+        });
+      });
+    },
+    [],
+  );
 
   const stepLabels = <SubmissionProgress steps={steps} currentStep={step} />;
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
+    event.currentTarget.value = "";
     addFiles(selected);
   };
 
   const addFiles = (selected: File[]) => {
+    if (uploads.some((upload) => upload.status === "uploading")) {
+      setNotice({ error: "현재 파일 업로드가 끝난 뒤 추가해주세요." });
+      return;
+    }
     if (!submissionIdRef.current) {
       setNotice({
         error:
@@ -949,30 +1197,22 @@ export function MvWizard({
       return;
     }
 
-    const nextFileEntries: File[] = [];
-    const seenFileKeys = new Set<string>();
-    [...files, ...filtered].forEach((file) => {
-      const key = `${file.name}-${file.size}-${file.lastModified}`;
-      if (seenFileKeys.has(key)) return;
-      seenFileKeys.add(key);
+    const nextFileEntries = [...files];
+    const seenLocalKeys = new Set(files.map(getLocalUploadKey));
+    const nextUploads = uploads.map((upload) => ({ ...upload }));
+    filtered.forEach((file) => {
+      const localKey = getLocalUploadKey(file);
+      if (seenLocalKeys.has(localKey)) return;
+      seenLocalKeys.add(localKey);
       nextFileEntries.push(file);
-    });
-
-    const existingMap = new Map<string, UploadItem>();
-    uploads.forEach((item) => {
-      existingMap.set(`${item.name}-${item.size}`, item);
-    });
-    const nextUploads = nextFileEntries.map((file) => {
-      const key = `${file.name}-${file.size}`;
-      return (
-        existingMap.get(key) ?? {
-          name: file.name,
-          size: file.size,
-          progress: 0,
-          status: "pending" as const,
-          mime: file.type,
-        }
-      );
+      nextUploads.push({
+        name: file.name,
+        size: file.size,
+        progress: 0,
+        status: "pending",
+        mime: file.type,
+        localKey,
+      });
     });
     setNotice({});
     setFiles(nextFileEntries);
@@ -1593,28 +1833,38 @@ export function MvWizard({
       return uploadedFiles;
     }
 
-    const results: UploadResult[] = [];
-    const nextUploads =
-      initialUploads.length === targetFiles.length
-        ? [...initialUploads]
-        : targetFiles.map((file) => ({
-          name: file.name,
-          size: file.size,
-          progress: 0,
-          status: "pending" as const,
-          mime: file.type,
-        }));
+    let results = uploadedFiles.map((file) => ({ ...file }));
+    const nextUploads = initialUploads.map((upload) => ({ ...upload }));
 
     for (let index = 0; index < targetFiles.length; index += 1) {
       const file = targetFiles[index];
+      const localKey = getLocalUploadKey(file);
+      let uploadIndex = nextUploads.findIndex(
+        (upload) => upload.localKey === localKey,
+      );
+      if (uploadIndex < 0) {
+        uploadIndex = nextUploads.length;
+        nextUploads.push({
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          status: "pending",
+          mime: file.type,
+          localKey,
+        });
+      }
+      const existingUpload = nextUploads[uploadIndex];
 
-      if (nextUploads[index]?.status === "done" && uploadedFiles[index]) {
-        results.push(uploadedFiles[index]);
+      if (
+        existingUpload.status === "done" &&
+        existingUpload.path &&
+        results.some((result) => result.path === existingUpload.path)
+      ) {
         continue;
       }
 
-      nextUploads[index] = {
-        ...nextUploads[index],
+      nextUploads[uploadIndex] = {
+        ...existingUpload,
         status: "uploading",
       };
       setUploads([...nextUploads]);
@@ -1624,8 +1874,8 @@ export function MvWizard({
       let durationSeconds: number | undefined;
       try {
         const uploadResult = await uploadWithProgress(file, (progress) => {
-          nextUploads[index] = {
-            ...nextUploads[index],
+          nextUploads[uploadIndex] = {
+            ...nextUploads[uploadIndex],
             progress,
           };
           setUploads([...nextUploads]);
@@ -1634,8 +1884,8 @@ export function MvWizard({
         accessUrl = uploadResult.accessUrl;
         durationSeconds = uploadResult.durationSeconds;
       } catch (error) {
-        nextUploads[index] = {
-          ...nextUploads[index],
+        nextUploads[uploadIndex] = {
+          ...nextUploads[uploadIndex],
           status: "error",
         };
         setUploads([...nextUploads]);
@@ -1648,22 +1898,24 @@ export function MvWizard({
         throw new Error(message);
       }
 
-      nextUploads[index] = {
-        ...nextUploads[index],
+      nextUploads[uploadIndex] = {
+        ...nextUploads[uploadIndex],
         status: "done",
         progress: 100,
         path,
       };
       setUploads([...nextUploads]);
 
-      results.push({
-        path,
-        originalName: file.name,
-        mime: file.type || undefined,
-        size: file.size,
-        accessUrl,
-        durationSeconds,
-      });
+      results = mergeSubmissionUploadMetadata(results, [
+        {
+          path,
+          originalName: file.name,
+          mime: file.type || undefined,
+          size: file.size,
+          accessUrl,
+          durationSeconds,
+        },
+      ]);
     }
 
     setUploadedFiles(results);
@@ -1715,6 +1967,10 @@ export function MvWizard({
 
   const selectUploadDeliveryMode = React.useCallback(
     (mode: "upload" | "email") => {
+      if (uploads.some((upload) => upload.status === "uploading")) {
+        setNotice({ error: "현재 파일 업로드가 끝난 뒤 변경해주세요." });
+        return;
+      }
       if (mode === "upload") {
         setEmailSubmitConfirmed(false);
         setNotice({});
@@ -1724,14 +1980,10 @@ export function MvWizard({
         setNotice({});
         return;
       }
-      setFiles([]);
-      setUploads([]);
-      setUploadedFiles([]);
-      setFileDigest("");
       setEmailSubmitConfirmed(true);
       setNotice({});
     },
-    [emailSubmitConfirmed],
+    [emailSubmitConfirmed, uploads],
   );
 
   const applyStoredDraft = React.useCallback((
@@ -1743,15 +1995,19 @@ export function MvWizard({
       onlineBaseSelected?: boolean;
       emailSubmitConfirmed?: boolean;
       applicationFormMode?: ApplicationFormMode;
+      existingCartSubmission?: ExistingMvCartSubmissionSnapshot;
     } | null,
   ) => {
     const draftType =
       draft.type === "MV_BROADCAST" ? "MV_BROADCAST" : "MV_DISTRIBUTION";
     const restoredApplicationFormMode =
-      storedSelection?.applicationFormMode === "online" ||
-        storedSelection?.applicationFormMode === "upload"
-        ? storedSelection.applicationFormMode
-        : null;
+      draft.application_form_mode === "online" ||
+      draft.application_form_mode === "upload"
+        ? draft.application_form_mode
+        : storedSelection?.applicationFormMode === "online" ||
+            storedSelection?.applicationFormMode === "upload"
+          ? storedSelection.applicationFormMode
+          : null;
     setApplicationFormMode(restoredApplicationFormMode);
     setMvType(draftType);
     setTitle(String(draft.title ?? ""));
@@ -1813,7 +2069,14 @@ export function MvWizard({
     }
 
     const selection = storedSelection?.mvType === draftType ? storedSelection : null;
-    const draftStationCodes = (
+    const persistedStationCodes = Array.isArray(
+      draft.mv_selected_station_codes,
+    )
+      ? draft.mv_selected_station_codes.filter(
+          (code): code is string => typeof code === "string" && Boolean(code.trim()),
+        )
+      : [];
+    const reviewStationCodes = (
       Array.isArray(draft.station_reviews)
         ? (draft.station_reviews as Array<Record<string, unknown>>)
         : []
@@ -1830,6 +2093,16 @@ export function MvWizard({
         return typeof code === "string" && code.trim() ? code.trim() : null;
       })
       .filter((code): code is string => Boolean(code));
+    const draftStationCodes =
+      persistedStationCodes.length > 0
+        ? persistedStationCodes
+        : reviewStationCodes;
+    const serverOnlineBaseSelected =
+      draftType === "MV_DISTRIBUTION"
+        ? typeof draft.mv_base_selected === "boolean"
+          ? draft.mv_base_selected
+          : true
+        : false;
 
     if (draftType === "MV_BROADCAST") {
       setTvStations(
@@ -1849,36 +2122,80 @@ export function MvWizard({
       const baseSelected =
         typeof selection?.onlineBaseSelected === "boolean"
           ? selection.onlineBaseSelected
-          : typeof draft.mv_base_selected === "boolean"
-            ? draft.mv_base_selected
-            : true;
+          : serverOnlineBaseSelected;
       setOnlineBaseSelected(baseSelected);
     }
+
+    const restoredStatus = String(draft.status ?? "");
+    const serverCartSubmission: ExistingMvCartSubmissionSnapshot | null =
+      restoredStatus === "SUBMITTED" || restoredStatus === "WAITING_PAYMENT"
+        ? {
+            submissionId: String(draft.id ?? ""),
+            amountKrw: Number(draft.amount_krw ?? 0),
+            selectedOptionCodes: draftStationCodes,
+            onlineBaseSelected: serverOnlineBaseSelected,
+          }
+        : null;
+    const storedCartCandidate = storedSelection?.existingCartSubmission;
+    const storedCartSubmission =
+      storedCartCandidate?.submissionId === String(draft.id ?? "") &&
+      Array.isArray(storedCartCandidate.selectedOptionCodes) &&
+      typeof storedCartCandidate.onlineBaseSelected === "boolean"
+        ? {
+            submissionId: storedCartCandidate.submissionId,
+            amountKrw: Number(storedCartCandidate.amountKrw ?? 0),
+            selectedOptionCodes: storedCartCandidate.selectedOptionCodes.filter(
+              (code): code is string => typeof code === "string",
+            ),
+            onlineBaseSelected: storedCartCandidate.onlineBaseSelected,
+          }
+        : null;
+    const restoredCartSubmission =
+      serverCartSubmission ?? storedCartSubmission;
+    setExistingCartSubmission(restoredCartSubmission);
+    setPriceChangeAcknowledged(false);
 
     const files = mapDraftFiles(
       Array.isArray(draft.files) ? (draft.files as Array<Record<string, unknown>>) : [],
     );
+    serverUploadedFilesRef.current = files.map((file) => ({ ...file }));
     setUploadedFiles(files);
     setUploads(files.length > 0 ? buildUploadsFromFiles(files) : []);
     setFiles([]);
     setFileDigest("");
     setEmailSubmitConfirmed(
-      Boolean(storedSelection?.emailSubmitConfirmed) && files.length === 0,
+      Boolean(draft.files_submitted_by_email) ||
+        (Boolean(storedSelection?.emailSubmitConfirmed) && files.length === 0),
+    );
+    setCurrentServerUpdatedAt(
+      typeof draft.updated_at === "string" ? draft.updated_at : null,
     );
 
-    submissionIdRef.current = String(draft.id ?? "");
+    const restoredSubmissionId = String(draft.id ?? "");
+    submissionIdRef.current = restoredSubmissionId;
+    if (restoredSubmissionId) {
+      setCheckpointSeed({
+        submissionId: restoredSubmissionId,
+        initialDataIsServerState: true,
+      });
+    }
     if (isGuest && typeof draft.guest_token === "string") {
       guestTokenRef.current = draft.guest_token;
     }
 
     setNotice({});
     setStep(restoredApplicationFormMode ? 3 : 2);
+    return restoredCartSubmission;
   }, [buildUploadsFromFiles, isGuest, mapDraftFiles, normalizeDateValue]);
 
   const handleResumeDraftConfirm = React.useCallback(() => {
     if (!resumePrompt) return;
     resumePromptHandledRef.current = true;
-    applyStoredDraft(resumePrompt.draft, resumePrompt.stored ?? null);
+    setResumeDeleteError(null);
+    const restoredCartSubmission = applyStoredDraft(
+      resumePrompt.draft,
+      resumePrompt.stored ?? null,
+    );
     const draftId = String(resumePrompt.draft.id ?? "");
     if (draftId) {
       writeDraftStorage({
@@ -1897,6 +2214,7 @@ export function MvWizard({
         onlineBaseSelected: resumePrompt.stored?.onlineBaseSelected ?? true,
         emailSubmitConfirmed: resumePrompt.stored?.emailSubmitConfirmed ?? false,
         applicationFormMode: resumePrompt.stored?.applicationFormMode,
+        existingCartSubmission: restoredCartSubmission,
       });
     }
     setResumePrompt(null);
@@ -1905,21 +2223,47 @@ export function MvWizard({
 
   const handleResumeDraftCancel = React.useCallback(async () => {
     if (!resumePrompt || isClearingResumeDrafts) return;
-    resumePromptHandledRef.current = true;
+    const draftId = String(resumePrompt.draft.id ?? "");
+    if (!draftId) {
+      setResumeDeleteError(
+        "삭제할 임시저장 신청서를 확인하지 못했습니다. 다시 시도해주세요.",
+      );
+      return;
+    }
     setIsClearingResumeDrafts(true);
+    setResumeDeleteError(null);
     const guestToken = resumePrompt.storedGuestToken ?? guestTokenRef.current;
-    clearDraftStorage();
     try {
-      await clearServerDrafts({ guestToken });
-    } catch (error) {
-      console.warn("[MvDraft][resume-clear] failed", error);
-    } finally {
-      setIsClearingResumeDrafts(false);
+      const status = String(resumePrompt.draft.status ?? "");
+      if (status === "DRAFT" || status === "PRE_REVIEW") {
+        await clearServerDrafts({ ids: [draftId], guestToken });
+      } else if (status === "SUBMITTED" || status === "WAITING_PAYMENT") {
+        await clearCartSubmission(draftId, guestToken);
+      } else {
+        throw new Error("현재 상태에서는 삭제할 수 없는 신청서입니다.");
+      }
+      clearDraftStorageForSubmission(draftId);
+      if (submissionIdRef.current === draftId) {
+        mvCheckpointControllerRef.current?.clear();
+        submissionIdRef.current = null;
+        setCheckpointSeed(null);
+      }
+      resumePromptHandledRef.current = true;
       setResumePrompt(null);
       setResumeChecked(true);
+    } catch (error) {
+      console.warn("[MvDraft][resume-clear] failed", error);
+      setResumeDeleteError(
+        error instanceof Error && error.message
+          ? error.message
+          : "임시저장 삭제에 실패했습니다. 다시 시도해주세요.",
+      );
+    } finally {
+      setIsClearingResumeDrafts(false);
     }
   }, [
-    clearDraftStorage,
+    clearDraftStorageForSubmission,
+    clearCartSubmission,
     clearServerDrafts,
     isClearingResumeDrafts,
     resumePrompt,
@@ -2357,6 +2701,14 @@ export function MvWizard({
 
   const validateMvUploads = () => {
     if (isAdminReviewer) return true;
+    if (uploads.some((upload) => upload.status === "error")) {
+      setNotice({ error: "업로드에 실패한 파일이 있습니다." });
+      return false;
+    }
+    if (uploads.some((upload) => upload.status !== "done")) {
+      setNotice({ error: "파일 업로드가 완료될 때까지 기다려주세요." });
+      return false;
+    }
     if (emailSubmitConfirmed) return true;
     if (uploads.length === 0) {
       setNotice({
@@ -2364,14 +2716,6 @@ export function MvWizard({
           ? "작성한 신청서 파일(HWP/DOC/DOCX)과 영상 파일을 업로드해주세요."
           : "영상 파일을 업로드해주세요.",
       });
-      return false;
-    }
-    if (uploads.some((upload) => upload.status === "error")) {
-      setNotice({ error: "업로드에 실패한 파일이 있습니다." });
-      return false;
-    }
-    if (uploads.some((upload) => upload.status !== "done")) {
-      setNotice({ error: "파일 업로드가 완료될 때까지 기다려주세요." });
       return false;
     }
     if (
@@ -2392,126 +2736,267 @@ export function MvWizard({
     return true;
   };
 
-  const saveMvDraft = async (options: { includeFiles: boolean }) => {
-    const { songTitleKrValue, songTitleEnValue, songTitleOfficialValue } =
-      resolveSongTitleValues();
-    const titleValue = title.trim();
-    const artistNameValue = artistName.trim();
-    const artistNameOfficialValue = artistNameOfficial.trim();
-    const guestNameValue = guestName.trim();
-    const guestCompanyValue = guestCompany.trim();
-    const guestEmailValue = guestEmail.trim();
-    const guestPhoneValue = guestPhone.trim();
-    let submissionId: string;
-    try {
-      submissionId = requireSubmissionId();
-    } catch (error) {
-      setNotice({
-        error:
-          draftError ||
-          (error instanceof Error
-            ? error.message
-            : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
-      });
-      void createDraft();
-      return false;
+  const buildMvCheckpointSnapshot = (): MvCheckpointSnapshot => ({
+    step,
+    applicationFormMode,
+    mvType,
+    tvStations: [...tvStations],
+    onlineOptions: [...onlineOptions],
+    onlineBaseSelected,
+    title,
+    artistName,
+    artistNameOfficial,
+    director,
+    leadActor,
+    storyline,
+    productionCompany,
+    agency,
+    albumTitle,
+    distributionCompany,
+    usage,
+    desiredRating,
+    memo,
+    songTitleKr,
+    songTitleEn,
+    songTitleOfficial,
+    composer,
+    lyricist,
+    arranger,
+    songMemo,
+    lyrics,
+    releaseDate,
+    genre,
+    runtime,
+    format,
+    aiUsed,
+    guestName,
+    guestCompany,
+    guestEmail,
+    guestPhone,
+    paymentMethod,
+    bankDepositorName,
+    paymentDocumentType,
+    cashReceiptPurpose,
+    uploadedFiles: uploadedFiles.map(stripCheckpointAccessUrl),
+    emailSubmitConfirmed,
+    existingCartSubmission: existingCartSubmission
+      ? {
+          ...existingCartSubmission,
+          selectedOptionCodes: [
+            ...existingCartSubmission.selectedOptionCodes,
+          ],
+        }
+      : null,
+  });
+
+  const saveMvDraft = async (options: {
+    includeFiles: boolean;
+    background?: boolean;
+    snapshot?: MvCheckpointSnapshot;
+  }) => {
+    const foreground = options.background !== true;
+    if (foreground) {
+      if (draftSaveInFlightRef.current) return false;
+      draftSaveInFlightRef.current = true;
+      // Lock the form before waiting for a queued background save. Otherwise
+      // edits made during that wait can be omitted by the click-time snapshot.
+      setIsSaving(true);
+      setNotice({});
     }
-
-    setIsSaving(true);
-    setNotice({});
-    try {
-      const uploaded = options.includeFiles ? await uploadFiles() : undefined;
-      const result = await saveMvSubmissionAction({
-        submissionId,
-        amountKrw: totalAmount,
-        selectedStationIds,
-        selectedStationCodes,
-        title: titleValue || undefined,
-        artistName: artistNameValue || undefined,
-        director: director.trim() || undefined,
-        leadActor: leadActor.trim() || undefined,
-        storyline: storyline.trim() || undefined,
-        productionCompany: productionCompany.trim() || undefined,
-        agency: agency.trim() || undefined,
-        albumTitle: albumTitle.trim() || undefined,
-        distributionCompany: distributionCompany.trim() || undefined,
-        usage: usage.trim() || undefined,
-        desiredRating:
-          mvType === "MV_DISTRIBUTION" ? desiredRating.trim() || undefined : undefined,
-        memo: memo.trim() || undefined,
-        songTitle: songTitleOfficialValue || undefined,
-        songTitleKr: songTitleKrValue || undefined,
-        songTitleEn: songTitleEnValue || undefined,
-        songTitleOfficial: songTitleOfficial.trim() || undefined,
-        composer: composer.trim() || undefined,
-        lyricist: lyricist.trim() || undefined,
-        arranger: arranger.trim() || undefined,
-        songMemo: songMemo.trim() || undefined,
-        lyrics: lyrics.trim() || undefined,
-        artistNameOfficial: artistNameOfficialValue || undefined,
-        releaseDate: releaseDate || undefined,
-        genre: genre || undefined,
-        mvType,
-        runtime: runtime || undefined,
-        format: format || undefined,
-        mvBaseSelected:
-          mvType === "MV_DISTRIBUTION" ? onlineBaseSelected : false,
-        aiUsed: aiUsed ?? undefined,
-        guestToken: isGuest ? guestToken : undefined,
-        guestName: isGuest ? guestNameValue || undefined : undefined,
-        guestCompany: isGuest ? guestCompanyValue || undefined : undefined,
-        guestEmail: isGuest ? guestEmailValue || undefined : undefined,
-        guestPhone: isGuest ? guestPhoneValue || undefined : undefined,
-        paymentMethod,
-        bankDepositorName:
-          paymentMethod === "BANK" ? bankDepositorName.trim() || undefined : undefined,
-        paymentDocumentType: paymentDocumentType || undefined,
-        cashReceiptPurpose:
-          paymentDocumentType === "CASH_RECEIPT"
-            ? cashReceiptPurpose || undefined
-            : undefined,
-        cashReceiptPhone:
-          paymentDocumentType === "CASH_RECEIPT" &&
-            cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
-            ? cashReceiptPhone.trim() || undefined
-            : undefined,
-        cashReceiptBusinessNumber:
-          paymentDocumentType === "CASH_RECEIPT" &&
-            cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
-            ? cashReceiptBusinessNumber.trim() || undefined
-            : undefined,
-        taxInvoiceBusinessNumber:
-          paymentDocumentType === "TAX_INVOICE"
-            ? taxInvoiceBusinessNumber.trim() || undefined
-            : undefined,
-        status: "DRAFT",
-        files: uploaded,
-        filesSubmittedByEmail: emailSubmitConfirmed,
-        externalApplicationForm: isDownloadedApplicationFlow,
-      });
-
-      if (result.error) {
-        setNotice({ error: result.error });
+    const executeSave = async () => {
+      const source = options.snapshot ?? buildMvCheckpointSnapshot();
+      const sourceSelectedCodes =
+        source.mvType === "MV_BROADCAST"
+          ? source.tvStations
+          : source.onlineOptions;
+      const sourceStationIds = sourceSelectedCodes
+        .map((code) => stationMap.get(code)?.id)
+        .filter(Boolean) as string[];
+      const sourceAmount =
+        source.mvType === "MV_BROADCAST"
+          ? sourceSelectedCodes.reduce(
+              (sum, code) => sum + (stationPriceMap[code] ?? 0),
+              0,
+            )
+          : (source.onlineBaseSelected ? baseOnlinePrice : 0) +
+            sourceSelectedCodes.reduce(
+              (sum, code) => sum + (stationPriceMap[code] ?? 0),
+              0,
+            );
+      const songTitleKrValue = source.songTitleKr.trim();
+      const songTitleEnValue = source.songTitleEn.trim();
+      const songTitleOfficialValue =
+        source.songTitleOfficial.trim() ||
+        songTitleKrValue ||
+        songTitleEnValue;
+      const titleValue = source.title.trim();
+      const artistNameValue = source.artistName.trim();
+      const artistNameOfficialValue = source.artistNameOfficial.trim();
+      const guestNameValue = source.guestName.trim();
+      const guestCompanyValue = source.guestCompany.trim();
+      const guestEmailValue = source.guestEmail.trim();
+      const guestPhoneValue = source.guestPhone.trim();
+      let submissionId: string;
+      try {
+        submissionId = requireSubmissionId();
+      } catch (error) {
+        if (foreground) {
+          setNotice({
+            error:
+              draftError ||
+              (error instanceof Error
+                ? error.message
+                : "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요."),
+          });
+          void createDraft();
+        }
         return false;
       }
 
-      writeDraftStorage({
-        id: submissionId,
-        guestToken: isGuest ? guestTokenRef.current : null,
-        mvType,
-        tvStations,
-        onlineOptions,
-        onlineBaseSelected,
-        emailSubmitConfirmed,
-        applicationFormMode: applicationFormMode ?? undefined,
-      });
-      setNotice({ submissionId: result.submissionId });
-      return true;
-    } catch {
-      setNotice({ error: "저장 중 오류가 발생했습니다." });
-      return false;
+      if (source.existingCartSubmission?.submissionId === submissionId) {
+        // Editing a payable cart row must not downgrade its server lifecycle
+        // to DRAFT. Keep the exact edit in the local checkpoint and update the
+        // existing submission only from the final exclusive SUBMITTED action.
+        writeDraftStorage({
+          id: submissionId,
+          guestToken: isGuest ? guestTokenRef.current : null,
+          mvType: source.mvType,
+          tvStations: source.tvStations,
+          onlineOptions: source.onlineOptions,
+          onlineBaseSelected: source.onlineBaseSelected,
+          emailSubmitConfirmed: source.emailSubmitConfirmed,
+          applicationFormMode: source.applicationFormMode ?? undefined,
+          existingCartSubmission: source.existingCartSubmission,
+        });
+        if (foreground) setNotice({});
+        return true;
+      }
+
+      try {
+        const uploaded = options.includeFiles
+          ? options.snapshot
+            ? source.uploadedFiles
+            : await uploadFiles()
+          : undefined;
+        const savedSnapshot: MvCheckpointSnapshot = uploaded
+          ? { ...source, uploadedFiles: uploaded.map((file) => ({ ...file })) }
+          : source;
+        const result = await saveMvSubmissionAction({
+          submissionId,
+          amountKrw: sourceAmount,
+          selectedStationIds: sourceStationIds,
+          selectedStationCodes: sourceSelectedCodes,
+          title: titleValue || undefined,
+          artistName: artistNameValue || undefined,
+          director: source.director.trim() || undefined,
+          leadActor: source.leadActor.trim() || undefined,
+          storyline: source.storyline.trim() || undefined,
+          productionCompany: source.productionCompany.trim() || undefined,
+          agency: source.agency.trim() || undefined,
+          albumTitle: source.albumTitle.trim() || undefined,
+          distributionCompany: source.distributionCompany.trim() || undefined,
+          usage: source.usage.trim() || undefined,
+          desiredRating:
+            source.mvType === "MV_DISTRIBUTION"
+              ? source.desiredRating.trim() || undefined
+              : undefined,
+          memo: source.memo.trim() || undefined,
+          songTitle: songTitleOfficialValue || undefined,
+          songTitleKr: songTitleKrValue || undefined,
+          songTitleEn: songTitleEnValue || undefined,
+          songTitleOfficial: source.songTitleOfficial.trim() || undefined,
+          composer: source.composer.trim() || undefined,
+          lyricist: source.lyricist.trim() || undefined,
+          arranger: source.arranger.trim() || undefined,
+          songMemo: source.songMemo.trim() || undefined,
+          lyrics: source.lyrics.trim() || undefined,
+          artistNameOfficial: artistNameOfficialValue || undefined,
+          releaseDate: source.releaseDate || undefined,
+          genre: source.genre || undefined,
+          mvType: source.mvType,
+          runtime: source.runtime || undefined,
+          format: source.format || undefined,
+          mvBaseSelected:
+            source.mvType === "MV_DISTRIBUTION"
+              ? source.onlineBaseSelected
+              : false,
+          aiUsed: source.aiUsed ?? undefined,
+          guestToken: isGuest ? guestToken : undefined,
+          guestName: isGuest ? guestNameValue || undefined : undefined,
+          guestCompany: isGuest ? guestCompanyValue || undefined : undefined,
+          guestEmail: isGuest ? guestEmailValue || undefined : undefined,
+          guestPhone: isGuest ? guestPhoneValue || undefined : undefined,
+          paymentMethod: source.paymentMethod,
+          bankDepositorName:
+            source.paymentMethod === "BANK"
+              ? source.bankDepositorName.trim() || undefined
+              : undefined,
+          paymentDocumentType: source.paymentDocumentType || undefined,
+          cashReceiptPurpose:
+            source.paymentDocumentType === "CASH_RECEIPT"
+              ? source.cashReceiptPurpose || undefined
+              : undefined,
+          cashReceiptPhone:
+            source.paymentDocumentType === "CASH_RECEIPT" &&
+            source.cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+              ? cashReceiptPhone.trim() || undefined
+              : undefined,
+          cashReceiptBusinessNumber:
+            source.paymentDocumentType === "CASH_RECEIPT" &&
+            source.cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+              ? cashReceiptBusinessNumber.trim() || undefined
+              : undefined,
+          taxInvoiceBusinessNumber:
+            source.paymentDocumentType === "TAX_INVOICE"
+              ? taxInvoiceBusinessNumber.trim() || undefined
+              : undefined,
+          status: "DRAFT",
+          files: uploaded,
+          filesSubmittedByEmail: source.emailSubmitConfirmed,
+          applicationFormMode: source.applicationFormMode,
+          externalApplicationForm: source.applicationFormMode === "upload",
+        });
+
+        if (result.error) {
+          if (foreground) setNotice({ error: result.error });
+          return false;
+        }
+
+        if (uploaded) {
+          serverUploadedFilesRef.current = uploaded.map((file) => ({ ...file }));
+        }
+        writeDraftStorage({
+          id: submissionId,
+          guestToken: isGuest ? guestTokenRef.current : null,
+          mvType: source.mvType,
+          tvStations: source.tvStations,
+          onlineOptions: source.onlineOptions,
+          onlineBaseSelected: source.onlineBaseSelected,
+          emailSubmitConfirmed: source.emailSubmitConfirmed,
+          applicationFormMode: source.applicationFormMode ?? undefined,
+          existingCartSubmission: source.existingCartSubmission,
+        });
+        if (foreground) {
+          mvCheckpointControllerRef.current?.markSaved(savedSnapshot);
+          setNotice({ submissionId: result.submissionId });
+        }
+        return true;
+      } catch {
+        if (foreground) setNotice({ error: "저장 중 오류가 발생했습니다." });
+        return false;
+      }
+    };
+
+    try {
+      if (options.background || !mvCheckpointControllerRef.current) {
+        return await executeSave();
+      }
+      return await mvCheckpointControllerRef.current.runExclusive(executeSave);
     } finally {
-      setIsSaving(false);
+      if (foreground) {
+        setIsSaving(false);
+        draftSaveInFlightRef.current = false;
+      }
     }
   };
 
@@ -2519,9 +3004,14 @@ export function MvWizard({
     options?: { deferPayment?: boolean; redirectToCart?: boolean },
   ) => {
     const deferPayment = options?.deferPayment === true;
+    if (isSaving || submitInFlightRef.current) return;
     if (!validateMvForm({ requirePayment: !deferPayment })) return;
     if (!validateMvUploads()) return;
+    submitInFlightRef.current = true;
+    setIsSaving(true);
+    setNotice({});
 
+    const executeSubmit = async () => {
     const { songTitleKrValue, songTitleEnValue, songTitleOfficialValue } =
       resolveSongTitleValues();
     const titleValue = title.trim();
@@ -2547,8 +3037,6 @@ export function MvWizard({
       return;
     }
 
-    setIsSaving(true);
-    setNotice({});
     try {
       const uploaded = uploads.length > 0 ? await uploadFiles() : [];
       const submissionPaymentMethod = deferPayment ? "BANK" : paymentMethod;
@@ -2634,6 +3122,7 @@ export function MvWizard({
         status: "SUBMITTED",
         files: uploaded,
         filesSubmittedByEmail: emailSubmitConfirmed,
+        applicationFormMode,
         externalApplicationForm: isDownloadedApplicationFlow,
       });
 
@@ -2643,8 +3132,18 @@ export function MvWizard({
       }
 
       if (result.submissionId) {
+        serverUploadedFilesRef.current = uploaded.map((file) => ({ ...file }));
+        // The final server write already contains the latest form and uploaded
+        // file metadata. Mark that exact snapshot as synchronized so leaving
+        // the exclusive section cannot enqueue a stale DRAFT write while the
+        // card-payment popup is open.
+        mvCheckpointControllerRef.current?.markSaved({
+          ...buildMvCheckpointSnapshot(),
+          uploadedFiles: uploaded.map((file) => ({ ...file })),
+        });
         if (deferPayment) {
-          clearDraftStorage();
+          mvCheckpointControllerRef.current?.clear();
+          clearDraftStorageForSubmission(result.submissionId);
           if (isGuest) {
             const savedGuestToken = result.guestToken ?? guestToken;
             if (!savedGuestToken) {
@@ -2695,7 +3194,8 @@ export function MvWizard({
           return;
         }
         if (paymentMethod === "BANK") {
-          clearDraftStorage();
+          mvCheckpointControllerRef.current?.clear();
+          clearDraftStorageForSubmission(result.submissionId);
           setNotice(result.emailNotice ? { emailNotice: result.emailNotice } : {});
           setCompletionId(result.submissionId);
           if (result.guestToken) {
@@ -2715,7 +3215,16 @@ export function MvWizard({
       }
     } catch {
       setNotice({ error: "저장 중 오류가 발생했습니다." });
+    }
+    };
+
+    try {
+      if (!mvCheckpointControllerRef.current) {
+        return await executeSubmit();
+      }
+      return await mvCheckpointControllerRef.current.runExclusive(executeSubmit);
     } finally {
+      submitInFlightRef.current = false;
       setIsSaving(false);
     }
   };
@@ -2769,6 +3278,145 @@ export function MvWizard({
       setStep(5);
     }
   };
+
+  const mvCheckpointSnapshot = buildMvCheckpointSnapshot();
+  const restoreMvCheckpoint = React.useCallback(
+    (snapshot: MvCheckpointSnapshot) => {
+      setApplicationFormMode(snapshot.applicationFormMode);
+      setMvType(snapshot.mvType);
+      setTvStations([...snapshot.tvStations]);
+      setOnlineOptions([...snapshot.onlineOptions]);
+      setOnlineBaseSelected(snapshot.onlineBaseSelected);
+      setTitle(snapshot.title);
+      setArtistName(snapshot.artistName);
+      setArtistNameOfficial(snapshot.artistNameOfficial);
+      setDirector(snapshot.director);
+      setLeadActor(snapshot.leadActor);
+      setStoryline(snapshot.storyline);
+      setProductionCompany(snapshot.productionCompany);
+      setAgency(snapshot.agency);
+      setAlbumTitle(snapshot.albumTitle);
+      setDistributionCompany(snapshot.distributionCompany);
+      setUsage(snapshot.usage);
+      setDesiredRating(
+        snapshot.mvType === "MV_DISTRIBUTION"
+          ? snapshot.desiredRating
+          : "",
+      );
+      setMemo(snapshot.memo);
+      setSongTitleKr(snapshot.songTitleKr);
+      setSongTitleEn(snapshot.songTitleEn);
+      setSongTitleOfficial(snapshot.songTitleOfficial);
+      setComposer(snapshot.composer);
+      setLyricist(snapshot.lyricist);
+      setArranger(snapshot.arranger);
+      setSongMemo(snapshot.songMemo);
+      setLyrics(snapshot.lyrics);
+      setReleaseDate(snapshot.releaseDate);
+      setGenre(snapshot.genre);
+      setRuntime(snapshot.runtime);
+      setFormat(snapshot.format);
+      setAiUsed(snapshot.aiUsed);
+      setGuestName(snapshot.guestName);
+      setGuestCompany(snapshot.guestCompany);
+      setGuestEmail(snapshot.guestEmail);
+      setGuestPhone(snapshot.guestPhone);
+      setPaymentMethod(snapshot.paymentMethod);
+      setBankDepositorName(snapshot.bankDepositorName);
+      setPaymentDocumentType(snapshot.paymentDocumentType);
+      setCashReceiptPurpose(snapshot.cashReceiptPurpose);
+      setExistingCartSubmission(
+        snapshot.existingCartSubmission
+          ? {
+              ...snapshot.existingCartSubmission,
+              selectedOptionCodes: [
+                ...snapshot.existingCartSubmission.selectedOptionCodes,
+              ],
+            }
+          : null,
+      );
+      const restoredFiles =
+        checkpointRestoreSourceRef.current === "previous"
+          ? serverUploadedFilesRef.current.map((file) => ({ ...file }))
+          : snapshot.uploadedFiles.map((file) => ({ ...file }));
+      setUploadedFiles(restoredFiles);
+      setUploads(
+        restoredFiles.length > 0 ? buildUploadsFromFiles(restoredFiles) : [],
+      );
+      setFiles([]);
+      setFileDigest("");
+      setEmailSubmitConfirmed(snapshot.emailSubmitConfirmed);
+      setInvalidField(null);
+      setNotice({});
+      setStep(Math.max(1, Math.min(5, snapshot.step)));
+    },
+    [buildUploadsFromFiles],
+  );
+  const mvCheckpoint = useSubmissionCheckpoint<MvCheckpointSnapshot>({
+    kind: "MV",
+    storageKey: currentSubmissionId
+      ? getSubmissionCheckpointStorageKey(
+          draftStorageKey,
+          currentSubmissionId,
+        )
+      : null,
+    submissionId: currentSubmissionId,
+    snapshot: mvCheckpointSnapshot,
+    enabled:
+      resumeChecked &&
+      Boolean(currentSubmissionId) &&
+      !completionId,
+    debounceMs: 1_800,
+    serverUpdatedAt: currentServerUpdatedAt,
+    initialDataIsServerState:
+      checkpointSeed?.submissionId === currentSubmissionId
+        ? checkpointSeed.initialDataIsServerState
+        : false,
+    onRecover: restoreMvCheckpoint,
+    save: async (snapshot) => {
+      if (snapshot.existingCartSubmission) {
+        return { ok: true, serverSaved: false };
+      }
+      const saved = await saveMvDraft({
+        includeFiles: false,
+        background: true,
+        snapshot,
+      });
+      if (!saved) {
+        return {
+            ok: false,
+            error:
+              "서버 저장이 지연되고 있습니다. 입력은 이 기기에 보관했습니다.",
+          };
+      }
+      if (
+        !areSubmissionUploadMetadataEqual(
+          snapshot.uploadedFiles,
+          serverUploadedFilesRef.current,
+        )
+      ) {
+        return { ok: true, serverSaved: false };
+      }
+      return { ok: true, savedAt: Date.now() };
+    },
+  });
+  mvCheckpointControllerRef.current = mvCheckpoint;
+  const recoverMvCheckpoint = React.useCallback(() => {
+    checkpointRestoreSourceRef.current = "recovery";
+    try {
+      mvCheckpoint.recover();
+    } finally {
+      checkpointRestoreSourceRef.current = "recovery";
+    }
+  }, [mvCheckpoint]);
+  const revertMvCheckpointToSaved = React.useCallback(() => {
+    checkpointRestoreSourceRef.current = "previous";
+    try {
+      return mvCheckpoint.revertToSaved();
+    } finally {
+      checkpointRestoreSourceRef.current = "recovery";
+    }
+  }, [mvCheckpoint]);
 
   const renderBroadcastSpecs = () => {
     if (broadcastSpecs.length === 0) return null;
@@ -2870,6 +3518,14 @@ export function MvWizard({
             <p className="mt-2 text-sm text-muted-foreground">
               불러오시겠습니까?
             </p>
+            {resumeDeleteError ? (
+              <p
+                role="alert"
+                className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-600"
+              >
+                {resumeDeleteError}
+              </p>
+            ) : null}
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
@@ -2946,9 +3602,35 @@ export function MvWizard({
         </div>
       )}
       {stepLabels}
+      {mvCheckpoint.status === "recovery" && mvCheckpoint.recovery ? (
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 z-[115] bg-black/50 backdrop-blur-[1px]"
+        />
+      ) : null}
+      <SubmissionSaveIndicator
+        status={mvCheckpoint.status}
+        lastSavedAt={mvCheckpoint.lastSavedAt}
+        error={mvCheckpoint.error}
+        hasRecovery={Boolean(mvCheckpoint.recovery)}
+        hasPrevious={Boolean(mvCheckpoint.previous)}
+        onRetry={mvCheckpoint.retry}
+        onRecover={recoverMvCheckpoint}
+        onDiscardRecovery={mvCheckpoint.discardRecovery}
+        onRevertToSaved={revertMvCheckpointToSaved}
+        className={
+          mvCheckpoint.status === "recovery" && mvCheckpoint.recovery
+            ? "fixed left-1/2 top-1/2 z-[120] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 p-5"
+            : undefined
+        }
+      />
 
       {step === 1 && (
-        <div className="space-y-6">
+        <div
+          data-preflight-field="mvPurpose"
+          tabIndex={-1}
+          className="space-y-6 outline-none"
+        >
           <h2 className="font-display text-2xl text-foreground">심의 목적 선택</h2>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -3004,7 +3686,11 @@ export function MvWizard({
           </div>
 
           {mvType === "MV_BROADCAST" ? (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+            <div
+              data-preflight-field="reviewOptions"
+              tabIndex={-1}
+              className="rounded-[28px] border border-border/60 bg-card/80 p-6 outline-none"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-foreground">방송국 선택</h3>
                 <span className="rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-muted-foreground">
@@ -3052,7 +3738,11 @@ export function MvWizard({
               </div>
             </div>
           ) : (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+            <div
+              data-preflight-field="reviewOptions"
+              tabIndex={-1}
+              className="rounded-[28px] border border-border/60 bg-card/80 p-6 outline-none"
+            >
               <h3 className="font-semibold text-foreground">옵션 선택</h3>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <button
@@ -3161,10 +3851,16 @@ export function MvWizard({
 
       {step === 2 && (
         <div className="space-y-6">
-          <ApplicationFormModeTabs
-            mode={applicationFormMode}
-            onModeChange={selectApplicationFormMode}
-          />
+          <div
+            data-preflight-field="applicationFormMode"
+            tabIndex={-1}
+            className="outline-none"
+          >
+            <ApplicationFormModeTabs
+              mode={applicationFormMode}
+              onModeChange={selectApplicationFormMode}
+            />
+          </div>
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
@@ -3208,7 +3904,12 @@ export function MvWizard({
                   </a>
                 ))}
               </div>
-              <div data-mv-field="aiUsed" tabIndex={-1} className="mt-5">
+              <div
+                data-mv-field="aiUsed"
+                data-preflight-field="aiUsed"
+                tabIndex={-1}
+                className="mt-5"
+              >
                 <AiUsageSelector
                   value={aiUsed}
                   onChange={(nextValue) => {
@@ -3256,6 +3957,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="title"
+                      data-preflight-field="title"
                       aria-invalid={invalidField === "title"}
                       value={title}
                       onChange={(event) => {
@@ -3271,6 +3973,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="artistName"
+                      data-preflight-field="artistName"
                       aria-invalid={invalidField === "artistName"}
                       value={artistName}
                       onChange={(event) => {
@@ -3290,6 +3993,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="artistNameOfficial"
+                      data-preflight-field="artistNameOfficial"
                       aria-invalid={invalidField === "artistNameOfficial"}
                       value={artistNameOfficial}
                       onChange={(event) => {
@@ -3309,6 +4013,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="releaseDate"
+                      data-preflight-field="releaseDate"
                       aria-invalid={invalidField === "releaseDate"}
                       type="date"
                       value={releaseDate}
@@ -3357,6 +4062,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="director"
+                      data-preflight-field="director"
                       aria-invalid={invalidField === "director"}
                       value={director}
                       onChange={(event) => {
@@ -3372,6 +4078,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="leadActor"
+                      data-preflight-field="leadActor"
                       aria-invalid={invalidField === "leadActor"}
                       value={leadActor}
                       onChange={(event) => {
@@ -3395,6 +4102,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="productionCompany"
+                      data-preflight-field="productionCompany"
                       aria-invalid={invalidField === "productionCompany"}
                       value={productionCompany}
                       onChange={(event) => {
@@ -3424,6 +4132,7 @@ export function MvWizard({
                     </div>
                     <input
                       data-mv-field="agency"
+                      data-preflight-field="agency"
                       aria-invalid={invalidField === "agency"}
                       value={agency}
                       onChange={(event) => {
@@ -3439,6 +4148,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="albumTitle"
+                      data-preflight-field="albumTitle"
                       aria-invalid={invalidField === "albumTitle"}
                       value={albumTitle}
                       onChange={(event) => {
@@ -3454,6 +4164,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="distributionCompany"
+                      data-preflight-field="distributionCompany"
                       aria-invalid={invalidField === "distributionCompany"}
                       value={distributionCompany}
                       onChange={(event) => {
@@ -3469,6 +4180,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="usage"
+                      data-preflight-field="usage"
                       aria-invalid={invalidField === "usage"}
                       placeholder="예: 음악사이트 기재"
                       value={usage}
@@ -3504,7 +4216,11 @@ export function MvWizard({
                 </div>
               </div>
 
-              <div data-mv-field="aiUsed" tabIndex={-1}>
+              <div
+                data-mv-field="aiUsed"
+                data-preflight-field="aiUsed"
+                tabIndex={-1}
+              >
                 <AiUsageSelector
                   value={aiUsed}
                   onChange={(nextValue) => {
@@ -3527,6 +4243,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="songTitleKr"
+                      data-preflight-field="songTitleKr"
                       aria-invalid={invalidField === "songTitleKr"}
                       value={songTitleKr}
                       onChange={(event) => {
@@ -3542,6 +4259,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="songTitleEn"
+                      data-preflight-field="songTitleEn"
                       aria-invalid={invalidField === "songTitleEn"}
                       value={songTitleEn}
                       onChange={(event) => {
@@ -3557,6 +4275,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="songTitleOfficial"
+                      data-preflight-field="songTitleOfficial"
                       aria-invalid={invalidField === "songTitleOfficial"}
                       value={songTitleOfficial}
                       onChange={(event) => {
@@ -3576,6 +4295,7 @@ export function MvWizard({
                     </label>
                     <input
                       data-mv-field="composer"
+                      data-preflight-field="composer"
                       aria-invalid={invalidField === "composer"}
                       value={composer}
                       onChange={(event) => {
@@ -3624,6 +4344,7 @@ export function MvWizard({
                 </p>
                 <textarea
                   data-mv-field="storyline"
+                  data-preflight-field="storyline"
                   aria-invalid={invalidField === "storyline"}
                   value={storyline}
                   onChange={(event) => {
@@ -3704,6 +4425,7 @@ export function MvWizard({
                   )}
                   <textarea
                     data-mv-field="lyrics"
+                    data-preflight-field="lyrics"
                     aria-invalid={invalidField === "lyrics"}
                     ref={lyricsTextareaRef}
                     value={lyrics}
@@ -3763,6 +4485,7 @@ export function MvWizard({
                       </label>
                       <input
                         data-mv-field="guestName"
+                        data-preflight-field="guestName"
                         aria-invalid={invalidField === "guestName"}
                         value={guestName}
                         onChange={(event) => {
@@ -3789,6 +4512,7 @@ export function MvWizard({
                       </label>
                       <input
                         data-mv-field="guestEmail"
+                        data-preflight-field="guestEmail"
                         aria-invalid={invalidField === "guestEmail"}
                         type="email"
                         value={guestEmail}
@@ -3806,6 +4530,7 @@ export function MvWizard({
                       </label>
                       <input
                         data-mv-field="guestPhone"
+                        data-preflight-field="guestPhone"
                         aria-invalid={invalidField === "guestPhone"}
                         value={guestPhone}
                         onChange={(event) => {
@@ -3869,7 +4594,11 @@ export function MvWizard({
         <div className="space-y-8">
           <h2 className="font-display text-2xl text-foreground">파일 첨부</h2>
 
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+          <div
+            data-preflight-field="files"
+            tabIndex={-1}
+            className="rounded-[28px] border border-border/60 bg-card/80 p-6 outline-none"
+          >
             <p className="mt-1 text-xs font-semibold text-foreground">
               {isDownloadedApplicationFlow
                 ? "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V + HWP/DOC/DOCX"
@@ -3893,6 +4622,7 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("upload")}
+                disabled={uploadInProgress}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${!emailSubmitConfirmed
                   ? "bg-foreground text-background shadow-sm"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
@@ -3903,6 +4633,7 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
+                disabled={uploadInProgress}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
                   ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
@@ -3941,7 +4672,7 @@ export function MvWizard({
               <>
                 <div className="mt-4">
                   <label
-                    className="relative block"
+                    className={`relative block ${uploadInProgress ? "cursor-wait opacity-70" : ""}`}
                     onDragOver={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -3965,6 +4696,7 @@ export function MvWizard({
                       }
                       onChange={onFileChange}
                       className="hidden"
+                      disabled={uploadInProgress}
                     />
                     <span className="flex w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
                       {submissionIdRef.current
@@ -4011,11 +4743,11 @@ export function MvWizard({
                         key={`${upload.name}-${index}`}
                         className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-semibold text-foreground">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <span className="min-w-0 flex-1 break-all font-semibold text-foreground">
                             {upload.name}
                           </span>
-                          <div className="flex items-center gap-3">
+                          <div className="flex shrink-0 items-center gap-3">
                             {upload.status === "done" ? (
                               <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
                                 첨부 완료
@@ -4031,19 +4763,33 @@ export function MvWizard({
                             )}
                             <button
                               type="button"
+                              disabled={upload.status === "uploading"}
                               onClick={() => {
-                                const nextFiles = [...files];
-                                nextFiles.splice(index, 1);
-                                const nextUploads = [...uploads];
-                                nextUploads.splice(index, 1);
-                                setFiles(nextFiles);
-                                setUploads(nextUploads);
+                                const removedUpload = uploads[index];
+                                setFiles((currentFiles) =>
+                                  removedUpload?.localKey
+                                    ? currentFiles.filter(
+                                        (file) =>
+                                          getLocalUploadKey(file) !==
+                                          removedUpload.localKey,
+                                      )
+                                    : currentFiles,
+                                );
+                                setUploads((currentUploads) =>
+                                  currentUploads.filter(
+                                    (_, uploadIndex) => uploadIndex !== index,
+                                  ),
+                                );
                                 setUploadedFiles((prev) =>
-                                  prev.filter((_, idx) => idx !== index),
+                                  prev.filter((file) =>
+                                    removedUpload?.path
+                                      ? file.path !== removedUpload.path
+                                      : true,
+                                  ),
                                 );
                                 setFileDigest("");
                               }}
-                              className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
+                              className="min-h-11 rounded-full border border-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500 disabled:cursor-wait disabled:opacity-50"
                             >
                               삭제
                             </button>
@@ -4111,36 +4857,62 @@ export function MvWizard({
 
       {step === 5 && (
         <div className="space-y-8">
-          <h2 className="font-display text-2xl text-foreground">신청 내용 확인</h2>
-
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              선택한 옵션
-            </p>
-            <div className="mt-4 space-y-3 text-sm text-foreground">
-              {paymentItems.length > 0 ? (
-                paymentItems.map((item) => (
-                  <div
-                    key={`${item.title}-${item.amount}`}
-                    className="flex flex-wrap items-center justify-between gap-2"
-                  >
-                    <span className="font-semibold">{item.title}</span>
-                    <span className="text-sm font-semibold">
-                      {formatCurrency(item.amount)}원
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  선택된 옵션이 없습니다.
+          <div className="rounded-[22px] border-2 border-[#111111] bg-card p-4 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">
+                  결제 금액
                 </p>
-              )}
+                <p className="mt-1 text-2xl font-black text-foreground">
+                  {formatCurrency(totalAmount)}원
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="rounded-full border-2 border-[#111111] bg-background px-4 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 hover:bg-[#111111] hover:text-white dark:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
+              >
+                옵션 수정
+              </button>
             </div>
-            <div className="mt-4 flex items-center justify-between text-sm font-semibold text-foreground">
-              <span>총 결제 금액</span>
-              <span>{formatCurrency(totalAmount)}원</span>
-            </div>
+            <details className="mt-4 rounded-[14px] border border-border/70 bg-background/60 px-4 py-3 text-xs text-muted-foreground">
+              <summary className="cursor-pointer font-black text-foreground">
+                선택 내역 {paymentItems.length}건
+              </summary>
+              <div className="mt-3 space-y-2">
+                {paymentItems.length > 0 ? (
+                  paymentItems.map((item) => (
+                    <div
+                      key={`${item.title}-${item.amount}`}
+                      className="flex flex-wrap items-center justify-between gap-2"
+                    >
+                      <span className="font-semibold text-foreground">
+                        {item.title}
+                      </span>
+                      <span>{formatCurrency(item.amount)}원</span>
+                    </div>
+                  ))
+                ) : (
+                  <p>선택된 옵션이 없습니다.</p>
+                )}
+              </div>
+            </details>
           </div>
+
+          <SubmissionPreflightPanel
+            result={mvPreflight}
+            criteria={[
+              "심의 목적과 선택 옵션",
+              "작성 방식에 맞는 필수 신청 정보",
+              "영상·신청서 파일과 결제 금액",
+            ]}
+            onNavigate={navigateFromPreflight}
+            onAcknowledge={(issue) => {
+              if (issue.acknowledgementKey === "cart-price-change") {
+                setPriceChangeAcknowledged(true);
+              }
+            }}
+          />
 
           {isGuest && !usesSubmissionCartCheckout ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -4445,7 +5217,7 @@ export function MvWizard({
             <button
               type="button"
               onClick={() => handleSubmit({ deferPayment: true })}
-              disabled={isSaving || !mvPaymentReady}
+              disabled={isSaving || !mvPreflight.canSubmit}
               className="rounded-full border border-border/70 bg-background px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
             >
               장바구니에 담기
@@ -4458,7 +5230,7 @@ export function MvWizard({
                   redirectToCart: true,
                 })
               }
-              disabled={isSaving || !mvPaymentReady}
+              disabled={isSaving || !mvPreflight.canSubmit}
               className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
             >
               담고 결제하기

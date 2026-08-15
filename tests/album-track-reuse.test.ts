@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyAlbumTrackCreditsToBlankTracks,
+  applyAlbumTrackReusableCreditsToBlankTracks,
   createAlbumTrackWithReusableCredits,
   type AlbumTrackReusableCredits,
 } from "../src/lib/album-track-reuse";
@@ -131,4 +132,31 @@ test("invalid source indexes return an immutable shallow copy", () => {
   assert.notEqual(result, tracks);
   assert.equal(result[0], tracks[0]);
   assert.deepEqual(result, tracks);
+});
+
+test("explicit bulk credits can target selected blank fields only", () => {
+  const compilationTrack: TestTrack = {
+    ...initialTrack(),
+    trackTitle: "컴필레이션 트랙",
+    performer: "개별 가수",
+  };
+  const blankTrack = { ...initialTrack(), trackTitle: "빈 트랙" };
+
+  const result = applyAlbumTrackReusableCreditsToBlankTracks(
+    [compilationTrack, blankTrack],
+    {
+      performer: "공통 가수",
+      composer: "공통 작곡가",
+      lyricist: "공통 작사가",
+      arranger: "공통 편곡가",
+    },
+    { fields: ["performer", "composer"] },
+  );
+
+  assert.equal(result[0].performer, "개별 가수");
+  assert.equal(result[0].composer, "공통 작곡가");
+  assert.equal(result[1].performer, "공통 가수");
+  assert.equal(result[1].composer, "공통 작곡가");
+  assert.equal(result[1].lyricist, "");
+  assert.equal(result[1].arranger, "");
 });

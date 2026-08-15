@@ -39,3 +39,40 @@ test("cart DELETE avoids the PostgREST OR-filter regression", () => {
   );
   assert.doesNotMatch(deleteMutation, /\.or\(cartPaymentFilter\)/);
 });
+
+test("cart DELETE expands album bundles only after every row is authorized", () => {
+  const source = read("src/app/api/cart/items/route.ts");
+  const handler = source.slice(source.indexOf("export async function DELETE"));
+
+  const expansionIndex = handler.indexOf("loadCartAlbumGroupMembers");
+  const ownershipIndex = handler.indexOf(
+    "filterCompleteSubmissionCartGroups",
+    expansionIndex,
+  );
+  const requestedPaymentIndex = handler.indexOf(
+    "has_requested_submission_payments",
+    ownershipIndex,
+  );
+  const deleteIndex = handler.indexOf('.from("submissions")', requestedPaymentIndex);
+
+  assert.ok(expansionIndex >= 0, "album cart groups must be expanded");
+  assert.ok(
+    ownershipIndex > expansionIndex,
+    "every expanded row must be ownership-checked",
+  );
+  assert.ok(
+    requestedPaymentIndex > ownershipIndex,
+    "payment locks must be checked for the expanded group",
+  );
+  assert.ok(
+    deleteIndex > requestedPaymentIndex,
+    "the expanded group must be checked before the atomic delete",
+  );
+  assert.match(handler, /submissionIds = completeOwnedRows\.map\(\(row\) => row\.id\)/);
+  assert.match(handler, /hasGuestOwnership\(row, guestTokensBySubmissionId\)/);
+  assert.match(
+    handler,
+    /const fullAlbumSeedRows = seedRows\.filter\([\s\S]*row\.album_price_tier === "FULL"/,
+    "an additional album can be removed without deleting its full-price base",
+  );
+});

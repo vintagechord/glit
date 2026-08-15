@@ -291,16 +291,35 @@ test("submitted media and downloaded application forms are enforced server-side"
 });
 
 test("both wizards explicitly bind the downloaded-form mode into the server action", () => {
-  for (const path of [
-    "src/features/submissions/album-wizard.tsx",
-    "src/features/submissions/mv-wizard.tsx",
-  ]) {
-    const source = readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-    assert.equal(
-      (source.match(/externalApplicationForm: isDownloadedApplicationFlow/g) ?? [])
-        .length,
-      2,
-      `${path} must bind both draft and submit calls`,
-    );
-  }
+  const album = readFileSync(
+    new URL("../src/features/submissions/album-wizard.tsx", import.meta.url),
+    "utf8",
+  );
+  const mv = readFileSync(
+    new URL("../src/features/submissions/mv-wizard.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    album,
+    /externalApplicationForm: sourceDownloadedApplicationFlow/,
+    "album checkpoint saves must bind the form mode from the saved snapshot",
+  );
+  assert.equal(
+    (album.match(/externalApplicationForm: isDownloadedApplicationFlow/g) ?? [])
+      .length,
+    1,
+    "the final album submit call must bind the active form mode",
+  );
+  assert.match(
+    mv,
+    /externalApplicationForm: source\.applicationFormMode === "upload"/,
+    "MV checkpoint saves must bind the form mode from the saved snapshot",
+  );
+  assert.equal(
+    (mv.match(/externalApplicationForm: isDownloadedApplicationFlow/g) ?? [])
+      .length,
+    1,
+    "the final MV submit call must bind the active form mode",
+  );
 });

@@ -10,6 +10,8 @@ export type SubmissionCartItem = {
   amount_krw: number | null;
   payment_method?: string | null;
   is_oneclick?: boolean | null;
+  album_price_tier?: string | null;
+  album_draft_group_id?: string | null;
   created_at: string | null;
   updated_at: string | null;
   package?:
@@ -27,15 +29,19 @@ const CART_PAYMENT_FILTER =
   "payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)";
 
 const CART_SELECT =
-  "id, type, status, payment_status, payment_method, title, artist_name, amount_krw, is_oneclick, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )";
+  "id, type, status, payment_status, payment_method, title, artist_name, amount_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )";
 const CART_LEGACY_SELECT =
   "id, type, status, payment_status, payment_method, title, artist_name, amount_krw, is_oneclick, created_at, updated_at, package:packages ( name, station_count )";
 
-const isMissingUserDeletedAt = (error?: QueryError | null) =>
+const isMissingCartOptionalColumn = (error?: QueryError | null) =>
   Boolean(
     error &&
       (error.code === "42703" ||
-        error.message?.toLowerCase().includes("user_deleted_at")),
+        [
+          "user_deleted_at",
+          "album_price_tier",
+          "album_draft_group_id",
+        ].some((column) => error.message?.toLowerCase().includes(column))),
   );
 
 const buildCartQuery = (
@@ -73,7 +79,7 @@ export const getSubmissionCartItems = async (
     };
   }
 
-  if (!isMissingUserDeletedAt(primary.error)) {
+  if (!isMissingCartOptionalColumn(primary.error)) {
     return { items: [], error: primary.error };
   }
 

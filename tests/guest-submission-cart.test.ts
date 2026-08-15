@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  mergeGuestSubmissionCartEntries,
   normalizeGuestSubmissionCartEntries,
   parseGuestSubmissionCartEntries,
   toGuestTokensBySubmissionId,
@@ -122,5 +123,24 @@ test("toGuestTokensBySubmissionId returns a normalized submission-to-token map",
       [firstId]: "token-new",
       [secondId]: "token-two",
     },
+  );
+});
+
+test("re-adding an edited submission updates one guest cart entry", () => {
+  const editedId = submissionId(10);
+  const untouchedId = submissionId(11);
+
+  assert.deepEqual(
+    mergeGuestSubmissionCartEntries(
+      [
+        { submissionId: editedId, guestToken: "token-before" },
+        { submissionId: untouchedId, guestToken: "token-untouched" },
+      ],
+      [{ submissionId: editedId, guestToken: "token-after" }],
+    ),
+    [
+      { submissionId: editedId, guestToken: "token-after" },
+      { submissionId: untouchedId, guestToken: "token-untouched" },
+    ],
   );
 });

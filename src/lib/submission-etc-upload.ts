@@ -87,6 +87,7 @@ export const uploadSubmissionEtcFile = async ({
       filename: file.name,
       mimeType,
       sizeBytes: file.size,
+      purpose: "PAYMENT_DOCUMENT",
       guestToken,
     }),
   });

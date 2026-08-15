@@ -59,8 +59,8 @@ test("draft and pre-review saves keep the lease-compatible draft staging state",
 
 test("the DB lease serializes saves and fails closed around payment", () => {
   const migration = read("supabase/migrations/0083_submission_save_lease.sql");
-  const releaseMigration = read(
-    "supabase/migrations/0088_release_submission_save_lease_safely.sql",
+  const recoveryMigration = read(
+    "supabase/migrations/0089_atomic_submission_parent_save.sql",
   );
 
   assert.match(migration, /add column if not exists save_lease_token uuid/);
@@ -82,38 +82,80 @@ test("the DB lease serializes saves and fails closed around payment", () => {
   );
   assert.match(migration, /set status = 'DRAFT',\s+payment_status = 'UNPAID'/);
   assert.match(migration, /save_lease_expires_at <= clock_timestamp\(\)/);
+  assert.match(recoveryMigration, /original_submission jsonb not null/);
+  assert.match(recoveryMigration, /original_updated_at timestamptz not null/);
+  assert.match(recoveryMigration, /jsonb_populate_record\(null::public\.submissions, \$1\)/);
+  assert.match(recoveryMigration, /public\.restore_submission_save_lease_snapshot/);
+  assert.match(recoveryMigration, /claim_submission_save_lease_v2/);
+  assert.match(recoveryMigration, /commit_submission_save_v2/);
+  assert.match(recoveryMigration, /recovery_required boolean/);
   assert.match(
-    releaseMigration,
-    /set status = 'DRAFT',\s+payment_status = 'UNPAID',\s+save_lease_token = null/,
-  );
-  assert.match(
-    releaseMigration,
-    /save_lease_expires_at <= clock_timestamp\(\)/,
-  );
-  assert.match(
-    releaseMigration,
+    recoveryMigration,
     /submission\.save_lease_token = p_lease_token/,
   );
   assert.match(
-    releaseMigration,
-    /submission\.status in \('DRAFT', 'PRE_REVIEW', 'SUBMITTED'\)/,
+    recoveryMigration,
+    /v_submission\.save_lease_expires_at > clock_timestamp\(\)/,
   );
   assert.match(
-    releaseMigration,
-    /submission\.payment_status = 'UNPAID'/,
+    recoveryMigration,
+    /p_expected_updated_at is not distinct from v_original_updated_at/,
   );
   assert.match(
-    releaseMigration,
+    recoveryMigration,
     /payment\.status = 'REQUESTED'[\s\S]*submission_payment_includes_submission/,
   );
   assert.match(
-    releaseMigration,
+    recoveryMigration,
     /revoke all on function public\.release_submission_save_lease\(uuid, uuid\)[\s\S]*from public, anon, authenticated/,
   );
   assert.match(
-    releaseMigration,
+    recoveryMigration,
     /grant execute on function public\.release_submission_save_lease\(uuid, uuid\)[\s\S]*to service_role/,
   );
+  assert.match(
+    recoveryMigration,
+    /after update of save_lease_token on public\.submissions/,
+  );
+  assert.match(
+    recoveryMigration,
+    /delete from public\.submission_save_lease_snapshots/,
+  );
+  assert.match(
+    recoveryMigration,
+    /set save_lease_token = p_lease_token,\s+save_lease_expires_at = clock_timestamp\(\) \+ interval '5 minutes'/,
+  );
+  assert.doesNotMatch(
+    recoveryMigration.slice(
+      recoveryMigration.indexOf("create or replace function public.claim_submission_save_lease_v2"),
+      recoveryMigration.indexOf("-- Keep the old RPC safe during a rolling application deploy"),
+    ),
+    /set status = 'DRAFT'/,
+  );
+  assert.match(
+    recoveryMigration,
+    /from public\.commit_submission_save\([\s\S]*p_final_payment_status/,
+  );
+  assert.match(recoveryMigration, /prevent_requested_payment_during_submission_save/);
+  assert.match(
+    recoveryMigration,
+    /ACTIVE_SUBMISSION_SAVE_LEASES_RETRY_MIGRATION/,
+  );
+  assert.match(
+    recoveryMigration,
+    /create or replace function public\.claim_submission_save_lease\([\s\S]*from public\.claim_submission_save_lease_v2\(/,
+  );
+  for (const parentKey of [
+    "application_form_mode",
+    "files_submitted_by_email",
+    "mv_selected_station_codes",
+    "album_draft_group_id",
+  ]) {
+    assert.ok(
+      recoveryMigration.includes(`'${parentKey}'`),
+      `atomic parent allowlist must include ${parentKey}`,
+    );
+  }
 
   for (const signature of [
     "public.claim_submission_save_lease(\n  uuid, timestamptz, uuid, text, uuid\n)",
@@ -125,6 +167,13 @@ test("the DB lease serializes saves and fails closed around payment", () => {
   assert.match(migration, /grant execute on function public\.claim_submission_save_lease[\s\S]*to service_role/);
   assert.match(migration, /grant execute on function public\.commit_submission_save[\s\S]*to service_role/);
   assert.match(migration, /grant execute on function public\.release_submission_save_lease[\s\S]*to service_role/);
+});
+
+test("lease recovery is surfaced as a reload-required outcome", () => {
+  const source = read("src/features/submissions/actions.ts");
+  assert.match(source, /recovery_required\?: boolean/);
+  assert.match(source, /recoveryRequired: !error && row\?\.recovery_required === true/);
+  assert.match(source, /중단된 저장을 안전하게 복구했습니다/);
 });
 
 test("tracks, files, reviews, and final state are one atomic commit", () => {
@@ -192,7 +241,7 @@ test("track performers are backfilled and committed without erasing omitted trac
   assert.match(album, /p_replace_tracks: shouldReplaceTracks/);
 });
 
-test("album and MV actions validate, claim, stage, and atomically commit in order", () => {
+test("album and MV actions validate, claim, and atomically commit parent plus dependents", () => {
   const source = read("src/features/submissions/actions.ts");
   const albumStart = source.indexOf("export async function saveAlbumSubmissionAction");
   const mvStart = source.indexOf("export async function saveMvSubmissionAction");
@@ -208,21 +257,21 @@ test("album and MV actions validate, claim, stage, and atomically commit in orde
     const validation = action.indexOf(validator);
     const ownership = action.indexOf("validateSubmissionFileObjectKeys(");
     const claim = action.indexOf("claimSubmissionSaveLease(");
-    const stage = action.indexOf("stageSubmissionWithColumnFallback(", claim);
-    const snapshot = action.indexOf("loadSubmissionB2ObjectRefs(", stage);
-    const commit = action.indexOf('"commit_submission_save"', snapshot);
+    const snapshot = action.indexOf("loadSubmissionB2ObjectRefs(", claim);
+    const commit = action.indexOf('"commit_submission_save_v2"', snapshot);
     const cleanup = action.indexOf("scheduleReplacedSubmissionFileCleanup(", commit);
 
     assert.ok(validation >= 0, `${label}: missing submitted-field validation`);
     assert.ok(ownership >= 0 && ownership < claim, `${label}: file ownership must precede lease`);
     assert.ok(validation < claim, `${label}: required fields must precede lease`);
-    assert.ok(claim >= 0 && stage > claim, `${label}: parent must be lease-staged`);
-    assert.ok(snapshot > stage, `${label}: old file references must be captured after staging`);
-    assert.ok(commit > snapshot, `${label}: dependent data must use the atomic RPC`);
+    assert.ok(claim >= 0, `${label}: parent save lease must be claimed`);
+    assert.ok(snapshot > claim, `${label}: old file references must be captured after claim`);
+    assert.ok(commit > snapshot, `${label}: parent and dependent data must use the v2 atomic RPC`);
     assert.ok(cleanup > commit, `${label}: B2 cleanup must follow a successful commit`);
     assert.match(action.slice(commit, cleanup), new RegExp(`p_file_kind: "${fileKind}"`));
     assert.match(action.slice(commit, cleanup), /p_expected_updated_at:/);
     assert.match(action.slice(commit, cleanup), /p_lease_token:/);
+    assert.match(action.slice(commit, cleanup), /p_parent: atomicParentPayload/);
     assert.match(action, /releaseSubmissionSaveLease\(\{/);
     assert.doesNotMatch(action.slice(claim, cleanup), /\.from\("album_tracks"\)/);
     assert.doesNotMatch(action.slice(claim, cleanup), /\.from\("submission_files"\)/);

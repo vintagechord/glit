@@ -27,6 +27,12 @@ import {
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStorageLogId } from "@/lib/guest-storage-owner";
+import {
+  getSubmissionUploadBlockMessage,
+  getSubmissionUploadBlockReason,
+  getSubmissionUploadConflictMessage,
+  shouldStageSubmissionUpload,
+} from "@/lib/submission-upload-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,7 +90,7 @@ export async function POST(request: Request) {
   const startedAt = Date.now();
   let claimedGrant: MultipartUploadGrant | null = null;
   let completedObjectKey: string | null = null;
-  let recordedObjectKey: string | null = null;
+  let stagedObjectKey: string | null = null;
   const requestLimit = consumeRateLimit({
     namespace: "upload-multipart-complete-ip",
     identifier: getRequestIdentifier(request.headers),
@@ -147,6 +153,14 @@ export async function POST(request: Request) {
     if (error === "FORBIDDEN") {
       return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
     }
+    const uploadBlockReason = getSubmissionUploadBlockReason(submission);
+    if (uploadBlockReason) {
+      return NextResponse.json(
+        { error: getSubmissionUploadBlockMessage(uploadBlockReason) },
+        { status: 409 },
+      );
+    }
+    const staged = shouldStageSubmissionUpload(submission);
     const ownerKey = getMultipartOwnerKey({
       submissionUserId: submission?.user_id,
       authenticatedUserId: user?.id,
@@ -277,45 +291,24 @@ export async function POST(request: Request) {
       status: "UPLOADED",
       uploaded_at: new Date().toISOString(),
     };
-    let attachmentId: string | null = null;
-    let insertPayload = { ...payload } as Record<string, unknown>;
-    let inserted:
-      | { id?: string | null }
-      | null
-      | undefined;
-    let insertError: { code?: string; message?: string } | null = null;
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const result = await admin
-        .from("submission_files")
-        .insert(insertPayload)
-        .select("id")
-        .maybeSingle();
-      inserted = result.data as { id?: string | null } | null;
-      insertError = result.error as { code?: string; message?: string } | null;
-      if (!insertError) {
-        break;
-      }
-      if (insertError.code === "PGRST204") {
-        const match = insertError.message?.match(/column \"(.+?)\"/);
-        const missing = match?.[1];
-        if (missing && missing in insertPayload) {
-          const nextPayload = { ...insertPayload };
-          delete nextPayload[missing];
-          insertPayload = nextPayload;
-          continue;
-        }
-      }
-      break;
+    // Multipart completion follows the same provisional-only contract as the
+    // single-PUT path. No applicant endpoint writes submission_files directly.
+    const stagedResult = await admin
+      .from("submission_upload_staging")
+      .upsert(payload, { onConflict: "submission_id,file_path" })
+      .select("id")
+      .maybeSingle();
+    if (stagedResult.error || !stagedResult.data?.id) {
+      throw new Error(
+        stagedResult.error?.message || "파일 임시 정보를 저장할 수 없습니다.",
+      );
     }
-    if (insertError || !inserted?.id) {
-      throw new Error(insertError?.message || "파일 정보를 저장할 수 없습니다.");
-    }
-    attachmentId = inserted.id;
-    recordedObjectKey = key;
+    const stagingId = stagedResult.data.id;
+    stagedObjectKey = key;
     await markMultipartGrantCompleted(grant.id);
     claimedGrant = null;
     completedObjectKey = null;
-    recordedObjectKey = null;
+    stagedObjectKey = null;
 
     console.info("[Upload][multipart][complete] ok", {
       submissionIdHash: getStorageLogId(submissionId),
@@ -332,45 +325,46 @@ export async function POST(request: Request) {
       verified: true,
       etag: head.ETag,
       contentLength,
-      attachmentId,
+      attachmentId: null,
+      stagingId,
+      staged,
       key,
       submissionId,
       accessUrl,
     });
   } catch (error) {
-    if (recordedObjectKey) {
+    const uploadConflictMessage = getSubmissionUploadConflictMessage(error);
+    if (stagedObjectKey) {
       const admin = createAdminClient();
       const deleteResult = await admin
-        .from("submission_files")
+        .from("submission_upload_staging")
         .delete()
         .eq("submission_id", submissionId)
-        .eq("file_path", recordedObjectKey)
+        .eq("file_path", stagedObjectKey)
         .select("id");
       if (deleteResult.error || !deleteResult.data?.length) {
-        // Preserve the B2 object when its metadata row could not be removed;
-        // deleting it would leave a broken live reference. COMPLETING is a
-        // fail-closed reconciliation state and cannot issue more part URLs.
         if (claimedGrant) {
           await markMultipartGrantCompleted(claimedGrant.id).catch(
             () => undefined,
           );
         }
-        console.error("[Upload][multipart][complete] reconciliation pending", {
+        console.error("[Upload][multipart][complete] staging reconciliation pending", {
           submissionIdHash: getStorageLogId(submissionId),
-          objectKeyId: getStorageLogId(recordedObjectKey),
+          objectKeyId: getStorageLogId(stagedObjectKey),
         });
         return NextResponse.json(
           {
             ok: true,
             verified: true,
             processing: true,
-            key: recordedObjectKey,
+            staged: true,
+            key: stagedObjectKey,
             submissionId,
           },
           { status: 202 },
         );
       }
-      recordedObjectKey = null;
+      stagedObjectKey = null;
     }
     if (claimedGrant) {
       await abortCompletingMultipartGrant(claimedGrant).catch(() => false);
@@ -386,11 +380,13 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(
       {
-        error: isConfig
-          ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
-          : "업로드 완료 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
+        error:
+          uploadConflictMessage ??
+          (isConfig
+            ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
+            : "업로드 완료 처리 중 오류가 발생했습니다. 다시 시도해주세요."),
       },
-      { status: isConfig ? 503 : 500 },
+      { status: uploadConflictMessage ? 409 : isConfig ? 503 : 500 },
     );
   }
 }

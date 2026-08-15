@@ -110,6 +110,18 @@ test("paid and post-submission lifecycle records cannot be rewritten", () => {
       {
         user_id: "user-1",
         guest_token: null,
+        status: "WAITING_PAYMENT",
+        payment_status: "PAYMENT_PENDING",
+      },
+      { userId: "user-1" },
+    ),
+    false,
+  );
+  assert.equal(
+    canEditSubmission(
+      {
+        user_id: "user-1",
+        guest_token: null,
         status: "SUBMITTED",
         payment_status: "PAID",
       },

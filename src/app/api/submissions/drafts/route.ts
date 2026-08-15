@@ -5,7 +5,7 @@ import { z } from "zod";
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
 import {
   cleanupDeletedSubmissionB2Objects,
-  loadSubmissionB2ObjectRefs,
+  type SubmissionB2ObjectRef,
 } from "@/lib/submission-file-cleanup";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
@@ -40,6 +40,8 @@ const selectAlbumColumns = [
   "guest_token",
   "package_id",
   "amount_krw",
+  "album_price_tier",
+  "album_draft_group_id",
   "title",
   "artist_name",
   "artist_name_kr",
@@ -65,6 +67,8 @@ const selectAlbumColumns = [
   "cash_receipt_phone",
   "cash_receipt_business_number",
   "tax_invoice_business_number",
+  "application_form_mode",
+  "files_submitted_by_email",
   "created_at",
   "updated_at",
 ].join(",");
@@ -112,6 +116,7 @@ const selectMvColumns = [
   "mv_song_memo",
   "mv_lyrics",
   "mv_base_selected",
+  "mv_selected_station_codes",
   "ai_used",
   "payment_method",
   "bank_depositor_name",
@@ -120,6 +125,8 @@ const selectMvColumns = [
   "cash_receipt_phone",
   "cash_receipt_business_number",
   "tax_invoice_business_number",
+  "application_form_mode",
+  "files_submitted_by_email",
   "created_at",
   "updated_at",
 ].join(",");
@@ -162,8 +169,6 @@ const loadableDraftStatuses = [
   "SUBMITTED",
   "WAITING_PAYMENT",
 ];
-const deletableDraftStatuses = ["DRAFT", "PRE_REVIEW"];
-
 const extractMissingColumn = (error: { message?: string; code?: string } | null) => {
   const message = error?.message ?? "";
   const match =
@@ -329,7 +334,7 @@ export async function POST(request: Request) {
   const loadedSubmissions = (submissionResult.data ?? []) as unknown as Array<
     Record<string, unknown>
   >;
-  const submissions =
+  let submissions =
     isGuest && guestTokenEntries.length > 0
       ? loadedSubmissions.filter((row) => {
           const submissionId = String(row.id ?? "");
@@ -340,6 +345,46 @@ export async function POST(request: Request) {
           );
         })
       : loadedSubmissions;
+  if (parsed.data.type === "ALBUM" && submissions.length > 0) {
+    const groupIds = Array.from(
+      new Set(
+        submissions
+          .map((row) => String(row.album_draft_group_id ?? ""))
+          .filter(Boolean),
+      ),
+    );
+    if (groupIds.length > 0) {
+      const groupQuery = admin
+        .from("submissions")
+        .select(selectClause)
+        .eq("type", "ALBUM")
+        .or(incompletePaymentFilter)
+        .in("status", loadableDraftStatuses)
+        .in("album_draft_group_id", groupIds)
+        .order("created_at", { ascending: true })
+        .limit(100);
+      if (user?.id) {
+        groupQuery.eq("user_id", user.id);
+      } else {
+        // Possession of one exact guest token authorizes only its server-bound
+        // draft bundle. The group id itself is service-role protected.
+        groupQuery.is("user_id", null);
+      }
+      const groupResult = await groupQuery;
+      if (!groupResult.error) {
+        const byId = new Map(
+          submissions.map((row) => [String(row.id ?? ""), row] as const),
+        );
+        for (const row of (groupResult.data ?? []) as unknown as Array<
+          Record<string, unknown>
+        >) {
+          const id = String(row.id ?? "");
+          if (id) byId.set(id, row);
+        }
+        submissions = Array.from(byId.values());
+      }
+    }
+  }
   const submissionIds = submissions
     .map((row) => String(row.id ?? ""))
     .filter(Boolean);
@@ -412,6 +457,25 @@ export async function POST(request: Request) {
     >;
   }
 
+  // Completion is provisional for every applicant upload. Return owned
+  // staging rows too so another device can recover B2-verified files that
+  // have not reached an explicit save. Live rows stay first and therefore win
+  // the path/name/size dedupe below if an idempotent retry left both sources.
+  const stagedFileResult = await admin
+    .from("submission_upload_staging")
+    .select(selectFileColumns)
+    .in("submission_id", submissionIds)
+    .eq("purpose", "SUBMISSION_FILE")
+    .order("uploaded_at", { ascending: true });
+  if (!stagedFileResult.error) {
+    fileRows = [
+      ...fileRows,
+      ...((stagedFileResult.data ?? []) as unknown as Array<
+        Record<string, unknown>
+      >),
+    ];
+  }
+
   const tracksBySubmission = new Map<string, Array<Record<string, unknown>>>();
   trackRows.forEach((row) => {
     const submissionId = String(row.submission_id ?? "");
@@ -426,11 +490,10 @@ export async function POST(request: Request) {
   fileRows.forEach((row) => {
     const submissionId = String(row.submission_id ?? "");
     if (!submissionId) return;
-    const dedupeKey = [
-      String(row.object_key ?? row.file_path ?? ""),
-      String(row.original_name ?? ""),
-      String(row.size ?? ""),
-    ].join("|");
+    const objectPath = String(row.object_key ?? row.file_path ?? "").trim();
+    const dedupeKey =
+      objectPath ||
+      [String(row.original_name ?? ""), String(row.size ?? "")].join("|");
     const seen = seenFileKeysBySubmission.get(submissionId) ?? new Set<string>();
     if (seen.has(dedupeKey)) {
       return;
@@ -493,9 +556,6 @@ export async function DELETE(request: Request) {
   const guestTokensBySubmissionId =
     parsed.data.guestTokensBySubmissionId ?? {};
   const guestTokenEntries = Object.entries(guestTokensBySubmissionId);
-  const guestTokens = Array.from(
-    new Set(guestTokenEntries.map(([, token]) => token)),
-  );
   if (guestTokenEntries.length > 100) {
     return NextResponse.json({ error: "요청 정보를 확인해주세요." }, { status: 400 });
   }
@@ -509,95 +569,57 @@ export async function DELETE(request: Request) {
 
   const admin = createAdminClient();
   const requestedIds = Array.from(new Set(parsed.data.ids));
-  let eligibilityQuery = admin
-    .from("submissions")
-    .select("id, user_id, guest_token")
-    .or(incompletePaymentFilter)
-    .in("status", deletableDraftStatuses)
-    .in("id", requestedIds);
-
-  eligibilityQuery =
-    parsed.data.type === "ALBUM"
-      ? eligibilityQuery.eq("type", "ALBUM")
-      : eligibilityQuery.in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
-  eligibilityQuery = user?.id
-    ? eligibilityQuery.eq("user_id", user.id)
-    : guestTokenEntries.length > 0
-      ? eligibilityQuery
-          .is("user_id", null)
-          .in("guest_token", guestTokens)
-      : eligibilityQuery
-          .is("user_id", null)
-          .eq("guest_token", parsed.data.guestToken as string);
-
-  const { data: eligibleRows, error: eligibilityError } = await eligibilityQuery;
-  if (eligibilityError) {
-    return NextResponse.json(
-      { error: "삭제할 임시저장 항목을 확인하지 못했습니다." },
-      { status: 500 },
-    );
-  }
-  const authorizedEligibleRows =
-    isGuest && guestTokenEntries.length > 0
-      ? (eligibleRows ?? []).filter(
-          (row) =>
-            !row.user_id &&
-            typeof row.guest_token === "string" &&
-            guestTokensBySubmissionId[row.id] === row.guest_token,
-        )
-      : (eligibleRows ?? []);
-  if (authorizedEligibleRows.length !== requestedIds.length) {
-    return NextResponse.json(
-      { error: "삭제할 수 없는 임시저장 항목이 포함되어 있습니다." },
-      { status: 409 },
-    );
-  }
-
-  const b2ObjectRefs = await loadSubmissionB2ObjectRefs(admin, requestedIds);
-
-  const deleteQuery = admin
-    .from("submissions")
-    .delete()
-    .or(incompletePaymentFilter)
-    .in("status", deletableDraftStatuses);
-
-  if (parsed.data.type === "ALBUM") {
-    deleteQuery.eq("type", "ALBUM");
-  } else {
-    deleteQuery.in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"]);
-  }
-
-  deleteQuery.in("id", requestedIds);
-
-  if (user?.id) {
-    deleteQuery.eq("user_id", user.id);
-  } else if (guestTokenEntries.length > 0) {
-    deleteQuery
-      .is("user_id", null)
-      .in("guest_token", guestTokens);
-  } else {
-    deleteQuery
-      .is("user_id", null)
-      .eq("guest_token", parsed.data.guestToken as string);
-  }
-
-  const { data: deletedRows, error } = await deleteQuery.select("id");
+  const exactGuestTokens = isGuest
+    ? Object.fromEntries(
+        requestedIds.map((id) => [
+          id,
+          guestTokensBySubmissionId[id] ?? parsed.data.guestToken ?? "",
+        ]),
+      )
+    : {};
+  const { data, error } = await admin.rpc("delete_submission_drafts_atomic", {
+    p_type: parsed.data.type,
+    p_requested_ids: requestedIds,
+    p_user_id: user?.id ?? null,
+    p_guest_tokens_by_submission_id: exactGuestTokens,
+  });
   if (error) {
-    return NextResponse.json({ error: "임시저장 삭제에 실패했습니다." }, { status: 500 });
+    const conflict = ["22023", "42501", "55000", "P0002", "40001"].includes(
+      error.code ?? "",
+    );
+    return NextResponse.json(
+      {
+        error: conflict
+          ? "일부 임시저장 항목이 변경되어 삭제하지 못했습니다. 새로고침 후 다시 시도해주세요."
+          : "임시저장 삭제에 실패했습니다.",
+      },
+      { status: conflict ? 409 : 500 },
+    );
   }
-  const deletedIds = (deletedRows ?? []).map((row) => String(row.id));
+  const result = data as
+    | { deletedIds?: unknown; b2ObjectRefs?: unknown }
+    | null;
+  const deletedIds = Array.isArray(result?.deletedIds)
+    ? result.deletedIds.filter(
+        (value): value is string => typeof value === "string",
+      )
+    : [];
+  const b2ObjectRefs = Array.isArray(result?.b2ObjectRefs)
+    ? result.b2ObjectRefs.filter(
+        (value): value is SubmissionB2ObjectRef =>
+          Boolean(
+            value &&
+              typeof value === "object" &&
+              typeof (value as SubmissionB2ObjectRef).submissionId === "string" &&
+              typeof (value as SubmissionB2ObjectRef).objectKey === "string",
+          ),
+      )
+    : [];
   if (deletedIds.length > 0 && b2ObjectRefs.length > 0) {
     after(() =>
       cleanupDeletedSubmissionB2Objects(admin, b2ObjectRefs, deletedIds),
     );
   }
-  if ((deletedRows ?? []).length !== requestedIds.length) {
-    return NextResponse.json(
-      { error: "일부 임시저장 항목이 변경되어 삭제하지 못했습니다." },
-      { status: 409 },
-    );
-  }
-
   if (user) {
     clearDashboardStatusCache(user.id);
   }
@@ -610,5 +632,5 @@ export async function DELETE(request: Request) {
   revalidatePath("/en/dashboard/drafts");
   revalidatePath("/en/mypage/drafts");
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, deletedIds });
 }

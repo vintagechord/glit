@@ -96,8 +96,9 @@ export const parseSubmissionB2ObjectRefs = (
 };
 
 /**
- * Captures B2 references before the parent deletion cascades submission_files.
- * Metadata lookup failure intentionally does not block the database deletion.
+ * Captures live and staged B2 references before the parent deletion cascades
+ * their metadata. Metadata lookup failure intentionally does not block the
+ * database deletion.
  */
 export const loadSubmissionB2ObjectRefs = async (
   admin: AdminClient,
@@ -108,21 +109,33 @@ export const loadSubmissionB2ObjectRefs = async (
 
   try {
     const { prefix } = getB2Config();
-    const { data, error } = await admin
-      .from("submission_files")
-      .select("submission_id, storage_provider, object_key")
-      .in("submission_id", ids);
+    const [liveResult, stagedResult] = await Promise.all([
+      admin
+        .from("submission_files")
+        .select("submission_id, storage_provider, object_key")
+        .in("submission_id", ids),
+      admin
+        .from("submission_upload_staging")
+        .select("submission_id, storage_provider, object_key")
+        .in("submission_id", ids),
+    ]);
 
-    if (error) {
+    if (liveResult.error || stagedResult.error) {
       console.error(
         "[SubmissionFiles] B2 cleanup metadata lookup failed",
-        safeDatabaseError(error),
+        {
+          live: safeDatabaseError(liveResult.error),
+          staged: safeDatabaseError(stagedResult.error),
+        },
       );
       return [];
     }
 
     return parseSubmissionB2ObjectRefs(
-      (data ?? []) as unknown as SubmissionFileRow[],
+      [
+        ...(liveResult.data ?? []),
+        ...(stagedResult.data ?? []),
+      ] as unknown as SubmissionFileRow[],
       prefix,
     );
   } catch (error) {
@@ -185,8 +198,8 @@ export const deleteObjectKeysBestEffort = async (
 
 /**
  * Deletes captured B2 objects only after verifying that no current
- * submission_files row references them. This is shared by hard deletion and
- * successful file replacement so an object reused by another row is always
+ * live or staged metadata row references them. This is shared by hard deletion
+ * and successful file replacement so an object reused by another row is always
  * preserved.
  */
 export const cleanupUnreferencedSubmissionB2Objects = async (
@@ -205,17 +218,24 @@ export const cleanupUnreferencedSubmissionB2Objects = async (
 
   try {
     for (const batch of chunk(candidateKeys, REFERENCE_LOOKUP_BATCH_SIZE)) {
-      const { data, error } = await admin
-        .from("submission_files")
-        .select("object_key")
-        .in("object_key", batch);
+      const [liveResult, stagedResult] = await Promise.all([
+        admin
+          .from("submission_files")
+          .select("object_key")
+          .in("object_key", batch),
+        admin
+          .from("submission_upload_staging")
+          .select("object_key")
+          .in("object_key", batch),
+      ]);
 
-      if (error) {
+      if (liveResult.error || stagedResult.error) {
         failed += batch.length;
         console.error(
           "[SubmissionFiles] surviving B2 reference check failed; cleanup skipped",
           {
-            ...safeDatabaseError(error),
+            live: safeDatabaseError(liveResult.error),
+            staged: safeDatabaseError(stagedResult.error),
             objectCount: batch.length,
           },
         );
@@ -223,7 +243,10 @@ export const cleanupUnreferencedSubmissionB2Objects = async (
       }
 
       const referencedKeys =
-        ((data ?? []) as unknown as Array<{ object_key?: string | null }>)
+        ([
+          ...(liveResult.data ?? []),
+          ...(stagedResult.data ?? []),
+        ] as unknown as Array<{ object_key?: string | null }>)
           .map((row) => String(row.object_key ?? "").trim())
           .filter(Boolean);
       const unreferencedKeys = excludeReferencedObjectKeys(

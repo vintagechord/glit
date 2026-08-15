@@ -20,7 +20,12 @@ export const canEditSubmission = (
   actor: SubmissionEditActor,
 ) => {
   if (!submission) return false;
-  if (submission.payment_status === "PAID") return false;
+  // PAYMENT_PENDING is an active bank-payment reconciliation state. Editing
+  // it as an ordinary unpaid draft would silently cancel that state and can
+  // make an incoming deposit impossible to match.
+  if (["PAID", "PAYMENT_PENDING"].includes(submission.payment_status ?? "")) {
+    return false;
+  }
   if (
     !["DRAFT", "PRE_REVIEW", "SUBMITTED", "WAITING_PAYMENT"].includes(
       submission.status ?? "",

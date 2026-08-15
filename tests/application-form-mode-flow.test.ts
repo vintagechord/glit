@@ -26,10 +26,12 @@ test("album applications require one explicit form mode before form entry", () =
   assert.doesNotMatch(oneClickSteps, /작성 방식 선택/);
   assert.match(source, /setStep\(isOneClick \? 3 : 2\)/);
   assert.match(source, /applicationFormMode: applicationFormMode \?\? undefined/);
-  assert.match(
-    source,
-    /mode === "online" && applicationFormMode === "upload"[\s\S]*setUploadedFiles[\s\S]*!isApplicationFormFile/,
+  const modeSelector = source.slice(
+    source.indexOf("const selectApplicationFormMode"),
+    source.indexOf("const profanityWords"),
   );
+  assert.match(modeSelector, /setApplicationFormMode\(mode\)/);
+  assert.doesNotMatch(modeSelector, /setFiles|setUploads|setUploadedFiles/);
   assert.match(
     source,
     /setStep\(restoredIsOneClick \|\| restoredApplicationFormMode \? 3 : 2\)/,
@@ -37,7 +39,7 @@ test("album applications require one explicit form mode before form entry", () =
   assert.match(source, /emailSubmitConfirmed: false/);
   assert.match(
     actions,
-    /if \(isOneClick && usesExternalApplicationForm\)[\s\S]*원클릭 접수와 파일 제출 방식은 함께 선택할 수 없습니다/,
+    /if \(isOneClick && externalApplicationFormRequested\)[\s\S]*원클릭 접수와 파일 제출 방식은 함께 선택할 수 없습니다/,
   );
 });
 
@@ -69,7 +71,7 @@ test("MV applications use a six-step exclusive form-mode flow", () => {
     "작성 방식 선택",
     "신청서 작성",
     "파일 업로드",
-    "결제하기",
+    "최종 점검",
     "접수 완료",
   ]) {
     assert.match(steps, new RegExp(`"${label}"`));
@@ -82,13 +84,18 @@ test("MV applications use a six-step exclusive form-mode flow", () => {
   assert.match(source, /disabled=\{!applicationFormMode\}/);
   assert.match(source, /\{step === 3 && \([\s\S]*신청서 작성/);
   assert.match(source, /\{step === 4 && \([\s\S]*파일 첨부/);
-  assert.match(source, /\{step === 5 && \([\s\S]*신청 내용 확인/);
-  assert.match(source, /\{step === 6 && \([\s\S]*접수 완료/);
-  assert.match(source, /applicationFormMode: payload\.applicationFormMode/);
   assert.match(
     source,
-    /mode === "online" && applicationFormMode === "upload"[\s\S]*setUploadedFiles[\s\S]*!isApplicationFormFile/,
+    /\{step === 5 && \([\s\S]*<SubmissionPreflightPanel[\s\S]*result=\{mvPreflight\}/,
   );
+  assert.match(source, /\{step === 6 && \([\s\S]*접수 완료/);
+  assert.match(source, /applicationFormMode: payload\.applicationFormMode/);
+  const modeSelector = source.slice(
+    source.indexOf("const selectApplicationFormMode"),
+    source.indexOf("const uploadChips"),
+  );
+  assert.match(modeSelector, /setApplicationFormMode\(mode\)/);
+  assert.doesNotMatch(modeSelector, /setFiles|setUploads|setUploadedFiles/);
   assert.match(source, /setStep\(restoredApplicationFormMode \? 3 : 2\)/);
   assert.match(
     source,

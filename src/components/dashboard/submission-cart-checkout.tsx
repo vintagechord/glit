@@ -26,6 +26,10 @@ import {
   openInicisCardPopup,
   type InicisPopupContext,
 } from "@/lib/inicis/popup";
+import {
+  expandSubmissionCartGroupIds,
+  getSubmissionCartGroupKey,
+} from "@/lib/submission-cart-group";
 import type { SubmissionCartItem } from "@/lib/submission-cart";
 
 type CartItem = {
@@ -37,6 +41,8 @@ type CartItem = {
   artistName: string | null;
   amountKrw: number | null;
   isOneclick: boolean | null;
+  albumPriceTier: string | null;
+  albumDraftGroupId: string | null;
   updatedAt: string | null;
   packageName: string | null;
   guestToken: string | null;
@@ -62,6 +68,8 @@ export const mapSubmissionCartItem = (
   artistName: item.artist_name,
   amountKrw: item.amount_krw,
   isOneclick: item.is_oneclick ?? null,
+  albumPriceTier: item.album_price_tier ?? null,
+  albumDraftGroupId: item.album_draft_group_id ?? null,
   updatedAt: item.updated_at,
   packageName: normalizePackageName(item),
   guestToken,
@@ -133,9 +141,18 @@ export function SubmissionCartCheckout({
     setIsLoadingGuestCart(false);
   }, [initialItems, userId]);
   const items = cartItems;
-  const payableIds = React.useMemo(
-    () => items.filter((item) => getPayableAmount(item) > 0).map((item) => item.id),
+  const payableItems = React.useMemo(
+    () =>
+      items.filter(
+        (item) =>
+          getPayableAmount(item) > 0 &&
+          item.paymentStatus !== "PAYMENT_PENDING",
+      ),
     [items],
+  );
+  const payableIds = React.useMemo(
+    () => payableItems.map((item) => item.id),
+    [payableItems],
   );
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
     () => new Set(payableIds),
@@ -333,9 +350,9 @@ export function SubmissionCartCheckout({
         payableIds.forEach((id) => next.add(id));
         didAutoSelectPayableItems.current = true;
       }
-      return next;
+      return new Set(expandSubmissionCartGroupIds(payableItems, next));
     });
-  }, [payableIds]);
+  }, [payableIds, payableItems]);
 
   React.useEffect(() => {
     if (!focusedSubmissionId) return;
@@ -343,9 +360,13 @@ export function SubmissionCartCheckout({
     if (!target || getPayableAmount(target) <= 0) return;
 
     setSelectedIds((prev) => {
-      if (prev.has(focusedSubmissionId)) return prev;
+      const focusedGroupIds = expandSubmissionCartGroupIds(
+        payableItems,
+        [focusedSubmissionId],
+      );
+      if (focusedGroupIds.every((id) => prev.has(id))) return prev;
       const next = new Set(prev);
-      next.add(focusedSubmissionId);
+      focusedGroupIds.forEach((id) => next.add(id));
       return next;
     });
 
@@ -354,7 +375,7 @@ export function SubmissionCartCheckout({
         .getElementById(`cart-item-${focusedSubmissionId}`)
         ?.scrollIntoView({ block: "center", behavior: "smooth" });
     });
-  }, [focusedSubmissionId, items]);
+  }, [focusedSubmissionId, items, payableItems]);
 
   const selectedItems = React.useMemo(
     () => items.filter((item) => selectedIds.has(item.id)),
@@ -428,10 +449,17 @@ export function SubmissionCartCheckout({
   }, [cartHref, router, userId]);
 
   const toggleItem = (id: string) => {
+    const groupIds = expandSubmissionCartGroupIds(
+      payableItems,
+      [id],
+    );
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      const groupIsSelected = groupIds.every((groupId) => next.has(groupId));
+      groupIds.forEach((groupId) => {
+        if (groupIsSelected) next.delete(groupId);
+        else next.add(groupId);
+      });
       return next;
     });
   };
@@ -457,11 +485,18 @@ export function SubmissionCartCheckout({
     if (typeof window === "undefined") return;
     try {
       if (item.type === "ALBUM") {
+        const groupItems = items.filter(
+          (candidate) =>
+            getSubmissionCartGroupKey(candidate) ===
+            getSubmissionCartGroupKey(item),
+        );
+        const groupGuestTokens = getGuestTokensForItems(groupItems);
         window.localStorage.setItem(
           `onside:draft:album:${userId ?? "guest"}`,
           JSON.stringify({
-            ids: [item.id],
+            ids: groupItems.map((candidate) => candidate.id),
             guestToken: item.guestToken,
+            guestTokensBySubmissionId: groupGuestTokens,
             updatedAt: Date.now(),
           }),
         );
@@ -487,7 +522,10 @@ export function SubmissionCartCheckout({
 
   const handleDeleteItems = (ids: string[]) => {
     if (isDeleting || isOpening) return;
-    const targetIds = Array.from(new Set(ids.filter(Boolean)));
+    const targetIds = expandSubmissionCartGroupIds(
+      items,
+      Array.from(new Set(ids.filter(Boolean))),
+    );
     if (targetIds.length === 0) {
       setNotice({ type: "error", message: "삭제할 장바구니 항목을 선택해주세요." });
       return;
@@ -749,7 +787,18 @@ export function SubmissionCartCheckout({
           {items.map((item) => {
             const amount = getPayableAmount(item);
             const selected = selectedIds.has(item.id);
-            const disabled = amount <= 0;
+            const paymentConfirmationPending =
+              item.paymentStatus === "PAYMENT_PENDING";
+            const disabled = amount <= 0 || paymentConfirmationPending;
+            const groupSize = items.filter(
+              (candidate) =>
+                getSubmissionCartGroupKey(candidate) ===
+                getSubmissionCartGroupKey(item),
+            ).length;
+            const selectionLabel =
+              groupSize > 1
+                ? `${getDisplayTitle(item)} 포함 앨범 ${groupSize}건 묶음 선택`
+                : `${getDisplayTitle(item)} 선택`;
             return (
               <div
                 id={`cart-item-${item.id}`}
@@ -767,7 +816,7 @@ export function SubmissionCartCheckout({
                   }}
                   disabled={disabled || isDeleting}
                   aria-pressed={selected}
-                  aria-label={`${getDisplayTitle(item)} 선택`}
+                  aria-label={selectionLabel}
                   className={`flex h-9 w-9 items-center justify-center rounded-[6px] border-2 ${
                     selected
                       ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-ink)] text-[var(--background)]"
@@ -788,6 +837,11 @@ export function SubmissionCartCheckout({
                     <span className="rounded-[6px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-2 py-1 text-[11px] font-black text-[var(--foreground)]">
                       {getTypeLabel(item)}
                     </span>
+                    {groupSize > 1 ? (
+                      <span className="rounded-[6px] border border-[var(--bauhaus-ink)]/40 bg-[var(--background)] px-2 py-1 text-[10px] font-bold text-muted-foreground">
+                        앨범 {groupSize}건 묶음
+                      </span>
+                    ) : null}
                   </span>
                   <span className="mt-2 block truncate text-sm font-black text-foreground">
                     {getDisplayTitle(item)}
@@ -811,15 +865,21 @@ export function SubmissionCartCheckout({
                     <Eye size={14} strokeWidth={2.8} />
                     확인
                   </Link>
-                  <Link
-                    href={getEditHref(item)}
-                    onClick={() => prepareEditStorage(item)}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-3 text-[11px] font-black text-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
-                    aria-label={`${getDisplayTitle(item)} 수정`}
-                  >
-                    <Pencil size={14} strokeWidth={2.8} />
-                    수정
-                  </Link>
+                  {paymentConfirmationPending ? (
+                    <span className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-3 text-[11px] font-black text-[#111111]">
+                      입금 확인 중
+                    </span>
+                  ) : (
+                    <Link
+                      href={getEditHref(item)}
+                      onClick={() => prepareEditStorage(item)}
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-3 text-[11px] font-black text-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
+                      aria-label={`${getDisplayTitle(item)} 수정`}
+                    >
+                      <Pencil size={14} strokeWidth={2.8} />
+                      수정
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={() => void handleDeleteItems([item.id])}

@@ -30,6 +30,7 @@ type SubmissionRecord = {
   amount_krw: number | null;
   payment_method: string | null;
   payment_status: string | null;
+  album_draft_group_id?: string | null;
   mv_desired_rating: string | null;
   certificate_b2_path?: string | null;
   certificate_original_name?: string | null;
@@ -63,7 +64,7 @@ type ApprovePaymentRpcRow = {
 };
 
 const submissionSelectWithResult =
-  "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
+  "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, album_draft_group_id, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
 const submissionSelectFallback =
   "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, package:packages ( name )";
 
@@ -283,6 +284,39 @@ export const createSubmissionPaymentOrder = async (
     return { error: "같은 신청자의 접수만 함께 결제할 수 있습니다." };
   }
 
+  const albumDraftGroupIds = Array.from(
+    new Set(
+      submissions
+        .filter(
+          (item) => item.type === "ALBUM" && item.album_draft_group_id,
+        )
+        .map((item) => item.album_draft_group_id as string),
+    ),
+  );
+  const admin = createAdminClient();
+  if (albumDraftGroupIds.length > 0) {
+    const { data: activeGroupRows, error: groupError } = await admin
+      .from("submissions")
+      .select("id, album_draft_group_id")
+      .in("album_draft_group_id", albumDraftGroupIds)
+      .in("status", ["DRAFT", "PRE_REVIEW", "SUBMITTED", "WAITING_PAYMENT"])
+      .or("payment_status.is.null,payment_status.neq.PAID");
+    if (groupError) {
+      return { error: "앨범 장바구니 묶음을 확인하지 못했습니다." };
+    }
+
+    const requestedIdSet = new Set(submissionIds);
+    const missingGroupMember = (activeGroupRows ?? []).find(
+      (row) => !requestedIdSet.has(String(row.id)),
+    );
+    if (missingGroupMember) {
+      return {
+        error:
+          "함께 작성한 앨범은 묶음 전체의 접수를 완료한 뒤 함께 결제해주세요.",
+      };
+    }
+  }
+
   const amountKrw = submissions.reduce(
     (sum, item) => sum + Math.round(Number(item.amount_krw ?? 0)),
     0,
@@ -353,7 +387,6 @@ export const createSubmissionPaymentOrder = async (
     })),
   };
 
-  const admin = createAdminClient();
   const { data: startedRows, error: startError } = await admin.rpc(
     "begin_submission_payment_order",
     {
@@ -390,6 +423,9 @@ export const createSubmissionPaymentOrder = async (
         error:
           "추가 앨범 할인 결제에는 같은 패키지의 정가 앨범을 함께 선택하거나 먼저 결제해야 합니다.",
       };
+    }
+    if (startError.message?.includes("ALBUM_GROUP_INCOMPLETE")) {
+      return { error: "함께 작성한 앨범은 묶음 전체를 선택해 결제해주세요." };
     }
     console.error("[Inicis][STDPay][init][transaction-error]", {
       orderId,

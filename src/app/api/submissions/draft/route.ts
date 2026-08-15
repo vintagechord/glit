@@ -18,6 +18,7 @@ const schema = z.object({
   // New guest drafts must use a cryptographically random identifier. Legacy
   // lookup tokens remain supported by read/edit routes.
   guestToken: z.string().uuid().optional(),
+  forceNew: z.boolean().optional().default(false),
 });
 
 const draftStatuses = ["DRAFT", "PRE_REVIEW"] as const;
@@ -100,10 +101,12 @@ export async function POST(request: Request) {
   };
 
   if (isGuest) {
-    const fallbackId = await findExistingDraftId(admin, {
-      type: parsed.data.type,
-      guestToken: parsed.data.guestToken,
-    });
+    const fallbackId = parsed.data.forceNew
+      ? null
+      : await findExistingDraftId(admin, {
+          type: parsed.data.type,
+          guestToken: parsed.data.guestToken,
+        });
     if (fallbackId) {
       return NextResponse.json({
         ok: true,
@@ -156,11 +159,13 @@ export async function POST(request: Request) {
 
   const { data, error } = await insertQuery;
   if (error || !data?.id) {
-    const fallbackId = await findExistingDraftId(admin, {
-      type: parsed.data.type,
-      guestToken: parsed.data.guestToken,
-      userId: user?.id,
-    });
+    const fallbackId = parsed.data.forceNew
+      ? null
+      : await findExistingDraftId(admin, {
+          type: parsed.data.type,
+          guestToken: parsed.data.guestToken,
+          userId: user?.id,
+        });
     if (fallbackId) {
       return NextResponse.json({ ok: true, submissionId: fallbackId });
     }

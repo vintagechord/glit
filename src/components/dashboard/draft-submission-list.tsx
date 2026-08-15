@@ -119,10 +119,25 @@ export function DraftSubmissionList({
     if (typeof window !== "undefined") {
       try {
         if (draftGroup === "ALBUM") {
+          const albumStorageKey = `onside:draft:album:${userId}`;
+          const existingRaw = window.localStorage.getItem(albumStorageKey);
+          let existingIds: string[] = [];
+          if (existingRaw) {
+            try {
+              const existing = JSON.parse(existingRaw) as { ids?: unknown };
+              existingIds = Array.isArray(existing.ids)
+                ? existing.ids.filter(
+                    (id): id is string => typeof id === "string" && Boolean(id),
+                  )
+                : [];
+            } catch {
+              existingIds = [];
+            }
+          }
           window.localStorage.setItem(
-            `onside:draft:album:${userId}`,
+            albumStorageKey,
             JSON.stringify({
-              ids: [item.id],
+              ids: existingIds.includes(item.id) ? existingIds : [item.id],
               guestToken: null,
               updatedAt,
             }),
@@ -213,7 +228,15 @@ export function DraftSubmissionList({
           if (!response.ok) {
             setNotice(await parseErrorMessage(response));
           } else {
-            albumIds.forEach((id) => deletedIds.add(id));
+            const payload = (await response.json().catch(() => null)) as
+              | { deletedIds?: unknown }
+              | null;
+            const confirmedIds = Array.isArray(payload?.deletedIds)
+              ? payload.deletedIds.filter(
+                  (value): value is string => typeof value === "string",
+                )
+              : albumIds;
+            confirmedIds.forEach((id) => deletedIds.add(id));
           }
         } catch {
           setNotice("작성중 신청서 삭제 중 오류가 발생했습니다.");
@@ -231,7 +254,15 @@ export function DraftSubmissionList({
           if (!response.ok) {
             setNotice(await parseErrorMessage(response));
           } else {
-            mvIds.forEach((id) => deletedIds.add(id));
+            const payload = (await response.json().catch(() => null)) as
+              | { deletedIds?: unknown }
+              | null;
+            const confirmedIds = Array.isArray(payload?.deletedIds)
+              ? payload.deletedIds.filter(
+                  (value): value is string => typeof value === "string",
+                )
+              : mvIds;
+            confirmedIds.forEach((id) => deletedIds.add(id));
           }
         } catch {
           setNotice("작성중 신청서 삭제 중 오류가 발생했습니다.");

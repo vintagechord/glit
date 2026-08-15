@@ -17,6 +17,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
+import { filterCompleteSubmissionCartGroups } from "@/lib/submission-cart-group";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,23 +38,39 @@ const guestCartSchema = z.object({
 
 type CartDeleteSubmission = {
   id: string;
+  type: string | null;
   user_id: string | null;
   guest_token: string | null;
   status: string | null;
   payment_status: string | null;
   user_deleted_at: string | null;
+  album_price_tier: string | null;
+  album_draft_group_id: string | null;
 };
 
 const cartItemSelect =
-  "id, type, status, payment_status, payment_method, title, artist_name, amount_krw, is_oneclick, created_at, updated_at, user_deleted_at, user_id, guest_token, package:packages ( name, station_count )";
+  "id, type, status, payment_status, payment_method, title, artist_name, amount_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, user_id, guest_token, package:packages ( name, station_count )";
+
+const cartGroupSelect =
+  "id, type, user_id, guest_token, status, payment_status, user_deleted_at, album_price_tier, album_draft_group_id";
 
 const cartStatuses = new Set(["SUBMITTED", "WAITING_PAYMENT"]);
+const groupedDeleteStatuses = new Set([
+  "DRAFT",
+  "PRE_REVIEW",
+  "SUBMITTED",
+  "WAITING_PAYMENT",
+]);
 const cartPaymentFilter =
   "payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)";
 
 const isCartSubmission = (row: CartDeleteSubmission) =>
   row.payment_status !== "PAID" &&
   cartStatuses.has(String(row.status ?? ""));
+
+const isGroupedDeleteSubmission = (row: CartDeleteSubmission) =>
+  row.payment_status !== "PAID" &&
+  groupedDeleteStatuses.has(String(row.status ?? ""));
 
 const hasGuestOwnership = (
   row: CartDeleteSubmission,
@@ -62,6 +79,54 @@ const hasGuestOwnership = (
   !row.user_id &&
   Boolean(row.guest_token) &&
   guestTokensBySubmissionId[row.id] === row.guest_token;
+
+const uniqueCartRows = <T extends { id: string }>(rows: readonly T[]) =>
+  Array.from(new Map(rows.map((row) => [row.id, row])).values());
+
+const loadCartAlbumGroupMembers = async (
+  admin: ReturnType<typeof createAdminClient>,
+  seedRows: CartDeleteSubmission[],
+  options?: { includeUnfinishedDrafts?: boolean },
+) => {
+  const groupIds = Array.from(
+    new Set(
+      seedRows
+        .filter(
+          (row) => row.type === "ALBUM" && row.album_draft_group_id,
+        )
+        .map((row) => row.album_draft_group_id as string),
+    ),
+  );
+  if (groupIds.length === 0) {
+    return { rows: seedRows, error: null };
+  }
+
+  let groupQuery = admin
+    .from("submissions")
+    .select(cartGroupSelect)
+    .in("album_draft_group_id", groupIds)
+    .in(
+      "status",
+      options?.includeUnfinishedDrafts
+        ? ["DRAFT", "PRE_REVIEW", "SUBMITTED", "WAITING_PAYMENT"]
+        : ["SUBMITTED", "WAITING_PAYMENT"],
+    )
+    .or(cartPaymentFilter);
+  if (!options?.includeUnfinishedDrafts) {
+    groupQuery = groupQuery.is("user_deleted_at", null);
+  }
+  const { data, error } = await groupQuery;
+
+  return {
+    rows: error
+      ? seedRows
+      : uniqueCartRows([
+          ...seedRows,
+          ...((data ?? []) as unknown as CartDeleteSubmission[]),
+        ]),
+    error,
+  };
+};
 
 const getCartRateLimitResponse = (
   request: Request,
@@ -138,15 +203,32 @@ export async function POST(request: Request) {
     );
   }
 
-  const rows = ((data ?? []) as unknown[]).map(
+  const seedRows = ((data ?? []) as unknown[]).map(
     (row) => row as CartDeleteSubmission & Record<string, unknown>,
   );
-  const items = rows
-    .filter(
-      (row) =>
-        isCartSubmission(row) &&
-        hasGuestOwnership(row, guestTokensBySubmissionId),
-    )
+  const ownedSeedRows = seedRows.filter(
+    (row) =>
+      isCartSubmission(row) &&
+      hasGuestOwnership(row, guestTokensBySubmissionId),
+  );
+  const expanded = await loadCartAlbumGroupMembers(admin, ownedSeedRows);
+  if (expanded.error) {
+    console.error("[CartItems] guest album group load failed", {
+      code: expanded.error.code,
+      message: expanded.error.message,
+    });
+    return NextResponse.json(
+      { error: "앨범 장바구니 묶음을 확인하지 못했습니다." },
+      { status: 500 },
+    );
+  }
+  const completeOwnedRows = filterCompleteSubmissionCartGroups(
+    expanded.rows,
+    (row) =>
+      isCartSubmission(row) &&
+      hasGuestOwnership(row, guestTokensBySubmissionId),
+  );
+  const items = completeOwnedRows
     .map((row) =>
       Object.fromEntries(
         Object.entries(row).filter(
@@ -200,9 +282,7 @@ export async function PATCH(request: Request) {
   const admin = createAdminClient();
   const { data: rows, error: loadError } = await admin
     .from("submissions")
-    .select(
-      "id, user_id, guest_token, status, payment_status, user_deleted_at",
-    )
+    .select(cartGroupSelect)
     .in("id", submissionIds)
     .is("user_id", null)
     .in("guest_token", guestTokens);
@@ -215,11 +295,39 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const { claimableEntries, invalidSubmissionIds } =
-    partitionGuestCartClaimEntries(
-      guestTokensBySubmissionId,
-      (rows ?? []) as CartDeleteSubmission[],
+  const initialPartition = partitionGuestCartClaimEntries(
+    guestTokensBySubmissionId,
+    (rows ?? []) as CartDeleteSubmission[],
+  );
+  const ownedSeedRows = ((rows ?? []) as CartDeleteSubmission[]).filter(
+    (row) => Boolean(initialPartition.claimableEntries[row.id]),
+  );
+  const expanded = await loadCartAlbumGroupMembers(admin, ownedSeedRows);
+  if (expanded.error) {
+    console.error("[CartItems] guest claim album group load failed", {
+      code: expanded.error.code,
+      message: expanded.error.message,
+    });
+    return NextResponse.json(
+      { error: "비회원 앨범 장바구니 묶음을 확인하지 못했습니다." },
+      { status: 500 },
     );
+  }
+  const completeOwnedRows = filterCompleteSubmissionCartGroups(
+    expanded.rows,
+    (row) =>
+      isCartSubmission(row) &&
+      hasGuestOwnership(row, guestTokensBySubmissionId),
+  );
+  const completeOwnedIds = new Set(completeOwnedRows.map((row) => row.id));
+  const claimableEntries = Object.fromEntries(
+    Object.entries(guestTokensBySubmissionId).filter(([id]) =>
+      completeOwnedIds.has(id),
+    ),
+  );
+  const invalidSubmissionIds = submissionIds.filter(
+    (id) => !claimableEntries[id],
+  );
   const claimableIds = Object.keys(claimableEntries);
   if (claimableIds.length === 0) {
     return NextResponse.json({ claimedIds: [], invalidSubmissionIds });
@@ -305,7 +413,7 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const submissionIds = Array.from(new Set(parsed.data.submissionIds));
+  let submissionIds = Array.from(new Set(parsed.data.submissionIds));
   const guestTokensBySubmissionId =
     parsed.data.guestTokensBySubmissionId ?? {};
   const guestTokens = Array.from(
@@ -324,7 +432,7 @@ export async function DELETE(request: Request) {
   const admin = createAdminClient();
   let loadQuery = admin
     .from("submissions")
-    .select("id, user_id, guest_token, status, payment_status")
+    .select(cartGroupSelect)
     .in("id", submissionIds)
     .or(cartPaymentFilter);
   loadQuery = user
@@ -340,12 +448,12 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const rows = ((data ?? []) as unknown[]).map(
+  const seedRows = ((data ?? []) as unknown[]).map(
     (row) => row as CartDeleteSubmission,
   );
   const invalid =
-    rows.length !== submissionIds.length ||
-    rows.some(
+    seedRows.length !== submissionIds.length ||
+    seedRows.some(
       (row) =>
         !isCartSubmission(row) ||
         !(user
@@ -359,6 +467,53 @@ export async function DELETE(request: Request) {
       { status: 409 },
     );
   }
+
+  // Deleting a FULL album row must also remove its active ADDITIONAL siblings
+  // so discounted rows cannot be orphaned. An ADDITIONAL row is safe to remove
+  // on its own (the album editor exposes that exact action), while the cart UI
+  // explicitly sends every group id for a whole-bundle delete.
+  const fullAlbumSeedRows = seedRows.filter(
+    (row) =>
+      row.type === "ALBUM" &&
+      row.album_draft_group_id &&
+      row.album_price_tier === "FULL",
+  );
+  const expanded = await loadCartAlbumGroupMembers(admin, fullAlbumSeedRows, {
+    includeUnfinishedDrafts: true,
+  });
+  if (expanded.error) {
+    console.error("[CartItems] delete album group load failed", {
+      code: expanded.error.code,
+      message: expanded.error.message,
+    });
+    return NextResponse.json(
+      { error: "삭제할 앨범 장바구니 묶음을 확인하지 못했습니다." },
+      { status: 500 },
+    );
+  }
+  const expandedRows = uniqueCartRows([...seedRows, ...expanded.rows]);
+  const completeOwnedRows = filterCompleteSubmissionCartGroups(
+    expandedRows,
+    (row) =>
+      isGroupedDeleteSubmission(row) &&
+      (user
+        ? row.user_id === user.id
+        : hasGuestOwnership(row, guestTokensBySubmissionId)),
+  );
+  if (
+    completeOwnedRows.length !== expandedRows.length ||
+    completeOwnedRows.length > 100
+  ) {
+    return NextResponse.json(
+      {
+        error: user
+          ? "앨범 묶음 전체를 삭제할 권한이 없습니다."
+          : "앨범 묶음 전체의 조회 코드를 확인해주세요.",
+      },
+      { status: 403 },
+    );
+  }
+  submissionIds = completeOwnedRows.map((row) => row.id);
 
   const { data: hasRequestedPayment, error: requestedPaymentError } =
     await admin.rpc("has_requested_submission_payments", {
@@ -396,7 +551,7 @@ export async function DELETE(request: Request) {
     .from("submissions")
     .delete()
     .in("id", submissionIds)
-    .in("status", ["SUBMITTED", "WAITING_PAYMENT"])
+    .in("status", ["DRAFT", "PRE_REVIEW", "SUBMITTED", "WAITING_PAYMENT"])
     // PostgREST qualifies columns inside an `or` filter incorrectly for
     // DELETE requests (`submissions.payment_status` -> SQLSTATE 42703).
     // payment_status is NOT NULL in the current schema, so the equivalent

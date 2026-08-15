@@ -16,6 +16,12 @@ import {
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
 import { isSubmissionObjectKeyOwned } from "@/lib/submission-object-key";
+import {
+  getSubmissionUploadBlockMessage,
+  getSubmissionUploadBlockReason,
+  getSubmissionUploadConflictMessage,
+  shouldStageSubmissionUpload,
+} from "@/lib/submission-upload-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -33,6 +39,7 @@ const schema = z
     sizeBytes: z.number().int().positive(),
     checksum: z.string().min(8).max(512).optional(),
     durationSeconds: z.number().nonnegative().optional(),
+    purpose: z.enum(["SUBMISSION_FILE", "PAYMENT_DOCUMENT"]).optional(),
     guestToken: z.string().min(8).max(120).optional(),
   })
   .superRefine((data, ctx) => {
@@ -137,6 +144,14 @@ export async function POST(request: Request) {
     if (error === "FORBIDDEN") {
       return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
     }
+    const uploadBlockReason = getSubmissionUploadBlockReason(submission);
+    if (uploadBlockReason) {
+      return NextResponse.json(
+        { error: getSubmissionUploadBlockMessage(uploadBlockReason) },
+        { status: 409 },
+      );
+    }
+    const staged = shouldStageSubmissionUpload(submission);
     const { prefix } = getB2Config();
     if (
       !isSubmissionObjectKeyOwned({
@@ -194,105 +209,24 @@ export async function POST(request: Request) {
       access_url: accessUrl,
       storage_provider: "b2",
       status: "UPLOADED",
+      purpose: parsed.data.purpose ?? "SUBMISSION_FILE",
       uploaded_at: new Date().toISOString(),
     };
-    let attachmentId: string | null = null;
-    try {
-      let existingId: string | null = null;
-      const existingResult = await admin
-        .from("submission_files")
-        .select("id")
-        .eq("submission_id", submissionId)
-        .eq("kind", normalizedKind)
-        .eq("file_path", normalizedKey)
-        .order("uploaded_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (existingResult.error) {
-        throw new Error(existingResult.error.message);
-      }
-
-      if (existingResult.data?.id) {
-        existingId = existingResult.data.id;
-      }
-
-      if (existingId) {
-        let updatePayload = { ...payload } as Record<string, unknown>;
-        let updateError: { code?: string; message?: string } | null = null;
-        for (let attempt = 0; attempt < 8; attempt += 1) {
-          const result = await admin
-            .from("submission_files")
-            .update(updatePayload)
-            .eq("id", existingId);
-          updateError = result.error as { code?: string; message?: string } | null;
-          if (!updateError) {
-            break;
-          }
-          if (updateError.code === "PGRST204") {
-            const match = updateError.message?.match(/column \"(.+?)\"/);
-            const missing = match?.[1];
-            if (missing && missing in updatePayload) {
-              const nextPayload = { ...updatePayload };
-              delete nextPayload[missing];
-              updatePayload = nextPayload;
-              continue;
-            }
-          }
-          break;
-        }
-        if (updateError) {
-          throw new Error(updateError.message || "파일 정보를 갱신할 수 없습니다.");
-        }
-        attachmentId = existingId;
-      } else {
-        deleteUnreferencedObjectOnFailure = true;
-        let insertPayload = { ...payload } as Record<string, unknown>;
-        let inserted:
-          | { id?: string | null }
-          | null
-          | undefined;
-        let insertError: { code?: string; message?: string } | null = null;
-        for (let attempt = 0; attempt < 8; attempt += 1) {
-          const result = await admin
-            .from("submission_files")
-            .insert(insertPayload)
-            .select("id")
-            .maybeSingle();
-          inserted = result.data as { id?: string | null } | null;
-          insertError = result.error as { code?: string; message?: string } | null;
-          if (!insertError) {
-            break;
-          }
-          if (insertError.code === "PGRST204") {
-            const match = insertError.message?.match(/column \"(.+?)\"/);
-            const missing = match?.[1];
-            if (missing && missing in insertPayload) {
-              const nextPayload = { ...insertPayload };
-              delete nextPayload[missing];
-              insertPayload = nextPayload;
-              continue;
-            }
-          }
-          break;
-        }
-        if (insertError) {
-          throw new Error(insertError.message || "파일 정보를 저장할 수 없습니다.");
-        }
-        if (!inserted?.id) {
-          throw new Error("파일 정보를 저장할 수 없습니다.");
-        }
-        attachmentId = inserted.id;
-        deleteUnreferencedObjectOnFailure = false;
-      }
-    } catch (error) {
-      console.error("[Upload][complete] failed to record file", {
-        submissionIdHash: getStorageLogId(submissionId),
-        objectKeyId: getStorageLogId(normalizedKey),
-        errorName: error instanceof Error ? error.name : "UnknownError",
-      });
-      throw error;
+    // Every applicant upload is provisional. The atomic submission save
+    // validates this row and is the only path that can create live metadata.
+    deleteUnreferencedObjectOnFailure = true;
+    const stagedResult = await admin
+      .from("submission_upload_staging")
+      .upsert(payload, { onConflict: "submission_id,file_path" })
+      .select("id")
+      .maybeSingle();
+    if (stagedResult.error || !stagedResult.data?.id) {
+      throw new Error(
+        stagedResult.error?.message || "파일 임시 정보를 저장할 수 없습니다.",
+      );
     }
+    const stagingId = stagedResult.data.id;
+    deleteUnreferencedObjectOnFailure = false;
 
     console.info("[Upload][complete] ok", {
       submissionIdHash: getStorageLogId(submissionId),
@@ -310,22 +244,39 @@ export async function POST(request: Request) {
       verified: true,
       etag: head.ETag,
       contentLength,
-      attachmentId,
+      attachmentId: null,
+      stagingId,
+      staged,
       key: normalizedKey,
       submissionId,
       accessUrl,
     });
   } catch (error) {
+    const uploadConflictMessage = getSubmissionUploadConflictMessage(error);
     if (deleteUnreferencedObjectOnFailure) {
       const admin = createAdminClient();
-      const referenceResult = await admin
-        .from("submission_files")
-        .select("id")
-        .eq("submission_id", submissionId)
-        .eq("file_path", normalizedKey)
-        .limit(1)
-        .maybeSingle();
-      if (!referenceResult.error && !referenceResult.data) {
+      const [liveReference, stagedReference] = await Promise.all([
+        admin
+          .from("submission_files")
+          .select("id")
+          .eq("submission_id", submissionId)
+          .eq("file_path", normalizedKey)
+          .limit(1)
+          .maybeSingle(),
+        admin
+          .from("submission_upload_staging")
+          .select("id")
+          .eq("submission_id", submissionId)
+          .eq("file_path", normalizedKey)
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      if (
+        !liveReference.error &&
+        !liveReference.data &&
+        !stagedReference.error &&
+        !stagedReference.data
+      ) {
         await deleteObject(normalizedKey).catch(() => undefined);
       }
     }
@@ -338,11 +289,13 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(
       {
-        error: isConfig
-          ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
-          : "업로드 확인 중 오류가 발생했습니다. 다시 시도해주세요.",
+        error:
+          uploadConflictMessage ??
+          (isConfig
+            ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
+            : "업로드 확인 중 오류가 발생했습니다. 다시 시도해주세요."),
       },
-      { status: isConfig ? 503 : 500 },
+      { status: uploadConflictMessage ? 409 : isConfig ? 503 : 500 },
     );
   }
 }

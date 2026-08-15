@@ -34,6 +34,7 @@ type CartBankSubmission = {
   amount_krw: number | null;
   status: string | null;
   payment_status: string | null;
+  album_draft_group_id: string | null;
   applicant_email: string | null;
   guest_email: string | null;
 };
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
   let submissionQuery = admin
     .from("submissions")
     .select(
-      "id, user_id, guest_token, type, title, artist_name, amount_krw, status, payment_status, applicant_email, guest_email",
+      "id, user_id, guest_token, type, title, artist_name, amount_krw, status, payment_status, album_draft_group_id, applicant_email, guest_email",
     )
     .in("id", submissionIds)
     .or("payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)");
@@ -157,6 +158,46 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const albumDraftGroupIds = Array.from(
+    new Set(
+      submissions
+        .filter(
+          (item) => item.type === "ALBUM" && item.album_draft_group_id,
+        )
+        .map((item) => item.album_draft_group_id as string),
+    ),
+  );
+  if (albumDraftGroupIds.length > 0) {
+    const { data: activeGroupRows, error: groupError } = await admin
+      .from("submissions")
+      .select("id, album_draft_group_id")
+      .in("album_draft_group_id", albumDraftGroupIds)
+      .in("status", ["DRAFT", "PRE_REVIEW", "SUBMITTED", "WAITING_PAYMENT"])
+      .or("payment_status.is.null,payment_status.neq.PAID");
+    if (groupError) {
+      console.error("[CartBank] album group load failed", groupError);
+      return NextResponse.json(
+        { error: "앨범 장바구니 묶음을 확인하지 못했습니다." },
+        { status: 500 },
+      );
+    }
+
+    const requestedIdSet = new Set(submissionIds);
+    if (
+      (activeGroupRows ?? []).some(
+        (row) => !requestedIdSet.has(String(row.id)),
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "함께 작성한 앨범은 묶음 전체의 접수를 완료한 뒤 함께 결제해주세요.",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const totalAmountKrw = submissions.reduce(
     (sum, item) => sum + Math.round(Number(item.amount_krw ?? 0)),
     0,
@@ -178,9 +219,13 @@ export async function POST(req: NextRequest) {
     const invalidAlbumDiscount = updateError?.message?.includes(
       "ALBUM_DISCOUNT_NOT_ELIGIBLE",
     );
+    const incompleteAlbumGroup = updateError?.message?.includes(
+      "ALBUM_GROUP_INCOMPLETE",
+    );
     const conflict =
       invalidAlbumPrice ||
       invalidAlbumDiscount ||
+      incompleteAlbumGroup ||
       (updateError?.code === "55000" &&
         (updateError.message?.includes("PAYMENT_ALREADY_IN_PROGRESS") ||
           updateError.message?.includes("SUBMISSION_NOT_PAYABLE")));
@@ -190,6 +235,8 @@ export async function POST(req: NextRequest) {
           ? "앨범 신청서의 결제 금액이 변경되었습니다. 신청서를 다시 저장해주세요."
           : invalidAlbumDiscount
             ? "추가 앨범 할인 결제에는 같은 패키지의 정가 앨범을 함께 선택하거나 먼저 결제해야 합니다."
+            : incompleteAlbumGroup
+              ? "함께 작성한 앨범은 묶음 전체를 선택해 결제해주세요."
             : conflict
               ? "이미 결제가 진행 중이거나 결제 대기 상태인 신청서가 포함되어 있습니다."
               : "무통장 입금 대기 상태로 변경하지 못했습니다.",

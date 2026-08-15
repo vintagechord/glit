@@ -12,6 +12,9 @@ const mvWizard = readSource("src/features/submissions/mv-wizard.tsx");
 const englishLanguagePack = readSource(
   "src/components/i18n/english-language-pack.tsx",
 );
+const submissionPreflightPanel = readSource(
+  "src/features/submissions/submission-preflight-panel.tsx",
+);
 
 test("submission wizards use concise cart actions and outcome notices", () => {
   for (const source of [albumWizard, mvWizard]) {
@@ -30,13 +33,13 @@ test("submission wizards use concise cart actions and outcome notices", () => {
   }
 });
 
-test("album readiness only surfaces incomplete blockers", () => {
-  assert.match(
-    albumWizard,
-    /const albumPaymentBlockers = albumPaymentReadiness\.filter\(\(item\) => !item\.ready\)/,
-  );
-  assert.match(albumWizard, /\{albumPaymentBlockers\.map\(\(item\) => \(/);
-  assert.match(albumWizard, /role="alert"/);
+test("album final check only surfaces actionable issues", () => {
+  assert.match(albumWizard, /buildAlbumSubmissionPreflight\(\{/);
+  assert.match(albumWizard, /<SubmissionPreflightPanel\s+result=\{albumPreflight\}/);
+  assert.match(submissionPreflightPanel, /result\.blockingIssues\.map\(\(item\) =>/);
+  assert.match(submissionPreflightPanel, /result\.warnings\.map\(\(item\) =>/);
+  assert.doesNotMatch(submissionPreflightPanel, /result\.issues\.map\(/);
+  assert.match(submissionPreflightPanel, /onNavigate\(issue\.target, issue\)/);
   assert.doesNotMatch(albumWizard, /\{albumPaymentReadiness\.map\(/);
   assert.match(albumWizard, /최종 결제 금액/);
   assert.doesNotMatch(albumWizard, />\s*결제금액\s*</);
@@ -56,7 +59,7 @@ test("one-click guidance uses the site card system and scannable required items"
 test("album packages stay compact while preserving comparison and station details", () => {
   assert.match(
     albumWizard,
-    /grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5/,
+    /className="grid gap-3[^"]*sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5[^"]*"/,
   );
   assert.match(albumWizard, /aria-pressed=\{isActive\}/);
   assert.match(albumWizard, /<details className="group border-t-2/);

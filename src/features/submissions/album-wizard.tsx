@@ -8,11 +8,22 @@ import {
   applyAlbumTrackCreditsToBlankTracks,
   createAlbumTrackWithReusableCredits,
 } from "@/lib/album-track-reuse";
+import { matchAlbumTracksToAudioFiles } from "@/lib/album-track-file-matching";
+import {
+  appendAlbumTrackRowKey,
+  createAlbumTrackRowKeyState,
+  mergeAlbumTrackPasteRows,
+  moveAlbumTrackRowKey,
+  removeAlbumTrackRowKey,
+  resizeAlbumTrackRowKeyState,
+  type AlbumTrackPasteRow,
+} from "@/lib/album-track-table";
 import {
   getAlbumReviewDiscountPercentForPackage,
   getDiscountedAlbumPrice,
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
+import { orderAlbumDraftRowsForResume } from "@/lib/album-draft-order";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
@@ -47,14 +58,25 @@ import {
   type ProfanityTerm,
 } from "@/lib/profanity/legacy";
 import { runProfanityCheck } from "@/lib/profanity/check";
+import {
+  buildAlbumSubmissionPreflight,
+  type ExistingCartSubmissionSnapshot,
+  type SubmissionPreflightTarget,
+} from "@/lib/submission-preflight";
+import { getSubmissionCheckpointStorageKey } from "@/lib/submission-checkpoint";
+import { mergeSubmissionUploadMetadata } from "@/lib/submission-upload-metadata";
 
 import {
   saveAlbumSubmissionAction,
   type SubmissionActionState,
 } from "./actions";
 import { AiUsageSelector } from "./ai-usage-selector";
+import { AlbumTrackTableEditor } from "./album-track-table-editor";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
+import { SubmissionPreflightPanel } from "./submission-preflight-panel";
 import { SubmissionProgress } from "./submission-progress";
+import { SubmissionSaveIndicator } from "./submission-save-indicator";
+import { useSubmissionCheckpoint } from "./use-submission-checkpoint";
 import { safeRandomUUID } from "@/lib/uuid";
 
 declare global {
@@ -110,6 +132,7 @@ type UploadItem = {
   status: "pending" | "uploading" | "done" | "error";
   path?: string;
   mime?: string;
+  localKey?: string;
 };
 
 type UploadResult = {
@@ -121,6 +144,9 @@ type UploadResult = {
   durationSeconds?: number;
   accessUrl?: string;
 };
+
+const getLocalUploadKey = (file: File) =>
+  `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
 
 type ApplicationFormMode = "online" | "upload";
 
@@ -150,7 +176,7 @@ const standardSteps = [
   "기본 정보",
   "트랙 정보",
   "파일 업로드",
-  "결제",
+  "최종 점검",
   "접수 완료",
 ];
 
@@ -159,7 +185,7 @@ const compactSteps = [
   "작성 방식 선택",
   "기본 정보",
   "파일 업로드",
-  "결제",
+  "최종 점검",
   "접수 완료",
 ];
 
@@ -167,7 +193,7 @@ const oneClickSteps = [
   "방송국 패키지 선택",
   "기본 정보",
   "파일 업로드",
-  "결제",
+  "최종 점검",
   "접수 완료",
 ];
 
@@ -176,7 +202,7 @@ const uploadFormSteps = [
   "작성 방식 선택",
   "신청서 양식",
   "파일 업로드",
-  "결제",
+  "최종 점검",
   "접수 완료",
 ];
 
@@ -295,6 +321,9 @@ const oneClickPriceMap: Record<number, number> = {
 type AlbumDraft = {
   submissionId: string;
   guestToken: string;
+  sourceStatus?: string;
+  priceTier: "FULL" | "ADDITIONAL";
+  amountKrw: number;
   title: string;
   artistName: string;
   artistNameKr: string;
@@ -312,6 +341,44 @@ type AlbumDraft = {
   tracks: TrackInput[];
   files: UploadResult[];
   emailSubmitConfirmed: boolean;
+};
+
+type AlbumCheckpointSnapshot = {
+  step: number;
+  isOneClick: boolean;
+  applicationFormMode: ApplicationFormMode | null;
+  selectedPackageId: string | null;
+  existingCartSubmission: ExistingCartSubmissionSnapshot | null;
+  currentDraft: AlbumDraft;
+  albumDrafts: AlbumDraft[];
+  editingIndex?: number | null;
+  baseDraftSnapshot?: DraftSnapshot | null;
+  uploadDrafts: AlbumDraft[] | null;
+  uploadDraftIndex: number;
+  applicantName: string;
+  applicantEmail: string;
+  applicantPhone: string;
+  paymentMethod: "CARD" | "BANK";
+  bankDepositorName: string;
+  paymentDocumentType: PaymentDocumentType;
+  cashReceiptPurpose: CashReceiptPurpose;
+};
+
+const stripCheckpointAccessUrl = (file: UploadResult): UploadResult => {
+  const safeFile = { ...file };
+  delete safeFile.accessUrl;
+  return safeFile;
+};
+
+const sanitizeAlbumDraftForCheckpoint = (draft: AlbumDraft): AlbumDraft => ({
+  ...draft,
+  files: draft.files.map(stripCheckpointAccessUrl),
+});
+
+type AlbumCheckpointController = {
+  runExclusive: <T>(task: () => Promise<T>) => Promise<T>;
+  markSaved: (snapshot?: AlbumCheckpointSnapshot, savedAt?: number) => void;
+  clear: () => void;
 };
 
 const getAlbumDraftGuestTokens = (drafts: AlbumDraft[]) =>
@@ -369,7 +436,13 @@ export function AlbumWizard({
     React.useState<ApplicationFormMode | null>(null);
   const [selectedPackage, setSelectedPackage] =
     React.useState<PackageOption | null>(packages[0] ?? null);
+  const [currentAlbumPriceTier, setCurrentAlbumPriceTier] = React.useState<
+    "FULL" | "ADDITIONAL"
+  >("FULL");
   const [tracks, setTracks] = React.useState<TrackInput[]>([initialTrack]);
+  const [trackRowKeys, setTrackRowKeys] = React.useState(() =>
+    createAlbumTrackRowKeyState(1),
+  );
   const [activeTrackIndex, setActiveTrackIndex] = React.useState(0);
   const [title, setTitle] = React.useState("");
   const [artistName, setArtistName] = React.useState("");
@@ -440,16 +513,30 @@ export function AlbumWizard({
   const [resumeChecked, setResumeChecked] = React.useState(false);
   const [resumePrompt, setResumePrompt] = React.useState<{
     drafts: Array<Record<string, unknown>>;
+    storedSubmissionIds?: string[];
     storedGuestToken?: string;
     storedGuestTokensBySubmissionId?: Record<string, string>;
     storedApplicationFormMode?: ApplicationFormMode;
+    storedExistingCartSubmission?: ExistingCartSubmissionSnapshot;
   } | null>(null);
   const [isClearingResumeDrafts, setIsClearingResumeDrafts] = React.useState(false);
+  const [resumeDeleteError, setResumeDeleteError] = React.useState<string | null>(
+    null,
+  );
   const resumePromptHandledRef = React.useRef(false);
   const draftInitAttemptedRef = React.useRef(false);
   const draftCreationPromiseRef = React.useRef<Promise<string | null> | null>(
     null,
   );
+  const albumCheckpointControllerRef =
+    React.useRef<AlbumCheckpointController | null>(null);
+  const draftSaveInFlightRef = React.useRef(false);
+  const finalSaveInFlightRef = React.useRef(false);
+  const addAlbumInFlightRef = React.useRef(false);
+  const checkpointRestoreSourceRef = React.useRef<"recovery" | "previous">(
+    "recovery",
+  );
+  const trackStructureMutationRef = React.useRef(false);
 
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
   const [completionId, setCompletionId] = React.useState<string | null>(null);
@@ -467,8 +554,16 @@ export function AlbumWizard({
   const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
   const [baseDraftSnapshot, setBaseDraftSnapshot] =
     React.useState<DraftSnapshot | null>(null);
+  const [existingCartSubmission, setExistingCartSubmission] =
+    React.useState<ExistingCartSubmissionSnapshot | null>(null);
+  const [priceChangeAcknowledged, setPriceChangeAcknowledged] =
+    React.useState(false);
   const [currentSubmissionId, setCurrentSubmissionId] =
     React.useState<string | null>(null);
+  const [currentServerUpdatedAt, setCurrentServerUpdatedAt] =
+    React.useState<string | null>(null);
+  const [checkpointInitialDataIsServerState, setCheckpointInitialDataIsServerState] =
+    React.useState(false);
   const [currentGuestToken, setCurrentGuestToken] = React.useState(() =>
     safeRandomUUID(),
   );
@@ -516,29 +611,9 @@ export function AlbumWizard({
         ? step
         : step - 1;
   const selectApplicationFormMode = (mode: ApplicationFormMode) => {
-    if (mode === "online" && applicationFormMode === "upload") {
-      setFiles((previous) =>
-        previous.filter(
-          (file) =>
-            !isApplicationFormFile(file.name) &&
-            !isApplicationFormMime(file.type),
-        ),
-      );
-      setUploads((previous) =>
-        previous.filter(
-          (file) =>
-            !isApplicationFormFile(file.name) &&
-            !isApplicationFormMime(file.mime ?? ""),
-        ),
-      );
-      setUploadedFiles((previous) =>
-        previous.filter(
-          (file) =>
-            !isApplicationFormFile(file.originalName) &&
-            !isApplicationFormMime(file.mime ?? ""),
-        ),
-      );
-    }
+    // Switching the authoring method must be reversible. Keep selected and
+    // uploaded files intact; the active mode controls which files are required,
+    // not whether the user's work is destroyed.
     setApplicationFormMode(mode);
     setNotice({});
   };
@@ -599,12 +674,18 @@ export function AlbumWizard({
   );
   const hasAlbumEventDiscount = selectedAlbumDiscountPercent > 0;
   const additionalPriceKrw = Math.round(basePriceKrw * 0.5);
-  const additionalAlbumCount = albumDrafts.length;
-  const totalAlbumCount = additionalAlbumCount + 1;
+  const groupPriceTiers = editingIndex !== null && baseDraftSnapshot
+    ? [baseDraftSnapshot.draft.priceTier, ...albumDrafts.map((draft) => draft.priceTier)]
+    : [currentAlbumPriceTier, ...albumDrafts.map((draft) => draft.priceTier)];
+  const additionalAlbumCount = groupPriceTiers.filter(
+    (tier) => tier === "ADDITIONAL",
+  ).length;
+  const totalAlbumCount = groupPriceTiers.length;
+  const fullPriceAlbumCount = Math.max(0, totalAlbumCount - additionalAlbumCount);
   const additionalAlbumTotalKrw = additionalAlbumCount * additionalPriceKrw;
   const originalTotalPriceKrw = totalAlbumCount * originalBasePriceKrw;
   const totalPriceKrw =
-    basePriceKrw + additionalAlbumTotalKrw;
+    fullPriceAlbumCount * basePriceKrw + additionalAlbumTotalKrw;
   const albumEventDiscountTotalKrw = hasAlbumEventDiscount
     ? totalAlbumCount * Math.max(0, originalBasePriceKrw - basePriceKrw)
     : 0;
@@ -666,8 +747,97 @@ export function AlbumWizard({
       ready: totalPriceKrw > 0,
     },
   ];
-  const albumPaymentReady = albumPaymentReadiness.every((item) => item.ready);
-  const albumPaymentBlockers = albumPaymentReadiness.filter((item) => !item.ready);
+  const albumReadinessReady = albumPaymentReadiness.every((item) => item.ready);
+  const albumTrackFilesForMatch = React.useMemo(
+    () =>
+      uploadedFiles.length > 0
+        ? uploadedFiles
+        : uploads.map((upload) => ({ name: upload.name })),
+    [uploadedFiles, uploads],
+  );
+  const albumTrackFileMatch = React.useMemo(
+    () => matchAlbumTracksToAudioFiles(tracks, albumTrackFilesForMatch),
+    [albumTrackFilesForMatch, tracks],
+  );
+  const hasArchiveForTrackMatch = React.useMemo(
+    () =>
+      albumTrackFilesForMatch.some((file) => {
+        const name = "originalName" in file ? file.originalName : file.name;
+        return String(name ?? "").toLocaleLowerCase().endsWith(".zip");
+      }),
+    [albumTrackFilesForMatch],
+  );
+  const albumPreflight = React.useMemo(
+    () =>
+      buildAlbumSubmissionPreflight({
+        submissionId: currentSubmissionId,
+        selectedPackageId: selectedPackage?.id ?? null,
+        amountKrw: totalPriceKrw,
+        existingCartSubmission,
+        priceChangeAcknowledged,
+        isAdminReviewer,
+        isOneClick,
+        applicationFormMode,
+        applicantName,
+        applicantEmail,
+        applicantPhone,
+        aiUsed,
+        melonUrl,
+        title,
+        artistName,
+        artistNameKr,
+        artistNameEn,
+        releaseDate,
+        genre: genreValue,
+        distributor,
+        productionCompany,
+        previousRelease,
+        artistType,
+        artistGender,
+        artistMembers,
+        tracks,
+        files: uploadedFiles,
+        uploads,
+        filesSubmittedByEmail: emailSubmitConfirmed,
+      }),
+    [
+      aiUsed,
+      applicantEmail,
+      applicantName,
+      applicantPhone,
+      applicationFormMode,
+      artistGender,
+      artistMembers,
+      artistName,
+      artistNameEn,
+      artistNameKr,
+      artistType,
+      currentSubmissionId,
+      distributor,
+      emailSubmitConfirmed,
+      existingCartSubmission,
+      genreValue,
+      isAdminReviewer,
+      isOneClick,
+      melonUrl,
+      previousRelease,
+      priceChangeAcknowledged,
+      productionCompany,
+      releaseDate,
+      selectedPackage?.id,
+      title,
+      totalPriceKrw,
+      tracks,
+      uploadedFiles,
+      uploads,
+    ],
+  );
+  const albumPaymentReady = albumReadinessReady && albumPreflight.canSubmit;
+
+  React.useEffect(() => {
+    setPriceChangeAcknowledged(false);
+  }, [selectedPackage?.id, totalPriceKrw]);
+
   const readDraftStorage = React.useCallback(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -679,6 +849,7 @@ export function AlbumWizard({
         guestToken?: string;
         guestTokensBySubmissionId?: Record<string, string>;
         applicationFormMode?: ApplicationFormMode;
+        existingCartSubmission?: ExistingCartSubmissionSnapshot;
       };
     } catch {
       return null;
@@ -690,6 +861,7 @@ export function AlbumWizard({
     guestToken?: string | null;
     guestTokensBySubmissionId?: Record<string, string>;
     applicationFormMode?: ApplicationFormMode;
+    existingCartSubmission?: ExistingCartSubmissionSnapshot | null;
   }) => {
     if (typeof window === "undefined") return;
     try {
@@ -701,6 +873,7 @@ export function AlbumWizard({
           guestTokensBySubmissionId:
             payload.guestTokensBySubmissionId ?? {},
           applicationFormMode: payload.applicationFormMode,
+          existingCartSubmission: payload.existingCartSubmission ?? null,
           updatedAt: Date.now(),
         }),
       );
@@ -709,14 +882,50 @@ export function AlbumWizard({
     }
   }, [draftStorageKey]);
 
-  const clearDraftStorage = React.useCallback(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(draftStorageKey);
-    } catch {
-      // ignore
-    }
-  }, [draftStorageKey]);
+  const clearCheckpointStorage = React.useCallback(
+    (submissionIds: readonly string[]) => {
+      if (typeof window === "undefined") return;
+      for (const submissionId of submissionIds) {
+        if (!submissionId) continue;
+        try {
+          window.localStorage.removeItem(
+            getSubmissionCheckpointStorageKey(draftStorageKey, submissionId),
+          );
+        } catch {
+          // Best-effort cleanup for a draft the user explicitly discarded.
+        }
+      }
+    },
+    [draftStorageKey],
+  );
+
+  const clearDraftStorageForSubmissions = React.useCallback(
+    (submissionIds: readonly string[]) => {
+      const exactIds = Array.from(new Set(submissionIds.filter(Boolean))).sort();
+      clearCheckpointStorage(exactIds);
+      if (typeof window === "undefined" || exactIds.length === 0) return;
+      try {
+        const raw = window.localStorage.getItem(draftStorageKey);
+        if (!raw) return;
+        const stored = JSON.parse(raw) as { ids?: unknown };
+        const storedIds = Array.isArray(stored.ids)
+          ? Array.from(
+              new Set(stored.ids.filter((id): id is string => typeof id === "string")),
+            ).sort()
+          : [];
+        if (
+          storedIds.length === exactIds.length &&
+          storedIds.every((id, index) => id === exactIds[index])
+        ) {
+          window.localStorage.removeItem(draftStorageKey);
+        }
+      } catch {
+        // Never clear a locator that cannot be proven to belong to this exact
+        // payment group; another tab may already be editing a newer draft.
+      }
+    },
+    [clearCheckpointStorage, draftStorageKey],
+  );
 
   const clearServerDrafts = React.useCallback(async (options: {
     ids?: string[];
@@ -775,6 +984,28 @@ export function AlbumWizard({
     }
   }, [currentGuestToken, isGuest]);
 
+  const clearCartSubmissions = React.useCallback(async (
+    submissionIds: string[],
+    guestTokensBySubmissionId: Record<string, string>,
+  ) => {
+    const res = await fetch("/api/cart/items", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        submissionIds,
+        guestTokensBySubmissionId: isGuest
+          ? guestTokensBySubmissionId
+          : undefined,
+      }),
+    });
+    if (!res.ok) {
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(json?.error || "장바구니 신청서를 삭제하지 못했습니다.");
+    }
+  }, [isGuest]);
+
   const createDraft = React.useCallback(async (options?: { force?: boolean }) => {
     if (currentSubmissionId) return currentSubmissionId;
     if (draftCreationPromiseRef.current) {
@@ -803,11 +1034,34 @@ export function AlbumWizard({
           error?: string;
         };
         if (res.ok && json?.submissionId) {
+          const issuedGuestToken =
+            isGuest && json.guestToken
+              ? json.guestToken
+              : currentGuestTokenRef.current;
           if (isGuest && json.guestToken) {
             currentGuestTokenRef.current = json.guestToken;
             setCurrentGuestToken(json.guestToken);
           }
+          writeDraftStorage({
+            ids: [
+              json.submissionId,
+              ...albumDrafts
+                .map((draft) => draft.submissionId)
+                .filter((id) => id !== json.submissionId),
+            ],
+            guestToken: isGuest ? issuedGuestToken : null,
+            guestTokensBySubmissionId: isGuest
+              ? {
+                  ...getAlbumDraftGuestTokens(albumDrafts),
+                  [json.submissionId]: issuedGuestToken,
+                }
+              : undefined,
+            applicationFormMode: applicationFormMode ?? undefined,
+            existingCartSubmission,
+          });
           setCurrentSubmissionId(json.submissionId);
+          setCheckpointInitialDataIsServerState(false);
+          setCurrentServerUpdatedAt(new Date().toISOString());
           return json.submissionId;
         }
         const message =
@@ -835,7 +1089,14 @@ export function AlbumWizard({
         draftCreationPromiseRef.current = null;
       }
     }
-  }, [currentSubmissionId, isGuest]);
+  }, [
+    albumDrafts,
+    applicationFormMode,
+    currentSubmissionId,
+    isGuest,
+    existingCartSubmission,
+    writeDraftStorage,
+  ]);
 
   React.useEffect(() => {
     currentGuestTokenRef.current = currentGuestToken;
@@ -846,6 +1107,58 @@ export function AlbumWizard({
     if (currentSubmissionId || isPreparingDraft) return;
     void createDraft();
   }, [createDraft, currentSubmissionId, isPreparingDraft, resumeChecked]);
+
+  const createAdditionalAlbumDraft = React.useCallback(async () => {
+    const requestedGuestToken = isGuest ? safeRandomUUID() : undefined;
+    const res = await fetch("/api/submissions/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "ALBUM",
+        guestToken: requestedGuestToken,
+        forceNew: true,
+      }),
+    });
+    const json = (await res.json().catch(() => null)) as {
+      submissionId?: string;
+      guestToken?: string;
+      error?: string;
+    } | null;
+    if (!res.ok || !json?.submissionId) {
+      throw new Error(json?.error || "추가 앨범 초안을 만들지 못했습니다.");
+    }
+    const usedIds = new Set([
+      currentSubmissionId,
+      ...albumDrafts.map((draft) => draft.submissionId),
+    ]);
+    if (usedIds.has(json.submissionId)) {
+      throw new Error("추가 앨범 ID를 새로 만들지 못했습니다. 다시 시도해주세요.");
+    }
+    return {
+      submissionId: json.submissionId,
+      guestToken: json.guestToken ?? requestedGuestToken ?? "",
+      sourceStatus: "DRAFT",
+      priceTier: "ADDITIONAL" as const,
+      amountKrw: additionalPriceKrw,
+      title: "",
+      artistName: "",
+      artistNameKr: "",
+      artistNameEn: "",
+      releaseDate: "",
+      genre: "",
+      distributor: "",
+      productionCompany: "",
+      previousRelease: "",
+      artistType: "",
+      artistGender: "",
+      artistMembers: "",
+      melonUrl: "",
+      aiUsed: null,
+      tracks: [{ ...initialTrack }],
+      files: [],
+      emailSubmitConfirmed: false,
+    } satisfies AlbumDraft;
+  }, [additionalPriceKrw, albumDrafts, currentSubmissionId, isGuest]);
 
   const shouldShowGuestLookup = isGuest || completionTokens.length > 0;
   const completionCodesToShow = shouldShowGuestLookup
@@ -953,7 +1266,18 @@ export function AlbumWizard({
         ? guestTokenFromMsg || currentGuestToken
         : guestTokenFromMsg;
       if (status === "SUCCESS") {
-        clearDraftStorage();
+        const submissionIdsFromMsg = Array.isArray(payload.submissionIds)
+          ? payload.submissionIds.filter(
+              (id): id is string => typeof id === "string" && id.length > 0,
+            )
+          : [];
+        const paidSubmissionIds = Array.from(
+          new Set([
+            ...submissionIdsFromMsg,
+            ...(submissionIdFromMsg ? [submissionIdFromMsg] : []),
+          ]),
+        );
+        clearDraftStorageForSubmissions(paidSubmissionIds);
         if (guestPaymentToken) {
           window.location.href = `${localePrefix}/track/${encodeURIComponent(guestPaymentToken)}?payment=success`;
         } else if (submissionIdFromMsg) {
@@ -981,7 +1305,7 @@ export function AlbumWizard({
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, [
-    clearDraftStorage,
+    clearDraftStorageForSubmissions,
     currentGuestToken,
     currentSubmissionId,
     isGuest,
@@ -1186,23 +1510,31 @@ export function AlbumWizard({
   };
 
   const addBlankTrack = () => {
-    setTracks((prev) => {
-      const next = [...prev, { ...initialTrack }];
-      setActiveTrackIndex(next.length - 1);
-      return next;
+    if (trackStructureMutationRef.current) return;
+    trackStructureMutationRef.current = true;
+    queueMicrotask(() => {
+      trackStructureMutationRef.current = false;
     });
+    const next = [...tracks, { ...initialTrack }];
+    setTracks(next);
+    setTrackRowKeys((keyState) => appendAlbumTrackRowKey(keyState));
+    setActiveTrackIndex(next.length - 1);
   };
 
   const addTrackWithSameCredits = () => {
-    setTracks((prev) => {
-      const source = prev[activeTrackIndex] ?? prev[0] ?? initialTrack;
-      const next = [
-        ...prev,
-        createAlbumTrackWithReusableCredits(initialTrack, source),
-      ];
-      setActiveTrackIndex(next.length - 1);
-      return next;
+    if (trackStructureMutationRef.current) return;
+    trackStructureMutationRef.current = true;
+    queueMicrotask(() => {
+      trackStructureMutationRef.current = false;
     });
+    const source = tracks[activeTrackIndex] ?? tracks[0] ?? initialTrack;
+    const next = [
+      ...tracks,
+      createAlbumTrackWithReusableCredits(initialTrack, source),
+    ];
+    setTracks(next);
+    setTrackRowKeys((keyState) => appendAlbumTrackRowKey(keyState));
+    setActiveTrackIndex(next.length - 1);
   };
 
   const applyCurrentCreditsToBlankTracks = () => {
@@ -1212,27 +1544,98 @@ export function AlbumWizard({
   };
 
   const removeTrack = (index: number) => {
-    setTracks((prev) => {
-      const removed = prev[index];
-      const next = prev.filter((_, idx) => idx !== index);
-      if (removed?.titleRole === "MAIN") {
-        const fallback = next.find((track) => track.isTitle);
-        if (fallback) {
-          fallback.titleRole = "MAIN";
-        }
+    if (tracks.length <= 1) return;
+    if (trackStructureMutationRef.current) return;
+    trackStructureMutationRef.current = true;
+    queueMicrotask(() => {
+      trackStructureMutationRef.current = false;
+    });
+    const removed = tracks[index];
+    const next = tracks
+      .filter((_, idx) => idx !== index)
+      .map((track) => ({ ...track }));
+    if (removed?.titleRole === "MAIN") {
+      const fallback = next.find((track) => track.isTitle);
+      if (fallback) {
+        fallback.titleRole = "MAIN";
       }
-      setActiveTrackIndex((prevIndex) => {
-        const nextIndex =
-          prevIndex > index ? prevIndex - 1 : prevIndex === index ? 0 : prevIndex;
-        return Math.min(nextIndex, Math.max(0, next.length - 1));
-      });
+    }
+    setTracks(next);
+    setActiveTrackIndex((prevIndex) => {
+      const nextIndex =
+        prevIndex > index ? prevIndex - 1 : prevIndex === index ? 0 : prevIndex;
+      return Math.min(nextIndex, Math.max(0, next.length - 1));
+    });
+    setTrackRowKeys((keyState) => removeAlbumTrackRowKey(keyState, index));
+  };
+
+  const moveTrack = (fromIndex: number, toIndex: number) => {
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= tracks.length ||
+      toIndex >= tracks.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    if (trackStructureMutationRef.current) return;
+    trackStructureMutationRef.current = true;
+    queueMicrotask(() => {
+      trackStructureMutationRef.current = false;
+    });
+    setTracks((previous) => {
+      const next = [...previous];
+      const [moved] = next.splice(fromIndex, 1);
+      if (!moved) return previous;
+      next.splice(toIndex, 0, moved);
       return next;
+    });
+    setTrackRowKeys((keyState) =>
+      moveAlbumTrackRowKey(keyState, fromIndex, toIndex),
+    );
+    setActiveTrackIndex((currentIndex) => {
+      if (currentIndex === fromIndex) return toIndex;
+      if (fromIndex < currentIndex && currentIndex <= toIndex) {
+        return currentIndex - 1;
+      }
+      if (toIndex <= currentIndex && currentIndex < fromIndex) {
+        return currentIndex + 1;
+      }
+      return currentIndex;
     });
   };
 
+  const applyPastedTracks = (
+    pastedRows: readonly AlbumTrackPasteRow[],
+    startIndex: number,
+  ) => {
+    if (trackStructureMutationRef.current) return;
+    trackStructureMutationRef.current = true;
+    queueMicrotask(() => {
+      trackStructureMutationRef.current = false;
+    });
+    const next = mergeAlbumTrackPasteRows(
+      tracks,
+      pastedRows,
+      () => ({ ...initialTrack }),
+      startIndex,
+    );
+    setTracks(next);
+    setTrackRowKeys((keyState) =>
+      resizeAlbumTrackRowKeyState(keyState, next.length),
+    );
+    setActiveTrackIndex(Math.min(startIndex, Math.max(0, next.length - 1)));
+  };
+
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
+  const uploadInProgress = uploads.some((upload) => upload.status === "uploading");
 
   const addFiles = (selected: File[]) => {
+    if (uploadInProgress) {
+      setNotice({ error: "현재 파일 업로드가 끝난 뒤 추가해주세요." });
+      return;
+    }
     if (!currentSubmissionId) {
       setNotice({
         error:
@@ -1267,31 +1670,24 @@ export function AlbumWizard({
       return;
     }
 
-    const nextFileEntries: File[] = [];
-    const seenFileKeys = new Set<string>();
-    [...files, ...filtered].forEach((file) => {
-      const key = `${file.name}-${file.size}-${file.lastModified}`;
-      if (seenFileKeys.has(key)) return;
-      seenFileKeys.add(key);
+    const nextFileEntries = [...files];
+    const seenLocalKeys = new Set(files.map(getLocalUploadKey));
+    const nextUploads = uploads.map((upload) => ({ ...upload }));
+    filtered.forEach((file) => {
+      const localKey = getLocalUploadKey(file);
+      if (seenLocalKeys.has(localKey)) return;
+      seenLocalKeys.add(localKey);
       nextFileEntries.push(file);
+      nextUploads.push({
+        name: file.name,
+        size: file.size,
+        progress: 0,
+        status: "pending" as const,
+        mime: file.type,
+        localKey,
+      });
     });
-
-    const existingMap = new Map<string, UploadItem>();
-    uploads.forEach((item) => {
-      existingMap.set(`${item.name}-${item.size}`, item);
-    });
-    const nextUploads = nextFileEntries.map((file) => {
-      const key = `${file.name}-${file.size}`;
-      return (
-        existingMap.get(key) ?? {
-          name: file.name,
-          size: file.size,
-          progress: 0,
-          status: "pending" as const,
-          mime: file.type,
-        }
-      );
-    });
+    if (nextUploads.length === uploads.length) return;
     setNotice({});
     setFiles(nextFileEntries);
     setUploads(nextUploads);
@@ -1317,6 +1713,7 @@ export function AlbumWizard({
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
+    event.currentTarget.value = "";
     addFiles(selected);
   };
 
@@ -1931,28 +2328,37 @@ export function AlbumWizard({
       return uploadedFiles;
     }
 
-    const results: UploadResult[] = [];
-    const nextUploads =
-      initialUploads.length === targetFiles.length
-        ? [...initialUploads]
-        : targetFiles.map((file) => ({
-          name: file.name,
-          size: file.size,
-          progress: 0,
-          status: "pending" as const,
-          mime: file.type,
-        }));
+    const nextUploads = initialUploads.map((upload) => ({ ...upload }));
+    let results = uploadedFiles.map((file) => ({ ...file }));
 
     for (let index = 0; index < targetFiles.length; index += 1) {
       const file = targetFiles[index];
+      const localKey = getLocalUploadKey(file);
+      let uploadIndex = nextUploads.findIndex(
+        (item) => item.localKey === localKey,
+      );
+      if (uploadIndex < 0) {
+        uploadIndex = nextUploads.length;
+        nextUploads.push({
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          status: "pending",
+          mime: file.type,
+          localKey,
+        });
+      }
 
-      if (nextUploads[index]?.status === "done" && uploadedFiles[index]) {
-        results.push(uploadedFiles[index]);
+      if (
+        nextUploads[uploadIndex]?.status === "done" &&
+        nextUploads[uploadIndex]?.path &&
+        results.some((result) => result.path === nextUploads[uploadIndex]?.path)
+      ) {
         continue;
       }
 
-      nextUploads[index] = {
-        ...nextUploads[index],
+      nextUploads[uploadIndex] = {
+        ...nextUploads[uploadIndex],
         status: "uploading",
       };
       setUploads([...nextUploads]);
@@ -1960,16 +2366,16 @@ export function AlbumWizard({
       let path: string;
       try {
         const uploadResult = await uploadWithProgress(file, (progress) => {
-          nextUploads[index] = {
-            ...nextUploads[index],
+          nextUploads[uploadIndex] = {
+            ...nextUploads[uploadIndex],
             progress,
           };
           setUploads([...nextUploads]);
         });
         path = uploadResult.objectKey;
       } catch (error) {
-        nextUploads[index] = {
-          ...nextUploads[index],
+        nextUploads[uploadIndex] = {
+          ...nextUploads[uploadIndex],
           status: "error",
         };
         setUploads([...nextUploads]);
@@ -1982,59 +2388,28 @@ export function AlbumWizard({
         throw new Error(message);
       }
 
-      nextUploads[index] = {
-        ...nextUploads[index],
+      nextUploads[uploadIndex] = {
+        ...nextUploads[uploadIndex],
         status: "done",
         progress: 100,
         path,
       };
       setUploads([...nextUploads]);
 
-      results.push({
-        path,
-        originalName: file.name,
-        mime: file.type || undefined,
-        size: file.size,
-      });
+      results = mergeSubmissionUploadMetadata(results, [
+        {
+          path,
+          originalName: file.name,
+          mime: file.type || undefined,
+          size: file.size,
+        },
+      ]);
     }
 
+    setUploads(nextUploads);
     setUploadedFiles(results);
     setFileDigest(digest);
     return results;
-  };
-
-  const resetAlbumForm = () => {
-    setTitle("");
-    setArtistName("");
-    setArtistNameKr("");
-    setArtistNameEn("");
-    setReleaseDate("");
-    setGenreSelection("");
-    setGenreCustom("");
-    setDistributor("");
-    setProductionCompany("");
-    setPreviousRelease("");
-    setArtistType("");
-    setArtistGender("");
-    setArtistMembers("");
-    setMelonUrl("");
-    setAiUsed(null);
-    setTracks([initialTrack]);
-    setActiveTrackIndex(0);
-    setTranslationPanelOpenMap({});
-    setFiles([]);
-    setUploads([]);
-    setUploadedFiles([]);
-    setFileDigest("");
-    setEmailSubmitConfirmed(false);
-    setNotice({});
-    setCurrentSubmissionId(null);
-    draftInitAttemptedRef.current = false;
-    draftErrorRef.current = null;
-    setDraftError(null);
-    const nextGuestToken = safeRandomUUID();
-    currentGuestTokenRef.current = nextGuestToken;
-    setCurrentGuestToken(nextGuestToken);
   };
 
   const buildUploadsFromFiles = React.useCallback(
@@ -2104,6 +2479,11 @@ export function AlbumWizard({
   ): AlbumDraft => ({
     submissionId,
     guestToken: currentGuestTokenRef.current,
+    priceTier: currentAlbumPriceTier,
+    amountKrw:
+      currentAlbumPriceTier === "ADDITIONAL"
+        ? additionalPriceKrw
+        : basePriceKrw,
     title: title.trim(),
     artistName: artistName.trim(),
     artistNameKr: artistNameKr.trim(),
@@ -2145,6 +2525,12 @@ export function AlbumWizard({
     setMelonUrl(draft.melonUrl);
     setAiUsed(draft.aiUsed ?? null);
     setTracks(draft.tracks.map((track) => ({ ...track })));
+    setTrackRowKeys(
+      createAlbumTrackRowKeyState(
+        draft.tracks.length,
+        `album-track-${draft.submissionId}`,
+      ),
+    );
     setActiveTrackIndex(0);
     setTranslationPanelOpenMap({});
     setFiles([]);
@@ -2154,10 +2540,11 @@ export function AlbumWizard({
     setEmailSubmitConfirmed(
       options?.emailSubmitConfirmed ??
       draft.emailSubmitConfirmed ??
-      draft.files.length === 0,
+      false,
     );
     setNotice({});
     setCurrentSubmissionId(draft.submissionId);
+    setCurrentAlbumPriceTier(draft.priceTier);
     currentGuestTokenRef.current = draft.guestToken;
     setCurrentGuestToken(draft.guestToken);
   }, [buildUploadsFromFiles]);
@@ -2166,14 +2553,16 @@ export function AlbumWizard({
     draftRows: Array<Record<string, unknown>>,
     fallbackGuestToken: string,
     storedApplicationFormMode?: ApplicationFormMode,
+    storedSubmissionIds: string[] = [],
+    storedExistingCartSubmission?: ExistingCartSubmissionSnapshot,
   ) => {
     if (draftRows.length === 0) return;
-    const sorted = [...draftRows].sort((a, b) => {
-      const aTime = new Date(String(a.updated_at ?? a.created_at ?? 0)).getTime();
-      const bTime = new Date(String(b.updated_at ?? b.created_at ?? 0)).getTime();
-      return bTime - aTime;
-    });
-    const mappedDrafts = sorted.map((row) => {
+    setCheckpointInitialDataIsServerState(true);
+    const sorted = orderAlbumDraftRowsForResume(
+      draftRows,
+      storedSubmissionIds,
+    );
+    const mappedDrafts = sorted.map((row, index) => {
       const files = mapDraftFiles(
         Array.isArray(row.files) ? (row.files as Array<Record<string, unknown>>) : [],
       );
@@ -2187,6 +2576,13 @@ export function AlbumWizard({
       return {
         submissionId: String(row.id),
         guestToken: guestTokenValue,
+        sourceStatus: String(row.status ?? "DRAFT"),
+        priceTier:
+          String(row.album_price_tier ?? "") === "ADDITIONAL" ||
+          (!row.album_price_tier && index > 0)
+            ? "ADDITIONAL"
+            : "FULL",
+        amountKrw: Number(row.amount_krw ?? 0),
         title: String(row.title ?? ""),
         artistName: String(row.artist_name ?? ""),
         artistNameKr: String(row.artist_name_kr ?? ""),
@@ -2204,12 +2600,15 @@ export function AlbumWizard({
           typeof row.ai_used === "boolean" ? row.ai_used : null,
         tracks: tracks.length > 0 ? tracks : [initialTrack],
         files,
-        emailSubmitConfirmed: false,
+        emailSubmitConfirmed: Boolean(row.files_submitted_by_email),
       } as AlbumDraft;
     });
 
     const baseRow = sorted[0];
     const baseDraft = mappedDrafts[0];
+    setCurrentServerUpdatedAt(
+      typeof baseRow.updated_at === "string" ? baseRow.updated_at : null,
+    );
     const nextPackageId =
       typeof baseRow.package_id === "string" ? baseRow.package_id : null;
     const matchedPackage = nextPackageId
@@ -2218,13 +2617,32 @@ export function AlbumWizard({
     if (matchedPackage) {
       setSelectedPackage(matchedPackage);
     }
+    const restoredStatus = String(baseRow.status ?? "");
+    setExistingCartSubmission(
+      storedExistingCartSubmission?.submissionId === String(baseRow.id)
+        ? storedExistingCartSubmission
+        : restoredStatus === "SUBMITTED" || restoredStatus === "WAITING_PAYMENT"
+        ? {
+            submissionId: String(baseRow.id),
+            packageId: nextPackageId,
+            amountKrw: Number(baseRow.amount_krw ?? 0),
+          }
+        : null,
+    );
+    setPriceChangeAcknowledged(false);
     const restoredIsOneClick = Boolean(baseRow.is_oneclick);
+    const serverApplicationFormMode =
+      baseRow.application_form_mode === "online" ||
+      baseRow.application_form_mode === "upload"
+        ? baseRow.application_form_mode
+        : null;
     const restoredApplicationFormMode = restoredIsOneClick
       ? "online"
-      : storedApplicationFormMode === "online" ||
+      : serverApplicationFormMode ??
+        (storedApplicationFormMode === "online" ||
           storedApplicationFormMode === "upload"
         ? storedApplicationFormMode
-        : null;
+        : null);
     setIsOneClick(restoredIsOneClick);
     setApplicationFormMode(restoredApplicationFormMode);
     setApplicantName(String(baseRow.applicant_name ?? ""));
@@ -2253,7 +2671,9 @@ export function AlbumWizard({
     setTaxInvoiceBusinessNumber(String(baseRow.tax_invoice_business_number ?? ""));
 
     setAlbumDrafts(mappedDrafts.slice(1));
-    setUploadDrafts(mappedDrafts);
+    // Authoring resumes before the file step. Keeping a parallel upload array
+    // here makes an edited additional album replace the base row in autosave.
+    setUploadDrafts(null);
     setUploadDraftIndex(0);
     applyDraftToForm(baseDraft, {
       emailSubmitConfirmed: baseDraft.emailSubmitConfirmed,
@@ -2264,6 +2684,10 @@ export function AlbumWizard({
   const handleResumeDraftConfirm = React.useCallback(() => {
     if (!resumePrompt) return;
     resumePromptHandledRef.current = true;
+    const orderedDraftRows = orderAlbumDraftRowsForResume(
+      resumePrompt.drafts,
+      resumePrompt.storedSubmissionIds,
+    );
     const fallbackGuestToken =
       resumePrompt.storedGuestToken ?? currentGuestToken ?? safeRandomUUID();
     const restoredGuestTokens = getStoredAlbumDraftGuestTokens(
@@ -2275,14 +2699,17 @@ export function AlbumWizard({
       resumePrompt.drafts,
       fallbackGuestToken,
       resumePrompt.storedApplicationFormMode,
+      resumePrompt.storedSubmissionIds,
+      resumePrompt.storedExistingCartSubmission,
     );
     writeDraftStorage({
-      ids: resumePrompt.drafts
+      ids: orderedDraftRows
         .map((draft) => String(draft.id ?? ""))
         .filter(Boolean),
       guestToken: isGuest ? fallbackGuestToken : null,
       guestTokensBySubmissionId: isGuest ? restoredGuestTokens : undefined,
       applicationFormMode: resumePrompt.storedApplicationFormMode,
+      existingCartSubmission: resumePrompt.storedExistingCartSubmission ?? null,
     });
     setResumePrompt(null);
     setResumeChecked(true);
@@ -2296,8 +2723,8 @@ export function AlbumWizard({
 
   const handleResumeDraftCancel = React.useCallback(async () => {
     if (!resumePrompt || isClearingResumeDrafts) return;
-    resumePromptHandledRef.current = true;
     setIsClearingResumeDrafts(true);
+    setResumeDeleteError(null);
     const guestToken = resumePrompt.storedGuestToken ?? currentGuestToken;
     const ids = resumePrompt.drafts
       .map((draft) => String(draft.id ?? ""))
@@ -2307,22 +2734,51 @@ export function AlbumWizard({
       resumePrompt.storedGuestTokensBySubmissionId,
       guestToken,
     );
-    clearDraftStorage();
     try {
-      await clearServerDrafts({
-        ids,
-        guestToken,
-        guestTokensBySubmissionId,
-      });
-    } catch (error) {
-      console.warn("[AlbumDraft][resume-clear] failed", error);
-    } finally {
-      setIsClearingResumeDrafts(false);
+      const draftIds = resumePrompt.drafts
+        .filter((draft) => ["DRAFT", "PRE_REVIEW"].includes(String(draft.status)))
+        .map((draft) => String(draft.id ?? ""))
+        .filter(Boolean);
+      const cartIds = resumePrompt.drafts
+        .filter((draft) =>
+          ["SUBMITTED", "WAITING_PAYMENT"].includes(String(draft.status)),
+        )
+        .map((draft) => String(draft.id ?? ""))
+        .filter(Boolean);
+      if (draftIds.length + cartIds.length !== ids.length) {
+        throw new Error("현재 상태에서는 삭제할 수 없는 신청서가 포함되어 있습니다.");
+      }
+      if (cartIds.length > 0) {
+        await clearCartSubmissions(cartIds, guestTokensBySubmissionId);
+      }
+      if (draftIds.length > 0) {
+        await clearServerDrafts({
+          ids: draftIds,
+          guestToken,
+          guestTokensBySubmissionId: Object.fromEntries(
+            draftIds
+              .map((id) => [id, guestTokensBySubmissionId[id]] as const)
+              .filter((entry): entry is readonly [string, string] => Boolean(entry[1])),
+          ),
+        });
+      }
+      clearDraftStorageForSubmissions(ids);
+      resumePromptHandledRef.current = true;
       setResumePrompt(null);
       setResumeChecked(true);
+    } catch (error) {
+      console.warn("[AlbumDraft][resume-clear] failed", error);
+      setResumeDeleteError(
+        error instanceof Error && error.message
+          ? error.message
+          : "임시저장 삭제에 실패했습니다. 다시 시도해주세요.",
+      );
+    } finally {
+      setIsClearingResumeDrafts(false);
     }
   }, [
-    clearDraftStorage,
+    clearDraftStorageForSubmissions,
+    clearCartSubmissions,
     clearServerDrafts,
     currentGuestToken,
     isClearingResumeDrafts,
@@ -2375,9 +2831,11 @@ export function AlbumWizard({
         }
         setResumePrompt({
           drafts,
+          storedSubmissionIds: stored?.ids,
           storedGuestToken: storedGuestToken ?? undefined,
           storedGuestTokensBySubmissionId,
           storedApplicationFormMode: stored?.applicationFormMode,
+          storedExistingCartSubmission: stored?.existingCartSubmission,
         });
       } catch (error) {
         if (cancelled) return;
@@ -2439,6 +2897,11 @@ export function AlbumWizard({
     return {
       submissionId: requireSubmissionId(),
       guestToken: currentGuestTokenRef.current,
+      priceTier: currentAlbumPriceTier,
+      amountKrw:
+        currentAlbumPriceTier === "ADDITIONAL"
+          ? additionalPriceKrw
+          : basePriceKrw,
       title: title.trim(),
       artistName: artistName.trim(),
       artistNameKr: artistNameKr.trim(),
@@ -2460,6 +2923,10 @@ export function AlbumWizard({
   };
 
   const confirmEmailSubmission = React.useCallback(async () => {
+    if (uploads.some((upload) => upload.status === "uploading")) {
+      setNotice({ error: "현재 파일 업로드가 끝난 뒤 변경해주세요." });
+      return false;
+    }
     const message =
       "음원 파일 첨부가 완료되지 않으면 파일 없이 다음 단계로 진행할 수 있습니다. 예전 온사이드 사이트에서도 동일하게 접수할 수 있습니다.\n파일 없이 계속 진행하시겠습니까?";
     const confirmed = await showCenteredConfirm(message);
@@ -2476,10 +2943,14 @@ export function AlbumWizard({
       });
     }
     return confirmed;
-  }, [uploadDraftIndex]);
+  }, [uploadDraftIndex, uploads]);
 
   const selectUploadDeliveryMode = React.useCallback(
     (mode: "upload" | "email") => {
+      if (uploads.some((upload) => upload.status === "uploading")) {
+        setNotice({ error: "현재 파일 업로드가 끝난 뒤 변경해주세요." });
+        return;
+      }
       if (mode === "upload") {
         setEmailSubmitConfirmed(false);
         setNotice({});
@@ -2497,26 +2968,19 @@ export function AlbumWizard({
         setNotice({});
         return;
       }
-      setFiles([]);
-      setUploads([]);
-      setUploadedFiles([]);
-      setFileDigest("");
       setEmailSubmitConfirmed(true);
       setNotice({});
       setUploadDrafts((prev) => {
         if (!prev) return prev;
         return prev.map((draft, index) =>
           index === uploadDraftIndex
-            ? { ...draft, files: [], emailSubmitConfirmed: true }
+            ? { ...draft, emailSubmitConfirmed: true }
             : draft,
         );
       });
     },
-    [emailSubmitConfirmed, uploadDraftIndex],
+    [emailSubmitConfirmed, uploadDraftIndex, uploads],
   );
-
-  const getTrackDisplayTitle = (track: TrackInput) =>
-    track.trackTitle.trim() || "제목 미입력";
 
   const mapTracksForSave = (trackList: TrackInput[]) => {
     const isSingleTrack = trackList.length === 1;
@@ -2809,28 +3273,68 @@ export function AlbumWizard({
 
   const saveAlbumDrafts = async (
     drafts: AlbumDraft[],
-    options: { includeFiles: boolean; status?: "DRAFT" | "PRE_REVIEW" },
+    options: {
+      includeFiles: boolean;
+      status?: "DRAFT" | "PRE_REVIEW";
+      background?: boolean;
+      sourceSnapshot?: AlbumCheckpointSnapshot;
+    },
   ) => {
-    const applicantNameValue = applicantName.trim();
-    const applicantEmailValue = applicantEmail.trim();
-    const applicantPhoneValue = applicantPhone.trim();
+    const sourceSnapshot = options.sourceSnapshot ?? albumCheckpointSnapshot;
+    const foreground = options.background !== true;
+    // Show the blocking overlay before waiting for a pending autosave. This
+    // prevents the user from changing fields after the foreground snapshot was
+    // captured but before its lease can start.
+    if (foreground) {
+      if (draftSaveInFlightRef.current) return false;
+      draftSaveInFlightRef.current = true;
+      setIsSaving(true);
+      setNotice({});
+    }
+    if (sourceSnapshot.existingCartSubmission) {
+      // Intermediate edits of a payable cart item are checkpointed locally.
+      // Writing DRAFT/PRE_REVIEW here would make the item disappear from the
+      // cart before the user explicitly confirms the final update.
+      if (foreground) {
+        setIsSaving(false);
+        draftSaveInFlightRef.current = false;
+      }
+      return true;
+    }
+    const executeSave = async () => {
+      const applicantNameValue = sourceSnapshot.applicantName.trim();
+    const applicantEmailValue = sourceSnapshot.applicantEmail.trim();
+    const applicantPhoneValue = sourceSnapshot.applicantPhone.trim();
+    const sourceIsOneClick = sourceSnapshot.isOneClick;
+    const sourceDownloadedApplicationFlow =
+      !sourceIsOneClick && sourceSnapshot.applicationFormMode === "upload";
+    const sourcePaymentMethod = sourceSnapshot.paymentMethod;
     const saveStatus =
       options.status ??
-      (uploadDrafts && uploadDrafts.length > 0 ? "PRE_REVIEW" : "DRAFT");
+      (sourceSnapshot.uploadDrafts && sourceSnapshot.uploadDrafts.length > 0
+        ? "PRE_REVIEW"
+        : "DRAFT");
     const submissionIds: string[] = [];
+    const albumDraftGroupId =
+      drafts.find((draft) => draft.priceTier === "FULL")?.submissionId ??
+      drafts[0]?.submissionId;
+    const albumDraftGroupGuestToken = drafts.find(
+      (draft) => draft.submissionId === albumDraftGroupId,
+    )?.guestToken;
 
-    setIsSaving(true);
-    setNotice({});
     try {
       for (let index = 0; index < drafts.length; index += 1) {
         const draft = drafts[index];
-        const albumPrice =
-          basePriceKrw > 0 ? (index === 0 ? basePriceKrw : additionalPriceKrw) : 0;
+        const albumPrice = Math.max(0, Math.round(draft.amountKrw));
         const titleValue = draft.title.trim();
         const artistValue = draft.artistName.trim();
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
-          packageId: selectedPackage?.id,
+          albumDraftGroupId,
+          albumDraftGroupGuestToken: isGuest
+            ? albumDraftGroupGuestToken
+            : undefined,
+          packageId: sourceSnapshot.selectedPackageId ?? undefined,
           amountKrw: albumPrice,
           title: titleValue || undefined,
           artistName: artistValue || undefined,
@@ -2850,49 +3354,53 @@ export function AlbumWizard({
             draft.artistType === "GROUP"
               ? draft.artistMembers || undefined
               : undefined,
-          isOneClick,
+          isOneClick: sourceIsOneClick,
           aiUsed: draft.aiUsed ?? undefined,
-          filesSubmittedByEmail:
-            isDownloadedApplicationFlow && draft.emailSubmitConfirmed,
-          externalApplicationForm: isDownloadedApplicationFlow,
-          melonUrl: isOneClick ? draft.melonUrl || undefined : undefined,
+          filesSubmittedByEmail: draft.emailSubmitConfirmed,
+          applicationFormMode: sourceSnapshot.applicationFormMode,
+          externalApplicationForm: sourceDownloadedApplicationFlow,
+          melonUrl: sourceIsOneClick ? draft.melonUrl || undefined : undefined,
           guestToken: draft.guestToken,
           guestName: applicantNameValue,
           guestCompany: draft.productionCompany || undefined,
           guestEmail: applicantEmailValue,
           guestPhone: applicantPhoneValue,
-          paymentMethod,
+          paymentMethod: sourcePaymentMethod,
           bankDepositorName:
-            paymentMethod === "BANK" ? bankDepositorName.trim() || undefined : undefined,
-          paymentDocumentType: paymentDocumentType || undefined,
+            sourcePaymentMethod === "BANK"
+              ? sourceSnapshot.bankDepositorName.trim() || undefined
+              : undefined,
+          paymentDocumentType: sourceSnapshot.paymentDocumentType || undefined,
           cashReceiptPurpose:
-            paymentDocumentType === "CASH_RECEIPT"
-              ? cashReceiptPurpose || undefined
+            sourceSnapshot.paymentDocumentType === "CASH_RECEIPT"
+              ? sourceSnapshot.cashReceiptPurpose || undefined
               : undefined,
           cashReceiptPhone:
-            paymentDocumentType === "CASH_RECEIPT" &&
-              cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
+            sourceSnapshot.paymentDocumentType === "CASH_RECEIPT" &&
+              sourceSnapshot.cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION"
               ? cashReceiptPhone.trim() || undefined
               : undefined,
           cashReceiptBusinessNumber:
-            paymentDocumentType === "CASH_RECEIPT" &&
-              cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
+            sourceSnapshot.paymentDocumentType === "CASH_RECEIPT" &&
+              sourceSnapshot.cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF"
               ? cashReceiptBusinessNumber.trim() || undefined
               : undefined,
           taxInvoiceBusinessNumber:
-            paymentDocumentType === "TAX_INVOICE"
+            sourceSnapshot.paymentDocumentType === "TAX_INVOICE"
               ? taxInvoiceBusinessNumber.trim() || undefined
               : undefined,
           status: saveStatus,
           tracks:
-            isOneClick || isDownloadedApplicationFlow
+            sourceIsOneClick || sourceDownloadedApplicationFlow
               ? undefined
               : mapTracksForSave(draft.tracks),
           files: options.includeFiles ? draft.files : undefined,
         });
 
         if (result.error) {
-          setNotice({ error: result.error });
+          if (foreground) {
+            setNotice({ error: result.error });
+          }
           return false;
         }
 
@@ -2909,19 +3417,37 @@ export function AlbumWizard({
         guestTokensBySubmissionId: isGuest
           ? getAlbumDraftGuestTokens(drafts)
           : undefined,
-        applicationFormMode: applicationFormMode ?? undefined,
+        applicationFormMode: sourceSnapshot.applicationFormMode ?? undefined,
+        existingCartSubmission: sourceSnapshot.existingCartSubmission,
       });
-      setNotice({ submissionId: submissionIds[0] ?? currentSubmissionId });
+      if (foreground) {
+        albumCheckpointControllerRef.current?.markSaved(sourceSnapshot);
+        setNotice({ submissionId: submissionIds[0] ?? currentSubmissionId });
+      }
       return true;
     } catch {
-      setNotice({ error: "저장 중 오류가 발생했습니다." });
+      if (foreground) {
+        setNotice({ error: "저장 중 오류가 발생했습니다." });
+      }
       return false;
+    }
+    };
+
+    try {
+      if (options.background || !albumCheckpointControllerRef.current) {
+        return await executeSave();
+      }
+      return await albumCheckpointControllerRef.current.runExclusive(executeSave);
     } finally {
-      setIsSaving(false);
+      if (foreground) {
+        setIsSaving(false);
+        draftSaveInFlightRef.current = false;
+      }
     }
   };
 
   const handleAddAlbum = async () => {
+    if (addAlbumInFlightRef.current) return;
     if (
       !validateBasicInfoStep() ||
       !validateTrackInfoStep() ||
@@ -2929,10 +3455,18 @@ export function AlbumWizard({
     ) {
       return;
     }
+    addAlbumInFlightRef.current = true;
     setIsAddingAlbum(true);
     setNotice({});
     try {
-      const draft = await buildAlbumDraft({ includeUpload: false });
+      const builtDraft = await buildAlbumDraft({ includeUpload: false });
+      const draft =
+        editingIndex !== null
+          ? {
+              ...builtDraft,
+              sourceStatus: albumDrafts[editingIndex]?.sourceStatus ?? "DRAFT",
+            }
+          : builtDraft;
       if (editingIndex !== null) {
         const nextAlbumDrafts = albumDrafts.map((item, idx) =>
           idx === editingIndex ? draft : item,
@@ -2954,40 +3488,119 @@ export function AlbumWizard({
             emailSubmitConfirmed: baseDraftSnapshot.emailSubmitConfirmed,
           });
           setBaseDraftSnapshot(null);
-        } else {
-          resetAlbumForm();
         }
       } else {
-        const saved = await saveAlbumDrafts([draft, ...albumDrafts], {
+        const baseDraft = {
+          ...draft,
+          priceTier: "FULL" as const,
+          amountKrw: basePriceKrw,
+        };
+        const saved = await saveAlbumDrafts([baseDraft, ...albumDrafts], {
           includeFiles: false,
           status: "DRAFT",
         });
         if (!saved) return;
-        setAlbumDrafts((prev) => [...prev, draft]);
-        resetAlbumForm();
+        const additionalDraft = await createAdditionalAlbumDraft();
+        const nextAlbumDrafts = [...albumDrafts, additionalDraft];
+        setBaseDraftSnapshot({
+          draft: baseDraft,
+          emailSubmitConfirmed: baseDraft.emailSubmitConfirmed,
+        });
+        setAlbumDrafts(nextAlbumDrafts);
+        setEditingIndex(nextAlbumDrafts.length - 1);
+        applyDraftToForm(additionalDraft, { emailSubmitConfirmed: false });
+        writeDraftStorage({
+          ids: [baseDraft, ...nextAlbumDrafts].map(
+            (item) => item.submissionId,
+          ),
+          guestToken: isGuest ? baseDraft.guestToken : null,
+          guestTokensBySubmissionId: isGuest
+            ? getAlbumDraftGuestTokens([baseDraft, ...nextAlbumDrafts])
+            : undefined,
+          applicationFormMode: applicationFormMode ?? undefined,
+          existingCartSubmission,
+        });
         setStep(3);
       }
     } catch {
       setNotice({ error: "추가 앨범 등록 중 오류가 발생했습니다." });
     } finally {
       setIsAddingAlbum(false);
+      addAlbumInFlightRef.current = false;
     }
   };
 
-  const removeAlbumDraft = (index: number) => {
-    setAlbumDrafts((prev) => prev.filter((_, idx) => idx !== index));
-    if (editingIndex === index) {
-      setEditingIndex(null);
-      if (baseDraftSnapshot) {
-        applyDraftToForm(baseDraftSnapshot.draft, {
-          emailSubmitConfirmed: baseDraftSnapshot.emailSubmitConfirmed,
-        });
-        setBaseDraftSnapshot(null);
-      }
+  const removeAlbumDraft = async (index: number) => {
+    const target = albumDrafts[index];
+    if (!target || isAddingAlbum || isSaving) return;
+    if (editingIndex !== null && editingIndex !== index) {
+      setNotice({ error: "수정 중인 앨범을 먼저 저장해주세요." });
       return;
     }
-    if (editingIndex !== null && index < editingIndex) {
-      setEditingIndex(editingIndex - 1);
+    const confirmed = await showCenteredConfirm(
+      "이 추가 앨범과 임시저장 파일을 함께 삭제할까요? 삭제 후 복구할 수 없습니다.",
+      { title: "추가 앨범 삭제" },
+    );
+    if (!confirmed) return;
+
+    setIsAddingAlbum(true);
+    setNotice({});
+    try {
+      if (
+        target.sourceStatus === "SUBMITTED" ||
+        target.sourceStatus === "WAITING_PAYMENT"
+      ) {
+        await clearCartSubmissions(
+          [target.submissionId],
+          isGuest ? { [target.submissionId]: target.guestToken } : {},
+        );
+      } else {
+        await clearServerDrafts({
+          ids: [target.submissionId],
+          guestToken: target.guestToken,
+          guestTokensBySubmissionId: isGuest
+            ? { [target.submissionId]: target.guestToken }
+            : undefined,
+        });
+      }
+      const nextAlbumDrafts = albumDrafts.filter((_, idx) => idx !== index);
+      clearCheckpointStorage([target.submissionId]);
+      setAlbumDrafts(nextAlbumDrafts);
+
+      let baseDraft: AlbumDraft;
+      if (editingIndex === index && baseDraftSnapshot) {
+        baseDraft = baseDraftSnapshot.draft;
+        applyDraftToForm(baseDraft, {
+          emailSubmitConfirmed: baseDraftSnapshot.emailSubmitConfirmed,
+        });
+        setEditingIndex(null);
+        setBaseDraftSnapshot(null);
+      } else {
+        baseDraft = captureCurrentDraft();
+        if (editingIndex !== null && index < editingIndex) {
+          setEditingIndex(editingIndex - 1);
+        }
+      }
+
+      const remainingDrafts = [baseDraft, ...nextAlbumDrafts];
+      writeDraftStorage({
+        ids: remainingDrafts.map((draft) => draft.submissionId),
+        guestToken: isGuest ? baseDraft.guestToken : null,
+        guestTokensBySubmissionId: isGuest
+          ? getAlbumDraftGuestTokens(remainingDrafts)
+          : undefined,
+        applicationFormMode: applicationFormMode ?? undefined,
+        existingCartSubmission,
+      });
+    } catch (error) {
+      setNotice({
+        error:
+          error instanceof Error && error.message
+            ? error.message
+            : "추가 앨범을 삭제하지 못했습니다. 다시 시도해주세요.",
+      });
+    } finally {
+      setIsAddingAlbum(false);
     }
   };
 
@@ -3170,6 +3783,11 @@ export function AlbumWizard({
       }
       const currentDraft = captureCurrentDraft(submissionId);
       const allDrafts = [currentDraft, ...albumDrafts];
+      const saved = await saveAlbumDrafts(allDrafts, {
+        includeFiles: false,
+        status: "DRAFT",
+      });
+      if (!saved) return;
       writeDraftStorage({
         ids: allDrafts.map((draft) => draft.submissionId),
         guestToken: isGuest ? currentGuestTokenRef.current : null,
@@ -3177,6 +3795,7 @@ export function AlbumWizard({
           ? getAlbumDraftGuestTokens(allDrafts)
           : undefined,
         applicationFormMode: applicationFormMode ?? undefined,
+        existingCartSubmission,
       });
       setUploadDrafts(allDrafts);
       setUploadDraftIndex(0);
@@ -3245,6 +3864,11 @@ export function AlbumWizard({
     }
     const saved = await saveAlbumDrafts(draftsForUpload, { includeFiles: true });
     if (saved) {
+      setUploadDrafts(draftsForUpload);
+      setUploadDraftIndex(0);
+      applyDraftToForm(draftsForUpload[0], {
+        emailSubmitConfirmed: draftsForUpload[0].emailSubmitConfirmed,
+      });
       setStep(6);
     }
   };
@@ -3253,6 +3877,12 @@ export function AlbumWizard({
     status: "DRAFT" | "SUBMITTED",
     options?: { deferPayment?: boolean; redirectToCart?: boolean },
   ) => {
+    if (finalSaveInFlightRef.current || isSaving || isAddingAlbum) return;
+    finalSaveInFlightRef.current = true;
+    // Lock the form before waiting for an in-flight autosave lease. Otherwise
+    // a click-time snapshot could overwrite edits made during that wait.
+    setIsSaving(true);
+    const executeFinalSave = async () => {
     const deferPayment = status === "SUBMITTED" && options?.deferPayment === true;
     if (editingIndex !== null) {
       setNotice({ error: "수정 중인 앨범을 저장한 뒤 진행해주세요." });
@@ -3318,7 +3948,6 @@ export function AlbumWizard({
       return;
     }
 
-    setIsSaving(true);
     setNotice({});
     try {
       if (status === "SUBMITTED" && !selectedPackage) {
@@ -3337,19 +3966,21 @@ export function AlbumWizard({
       const guestTokensBySubmissionId: Record<string, string> = {};
       let emailNotice: string | undefined;
       const submissionPaymentMethod = deferPayment ? "BANK" : paymentMethod;
+      const albumDraftGroupId =
+        draftsForSubmit.find((draft) => draft.priceTier === "FULL")
+          ?.submissionId ?? draftsForSubmit[0]?.submissionId;
+      const albumDraftGroupGuestToken = draftsForSubmit.find(
+        (draft) => draft.submissionId === albumDraftGroupId,
+      )?.guestToken;
 
       for (let index = 0; index < draftsForSubmit.length; index += 1) {
         const draft = draftsForSubmit[index];
         const albumPrice =
-          status === "SUBMITTED"
-            ? index === 0
-              ? basePriceKrw
-              : additionalPriceKrw
-            : basePriceKrw > 0
-              ? index === 0
-                ? basePriceKrw
-                : additionalPriceKrw
-              : 0;
+          basePriceKrw > 0
+            ? draft.priceTier === "ADDITIONAL"
+              ? additionalPriceKrw
+              : basePriceKrw
+            : Math.max(0, Math.round(draft.amountKrw));
         const titleValue = draft.title.trim();
         const artistValue = draft.artistName.trim();
         if (
@@ -3365,6 +3996,10 @@ export function AlbumWizard({
         }
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
+          albumDraftGroupId,
+          albumDraftGroupGuestToken: isGuest
+            ? albumDraftGroupGuestToken
+            : undefined,
           packageId: selectedPackage?.id,
           amountKrw: albumPrice,
           title: titleValue || undefined,
@@ -3387,8 +4022,8 @@ export function AlbumWizard({
               : undefined,
           isOneClick,
           aiUsed: draft.aiUsed ?? undefined,
-          filesSubmittedByEmail:
-            isDownloadedApplicationFlow && draft.emailSubmitConfirmed,
+          filesSubmittedByEmail: draft.emailSubmitConfirmed,
+          applicationFormMode,
           externalApplicationForm: isDownloadedApplicationFlow,
           melonUrl: isOneClick ? draft.melonUrl || undefined : undefined,
           guestToken: draft.guestToken,
@@ -3465,8 +4100,17 @@ export function AlbumWizard({
       }
 
       if (status === "SUBMITTED" && submissionIds.length > 0) {
+        albumCheckpointControllerRef.current?.markSaved({
+          ...albumCheckpointSnapshot,
+          step: 6,
+          currentDraft: draftsForSubmit[0],
+          albumDrafts: draftsForSubmit.slice(1),
+          uploadDrafts: draftsForSubmit,
+          uploadDraftIndex: 0,
+        });
         if (deferPayment) {
-          clearDraftStorage();
+          albumCheckpointControllerRef.current?.clear();
+          clearDraftStorageForSubmissions(submissionIds);
           if (isGuest) {
             addGuestSubmissionCartEntries(
               Object.entries(guestTokensBySubmissionId).map(
@@ -3515,7 +4159,8 @@ export function AlbumWizard({
           }
           return;
         } else if (paymentMethod === "BANK") {
-          clearDraftStorage();
+          albumCheckpointControllerRef.current?.clear();
+          clearDraftStorageForSubmissions(submissionIds);
           setNotice(emailNotice ? { emailNotice } : {});
           setCompletionId(submissionIds[0]);
           setCompletionSubmissionIds(submissionIds);
@@ -3536,10 +4181,244 @@ export function AlbumWizard({
       });
     } catch {
       setNotice({ error: "저장 중 오류가 발생했습니다." });
+    }
+    };
+
+    try {
+      if (albumCheckpointControllerRef.current) {
+        await albumCheckpointControllerRef.current.runExclusive(executeFinalSave);
+      } else {
+        await executeFinalSave();
+      }
     } finally {
       setIsSaving(false);
+      finalSaveInFlightRef.current = false;
     }
   };
+
+  const handlePreflightNavigate = React.useCallback(
+    (target: SubmissionPreflightTarget) => {
+      setNotice({});
+      if (typeof target.trackIndex === "number") {
+        setActiveTrackIndex(target.trackIndex);
+      }
+      setStep(target.step);
+      window.setTimeout(() => {
+        const element = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-preflight-field]"),
+        ).find(
+          (candidate) =>
+            candidate.dataset.preflightField === target.field &&
+            (typeof target.trackIndex !== "number" ||
+              candidate.dataset.trackIndex === undefined ||
+              candidate.dataset.trackIndex === String(target.trackIndex)),
+        );
+        element?.scrollIntoView({ behavior: "smooth", block: "center" });
+        element?.focus({ preventScroll: true });
+      }, 80);
+    },
+    [],
+  );
+
+  const albumCheckpointSnapshot: AlbumCheckpointSnapshot = {
+    step,
+    isOneClick,
+    applicationFormMode,
+    selectedPackageId: selectedPackage?.id ?? null,
+    existingCartSubmission,
+    currentDraft: sanitizeAlbumDraftForCheckpoint({
+      submissionId: currentSubmissionId ?? "",
+      guestToken: currentGuestTokenRef.current,
+      priceTier: currentAlbumPriceTier,
+      amountKrw:
+        currentAlbumPriceTier === "ADDITIONAL"
+          ? additionalPriceKrw
+          : basePriceKrw,
+      title,
+      artistName,
+      artistNameKr,
+      artistNameEn,
+      releaseDate,
+      genre: genreValue,
+      distributor,
+      productionCompany,
+      previousRelease,
+      artistType,
+      artistGender,
+      artistMembers,
+      melonUrl,
+      aiUsed,
+      tracks,
+      files: uploadedFiles.map(stripCheckpointAccessUrl),
+      emailSubmitConfirmed,
+    }),
+    albumDrafts: albumDrafts.map(sanitizeAlbumDraftForCheckpoint),
+    editingIndex,
+    baseDraftSnapshot: baseDraftSnapshot
+      ? {
+          ...baseDraftSnapshot,
+          draft: sanitizeAlbumDraftForCheckpoint(baseDraftSnapshot.draft),
+        }
+      : null,
+    uploadDrafts: uploadDrafts?.map(sanitizeAlbumDraftForCheckpoint) ?? null,
+    uploadDraftIndex,
+    applicantName,
+    applicantEmail,
+    applicantPhone,
+    paymentMethod,
+    bankDepositorName,
+    paymentDocumentType,
+    cashReceiptPurpose,
+  };
+
+  const restoreAlbumCheckpoint = React.useCallback(
+    (snapshot: AlbumCheckpointSnapshot) => {
+      const liveDrafts: AlbumDraft[] = [
+        {
+          ...snapshot.currentDraft,
+          submissionId: currentSubmissionId ?? snapshot.currentDraft.submissionId,
+          files: uploadedFiles,
+        },
+        ...(uploadDrafts ?? []),
+        ...albumDrafts,
+      ];
+      const preserveLiveFiles = (draft: AlbumDraft) => {
+        if (checkpointRestoreSourceRef.current !== "previous") return { ...draft };
+        const live = liveDrafts.find(
+          (candidate) => candidate.submissionId === draft.submissionId,
+        );
+        return {
+          ...draft,
+          files: live?.files.map((file) => ({ ...file })) ?? draft.files,
+        };
+      };
+      const restoredCurrentDraft = preserveLiveFiles(snapshot.currentDraft);
+      const matchedPackage = snapshot.selectedPackageId
+        ? packages.find((item) => item.id === snapshot.selectedPackageId) ?? null
+        : null;
+      if (matchedPackage) setSelectedPackage(matchedPackage);
+      setExistingCartSubmission(snapshot.existingCartSubmission ?? null);
+      setIsOneClick(snapshot.isOneClick);
+      setApplicationFormMode(snapshot.applicationFormMode);
+      setApplicantName(snapshot.applicantName);
+      setApplicantEmail(snapshot.applicantEmail);
+      setApplicantPhone(snapshot.applicantPhone);
+      setPaymentMethod(snapshot.paymentMethod);
+      setBankDepositorName(snapshot.bankDepositorName);
+      setPaymentDocumentType(snapshot.paymentDocumentType);
+      setCashReceiptPurpose(snapshot.cashReceiptPurpose);
+      setAlbumDrafts(snapshot.albumDrafts.map(preserveLiveFiles));
+      setEditingIndex(snapshot.editingIndex ?? null);
+      setBaseDraftSnapshot(
+        snapshot.baseDraftSnapshot
+          ? {
+              ...snapshot.baseDraftSnapshot,
+              draft: preserveLiveFiles(snapshot.baseDraftSnapshot.draft),
+            }
+          : null,
+      );
+      setUploadDrafts(
+        snapshot.uploadDrafts?.map(preserveLiveFiles) ?? null,
+      );
+      setUploadDraftIndex(snapshot.uploadDraftIndex);
+      applyDraftToForm(restoredCurrentDraft, {
+        emailSubmitConfirmed: restoredCurrentDraft.emailSubmitConfirmed,
+      });
+      const restoredStep = Math.max(1, Math.min(6, snapshot.step));
+      setStep(snapshot.isOneClick && restoredStep === 2 ? 3 : restoredStep);
+    },
+    [
+      albumDrafts,
+      applyDraftToForm,
+      currentSubmissionId,
+      packages,
+      uploadedFiles,
+      uploadDrafts,
+    ],
+  );
+
+  const albumCheckpointSubmissionId =
+    uploadDrafts?.[0]?.submissionId ??
+    baseDraftSnapshot?.draft.submissionId ??
+    currentSubmissionId;
+
+  const albumCheckpoint = useSubmissionCheckpoint<AlbumCheckpointSnapshot>({
+    kind: "ALBUM",
+    storageKey: albumCheckpointSubmissionId
+      ? getSubmissionCheckpointStorageKey(
+          draftStorageKey,
+          albumCheckpointSubmissionId,
+        )
+      : null,
+    submissionId: albumCheckpointSubmissionId,
+    snapshot: albumCheckpointSnapshot,
+    enabled:
+      resumeChecked &&
+      Boolean(albumCheckpointSubmissionId) &&
+      !completionId,
+    initialDataIsServerState: checkpointInitialDataIsServerState,
+    debounceMs: 1_800,
+    serverUpdatedAt: currentServerUpdatedAt,
+    onRecover: restoreAlbumCheckpoint,
+    save: async (snapshot) => {
+      if (!snapshot.currentDraft.submissionId) {
+        return { ok: false, error: "접수 ID를 확인하지 못했습니다." };
+      }
+      if (snapshot.existingCartSubmission || snapshot.step >= 5) {
+        // Keep payable cart rows untouched until the user confirms the edit.
+        // File/final steps are also local-only because a background file
+        // replacement can clean old B2 objects and PRE_REVIEW autosaves would
+        // create duplicate lifecycle events. Explicit step actions persist them.
+        return { ok: true, serverSaved: false };
+      }
+      const drafts = snapshot.uploadDrafts?.length
+        ? snapshot.uploadDrafts.map((draft, index) =>
+            index === snapshot.uploadDraftIndex
+              ? snapshot.currentDraft
+              : draft,
+          )
+        : typeof snapshot.editingIndex === "number"
+          ? snapshot.baseDraftSnapshot
+            ? [
+                snapshot.baseDraftSnapshot.draft,
+                ...snapshot.albumDrafts.map((draft, index) =>
+                  index === snapshot.editingIndex
+                    ? snapshot.currentDraft
+                    : draft,
+                ),
+              ]
+            : snapshot.albumDrafts.map((draft, index) =>
+                index === snapshot.editingIndex
+                  ? snapshot.currentDraft
+                  : draft,
+              )
+          : [snapshot.currentDraft, ...snapshot.albumDrafts];
+      const saved = await saveAlbumDrafts(drafts, {
+        // Background saves never replace file relations. File replacement also
+        // cleans old B2 objects, so it belongs to the explicit file-step save.
+        includeFiles: false,
+        status: "DRAFT",
+        background: true,
+        sourceSnapshot: snapshot,
+      });
+      return saved
+        ? { ok: true, savedAt: Date.now() }
+        : {
+            ok: false,
+            error: "서버 저장이 지연되고 있습니다. 입력은 이 기기에 보관했습니다.",
+          };
+    },
+  });
+  albumCheckpointControllerRef.current = albumCheckpoint;
+  const recoverAlbumCheckpoint = React.useCallback(() => {
+    checkpointRestoreSourceRef.current = "recovery";
+    albumCheckpoint.recover();
+  }, [albumCheckpoint]);
+  const revertAlbumCheckpointToSaved = React.useCallback(() => {
+    checkpointRestoreSourceRef.current = "previous";
+    albumCheckpoint.revertToSaved();
+    checkpointRestoreSourceRef.current = "recovery";
+  }, [albumCheckpoint]);
 
   return (
     <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
@@ -3564,6 +4443,11 @@ export function AlbumWizard({
             <p className="mt-2 text-sm text-muted-foreground">
               불러오시겠습니까?
             </p>
+            {resumeDeleteError ? (
+              <p role="alert" className="mt-3 text-sm font-semibold text-red-600">
+                {resumeDeleteError}
+              </p>
+            ) : null}
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
@@ -3586,6 +4470,17 @@ export function AlbumWizard({
         </div>
       ) : null}
       {stepLabels}
+      <SubmissionSaveIndicator
+        status={albumCheckpoint.status}
+        lastSavedAt={albumCheckpoint.lastSavedAt}
+        error={albumCheckpoint.error}
+        hasRecovery={Boolean(albumCheckpoint.recovery)}
+        hasPrevious={Boolean(albumCheckpoint.previous)}
+        onRetry={albumCheckpoint.retry}
+        onRecover={recoverAlbumCheckpoint}
+        onDiscardRecovery={albumCheckpoint.discardRecovery}
+        onRevertToSaved={revertAlbumCheckpointToSaved}
+      />
 
       {step === 1 && (
         <div className="space-y-6">
@@ -3659,7 +4554,11 @@ export function AlbumWizard({
             )}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div
+            data-preflight-field="package"
+            tabIndex={-1}
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {packages.map((pkg, index) => {
               const isActive = activePackageId === pkg.id;
               const isDisabled =
@@ -3815,7 +4714,11 @@ export function AlbumWizard({
       )}
 
       {step === 2 && !isOneClick && (
-        <div className="space-y-6">
+        <div
+          data-preflight-field="applicationFormMode"
+          tabIndex={-1}
+          className="space-y-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <ApplicationFormModeTabs
             mode={applicationFormMode}
             disabled={selectionLocked && applicationFormMode !== null}
@@ -3879,7 +4782,7 @@ export function AlbumWizard({
               <div className="mt-5 inline-flex rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
                 다음: 신청서 + 음원 첨부
               </div>
-              <div className="mt-5">
+                <div data-preflight-field="aiUsed" tabIndex={-1} className="mt-5 outline-none">
                 <AiUsageSelector
                   value={aiUsed}
                   onChange={(nextValue) => {
@@ -3916,7 +4819,7 @@ export function AlbumWizard({
                 >
                   {isContinuingDownloadedApplication || isPreparingDraft
                     ? "업로드 단계 준비 중..."
-                    : "파일 업로드로 이동"}
+                    : "다음 단계"}
                 </button>
               </div>
             </div>
@@ -3935,6 +4838,7 @@ export function AlbumWizard({
                         앨범 제목 *
                       </label>
                       <input
+                        data-preflight-field="title"
                         value={title}
                         onChange={(event) => setTitle(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -3945,6 +4849,7 @@ export function AlbumWizard({
                         아티스트명 공식 표기 *
                       </label>
                       <input
+                        data-preflight-field="artistName"
                         value={artistName}
                         onChange={(event) => setArtistName(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -3955,6 +4860,7 @@ export function AlbumWizard({
                         아티스트 한글명 *
                       </label>
                       <input
+                        data-preflight-field="artistNameKr"
                         value={artistNameKr}
                         onChange={(event) => setArtistNameKr(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -3965,6 +4871,7 @@ export function AlbumWizard({
                         아티스트 영문명 *
                       </label>
                       <input
+                        data-preflight-field="artistNameEn"
                         value={artistNameEn}
                         onChange={(event) => setArtistNameEn(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -3975,6 +4882,7 @@ export function AlbumWizard({
                         발매일 *
                       </label>
                       <input
+                        data-preflight-field="releaseDate"
                         type="date"
                         value={releaseDate}
                         onChange={(event) => setReleaseDate(event.target.value)}
@@ -3986,6 +4894,7 @@ export function AlbumWizard({
                         장르 *
                       </label>
                       <select
+                        data-preflight-field="genre"
                         value={genreSelection}
                         onChange={(event) => setGenreSelection(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -4004,6 +4913,7 @@ export function AlbumWizard({
                           기타 장르 입력 *
                         </label>
                         <input
+                          data-preflight-field="genre"
                           value={genreCustom}
                           onChange={(event) => setGenreCustom(event.target.value)}
                           className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -4015,6 +4925,7 @@ export function AlbumWizard({
                         유통사 *
                       </label>
                       <input
+                        data-preflight-field="distributor"
                         value={distributor}
                         onChange={(event) => setDistributor(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -4025,6 +4936,7 @@ export function AlbumWizard({
                         제작사 *
                       </label>
                       <input
+                        data-preflight-field="productionCompany"
                         value={productionCompany}
                         onChange={(event) => setProductionCompany(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -4035,6 +4947,7 @@ export function AlbumWizard({
                         이전 발매곡 *
                       </label>
                       <textarea
+                        data-preflight-field="previousRelease"
                         value={previousRelease}
                         onChange={(event) => setPreviousRelease(event.target.value)}
                         placeholder="가장 최근 발매한 1곡을 적어주세요. 신인인 경우 신인이라고 표기해주세요."
@@ -4046,6 +4959,7 @@ export function AlbumWizard({
                         그룹/솔로 *
                       </label>
                       <select
+                        data-preflight-field="artistType"
                         value={artistType}
                         onChange={(event) => setArtistType(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -4060,6 +4974,7 @@ export function AlbumWizard({
                         성별 *
                       </label>
                       <select
+                        data-preflight-field="artistGender"
                         value={artistGender}
                         onChange={(event) => setArtistGender(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -4077,6 +4992,7 @@ export function AlbumWizard({
                           팀원 전체 이름 *
                         </label>
                         <input
+                          data-preflight-field="artistMembers"
                           value={artistMembers}
                           onChange={(event) => setArtistMembers(event.target.value)}
                           placeholder="그룹인 경우 팀원 전체의 이름을 적어주세요."
@@ -4124,6 +5040,7 @@ export function AlbumWizard({
                           멜론 링크 *
                         </label>
                         <input
+                          data-preflight-field="melonUrl"
                           value={melonUrl}
                           onChange={(event) => setMelonUrl(event.target.value)}
                           placeholder="https://www.melon.com/..."
@@ -4134,7 +5051,7 @@ export function AlbumWizard({
                   </div>
                 )}
 
-                <div className="mt-6">
+                <div data-preflight-field="aiUsed" tabIndex={-1} className="mt-6 outline-none">
                   <AiUsageSelector
                     value={aiUsed}
                     onChange={(nextValue) => {
@@ -4160,6 +5077,7 @@ export function AlbumWizard({
                         접수자 *
                       </label>
                       <input
+                        data-preflight-field="applicantName"
                         value={applicantName}
                         onChange={(event) => setApplicantName(event.target.value)}
                         required
@@ -4171,6 +5089,7 @@ export function AlbumWizard({
                         이메일 *
                       </label>
                       <input
+                        data-preflight-field="applicantEmail"
                         type="email"
                         value={applicantEmail}
                         onChange={(event) => setApplicantEmail(event.target.value)}
@@ -4183,6 +5102,7 @@ export function AlbumWizard({
                         연락처 *
                       </label>
                       <input
+                        data-preflight-field="applicantPhone"
                         value={applicantPhone}
                         onChange={(event) => setApplicantPhone(event.target.value)}
                         required
@@ -4204,105 +5124,31 @@ export function AlbumWizard({
                       총 {tracks.length}곡
                     </span>
                   </div>
-                  <div className="mt-5 grid gap-6 md:grid-cols-[200px_1fr]">
-                    <div className="space-y-3">
-                      <div className="flex gap-2 overflow-x-auto pb-2 md:max-h-[60vh] md:block md:space-y-2 md:overflow-y-auto md:overflow-x-hidden md:pb-0 md:pr-1">
-                        {tracks.map((track, index) => {
-                        const active = index === activeTrackIndex;
-                        return (
-                          <button
-                            key={`track-tab-${index}`}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => setActiveTrackIndex(index)}
-                            className={`w-[150px] shrink-0 rounded-2xl border px-3 py-3 text-left transition md:w-full ${active
-                              ? "border-foreground bg-foreground text-background"
-                              : "border-border/60 bg-background text-foreground hover:border-foreground"
-                              }`}
-                          >
-                            <p className="text-xs font-semibold uppercase tracking-[0.2em]">
-                              Track {String(index + 1).padStart(2, "0")}
-                            </p>
-                            <p className="mt-1 text-xs opacity-80">
-                              {getTrackDisplayTitle(track)}
-                            </p>
-                            {track.performer.trim() && (
-                              <p className="mt-1 truncate text-[11px] opacity-70">
-                                {track.performer.trim()}
-                              </p>
-                            )}
-                            <div
-                              className={`mt-2 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] ${active ? "text-background" : ""
-                                }`}
-                            >
-                              {track.isTitle && (
-                                <span
-                                  className={`rounded-full border px-2 py-1 ${track.titleRole === "MAIN"
-                                    ? active
-                                      ? "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm"
-                                      : "border-[#f6d64a] bg-[#f6d64a] text-black shadow-sm dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black"
-                                    : active
-                                      ? "border-background/80 bg-background text-foreground shadow-sm"
-                                      : "border-border/60 bg-background/80 text-foreground/80"
-                                    }`}
-                                >
-                                  {track.titleRole === "MAIN"
-                                    ? "메인 타이틀"
-                                    : "서브 타이틀"}
-                                </span>
-                              )}
-                              {track.broadcastSelected && (
-                                <span
-                                  className={`rounded-full border px-2 py-1 ${active
-                                    ? "border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm"
-                                    : "border-emerald-300 text-emerald-600 dark:text-emerald-200"
-                                    }`}
-                                >
-                                  원음방송
-                                </span>
-                              )}
-                            </div>
-                          </button>
-                        );
-                        })}
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1">
-                        <button
-                          type="button"
-                          onClick={addTrackWithSameCredits}
-                          className="w-full rounded-2xl border border-foreground bg-foreground px-3 py-3 text-xs font-semibold text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
-                        >
-                          같은 참여진으로 추가
-                        </button>
-                        <button
-                          type="button"
-                          onClick={addBlankTrack}
-                          className="w-full rounded-2xl border border-dashed border-border/70 px-3 py-3 text-xs font-semibold text-muted-foreground transition hover:border-foreground hover:text-foreground"
-                        >
-                          빈 트랙 추가
-                        </button>
-                      </div>
-                    </div>
+                  <div data-preflight-field="tracks" tabIndex={-1} className="mt-5 outline-none">
+                    <AlbumTrackTableEditor
+                      tracks={tracks}
+                      rowKeys={trackRowKeys.keys}
+                      activeIndex={activeTrackIndex}
+                      onSelect={setActiveTrackIndex}
+                      onUpdate={updateTrack}
+                      onAddWithCredits={addTrackWithSameCredits}
+                      onAddBlank={addBlankTrack}
+                      onApplyCurrentCredits={applyCurrentCreditsToBlankTracks}
+                      onRemove={removeTrack}
+                      onMove={moveTrack}
+                      onPaste={applyPastedTracks}
+                    />
+                  </div>
 
-                    <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                  <div className="mt-5 rounded-2xl border border-border/60 bg-background/70 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-foreground">
-                            트랙 {activeTrackIndex + 1}
-                          </p>
-                          {tracks.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={applyCurrentCreditsToBlankTracks}
-                              className="rounded-full border border-border/70 bg-background px-3 py-1 text-[11px] font-semibold text-foreground transition hover:border-foreground"
-                            >
-                              현재 참여진을 빈칸에 적용
-                            </button>
-                          )}
-                        </div>
+                        <p className="text-sm font-semibold text-foreground">
+                          트랙 {activeTrackIndex + 1} 상세 편집
+                        </p>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                           <label className="flex items-center gap-2">
                             <input
+                              data-preflight-field="isTitle"
                               type="checkbox"
                               checked={activeTrack.isTitle}
                               onChange={() => toggleTitleTrack(activeTrackIndex)}
@@ -4313,6 +5159,7 @@ export function AlbumWizard({
                           {activeTrack.isTitle && (
                             <label className="flex items-center gap-2 rounded-full border border-[#f6d64a] bg-[#f6d64a] px-3 py-1 text-[13px] font-semibold text-black shadow-sm transition dark:border-[#f6d64a] dark:bg-[#f6d64a] dark:text-black">
                               <input
+                                data-preflight-field="isTitle"
                                 type="radio"
                                 checked={activeTrack.titleRole === "MAIN"}
                                 onChange={() => setMainTitleTrack(activeTrackIndex)}
@@ -4324,6 +5171,7 @@ export function AlbumWizard({
                           {requiresBroadcastSelection && (
                             <label className="flex items-center gap-2">
                               <input
+                                data-preflight-field="broadcastSelected"
                                 type="checkbox"
                                 checked={activeTrack.broadcastSelected}
                                 onChange={() =>
@@ -4351,38 +5199,6 @@ export function AlbumWizard({
                         </div>
                       )}
                       <div className="mt-4 grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2 md:col-span-2">
-                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                            곡명 *
-                          </label>
-                          <input
-                            value={activeTrack.trackTitle}
-                            onChange={(event) =>
-                              updateTrack(
-                                activeTrackIndex,
-                                "trackTitle",
-                                event.target.value,
-                              )
-                            }
-                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                            가수명 *
-                          </label>
-                          <input
-                            value={activeTrack.performer}
-                            onChange={(event) =>
-                              updateTrack(
-                                activeTrackIndex,
-                                "performer",
-                                event.target.value,
-                              )
-                            }
-                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                          />
-                        </div>
                         <div className="space-y-2">
                           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                             피처링
@@ -4394,55 +5210,6 @@ export function AlbumWizard({
                               updateTrack(
                                 activeTrackIndex,
                                 "featuring",
-                                event.target.value,
-                              )
-                            }
-                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                            작곡 *
-                          </label>
-                          <input
-                            value={activeTrack.composer}
-                            onChange={(event) =>
-                              updateTrack(
-                                activeTrackIndex,
-                                "composer",
-                                event.target.value,
-                              )
-                            }
-                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                            작사
-                          </label>
-                          <input
-                            value={activeTrack.lyricist}
-                            placeholder="연주곡/MR/Inst. 인 경우 비워두세요"
-                            onChange={(event) =>
-                              updateTrack(
-                                activeTrackIndex,
-                                "lyricist",
-                                event.target.value,
-                              )
-                            }
-                            className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                            편곡
-                          </label>
-                          <input
-                            value={activeTrack.arranger}
-                            onChange={(event) =>
-                              updateTrack(
-                                activeTrackIndex,
-                                "arranger",
                                 event.target.value,
                               )
                             }
@@ -4541,6 +5308,7 @@ export function AlbumWizard({
                                 {needsTranslatedLyrics ? " *" : ""}
                               </label>
                               <textarea
+                                data-preflight-field="translatedLyrics"
                                 value={activeTrack.translatedLyrics}
                                 onChange={(event) =>
                                   updateTrack(
@@ -4584,10 +5352,10 @@ export function AlbumWizard({
                               )}
                             </div>
                           )}
-                          <div className="group rounded-2xl border border-border/60 bg-background/70 px-3 py-3 text-xs text-muted-foreground transition-all duration-200 group-hover:[&_li]:text-sm group-hover:[&_li]:leading-relaxed group-hover:[&_p]:text-xs">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                              유의사항
-                            </p>
+                          <details className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3 text-xs text-muted-foreground">
+                            <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground">
+                              가사 작성 기준
+                            </summary>
                             <ul className="mt-2 space-y-1">
                               {lyricCautions.map((note) => (
                                 <li key={note} className="list-disc pl-4">
@@ -4595,7 +5363,7 @@ export function AlbumWizard({
                                 </li>
                               ))}
                             </ul>
-                          </div>
+                          </details>
                         </div>
                         <div className="space-y-2 md:col-span-2">
                           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -4616,7 +5384,6 @@ export function AlbumWizard({
                       </div>
                     </div>
                   </div>
-                </div>
               )}
 
               {step === 4 && albumDrafts.length > 0 && (
@@ -4628,15 +5395,18 @@ export function AlbumWizard({
                     {albumDrafts.map((draft, index) => (
                       <div
                         key={draft.submissionId}
-                        onClick={() => void startEditingDraft(index)}
-                        role="button"
-                        tabIndex={0}
                         className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${editingIndex === index
                           ? "border-[#f6d64a] bg-[#f6d64a] text-black"
                           : "border-border/60 bg-background/70 hover:border-foreground"
                           }`}
                       >
-                        <div>
+                        <button
+                          type="button"
+                          onClick={() => void startEditingDraft(index)}
+                          aria-label={`앨범 ${index + 1} 수정`}
+                          className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                        >
+                          <span className="min-w-0">
                           <p
                             className={`text-sm font-semibold ${editingIndex === index ? "text-black" : "text-foreground"
                               }`}
@@ -4660,14 +5430,16 @@ export function AlbumWizard({
                               (draft.artistName.trim() ||
                                 (isOneClick ? "원클릭 접수" : "아티스트 미입력"))}
                           </p>
-                        </div>
+                          </span>
+                          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                            수정
+                          </span>
+                        </button>
                         <button
                           type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeAlbumDraft(index);
-                          }}
-                          className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
+                          onClick={() => void removeAlbumDraft(index)}
+                          aria-label={`앨범 ${index + 1} 삭제`}
+                          className="min-h-11 shrink-0 rounded-full border border-border/70 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-foreground hover:text-foreground"
                         >
                           삭제
                         </button>
@@ -4709,7 +5481,7 @@ export function AlbumWizard({
                     disabled={isSaving || isAddingAlbum}
                     className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                   >
-                    {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 등록"}
+                    {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 작성"}
                   </button>
                 )}
                 <button
@@ -4772,6 +5544,11 @@ export function AlbumWizard({
                   <div
                     key={draft.submissionId}
                     onClick={() => handleSelectUploadDraft(index)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      handleSelectUploadDraft(index);
+                    }}
                     role="button"
                     tabIndex={0}
                     className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs transition ${uploadDraftIndex === index
@@ -4819,7 +5596,11 @@ export function AlbumWizard({
             </div>
           )}
 
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+          <div
+            data-preflight-field="files"
+            tabIndex={-1}
+            className="rounded-[28px] border border-border/60 bg-card/80 p-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               {isDownloadedApplicationFlow ? "신청서와 음원 업로드" : "전체 음원 파일 업로드"}
             </p>
@@ -4827,6 +5608,7 @@ export function AlbumWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("upload")}
+                disabled={uploadInProgress}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${!emailSubmitConfirmed
                   ? "bg-foreground text-background shadow-sm"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
@@ -4837,6 +5619,7 @@ export function AlbumWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
+                disabled={uploadInProgress}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
                   ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
@@ -4875,7 +5658,7 @@ export function AlbumWizard({
               <>
                 <div className="mt-4">
                   <label
-                    className="relative block"
+                    className={`relative block ${uploadInProgress ? "cursor-wait opacity-70" : ""}`}
                     onDragOver={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -4902,7 +5685,7 @@ export function AlbumWizard({
                       }
                       onChange={onFileChange}
                       className="hidden"
-                      disabled={!currentSubmissionId || isPreparingDraft}
+                      disabled={!currentSubmissionId || isPreparingDraft || uploadInProgress}
                     />
                     <div className="flex min-h-[120px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
                       <span>
@@ -4912,7 +5695,7 @@ export function AlbumWizard({
                             ? "접수 ID 준비 중... 잠시 후 첨부 가능"
                             : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
                       </span>
-                      <span className="inline-flex items-center gap-2 rounded-full border border-black bg-gradient-to-br from-black to-slate-900 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm">
+                      <span className="flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 break-all rounded-full border border-black bg-gradient-to-br from-black to-slate-900 px-3 py-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-white shadow-sm">
                         허용 형식:{" "}
                         <span className="font-mono text-[12px]">
                           {isDownloadedApplicationFlow
@@ -4950,11 +5733,11 @@ export function AlbumWizard({
                       key={`${upload.name}-${index}`}
                       className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-semibold text-foreground">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span className="min-w-0 flex-1 break-all font-semibold text-foreground">
                           {upload.name}
                         </span>
-                        <div className="flex items-center gap-3">
+                        <div className="flex shrink-0 items-center gap-3">
                           {upload.status === "done" ? (
                             <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
                               첨부 완료
@@ -4970,19 +5753,32 @@ export function AlbumWizard({
                           )}
                           <button
                             type="button"
+                            disabled={upload.status === "uploading"}
                             onClick={() => {
-                              const nextFiles = [...files];
-                              nextFiles.splice(index, 1);
+                              const removedUpload = uploads[index];
+                              if (!removedUpload) return;
+                              const nextFiles = removedUpload.localKey
+                                ? files.filter(
+                                    (file) =>
+                                      getLocalUploadKey(file) !==
+                                      removedUpload.localKey,
+                                  )
+                                : files;
                               const nextUploads = [...uploads];
                               nextUploads.splice(index, 1);
                               setFiles(nextFiles);
                               setUploads(nextUploads);
                               setUploadedFiles((prev) =>
-                                prev.filter((_, idx) => idx !== index),
+                                prev.filter(
+                                  (file) =>
+                                    removedUpload.path
+                                      ? file.path !== removedUpload.path
+                                      : true,
+                                ),
                               );
                               setFileDigest("");
                             }}
-                            className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
+                            className="min-h-11 rounded-full border border-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500 disabled:cursor-wait disabled:opacity-50"
                           >
                             삭제
                           </button>
@@ -5016,31 +5812,88 @@ export function AlbumWizard({
                     </div>
                   )}
                 </div>
+                {hasTrackStep && albumTrackFilesForMatch.length > 0 ? (
+                  <div className="mt-4 rounded-2xl border-2 border-[#111111] bg-background px-4 py-4 text-xs text-foreground shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-none">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-black">트랙 · 파일 자동 확인</p>
+                      <span className="rounded-full bg-[#111111] px-3 py-1 font-black text-white dark:bg-[#f2cf27] dark:text-[#111111]">
+                        {hasArchiveForTrackMatch
+                          ? "ZIP 확인"
+                          : `${albumTrackFileMatch.matches.length}/${tracks.length}곡 연결`}
+                      </span>
+                    </div>
+                    {hasArchiveForTrackMatch ? (
+                      <p className="mt-3 rounded-xl bg-[#f2cf27]/15 px-3 py-2 font-semibold leading-5 text-foreground">
+                        ZIP 파일은 자동 연결하지 않습니다. 압축 안의 곡명과 트랙 순서를 확인해주세요.
+                      </p>
+                    ) : albumTrackFileMatch.missingTrackIndexes.length === 0 &&
+                    albumTrackFileMatch.unmatchedFileIndexes.length === 0 ? (
+                      <p className="mt-3 font-semibold text-emerald-700 dark:text-emerald-300">
+                        트랙명과 음원 파일명이 모두 연결되었습니다.
+                      </p>
+                    ) : (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {albumTrackFileMatch.missingTrackIndexes.length > 0 ? (
+                          <div className="rounded-xl bg-[#d9362c]/8 px-3 py-2">
+                            <p className="font-black text-[#b92d25]">파일 확인 필요</p>
+                            <p className="mt-1 leading-5 text-muted-foreground">
+                              {albumTrackFileMatch.missingTrackIndexes
+                                .map(
+                                  (index) =>
+                                    `${index + 1}. ${tracks[index]?.trackTitle.trim() || "곡명 미입력"}`,
+                                )
+                                .join(" · ")}
+                            </p>
+                          </div>
+                        ) : null}
+                        {albumTrackFileMatch.unmatchedFileIndexes.length > 0 ? (
+                          <div className="rounded-xl bg-[#f2cf27]/15 px-3 py-2">
+                            <p className="font-black">연결되지 않은 파일</p>
+                            <p className="mt-1 break-all leading-5 text-muted-foreground">
+                              {albumTrackFileMatch.unmatchedFileIndexes
+                                .map((index) => {
+                                  const file = albumTrackFilesForMatch[index];
+                                  if (!file) return `파일 ${index + 1}`;
+                                  return "originalName" in file
+                                    ? file.originalName || `파일 ${index + 1}`
+                                    : file.name || `파일 ${index + 1}`;
+                                })
+                                .join(" · ")}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                    {!hasArchiveForTrackMatch &&
+                    albumTrackFileMatch.unsupportedFileIndexes.length > 0 ? (
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        ZIP·문서 파일은 파일명 자동 연결에서 제외됩니다.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </>
             )}
-            <div className="mt-4 space-y-1 text-xs text-muted-foreground">
-              <p>
-                음원 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 다음 단계로 진행하거나 예전 온사이드 사이트에서 접수해주세요.
-              </p>
-              {isOneClick && (
-                <p>원클릭 접수도 동일하게 파일 없이 다음 단계로 진행할 수 있습니다.</p>
-              )}
-              {!emailSubmitConfirmed ? (
-                <p className="font-semibold text-foreground">
-                  {APP_CONFIG.supportEmail}
+            <details className="mt-4 rounded-xl border border-border/60 px-4 py-3 text-xs text-muted-foreground">
+              <summary className="cursor-pointer font-semibold text-foreground">
+                업로드 도움이 필요하신가요?
+              </summary>
+              <div className="mt-3 space-y-2 leading-5">
+                <p>
+                  업로드가 어려우면 파일 없이 진행한 뒤 {APP_CONFIG.supportEmail}로 보내주세요.
                 </p>
-              ) : null}
-              <p className="text-xs text-muted-foreground">
-                CD 제작 등 실물 앨범을 발표한 경우{" "}
-                <button
-                  type="button"
-                  onClick={() => setShowCdInfo(true)}
-                  className="font-semibold text-primary transition hover:text-primary/80"
-                >
-                  자세히 보기 →
-                </button>
-              </p>
-            </div>
+                <p>
+                  실물 앨범을 발표했다면{" "}
+                  <button
+                    type="button"
+                    onClick={() => setShowCdInfo(true)}
+                    className="font-semibold text-primary transition hover:text-primary/80"
+                  >
+                    CD 제출 기준 보기 →
+                  </button>
+                </p>
+              </div>
+            </details>
           </div>
 
           {notice.error && (
@@ -5095,39 +5948,15 @@ export function AlbumWizard({
 
       {step === 6 && (
         <div className="space-y-8">
-          <h2 className="font-display text-2xl text-foreground">신청 내용 확인</h2>
-
-          {albumPaymentBlockers.length > 0 ? (
-            <div
-              role="alert"
-              className="rounded-[28px] border-2 border-[#f2cf27] bg-[rgba(242,207,39,0.18)] p-5 shadow-[4px_4px_0_rgba(17,17,17,0.2)]"
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-foreground">
-                확인 필요
-              </p>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {albumPaymentBlockers.map((item) => (
-                  <div
-                    key={item.label}
-                    className="rounded-2xl border border-[#111111] bg-background px-4 py-3 text-sm text-foreground"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
-                        {item.label}
-                      </p>
-                      <span
-                        aria-hidden="true"
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] border border-[#111111] bg-[#f2cf27] text-[11px] font-black text-[#111111]"
-                      >
-                        !
-                      </span>
-                    </div>
-                    <p className="mt-2 font-semibold leading-5">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          <SubmissionPreflightPanel
+            result={albumPreflight}
+            onNavigate={handlePreflightNavigate}
+            onAcknowledge={(issue) => {
+              if (issue.acknowledgementKey === "cart-price-change") {
+                setPriceChangeAcknowledged(true);
+              }
+            }}
+          />
 
           <div className="space-y-4">
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-5 sm:p-6">

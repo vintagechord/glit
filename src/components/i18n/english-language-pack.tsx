@@ -107,6 +107,209 @@ const exactTranslations: Record<string, string> = {
   "다음: 신청서 + 음원 첨부": "Next: Application + Audio",
   "파일 첨부": "Attach Files",
   "신청 내용 확인": "Review Application",
+  "최종 점검": "Final Check",
+  "변경 확인": "Confirm Change",
+  "필수 정보와 트랙별 크레딧": "Required details and track credits",
+  "트랙 수, 타이틀곡과 심의 대상곡":
+    "Track count, title tracks, and tracks for review",
+  "음원·신청서 파일과 결제 금액 변경":
+    "Audio, application files, and payment changes",
+  "확인 완료": "All Set",
+  "수정이 필요한 항목": "Items Requiring Changes",
+  "제출 전 확인 권장": "Recommended Before Submission",
+  "확인을 권장하는 항목": "Items Recommended for Review",
+  "신청 정보를 모두 확인했습니다.":
+    "All application details have been checked.",
+  "점검 기준": "What We Check",
+  "트랙 빠른 입력": "Quick Track Entry",
+  "곡별 값은 표에서 비교하고, 가사와 타이틀 설정은 상세 편집에서 입력합니다.":
+    "Compare track details in the table, then add lyrics and title-track settings in Details.",
+  "빈 참여진 채우기": "Fill Blank Credits",
+  "여러 트랙 붙여넣기": "Paste Multiple Tracks",
+  "Excel·Sheets의 곡명·가수명·작곡·작사·편곡 열을 그대로 붙여넣으세요. 입력된 열만 반영됩니다.":
+    "Paste the song title, performer, composer, lyricist, and arranger columns from Excel or Google Sheets. Only supplied columns are applied.",
+  "붙여넣을 트랙 표": "Track Table to Paste",
+  "곡명\t가수명\t작곡\t작사\t편곡\n첫 번째 곡\t가수 A\t작곡가\t작사가\t편곡가":
+    "Song Title\tPerformer\tComposer\tLyricist\tArranger\nFirst Song\tArtist A\tComposer\tLyricist\tArranger",
+  "붙여넣은 내용이 여기에 반영됩니다.":
+    "Your pasted tracks will appear here.",
+  "표에 적용": "Apply to Table",
+  "트랙 표 입력": "Track Table Entry",
+  "트랙별 곡명, 가수명, 작곡, 작사, 편곡 빠른 입력":
+    "Quick entry of song title, performer, composer, lyricist, and arranger for each track",
+  "작업": "Actions",
+  "상세": "Details",
+  "가사 작성 기준": "Lyrics Guidelines",
+  "트랙 · 파일 자동 확인": "Automatic Track and File Check",
+  "트랙명과 음원 파일명이 모두 연결되었습니다.":
+    "Every track has been matched to an audio file.",
+  "파일 확인 필요": "Files Need Attention",
+  "연결되지 않은 파일": "Unmatched Files",
+  "곡명 미입력": "Song Title Missing",
+  "ZIP·문서 파일은 파일명 자동 연결에서 제외됩니다.":
+    "ZIP and document files are excluded from automatic filename matching.",
+  "업로드 도움이 필요하신가요?": "Need Help Uploading?",
+  "업로드가 어려우면 파일 없이 진행한 뒤":
+    "If upload is difficult, continue without files and email them to",
+  "로 보내주세요.": ".",
+  "실물 앨범을 발표했다면": "If you released a physical album,",
+  "CD 제출 기준 보기 →": "View CD Submission Requirements →",
+  "심의 목적과 선택 옵션": "Review purpose and selected options",
+  "작성 방식에 맞는 필수 신청 정보":
+    "Required application details for the selected method",
+  "영상·신청서 파일과 결제 금액":
+    "Video, application file, and payment amount",
+  "기기에 남아 있는 최신 입력을 지우고 서버 저장본을 사용할까요?":
+    "Discard the latest changes saved on this device and use the server copy?",
+  "복구본을 사용하지 않음": "Discard Recovered Draft",
+  "현재 입력을 이전 저장본으로 되돌릴까요?":
+    "Restore the previously saved version and replace the current entries?",
+  "이전 저장본 복원": "Restore Previous Version",
+  "최근 입력 복구 가능": "Recent Changes Available",
+  "복구": "Recover",
+  "서버 저장본 사용": "Use Server Copy",
+  "저장 중": "Saving",
+  "저장 실패": "Save Failed",
+  "기기에 저장됨": "Saved on This Device",
+  "저장됨": "Saved",
+  "재시도": "Retry",
+  "이전 저장본": "Previous Version",
+  "닫히지 않은 따옴표가 있습니다.": "A quotation mark is not closed.",
+  "같은 의미의 열 제목이 중복되어 첫 번째 열만 반영했습니다.":
+    "Duplicate column headings were found, so only the first one was applied.",
+  "저장할 수 있는 신청서 데이터가 없습니다.":
+    "There is no application data to save.",
+  "이 기기에 임시 저장하지 못했습니다.":
+    "The draft could not be saved on this device.",
+  "신청서를 저장하지 못했습니다.": "The application could not be saved.",
+  "브라우저 임시 저장을 사용할 수 없습니다.":
+    "Browser draft storage is unavailable.",
+  "결제 금액 변경": "Payment Amount Changed",
+  "패키지 또는 결제 금액이 변경되었습니다. 변경 내용을 확인해주세요.":
+    "The package or payment amount has changed. Review and confirm the change.",
+  "심의 패키지를 선택해주세요.": "Select a review package.",
+  "온라인 작성 또는 파일 제출 중 하나를 선택해주세요.":
+    "Choose either online entry or file submission.",
+  "접수자 연락처": "Applicant Phone",
+  "이메일 형식을 확인해주세요.": "Check the email address format.",
+  "연락처는 숫자 9~11자리로 입력해주세요.":
+    "Enter a phone number containing 9 to 11 digits.",
+  "AI 활용 여부": "AI Usage",
+  "AI 활용 여부를 선택해주세요.": "Select whether AI was used.",
+  "아티스트명(한글)": "Artist Name (Korean)",
+  "아티스트명(영문)": "Artist Name (English)",
+  "이전 발매곡": "Previous Release",
+  "그룹/솔로": "Group / Solo",
+  "성별": "Gender",
+  "그룹 팀원": "Group Members",
+  "한 곡 이상 입력해주세요.": "Enter at least one track.",
+  "곡명을 입력해주세요.": "Enter the song title.",
+  "이 트랙의 가수명을 입력해주세요.":
+    "Enter the performer for this track.",
+  "작곡": "Composer",
+  "작사": "Lyricist",
+  "편곡": "Arranger",
+  "작곡자 정보를 입력해주세요.": "Enter the composer.",
+  "외국어 가사의 번역본을 입력해주세요.":
+    "Enter a translation of the foreign-language lyrics.",
+  "타이틀곡": "Title Track",
+  "타이틀곡을 한 곡 이상 선택해주세요.":
+    "Select at least one title track.",
+  "방송 심의 대상곡": "Tracks for Broadcast Review",
+  "수록곡이 4곡 이상이면 심의 대상곡 3곡을 선택해주세요.":
+    "For releases with four or more tracks, select three tracks for review.",
+  "업로드에 실패한 파일을 다시 선택해주세요.":
+    "Select the files that failed to upload again.",
+  "파일 업로드가 끝날 때까지 기다려주세요.":
+    "Wait for all file uploads to finish.",
+  "음원 파일을 업로드하거나 이메일 제출을 선택해주세요.":
+    "Upload the audio files or choose email submission.",
+  "작성한 신청서": "Completed Application Form",
+  "작성한 신청서 파일을 함께 첨부해주세요.":
+    "Attach the completed application form.",
+  "트랙과 음원 수": "Track and Audio File Count",
+  "심의 목적": "Review Purpose",
+  "뮤직비디오 심의 목적을 선택해주세요.":
+    "Select the music video review purpose.",
+  "TV 송출 심의를 진행할 방송국을 선택해주세요.":
+    "Select the broadcasters for TV broadcast review.",
+  "심의 옵션": "Review Options",
+  "심의 옵션 변경": "Review Options Changed",
+  "심의 옵션 또는 결제 금액이 변경되었습니다. 변경 내용을 확인해주세요.":
+    "The review options or payment amount have changed. Review and confirm the change.",
+  "온라인 심의 옵션을 하나 이상 선택해주세요.":
+    "Select at least one online review option.",
+  "선택한 심의 옵션과 결제 금액을 확인해주세요.":
+    "Review the selected options and payment amount.",
+  "뮤직비디오 제목": "Music Video Title",
+  "아티스트명 공식 표기": "Official Artist Name",
+  "영상 공개일자": "Video Release Date",
+  "감독": "Director",
+  "주연": "Lead Actor",
+  "뮤직비디오 제작사": "Music Video Production Company",
+  "소속사": "Agency",
+  "앨범명": "Album Title",
+  "용도": "Intended Use",
+  "곡명(한글)": "Song Title (Korean)",
+  "곡명(영문)": "Song Title (English)",
+  "곡 정보 공식 표기": "Official Song Information",
+  "작곡자": "Composer",
+  "줄거리": "Synopsis",
+  "담당자명": "Contact Name",
+  "영상 파일을 업로드하거나 이메일 제출을 선택해주세요.":
+    "Upload the video file or choose email submission.",
+  "작성한 신청서 파일을 영상과 함께 첨부해주세요.":
+    "Attach the completed application form with the video.",
+  "접수 ID를 확인하지 못했습니다.":
+    "The application ID could not be verified.",
+  "접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.":
+    "The application ID could not be prepared. Try again shortly.",
+  "저장 중 오류가 발생했습니다.": "An error occurred while saving.",
+  "서버 저장이 지연되고 있습니다. 입력은 이 기기에 보관했습니다.":
+    "Server saving is delayed. Your entries are saved on this device.",
+  "옵션 수정": "Edit Options",
+  "선택 내역": "Selections",
+  "선택된 옵션이 없습니다.": "No options are selected.",
+  "접수자 이름을(를) 입력해주세요.": "Enter the applicant name.",
+  "접수자 이메일을(를) 입력해주세요.": "Enter the applicant email.",
+  "접수자 연락처을(를) 입력해주세요.": "Enter the applicant phone number.",
+  "멜론 링크을(를) 입력해주세요.": "Enter the Melon link.",
+  "앨범 제목을(를) 입력해주세요.": "Enter the album title.",
+  "아티스트명을(를) 입력해주세요.": "Enter the artist name.",
+  "아티스트명(한글)을(를) 입력해주세요.":
+    "Enter the artist name in Korean.",
+  "아티스트명(영문)을(를) 입력해주세요.":
+    "Enter the artist name in English.",
+  "발매일을(를) 입력해주세요.": "Enter the release date.",
+  "장르을(를) 입력해주세요.": "Enter the genre.",
+  "유통사을(를) 입력해주세요.": "Enter the distributor.",
+  "제작사을(를) 입력해주세요.": "Enter the production company.",
+  "이전 발매곡을(를) 입력해주세요.": "Enter the previous release.",
+  "그룹/솔로을(를) 입력해주세요.": "Select group or solo.",
+  "성별을(를) 입력해주세요.": "Select the gender.",
+  "그룹 팀원을(를) 입력해주세요.": "Enter the group members.",
+  "뮤직비디오 제목을(를) 입력해주세요.":
+    "Enter the music video title.",
+  "아티스트명 공식 표기을(를) 입력해주세요.":
+    "Enter the official artist name.",
+  "영상 공개일자을(를) 입력해주세요.": "Enter the video release date.",
+  "감독을(를) 입력해주세요.": "Enter the director.",
+  "주연을(를) 입력해주세요.": "Enter the lead actor.",
+  "뮤직비디오 제작사을(를) 입력해주세요.":
+    "Enter the music video production company.",
+  "소속사을(를) 입력해주세요.": "Enter the agency.",
+  "앨범명을(를) 입력해주세요.": "Enter the album title.",
+  "용도을(를) 입력해주세요.": "Enter the intended use.",
+  "곡명(한글)을(를) 입력해주세요.": "Enter the song title in Korean.",
+  "곡명(영문)을(를) 입력해주세요.": "Enter the song title in English.",
+  "곡 정보 공식 표기을(를) 입력해주세요.":
+    "Enter the official song information.",
+  "작곡자을(를) 입력해주세요.": "Enter the composer.",
+  "줄거리을(를) 입력해주세요.": "Enter the synopsis.",
+  "가사을(를) 입력해주세요.": "Enter the lyrics.",
+  "담당자명을(를) 입력해주세요.": "Enter the contact name.",
+  "이메일을(를) 입력해주세요.": "Enter the email address.",
+  "연락처을(를) 입력해주세요.": "Enter the phone number.",
   "예상 기간 · 영업일 기준 최대 3주": "Up to 3 Business Weeks",
   "부가세·증빙 서류 신청 가능": "VAT · Receipt Documents Available",
   "접수 전 취소 조건 확인": "Check Cancellation Terms Before Submission",
@@ -804,6 +1007,10 @@ const exactTranslations: Record<string, string> = {
   "전체 해제": "Clear All",
   "선택 삭제": "Delete Selected",
   "삭제 중": "Deleting",
+  "삭제할 임시저장 신청서를 확인하지 못했습니다. 다시 시도해주세요.":
+    "The saved draft could not be identified. Please try again.",
+  "임시저장 삭제에 실패했습니다. 다시 시도해주세요.":
+    "The saved draft could not be deleted. Please try again.",
   "수정": "Edit",
   "삭제": "Delete",
   "삭제 확인": "Confirm Deletion",
@@ -914,6 +1121,7 @@ const exactTranslations: Record<string, string> = {
   "부분 적격": "Partially Approved",
   "수정요청": "Revision Requested",
   "결제 확인": "Payment Confirmed",
+  "입금 확인 중": "Verifying Deposit",
   "현재 상태": "Current Status",
   "심의 진행 단계": "Review Progress",
   "신청서 작성 및 제출": "Application Submitted",
@@ -1309,6 +1517,30 @@ const exactTranslations: Record<string, string> = {
 const phraseTranslations: Array<[RegExp, string]> = [
   [/\(현재 단계\)/g, "(Current step)"],
   [/현재\s*(\d+)단계/g, "Current Step $1"],
+  [/확인 필요\s*(\d+)/g, "$1 Issues"],
+  [/확인 권장\s*(\d+)/g, "$1 Recommendations"],
+  [/선택 내역\s*(\d+)건/g, "$1 Selected"],
+  [/(\d+)\/(\d+)곡 연결/g, "$1/$2 Tracks Matched"],
+  [/(\d+)개 트랙 확인/g, "$1 Tracks Ready"],
+  [/트랙\s*(\d+)\s*상세 편집/g, "Track $1 Details"],
+  [/(\d+)번 트랙 · 곡명/g, "Track $1 · Song Title"],
+  [/(\d+)번 트랙 · 가수명/g, "Track $1 · Performer"],
+  [/(\d+)번 트랙 · 작곡/g, "Track $1 · Composer"],
+  [/(\d+)번 트랙 · 번역 가사/g, "Track $1 · Translated Lyrics"],
+  [/(\d+)번 트랙 곡명/g, "Track $1 Song Title"],
+  [/(\d+)번 트랙 가수명/g, "Track $1 Performer"],
+  [/(\d+)번 트랙 작곡/g, "Track $1 Composer"],
+  [/(\d+)번 트랙 작사/g, "Track $1 Lyricist"],
+  [/(\d+)번 트랙 편곡/g, "Track $1 Arranger"],
+  [/(\d+)번 트랙 위로 이동/g, "Move Track $1 Up"],
+  [/(\d+)번 트랙 아래로 이동/g, "Move Track $1 Down"],
+  [/(\d+)번 트랙 삭제/g, "Delete Track $1"],
+  [/(\d+)\.\s*곡명 미입력/g, "$1. Song Title Missing"],
+  [/반영하지 않는 열:\s*(.+)/g, "Ignored columns: $1"],
+  [/저장됨\s*·\s*(.+)/g, "Saved · $1"],
+  [/파일\s*(\d+)/g, "File $1"],
+  [/(\d+)개 트랙에 음원\s*(\d+)개가 첨부되었습니다\. 누락 또는 중복 여부를 확인해주세요\./g,
+    "$2 audio files are attached for $1 tracks. Check for missing or duplicate files."],
   [/앨범\s*(\d+)\s*·\s*추가\s*(\d+)건/g, "$1 Albums · $2 Additional"],
   [/추가\s*(\d+)건/g, "$1 Additional"],
   [/(\d+)건 대기/g, "$1 pending"],
@@ -1558,6 +1790,15 @@ function walkAndTranslate(root: ParentNode) {
               ? node
               : null;
         if (!parent) return NodeFilter.FILTER_REJECT;
+        // Translate labels and placeholders on a textarea element, but keep its
+        // editable text node out of the translation walk so user input is never
+        // rewritten.
+        if (
+          node instanceof HTMLTextAreaElement &&
+          !node.closest("script, style, noscript, code, pre, [data-no-translate]")
+        ) {
+          return NodeFilter.FILTER_ACCEPT;
+        }
         if (
           parent.closest(
             "script, style, noscript, code, pre, textarea, [data-no-translate]",
