@@ -54,6 +54,8 @@ test("track entry preserves compilation overrides and saves before upload", () =
   );
   assert.doesNotMatch(source, /기본 정보 수정/);
   assert.doesNotMatch(source, /트랙 임시 저장/);
+  assert.doesNotMatch(source, /저장하고 트랙 정보 입력/);
+  assert.match(source, /: "저장하고 다음 단계"/);
   assert.match(source, /: "다음 단계"\}\s*<\/button>/);
   assert.match(trackHandler, /validateTrackInfoStep\(\)/);
   assert.match(trackHandler, /validateTranslatedLyrics\(\)/);
@@ -82,7 +84,7 @@ test("progress and English UI support dynamic five- to seven-step flows", () => 
     "작성 방식 선택",
     "트랙 정보",
     "가수명",
-    "저장하고 트랙 정보 입력",
+    "저장하고 다음 단계",
     "저장하고 파일 업로드",
     "같은 참여진으로 추가",
     "빈 트랙 추가",

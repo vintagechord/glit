@@ -4727,7 +4727,7 @@ export function AlbumWizard({
                   {step === 3
                     ? isOneClick
                       ? "저장하고 파일 업로드"
-                      : "저장하고 트랙 정보 입력"
+                      : "저장하고 다음 단계"
                     : "다음 단계"}
                 </button>
               </div>

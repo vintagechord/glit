@@ -871,7 +871,7 @@ const exactTranslations: Record<string, string> = {
   "저장": "Save",
   "임시 저장": "Save Draft",
   "트랙 임시 저장": "Save Track Draft",
-  "저장하고 트랙 정보 입력": "Save and Enter Tracks",
+  "저장하고 다음 단계": "Save and Continue",
   "저장하고 파일 업로드": "Save and Upload Files",
   "기본 정보 수정": "Edit Basic Information",
   "같은 참여진으로 추가": "Add with Same Credits",
