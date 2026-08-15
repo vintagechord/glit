@@ -37,10 +37,7 @@ export default async function AdminArtistDetailPage({
   if (!artistId) {
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          관리자
-        </p>
-        <h1 className="font-display mt-2 text-2xl text-foreground">아티스트 상세</h1>
+        <h1 className="font-display text-2xl text-foreground">아티스트 상세</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           잘못된 아티스트 ID입니다.
         </p>
@@ -76,10 +73,7 @@ export default async function AdminArtistDetailPage({
   if (error || !artist) {
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          관리자
-        </p>
-        <h1 className="font-display mt-2 text-2xl text-foreground">아티스트 상세</h1>
+        <h1 className="font-display text-2xl text-foreground">아티스트 상세</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           아티스트 정보를 불러올 수 없습니다.
         </p>
@@ -161,10 +155,7 @@ export default async function AdminArtistDetailPage({
             </div>
           )}
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              관리자
-            </p>
-            <h1 className="font-display mt-1 break-words text-2xl text-foreground sm:text-3xl">
+            <h1 className="font-display break-words text-2xl text-foreground sm:text-3xl">
               {artist.name}
             </h1>
             <p className="text-xs text-muted-foreground">

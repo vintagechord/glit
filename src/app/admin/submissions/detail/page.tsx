@@ -6,7 +6,6 @@ import {
   paymentStatusLabelMap,
   resultStatusLabelMap,
   resultStatusOptions,
-  reviewStatusLabelMap,
   stationReviewStatusOptions,
   type PaymentStatus,
   type ReviewStatus,
@@ -295,10 +294,7 @@ export default async function AdminSubmissionDetailPage({
   if (!rawSubmissionId) {
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          관리자
-        </p>
-        <h1 className="font-display mt-2 text-2xl text-foreground">접수 상세</h1>
+        <h1 className="font-display text-2xl text-foreground">접수 상세</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           접수 ID가 없습니다.
         </p>
@@ -324,10 +320,7 @@ export default async function AdminSubmissionDetailPage({
   if (!uuidPattern.test(rawSubmissionId)) {
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          관리자
-        </p>
-        <h1 className="font-display mt-2 text-2xl text-foreground">접수 상세</h1>
+        <h1 className="font-display text-2xl text-foreground">접수 상세</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           접수 ID 형식이 올바르지 않습니다.
         </p>
@@ -354,10 +347,7 @@ export default async function AdminSubmissionDetailPage({
 
   const renderSubmissionNotFound = (reason?: string | null) => (
     <div className="mx-auto w-full max-w-4xl px-6 py-12">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        관리자
-      </p>
-      <h1 className="font-display mt-2 text-2xl text-foreground">접수 상세</h1>
+      <h1 className="font-display text-2xl text-foreground">접수 상세</h1>
       <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
         해당 ID의 접수를 찾을 수 없습니다.
       </p>
@@ -446,10 +436,7 @@ export default async function AdminSubmissionDetailPage({
   if (submissionError) {
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          관리자
-        </p>
-        <h1 className="font-display mt-2 text-2xl text-foreground">접수 상세</h1>
+        <h1 className="font-display text-2xl text-foreground">접수 상세</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
           서버 오류로 접수 정보를 불러오지 못했습니다.
         </p>
@@ -495,7 +482,6 @@ export default async function AdminSubmissionDetailPage({
     returnToParam,
     submissionTypeListHref,
   );
-  const statusLabel = reviewStatusLabelMap[submission.status] ?? submission.status;
   const paymentLabel =
     submission.payment_status && paymentStatusLabelMap[submission.payment_status]
       ? paymentStatusLabelMap[submission.payment_status]
@@ -837,26 +823,17 @@ export default async function AdminSubmissionDetailPage({
       ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            관리자
-          </p>
-          <h1 className="font-display mt-2 text-3xl text-foreground">
+          <h1 className="font-display text-3xl text-foreground">
             {submission.title || "제목 미입력"}
           </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {submission.artist_name || "아티스트 미입력"}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
-              <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-foreground">
-                {statusLabel}
-              </span>
-              <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-foreground">
-                결제: {paymentLabel}
-              </span>
-              <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-muted-foreground">
-                ID: {submission.id.slice(0, 8)}
-              </span>
-            </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {submission.artist_name || "아티스트 미입력"}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
+            <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-muted-foreground">
+              ID: {submission.id.slice(0, 8)}
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="text-muted-foreground">
@@ -1023,9 +1000,6 @@ export default async function AdminSubmissionDetailPage({
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 2. 운영 단계
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                접수 상태와 결제 상태를 하나의 단계로 관리합니다.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -1366,17 +1340,9 @@ export default async function AdminSubmissionDetailPage({
         <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
           <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 text-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              운영 요약
+              자료 요약
             </p>
             <div className="mt-3 space-y-2 text-[13px] text-foreground">
-              <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
-                <span className="text-muted-foreground">접수 상태</span>
-                <span className="font-semibold">{statusLabel}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
-                <span className="text-muted-foreground">결제</span>
-                <span className="font-semibold">{paymentLabel}</span>
-              </div>
               <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/70 px-3 py-2">
                 <span className="text-muted-foreground">파일</span>
                 <span className="font-semibold">{files.length}개</span>

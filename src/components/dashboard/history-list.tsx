@@ -251,14 +251,10 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
           submission.status,
           submission.paymentStatus,
         );
-        const paymentInfo = getPaymentStatus(submission.paymentStatus);
         const paymentMethodLabel = getPaymentMethodLabel(
           submission.paymentMethod,
         );
-        const shouldShowPaymentChip = !(
-          submission.status === "WAITING_PAYMENT" &&
-          submission.paymentStatus === "PAYMENT_PENDING"
-        );
+        const hasPaymentAction = submission.paymentStatus !== "PAID";
         const packageLabel = submission.packageInfo?.name ?? "패키지 미지정";
         const trackCount = submission.tracks.length;
         const amountLabel =
@@ -288,18 +284,13 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                   <p className="min-w-0 truncate text-sm font-semibold text-foreground">
                     {submission.title}
                   </p>
-                  <span
-                    className={`bauhaus-status-chip bauhaus-status-chip--compact ${statusInfo.tone}`}
-                  >
-                    {statusInfo.label}
-                  </span>
-                  {paymentInfo && shouldShowPaymentChip && (
+                  {!hasPaymentAction ? (
                     <span
-                      className={`bauhaus-status-chip bauhaus-status-chip--compact ${paymentInfo.tone}`}
+                      className={`bauhaus-status-chip bauhaus-status-chip--compact ${statusInfo.tone}`}
                     >
-                      {paymentInfo.label}
+                      {statusInfo.label}
                     </span>
-                  )}
+                  ) : null}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {submission.artistName} · {submission.typeLabel} ·{" "}
@@ -319,7 +310,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               >
                 상세보기
               </button>
-              {submission.paymentStatus !== "PAID" ? (
+              {hasPaymentAction ? (
                 <Link
                   href={`${localePrefix}/mypage/cart?focus=${submission.id}`}
                   className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"

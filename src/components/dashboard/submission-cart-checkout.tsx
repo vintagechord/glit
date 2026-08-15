@@ -721,7 +721,7 @@ export function SubmissionCartCheckout({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 py-2 text-xs font-black text-foreground shadow-[2px_2px_0_var(--bauhaus-shadow)]">
             <ShoppingCart size={16} strokeWidth={2.5} />
-            <span>{items.length}건 대기</span>
+            <span>{items.length}건</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -788,11 +788,6 @@ export function SubmissionCartCheckout({
                     <span className="rounded-[6px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-2 py-1 text-[11px] font-black text-[var(--foreground)]">
                       {getTypeLabel(item)}
                     </span>
-                    {item.paymentStatus === "PAYMENT_PENDING" ? (
-                      <span className="rounded-[6px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-2 py-1 text-[11px] font-black text-[#111111]">
-                        결제 대기
-                      </span>
-                    ) : null}
                   </span>
                   <span className="mt-2 block truncate text-sm font-black text-foreground">
                     {getDisplayTitle(item)}

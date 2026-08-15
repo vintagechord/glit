@@ -63,10 +63,7 @@ export default async function AdminPaymentsPage() {
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            관리자
-          </p>
-          <h1 className="font-display mt-2 text-3xl text-foreground">
+          <h1 className="font-display text-3xl text-foreground">
             카드 결제
           </h1>
           <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">

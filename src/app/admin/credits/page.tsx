@@ -131,16 +131,10 @@ export default async function AdminCreditsPage({
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        관리자
-      </p>
-      <h1 className="font-display mt-2 text-3xl text-foreground">
+      <h1 className="font-display text-3xl text-foreground">
         크레딧 서비스 관리
       </h1>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          크레딧 서비스와 노출 상태를 관리합니다.
-        </p>
+      <div className="mt-4 flex justify-end">
         <Link
           href="/admin/credits/requests"
           className="rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold text-foreground transition hover:border-foreground"

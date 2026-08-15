@@ -5,7 +5,7 @@ import { FilePenLine, Upload } from "lucide-react";
 type ApplicationFormMode = "online" | "upload";
 
 const buttonBaseClass =
-  "min-h-[4rem] rounded-[10px] border-2 px-4 py-3 text-left text-sm font-black leading-snug shadow-[2px_2px_0_rgba(17,17,17,0.22)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "min-h-[3.25rem] rounded-[10px] border-2 px-4 py-3 text-left text-sm font-black leading-snug shadow-[2px_2px_0_rgba(17,17,17,0.22)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const buttonIdleClass =
   "border-[#111111]/60 bg-card text-foreground hover:-translate-y-0.5 hover:border-[#111111] hover:bg-[#f2cf27] hover:text-[#111111] hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27]/60 dark:bg-[#171717] dark:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111] dark:hover:shadow-[4px_4px_0_#f2cf27]";
 const onlineActiveClass =
@@ -39,12 +39,7 @@ export function ApplicationFormModeTabs({
         >
           <span className="flex items-center gap-3">
             <FilePenLine className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <span>
-              <span className="block">온라인 작성</span>
-              <span className="mt-0.5 block text-xs font-semibold opacity-70">
-                화면에서 바로 입력
-              </span>
-            </span>
+            <span>온라인 작성</span>
           </span>
         </button>
         <button
@@ -55,12 +50,7 @@ export function ApplicationFormModeTabs({
         >
           <span className="flex items-center gap-3">
             <Upload className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <span>
-              <span className="block">파일로 제출</span>
-              <span className="mt-0.5 block text-xs font-semibold opacity-70">
-                양식 작성 후 첨부
-              </span>
-            </span>
+            <span>파일로 제출</span>
           </span>
         </button>
       </div>

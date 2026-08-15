@@ -110,14 +110,6 @@ type TrackResultModalState = {
 };
 
 const stageStatusMap = {
-  payment: {
-    label: "결제 대기",
-    tone: "bauhaus-status-chip--neutral",
-  },
-  pending: {
-    label: "결제 대기",
-    tone: "bauhaus-status-chip--waiting",
-  },
   paid: {
     label: "결제완료",
     tone: "bauhaus-status-chip--success",
@@ -311,11 +303,8 @@ function getStageStatus(submission?: SubmissionSummary | null) {
   if (status === "IN_PROGRESS") {
     return stageStatusMap.progress;
   }
-  if (submission.payment_status === "PAYMENT_PENDING") {
-    return stageStatusMap.pending;
-  }
   if (submission.payment_status !== "PAID") {
-    return stageStatusMap.payment;
+    return null;
   }
   if (["SUBMITTED", "PRE_REVIEW"].includes(status)) {
     return stageStatusMap.received;
@@ -741,7 +730,6 @@ export function HomeReviewPanel({
 
   const needsPayment =
     Boolean(activeSubmission) && activeSubmission?.payment_status !== "PAID";
-  const isCompactPaymentState = compact && needsPayment;
   const activeSubmissionType =
     activeSubmission?.type ?? (tab === "album" ? "ALBUM" : "MV_DISTRIBUTION");
   const editHref =
@@ -781,6 +769,14 @@ export function HomeReviewPanel({
   }, [activeSubmission, activeSubmissionType, viewerId]);
   const paymentActions = activeSubmission ? (
     <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+      {showDetailLink ? (
+        <Link
+          href={`${localePrefix}/dashboard/submissions/${activeSubmission.id}`}
+          className="inline-flex min-h-[3.25rem] w-full items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black tracking-normal text-[#111111] shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#fff7cf] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto sm:min-w-[8.5rem]"
+        >
+          자세히 보기
+        </Link>
+      ) : null}
       <Link
         href={editHref}
         onClick={prepareActiveSubmissionEdit}
@@ -851,7 +847,7 @@ export function HomeReviewPanel({
   const pagerSpacingClass = compact ? "mt-2.5" : "mt-3";
   const bodySpacingClass = compact
     ? `mt-4 flex flex-1 flex-col gap-3 ${
-        isCompactPaymentState ? "justify-center" : ""
+        needsPayment ? "justify-center" : ""
       }`
     : "mt-5 space-y-4 sm:mt-6 sm:space-y-5";
   const sectionPaddingClass = compact ? "p-3" : "p-4";
@@ -1171,12 +1167,9 @@ export function HomeReviewPanel({
         <div className={`rounded-2xl border border-dashed border-border/80 bg-background/70 ${sectionPaddingClass}`}>
           <p className="sr-only">접수 현황</p>
           {activeSubmission ? (
-            isCompactPaymentState ? (
-              <div className="rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-3 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm font-black sm:text-base">결제 대기</p>
-                  {paymentActions}
-                </div>
+            needsPayment ? (
+              <div className="flex justify-end">
+                {paymentActions}
               </div>
             ) : (
               <div className={progressBodyClass}>
@@ -1204,24 +1197,6 @@ export function HomeReviewPanel({
                       style={{ width: `${progressPercent}%` }}
                     />
                   </div>
-                  {needsPayment ? (
-                    <div className="mt-4 rounded-[10px] border-2 border-[#111111] bg-[#f2cf27] p-3 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                          <p className="text-[11px] font-black uppercase tracking-normal">
-                            결제 대기
-                          </p>
-                          <p className="mt-1 text-sm font-black sm:text-base">
-                            결제가 완료되지 않았습니다.
-                          </p>
-                          <p className="mt-1 text-xs font-semibold text-[#111111]/72">
-                            결제 후 심의가 진행됩니다.
-                          </p>
-                        </div>
-                        {paymentActions}
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             )
@@ -1249,7 +1224,7 @@ export function HomeReviewPanel({
           )}
         </div>
 
-        {!isCompactPaymentState ? (
+        {!needsPayment ? (
           <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass} ${stationSectionClass}`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1392,9 +1367,7 @@ export function HomeReviewPanel({
                 <div className={stationEmptyClass}>
                   {isRemoteError
                     ? "심의 현황을 불러오지 못했습니다."
-                    : needsPayment
-                      ? "입금 확인 후 방송국별 현황이 표시됩니다."
-                      : "방송국별 현황이 없습니다."}
+                    : "방송국별 현황이 없습니다."}
                 </div>
               )}
             </div>

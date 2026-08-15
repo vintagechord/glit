@@ -38,22 +38,12 @@ const statusLabels: Record<string, { label: string; tone: string }> = {
   SUBMITTED: { label: "접수", tone: "bauhaus-status-chip--info" },
   PRE_REVIEW: { label: "사전검토", tone: "bauhaus-status-chip--waiting" },
   WAITING_PAYMENT: {
-    label: "결제 대기",
-    tone: "bauhaus-status-chip--waiting",
+    label: "접수",
+    tone: "bauhaus-status-chip--info",
   },
   IN_PROGRESS: { label: "진행중", tone: "bauhaus-status-chip--progress" },
   RESULT_READY: { label: "결과", tone: "bauhaus-status-chip--success" },
   COMPLETED: { label: "완료", tone: "bauhaus-status-chip--success" },
-};
-
-const paymentLabels: Record<string, { label: string; tone: string }> = {
-  UNPAID: { label: "미결제", tone: "bauhaus-status-chip--neutral" },
-  PAYMENT_PENDING: {
-    label: "결제 대기",
-    tone: "bauhaus-status-chip--waiting",
-  },
-  PAID: { label: "결제완료", tone: "bauhaus-status-chip--success" },
-  REFUNDED: { label: "환불", tone: "bauhaus-status-chip--danger" },
 };
 
 const typeLabels: Record<string, string> = {
@@ -104,12 +94,7 @@ export function SubmissionStatusList({
             submission.status !== "PRE_REVIEW"
               ? "WAITING_PAYMENT"
               : submission.status;
-          const paymentInfo =
-            paymentLabels[submission.payment_status] ?? paymentLabels.UNPAID;
-          const shouldShowPaymentChip = !(
-            submission.status === "WAITING_PAYMENT" &&
-            submission.payment_status === "PAYMENT_PENDING"
-          );
+          const hasPaymentAction = submission.payment_status !== "PAID";
           const typeLabel =
             typeLabels[submission.type] ?? submission.type ?? "심의";
           const stationReviews = [...(submission.station_reviews ?? [])].sort(
@@ -150,9 +135,6 @@ export function SubmissionStatusList({
               ? Math.round((completedStations / totalStations) * 100)
               : 0;
           const stageLabel = (() => {
-            if (submission.payment_status !== "PAID") {
-              return "입금 확인 대기";
-            }
             if (isAlbumSubmission && totalStations > 0) {
               return hasAllStationResults ? "완료" : "접수완료";
             }
@@ -196,19 +178,14 @@ export function SubmissionStatusList({
                   </p>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
-                  <span
-                    className={`bauhaus-status-chip ${statusInfo.tone}`}
-                  >
-                    {statusInfo.label}
-                  </span>
-                  {shouldShowPaymentChip && (
+                  {!hasPaymentAction ? (
                     <span
-                      className={`bauhaus-status-chip ${paymentInfo.tone}`}
+                      className={`bauhaus-status-chip ${statusInfo.tone}`}
                     >
-                      {paymentInfo.label}
+                      {statusInfo.label}
                     </span>
-                  )}
-                  {submission.payment_status !== "PAID" && (
+                  ) : null}
+                  {hasPaymentAction && (
                     <button
                       type="button"
                       onClick={() =>
@@ -230,25 +207,32 @@ export function SubmissionStatusList({
                   </button>
                 </div>
               </div>
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{totalStations}곳 중 {completedStations}곳 완료 · {progressPercent}%</span>
-                  <span>{stageLabel}</span>
-                </div>
-                <div
-                  className="mt-2 h-2 w-full rounded-full bg-muted"
-                  role="progressbar"
-                  aria-label="심의 완료율"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={progressPercent}
-                >
+              {!hasPaymentAction ? (
+                <div className="mt-4">
                   <div
-                    className="h-2 rounded-full bg-foreground transition-all"
-                    style={{ width: `${progressPercent}%` }}
-                  />
+                    className="flex items-center justify-between text-xs text-muted-foreground"
+                  >
+                    <span>
+                      {totalStations}곳 중 {completedStations}곳 완료 ·{" "}
+                      {progressPercent}%
+                    </span>
+                    <span>{stageLabel}</span>
+                  </div>
+                  <div
+                    className="mt-2 h-2 w-full rounded-full bg-muted"
+                    role="progressbar"
+                    aria-label="심의 완료율"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={progressPercent}
+                  >
+                    <div
+                      className="h-2 rounded-full bg-foreground transition-all"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           );
         })}

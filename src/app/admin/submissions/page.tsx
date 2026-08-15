@@ -353,8 +353,7 @@ export default async function AdminSubmissionsPage({
       <div className="border-b-2 border-[#111111] pb-5 dark:border-[#f2cf27]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <p className="bauhaus-kicker">관리자</p>
-            <h1 className="font-display mt-3 text-2xl font-black leading-tight text-foreground sm:text-3xl">
+            <h1 className="font-display text-2xl font-black leading-tight text-foreground sm:text-3xl">
               접수 관리
             </h1>
             <p className="mt-2 text-sm font-semibold text-muted-foreground">

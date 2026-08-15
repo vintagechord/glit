@@ -21,9 +21,6 @@ type PaymentRetryClientProps = {
   showDetailLink?: boolean;
 };
 
-const savedDraftNotice =
-  "작성한 신청서는 작성중 신청서에 보관되어 있으니 다시 작성하지 않아도 됩니다.";
-
 const normalizeInicisStatus = (type: string) => {
   const rawStatus = type.replace("INICIS:", "").toUpperCase();
   if (rawStatus.startsWith("SUCCESS")) return "SUCCESS";
@@ -38,13 +35,13 @@ const getInitialNotice = (paymentState?: string) => {
   if (normalized === "cancel") {
     return {
       type: "error" as const,
-      message: `결제가 취소되었습니다. 다시 결제할 수 있습니다. ${savedDraftNotice}`,
+      message: "결제가 취소되었습니다.",
     };
   }
   if (normalized === "fail" || normalized === "error") {
     return {
       type: "error" as const,
-      message: `결제가 완료되지 않았습니다. 다시 시도해주세요. ${savedDraftNotice}`,
+      message: "결제에 실패했습니다.",
     };
   }
   return null;
@@ -99,10 +96,10 @@ export function PaymentRetryClient({
         const paymentState = status.toLowerCase();
         const message =
           typeof payload.message === "string"
-            ? `${payload.message} ${savedDraftNotice}`
+            ? payload.message
             : status === "CANCEL"
-              ? `결제가 취소되었습니다. 접수 내용은 결제 대기 상태로 유지됩니다. ${savedDraftNotice}`
-              : `결제가 완료되지 않았습니다. 다시 시도해주세요. ${savedDraftNotice}`;
+              ? "결제가 취소되었습니다."
+              : "결제에 실패했습니다.";
         setNotice({ type: "error", message });
         setIsOpening(false);
         window.setTimeout(() => reloadPaymentPage(paymentState), 80);
@@ -116,7 +113,7 @@ export function PaymentRetryClient({
   const handleRetryPayment = async () => {
     if (isOpening || disabled) return;
     setIsOpening(true);
-    setNotice({ type: "info", message: "이니시스 결제 모듈을 준비 중입니다." });
+    setNotice(null);
     const { ok, error } = await openInicisCardPopup({
       context,
       submissionId,
@@ -131,7 +128,6 @@ export function PaymentRetryClient({
       setIsOpening(false);
       return;
     }
-    setNotice({ type: "info", message: "결제 모듈을 실행했습니다. 결제를 완료해주세요." });
   };
 
   return (
@@ -154,7 +150,7 @@ export function PaymentRetryClient({
           disabled={disabled || isOpening}
           className="inline-flex items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-5 py-3 text-xs font-black uppercase tracking-normal text-white shadow-[3px_3px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:text-[#06111f] dark:hover:bg-[#ff7a72]"
         >
-          {isOpening ? "결제 모듈 준비 중" : "카드 결제하기"}
+          {isOpening ? "결제 준비 중" : "카드 결제하기"}
         </button>
         {showDetailLink ? (
           <Link

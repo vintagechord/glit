@@ -327,15 +327,9 @@ export default function AdminFilesPage() {
               : "등급 이미지 다운로드 중..."
         }
       />
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        관리자 · 뮤직비디오 결과 파일
-      </p>
-      <h1 className="font-display mt-2 text-2xl text-foreground">
+      <h1 className="font-display text-2xl text-foreground">
         뮤직비디오 필증 업로드
       </h1>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        접수별 영등위 필증을 업로드합니다.
-      </p>
       <details className="mt-2 text-xs text-muted-foreground">
         <summary className="cursor-pointer font-semibold text-foreground">
           사용자 제공 파일

@@ -84,15 +84,9 @@ export default async function AdminChatPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-12">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        Admin
-      </p>
-      <h1 className="font-display mt-2 text-3xl text-foreground">
+      <h1 className="font-display text-3xl text-foreground">
         실시간 채팅 관리
       </h1>
-      <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
-        실시간 문의를 확인하고 답변합니다.
-      </p>
 
       {error ? (
         <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">

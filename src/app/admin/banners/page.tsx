@@ -65,13 +65,7 @@ export default async function AdminBannersPage({
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        관리자
-      </p>
-      <h1 className="font-display mt-2 text-3xl text-foreground">배너 관리</h1>
-      <p className="mt-3 text-sm text-muted-foreground">
-        홈 배너의 이미지·링크·노출을 관리합니다.
-      </p>
+      <h1 className="font-display text-3xl text-foreground">배너 관리</h1>
 
       <div className="mt-8 space-y-6">
         {bannersError && (

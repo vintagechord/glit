@@ -111,15 +111,9 @@ export default async function AdminKaraokePage({
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        Admin
-      </p>
-      <h1 className="font-display mt-2 text-3xl text-foreground">
+      <h1 className="font-display text-3xl text-foreground">
         노래방 등록 관리
       </h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        등록 요청과 결제 상태를 관리합니다.
-      </p>
 
       <form className="mt-6 flex flex-wrap items-center gap-3 rounded-[28px] border border-border/60 bg-card/80 p-4">
         <select

@@ -127,10 +127,7 @@ export default async function AdminConfigPage({
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        관리자 설정
-      </p>
-      <h1 className="font-display mt-2 text-3xl text-foreground">
+      <h1 className="font-display text-3xl text-foreground">
         패키지/방송국 설정
       </h1>
 

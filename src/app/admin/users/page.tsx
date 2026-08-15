@@ -58,15 +58,9 @@ export default async function AdminUsersPage() {
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            관리자
-          </p>
-          <h1 className="font-display mt-2 text-3xl text-foreground">
+          <h1 className="font-display text-3xl text-foreground">
             회원 관리
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            회원 정보와 연락처를 확인합니다.
-          </p>
         </div>
         <Link
           href="/admin"

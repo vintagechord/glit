@@ -766,23 +766,18 @@ export function SubmissionDetailClient({
     paymentState === "success"
       ? {
         title: "결제가 완료되었습니다.",
-        description: "접수가 정상적으로 반영되었습니다. 아래 상세 화면에서 진행 상황을 확인할 수 있습니다.",
         tone:
           "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100",
       }
       : paymentState === "cancel"
         ? {
           title: "결제가 취소되었습니다.",
-          description:
-            "현재 접수 내용은 작성중 신청서에 보관되어 있습니다. 필요하면 다시 결제를 진행하거나 무통장 입금으로 접수할 수 있습니다.",
           tone:
             "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
         }
         : paymentState === "fail" || paymentState === "error"
           ? {
             title: "결제가 완료되지 않았습니다.",
-            description:
-              "결제 과정에서 문제가 발생했습니다. 작성한 신청서는 작성중 신청서에 보관되어 있으니 다시 결제하거나 다른 결제 방식을 선택해주세요.",
             tone:
               "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-100",
           }
@@ -961,14 +956,7 @@ export function SubmissionDetailClient({
   ];
   const renderProcessSection = () => (
     <div className="rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className={detailKickerClass}>
-          심의 진행 단계
-        </p>
-        <p className="text-xs font-semibold text-muted-foreground">
-          현재 진행 상황
-        </p>
-      </div>
+      <p className={detailKickerClass}>심의 진행 단계</p>
       <div className="mt-4 grid gap-3 md:grid-cols-4">
         {processSteps.map((step, index) => (
           <div
@@ -1004,7 +992,6 @@ export function SubmissionDetailClient({
                 </span>
             </div>
             <p className="mt-3 font-black tracking-normal">{step.label}</p>
-            <p className="mt-2 text-xs leading-5 opacity-85">{step.value}</p>
           </div>
         ))}
       </div>
@@ -1017,34 +1004,18 @@ export function SubmissionDetailClient({
           방송국별 현황
         </p>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {isMvSubmission ? (
-          <span
-            className={`bauhaus-status-chip ${
-              isMvResultDelivered
-                ? "bauhaus-status-chip--success"
-                : "bauhaus-status-chip--waiting"
-            } bauhaus-status-chip--compact`}
-          >
-            {isMvResultDelivered ? "결과 반영 완료" : "결과 반영 대기"}
+      {!isMvSubmission ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className="bauhaus-status-chip bauhaus-status-chip--info bauhaus-status-chip--compact">
+            결과 {stationSummary.delivered}/{expectedStationTotal}
           </span>
-        ) : (
-          <>
-            <span className="bauhaus-status-chip bauhaus-status-chip--neutral bauhaus-status-chip--compact">
-              전체 {expectedStationTotal}곳
-            </span>
-            <span className="bauhaus-status-chip bauhaus-status-chip--info bauhaus-status-chip--compact">
-              {stationSummary.delivered}/{expectedStationTotal} 결과 반영
-            </span>
-            <span className="bauhaus-status-chip bauhaus-status-chip--success bauhaus-status-chip--compact">
-              적격 반영 {stationSummary.approved}곳
-            </span>
+          {stationSummary.actionNeeded > 0 ? (
             <span className="bauhaus-status-chip bauhaus-status-chip--waiting bauhaus-status-chip--compact">
               확인 필요 {stationSummary.actionNeeded}곳
             </span>
-          </>
-        )}
-      </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-5">
         {renderStationReviews && renderStationReviews.length > 0 ? (
           <div className="grid gap-3 lg:grid-cols-2">
@@ -1189,7 +1160,7 @@ export function SubmissionDetailClient({
           </div>
         ) : (
           <div className="rounded-[8px] border-2 border-dashed border-border bg-background px-4 py-6 text-sm text-muted-foreground">
-            결제 완료 후 방송국 진행 정보가 자동 생성됩니다.
+            진행 정보 준비 중
           </div>
         )}
       </div>
@@ -1391,7 +1362,6 @@ export function SubmissionDetailClient({
             Payment
           </p>
           <h2 className="mt-2 text-lg font-black">{paymentFeedback.title}</h2>
-          <p className="mt-1 text-sm opacity-90">{paymentFeedback.description}</p>
         </div>
       ) : null}
       {showPaymentInfo ? (
@@ -1416,9 +1386,6 @@ export function SubmissionDetailClient({
                 <h2 className="mt-2 text-lg font-black text-foreground">
                   {packageInfo?.name ?? submission.title ?? "신청 상품"}
                 </h2>
-                <p className="text-sm text-muted-foreground">
-                  입금 확인 대기 상태입니다. 아래 계좌로 입금 후 알려주세요.
-                </p>
               </div>
               <button
                 type="button"
@@ -1455,7 +1422,7 @@ export function SubmissionDetailClient({
             </div>
             <div className={`${detailSubPanelClass} mt-4 p-4 text-sm`}>
               <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-                무통장 입금 안내
+                입금 계좌
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div>
@@ -1478,7 +1445,7 @@ export function SubmissionDetailClient({
                 </div>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                입금 후 24시간 내에 결제 완료로 전환됩니다.
+                24시간 내 확인 · 입금자명이 다르면 문의해주세요.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
@@ -1486,7 +1453,7 @@ export function SubmissionDetailClient({
                   onClick={openCartForPayment}
                   className="rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-4 py-2 text-xs font-black uppercase tracking-normal text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
                 >
-                  장바구니에서 결제하기
+                  장바구니
                 </button>
               </div>
             </div>
@@ -1523,11 +1490,6 @@ export function SubmissionDetailClient({
               <h2 className="mt-2 text-2xl font-black text-foreground">
                 {displayStatus.currentLabel}
               </h2>
-              {displayStatus.primaryMessage ? (
-                <p className="mt-3 text-sm font-semibold leading-6 text-foreground/85">
-                  {displayStatus.primaryMessage}
-                </p>
-              ) : null}
               <div className="mt-5 flex flex-wrap gap-2">
                 {displayStatus.primaryActionLabel ? (
                   <button
@@ -1551,12 +1513,14 @@ export function SubmissionDetailClient({
         </div>
       </section>
 
-      {!isMvSubmission ? (
+      {!isMvSubmission && isPaymentDone ? (
         <div className="mt-8">{renderProcessSection()}</div>
       ) : null}
-      <div className={isMvSubmission ? "mt-8" : "mt-6"}>
-        {renderStationReviewSection()}
-      </div>
+      {isPaymentDone ? (
+        <div className={isMvSubmission ? "mt-8" : "mt-6"}>
+          {renderStationReviewSection()}
+        </div>
+      ) : null}
 
       {/* 관리자용 등급/필증 편집 UI는 관리자 페이지에서만 제공 */}
       {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}
@@ -2095,7 +2059,7 @@ export function SubmissionDetailClient({
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
-                결제 완료 후 방송국 진행 정보가 자동 생성됩니다.
+                진행 정보 준비 중
               </div>
             )}
           </div>

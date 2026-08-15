@@ -39,9 +39,7 @@ type DeletePayload = {
 };
 
 const stageTone: Record<string, string> = {
-  "결제 대기": "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
   "접수 완료": "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]",
-  "결제 확인": "border-[var(--bauhaus-blue)] bg-[var(--bauhaus-blue)] text-white dark:text-[#06111f]",
   "심의 진행": "border-[var(--bauhaus-ink)] bg-[var(--foreground)] text-[var(--background)]",
   "결과 전달": "border-[var(--bauhaus-green)] bg-[var(--bauhaus-green)] text-white dark:text-[#06111f]",
 };
@@ -62,17 +60,8 @@ const getStageLabel = (item: SubmissionItem) => {
   if (item.status === "IN_PROGRESS") {
     return "심의 진행";
   }
-  if (item.payment_status === "PAYMENT_PENDING") {
-    return "결제 대기";
-  }
-  if (item.payment_status !== "PAID") {
-    return "결제 대기";
-  }
   if (["SUBMITTED", "PRE_REVIEW"].includes(item.status)) {
     return "접수 완료";
-  }
-  if (item.payment_status === "PAID") {
-    return "결제 확인";
   }
   return "접수 완료";
 };

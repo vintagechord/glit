@@ -5,7 +5,6 @@ import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
-import { paymentStatusLabelMap } from "@/constants/review-status";
 import { PaymentMethodChoiceClient } from "./payment-method-choice-client";
 
 export const dynamic = "force-dynamic";
@@ -146,15 +145,6 @@ export default async function PayPage({
   const amountLabel = paymentSubmission.amount_krw
     ? formatCurrency(paymentSubmission.amount_krw)
     : "미정";
-  const paymentStatusLabel =
-    paymentSubmission.payment_status &&
-    paymentSubmission.payment_status in paymentStatusLabelMap
-      ? paymentStatusLabelMap[
-          paymentSubmission.payment_status as keyof typeof paymentStatusLabelMap
-        ]
-      : paymentSubmission.payment_status === "UNPAID"
-        ? "미결제"
-        : "미결제";
   const isPaid = paymentSubmission.payment_status === "PAID";
   const paymentContext =
     paymentSubmission.type === "ALBUM"
@@ -181,30 +171,23 @@ export default async function PayPage({
         <div className="mt-6 grid gap-4 rounded-[8px] border-2 border-border bg-background/70 p-4 text-sm text-foreground">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-              결제 상태
-            </span>
-            <span className="rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-[11px] font-black uppercase tracking-normal text-black">
-              {paymentStatusLabel}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-normal text-muted-foreground">
               결제 금액
             </span>
             <span className="text-base font-black">{amountLabel}원</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-              최근 선택 방식
-            </span>
-            <span className="text-sm">
-              {paymentSubmission.payment_method === "CARD"
-                ? "카드"
-                : paymentSubmission.payment_method === "BANK"
-                  ? "무통장 입금"
-                  : "결제 대기"}
-            </span>
-          </div>
+          {paymentSubmission.payment_method === "CARD" ||
+          paymentSubmission.payment_method === "BANK" ? (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-normal text-muted-foreground">
+                결제 방식
+              </span>
+              <span className="text-sm">
+                {paymentSubmission.payment_method === "CARD"
+                  ? "카드"
+                  : "무통장 입금"}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {isPaid ? (

@@ -34,7 +34,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               가입 완료
             </div>
           ) : null}
-          <p className="bauhaus-kicker mx-auto">로그인</p>
           <h1 className="font-display text-2xl font-black text-foreground sm:text-3xl">로그인</h1>
         </div>
         <LoginForm nextPath={nextPath} />

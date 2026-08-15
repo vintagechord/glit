@@ -74,14 +74,12 @@ async function getDashboardSummary(): Promise<DashboardSummary> {
 
 function SummaryCard({
   title,
-  description,
   count,
   href,
   icon: Icon,
   tone,
 }: {
   title: string;
-  description: string;
   count: number;
   href: string;
   icon: LucideIcon;
@@ -99,14 +97,8 @@ function SummaryCard({
           <Icon className="h-5 w-5" aria-hidden="true" />
         </span>
         <span className="min-w-0">
-          <span className="block text-[11px] font-black uppercase tracking-[0.22em] text-muted-foreground">
-            전체 유형 합산
-          </span>
-          <span className="mt-1 block text-base font-black text-foreground">
+          <span className="block text-base font-black text-foreground">
             {title}
-          </span>
-          <span className="mt-1 block text-xs font-semibold text-muted-foreground">
-            {description}
           </span>
         </span>
       </div>
@@ -126,15 +118,7 @@ export default async function AdminPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
-      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-        관리자
-      </p>
-      <h1 className="font-display mt-2 text-3xl text-foreground">
-        관리자 대시보드
-      </h1>
-      <p className="mt-3 text-sm text-muted-foreground">
-        처리할 업무를 선택하세요.
-      </p>
+      <h1 className="font-display text-3xl text-foreground">대시보드</h1>
 
       <section
         aria-label="관리자 처리 요약"
@@ -143,11 +127,8 @@ export default async function AdminPage() {
         <div className="border-b border-border/70 bg-background/80 px-5 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-muted-foreground">
+              <h2 className="text-base font-black text-foreground">
                 처리 현황
-              </p>
-              <h2 className="mt-1 text-base font-black text-foreground">
-                접수 · 결제 · 결과통보 요약
               </h2>
             </div>
             {summary.hasError ? (
@@ -160,7 +141,6 @@ export default async function AdminPage() {
         <div className="grid md:grid-cols-3">
           <SummaryCard
             title="접수"
-            description="접수 완료 상태"
             count={summary.received}
             href="/admin/submissions?type=ALL&status=SUBMITTED"
             icon={ClipboardList}
@@ -168,7 +148,6 @@ export default async function AdminPage() {
           />
           <SummaryCard
             title="결제 완료"
-            description="결제 승인/완료 건"
             count={summary.paid}
             href="/admin/submissions?type=ALL&payment=PAID"
             icon={CreditCard}
@@ -176,7 +155,6 @@ export default async function AdminPage() {
           />
           <SummaryCard
             title="결과통보 완료"
-            description="결과 안내 발송 완료"
             count={summary.resultNotified}
             href="/admin/submissions?type=ALL&status=RESULT_READY"
             icon={SendHorizontal}
@@ -191,12 +169,9 @@ export default async function AdminPage() {
       >
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-[#1556a4] dark:text-[#8bc3ff]">
-              REVIEW DOCS
-            </p>
             <h2
               id="melon-review-docs-title"
-              className="mt-1 text-base font-black text-foreground"
+              className="text-base font-black text-foreground"
             >
               멜론/지니 링크 심의자료 생성
             </h2>
@@ -225,171 +200,95 @@ export default async function AdminPage() {
           href="/admin/submissions?type=ALBUM"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            접수 관리
-          </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
-            접수 관리
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            접수 리스트와 결제 승인, 상태 변경을 처리합니다.
-          </p>
+          <h2 className="text-xl font-semibold text-foreground">접수 관리</h2>
         </Link>
         <Link
           href="/admin/artists"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            아티스트
-          </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold text-foreground">
             아티스트 관리
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            아티스트 썸네일과 메타 정보를 관리합니다.
-          </p>
         </Link>
         <Link
           href="/admin/config"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            설정
-          </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold text-foreground">
             패키지/방송국 설정
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            패키지 가격과 방송국 매핑을 관리합니다.
-          </p>
         </Link>
         <Link
           href="/admin/karaoke"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            노래방
-          </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold text-foreground">
             노래방 등록 관리
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            노래방 등록 접수와 상태를 관리합니다.
-          </p>
         </Link>
         <Link
           href="/admin/magazine"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            매거진
-          </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold text-foreground">
             매거진 발행 요청
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            음반심의 크레딧으로 접수된 매거진 요청을 관리합니다.
-          </p>
         </Link>
         <Link
           href="/admin/credits"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            크레딧
-          </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold text-foreground">
             크레딧 서비스 관리
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            크레딧 사용 서비스와 요청 접수를 관리합니다.
-          </p>
         </Link>
         <Link
           href="/admin/chat"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            실시간 상담
-          </p>
-          <h2 className="mt-3 flex items-center gap-2 text-xl font-semibold text-foreground">
+          <h2 className="flex items-center gap-2 text-xl font-semibold text-foreground">
             <MessageCircle className="h-5 w-5" aria-hidden="true" />
             실시간 채팅
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            사이트 우측 하단 채팅으로 들어온 문의에 답변합니다.
-          </p>
         </Link>
         <Link
           href="/admin/inquiries"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            고객 문의
-          </p>
-          <h2 className="mt-3 flex items-center gap-2 text-xl font-semibold text-foreground">
+          <h2 className="flex items-center gap-2 text-xl font-semibold text-foreground">
             <MessageSquareText className="h-5 w-5" aria-hidden="true" />
             1:1 문의
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            고객센터 모달로 접수된 제목, 내용, 연락처를 확인합니다.
-          </p>
         </Link>
         <Link
           href="/admin/banners"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            배너
-          </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
-            배너 관리
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            좌측 배너 광고 노출 정보를 관리합니다.
-          </p>
+          <h2 className="text-xl font-semibold text-foreground">배너 관리</h2>
         </Link>
         <Link
           href="/admin/users"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            회원 관리
-          </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold text-foreground">
             가입 회원 관리
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            회원 프로필과 연락처 정보를 조회하고 관리합니다.
-          </p>
         </Link>
         <Link
           href="/admin/payments"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            카드 결제
-          </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold text-foreground">
             이니시스 승인 내역
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            승인 완료된 카드 결제 건을 조회합니다.
-          </p>
         </Link>
         <Link
           href="/admin/files"
           className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            결과 파일
-          </p>
-          <h2 className="mt-3 text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold text-foreground">
             심의 파일 업로드
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            등급분류/결과/표기 가이드 파일을 접수 건에 업로드합니다.
-          </p>
         </Link>
       </div>
     </div>

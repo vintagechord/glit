@@ -88,15 +88,6 @@ export function KaraokeStatusPanel({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          진행상황
-        </p>
-        <p className="mt-3 text-sm">
-          노래방 등록 요청 진행상황은 실시간으로 업데이트됩니다.
-        </p>
-      </div>
-
       {requests.length > 0 ? (
         requests.map((request) => {
           const currentIndex = steps.findIndex(

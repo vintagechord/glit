@@ -146,16 +146,13 @@ export function MagazineRequestForm({
         {!isAuthenticated ? (
           <div className="mt-5 rounded-[8px] border-2 border-[#111111] bg-background p-5">
             <p className="text-sm font-black text-foreground">
-              크레딧 사용은 회원만 가능합니다.
-            </p>
-            <p className="mt-2 text-xs font-semibold leading-5 text-muted-foreground">
-              로그인 후 보유 크레딧으로 매거진 등록을 신청할 수 있습니다.
+              로그인이 필요합니다.
             </p>
             <Link
               href={`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/magazine#credit-use`)}`}
-              className="mt-4 inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black text-white transition hover:-translate-y-0.5"
+              className="mt-3 inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black text-white transition hover:-translate-y-0.5"
             >
-              로그인 후 크레딧 사용
+              로그인
             </Link>
           </div>
         ) : null}
@@ -175,6 +172,7 @@ export function MagazineRequestForm({
                     key={option.value}
                     type="button"
                     onClick={() => setTargetChannel(option.value)}
+                    aria-pressed={selected}
                     className={`min-h-[94px] rounded-[8px] border-2 p-4 text-left transition ${
                       selected
                         ? "border-[#111111] bg-[#1556a4] text-white shadow-[4px_4px_0_#111111] dark:border-[#8bc3ff] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[4px_4px_0_#8bc3ff]"
@@ -328,23 +326,22 @@ export function MagazineRequestForm({
           >
             <SendHorizontal className="h-4 w-4" aria-hidden="true" />
             {!isAuthenticated
-              ? "로그인 후 이용"
+              ? "발행 요청"
               : !hasAvailableCredits
                 ? "사용 가능한 크레딧 없음"
               : isPending
                 ? "요청 접수 중..."
-                : "크레딧 사용해서 발행 요청"}
+                : "발행 요청"}
           </button>
         </form>
       </section>
 
       <aside className="space-y-5">
-        <section className="rounded-[10px] border-2 border-[#111111] bg-background p-5 dark:border-white/70">
-          <p className="bauhaus-kicker">Credits</p>
-          <h2 className="mt-3 text-xl font-black text-foreground">
-            보유 크레딧
-          </h2>
-          <div className="mt-4 grid grid-cols-2 gap-3">
+        <section
+          aria-label="크레딧 요약"
+          className="rounded-[10px] border-2 border-[#111111] bg-background p-5 dark:border-white/70"
+        >
+          <div className="grid grid-cols-2 gap-3">
             <div className="rounded-[8px] border-2 border-border bg-card p-4">
               <p className={labelClass}>보유 크레딧</p>
               <p className="mt-2 text-3xl font-black text-foreground">

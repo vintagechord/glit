@@ -117,10 +117,10 @@ const steps = [
   "접수 완료",
 ];
 
-const deferredPaymentNotice =
-  "결제가 완료되지 않아 신청서만 저장되었습니다.";
+const deferredPaymentNotice = "신청서를 장바구니에 담았습니다.";
+const paymentFailureStorageNotice = "신청서는 장바구니에 보관됩니다.";
 const paymentFailureDraftNotice =
-  "결제가 완료되지 않았습니다. 작성한 신청서는 접수 현황과 장바구니에 보관되어 있으니 다시 작성하지 않아도 됩니다.";
+  `결제에 실패했습니다. ${paymentFailureStorageNotice}`;
 
 const selectedBadgeClass =
   "inline-flex items-center rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
@@ -703,7 +703,7 @@ export function MvWizard({
       if (status === "FAIL" || status === "CANCEL" || status === "ERROR") {
         const message =
           typeof payload.message === "string"
-            ? `${payload.message} ${paymentFailureDraftNotice}`
+            ? `${payload.message} ${paymentFailureStorageNotice}`
             : paymentFailureDraftNotice;
         const paymentState = status.toLowerCase();
         if (guestPaymentToken) {
@@ -2646,7 +2646,7 @@ export function MvWizard({
             setNotice({
               error:
                 error
-                  ? `${error} ${paymentFailureDraftNotice}`
+                  ? `${error} ${paymentFailureStorageNotice}`
                   : paymentFailureDraftNotice,
             });
           }
@@ -4112,14 +4112,7 @@ export function MvWizard({
                 </button>
               </div>
             </div>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-emerald-500/30 bg-emerald-500/8 px-5 py-4">
-              <span className="font-semibold text-foreground">✓ 장바구니 준비 완료</span>
-              <span className="rounded-full bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
-                여러 건 동시 결제
-              </span>
-            </div>
-          )}
+          ) : null}
 
           {isGuest && !usesSubmissionCartCheckout && paymentMethod === "BANK" ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -4385,7 +4378,7 @@ export function MvWizard({
               disabled={isSaving || !mvPaymentReady}
               className="rounded-full border border-border/70 bg-background px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              장바구니에 담고 나중에 결제
+              장바구니에 담기
             </button>
             <button
               type="button"
@@ -4398,7 +4391,7 @@ export function MvWizard({
               disabled={isSaving || !mvPaymentReady}
               className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
             >
-              장바구니에서 결제하기
+              담고 결제하기
             </button>
           </div>
         </div>
@@ -4410,9 +4403,6 @@ export function MvWizard({
             ✓
           </div>
           <h2 className="font-display mt-4 text-3xl text-foreground">접수 완료</h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            결제 확인 후 진행 상태가 업데이트됩니다.
-          </p>
           {notice.emailNotice ? (
             <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
               {notice.emailNotice}

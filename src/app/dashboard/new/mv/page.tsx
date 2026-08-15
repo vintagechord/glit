@@ -31,16 +31,12 @@ export default async function MvSubmissionPage() {
       <section className="rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="bauhaus-kicker">뮤직비디오 심의 신청</p>
-            <h1 className="font-display mt-4 text-3xl font-black text-foreground">
+            <h1 className="font-display text-3xl font-black text-foreground">
               뮤직비디오 심의 접수
             </h1>
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
                 비회원 가능
-              </span>
-              <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
-                5단계 접수
               </span>
             </div>
           </div>

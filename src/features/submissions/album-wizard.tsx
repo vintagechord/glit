@@ -146,10 +146,10 @@ const steps = [
   "접수 완료",
 ];
 
-const deferredPaymentNotice =
-  "결제가 완료되지 않아 신청서만 저장되었습니다.";
+const deferredPaymentNotice = "신청서를 장바구니에 담았습니다.";
+const paymentFailureStorageNotice = "신청서는 장바구니에 보관됩니다.";
 const paymentFailureDraftNotice =
-  "결제가 완료되지 않았습니다. 작성한 신청서는 접수 현황과 장바구니에 보관되어 있으니 다시 작성하지 않아도 됩니다.";
+  `결제에 실패했습니다. ${paymentFailureStorageNotice}`;
 const usesSubmissionCartCheckout = true;
 
 const selectedBadgeClass =
@@ -588,6 +588,7 @@ export function AlbumWizard({
     },
   ];
   const albumPaymentReady = albumPaymentReadiness.every((item) => item.ready);
+  const albumPaymentBlockers = albumPaymentReadiness.filter((item) => !item.ready);
   const albumQuickSteps = isOneClick
     ? ["담당자 정보", "멜론 링크", "음원 WAV/MP3/ZIP", "결제"]
     : ["담당자 정보", "앨범·트랙 정보", "음원 WAV/MP3/ZIP", "결제"];
@@ -884,7 +885,7 @@ export function AlbumWizard({
       if (status === "FAIL" || status === "CANCEL" || status === "ERROR") {
         const message =
           typeof payload.message === "string"
-            ? `${payload.message} ${paymentFailureDraftNotice}`
+            ? `${payload.message} ${paymentFailureStorageNotice}`
             : paymentFailureDraftNotice;
         const paymentState = status.toLowerCase();
         if (guestPaymentToken) {
@@ -3237,7 +3238,7 @@ export function AlbumWizard({
             setNotice({
               error:
                 error
-                  ? `${error} ${paymentFailureDraftNotice}`
+                  ? `${error} ${paymentFailureStorageNotice}`
                   : paymentFailureDraftNotice,
             });
           }
@@ -4716,38 +4717,37 @@ export function AlbumWizard({
         <div className="space-y-8">
           <h2 className="font-display text-2xl text-foreground">신청 내용 확인</h2>
 
-          <div className="rounded-[28px] border-2 border-[#111111] bg-background p-5 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              결제 전 확인
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
-              {albumPaymentReadiness.map((item) => (
-                <div
-                  key={item.label}
-                  className={`rounded-2xl border px-4 py-3 text-sm ${item.ready
-                    ? "border-[#111111] bg-[#fffaf0] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27]"
-                    : "border-[#f2cf27] bg-[rgba(242,207,39,0.18)] text-foreground shadow-[3px_3px_0_rgba(17,17,17,0.2)]"
-                    }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
-                      {item.label}
-                    </p>
-                    <span
-                      className={`inline-flex h-5 w-5 items-center justify-center rounded-[5px] border text-[11px] font-black ${
-                        item.ready
-                          ? "border-[#1556a4] bg-[#1556a4] text-white dark:border-[#8bc3ff] dark:bg-[#8bc3ff] dark:text-[#06111f]"
-                          : "border-[#111111] bg-[#f2cf27] text-[#111111]"
-                      }`}
-                    >
-                      {item.ready ? "✓" : "!"}
-                    </span>
+          {albumPaymentBlockers.length > 0 ? (
+            <div
+              role="alert"
+              className="rounded-[28px] border-2 border-[#f2cf27] bg-[rgba(242,207,39,0.18)] p-5 shadow-[4px_4px_0_rgba(17,17,17,0.2)]"
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-foreground">
+                확인 필요
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {albumPaymentBlockers.map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-2xl border border-[#111111] bg-background px-4 py-3 text-sm text-foreground"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
+                        {item.label}
+                      </p>
+                      <span
+                        aria-hidden="true"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] border border-[#111111] bg-[#f2cf27] text-[11px] font-black text-[#111111]"
+                      >
+                        !
+                      </span>
+                    </div>
+                    <p className="mt-2 font-semibold leading-5">{item.value}</p>
                   </div>
-                  <p className="mt-2 font-semibold leading-5">{item.value}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div className="space-y-4">
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-5 sm:p-6">
@@ -4763,14 +4763,11 @@ export function AlbumWizard({
                         isOneClick,
                       )}
                     </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      음반 심의{" "}
-                      {getPackageDisplayName(
-                        selectedPackageSummary,
-                        isOneClick,
-                      )}
-                      {totalAlbumCount > 1 ? ` · 총 ${totalAlbumCount}건` : ""}
-                    </p>
+                    {totalAlbumCount > 1 ? (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        총 {totalAlbumCount}건
+                      </p>
+                    ) : null}
                   </div>
                   {isOneClick ? (
                     <span className="inline-flex rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -4784,62 +4781,6 @@ export function AlbumWizard({
                 </p>
               )}
             </div>
-
-            {hasAlbumEventDiscount ? (
-              <div className="rounded-[18px] border border-[#f2cf27] bg-[#f2cf27]/20 p-4 sm:p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-black text-foreground">
-                      오픈 기념 {selectedAlbumDiscountPercent}% 할인 적용
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {additionalAlbumCount > 0 ? "패키지 정상가" : "정상가"}{" "}
-                      <span className="text-foreground/70 line-through">
-                        {formatCurrency(
-                          additionalAlbumCount > 0
-                            ? originalBasePriceKrw
-                            : originalTotalPriceKrw,
-                        )}원
-                      </span>
-                      {" "}→{" "}
-                      <span className="font-black text-foreground">
-                        {additionalAlbumCount > 0
-                          ? `할인 적용가 ${formatCurrency(basePriceKrw)}원`
-                          : `결제가 ${formatCurrency(totalPriceKrw)}원`}
-                      </span>
-                    </p>
-                  </div>
-                  <span className="inline-flex w-fit rounded-full bg-[#111111] px-3 py-1 text-xs font-black text-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]">
-                    총 {formatCurrency(albumEventDiscountTotalKrw)}원 할인
-                  </span>
-                </div>
-              </div>
-            ) : null}
-
-            {hasAdditionalAlbumDiscount ? (
-              <div className="rounded-[18px] border-2 border-[#1556a4] bg-[rgba(21,86,164,0.08)] p-4 text-foreground dark:border-[#8bc3ff] dark:bg-[#0f1d2e] sm:p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-black">
-                      2번째 앨범부터 50% 할인 적용
-                    </p>
-                    <p className="mt-1 text-sm text-foreground/75 dark:text-[#d7e7ff]">
-                      추가 앨범 {additionalAlbumCount}건 · 앨범당{" "}
-                      <span className="line-through">
-                        {formatCurrency(basePriceKrw)}원
-                      </span>
-                      {" "}→{" "}
-                      <span className="font-black text-[#1556a4] dark:text-[#8bc3ff]">
-                        {formatCurrency(additionalPriceKrw)}원
-                      </span>
-                    </p>
-                  </div>
-                  <span className="inline-flex w-fit rounded-full bg-[#1556a4] px-3 py-1 text-xs font-black text-white dark:bg-[#8bc3ff] dark:text-[#06111f]">
-                    총 {formatCurrency(additionalAlbumDiscountTotalKrw)}원 할인
-                  </span>
-                </div>
-              </div>
-            ) : null}
 
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-5 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -4876,20 +4817,8 @@ export function AlbumWizard({
                         </span>
                       </div>
                     ) : null}
-                    <div className="flex items-center justify-between gap-4 text-[#1556a4] dark:text-[#8bc3ff]">
-                      <span>총 할인</span>
-                      <span className="font-black">
-                        -{formatCurrency(totalDisplayDiscountKrw)}원
-                      </span>
-                    </div>
                   </>
                 ) : null}
-                <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-3">
-                  <span className="font-semibold text-foreground">결제금액</span>
-                  <span className="font-black text-foreground">
-                    {formatCurrency(totalPriceKrw)}원
-                  </span>
-                </div>
               </div>
               <div className="mt-5 rounded-[18px] border-2 border-[#111111] bg-background px-4 py-4 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:flex sm:items-end sm:justify-between sm:gap-4">
                 <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
@@ -4956,14 +4885,7 @@ export function AlbumWizard({
                 </button>
               </div>
             </div>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-emerald-500/30 bg-emerald-500/8 px-5 py-4">
-              <span className="font-semibold text-foreground">✓ 장바구니 준비 완료</span>
-              <span className="rounded-full bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
-                여러 건 동시 결제
-              </span>
-            </div>
-          )}
+          ) : null}
 
           {isGuest && !usesSubmissionCartCheckout && paymentMethod === "BANK" && (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -5225,7 +5147,7 @@ export function AlbumWizard({
               disabled={isSaving || isAddingAlbum || !albumPaymentReady}
               className="rounded-full border border-border/70 bg-background px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              장바구니에 담고 나중에 결제
+              장바구니에 담기
             </button>
             <button
               type="button"
@@ -5238,7 +5160,7 @@ export function AlbumWizard({
               disabled={isSaving || isAddingAlbum || !albumPaymentReady}
               className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
             >
-              장바구니에서 결제하기
+              담고 결제하기
             </button>
           </div>
         </div>
@@ -5250,16 +5172,6 @@ export function AlbumWizard({
             ✓
           </div>
           <h2 className="font-display mt-4 text-3xl text-foreground">접수 완료</h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            결제 확인 후 진행 상태가 업데이트됩니다.
-          </p>
-          <div className="mx-auto mt-6 flex max-w-xl flex-wrap items-center justify-center gap-2 text-xs font-semibold text-muted-foreground">
-            <span className="rounded-full border border-border/60 bg-background px-3 py-1.5">접수 내역</span>
-            <span aria-hidden="true">→</span>
-            <span className="rounded-full border border-border/60 bg-background px-3 py-1.5">진행 현황</span>
-            <span aria-hidden="true">→</span>
-            <span className="rounded-full border border-border/60 bg-background px-3 py-1.5">결과 확인</span>
-          </div>
           {notice.emailNotice ? (
             <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
               {notice.emailNotice}

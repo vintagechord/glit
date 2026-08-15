@@ -317,17 +317,16 @@ export function KaraokeForm({
       {isDraggingOver && (
         <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
       )}
-      <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          노래방 등록 신청하기
-        </p>
-        <p className="mt-3 text-sm">
-          태진/금영 등록을 <strong>온사이드</strong>가 대행합니다. 신청 후 진행상황 탭에서
-            단계별 진행을 확인할 수 있습니다.
-        </p>
-        <p className="mt-3 text-xs text-muted-foreground">
-          기본 신청 비용 {formatCurrency(APP_CONFIG.karaokeFeeKrw)}원
-        </p>
+      <div
+        aria-label="기본 신청 비용"
+        className="flex items-center justify-between gap-4 rounded-[28px] border border-border/60 bg-card/80 p-5"
+      >
+        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          기본 신청 비용
+        </span>
+        <strong className="text-lg text-foreground">
+          {formatCurrency(APP_CONFIG.karaokeFeeKrw)}원
+        </strong>
         {/* 크레딧 운영 보류: 추천 구조 안내 숨김
         <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary shadow-sm dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
           <p className="text-xs font-semibold uppercase tracking-[0.25em]">추천 구조</p>
@@ -421,6 +420,7 @@ export function KaraokeForm({
             >
               <input
                 type="checkbox"
+                aria-label="태진 등록 요청"
                 checked={tjRequested}
                 onChange={() => setTjRequested((prev) => !prev)}
                 className="sr-only"
@@ -436,11 +436,6 @@ export function KaraokeForm({
                 ✓
               </span>
               <span>태진</span>
-              {tjRequested ? (
-                <span className="ml-auto rounded-full bg-white/18 px-2 py-1 text-[10px] font-black uppercase tracking-normal dark:bg-[#00101f]/10">
-                  선택됨
-                </span>
-              ) : null}
             </label>
             <label
               className={`flex min-h-[54px] items-center gap-3 rounded-[10px] border-2 px-4 py-3 text-sm font-semibold transition ${
@@ -451,6 +446,7 @@ export function KaraokeForm({
             >
               <input
                 type="checkbox"
+                aria-label="금영 등록 요청"
                 checked={kyRequested}
                 onChange={() => setKyRequested((prev) => !prev)}
                 className="sr-only"
@@ -466,11 +462,6 @@ export function KaraokeForm({
                 ✓
               </span>
               <span>금영</span>
-              {kyRequested ? (
-                <span className="ml-auto rounded-full bg-white/18 px-2 py-1 text-[10px] font-black uppercase tracking-normal dark:bg-[#00101f]/10">
-                  선택됨
-                </span>
-              ) : null}
             </label>
           </div>
         </div>
@@ -640,16 +631,14 @@ export function KaraokeForm({
             <button
               type="button"
               onClick={() => setPaymentMethod("BANK")}
+              aria-pressed={paymentMethod === "BANK"}
               className={`rounded-2xl border p-4 text-left transition ${
                 paymentMethod === "BANK"
                   ? "border-foreground bg-foreground text-background"
                   : "border-border/60 bg-background text-foreground hover:border-foreground"
-              }`}
+                }`}
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                무통장
-              </p>
-              <p className="mt-2 text-sm font-semibold">무통장 입금</p>
+              <p className="text-sm font-semibold">무통장 입금</p>
               <p className="mt-2 text-xs opacity-80">
                 입금 확인 후 요청이 진행됩니다.
               </p>
@@ -658,21 +647,17 @@ export function KaraokeForm({
               type="button"
               onClick={() => !isGuest && setPaymentMethod("CARD")}
               disabled={isGuest}
+              aria-pressed={paymentMethod === "CARD"}
               className={`rounded-2xl border p-4 text-left transition ${
                 paymentMethod === "CARD"
                   ? "border-foreground bg-foreground text-background"
                   : "border-border/60 bg-background text-foreground hover:border-foreground"
-              }`}
+                }`}
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
-                카드
-              </p>
-              <p className="mt-2 text-sm font-semibold">카드 결제</p>
-              <p className="mt-2 text-xs opacity-80">
-                {isGuest
-                  ? "로그인 후 이용 가능합니다."
-                  : "결제 창에서 카드 결제를 완료해주세요."}
-              </p>
+              <p className="text-sm font-semibold">카드 결제</p>
+              {isGuest ? (
+                <p className="mt-2 text-xs opacity-80">로그인 필요</p>
+              ) : null}
             </button>
           </div>
 

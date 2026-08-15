@@ -42,14 +42,10 @@ export default function ForgotPasswordPage() {
       <div aria-hidden="true" className="absolute bottom-6 right-6 hidden h-16 w-16 bg-[#f2cf27] sm:block" />
 
       <div className="relative w-full max-w-xl rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-10">
-        <div className="space-y-3 text-center">
-          <p className="bauhaus-kicker mx-auto">비밀번호 재설정</p>
+        <div className="text-center">
           <h1 className="font-display text-3xl font-black leading-tight tracking-normal text-foreground">
             재설정 링크 받기
           </h1>
-          <p className="mx-auto max-w-md text-sm font-semibold text-muted-foreground sm:text-base">
-            가입 이메일을 입력하세요.
-          </p>
         </div>
 
         <form action={formAction} className="mt-8 space-y-5">

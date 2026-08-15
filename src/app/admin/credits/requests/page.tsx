@@ -121,13 +121,11 @@ function RequestViewBanner({
   view,
   activeView,
   title,
-  description,
   count,
 }: {
   view: RequestView;
   activeView: RequestView;
   title: string;
-  description: string;
   count: number;
 }) {
   const isActive = view === activeView;
@@ -136,7 +134,7 @@ function RequestViewBanner({
   return (
     <Link
       href={buildRequestPath(view)}
-      className={`group flex min-h-[126px] items-stretch rounded-[10px] border-2 p-4 transition hover:-translate-y-0.5 ${
+      className={`group flex min-h-[96px] items-stretch rounded-[10px] border-2 p-4 transition hover:-translate-y-0.5 ${
         isActive
           ? "border-[#111111] bg-[#1556a4] text-white shadow-[5px_5px_0_#f2cf27]"
           : "border-border bg-card text-foreground hover:border-[#1556a4]"
@@ -155,14 +153,7 @@ function RequestViewBanner({
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-lg font-black">{title}</span>
         <span
-          className={`mt-2 text-xs font-semibold leading-5 ${
-            isActive ? "text-white/78" : "text-muted-foreground"
-          }`}
-        >
-          {description}
-        </span>
-        <span
-          className={`mt-auto w-fit rounded-[6px] border px-2.5 py-1 text-[11px] font-black ${
+          className={`mt-2 w-fit rounded-[6px] border px-2.5 py-1 text-[11px] font-black ${
             isActive
               ? "border-white/35 text-white"
               : "border-border text-muted-foreground"
@@ -371,15 +362,9 @@ export default async function AdminCreditRequestsPage({
       {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-            Admin
-          </p>
-          <h1 className="font-display mt-2 text-3xl text-foreground">
+          <h1 className="font-display text-3xl text-foreground">
             크레딧 요청 관리
           </h1>
-          <p className="mt-3 max-w-3xl text-sm text-muted-foreground">
-            요청 상태와 처리 결과를 관리합니다.
-          </p>
         </div>
         <Link
           href="/admin/credits"
@@ -406,14 +391,12 @@ export default async function AdminCreditRequestsPage({
           view="magazine"
           activeView={activeView}
           title="매거진 발행 요청"
-          description="발행 URL, 발행 상태, 관리자 메모를 처리합니다."
           count={magazineTotal}
         />
         <RequestViewBanner
           view="services"
           activeView={activeView}
           title="서비스 이용 요청"
-          description="연락처, 이메일, 희망 일정, 요청사항을 확인합니다."
           count={studioTotal}
         />
       </div>
@@ -566,14 +549,9 @@ export default async function AdminCreditRequestsPage({
       {activeView === "services" ? (
       <section className="mt-6 space-y-4 rounded-[32px] border border-border/60 bg-card/80 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">
-              서비스 이용 요청
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              접수부터 사용 완료까지 상태를 관리합니다.
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold text-foreground">
+            서비스 이용 요청
+          </h2>
           <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
             최신순 · {studioTotal.toLocaleString()}건
           </span>

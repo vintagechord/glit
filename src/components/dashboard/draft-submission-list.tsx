@@ -21,25 +21,6 @@ export type DraftSubmissionItem = {
 type DraftGroupType = "ALBUM" | "MV";
 type FilterType = "ALL" | DraftGroupType;
 
-const draftStatusMap: Record<string, { label: string; tone: string }> = {
-  DRAFT: {
-    label: "작성중",
-    tone: "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]",
-  },
-  PRE_REVIEW: {
-    label: "진행중",
-    tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
-  },
-  SUBMITTED: {
-    label: "결제 대기",
-    tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
-  },
-  WAITING_PAYMENT: {
-    label: "결제 대기",
-    tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
-  },
-};
-
 const filterButtonClass = (active: boolean) =>
   `inline-flex h-8 items-center justify-center rounded-[8px] border-2 px-3 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
     active
@@ -55,27 +36,6 @@ const dangerControlClass =
 
 const chipClass =
   "inline-flex min-h-7 items-center justify-center rounded-[6px] border-2 px-2.5 py-1 text-[11px] font-black leading-none tracking-normal shadow-[1.5px_1.5px_0_var(--bauhaus-shadow)]";
-
-const getDraftStatusInfo = (item: DraftSubmissionItem) => {
-  if (item.paymentStatus === "PAYMENT_PENDING") {
-    return {
-      label: "결제 대기",
-      tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
-    };
-  }
-  if (item.paymentStatus === "UNPAID" && !["DRAFT", "PRE_REVIEW"].includes(item.status)) {
-    return {
-      label: "미결제",
-      tone: "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]",
-    };
-  }
-  return (
-    draftStatusMap[item.status] ?? {
-      label: item.status,
-      tone: "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]",
-    }
-  );
-};
 
 const getDraftGroupType = (type: string): DraftGroupType =>
   type === "ALBUM" ? "ALBUM" : "MV";
@@ -369,7 +329,6 @@ export function DraftSubmissionList({
         ) : (
           filteredItems.map((item) => {
             const draftGroup = getDraftGroupType(item.type);
-            const statusInfo = getDraftStatusInfo(item);
             const shouldOpenPayment =
               item.paymentStatus !== "PAID" &&
               !["DRAFT", "PRE_REVIEW"].includes(item.status);
@@ -392,11 +351,6 @@ export function DraftSubmissionList({
                     </p>
                     <span className={`${chipClass} border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]`}>
                       {getTypeLabel(draftGroup)}
-                    </span>
-                    <span
-                      className={`${chipClass} ${statusInfo.tone}`}
-                    >
-                      {statusInfo.label}
                     </span>
                   </div>
                   <p
