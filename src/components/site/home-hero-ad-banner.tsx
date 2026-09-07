@@ -1,7 +1,6 @@
-import { unstable_cache } from "next/cache";
+import { Suspense } from "react";
 
-import { createAdminClient } from "@/lib/supabase/admin";
-import { isAllowedImageSource } from "@/lib/image-source";
+import { getPublicAdBanners, selectPublicAdBanners } from "@/lib/public-ad-banners";
 import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
 import { HomeHeroAdBannerClient } from "@/components/site/home-hero-ad-banner-client";
 
@@ -27,41 +26,12 @@ const fallbackBanners: HomeHeroAdBannerItem[] = [
   },
 ];
 
-function isBannerActive(banner: HomeHeroAdBannerItem, now: Date) {
-  const startsOk = !banner.starts_at || new Date(banner.starts_at) <= now;
-  const endsOk = !banner.ends_at || new Date(banner.ends_at) >= now;
-  return startsOk && endsOk;
-}
-
-const loadHomeHeroBanners = unstable_cache(
-  async () => {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("ad_banners")
-      .select("id, title, description, image_url, link_url, starts_at, ends_at")
-      .eq("is_active", true)
-      .eq("placement", "HOME_HERO")
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      if (isDynamicServerUsageError(error)) {
-        throw error;
-      }
-      console.error("[HomeHeroAdBanner] Failed to fetch banners:", error.message);
-    }
-
-    return data;
-  },
-  ["home-hero-ad-banners"],
-  { revalidate: 60 },
-);
-
-export async function HomeHeroAdBanner() {
-  let data: HomeHeroAdBannerItem[] | null = null;
+async function HomeHeroAdBannerContent() {
+  let banners = fallbackBanners;
 
   try {
-    data = await loadHomeHeroBanners();
+    const activeBanners = selectPublicAdBanners(await getPublicAdBanners(), "HOME_HERO");
+    if (activeBanners.length > 0) banners = activeBanners;
   } catch (error) {
     if (isDynamicServerUsageError(error)) {
       throw error;
@@ -69,13 +39,13 @@ export async function HomeHeroAdBanner() {
     console.error("[HomeHeroAdBanner] Failed to initialize banner query:", error);
   }
 
-  const now = new Date();
-  const activeBanners =
-    data?.filter(
-      (item) =>
-        isBannerActive(item, now) && isAllowedImageSource(item.image_url),
-    ) ?? [];
-  const bannersToShow = activeBanners.length > 0 ? activeBanners : fallbackBanners;
+  return <HomeHeroAdBannerClient banners={banners} />;
+}
 
-  return <HomeHeroAdBannerClient banners={bannersToShow} />;
+export function HomeHeroAdBanner() {
+  return (
+    <Suspense fallback={<div aria-hidden="true" className="h-[112px] w-full max-w-[540px] rounded-[10px] border-2 border-border bg-card sm:h-[128px]" />}>
+      <HomeHeroAdBannerContent />
+    </Suspense>
+  );
 }

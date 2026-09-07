@@ -1826,11 +1826,20 @@ function preserveWhitespace(original: string, replacement: string) {
   return `${leading}${replacement}${trailing}`;
 }
 
+const koreanTextPattern = /[\u1100-\u11ff\u3130-\u318f\ua960-\ua97f\uac00-\ud7ff]/;
+const phraseTranslationCache = new Map<string, string>();
+const maxCachedPhraseTranslations = 256;
+
 function translateValue(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return value;
   const exact = exactTranslations[trimmed];
   if (exact) return preserveWhitespace(value, exact);
+  // Every phrase pattern contains Korean. English labels, dates, URLs and
+  // previously translated text cannot match and need no regex scan.
+  if (!koreanTextPattern.test(value)) return value;
+  const cached = phraseTranslationCache.get(value);
+  if (cached !== undefined) return cached;
 
   let next = value;
   for (const [pattern, replacement] of phraseTranslations) {
@@ -1838,7 +1847,16 @@ function translateValue(value: string) {
   }
   const translatedTrimmed = next.trim();
   const translatedExact = exactTranslations[translatedTrimmed];
-  return translatedExact ? preserveWhitespace(next, translatedExact) : next;
+  const result = translatedExact ? preserveWhitespace(next, translatedExact) : next;
+  // Bound retained text when counters, filenames or user content keep changing.
+  if (value.length <= 2048) {
+    if (phraseTranslationCache.size >= maxCachedPhraseTranslations) {
+      const oldestKey = phraseTranslationCache.keys().next().value;
+      if (oldestKey !== undefined) phraseTranslationCache.delete(oldestKey);
+    }
+    phraseTranslationCache.set(value, result);
+  }
+  return result;
 }
 
 function translateTextNode(node: Text) {
@@ -1878,7 +1896,20 @@ function translateElement(element: Element) {
   }
 }
 
-function walkAndTranslate(root: ParentNode) {
+function walkAndTranslate(root: Node) {
+  if (root instanceof Text) {
+    if (!root.parentElement?.closest("script, style, noscript, code, pre, textarea, [data-no-translate]")) {
+      translateTextNode(root);
+    }
+    return;
+  }
+  // TreeWalker starts with the root's children. Handle the changed/inserted
+  // element itself as well, including its placeholder and accessible label.
+  if (root instanceof Element) {
+    if (root.closest("script, style, noscript, code, pre, [data-no-translate]")) return;
+    translateElement(root);
+    if (root.closest("textarea")) return;
+  }
   const walker = document.createTreeWalker(
     root,
     NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
@@ -1970,17 +2001,18 @@ function localizeUrl(raw: string) {
   }
 }
 
-function localizeLinks(root: ParentNode) {
-  const links = root.querySelectorAll?.("a[href]") ?? [];
-  links.forEach((link) => {
-    if (link.matches("[data-no-localize]")) return;
-    const href = link.getAttribute("href");
-    if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
-    const next = localizeUrl(href);
-    if (next !== href) {
-      link.setAttribute("href", next);
-    }
-  });
+function localizeLink(link: Element) {
+  if (!link.matches("a[href]") || link.matches("[data-no-localize]")) return;
+  const href = link.getAttribute("href");
+  if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
+  const next = localizeUrl(href);
+  if (next !== href) link.setAttribute("href", next);
+}
+
+function localizeLinks(root: Node) {
+  if (!(root instanceof Element)) return;
+  localizeLink(root);
+  root.querySelectorAll("a[href]").forEach(localizeLink);
 }
 
 function translateDocumentMetadata() {
@@ -1999,8 +2031,7 @@ export function EnglishLanguagePack() {
 
     document.documentElement.lang = "en";
 
-    const apply = (root: ParentNode = document.body) => {
-      translateDocumentMetadata();
+    const apply = (root: Node = document.body) => {
       walkAndTranslate(root);
       localizeLinks(root);
     };
@@ -2012,30 +2043,58 @@ export function EnglishLanguagePack() {
       attributes: true,
       attributeFilter: ["placeholder", "aria-label", "title", "alt", "href"],
     };
-    const pendingRoots = new Set<ParentNode>();
+    const pendingRoots = new Set<Node>();
+    const pendingAttributes = new Set<Element>();
     let animationFrameId: number | null = null;
     let timeoutId: number | null = null;
     let observer: MutationObserver | null = null;
 
+    const hasPendingAncestor = (node: Node) => {
+      let parent = node.parentNode;
+      while (parent) {
+        if (pendingRoots.has(parent)) return true;
+        parent = parent.parentNode;
+      }
+      return false;
+    };
+
     const flush = () => {
       animationFrameId = null;
-      const roots = Array.from(pendingRoots);
-      pendingRoots.clear();
+      const roots = Array.from(pendingRoots).filter(
+        (root) => root.isConnected && !hasPendingAncestor(root),
+      );
+      const attributes = Array.from(pendingAttributes).filter(
+        (element) => element.isConnected && !pendingRoots.has(element) && !hasPendingAncestor(element),
+      );
 
       observer?.disconnect();
+      translateDocumentMetadata();
       roots.forEach((root) => apply(root));
+      attributes.forEach((element) => {
+        if (!element.closest("script, style, noscript, code, pre, [data-no-translate]")) {
+          translateElement(element);
+        }
+        localizeLink(element);
+      });
+      pendingRoots.clear();
+      pendingAttributes.clear();
       observer?.observe(document.body, observeOptions);
     };
 
-    const schedule = (root: ParentNode | null) => {
-      if (!root) return;
-      pendingRoots.add(root);
+    const schedule = (root: Node, attributesOnly = false) => {
+      if (!root.isConnected) return;
+      if (attributesOnly && root instanceof Element) {
+        pendingAttributes.add(root);
+      } else {
+        pendingRoots.add(root);
+      }
       if (animationFrameId !== null) return;
       animationFrameId = window.requestAnimationFrame(flush);
     };
 
     const startTranslation = () => {
       timeoutId = null;
+      translateDocumentMetadata();
       apply();
       observer?.observe(document.body, observeOptions);
     };
@@ -2043,14 +2102,13 @@ export function EnglishLanguagePack() {
     observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         if (mutation.type === "characterData" && mutation.target instanceof Text) {
-          schedule(mutation.target.parentElement);
+          schedule(mutation.target);
           continue;
         }
 
         mutation.addedNodes.forEach((node) => {
           if (node instanceof Element || node instanceof Text) {
-            const root = node instanceof Text ? node.parentElement : node;
-            schedule(root);
+            schedule(node);
           }
         });
 
@@ -2058,7 +2116,7 @@ export function EnglishLanguagePack() {
           mutation.type === "attributes" &&
           mutation.target instanceof Element
         ) {
-          schedule(mutation.target);
+          schedule(mutation.target, true);
         }
       }
     });
@@ -2108,6 +2166,8 @@ export function EnglishLanguagePack() {
         window.clearTimeout(timeoutId);
       }
       observer?.disconnect();
+      pendingRoots.clear();
+      pendingAttributes.clear();
       document.removeEventListener("click", handleClick, true);
       window.alert = originalAlert;
       window.confirm = originalConfirm;

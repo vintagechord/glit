@@ -25,15 +25,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [loadChatbot, setLoadChatbot] = React.useState(false);
   const isPaymentPopupRoute = pathname.startsWith("/pay/inicis");
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
-  const isAdminRoute = pathname.startsWith("/admin");
-  const shouldLoadChatbot = !isPaymentPopupRoute && !isAdminRoute;
+  const basePath = pathname.replace(/^\/en(?=\/|$)/, "") || "/";
+  const isAdminRoute = basePath.startsWith("/admin");
+  const isAuthRoute = ["/login", "/signup", "/forgot-password", "/reset-password"].includes(basePath);
+  const shouldLoadChatbot = !isPaymentPopupRoute && !isAdminRoute && !isAuthRoute;
 
   React.useEffect(() => {
-    if (!shouldLoadChatbot) {
-      setLoadChatbot(false);
-      return;
-    }
-    setLoadChatbot(false);
+    if (!shouldLoadChatbot || loadChatbot) return;
 
     const scheduleIdle =
       typeof window !== "undefined" &&
@@ -58,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         window.clearTimeout(timeoutId);
       }
     };
-  }, [pathname, shouldLoadChatbot]);
+  }, [loadChatbot, shouldLoadChatbot]);
 
   if (isPaymentPopupRoute) {
     return (
@@ -82,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <SiteFooter />
-      {loadChatbot ? <ChatbotWidget /> : null}
+      {shouldLoadChatbot && loadChatbot ? <ChatbotWidget /> : null}
     </div>
   );
 }

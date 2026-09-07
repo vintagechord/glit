@@ -1,93 +1,11 @@
 import { AlbumIntroPanel } from "@/features/submissions/album-intro-panel";
 import { AlbumWizard } from "@/features/submissions/album-wizard";
-import { getAlbumReviewDiscountPercent } from "@/lib/album-discount-server";
+import { getPublicAlbumCatalog } from "@/lib/public-catalog";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 
 export const metadata = {
   title: "음반 심의 접수",
-};
-
-const albumStationOrderByCount: Record<number, string[]> = {
-  3: ["KBS", "MBC", "SBS"],
-  7: ["KBS", "MBC", "SBS", "CBS", "WBS", "TBS", "YTN"],
-  10: ["KBS", "MBC", "SBS", "TBS", "CBS", "PBC", "WBS", "BBS", "YTN", "ARIRANG"],
-  13: [
-    "KBS",
-    "MBC",
-    "SBS",
-    "TBS",
-    "CBS",
-    "PBC",
-    "WBS",
-    "BBS",
-    "YTN",
-    "GYEONGIN_IFM",
-    "TBN",
-    "ARIRANG",
-    "KISS",
-  ],
-  15: [
-    "KBS",
-    "MBC",
-    "SBS",
-    "TBS",
-    "CBS",
-    "PBC",
-    "WBS",
-    "BBS",
-    "YTN",
-    "GYEONGIN_IFM",
-    "TBN",
-    "ARIRANG",
-    "KISS",
-    "FEBC",
-    "GUGAK",
-  ],
-};
-
-const albumStationLabelByCode: Record<string, string> = {
-  KBS: "KBS",
-  MBC: "MBC",
-  SBS: "SBS",
-  CBS: "CBS 기독교방송",
-  WBS: "WBS 원음방송",
-  TBS: "TBS 교통방송",
-  YTN: "YTN",
-  PBC: "PBC 평화방송",
-  BBS: "BBS 불교방송",
-  ARIRANG: "Arirang 방송",
-  GYEONGIN_IFM: "경인 iFM",
-  TBN: "TBN 한국교통방송",
-  KISS: "KISS 디지털 라디오 음악방송",
-  FEBC: "극동방송",
-  GUGAK: "국악방송",
-};
-
-const normalizeStations = (
-  stations: Array<{ id: string; name: string; code: string }>,
-  stationCount: number,
-) => {
-  const order = albumStationOrderByCount[stationCount];
-  const stationByCode = new Map(
-    stations.map((station) => [station.code, station]),
-  );
-  if (!order) {
-    return stations.map((station) => ({
-      ...station,
-      name: albumStationLabelByCode[station.code] ?? station.name,
-    }));
-  }
-  return order
-    .map((code) => {
-      const station = stationByCode.get(code);
-      const name = albumStationLabelByCode[code] ?? station?.name ?? code;
-      if (station) {
-        return { ...station, name };
-      }
-      return { id: `station-${code}`, name, code };
-    })
-    .filter(Boolean);
 };
 
 const preparationChecklist = [
@@ -99,85 +17,13 @@ const preparationChecklist = [
   "실제 발매 앨범과 동일한 트랙 순서와 INST 포함 여부",
 ];
 
-const isTestPackage = (name?: string | null) => name?.startsWith("[테스트]") ?? false;
-
-const sortPackagesForDisplay = <
-  T extends { name?: string | null; stationCount: number; priceKrw: number },
->(
-  packages: T[],
-) =>
-  [...packages].sort((a, b) => {
-    const aIsTest = isTestPackage(a.name);
-    const bIsTest = isTestPackage(b.name);
-    if (aIsTest !== bIsTest) return aIsTest ? 1 : -1;
-    return a.stationCount - b.stationCount || a.priceKrw - b.priceKrw;
-  });
-
 export default async function AlbumSubmissionPage() {
   const supabase = await createServerSupabase();
   const profanityFilterV2Enabled = process.env.PROFANITY_FILTER_V2 !== "false";
-  const user = await getServerSessionUser(supabase);
-  const albumDiscountPercent = await getAlbumReviewDiscountPercent(supabase);
-
-  const { data: joinedPackageRows, error: packageJoinError } = await supabase
-    .from("packages")
-    .select(
-      "id, name, station_count, price_krw, description, package_stations ( station:stations ( id, name, code ) )",
-    )
-    .eq("is_active", true)
-    .order("station_count", { ascending: true });
-
-  const packagesFromJoin =
-    joinedPackageRows?.map((pkg) => {
-      const stations =
-        pkg.package_stations?.flatMap((row) => {
-          if (!row.station) return [];
-          return Array.isArray(row.station) ? row.station : [row.station];
-        }) ?? [];
-
-      return {
-        id: pkg.id,
-        name: pkg.name,
-        stationCount: pkg.station_count,
-        priceKrw: pkg.price_krw,
-        description: pkg.description,
-        stations: normalizeStations(stations, pkg.station_count),
-      };
-    }) ?? [];
-
-  let packages = packagesFromJoin;
-
-  if (packageJoinError || packagesFromJoin.length === 0) {
-    const { data: fallbackPackageRows } = await supabase
-      .from("packages")
-      .select("id, name, station_count, price_krw, description")
-      .eq("is_active", true)
-      .order("station_count", { ascending: true });
-
-    packages =
-      fallbackPackageRows?.map((pkg) => ({
-        id: pkg.id,
-        name: pkg.name,
-        stationCount: pkg.station_count,
-        priceKrw: pkg.price_krw,
-        description: pkg.description,
-        stations: normalizeStations([], pkg.station_count),
-      })) ?? [];
-  }
-
-  const { data: profanityRows } = await supabase
-    .from("profanity_terms")
-    .select("term, language")
-    .eq("is_active", true)
-    .order("term", { ascending: true });
-
-  const profanityTerms =
-    profanityRows?.map((row) => ({
-      term: row.term,
-      language: row.language,
-    })) ?? [];
-
-  const visiblePackages = packages.filter((pkg) => !isTestPackage(pkg.name));
+  const [user, { packages, albumDiscountPercent, profanityTerms }] = await Promise.all([
+    getServerSessionUser(supabase),
+    getPublicAlbumCatalog(),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
@@ -187,7 +33,7 @@ export default async function AlbumSubmissionPage() {
 
       <div className="mt-8">
         <AlbumWizard
-          packages={sortPackagesForDisplay(visiblePackages)}
+          packages={packages}
           userId={user?.id ?? null}
           userEmail={user?.email ?? null}
           profanityTerms={profanityTerms}

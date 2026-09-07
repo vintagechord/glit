@@ -1,8 +1,7 @@
-import { unstable_cache } from "next/cache";
+import { Suspense } from "react";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getPublicAdBanners, selectPublicAdBanners } from "@/lib/public-ad-banners";
 import { StripAdBannerClient } from "@/components/site/strip-ad-banner-client";
-import { isAllowedImageSource } from "@/lib/image-source";
 import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
 
 type AdBanner = {
@@ -14,52 +13,16 @@ type AdBanner = {
   ends_at: string | null;
 };
 
-function isBannerActive(banner: AdBanner, now: Date) {
-  const startsOk = !banner.starts_at || new Date(banner.starts_at) <= now;
-  const endsOk = !banner.ends_at || new Date(banner.ends_at) >= now;
-  return startsOk && endsOk;
-}
-
-const loadStripBanners = unstable_cache(
-  async () => {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("ad_banners")
-      .select("id, title, image_url, link_url, starts_at, ends_at")
-      .eq("is_active", true)
-      .eq("placement", "STRIP")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      if (isDynamicServerUsageError(error)) {
-        throw error;
-      }
-      console.error("[StripAdBanner] Failed to fetch banners:", error.message);
-    }
-
-    return data;
-  },
-  ["strip-ad-banners"],
-  { revalidate: 60 },
-);
-
-export async function StripAdBanner() {
-  let data: AdBanner[] | null = null;
+async function StripAdBannerContent() {
+  let activeBanners: AdBanner[] = [];
   try {
-    data = await loadStripBanners();
+    activeBanners = selectPublicAdBanners(await getPublicAdBanners(), "STRIP");
   } catch (error) {
     if (isDynamicServerUsageError(error)) {
       throw error;
     }
     console.error("[StripAdBanner] Failed to initialize banner query:", error);
   }
-
-  const now = new Date();
-  const activeBanners =
-    data?.filter(
-      (item) =>
-        isBannerActive(item, now) && isAllowedImageSource(item.image_url),
-    ) ?? [];
 
   const bannersToShow =
     activeBanners.length > 0
@@ -76,4 +39,12 @@ export async function StripAdBanner() {
         ];
 
   return <StripAdBannerClient banners={bannersToShow} />;
+}
+
+export function StripAdBanner() {
+  return (
+    <Suspense fallback={<div aria-hidden="true" className="h-[112px] rounded-[10px] border-2 border-border bg-card sm:h-[136px]" />}>
+      <StripAdBannerContent />
+    </Suspense>
+  );
 }

@@ -3,7 +3,7 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 
@@ -40,6 +40,12 @@ import {
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
+import {
+  PUBLIC_CATALOG_CACHE_TAG,
+  PUBLIC_ALBUM_DISCOUNT_CACHE_TAG,
+  PUBLIC_PROFANITY_TERMS_CACHE_TAG,
+  PUBLIC_AD_BANNERS_CACHE_TAG,
+} from "@/lib/public-cache-tags";
 import { safeAdminRedirectPath } from "@/lib/admin/redirect";
 import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
 import {
@@ -2208,6 +2214,7 @@ export async function upsertPackageAction(
     return { error: "패키지 저장에 실패했습니다." };
   }
 
+  updateTag(PUBLIC_CATALOG_CACHE_TAG);
   return { message: "패키지가 저장되었습니다." };
 }
 
@@ -2252,6 +2259,7 @@ export async function upsertStationAction(
     return { error: "방송국 저장에 실패했습니다." };
   }
 
+  updateTag(PUBLIC_CATALOG_CACHE_TAG);
   return { message: "방송국 정보가 저장되었습니다." };
 }
 
@@ -2301,11 +2309,14 @@ export async function updatePackageStationsAction(
     return { error: "일부 방송국 코드를 찾을 수 없습니다." };
   }
 
-  await supabase
+  const { error: deleteError } = await supabase
     .from("package_stations")
     .delete()
     .eq("package_id", parsed.data.packageId);
 
+  if (deleteError) {
+    return { error: "패키지 방송국 매핑 저장 실패" };
+  }
   if (stations && stations.length > 0) {
     const rows = stations.map((station) => ({
       package_id: parsed.data.packageId,
@@ -2313,10 +2324,13 @@ export async function updatePackageStationsAction(
     }));
     const { error } = await supabase.from("package_stations").insert(rows);
     if (error) {
+      // The deletion already changed the catalog even though insertion failed.
+      updateTag(PUBLIC_CATALOG_CACHE_TAG);
       return { error: "패키지 방송국 매핑 저장 실패" };
     }
   }
 
+  updateTag(PUBLIC_CATALOG_CACHE_TAG);
   return { message: "패키지 방송국이 업데이트되었습니다." };
 }
 
@@ -2361,6 +2375,7 @@ export async function updateAlbumReviewDiscountAction(
     };
   }
 
+  updateTag(PUBLIC_ALBUM_DISCOUNT_CACHE_TAG);
   return { message: "음반 할인율이 저장되었습니다." };
 }
 
@@ -2394,6 +2409,7 @@ export async function deletePackageAction(
   if (error) {
     return { error: "패키지 삭제에 실패했습니다." };
   }
+  updateTag(PUBLIC_CATALOG_CACHE_TAG);
   return { message: "패키지가 삭제되었습니다." };
 }
 
@@ -2422,6 +2438,7 @@ export async function deleteStationAction(
   if (error) {
     return { error: "방송국 삭제에 실패했습니다." };
   }
+  updateTag(PUBLIC_CATALOG_CACHE_TAG);
   return { message: "방송국이 삭제되었습니다." };
 }
 
@@ -2474,6 +2491,7 @@ export async function upsertAdBannerAction(
     return { error: "배너 저장에 실패했습니다." };
   }
 
+  updateTag(PUBLIC_AD_BANNERS_CACHE_TAG);
   return { message: "배너가 저장되었습니다." };
 }
 
@@ -2540,6 +2558,7 @@ export async function deleteAdBannerAction(
     return { error: "배너 삭제에 실패했습니다." };
   }
 
+  updateTag(PUBLIC_AD_BANNERS_CACHE_TAG);
   return { message: "배너가 삭제되었습니다." };
 }
 
@@ -2578,6 +2597,7 @@ export async function upsertProfanityTermAction(
     return { error: "욕설/비속어 저장에 실패했습니다." };
   }
 
+  updateTag(PUBLIC_PROFANITY_TERMS_CACHE_TAG);
   return { message: "욕설/비속어가 저장되었습니다." };
 }
 
@@ -2620,6 +2640,7 @@ export async function deleteProfanityTermAction(
     return { error: "욕설/비속어 삭제에 실패했습니다." };
   }
 
+  updateTag(PUBLIC_PROFANITY_TERMS_CACHE_TAG);
   return { message: "욕설/비속어가 삭제되었습니다." };
 }
 
