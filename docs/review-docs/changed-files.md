@@ -97,3 +97,7 @@
 - `tests/review-docs-worker.test.ts`
 - `tests/sql/review-document-jobs.sql`
 - `tests/supabase-health.test.ts`
+
+- `.gitattributes`
+
+- `docs/review-docs/deployment-report.md`
