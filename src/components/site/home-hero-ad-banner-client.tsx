@@ -63,7 +63,8 @@ export function HomeHeroAdBannerClient({
                 fill
                 sizes="(min-width: 640px) 132px, 98px"
                 className="object-cover"
-                priority={false}
+                loading={index === 0 ? "eager" : "lazy"}
+                fetchPriority={index === 0 ? "high" : "auto"}
               />
             </div>
             <div className="flex min-w-0 flex-col justify-center px-3 py-3 pr-20 sm:px-4 sm:py-4 sm:pr-24">

@@ -48,7 +48,7 @@ export function StripAdBannerClient({ banners }: { banners: AdBanner[] }) {
     <div className="overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
       <div className="relative">
         <BannerLinkWrap banner={banner}>
-          <BannerContent banner={banner} />
+          <BannerContent banner={banner} eager={index === 0} />
         </BannerLinkWrap>
 
         <div className="pointer-events-none absolute left-1/2 top-1 z-30 -translate-x-1/2 rounded-b-[8px] border-2 border-t-0 border-[#111111] bg-[#111111] px-4 py-1 text-[10px] font-black uppercase leading-none tracking-[0.18em] text-white shadow-[3px_3px_0_#f2cf27] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[3px_3px_0_#111111] sm:text-[11px]">
@@ -164,7 +164,7 @@ function BannerLinkWrap({
   );
 }
 
-function BannerContent({ banner }: { banner: AdBanner }) {
+function BannerContent({ banner, eager }: { banner: AdBanner; eager: boolean }) {
   return (
     <div className="px-2 pb-2 pt-5 sm:px-3 sm:pb-3 sm:pt-6">
       <div className="group/banner relative flex h-20 overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white transition duration-300 dark:border-[#f2cf27] sm:h-24">
@@ -174,7 +174,8 @@ function BannerContent({ banner }: { banner: AdBanner }) {
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 ease-out group-hover/banner:scale-[1.03]"
           width={1200}
           height={240}
-          priority={false}
+          loading={eager ? "eager" : "lazy"}
+          fetchPriority={eager ? "high" : "auto"}
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white/10 via-white/0 to-white/80 dark:from-black/12 dark:via-black/4 dark:to-black/72" />
       </div>
