@@ -18,6 +18,29 @@ const assertExactTranslations = (labels: readonly string[]) => {
   }
 };
 
+test("authentication errors, recovery messages and resend countdown have English translations", () => {
+  for (const path of [
+    "src/features/auth/errors.ts",
+    "src/features/auth/recovery.ts",
+    "src/features/auth/validation.ts",
+    "src/features/auth/actions.ts",
+  ]) {
+    const messages = Array.from(
+      read(path).matchAll(/"([^"\n]*[가-힣][^"\n]*)"/g),
+      (match) => match[1],
+    );
+    assertExactTranslations(messages);
+  }
+  assertExactTranslations([
+    "메일 발송 중...",
+    "로그인 중...",
+    "새 재설정 링크 요청하기",
+    "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.",
+    "메일이 보이지 않으면 스팸함을 확인해주세요. 재발송한 경우 가장 최근 메일의 링크를 사용해주세요.",
+  ]);
+  assert.ok(translations.includes('[/(\\d+)초 후 다시 보내기/g, "Resend in $1 seconds"]'));
+});
+
 test("unified release choice and URL submission have exact English translations", () => {
   assertExactTranslations([
     "음반이 이미 발매되었나요?",

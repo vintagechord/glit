@@ -21,16 +21,27 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const { url, anonKey } = getSupabaseEnv();
 
-  const res = NextResponse.next();
+  let res = NextResponse.next();
 
   const supabase = createServerClient(url, anonKey, {
     cookies: {
       getAll() {
         return req.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
+        // Server Components must see the refreshed token in this request,
+        // while the browser receives the same cookie for its next request.
+        const previousCookies = res.cookies.getAll();
+        cookiesToSet.forEach(({ name, value }) => {
+          req.cookies.set(name, value);
+        });
+        res = NextResponse.next({ request: { headers: req.headers } });
+        previousCookies.forEach((cookie) => res.cookies.set(cookie));
         cookiesToSet.forEach(({ name, value, options }) => {
           res.cookies.set(name, value, options);
+        });
+        Object.entries(headers).forEach(([name, value]) => {
+          res.headers.set(name, value);
         });
       },
     },

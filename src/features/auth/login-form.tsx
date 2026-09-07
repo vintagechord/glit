@@ -92,7 +92,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
           )}
         </div>
         {state.error && (
-          <p className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
+          <p role="alert" className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
             {state.error}
           </p>
         )}

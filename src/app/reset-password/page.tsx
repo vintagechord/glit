@@ -1,7 +1,8 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
 import { mapAuthError } from "@/features/auth/errors";
@@ -20,6 +21,8 @@ type Status =
 function ResetPasswordContent() {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
+  const pathname = usePathname();
+  const localePrefix = pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>({ state: "verifying" });
   const [password, setPassword] = useState("");
@@ -42,7 +45,7 @@ function ResetPasswordContent() {
         return;
       }
       const cleanUrl = new URL(window.location.href);
-      for (const key of ["code", "token", "token_hash", "type"]) cleanUrl.searchParams.delete(key);
+      for (const key of ["code", "token", "token_hash", "type", "sb_flow_id"]) cleanUrl.searchParams.delete(key);
       cleanUrl.hash = "";
       window.history.replaceState(window.history.state, "", `${cleanUrl.pathname}${cleanUrl.search}`);
       setStatus({ state: "ready" });
@@ -74,7 +77,7 @@ function ResetPasswordContent() {
 
     setSuccess("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.");
     setStatus({ state: "success", message: "비밀번호가 변경되었습니다." });
-    setTimeout(() => router.push("/login"), 1500);
+    setTimeout(() => router.push(`${localePrefix}/login`), 1500);
   };
 
   const heading =
@@ -98,12 +101,15 @@ function ResetPasswordContent() {
         </div>
 
         {status.state === "error" && (
-          <div className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-sm font-semibold text-[#d9362c]">
-            {status.message}
+          <div role="alert" className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-sm font-semibold text-[#d9362c]">
+            <p>{status.message}</p>
+            <Link href={`${localePrefix}/forgot-password`} className="mt-3 inline-flex min-h-10 items-center underline underline-offset-4">
+              새 재설정 링크 요청하기
+            </Link>
           </div>
         )}
         {success && (
-          <div className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-3 text-sm font-semibold text-[#1f7a5a]">
+          <div role="status" className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-3 text-sm font-semibold text-[#1f7a5a]">
             {success}
           </div>
         )}
@@ -150,7 +156,7 @@ function ResetPasswordContent() {
             />
           </div>
           {error && (
-            <p className="text-xs text-red-500">
+            <p role="alert" className="text-xs text-red-500">
               {error}
             </p>
           )}

@@ -10,11 +10,11 @@ test("auth actions validate, map transport failures, preserve safe login redirec
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = `import {state,calls} from 'auth-fixture';`;
         const files: Record<string, string> = {
-          'auth-fixture': `export const state={error:null,throws:false}; export const calls=[];`,
+          'auth-fixture': `export const state={error:null,throws:false,linkData:null,emailResult:{ok:true},limited:false}; export const calls=[];`,
           '@/lib/supabase/server': `${shared} export async function createServerSupabase(){ return {auth:{signInWithPassword:async input=>{calls.push({method:'login',input});if(state.throws)throw state.error;return {error:state.error};},resetPasswordForEmail:async()=>{calls.push({method:'reset'});return {error:state.error};}}}; }`,
-          '@/lib/supabase/admin': `${shared} export function createAdminClient(){return {auth:{admin:{createUser:async()=>{calls.push({method:'signup'});return {data:{user:{id:'fixture'}},error:state.error};},generateLink:async()=>{calls.push({method:'generateLink'});return {data:null,error:state.error};}}}};}`,
-          '@/lib/email': `${shared} export async function sendWelcomeEmail(){calls.push({method:'welcome'});return {ok:true};} export async function sendPasswordResetEmail(){calls.push({method:'sendReset'});return {ok:true};}`,
-          '@/lib/request-rate-limit': `export const consumeRateLimit=()=>({allowed:true}); export const getRequestIdentifier=()=> 'fixture';`,
+          '@/lib/supabase/admin': `${shared} export function createAdminClient(){return {auth:{admin:{createUser:async()=>{calls.push({method:'signup'});return {data:{user:{id:'fixture'}},error:state.error};},generateLink:async()=>{calls.push({method:'generateLink'});return {data:state.linkData,error:state.error};}}}};}`,
+          '@/lib/email': `${shared} export async function sendWelcomeEmail(){calls.push({method:'welcome'});return {ok:true};} export async function sendPasswordResetEmail(input){calls.push({method:'sendReset',input});return state.emailResult;}`,
+          '@/lib/request-rate-limit': `${shared} export const consumeRateLimit=()=>({allowed:!state.limited,retryAfterSeconds:state.limited?120:0}); export const getRequestIdentifier=()=> 'fixture';`,
           'next/navigation': `export function redirect(location){throw Object.assign(new Error('test redirect'),{location});}`,
           'next/headers': `export async function headers(){return new Headers();}`,
         };
@@ -22,8 +22,8 @@ test("auth actions validate, map transport failures, preserve safe login redirec
       });
     } }],
   });
-  type Action = (_: object, form: FormData) => Promise<{ error?: string; fieldErrors?: Record<string, string>; message?: string }>;
-  const bundled = { exports: {} as { state: { error: unknown; throws: boolean }; calls: { method: string; input?: unknown }[]; loginAction: Action; signupAction: Action; resetPasswordAction: Action } };
+  type Action = (_: object, form: FormData) => Promise<{ error?: string; fieldErrors?: Record<string, string>; message?: string; retryAfterSeconds?: number }>;
+  const bundled = { exports: {} as { state: { error: unknown; throws: boolean; linkData: unknown; emailResult: {ok:boolean;reason?:string;retryAfterSeconds?:number}; limited:boolean }; calls: { method: string; input?: unknown }[]; loginAction: Action; signupAction: Action; resetPasswordAction: Action } };
   new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), bundled, bundled.exports);
   const auth = bundled.exports;
   const form = (values: Record<string, string>) => { const body = new FormData(); for (const [name, value] of Object.entries(values)) body.set(name, value); return body; };
@@ -49,6 +49,40 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     delete process.env.RESEND_API_KEY; auth.calls.length = 0;
     await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
     assert.deepEqual(auth.calls.map((call) => call.method), ["reset"], "no custom-link request when custom sender is not configured");
+    process.env.RESEND_API_KEY = "fixture-only";
+    auth.state.error = null;
+    auth.state.linkData = { properties: { hashed_token: "fixture-recovery-hash", action_link: "https://provider.invalid/consume-once" } };
+    auth.calls.length = 0;
+    const sent = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
+    assert.ok(sent.message);
+    assert.equal(sent.retryAfterSeconds, 60);
+    assert.deepEqual(auth.calls.map((call) => call.method), ["generateLink", "sendReset"]);
+    const sentLink = new URL((auth.calls[1].input as {link:string}).link);
+    assert.equal(sentLink.pathname, "/reset-password");
+    assert.equal(sentLink.searchParams.get("token_hash"), "fixture-recovery-hash");
+    assert.equal(sentLink.searchParams.get("type"), "recovery");
+
+    for (const reason of ["configuration", "rate_limit", "delivery"]) {
+      auth.calls.length = 0;
+      auth.state.emailResult = { ok: false, reason, retryAfterSeconds: reason === "rate_limit" ? 90 : undefined };
+      const failed = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
+      assert.ok(failed.error);
+      assert.equal(failed.message, undefined, "must not claim email sent on transport failure");
+      assert.deepEqual(auth.calls.map((call) => call.method), ["generateLink", "sendReset"], "custom delivery failures must not consume default email quota or issue a second token");
+      if (reason === "configuration") assert.match(failed.error, /메일 발송 설정/);
+      if (reason === "rate_limit") assert.equal(failed.retryAfterSeconds, 90);
+    }
+    auth.calls.length = 0;
+    auth.state.error = { code: "user_not_found" };
+    const unknown = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
+    assert.equal(unknown.message, sent.message, "do not disclose account existence");
+    assert.deepEqual(auth.calls.map((call) => call.method), ["generateLink"]);
+    auth.calls.length = 0;
+    auth.state.limited = true;
+    const limited = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
+    assert.equal(limited.retryAfterSeconds, 120);
+    assert.equal(auth.calls.length, 0);
+
   } finally {
     if (originalResend === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = originalResend;
   }

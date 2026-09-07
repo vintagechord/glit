@@ -22,6 +22,7 @@ export type ActionState = {
   error?: string;
   message?: string;
   fieldErrors?: Record<string, string>;
+  retryAfterSeconds?: number;
 };
 
 const resetSuccessMessage = "가입된 이메일이라면 비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.";
@@ -53,7 +54,10 @@ const checkAuthRateLimit = async ({
     limit: emailLimit,
     windowMs,
   });
-  return byIp.allowed && byEmail.allowed;
+  return {
+    allowed: byIp.allowed && byEmail.allowed,
+    retryAfterSeconds: Math.max(byIp.retryAfterSeconds, byEmail.retryAfterSeconds),
+  };
 };
 
 export async function loginAction(
@@ -73,16 +77,18 @@ export async function loginAction(
     };
   }
 
-  if (
-    !(await checkAuthRateLimit({
-      namespace: "login",
-      email: parsed.data.email,
-      ipLimit: 20,
-      emailLimit: 10,
-      windowMs: 15 * 60 * 1_000,
-    }))
-  ) {
-    return { error: "로그인 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." };
+  const rateLimit = await checkAuthRateLimit({
+    namespace: "login",
+    email: parsed.data.email,
+    ipLimit: 20,
+    emailLimit: 10,
+    windowMs: 15 * 60 * 1_000,
+  });
+  if (!rateLimit.allowed) {
+    return {
+      error: "로그인 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+    };
   }
 
   try {
@@ -138,16 +144,18 @@ export async function signupAction(
     };
   }
 
-  if (
-    !(await checkAuthRateLimit({
-      namespace: "signup",
-      email: parsed.data.email,
-      ipLimit: 5,
-      emailLimit: 3,
-      windowMs: 60 * 60 * 1_000,
-    }))
-  ) {
-    return { error: "회원가입 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." };
+  const rateLimit = await checkAuthRateLimit({
+    namespace: "signup",
+    email: parsed.data.email,
+    ipLimit: 5,
+    emailLimit: 3,
+    windowMs: 60 * 60 * 1_000,
+  });
+  if (!rateLimit.allowed) {
+    return {
+      error: "회원가입 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+    };
   }
 
   try {
@@ -200,45 +208,64 @@ export async function resetPasswordAction(
     return { fieldErrors: { resetEmail: "유효한 이메일을 입력해주세요." } };
   }
 
-  if (
-    !(await checkAuthRateLimit({
-      namespace: "password-reset",
-      email: parsed.data,
-      ipLimit: 10,
-      emailLimit: 5,
-      windowMs: 60 * 60 * 1_000,
-    }))
-  ) {
-    return { error: "재설정 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." };
+  const rateLimit = await checkAuthRateLimit({
+    namespace: "password-reset",
+    email: parsed.data,
+    ipLimit: 10,
+    emailLimit: 5,
+    windowMs: 60 * 60 * 1_000,
+  });
+  if (!rateLimit.allowed) {
+    return {
+      error: "재설정 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+    };
   }
 
   try {
     const redirectTo = buildUrl("/reset-password", getBaseUrl());
-    // The custom sender is optional. A transport failure reaching Supabase,
-    // however, also prevents the default sender; do not repeat that request.
+    // A configured sender owns this attempt. Falling back after a failed send
+    // generates another token and masks delivery/configuration errors with the
+    // built-in provider's project-wide email quota.
     if (process.env.RESEND_API_KEY?.trim()) {
-      try {
-        const admin = createAdminClient();
-        const { data, error } = await admin.auth.admin.generateLink({
-          type: "recovery",
-          email: parsed.data,
-          options: { redirectTo },
-        });
-        if (error) {
-          logAuthError("generate recovery link", error);
-          if (isAuthConnectionError(error)) return { error: mapAuthError(error, "reset") };
-          if (error.code === "user_not_found") return { message: resetSuccessMessage };
-        } else {
-          const actionLink = data?.properties?.action_link;
-          if (actionLink) {
-            const emailResult = await sendPasswordResetEmail({ email: parsed.data, link: actionLink });
-            if (emailResult.ok) return { message: resetSuccessMessage };
-          }
+      const admin = createAdminClient();
+      const { data, error } = await admin.auth.admin.generateLink({
+        type: "recovery",
+        email: parsed.data,
+        options: { redirectTo },
+      });
+      if (error) {
+        logAuthError("generate recovery link", error);
+        if (error.code === "user_not_found") {
+          return { message: resetSuccessMessage, retryAfterSeconds: 60 };
         }
-      } catch (error) {
-        logAuthError("custom recovery mail", error);
-        if (isAuthConnectionError(error)) return { error: mapAuthError(error, "reset") };
+        return { error: mapAuthError(error, "reset") };
       }
+      const tokenHash = data?.properties?.hashed_token;
+      if (!tokenHash) {
+        logAuthError("generate recovery link", { code: "missing_recovery_token" });
+        return { error: "비밀번호 재설정 링크를 준비하지 못했습니다. 잠시 후 다시 시도해주세요." };
+      }
+      // Verify on our recovery screen so a simple link-prefetch request does
+      // not consume the one-time token at the mail provider's redirect URL.
+      const recoveryUrl = new URL(redirectTo);
+      recoveryUrl.searchParams.set("token_hash", tokenHash);
+      recoveryUrl.searchParams.set("type", "recovery");
+      const emailResult = await sendPasswordResetEmail({
+        email: parsed.data,
+        link: recoveryUrl.toString(),
+      });
+      if (emailResult.ok) {
+        return { message: resetSuccessMessage, retryAfterSeconds: 60 };
+      }
+      return {
+        error: emailResult.reason === "configuration"
+          ? "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요."
+          : emailResult.reason === "rate_limit"
+            ? "메일 발송 서비스가 잠시 혼잡합니다. 잠시 후 다시 시도해주세요."
+            : "재설정 메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요. 문제가 계속되면 고객센터에 문의해주세요.",
+        retryAfterSeconds: emailResult.retryAfterSeconds,
+      };
     }
 
     const supabase = await createServerSupabase();
@@ -247,7 +274,7 @@ export async function resetPasswordAction(
       logAuthError("default recovery mail", error);
       return { error: mapAuthError(error, "reset") };
     }
-    return { message: resetSuccessMessage };
+    return { message: resetSuccessMessage, retryAfterSeconds: 60 };
   } catch (error) {
     logAuthError("password reset", error);
     return { error: mapAuthError(error, "reset") };

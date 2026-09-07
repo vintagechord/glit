@@ -17,6 +17,10 @@ function withCookies(target: NextResponse, source: NextResponse) {
   source.cookies.getAll().forEach((cookie) => {
     target.cookies.set(cookie);
   });
+  for (const name of ["Cache-Control", "Expires", "Pragma"]) {
+    const value = source.headers.get(name);
+    if (value) target.headers.set(name, value);
+  }
   return target;
 }
 

@@ -68,6 +68,8 @@ type EmailSendResult = {
   ok: boolean;
   skipped?: boolean;
   message?: string;
+  reason?: "configuration" | "rate_limit" | "delivery";
+  retryAfterSeconds?: number;
 };
 
 const EMAIL_REQUEST_TIMEOUT_MS = 10_000;
@@ -173,12 +175,15 @@ export async function sendPasswordResetEmail(
     return {
       ok: false,
       skipped: true,
+      reason: "configuration",
       message:
         "RESEND_API_KEY가 설정되어 있지 않아 온사이드 발신 메일을 보내지 못했습니다.",
     };
   }
 
-  const safeLink = escapeHtml(normalizeAbsoluteUrl(payload.link) || payload.link);
+  const normalizedLink = normalizeAbsoluteUrl(payload.link);
+  if (!normalizedLink) return { ok: false, reason: "configuration" };
+  const safeLink = escapeHtml(normalizedLink);
   const html = `
     <div style="font-family: Arial, sans-serif; background-color: #0b1120; padding: 32px 0; text-align: center;">
       <div style="max-width: 520px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 28px 24px; color: #e2e8f0;">
@@ -208,9 +213,23 @@ export async function sendPasswordResetEmail(
     });
 
     if (!response.ok) {
+      const reason = [400, 401, 403, 422].includes(response.status)
+        ? "configuration"
+        : response.status === 429 ? "rate_limit" : "delivery";
+      // Keep the sender failure observable without logging the recipient,
+      // recovery credentials, or a provider payload that could contain them.
+      console.error("[Email] password reset rejected", { status: response.status, reason });
+      await response.arrayBuffer().catch(() => undefined);
+      const retryHeader = Number(response.headers.get("retry-after"));
       return {
         ok: false,
         skipped: false,
+        reason,
+        retryAfterSeconds: reason === "rate_limit"
+          ? Number.isFinite(retryHeader) && retryHeader > 0
+            ? Math.min(3600, Math.ceil(retryHeader))
+            : 60
+          : undefined,
         message: "비밀번호 재설정 메일 발송에 실패했습니다.",
       };
     }
@@ -221,6 +240,7 @@ export async function sendPasswordResetEmail(
     return {
       ok: false,
       skipped: false,
+      reason: "delivery",
       message: "비밀번호 재설정 메일 발송에 실패했습니다.",
     };
   }

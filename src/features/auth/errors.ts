@@ -21,6 +21,9 @@ export function mapAuthError(error: unknown, operation: "login" | "signup" | "re
   if (value.name === "SupabaseConfigurationError" || message.includes("missing supabase") || message.includes("missing supabase_service")) {
     return "인증 서비스 설정을 확인하고 있습니다. 잠시 후 다시 시도해주세요.";
   }
+  if (operation === "reset" && (code === "over_email_send_rate_limit" || /email.*rate limit/.test(message))) {
+    return "메일 발송 서비스의 전송 한도에 도달했습니다. 잠시 후 다시 시도하거나 고객센터에 문의해주세요.";
+  }
   if (value.status === 429 || /rate limit|too many/.test(message) || /over_.*rate_limit/.test(code)) {
     return "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
   }
@@ -37,10 +40,10 @@ export function mapAuthError(error: unknown, operation: "login" | "signup" | "re
   if (/invalid email/.test(message) || code === "email_address_invalid") {
     return "올바른 이메일 주소를 입력해주세요.";
   }
+  if (code === "same_password") return "현재 비밀번호와 다른 새 비밀번호를 입력해주세요.";
   if (code === "weak_password" || /weak password|password should|password must|password.*least/.test(message)) {
     return "비밀번호는 8자 이상으로 입력하고, 너무 단순한 비밀번호는 피해주세요.";
   }
-  if (code === "same_password") return "현재 비밀번호와 다른 새 비밀번호를 입력해주세요.";
   if (operation === "reset") return "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.";
   if (operation === "update") return "비밀번호를 변경할 수 없습니다. 잠시 후 다시 시도해주세요.";
   return "회원가입을 완료할 수 없습니다. 입력 내용을 다시 확인해주세요.";
@@ -52,5 +55,6 @@ export function logAuthError(operation: string, error: unknown) {
   console.error(`[Auth] ${operation}`, {
     kind: isAuthConnectionError(error) ? "connection" : value.name === "SupabaseConfigurationError" ? "configuration" : "provider",
     status: typeof value.status === "number" ? value.status : undefined,
+    code: typeof value.code === "string" && /^[a-z_]{1,64}$/.test(value.code) ? value.code : undefined,
   });
 }

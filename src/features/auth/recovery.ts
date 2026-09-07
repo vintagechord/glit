@@ -9,10 +9,21 @@ const expired = "세션을 확인할 수 없습니다. 링크가 만료되었거
 export async function verifyRecoverySession(auth: RecoveryAuth, url: URL): Promise<RecoveryResult> {
   const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
   if (url.searchParams.has("error") || hash.has("error")) return { ok: false, message: expired };
-  const tokenHash = url.searchParams.get("token_hash") || url.searchParams.get("token");
-  const code = url.searchParams.get("code");
+  const hasTokenHash = url.searchParams.has("token_hash") || url.searchParams.has("token");
+  const tokenHash = (url.searchParams.has("token_hash")
+    ? url.searchParams.get("token_hash")
+    : url.searchParams.get("token"))?.trim();
+  const code = url.searchParams.get("code")?.trim();
   const accessToken = hash.get("access_token");
   const refreshToken = hash.get("refresh_token");
+  if (
+    (hasTokenHash && !tokenHash) ||
+    (url.searchParams.has("code") && !code) ||
+    (hash.has("access_token") && !accessToken) ||
+    (hash.has("refresh_token") && !refreshToken)
+  ) {
+    return { ok: false, message: expired };
+  }
   try {
     if (tokenHash) {
       const { data, error } = await auth.verifyOtp({ type: "recovery", token_hash: tokenHash });
@@ -20,7 +31,11 @@ export async function verifyRecoverySession(auth: RecoveryAuth, url: URL): Promi
       return data.session ? { ok: true } : { ok: false, message: expired };
     }
     if (code) {
-      const { data, error } = await auth.exchangeCodeForSession(code);
+      const flowId = url.searchParams.get("sb_flow_id");
+      const { data, error } = await auth.exchangeCodeForSession(
+        code,
+        flowId !== null ? { flowId } : undefined,
+      );
       if (error) throw error;
       return data.session ? { ok: true } : { ok: false, message: expired };
     }

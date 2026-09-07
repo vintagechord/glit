@@ -96,3 +96,9 @@ test("partial implicit credentials are rejected, while already exchanged session
   assert.deepEqual(await verifyRecoverySession(resumed.auth, new URL("https://onside.test/reset-password")), { ok: true });
   assert.deepEqual(resumed.calls.map((call) => call.method), ["getSession"]);
 });
+
+
+test("email provider quota is distinct from user throttling and same-password precedes weak-password wording", () => {
+  assert.match(mapAuthError({ status: 429, code: "over_email_send_rate_limit", message: "email rate limit exceeded" }, "reset"), /메일 발송 서비스의 전송 한도/);
+  assert.match(mapAuthError({ code: "same_password", message: "New password should be different from the old password." }, "update"), /현재 비밀번호와 다른/);
+});

@@ -4,10 +4,10 @@ import { getSupabaseEnv } from "./env";
 
 export function createClient() {
   const { url, anonKey } = getSupabaseEnv();
-  const isRecoveryPage = typeof window !== "undefined" && /^\/(?:en\/)?reset-password\/?$/.test(window.location.pathname);
   return createBrowserClient(url, anonKey, {
-    // The recovery screen exchanges links explicitly and displays its own
-    // errors. Automatic detection would race it and consume one-time tokens.
-    auth: { detectSessionInUrl: !isRecoveryPage },
+    // All recovery credentials are exchanged by the recovery screen. Keep
+    // this fixed for the shared browser singleton: its first caller can be a
+    // layout on another route, and later client options would be ignored.
+    auth: { detectSessionInUrl: false },
   });
 }
