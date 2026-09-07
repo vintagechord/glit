@@ -1,4 +1,5 @@
 import { APP_CONFIG } from "./config";
+import { checkSupabaseConfig } from "./supabase/health";
 
 export type RuntimeHealthCheck = {
   name: string;
@@ -205,14 +206,7 @@ export const runRuntimeConfigChecks = (
 
   const checks: RuntimeHealthCheck[] = [
     checkBaseUrl(),
-    checkEnv(
-      [
-        "NEXT_PUBLIC_SUPABASE_URL",
-        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-        "SUPABASE_SERVICE_ROLE_KEY",
-      ],
-      "supabase",
-    ),
+    checkSupabaseConfig(),
     checkEnv(
       [
         "B2_S3_ENDPOINT",

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "/api/admin/**": ["./templates/review-docs/**/*.docx"],
+  },
   poweredByHeader: false,
   experimental: {
     serverActions: {

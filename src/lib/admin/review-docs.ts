@@ -1,8 +1,10 @@
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ZipFile } from "yazl";
+import PizZip from "pizzip";
 
 import { formatDate, formatDateTime } from "@/lib/format";
 import {
@@ -25,6 +27,8 @@ import {
   ReviewDocTemplateRenderError,
   type ReviewDocTemplateValue,
 } from "@/lib/admin/review-docs-docx";
+import { validateReviewData, type ReviewDocumentData } from "@/lib/review-docs/model";
+import { renderTrackLyrics } from "@/lib/review-docs/translation";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "templates", "review-docs");
 
@@ -36,6 +40,7 @@ export const REVIEW_DOC_TEMPLATE_FILES = {
   tbsIntegrated: "tbs-integrated.docx",
   wbsIntegrated: "wbs-integrated.docx",
   pbcIntegrated: "pbc-integrated.docx",
+  lyricsMv: "lyrics-mv.docx",
 } as const;
 
 type DbRecord = Record<string, unknown>;
@@ -132,10 +137,15 @@ export class ReviewDocsRenderError extends Error {
 type ReviewDocTemplateKey = keyof typeof REVIEW_DOC_TEMPLATE_FILES;
 type ReviewDocTemplates = Record<ReviewDocTemplateKey, Buffer>;
 
-async function loadReviewDocTemplates(templateDir = TEMPLATE_DIR) {
-  const entries = Object.entries(REVIEW_DOC_TEMPLATE_FILES) as Array<
-    [ReviewDocTemplateKey, string]
-  >;
+const ALBUM_TEMPLATE_KEYS = Object.keys(REVIEW_DOC_TEMPLATE_FILES).filter(
+  (key) => key !== "lyricsMv",
+) as ReviewDocTemplateKey[];
+
+async function loadReviewDocTemplates(
+  templateDir = TEMPLATE_DIR,
+  keys: ReviewDocTemplateKey[] = ALBUM_TEMPLATE_KEYS,
+) {
+  const entries = keys.map((key) => [key, REVIEW_DOC_TEMPLATE_FILES[key]] as const);
   const checks = await Promise.all(
     entries.map(async ([key, filename]) => {
       const filePath = path.join(templateDir, filename);
@@ -194,7 +204,7 @@ const hasText = (value: unknown) => valueToText(value).length > 0;
 const toDateParts = (value?: string | null) => {
   if (!value) return null;
   const text = value.trim();
-  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const match = text.match(/^(\d{4})[-.]\s*(\d{2})[-.]\s*(\d{2})(?:\.|T.*)?$/);
   if (match) {
     const year = Number(match[1]);
     const month = Number(match[2]);
@@ -209,13 +219,7 @@ const toDateParts = (value?: string | null) => {
     }
     return { year, month, day };
   }
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return null;
-  return {
-    year: date.getFullYear(),
-    month: date.getMonth() + 1,
-    day: date.getDate(),
-  };
+  return null;
 };
 
 const seoulTodayParts = () => {
@@ -249,8 +253,8 @@ const formatMonthDay = (parts: ReturnType<typeof seoulTodayParts> | null) =>
   parts ? `${two(parts.month)}/${two(parts.day)}` : "";
 
 const isInstrumentalTitle = (title: string) =>
-  /\b(inst|instrumental|mr|karaoke)\b/i.test(title) ||
-  /반주|가사\s*없음/i.test(title);
+  /(?:^|[([])\s*(?:inst\.?|instrumental|m\.?r\.?|karaoke)(?:\s+(?:ver\.?|version))?\s*(?:$|[)\]])/i.test(title) ||
+  /\((?:반주|연주곡)\)/.test(title);
 
 const compactLyrics = (value: string) =>
   value
@@ -310,17 +314,19 @@ const normalizeRecord = (record: DbRecord) =>
 const sanitizeFilenamePart = (value: string, fallback: string) => {
   const cleaned = value
     .normalize("NFC")
-    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
-    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g, "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, " ")
+    .replace(/\.{2,}/g, " ")
     .replace(/\s+/g, " ")
     .replace(/[. ]+$/g, "")
     .trim();
-  return (cleaned || fallback).slice(0, 80);
+  return Array.from(cleaned || fallback).slice(0, 80).join("");
 };
 
 const uniquePath = (pathName: string, used: Set<string>) => {
-  if (!used.has(pathName)) {
-    used.add(pathName);
+  const canonical = (name: string) => name.normalize("NFC").toLocaleLowerCase("en-US");
+  if (!used.has(canonical(pathName))) {
+    used.add(canonical(pathName));
     return pathName;
   }
 
@@ -328,11 +334,11 @@ const uniquePath = (pathName: string, used: Set<string>) => {
   const base = dotIndex > 0 ? pathName.slice(0, dotIndex) : pathName;
   const ext = dotIndex > 0 ? pathName.slice(dotIndex) : "";
   let index = 2;
-  while (used.has(`${base}_${index}${ext}`)) {
+  while (used.has(canonical(`${base}_${index}${ext}`))) {
     index += 1;
   }
   const next = `${base}_${index}${ext}`;
-  used.add(next);
+  used.add(canonical(next));
   return next;
 };
 
@@ -351,15 +357,13 @@ const normalizeTrack = (track: DbRecord, index: number) => {
   const lyricist = getText(track, "lyricist");
   const hasInstrumentalTitle = isInstrumentalTitle(title);
   const isInstrumental =
-    hasInstrumentalTitle || (!lyrics.trim() && !lyricist.trim());
-  const titleMarkers = [
-    isTitle ? "(타이틀)" : "",
-    isInstrumental && !hasInstrumentalTitle ? "(Inst.)" : "",
-  ].filter(Boolean);
+    track.is_instrumental === true ||
+    (track.is_instrumental !== false && hasInstrumentalTitle);
+  const titleMarkers = [isTitle ? "(타이틀)" : ""].filter(Boolean);
   const trackTitleForDocs = [title, ...titleMarkers].join(" ");
   const lyricsDisplay = isInstrumental
     ? "가사 없음 / Instrumental"
-    : appendTranslatedLyrics(lyrics, translatedLyrics);
+    : getText(track, "lyrics_with_translation") || appendTranslatedLyrics(lyrics, translatedLyrics);
   const creditParts = [
     !isInstrumental && lyricist ? `작사: ${lyricist}` : "",
     getText(track, "composer") ? `작곡: ${getText(track, "composer")}` : "",
@@ -429,6 +433,8 @@ function buildSubmissionTemplateData(
   bundle: ReviewDocSubmissionBundle,
   index: number,
   totalCount: number,
+  applicationDate = seoulTodayParts(),
+  requireWbsSelection = true,
 ) {
   const submission = bundle.submission;
   const rawReleaseDate = getText(submission, "release_date");
@@ -454,15 +460,11 @@ function buildSubmissionTemplateData(
       const bNo = getNumber(b, "track_no") ?? Number.MAX_SAFE_INTEGER;
       return aNo - bNo;
     })
-    .map((track, trackIndex) =>
-      normalizeTrack(
-        {
-          ...track,
-          performer: getText(track, "performer") || artistNameRaw,
-        },
-        trackIndex,
-      ),
-    );
+    .map((track, trackIndex) => normalizeTrack({
+      ...track,
+      performer: getText(track, "performer") || getText(track, "performers") ||
+        (submission.preserve_missing_performers === true ? "" : artistNameRaw),
+    }, trackIndex));
   const files = bundle.files.map(normalizeRecord);
   const events = bundle.events.map(normalizeRecord);
   const applicantName = getText(submission, "applicant_name");
@@ -471,10 +473,11 @@ function buildSubmissionTemplateData(
   const guestName = getText(submission, "guest_name");
   const guestEmail = getText(submission, "guest_email");
   const guestPhone = getText(submission, "guest_phone");
-  const todayParts = seoulTodayParts();
+  const todayParts = applicationDate;
   const releaseParts = toDateParts(rawReleaseDate);
+  const rawProductionDate = getText(submission, "production_date") || rawReleaseDate;
   const productionParts =
-    toDateParts(getText(submission, "production_date")) ?? releaseParts;
+    toDateParts(rawProductionDate);
   const titleTracks = tracks.filter((track) => track.is_title);
   const integratedTitleTrack = titleTracks[0] ?? tracks[0] ?? null;
   const integratedSongTracks =
@@ -486,7 +489,16 @@ function buildSubmissionTemplateData(
           ),
         ]
       : tracks;
-  const integratedSongTitles = integratedSongTracks
+  const selectedWbs = Array.isArray(submission.wbs_track_numbers)
+    ? submission.wbs_track_numbers as number[]
+    : [];
+  const wbsTracks = selectedWbs.length
+    ? selectedWbs.map((number) => tracks.find((track) => track.track_no === number)).filter((track) => track !== undefined)
+    : integratedSongTracks;
+  if (requireWbsSelection && titleTracks.length > 3 && selectedWbs.length === 0) {
+    throw new ReviewDocsInputError(`${title}: 타이틀곡이 3곡을 초과합니다. WBS 신청곡을 최대 3곡 선택해주세요.`);
+  }
+  const integratedSongTitles = wbsTracks
     .slice(0, 3)
     .map((track) => track.track_title)
     .join(", ");
@@ -512,14 +524,14 @@ function buildSubmissionTemplateData(
     today_mmdd: formatMonthDay(todayParts),
     today_short: formatMonthDay(todayParts),
     today_md: formatMonthDay(todayParts),
-    release_date: releaseParts ? formatDate(rawReleaseDate) : "",
-    release_date_long: formatLongDot(releaseParts),
-    release_date_full: formatLongDot(releaseParts),
-    release_date_short: formatShortDot(releaseParts),
-    release_date_mmdd: formatMonthDay(releaseParts),
-    release_date_md: formatMonthDay(releaseParts),
-    production_date_long: formatLongDot(productionParts),
-    production_date_short: formatShortDot(productionParts),
+    release_date: releaseParts ? formatDate(rawReleaseDate) : rawReleaseDate,
+    release_date_long: formatLongDot(releaseParts) || rawReleaseDate,
+    release_date_full: formatLongDot(releaseParts) || rawReleaseDate,
+    release_date_short: formatShortDot(releaseParts) || rawReleaseDate,
+    release_date_mmdd: formatMonthDay(releaseParts) || rawReleaseDate,
+    release_date_md: formatMonthDay(releaseParts) || rawReleaseDate,
+    production_date_long: formatLongDot(productionParts) || rawProductionDate,
+    production_date_short: formatShortDot(productionParts) || rawProductionDate,
     release_date_raw: rawReleaseDate,
     genre: getText(submission, "genre"),
     genre_checkbox_line: getGenreCheckboxLine(getText(submission, "genre")),
@@ -556,7 +568,7 @@ function buildSubmissionTemplateData(
     broadcast_tracks: tracks.filter((track) => track.broadcast_selected),
     track_count: tracks.length,
     track_count_label: `${tracks.length}곡`,
-    title_track_title: integratedTitleTrack?.track_title ?? "",
+    title_track_title: titleTracks.map((track) => track.track_title).join(", ") || integratedTitleTrack?.track_title || "",
     title_tracks_text:
       titleTracks.map((track) => track.track_title).join(", ") ||
       integratedTitleTrack?.track_title ||
@@ -1298,19 +1310,29 @@ export async function recordReviewDocsGeneratedEvents({
   }
 }
 
-export async function buildReviewDocsZip(
-  bundles: ReviewDocSubmissionBundle[],
-  options: { templateDir?: string } = {},
-) {
-  if (bundles.length === 0) {
-    throw new ReviewDocsNotFoundError("선택된 접수가 없습니다.");
-  }
+export type GeneratedReviewDocument = { name: string; buffer: Buffer };
 
-  const templates = await loadReviewDocTemplates(options.templateDir);
-  const hydratedBundles = await Promise.all(
-    bundles.map((bundle) => hydrateOneClickMelonBundle(bundle)),
-  );
-  const zip = new ZipFile();
+export type GeneratedReviewDocuments = {
+  zip: Buffer;
+  files: GeneratedReviewDocument[];
+  albumCount: number;
+  trackCount: number;
+  docxCount: number;
+  templateVersion: string;
+  validation: { structureChecked: true; rendered: false };
+};
+
+type PreparedReviewAlbum = ReturnType<typeof buildSubmissionTemplateData>;
+
+// The legacy submission download and independent administrator jobs both use this
+// renderer. Input adapters do not create database submissions, orders or payments.
+async function renderPreparedReviewDocuments(
+  preparedAlbums: PreparedReviewAlbum[],
+  templates: ReviewDocTemplates,
+  mode: "album" | "mv" = "album",
+): Promise<GeneratedReviewDocuments> {
+  const files: GeneratedReviewDocument[] = [];
+  const addDocument = (buffer: Buffer, name: string) => files.push({ name, buffer });
   const usedPaths = new Set<string>();
   const renderTemplate = (
     key: ReviewDocTemplateKey,
@@ -1330,8 +1352,21 @@ export async function buildReviewDocsZip(
     }
   };
 
-  hydratedBundles.forEach((bundle, index) => {
-    const base = buildSubmissionTemplateData(bundle, index, hydratedBundles.length);
+  preparedAlbums.forEach((base) => {
+    if (mode === "mv") {
+      base.tracks.forEach((track) => {
+        const artist = getText(track, "artist_display") || base.artist_name;
+        const filename = sanitizeFilenamePart(
+          `${track.track_no_padded}_${artist} - ${track.track_title_for_filename}`,
+          `track_${track.track_no_padded}`,
+        );
+        addDocument(
+          renderTemplate("lyricsMv", { ...base, ...track, artist_display: artist }),
+          uniquePath(`영등위_가사/${filename}.docx`, usedPaths),
+        );
+      });
+      return;
+    }
     const folder = uniquePath(
       sanitizeFilenamePart(
         `${base.artist_name} - ${base.album_title}`,
@@ -1362,19 +1397,19 @@ export async function buildReviewDocsZip(
       "album",
     );
 
-    zip.addBuffer(
+    addDocument(
       renderTemplate("songReviewRequest", base),
       uniquePath(`${folder}/가요심의요청서_${fileBase}.docx`, usedPaths),
     );
-    zip.addBuffer(
+    addDocument(
       renderTemplate("reviewForm", reviewFormData),
       uniquePath(`${folder}/심의폼_${fileBase}.docx`, usedPaths),
     );
-    zip.addBuffer(
+    addDocument(
       renderTemplate("reviewForm", albumInfoData),
       uniquePath(`${folder}/앨범정보_${fileBase}.docx`, usedPaths),
     );
-    zip.addBuffer(
+    addDocument(
       renderTemplate("lyricsAll", base),
       uniquePath(`${folder}/가사전체파일_${fileBase}.docx`, usedPaths),
     );
@@ -1384,7 +1419,7 @@ export async function buildReviewDocsZip(
         `${track.track_no_padded}_${track.track_title_for_filename}`,
         `track_${track.track_no_padded}`,
       );
-      zip.addBuffer(
+      addDocument(
         renderTemplate("lyricsTrack", {
           ...base,
           ...track,
@@ -1396,9 +1431,7 @@ export async function buildReviewDocsZip(
   });
 
   const integratedFolder = "통합신청서";
-  const integratedData = hydratedBundles.map((bundle, index) =>
-    buildSubmissionTemplateData(bundle, index, hydratedBundles.length),
-  );
+  const integratedData = preparedAlbums;
   const albums = integratedData.map((album, index) => ({
     ...album,
     row_no: index + 1,
@@ -1421,7 +1454,8 @@ export async function buildReviewDocsZip(
     ),
   };
 
-  zip.addBuffer(
+  if (mode === "album") {
+  addDocument(
     renderTemplate("tbsIntegrated", {
       ...integratedBase,
       station_code: "TBS",
@@ -1429,7 +1463,7 @@ export async function buildReviewDocsZip(
     }),
     uniquePath(`${integratedFolder}/TBS신청서_통합.docx`, usedPaths),
   );
-  zip.addBuffer(
+  addDocument(
     renderTemplate("wbsIntegrated", {
       ...integratedBase,
       station_code: "WBS",
@@ -1437,7 +1471,7 @@ export async function buildReviewDocsZip(
     }),
     uniquePath(`${integratedFolder}/WBS신청서_통합.docx`, usedPaths),
   );
-  zip.addBuffer(
+  addDocument(
     renderTemplate("pbcIntegrated", {
       ...integratedBase,
       station_code: "PBC",
@@ -1446,7 +1480,119 @@ export async function buildReviewDocsZip(
     uniquePath(`${integratedFolder}/PBC신청서_통합.docx`, usedPaths),
   );
 
-  return zipToBuffer(zip);
+  }
+
+  const trackCount = preparedAlbums.reduce((count, album) => count + album.tracks.length, 0);
+  const expectedCount = mode === "mv" ? trackCount : preparedAlbums.length * 4 + trackCount + 3;
+  if (files.length !== expectedCount || new Set(files.map((file) => file.name)).size !== expectedCount) {
+    throw new ReviewDocsRenderError("생성 문서 수 또는 파일명 중복 검사에 실패했습니다.");
+  }
+  const zip = new ZipFile();
+  for (const file of files) zip.addBuffer(file.buffer, file.name);
+  const zipBuffer = await zipToBuffer(zip);
+  // Reload with CRC checking before anything can be saved as a completed result.
+  const checkedZip = new PizZip(zipBuffer, { checkCRC32: true });
+  if (Object.values(checkedZip.files).filter((file) => !file.dir).length !== expectedCount) {
+    throw new ReviewDocsRenderError("ZIP 무결성 검사에 실패했습니다.");
+  }
+  const hash = createHash("sha256");
+  for (const [key, buffer] of Object.entries(templates).sort(([a], [b]) => a.localeCompare(b))) {
+    hash.update(key).update(buffer);
+  }
+  return {
+    zip: zipBuffer,
+    files,
+    albumCount: preparedAlbums.length,
+    trackCount,
+    docxCount: files.length,
+    templateVersion: hash.digest("hex"),
+    validation: { structureChecked: true, rendered: false },
+  };
+}
+
+export async function buildReviewDocsZip(
+  bundles: ReviewDocSubmissionBundle[],
+  options: { templateDir?: string } = {},
+) {
+  if (bundles.length === 0) throw new ReviewDocsNotFoundError("선택된 접수가 없습니다.");
+  const applicationDate = seoulTodayParts();
+  const templates = await loadReviewDocTemplates(options.templateDir);
+  const hydratedBundles = await Promise.all(bundles.map(hydrateOneClickMelonBundle));
+  const prepared = hydratedBundles.map((bundle, index) =>
+    buildSubmissionTemplateData(bundle, index, hydratedBundles.length, applicationDate),
+  );
+  return (await renderPreparedReviewDocuments(prepared, templates)).zip;
+}
+
+/** Renders a confirmed snapshot without network collection, translation or DB writes. */
+export async function generateReviewDocuments(
+  data: ReviewDocumentData,
+  options: { templateDir?: string } = {},
+): Promise<GeneratedReviewDocuments> {
+  const errors = validateReviewData(data).filter((issue) => issue.severity === "error");
+  if (errors.length) throw new ReviewDocsInputError(errors.map((issue) => issue.message).join(" "));
+  const applicationDate = toDateParts(data.applicationDate);
+  if (!applicationDate) throw new ReviewDocsInputError("작업 신청일자가 올바르지 않습니다.");
+  if (!data.albums.length) throw new ReviewDocsInputError("생성할 앨범 또는 곡이 없습니다.");
+  const templates = await loadReviewDocTemplates(
+    options.templateDir,
+    data.mode === "mv" ? ["lyricsMv"] : ALBUM_TEMPLATE_KEYS,
+  );
+  const prepared = data.albums.map((album, index) => {
+    if ((data.mode === "album" && (!album.artistName.trim() || !album.title.trim())) || !album.tracks.length) {
+      throw new ReviewDocsInputError("아티스트·앨범명·트랙을 확인해주세요.");
+    }
+    const tracks = album.tracks.map((track) => {
+      if (!track.title.trim()) throw new ReviewDocsInputError("곡명을 확인해주세요.");
+      if (track.lyricStatus === "extraction_failed" || track.lyricStatus === "not_provided") {
+        throw new ReviewDocsInputError(`${track.title}: 가사가 누락되었거나 추출되지 않았습니다.`);
+      }
+      if (track.lyricStatus === "instrumental" && !track.instrumentalConfirmed) {
+        throw new ReviewDocsInputError(`${track.title}: Inst./MR 여부를 확인해주세요.`);
+      }
+      if (track.isTitle && !track.titleConfirmed) {
+        throw new ReviewDocsInputError(`${track.title}: 타이틀 표시를 확인해주세요.`);
+      }
+      const lyrics = renderTrackLyrics(track);
+      if (!lyrics.trim()) throw new ReviewDocsInputError(`${track.title}: 가사를 확인해주세요.`);
+      return {
+        track_no: track.number,
+        track_title: track.title,
+        is_title: track.isTitle && track.titleConfirmed,
+        is_instrumental: track.lyricStatus === "instrumental" && track.instrumentalConfirmed,
+        lyricist: track.lyricist,
+        composer: track.composer,
+        arranger: track.arranger,
+        featuring: track.featuring,
+        performer: track.performers,
+        artist_display: track.artistName || album.artistName,
+        lyrics: track.lyrics,
+        lyrics_with_translation: lyrics,
+      };
+    });
+    const selectedWbs = album.wbsTrackIds.map((id) => album.tracks.find((track) => track.id === id)?.number);
+    if (selectedWbs.length > 3 || selectedWbs.some((number) => number === undefined) || new Set(selectedWbs).size !== selectedWbs.length) {
+      throw new ReviewDocsInputError(`${album.title}: WBS 신청곡은 해당 앨범에서 중복 없이 최대 3곡 선택해주세요.`);
+    }
+    return buildSubmissionTemplateData({
+      submission: {
+        title: album.title,
+        preserve_missing_performers: true,
+        artist_name: album.artistName,
+        artist_name_en: album.artistNameEn,
+        production_company: album.company,
+        distributor: album.distributor,
+        release_date: album.releaseDate,
+        production_date: album.productionDate,
+        genre: album.genre,
+        wbs_track_numbers: selectedWbs,
+      },
+      tracks,
+      files: [],
+      events: [],
+    }, index, data.albums.length, applicationDate, data.mode === "album");
+  });
+  return renderPreparedReviewDocuments(prepared, templates, data.mode);
 }
 
 export function buildReviewDocsZipFilename(bundles: ReviewDocSubmissionBundle[]) {
@@ -1461,7 +1607,7 @@ export function buildReviewDocsZipFilename(bundles: ReviewDocSubmissionBundle[])
 }
 
 export function contentDispositionAttachment(filename: string) {
-  const asciiFallback = filename.replace(/[^\x20-\x7e]/g, "_");
+  const asciiFallback = filename.replace(/[^\x20-\x7e]|["\\]/g, "_");
   return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(
     filename,
   )}`;

@@ -1,0 +1,10 @@
+.git
+.env*
+node_modules
+.next
+tmp
+output
+.codex
+services/**/.venv
+services/**/__pycache__
+tests

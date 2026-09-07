@@ -1,0 +1,84 @@
+-- Run only against the isolated test DB, after 0094. Rolled back at completion.
+begin;
+insert into auth.users(id) values ('10000000-0000-4000-8000-000000000001'),('10000000-0000-4000-8000-000000000002');
+do $$
+declare j public.review_document_jobs; first_id uuid; claimed public.review_document_jobs; caught boolean;
+begin
+  select * into j from public.create_review_document_job('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','album','urls',repeat('a',64),'[]');
+  first_id=j.id;
+  if j.status<>'queued' then raise exception 'new URL job not queued'; end if;
+  select * into j from public.create_review_document_job('20000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000001','album','urls',repeat('a',64),'[]');
+  if j.id<>first_id then raise exception 'duplicate job created'; end if;
+  select * into claimed from public.claim_review_document_job('30000000-0000-4000-8000-000000000001');
+  if claimed.id<>first_id or claimed.attempts<>1 then raise exception 'claim failed'; end if;
+  if exists(select 1 from public.claim_review_document_job(gen_random_uuid())) then raise exception 'concurrent lease allowed'; end if;
+  caught=false;
+  begin perform public.change_review_document_job(first_id,'10000000-0000-4000-8000-000000000002',1,'cancel'); exception when others then caught=true; end;
+  if not caught then raise exception 'owner isolation failed'; end if;
+  caught=false;
+  begin perform public.change_review_document_job(first_id,'10000000-0000-4000-8000-000000000001',1,'save','{}'); exception when others then caught=true; end;
+  if not caught then raise exception 'edit during processing accepted'; end if;
+  -- Expired worker leases recover after a server restart.
+  update public.review_document_jobs set lease_until=now()-interval '1 second' where id=first_id;
+  select * into claimed from public.claim_review_document_job('30000000-0000-4000-8000-000000000002');
+  if claimed.id<>first_id or claimed.attempts<>2 then raise exception 'restart recovery failed'; end if;
+  update public.review_document_jobs set status='needs_review',extracted_data='{"albums":[]}',lease_token=null,lease_until=null where id=first_id;
+  select * into j from public.change_review_document_job(first_id,'10000000-0000-4000-8000-000000000001',1,'save','{"albums":[1]}');
+  if j.version<>2 or j.extracted_data->'albums'<>'[]'::jsonb then raise exception 'draft/source isolation failed'; end if;
+  caught=false;
+  begin perform public.change_review_document_job(first_id,'10000000-0000-4000-8000-000000000001',1,'generate'); exception when others then caught=true; end;
+  if not caught then raise exception 'stale version accepted'; end if;
+  select * into j from public.change_review_document_job(first_id,'10000000-0000-4000-8000-000000000001',2,'generate');
+  if j.snapshot_data<>j.draft_data or j.status<>'queued' then raise exception 'snapshot missing'; end if;
+  select * into j from public.change_review_document_job(first_id,'10000000-0000-4000-8000-000000000001',2,'cancel');
+  if j.status<>'cancelled' or j.lease_token is not null then raise exception 'cancel failed'; end if;
+  update public.review_document_jobs set status='failed',error_code='TEMPLATE_MISSING' where id=first_id;
+  select * into j from public.change_review_document_job(first_id,'10000000-0000-4000-8000-000000000001',2,'generate');
+  if j.status<>'queued' or j.snapshot_data<>j.draft_data then raise exception 'template correction cannot regenerate saved draft'; end if;
+  perform public.change_review_document_job(first_id,'10000000-0000-4000-8000-000000000001',2,'cancel');
+  update public.review_document_jobs set expires_at=now()-interval '1 second' where id=first_id;
+  caught=false;
+  begin perform public.change_review_document_job(first_id,'10000000-0000-4000-8000-000000000001',2,'save','{}'); exception when others then caught=true; end;
+  if not caught then raise exception 'expired job editable'; end if;
+  -- Dedupe must not trap a fresh upload behind an expired job awaiting cleanup.
+  select * into j from public.create_review_document_job('20000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000001','album','urls',repeat('a',64),'[]');
+  if j.id=first_id then raise exception 'expired job prevents resubmission'; end if;
+  select * into j from public.create_review_document_job('20000000-0000-4000-8000-000000000004','10000000-0000-4000-8000-000000000001','mv','files',repeat('b',64),'[]');
+  select * into j from public.change_review_document_job(j.id,'10000000-0000-4000-8000-000000000001',1,'cancel');
+  if j.error_code<>'UPLOAD_CANCELLED' then raise exception 'cancelled upload unmarked'; end if;
+  caught=false;
+  begin perform public.change_review_document_job(j.id,'10000000-0000-4000-8000-000000000001',1,'retry'); exception when others then caught=true; end;
+  if not caught then raise exception 'cancelled partial upload retry allowed'; end if;
+  select * into j from public.create_review_document_job('20000000-0000-4000-8000-000000000005','10000000-0000-4000-8000-000000000001','mv','files',repeat('b',64),'[]');
+  if j.id<>'20000000-0000-4000-8000-000000000005' then raise exception 'cancelled upload prevents fresh upload'; end if;
+  -- Failed source retry freezes the edited draft and has an independent attempt budget.
+  update public.review_document_jobs set status='needs_review',draft_data='{"albums":["manual"]}',extraction_attempts=1 where id=j.id;
+  select * into j from public.change_review_document_job(j.id,'10000000-0000-4000-8000-000000000001',1,'retry');
+  if j.operation<>'reextract' or j.snapshot_data->'albums'<>'["manual"]'::jsonb then raise exception 'reanalysis snapshot not preserved'; end if;
+  update public.review_document_jobs set status='needs_review',extraction_attempts=3 where id=j.id;
+  caught=false;
+  begin perform public.change_review_document_job(j.id,'10000000-0000-4000-8000-000000000001',1,'retry'); exception when others then caught=true; end;
+  if not caught then raise exception 'reanalysis budget bypass'; end if;
+  -- Existing drafts cannot bypass the three-active-jobs guard through Generate.
+  perform public.create_review_document_job(gen_random_uuid(),'10000000-0000-4000-8000-000000000001','album','urls',repeat('c',64),'[]');
+  perform public.create_review_document_job(gen_random_uuid(),'10000000-0000-4000-8000-000000000001','album','urls',repeat('d',64),'[]');
+  caught=false;
+  begin perform public.change_review_document_job(j.id,'10000000-0000-4000-8000-000000000001',1,'generate'); exception when others then caught=true; end;
+  if not caught then raise exception 'generate bypasses concurrency limit'; end if;
+  if not exists(select 1 from public.review_document_job_events where job_id=first_id and version=2) then raise exception 'audit missing'; end if;
+  if has_function_privilege('authenticated','public.claim_review_document_job(uuid)','EXECUTE') then raise exception 'worker RPC public'; end if;
+  if has_table_privilege('authenticated','public.review_document_jobs','UPDATE') then raise exception 'direct writes permitted'; end if;
+  if has_table_privilege('anon','public.review_document_jobs','SELECT') then raise exception 'anonymous reads permitted'; end if;
+  raise notice 'review jobs: dedup, owner, concurrency, restart, snapshot, version, cancel, expiry, audit, grants PASS';
+end $$;
+grant usage on schema public,auth to authenticated;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',true);
+select set_config('request.jwt.claim.admin','false',true);
+do $$ begin if exists(select 1 from public.review_document_jobs) then raise exception 'non-admin RLS data exposure'; end if; end $$;
+select set_config('request.jwt.claim.admin','true',true);
+do $$ begin if not exists(select 1 from public.review_document_jobs) then raise exception 'owner admin unable to read'; end if; end $$;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',true);
+do $$ begin if exists(select 1 from public.review_document_jobs) then raise exception 'cross-admin RLS data exposure'; end if; end $$;
+reset role;
+rollback;

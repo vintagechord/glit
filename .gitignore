@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/test-results/
 
 # next.js
 /.next/
@@ -43,3 +44,8 @@ next-env.d.ts
 # local spellcheck artifacts
 services/spellcheck/.venv/
 services/spellcheck/__pycache__/
+
+# Local review document QA and converter dependencies
+/tmp/review-docs-*/
+services/review-docs/.venv/
+services/review-docs/__pycache__/

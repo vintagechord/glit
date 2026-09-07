@@ -4,6 +4,25 @@ const cleanEnvValue = (value?: string) => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
+export class SupabaseConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SupabaseConfigurationError";
+  }
+}
+
+export function validateSupabaseUrl(value: string) {
+  try {
+    const url = new URL(value);
+    if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+      throw new Error("invalid URL");
+    }
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    throw new SupabaseConfigurationError("Supabase URL must be an absolute HTTP(S) URL without credentials, query, or fragment.");
+  }
+}
+
 export function getSupabaseEnv() {
   const isServer = typeof window === "undefined";
   const url =
@@ -16,10 +35,14 @@ export function getSupabaseEnv() {
     (isServer ? cleanEnvValue(process.env.SUPABASE_PUBLISHABLE_KEY) : undefined);
 
   if (!url || !anonKey) {
-    throw new Error("Missing Supabase environment variables.");
+    throw new SupabaseConfigurationError("Missing Supabase environment variables.");
   }
 
-  return { url, anonKey };
+  if (anonKey.startsWith("sb_secret_")) {
+    throw new SupabaseConfigurationError("Supabase anonymous key must be a public publishable or anonymous key.");
+  }
+
+  return { url: validateSupabaseUrl(url), anonKey };
 }
 
 export function getServiceRoleKey() {
@@ -29,7 +52,7 @@ export function getServiceRoleKey() {
     cleanEnvValue(process.env.SUPABASE_SECRET_KEY);
 
   if (!serviceKey) {
-    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
+    throw new SupabaseConfigurationError("Missing SUPABASE_SERVICE_ROLE_KEY.");
   }
 
   return serviceKey;

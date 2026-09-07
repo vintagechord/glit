@@ -9,6 +9,7 @@ export type MelonTrackReviewData = {
   lyricist: string;
   arranger: string;
   lyrics: string;
+  lyricFetchFailed?: boolean;
 };
 
 export type MelonAlbumReviewData = {
@@ -27,6 +28,8 @@ export type MelonAlbumReviewData = {
 export type MelonFetchOptions = {
   fetcher?: typeof fetch;
   requireLyrics?: boolean;
+  tolerateSongErrors?: boolean;
+  maxTracks?: number;
 };
 
 export class MelonReviewDataError extends Error {
@@ -292,8 +295,12 @@ export async function fetchMelonAlbumReviewData(
     throw new MelonReviewDataError("멜론 앨범 정보를 가져오지 못했습니다.");
   }
 
+  if (options.maxTracks && album.tracks.length > options.maxTracks) {
+    throw new MelonReviewDataError(`앨범 트랙 수가 ${options.maxTracks}곡 제한을 초과했습니다.`);
+  }
   const tracks = await Promise.all(
     album.tracks.map(async (track) => {
+      try {
       const songHtml = await fetchMelonText(track.songUrl, fetcher);
       const detail = parseMelonSongPage(songHtml, track.songId);
       return {
@@ -305,6 +312,10 @@ export async function fetchMelonAlbumReviewData(
         arranger: detail.arranger,
         lyrics: detail.lyrics,
       };
+      } catch (error) {
+        if (!options.tolerateSongErrors) throw error;
+        return { ...track, lyricFetchFailed: true };
+      }
     }),
   );
 

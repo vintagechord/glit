@@ -330,8 +330,8 @@ test("review docs normalize artist, company, dates, filenames, lyrics, and instr
   assert.doesNotMatch(voiceXml, /가사 없음 \/ Instrumental/);
   assert.match(karaokeXml, /가사 없음 \/ Instrumental/);
   assert.doesNotMatch(karaokeXml, /Hidden Writer/);
-  assert.match(inferredInstrumentalXml, /No Vocal \(Inst\.\)/);
-  assert.match(inferredInstrumentalXml, /가사 없음 \/ Instrumental/);
+  assert.match(inferredInstrumentalXml, /No Vocal/);
+  assert.doesNotMatch(inferredInstrumentalXml, /\(Inst\.\)|가사 없음 \/ Instrumental/);
 });
 
 test("integrated templates repeat one preserved table row per selected album", async () => {

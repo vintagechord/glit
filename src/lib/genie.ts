@@ -9,6 +9,7 @@ export type GenieTrackReviewData = {
   lyricist: string;
   arranger: string;
   lyrics: string;
+  lyricFetchFailed?: boolean;
 };
 
 export type GenieAlbumReviewData = {
@@ -27,6 +28,8 @@ export type GenieAlbumReviewData = {
 export type GenieFetchOptions = {
   fetcher?: typeof fetch;
   requireLyrics?: boolean;
+  tolerateSongErrors?: boolean;
+  maxTracks?: number;
 };
 
 export class GenieReviewDataError extends Error {
@@ -306,8 +309,12 @@ export async function fetchGenieAlbumReviewData(
     throw new GenieReviewDataError("지니 앨범 정보를 가져오지 못했습니다.");
   }
 
+  if (options.maxTracks && album.tracks.length > options.maxTracks) {
+    throw new GenieReviewDataError(`앨범 트랙 수가 ${options.maxTracks}곡 제한을 초과했습니다.`);
+  }
   const tracks = await Promise.all(
     album.tracks.map(async (track) => {
+      try {
       const songHtml = await fetchGenieText(track.songUrl, fetcher);
       const detail = parseGenieSongPage(songHtml, track.songId);
       return {
@@ -319,6 +326,10 @@ export async function fetchGenieAlbumReviewData(
         arranger: detail.arranger,
         lyrics: detail.lyrics,
       };
+      } catch (error) {
+        if (!options.tolerateSongErrors) throw error;
+        return { ...track, lyricFetchFailed: true };
+      }
     }),
   );
 

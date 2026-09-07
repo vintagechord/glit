@@ -1,0 +1,36 @@
+# Optional, separate Blueprint. Do NOT apply without approval for a worker service.
+# Existing production render.yaml is intentionally unaffected.
+services:
+  - type: worker
+    name: onside-review-docs-worker
+    runtime: docker
+    dockerfilePath: ./services/review-docs/Dockerfile
+    dockerContext: .
+    plan: standard
+    numInstances: 1
+    autoDeployTrigger: off
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: B2_S3_ENDPOINT
+        sync: false
+      - key: B2_REGION
+        sync: false
+      - key: B2_BUCKET
+        sync: false
+      - key: B2_PREFIX
+        sync: false
+      - key: REVIEW_DOCS_B2_BUCKET
+        sync: false
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APPLICATION_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_TRANSLATION_MODEL
+        value: gpt-5.5

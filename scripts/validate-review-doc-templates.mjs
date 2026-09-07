@@ -22,6 +22,7 @@ const templates = new Map([
     "lyrics-track.docx",
     ["{manager_name}", "{track_title_with_title_mark}", "{lyrics_with_translation}"],
   ],
+  ["lyrics-mv.docx", ["{artist_display}", "{track_title}", "{lyrics_with_translation}"]],
   [
     "tbs-integrated.docx",
     ["{#albums}", "{/albums}", "{company_actual}", "{release_date_md}"],

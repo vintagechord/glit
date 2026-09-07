@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import PizZip from "pizzip";
+import { buildReviewDocsZip, generateReviewDocuments } from "../src/lib/admin/review-docs";
+import { normalizedReviewFixture } from "./fixtures/review-docs/normalized";
 
 import {
   SUBMISSION_ADMIN_DETAIL_SELECT,
@@ -60,15 +63,20 @@ test("admin-created tracks safely fall back to the submission artist", () => {
   assert.match(adminDetail, /defaultValue=\{submission\.artist_name \|\| ""\}/);
 });
 
-test("review documents use the stored performer with an album-artist fallback", () => {
-  const reviewDocs = read("src/lib/admin/review-docs.ts");
-
-  assert.match(
-    reviewDocs,
-    /performer: getText\(track, "performer"\) \|\| artistNameRaw/,
-  );
-  assert.match(
-    reviewDocs,
-    /performer: getText\(track, "performer"\) \|\| getText\(track, "performers"\)/,
-  );
+test("review documents preserve the legacy artist fallback and normalized missing performer blanks", async () => {
+  const performerCell = (buffer: Buffer) => {
+    const document = new PizZip(buffer).file("word/document.xml")!.asText();
+    const cells = [...document.matchAll(/<w:tc>[\s\S]*?<\/w:tc>/g)].map((match) => match[0].replace(/<[^>]*>/g, ""));
+    const template = new PizZip(readFileSync(new URL("../templates/review-docs/review-form.docx", import.meta.url))).file("word/document.xml")!.asText();
+    const templateCells = [...template.matchAll(/<w:tc>[\s\S]*?<\/w:tc>/g)].map((match) => match[0].replace(/<[^>]*>/g, ""));
+    return cells[templateCells.findIndex((cell) => cell === "{performer}")];
+  };
+  const legacy = new PizZip(await buildReviewDocsZip([{ submission: { title: "앨범", artist_name: "기본 가수" }, tracks: [{ track_no: 1, track_title: "노래", lyrics: "가사" }], files: [], events: [] }]));
+  assert.equal(performerCell(legacy.file(/심의폼_.*\.docx$/)[0].asNodeBuffer()), "기본 가수");
+  const data = normalizedReviewFixture(); data.albums[0].tracks = [data.albums[0].tracks[0]];
+  const normalized = await generateReviewDocuments(data);
+  assert.equal(performerCell(normalized.files.find((file) => file.name.includes("/심의폼_"))!.buffer), "");
+  data.albums[0].tracks[0].performers = "명시한 실연자";
+  const specified = await generateReviewDocuments(data);
+  assert.equal(performerCell(specified.files.find((file) => file.name.includes("/심의폼_"))!.buffer), "명시한 실연자");
 });

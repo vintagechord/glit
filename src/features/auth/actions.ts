@@ -1,6 +1,5 @@
 "use server";
 
-import { z } from "zod";
 import { redirect } from "next/navigation";
 import { headers as nextHeaders } from "next/headers";
 
@@ -16,6 +15,8 @@ import {
 import { getSafeInternalPath } from "@/lib/safe-internal-path";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildUrl, getBaseUrl } from "@/lib/url";
+import { isAuthConnectionError, logAuthError, mapAuthError } from "./errors";
+import { loginSchema, signupSchema, profileSchema, passwordUpdateSchema, resetEmailSchema, toFieldErrors } from "./validation";
 
 export type ActionState = {
   error?: string;
@@ -23,105 +24,7 @@ export type ActionState = {
   fieldErrors?: Record<string, string>;
 };
 
-const isFetchFailedError = (error: unknown) =>
-  error instanceof Error &&
-  error.message.toLowerCase().includes("fetch failed");
-
-const mapSignupError = (
-  error?: { code?: string | number; message?: string | null } | null,
-) => {
-  const message = error?.message?.toLowerCase() ?? "";
-
-  if (
-    message.includes("already") ||
-    message.includes("registered") ||
-    message.includes("exists") ||
-    message.includes("duplicate") ||
-    message.includes("user_already_exists")
-  ) {
-    return "이미 가입된 이메일입니다. 로그인 또는 비밀번호 재설정을 이용해주세요.";
-  }
-
-  if (
-    message.includes("invalid email") ||
-    (message.includes("email") && message.includes("valid"))
-  ) {
-    return "올바른 이메일 주소를 입력해주세요.";
-  }
-
-  if (
-    message.includes("weak password") ||
-    message.includes("password should") ||
-    message.includes("password must") ||
-    message.includes("password") && message.includes("least")
-  ) {
-    return "비밀번호는 8자 이상으로 입력하고, 너무 단순한 비밀번호는 피해주세요.";
-  }
-
-  if (message.includes("rate limit") || message.includes("too many")) {
-    return "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
-  }
-
-  if (isFetchFailedError(error)) {
-    return "회원가입 서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.";
-  }
-
-  return "회원가입을 완료할 수 없습니다. 입력 내용을 다시 확인해주세요.";
-};
-
-const loginSchema = z.object({
-  email: z.string().trim().email().max(254),
-  password: z.string().min(8).max(128),
-  next: z.string().max(2048).optional(),
-});
-
-const signupSchema = z.object({
-  name: z.string().trim().max(100).optional(),
-  company: z.string().trim().max(200).optional(),
-  phone: z.string().trim().max(40).optional(),
-  email: z.string().trim().email().max(254),
-  password: z.string().min(8).max(128),
-  confirmPassword: z.string().min(8).max(128),
-  agreeAge: z.literal("on"),
-  agreeTerms: z.literal("on"),
-  agreePrivacy: z.literal("on"),
-  agreeRefund: z.literal("on"),
-  agreeMarketing: z.literal("on").optional(),
-}).refine((data) => data.password === data.confirmPassword, {
-  path: ["confirmPassword"],
-  message: "비밀번호가 일치하지 않습니다.",
-});
-
-const profileSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  company: z.string().trim().max(200).optional(),
-  phone: z.string().trim().min(7).max(40),
-});
-
-const passwordUpdateSchema = z
-  .object({
-    newPassword: z
-      .string()
-      .min(8, "비밀번호는 8자 이상 입력해주세요.")
-      .max(128, "비밀번호는 128자 이하로 입력해주세요."),
-    confirmPassword: z
-      .string()
-      .min(8, "비밀번호는 8자 이상 입력해주세요.")
-      .max(128, "비밀번호는 128자 이하로 입력해주세요."),
-  })
-  .refine((data) => data.newPassword === data.confirmPassword, {
-    path: ["confirmPassword"],
-    message: "비밀번호가 일치하지 않습니다.",
-  });
-
-function toFieldErrors(
-  errors: Record<string, string[] | undefined>,
-): Record<string, string> {
-  const entries = Object.entries(errors)
-    .map(([key, value]) => [key, value?.[0]])
-    .filter(([, value]) => Boolean(value));
-  return Object.fromEntries(entries) as Record<string, string>;
-}
+const resetSuccessMessage = "가입된 이메일이라면 비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.";
 
 const checkAuthRateLimit = async ({
   namespace,
@@ -182,25 +85,29 @@ export async function loginAction(
     return { error: "로그인 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  const supabase = await createServerSupabase();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
-
-  if (error) {
-    const message =
-      error.message?.toLowerCase().includes("email not confirmed") ||
-      error.message?.toLowerCase().includes("email confirmation")
-        ? "이메일 인증 후 로그인해 주세요. 인증 메일을 다시 받으려면 비밀번호 재설정으로 진행하면 새 링크를 받을 수 있습니다."
-        : "로그인 정보를 확인해주세요.";
-    return { error: message };
+  try {
+    const supabase = await createServerSupabase();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: parsed.data.email,
+      password: parsed.data.password,
+    });
+    if (error) {
+      logAuthError("login", error);
+      return { error: mapAuthError(error, "login") };
+    }
+  } catch (error) {
+    logAuthError("login", error);
+    return { error: mapAuthError(error, "login") };
   }
 
   const internalNext = getSafeInternalPath(parsed.data.next);
+  const nextPathname = internalNext?.split(/[?#]/, 1)[0];
   const safeNext =
     internalNext &&
-    internalNext !== "/login" &&
-    !internalNext.startsWith("/login/") &&
-    internalNext !== "/en/login" &&
-    !internalNext.startsWith("/en/login/")
+    nextPathname !== "/login" &&
+    !nextPathname?.startsWith("/login/") &&
+    nextPathname !== "/en/login" &&
+    !nextPathname?.startsWith("/en/login/")
       ? internalNext
       : null;
 
@@ -258,7 +165,8 @@ export async function signupAction(
     });
 
     if (error || !data.user) {
-      return { error: mapSignupError(error) };
+      logAuthError("signup", error);
+      return { error: mapAuthError(error, "signup") };
     }
 
     const emailResult = await sendWelcomeEmail({
@@ -274,12 +182,8 @@ export async function signupAction(
       message: "회원가입이 완료되었습니다. 로그인해 주세요.",
     };
   } catch (error) {
-    console.error("Signup error", error);
-    return {
-      error: mapSignupError(
-        error instanceof Error ? { message: error.message } : undefined,
-      ),
-    };
+    logAuthError("signup", error);
+    return { error: mapAuthError(error, "signup") };
   }
 }
 
@@ -291,7 +195,7 @@ export async function resetPasswordAction(
   if (!email) {
     return { fieldErrors: { resetEmail: "이메일을 입력해주세요." } };
   }
-  const parsed = z.string().email().max(254).safeParse(email);
+  const parsed = resetEmailSchema.safeParse(email);
   if (!parsed.success) {
     return { fieldErrors: { resetEmail: "유효한 이메일을 입력해주세요." } };
   }
@@ -310,92 +214,43 @@ export async function resetPasswordAction(
 
   try {
     const redirectTo = buildUrl("/reset-password", getBaseUrl());
-    let customMailError: string | undefined;
-
-    try {
-      const admin = createAdminClient();
-      const { data, error } = await admin.auth.admin.generateLink({
-        type: "recovery",
-        email: parsed.data,
-        options: { redirectTo },
-      });
-
-      if (error) {
-        console.error("generateLink error", error);
-        customMailError =
-          error.message?.trim() ||
-          "비밀번호 재설정 링크를 생성하지 못했습니다.";
-      } else {
-        const linkData = data as
-          | {
-              action_link?: string | null;
-              properties?: { action_link?: string | null };
-            }
-          | null;
-        const actionLink =
-          linkData?.action_link ?? linkData?.properties?.action_link ?? null;
-
-        if (!actionLink) {
-          customMailError = "비밀번호 재설정 링크를 생성하지 못했습니다.";
+    // The custom sender is optional. A transport failure reaching Supabase,
+    // however, also prevents the default sender; do not repeat that request.
+    if (process.env.RESEND_API_KEY?.trim()) {
+      try {
+        const admin = createAdminClient();
+        const { data, error } = await admin.auth.admin.generateLink({
+          type: "recovery",
+          email: parsed.data,
+          options: { redirectTo },
+        });
+        if (error) {
+          logAuthError("generate recovery link", error);
+          if (isAuthConnectionError(error)) return { error: mapAuthError(error, "reset") };
+          if (error.code === "user_not_found") return { message: resetSuccessMessage };
         } else {
-          const emailResult = await sendPasswordResetEmail({
-            email: parsed.data,
-            link: actionLink,
-          });
-
-          if (emailResult.ok) {
-            return {
-              message: "비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.",
-            };
+          const actionLink = data?.properties?.action_link;
+          if (actionLink) {
+            const emailResult = await sendPasswordResetEmail({ email: parsed.data, link: actionLink });
+            if (emailResult.ok) return { message: resetSuccessMessage };
           }
-
-          customMailError = emailResult.skipped
-            ? undefined
-            : emailResult.message ??
-              "비밀번호 재설정 메일 발송에 실패했습니다.";
         }
+      } catch (error) {
+        logAuthError("custom recovery mail", error);
+        if (isAuthConnectionError(error)) return { error: mapAuthError(error, "reset") };
       }
-    } catch (error) {
-      console.error("custom reset mail error", error);
-      customMailError = isFetchFailedError(error)
-        ? "이메일 발송 서버 연결에 실패했습니다."
-        : error instanceof Error
-          ? error.message
-          : "비밀번호 재설정 메일 준비 중 오류가 발생했습니다.";
     }
 
     const supabase = await createServerSupabase();
-    const { error: fallbackError } = await supabase.auth.resetPasswordForEmail(
-      parsed.data,
-      {
-        redirectTo,
-      },
-    );
-    if (fallbackError) {
-      console.error("resetPasswordForEmail fallback error", fallbackError);
-      const fallbackMessage = fallbackError.message?.trim();
-      if (customMailError) {
-        return {
-          error: `${customMailError} 기본 재설정 메일 발송도 실패했습니다. ${fallbackMessage ?? ""}`.trim(),
-        };
-      }
-      return {
-        error:
-          fallbackMessage ||
-          "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.",
-      };
+    const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, { redirectTo });
+    if (error) {
+      logAuthError("default recovery mail", error);
+      return { error: mapAuthError(error, "reset") };
     }
-
-    return {
-      message: "비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.",
-    };
+    return { message: resetSuccessMessage };
   } catch (error) {
-    console.error("resetPasswordAction error", error);
-    return {
-      error: isFetchFailedError(error)
-        ? "메일 서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요."
-        : "비밀번호 재설정 요청 중 오류가 발생했습니다.",
-    };
+    logAuthError("password reset", error);
+    return { error: mapAuthError(error, "reset") };
   }
 }
 
@@ -457,25 +312,18 @@ export async function updatePasswordAction(
     };
   }
 
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return { error: "로그인이 필요합니다." };
+  try {
+    const supabase = await createServerSupabase();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError && isAuthConnectionError(userError)) return { error: mapAuthError(userError, "update") };
+    if (userError || !user) return { error: "로그인이 필요합니다." };
+    const { error } = await supabase.auth.updateUser({ password: parsed.data.newPassword });
+    if (error) return { error: mapAuthError(error, "update") };
+    return { message: "비밀번호가 변경되었습니다." };
+  } catch (error) {
+    logAuthError("update password", error);
+    return { error: mapAuthError(error, "update") };
   }
-
-  const { error } = await supabase.auth.updateUser({
-    password: parsed.data.newPassword,
-  });
-
-  if (error) {
-    return { error: "비밀번호 변경에 실패했습니다. 잠시 후 다시 시도해주세요." };
-  }
-
-  return { message: "비밀번호가 변경되었습니다." };
 }
 
 export async function signOutAction() {

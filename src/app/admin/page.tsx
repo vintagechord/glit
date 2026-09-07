@@ -119,6 +119,10 @@ export default async function AdminPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
       <h1 className="font-display text-3xl text-foreground">대시보드</h1>
+      <Link href="/admin/review-docs" className="mt-5 inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111]">
+        <FileArchive className="h-5 w-5" aria-hidden="true" />
+        심의자료 생성
+      </Link>
 
       <section
         aria-label="관리자 처리 요약"
