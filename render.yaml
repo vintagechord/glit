@@ -23,7 +23,9 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM
-        value: onside <myonside@daum.net>
+        # Set an address on a domain verified in Resend in the dashboard.
+        # Preserve that value across Blueprint syncs.
+        sync: false
       - key: B2_S3_ENDPOINT
         sync: false
       - key: B2_REGION

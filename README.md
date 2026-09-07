@@ -45,7 +45,7 @@ OPENAI_TRANSLATION_TIMEOUT_MS=15000
 
 # Email notifications (Resend)
 RESEND_API_KEY=your_resend_key
-RESEND_FROM="onside <myonside@daum.net>"
+RESEND_FROM="onside <no-reply@your-verified-domain.example>"
 RESEND_TEST_TO=you@example.com
 
 # Optional (official Kakao/Alimtalk notification webhook)
@@ -147,6 +147,27 @@ verified Resend sender/domain, then run:
 
 ```bash
 npm run email:smoke -- --to you@example.com
+```
+
+`RESEND_FROM` must use a domain you own and have [verified in Resend](https://resend.com/docs/dashboard/domains/introduction).
+The example above is a placeholder; a personal Daum/Gmail inbox can receive
+mail but cannot serve as your verified Resend sender domain. Set the real
+sender in Render's Environment settings. The Blueprint preserves this value.
+`/api/health` checks environment presence; it does not verify email delivery.
+
+Password recovery uses Resend when its API key is configured. A failed custom
+send reports a delivery error and does not retry through Supabase's default
+sender, which has a separate project-wide email quota. Without a Resend key,
+configure [Supabase custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp)
+for production delivery. Supabase Auth's redirect allowlist must include the
+actual site origin's `/reset-password` and `/en/reset-password` URLs.
+
+To check login and password recovery without sending email, run the following
+against an explicitly selected app. It uses the local Supabase configuration,
+creates one temporary account, tests both passwords, then deletes the account:
+
+```bash
+AUTH_QA_BASE_URL=http://127.0.0.1:3000 AUTH_QA_LINK_MODE=token_hash npx tsx scripts/auth-live-smoke.ts
 ```
 
 ## Notes
