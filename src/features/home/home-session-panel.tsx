@@ -64,16 +64,26 @@ function buildExampleState() {
     id: "sample-mv",
     title: "MV 심의",
     artist_name: "결과 예시",
-    status: "WAITING_PAYMENT",
-    payment_status: "PAYMENT_PENDING",
+    type: "MV_BROADCAST",
+    status: "COMPLETED",
+    payment_status: "PAID",
+    result_status: "APPROVED",
     updated_at: new Date(now).toISOString(),
   };
+  const sampleMvStations: StationItem[] = ["KBS", "MBC", "SBS", "ETN"].map(
+    (name) => ({
+      id: `sample-mv-${name.toLowerCase()}`,
+      status: "APPROVED",
+      updated_at: sampleMv.updated_at,
+      station: { name, code: name },
+    }),
+  );
 
   return {
     albumSubmissions: [sampleAlbum],
     mvSubmissions: [sampleMv],
     albumStationsMap: { [sampleAlbum.id]: sampleStations },
-    mvStationsMap: { [sampleMv.id]: sampleStations },
+    mvStationsMap: { [sampleMv.id]: sampleMvStations },
   };
 }
 
