@@ -27,6 +27,7 @@ type SubmissionRow = {
   created_at: string;
   updated_at: string | null;
   type: string;
+  is_oneclick?: boolean | null;
   user_deleted_at?: string | null;
 };
 
@@ -37,13 +38,13 @@ type ShellConfig = {
 };
 
 const PRIMARY_SELECT =
-  "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type, user_deleted_at";
+  "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type, is_oneclick, user_deleted_at";
 const FALLBACK_SELECT =
-  "id, title, artist_name, artist_id, status, payment_status, created_at, updated_at, type, user_deleted_at";
+  "id, title, artist_name, artist_id, status, payment_status, created_at, updated_at, type, is_oneclick, user_deleted_at";
 const PRIMARY_LEGACY_SELECT =
-  "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type";
+  "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type, is_oneclick";
 const FALLBACK_LEGACY_SELECT =
-  "id, title, artist_name, artist_id, status, payment_status, created_at, updated_at, type";
+  "id, title, artist_name, artist_id, status, payment_status, created_at, updated_at, type, is_oneclick";
 
 const isMissingUserDeletedAt = (error?: { code?: string; message?: string }) =>
   Boolean(
@@ -126,7 +127,7 @@ export async function HistoryPageView(config?: ShellConfig) {
     for (const item of filtered) {
       const artist = Array.isArray(item.artist) ? item.artist[0] : item.artist;
       const name = artist?.name?.trim() || item.artist_name?.trim() || "";
-      const displayArtistName = name || "아티스트 미입력";
+      const displayArtistName = name || (item.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력");
       const key = artist?.id ?? item.artist_id ?? (name || item.id);
 
       if (!grouped.has(key)) {
@@ -138,7 +139,10 @@ export async function HistoryPageView(config?: ShellConfig) {
         });
       }
 
-      grouped.get(key)?.submissions.push(item);
+      grouped.get(key)?.submissions.push({
+        ...item,
+        title: item.title || (item.is_oneclick ? "발매된 음반 · URL 접수" : null),
+      });
     }
 
     return Array.from(grouped.values()).sort((a, b) =>

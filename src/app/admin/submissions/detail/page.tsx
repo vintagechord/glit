@@ -34,6 +34,7 @@ import { updateStationReviewFormAction } from "@/features/admin/actions";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { ReviewDocsSingleDownloadButton } from "@/components/admin/review-docs-download";
 import { safeAdminSubmissionsReturnTo } from "@/lib/admin/submission-navigation";
+import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
 
 export const metadata = {
   title: "접수 상세 관리",
@@ -509,6 +510,7 @@ export default async function AdminSubmissionDetailPage({
   const applicantEmail = submission.applicant_email ?? submission.guest_email ?? null;
   const albumTracks = submission.album_tracks ?? [];
   const isOneclick = submission.is_oneclick === true;
+  const releasedAlbumUrl = parseReleasedAlbumUrl(submission.melon_url);
   const { data: paymentDocumentRaw, error: paymentDocumentError } = await supabase
     .from("submissions")
     .select(
@@ -825,10 +827,10 @@ export default async function AdminSubmissionDetailPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl text-foreground">
-            {submission.title || "제목 미입력"}
+            {submission.title || (isOneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {submission.artist_name || "아티스트 미입력"}
+            {submission.artist_name || (isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
             <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-muted-foreground">
@@ -840,7 +842,7 @@ export default async function AdminSubmissionDetailPage({
           <span className="text-muted-foreground">
             Updated {formatDateTime(submission.updated_at ?? submission.created_at)}
           </span>
-          {submission.type === "ALBUM" && !submission.is_oneclick ? (
+          {submission.type === "ALBUM" ? (
             <ReviewDocsSingleDownloadButton
               id={submission.id}
               className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-white transition hover:bg-[#1556a4] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
@@ -849,6 +851,28 @@ export default async function AdminSubmissionDetailPage({
           <AdminDeleteButton ids={[submission.id]} redirectTo={adminSubmissionListHref} className="rounded-full border border-rose-200/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700" />
         </div>
       </div>
+
+      {!isMvSubmission && isOneclick ? (
+        <div className="mt-6 rounded-2xl border border-[#1556a4]/30 bg-[#1556a4]/5 p-5 text-sm">
+          <p className="font-semibold text-foreground">발매된 음반 · URL 접수</p>
+          <p className="mt-2 leading-6 text-muted-foreground">
+            추가금 없이 접수된 발매 음반입니다. 심의자료 다운로드를 누르면 멜론·지니 링크에서 앨범 정보와 가사를 수집해 신청서 ZIP을 만듭니다.
+          </p>
+          {releasedAlbumUrl ? (
+            <a
+              href={releasedAlbumUrl.canonicalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-block break-all font-semibold text-[#1556a4] underline underline-offset-4 dark:text-sky-300"
+            >
+              {submission.melon_url}
+            </a>
+          ) : null}
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            원본 정보와 가사를 확인한 뒤 사용해주세요. 링크에서 자료를 불러오지 못하면 앨범 링크를 확인하거나 심의자료 도구에서 보완할 수 있습니다.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-8 rounded-[28px] border border-border/60 bg-background/80 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1536,7 +1560,7 @@ export default async function AdminSubmissionDetailPage({
                   label="이전 발매"
                   value={submission.previous_release || "-"}
                 />
-                <DetailRow label="멜론 링크" value={submission.melon_url || "-"} />
+                <DetailRow label="멜론·지니 앨범 링크" value={submission.melon_url || "-"} />
               </>
             )}
           </div>
@@ -1597,7 +1621,7 @@ export default async function AdminSubmissionDetailPage({
           {!isMvSubmission && isOneclick ? (
             <div className="mt-6 space-y-3 rounded-2xl border border-border/60 bg-background/70 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                원클릭 트랙 추가
+                발매 음반 트랙 추가
               </p>
               <p className="text-xs text-muted-foreground">
                 트랙을 추가한 뒤 방송국별 결과를 설정하세요.

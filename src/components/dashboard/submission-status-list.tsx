@@ -167,10 +167,10 @@ export function SubmissionStatusList({
                     {typeLabel}
                   </p>
                   <h2 className="mt-2 truncate text-xl font-semibold text-foreground">
-                    {submission.title || "제목 미입력"}
+                    {submission.title || (submission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
                   </h2>
                   <p className="mt-2 truncate text-sm text-muted-foreground">
-                    {submission.artist_name || "아티스트 미입력"}
+                    {submission.artist_name || (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
                   </p>
                   <p className="mt-2 text-sm text-muted-foreground">
                     접수일 {formatDateTime(submission.created_at)} · Updated{" "}
@@ -259,10 +259,10 @@ export function SubmissionStatusList({
                   방송국별 현황
                 </p>
                 <h3 className="mt-2 break-words text-xl font-semibold text-foreground sm:text-2xl">
-                  {activeSubmission.title || "제목 미입력"}
+                  {activeSubmission.title || (activeSubmission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {activeSubmission.artist_name || "아티스트 미입력"}
+                  {activeSubmission.artist_name || (activeSubmission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
                 </p>
               </div>
               <button
@@ -277,7 +277,7 @@ export function SubmissionStatusList({
               </button>
             </div>
 
-            {activeSubmission.is_oneclick && (
+            {activeSubmission.is_oneclick && activeSubmission.title && activeSubmission.artist_name && (
               <div className="mt-4 rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-lg font-semibold text-foreground">
                 {(activeSubmission.artist_name || "아티스트 미입력") +
                   " - " +

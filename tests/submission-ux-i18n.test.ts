@@ -18,6 +18,26 @@ const assertExactTranslations = (labels: readonly string[]) => {
   }
 };
 
+test("unified release choice and URL submission have exact English translations", () => {
+  assertExactTranslations([
+    "음반이 이미 발매되었나요?",
+    "발매 전이에요",
+    "이미 발매됐어요",
+    "발매 여부 · 패키지",
+    "URL · 접수자 정보",
+    "URL 접수 추가금 0원",
+    "URL 입력으로 계속",
+    "신청서 작성으로 계속",
+    "발매된 음반 간편 접수",
+    "멜론·지니 앨범 URL",
+    "멜론·지니 앨범 링크",
+    "멜론 또는 지니 앨범 페이지 주소를 붙여넣어주세요",
+    "멜론 또는 지니의 앨범 링크를 입력해주세요.",
+    "멜론 또는 지니의 앨범 상세 페이지 URL을 확인해주세요. 곡·아티스트 링크는 사용할 수 없습니다.",
+    "저장하고 최종 확인",
+  ]);
+});
+
 test("track table and checkpoint controls have exact English translations", () => {
   assertExactTranslations([
     "트랙 빠른 입력",

@@ -162,10 +162,10 @@ export default async function PayPage({
           결제하기
         </p>
         <h1 className="mt-4 text-2xl font-black text-foreground">
-          {paymentSubmission.title || "제목 미입력"}
+          {paymentSubmission.title || (paymentSubmission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
         </h1>
         <p className="mt-1 text-sm font-semibold text-muted-foreground">
-          {paymentSubmission.artist_name || "아티스트 미입력"}
+          {paymentSubmission.artist_name || (paymentSubmission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
         </p>
 
         <div className="mt-6 grid gap-4 rounded-[8px] border-2 border-border bg-background/70 p-4 text-sm text-foreground">

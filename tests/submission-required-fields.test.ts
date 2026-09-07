@@ -175,6 +175,28 @@ test("downloaded album forms require AI declaration but use the attached form fi
   );
 });
 
+test("released albums require a supported album URL and retain contact and AI requirements", () => {
+  const input = {
+    ...validAlbum,
+    isOneClick: true,
+    title: "",
+    artistName: "",
+    artistNameKr: "",
+    artistNameEn: "",
+    melonUrl: "https://www.genie.co.kr/detail/albumInfo?axnm=12345",
+    tracks: [],
+  };
+  assert.equal(validateAlbumSubmittedFields(input), null);
+  assert.ok(validateAlbumSubmittedFields({ ...input, aiUsed: null }));
+  assert.ok(validateAlbumSubmittedFields({ ...input, applicantName: "" }));
+  assert.ok(validateAlbumSubmittedFields({ ...input, applicantEmail: "" }));
+  assert.ok(validateAlbumSubmittedFields({ ...input, applicantPhone: "" }));
+  assert.ok(validateAlbumSubmittedFields({
+    ...input,
+    melonUrl: "https://www.melon.com/song/detail.htm?songId=12345",
+  }));
+});
+
 const validMv = {
   isAdminReviewer: false,
   externalApplicationForm: false,
@@ -251,6 +273,15 @@ test("submitted media and downloaded application forms are enforced server-side"
     filesSubmittedByEmail: false,
   };
   assert.ok(validateSubmittedFiles({ ...base, kind: "ALBUM" as const, files: [] }));
+  assert.equal(
+    validateSubmittedFiles({ ...base, kind: "ALBUM", isOneClick: true, files: [] }),
+    null,
+    "released albums are collected from their validated platform URL",
+  );
+  assert.ok(
+    validateSubmittedFiles({ ...base, kind: "MV", isOneClick: true, files: [] }),
+    "the album URL exemption must never bypass MV media requirements",
+  );
   assert.equal(
     validateSubmittedFiles({
       ...base,

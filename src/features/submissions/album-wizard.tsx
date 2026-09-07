@@ -25,6 +25,7 @@ import {
 } from "@/lib/album-pricing";
 import { orderAlbumDraftRowsForResume } from "@/lib/album-draft-order";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
+import { getReleasedAlbumUrlError } from "@/lib/released-album-url";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -171,7 +172,7 @@ const initialTrack: TrackInput = {
 };
 
 const standardSteps = [
-  "방송국 패키지 선택",
+  "발매 여부 · 패키지",
   "작성 방식 선택",
   "기본 정보",
   "트랙 정보",
@@ -181,7 +182,7 @@ const standardSteps = [
 ];
 
 const compactSteps = [
-  "방송국 패키지 선택",
+  "발매 여부 · 패키지",
   "작성 방식 선택",
   "기본 정보",
   "파일 업로드",
@@ -190,15 +191,14 @@ const compactSteps = [
 ];
 
 const oneClickSteps = [
-  "방송국 패키지 선택",
-  "기본 정보",
-  "파일 업로드",
+  "발매 여부 · 패키지",
+  "URL · 접수자 정보",
   "최종 점검",
   "접수 완료",
 ];
 
 const uploadFormSteps = [
-  "방송국 패키지 선택",
+  "발매 여부 · 패키지",
   "작성 방식 선택",
   "신청서 양식",
   "파일 업로드",
@@ -217,15 +217,13 @@ const selectedBadgeClass =
 
 const isReviewTestPackage = (name?: string | null) =>
   name?.startsWith("[테스트]") ?? false;
-const formatPackageName = (count: number, isOneClick = false) =>
-  `${isOneClick ? "원클릭 " : ""}${count}개 패키지`;
+const formatPackageName = (count: number) => `${count}개 패키지`;
 const getPackageDisplayName = (
   pkg: { name?: string | null; stationCount: number },
-  isOneClick = false,
 ) =>
   isReviewTestPackage(pkg.name)
     ? (pkg.name ?? "테스트 패키지")
-    : formatPackageName(pkg.stationCount, isOneClick);
+    : formatPackageName(pkg.stationCount);
 const packageGuidance: Record<
   number,
   { recommendation: string; badge?: string; conditional?: string[] }
@@ -311,13 +309,6 @@ const lyricCautions = [
 const broadcastRequirementMessage =
   "타이틀곡 지정해 주시고 4곡 이상의 앨범일 경우 원음방송 심의를 위해 3곡 지정 해주세요. (원음방송은 앨범당 3곡만 심의가 가능합니다.)";
 
-const oneClickPriceMap: Record<number, number> = {
-  7: 100000,
-  10: 130000,
-  13: 150000,
-  15: 170000,
-};
-
 type AlbumDraft = {
   submissionId: string;
   guestToken: string;
@@ -346,6 +337,7 @@ type AlbumDraft = {
 type AlbumCheckpointSnapshot = {
   step: number;
   isOneClick: boolean;
+  releaseStatusSelected?: boolean;
   applicationFormMode: ApplicationFormMode | null;
   selectedPackageId: string | null;
   existingCartSubmission: ExistingCartSubmissionSnapshot | null;
@@ -431,7 +423,20 @@ export function AlbumWizard({
     userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
+  const wizardRef = React.useRef<HTMLDivElement | null>(null);
+  const previousStepRef = React.useRef(step);
+  React.useEffect(() => {
+    if (previousStepRef.current === step) return;
+    previousStepRef.current = step;
+    wizardRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      block: "start",
+    });
+  }, [step]);
   const [isOneClick, setIsOneClick] = React.useState(false);
+  const [releaseStatusSelected, setReleaseStatusSelected] = React.useState(false);
   const [applicationFormMode, setApplicationFormMode] =
     React.useState<ApplicationFormMode | null>(null);
   const [selectedPackage, setSelectedPackage] =
@@ -485,7 +490,6 @@ export function AlbumWizard({
   const [fileDigest, setFileDigest] = React.useState("");
   const [emailSubmitConfirmed, setEmailSubmitConfirmed] = React.useState(false);
   const [showCdInfo, setShowCdInfo] = React.useState(false);
-  const [showOneclickNotice, setShowOneclickNotice] = React.useState(false);
   const [packageConfirmTarget, setPackageConfirmTarget] =
     React.useState<PackageOption | null>(null);
   const lyricsOverlayRef = React.useRef<HTMLDivElement | null>(null);
@@ -568,6 +572,7 @@ export function AlbumWizard({
     safeRandomUUID(),
   );
   const currentGuestTokenRef = React.useRef(currentGuestToken);
+  const hydratedGuestTokenStorageKeyRef = React.useRef<string | null>(null);
   const draftStorageKey = React.useMemo(
     () => `onside:draft:album:${userId ?? "guest"}`,
     [userId],
@@ -604,7 +609,9 @@ export function AlbumWizard({
       ? 1
       : step === 3
         ? 2
-        : step - 2
+        : step <= 6
+          ? 3
+          : 4
     : hasTrackStep
       ? step
       : step <= 3
@@ -657,12 +664,7 @@ export function AlbumWizard({
   const requiresBroadcastSelection = tracks.length >= 4;
   const normalizedAlbumDiscountPercent =
     normalizeAlbumDiscountPercent(albumDiscountPercent);
-  const originalBasePriceKrw = selectedPackage
-    ? isOneClick
-      ? oneClickPriceMap[selectedPackage.stationCount] ??
-      selectedPackage.priceKrw
-      : selectedPackage.priceKrw
-    : 0;
+  const originalBasePriceKrw = selectedPackage?.priceKrw ?? 0;
   const basePriceKrw = getDiscountedAlbumPrice(
     originalBasePriceKrw,
     normalizedAlbumDiscountPercent,
@@ -707,13 +709,13 @@ export function AlbumWizard({
       priceKrw: basePriceKrw,
     }
     : null;
-  const albumFilesReady = uploadDrafts?.length
+  const albumFilesReady = isOneClick || (uploadDrafts?.length
     ? uploadDrafts.every((draft, index) =>
       index === uploadDraftIndex
         ? uploadedFiles.length > 0 || emailSubmitConfirmed
         : draft.files.length > 0 || draft.emailSubmitConfirmed,
     )
-    : uploadedFiles.length > 0 || emailSubmitConfirmed;
+    : uploadedFiles.length > 0 || emailSubmitConfirmed);
   const uploadStatusLabel = emailSubmitConfirmed
     ? "파일 없이 진행 선택"
     : uploads.some((upload) => upload.status === "uploading")
@@ -727,7 +729,7 @@ export function AlbumWizard({
     {
       label: "심의 상품",
       value: selectedPackageSummary
-        ? getPackageDisplayName(selectedPackageSummary, isOneClick)
+        ? getPackageDisplayName(selectedPackageSummary)
         : "패키지 선택 필요",
       ready: Boolean(selectedPackageSummary),
     },
@@ -737,8 +739,8 @@ export function AlbumWizard({
       ready: step >= 6 || Boolean(uploadDrafts?.length),
     },
     {
-      label: "파일",
-      value: uploadStatusLabel,
+      label: isOneClick ? "앨범 URL" : "파일",
+      value: isOneClick ? "관리자가 심의 자료를 준비합니다." : uploadStatusLabel,
       ready: albumFilesReady,
     },
     {
@@ -1103,10 +1105,10 @@ export function AlbumWizard({
   }, [currentGuestToken]);
 
   React.useEffect(() => {
-    if (!resumeChecked) return;
+    if (!resumeChecked || !releaseStatusSelected) return;
     if (currentSubmissionId || isPreparingDraft) return;
     void createDraft();
-  }, [createDraft, currentSubmissionId, isPreparingDraft, resumeChecked]);
+  }, [createDraft, currentSubmissionId, isPreparingDraft, releaseStatusSelected, resumeChecked]);
 
   const createAdditionalAlbumDraft = React.useCallback(async () => {
     const requestedGuestToken = isGuest ? safeRandomUUID() : undefined;
@@ -1189,7 +1191,7 @@ export function AlbumWizard({
     if (mode === "oneclick") {
       setIsOneClick(true);
       setApplicationFormMode("online");
-      setShowOneclickNotice(true);
+      setReleaseStatusSelected(true);
     }
   }, [searchParams]);
 
@@ -1224,28 +1226,26 @@ export function AlbumWizard({
   }, [artistGender, artistType]);
 
   React.useEffect(() => {
-    if (!isGuest || typeof window === "undefined") return;
-    try {
-      const stored = window.localStorage.getItem(guestTokenStorageKey);
-      if (stored && stored !== currentGuestToken) {
-        currentGuestTokenRef.current = stored;
-        setCurrentGuestToken(stored);
-        return;
-      }
-      if (!stored) {
-        window.localStorage.setItem(guestTokenStorageKey, currentGuestToken);
-      }
-    } catch {
-      // ignore storage errors
+    if (!isGuest || typeof window === "undefined") {
+      hydratedGuestTokenStorageKeyRef.current = null;
+      return;
     }
-  }, [currentGuestToken, guestTokenStorageKey, isGuest]);
-
-  React.useEffect(() => {
-    if (!isGuest || typeof window === "undefined") return;
     try {
+      // Read the saved identity once. Later server-issued or restored tokens
+      // are authoritative; reading the old stored value on every change makes
+      // state and storage alternate forever between the two identities.
+      if (hydratedGuestTokenStorageKeyRef.current !== guestTokenStorageKey) {
+        hydratedGuestTokenStorageKeyRef.current = guestTokenStorageKey;
+        const stored = window.localStorage.getItem(guestTokenStorageKey);
+        if (stored && stored !== currentGuestToken) {
+          currentGuestTokenRef.current = stored;
+          setCurrentGuestToken(stored);
+          return;
+        }
+      }
       window.localStorage.setItem(guestTokenStorageKey, currentGuestToken);
     } catch {
-      // ignore
+      // Browser storage is optional; the current in-memory identity remains.
     }
   }, [currentGuestToken, guestTokenStorageKey, isGuest]);
 
@@ -2643,7 +2643,11 @@ export function AlbumWizard({
           storedApplicationFormMode === "upload"
         ? storedApplicationFormMode
         : null);
+    const restoredReleaseStatusSelected = Boolean(
+      restoredIsOneClick || nextPackageId || restoredApplicationFormMode,
+    );
     setIsOneClick(restoredIsOneClick);
+    setReleaseStatusSelected(restoredReleaseStatusSelected);
     setApplicationFormMode(restoredApplicationFormMode);
     setApplicantName(String(baseRow.applicant_name ?? ""));
     setApplicantEmail(String(baseRow.applicant_email ?? ""));
@@ -2678,6 +2682,10 @@ export function AlbumWizard({
     applyDraftToForm(baseDraft, {
       emailSubmitConfirmed: baseDraft.emailSubmitConfirmed,
     });
+    if (!restoredReleaseStatusSelected) {
+      setStep(1);
+      return;
+    }
     setStep(restoredIsOneClick || restoredApplicationFormMode ? 3 : 2);
   }, [applyDraftToForm, mapDraftFiles, mapDraftTracks, normalizeDateValue, packages]);
 
@@ -3022,8 +3030,9 @@ export function AlbumWizard({
     }
 
     if (isOneClick) {
-      if (!melonUrl.trim()) {
-        setNotice({ error: "멜론 링크를 입력해주세요." });
+      const urlError = getReleasedAlbumUrlError(melonUrl);
+      if (urlError) {
+        setNotice({ error: urlError });
         return false;
       }
     } else {
@@ -3130,6 +3139,7 @@ export function AlbumWizard({
   };
 
   const validateUploadStep = async (drafts: AlbumDraft[]) => {
+    if (isOneClick) return true;
     if (uploads.some((upload) => upload.status === "error")) {
       setNotice({ error: "업로드에 실패한 파일이 있습니다." });
       return false;
@@ -3667,7 +3677,7 @@ export function AlbumWizard({
       applyDraftToForm(allDrafts[0], {
         emailSubmitConfirmed: allDrafts[0].emailSubmitConfirmed,
       });
-      setStep(5);
+      setStep(6);
       return;
     }
 
@@ -4223,6 +4233,7 @@ export function AlbumWizard({
   const albumCheckpointSnapshot: AlbumCheckpointSnapshot = {
     step,
     isOneClick,
+    releaseStatusSelected,
     applicationFormMode,
     selectedPackageId: selectedPackage?.id ?? null,
     existingCartSubmission,
@@ -4299,7 +4310,8 @@ export function AlbumWizard({
       if (matchedPackage) setSelectedPackage(matchedPackage);
       setExistingCartSubmission(snapshot.existingCartSubmission ?? null);
       setIsOneClick(snapshot.isOneClick);
-      setApplicationFormMode(snapshot.applicationFormMode);
+      setReleaseStatusSelected(snapshot.releaseStatusSelected ?? true);
+      setApplicationFormMode(snapshot.isOneClick ? "online" : snapshot.applicationFormMode);
       setApplicantName(snapshot.applicantName);
       setApplicantEmail(snapshot.applicantEmail);
       setApplicantPhone(snapshot.applicantPhone);
@@ -4325,7 +4337,11 @@ export function AlbumWizard({
         emailSubmitConfirmed: restoredCurrentDraft.emailSubmitConfirmed,
       });
       const restoredStep = Math.max(1, Math.min(6, snapshot.step));
-      setStep(snapshot.isOneClick && restoredStep === 2 ? 3 : restoredStep);
+      setStep(
+        snapshot.isOneClick && [2, 4, 5].includes(restoredStep)
+          ? 3
+          : restoredStep,
+      );
     },
     [
       albumDrafts,
@@ -4421,7 +4437,7 @@ export function AlbumWizard({
   }, [albumCheckpoint]);
 
   return (
-    <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
+    <div ref={wizardRef} className="scroll-mt-36 space-y-8 text-[15px] leading-relaxed sm:scroll-mt-28 sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving || isAddingAlbum}
         label={step <= 5 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
@@ -4469,7 +4485,7 @@ export function AlbumWizard({
           </div>
         </div>
       ) : null}
-      {stepLabels}
+      {releaseStatusSelected && stepLabels}
       <SubmissionSaveIndicator
         status={albumCheckpoint.status}
         lastSavedAt={albumCheckpoint.lastSavedAt}
@@ -4484,232 +4500,221 @@ export function AlbumWizard({
 
       {step === 1 && (
         <div className="space-y-6">
-          <h2 className="font-display text-2xl text-foreground">
-            패키지 선택
-          </h2>
-
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              접수 방식
+          <section aria-labelledby="album-release-question" className="rounded-[20px] border-2 border-[#111111] bg-card p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:p-6">
+            <h2 id="album-release-question" className="font-display text-2xl font-black text-foreground">
+              음반이 이미 발매되었나요?
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              발매 여부에 맞춰 필요한 정보만 안내해드려요. 심의 비용은 동일합니다.
             </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectionLocked) return;
-                  if (isOneClick) {
-                    setApplicationFormMode(null);
-                  }
-                  setIsOneClick(false);
-                }}
-                disabled={selectionLocked}
-                className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-70 ${!isOneClick
-                  ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
-                  : "border-border/60 bg-background text-foreground hover:border-primary/40"
-                  }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold">일반 접수</p>
-                  </div>
-                  {!isOneClick ? (
-                    <span className={selectedBadgeClass}>
-                      ✓ 선택됨
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {[
+                { released: false, title: "발매 전이에요", description: "앨범·트랙 정보를 작성하고 음원 파일을 제출해요.", detail: "신청서 작성 → 파일 첨부 → 접수" },
+                { released: true, title: "이미 발매됐어요", description: "멜론이나 지니의 앨범 URL로 간편하게 접수해요.", detail: "URL 입력 → 관리자 자료 준비 → 심의 진행" },
+              ].map((option) => {
+                const selected = releaseStatusSelected && isOneClick === option.released;
+                return (
+                  <button
+                    key={String(option.released)}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={selectionLocked}
+                    onClick={() => {
+                      if (selectionLocked) return;
+                      if (isOneClick !== option.released) {
+                        setApplicationFormMode(option.released ? "online" : null);
+                      }
+                      setIsOneClick(option.released);
+                      setReleaseStatusSelected(true);
+                      setNotice({});
+                    }}
+                    className={`rounded-[14px] border-2 p-5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 disabled:cursor-not-allowed disabled:opacity-70 ${selected
+                      ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111]"
+                      : "border-border bg-background text-foreground hover:border-foreground"
+                    }`}
+                  >
+                    <span className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-lg font-black">{option.title}</span>
+                      {selected && <span className={selectedBadgeClass}>✓ 선택됨</span>}
                     </span>
-                  ) : null}
-                </div>
-                <p className="mt-2 text-xs opacity-80">트랙 정보 직접 입력</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectionLocked) return;
-                  setIsOneClick(true);
-                  setApplicationFormMode("online");
-                  setShowOneclickNotice(true);
-                }}
-                disabled={selectionLocked}
-                className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-70 ${isOneClick
-                  ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_18px_40px_rgba(0,113,227,0.22)] dark:bg-[#2997ff] dark:text-[#00101f]"
-                  : "border-border/60 bg-background text-foreground hover:border-primary/40"
-                  }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold">원클릭 접수</p>
-                  </div>
-                  {isOneClick ? (
-                    <span className={selectedBadgeClass}>
-                      ✓ 선택됨
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-2 text-xs opacity-80">멜론 링크로 간편 접수</p>
-              </button>
+                    <span className="mt-3 block text-sm leading-6 opacity-80">{option.description}</span>
+                    <span className="mt-4 block text-xs font-semibold leading-5">{option.detail}</span>
+                    {option.released && <span className="mt-3 inline-flex rounded-full border border-current/30 px-2.5 py-1 text-xs font-black">URL 접수 추가금 0원</span>}
+                  </button>
+                );
+              })}
             </div>
             {selectionLocked && (
               <p className="mt-3 text-xs text-muted-foreground">
-                추가 앨범이 등록된 경우 접수 방식은 변경할 수 없습니다.
+                추가 앨범이 등록된 경우 발매 여부는 변경할 수 없습니다.
               </p>
             )}
-          </div>
+          </section>
 
-          <div
-            data-preflight-field="package"
-            tabIndex={-1}
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {packages.map((pkg, index) => {
-              const isActive = activePackageId === pkg.id;
-              const isDisabled =
-                selectionLocked && selectedPackage?.id !== pkg.id;
-              const tone =
-                packageToneClasses[index % packageToneClasses.length];
-              const displayPrice = isOneClick
-                ? oneClickPriceMap[pkg.stationCount] ?? pkg.priceKrw
-                : pkg.priceKrw;
-              const packageDiscountPercent = getAlbumReviewDiscountPercentForPackage(
-                normalizedAlbumDiscountPercent,
-                pkg.stationCount,
-              );
-              const discountedDisplayPrice = getDiscountedAlbumPrice(
-                displayPrice,
-                normalizedAlbumDiscountPercent,
-                pkg.stationCount,
-              );
-              const hasDisplayDiscount =
-                packageDiscountPercent > 0 &&
-                discountedDisplayPrice < displayPrice;
-              const guidance = packageGuidance[pkg.stationCount];
-              const conditionalGuidance = guidance?.conditional ?? [];
-              const includedStationsLabel = `포함 방송국 ${pkg.stations.length}개`;
-              return (
-                <article
-                  key={pkg.id}
-                  className={`flex h-full flex-col overflow-hidden rounded-[14px] border-2 text-left transition ${isDisabled ? "opacity-60" : ""} ${isActive
-                    ? tone.card
-                    : "border-[#111111] bg-card text-foreground hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:hover:shadow-[3px_3px_0_#f2cf27]"
-                    }`}
-                >
-                  <button
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => {
-                      if (selectionLocked && selectedPackage?.id !== pkg.id) {
-                        return;
-                      }
-                      setPackageConfirmTarget(pkg);
-                    }}
-                    disabled={isDisabled}
-                    className="flex flex-1 flex-col p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-inset disabled:cursor-not-allowed"
-                  >
-                    <div className="flex w-full flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        {guidance?.badge ? (
-                          <span className={`mb-2 inline-flex rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}>
-                            {guidance.badge}
-                          </span>
-                        ) : null}
-                        <h3 className="text-base font-black leading-tight sm:text-lg xl:text-base">
-                          {getPackageDisplayName(pkg, isOneClick)}
-                        </h3>
-                      </div>
-                      <div className="flex min-w-[78px] shrink-0 flex-col items-end gap-1.5 text-right">
-                        {hasDisplayDiscount ? (
-                          <span className="rounded-[6px] border border-[#111111]/20 bg-white/70 px-2 py-0.5 text-[10px] font-black text-[#111111]">
-                            {packageDiscountPercent}% 할인
-                          </span>
-                        ) : null}
-                        {hasDisplayDiscount ? (
-                          <span className="text-xs font-semibold opacity-60 line-through">
-                            {formatCurrency(displayPrice)}원
-                          </span>
-                        ) : null}
-                        <span className="text-sm font-black sm:text-base xl:text-sm">
-                          {formatCurrency(discountedDisplayPrice)}원
-                        </span>
-                      </div>
-                    </div>
-                    {guidance?.recommendation ? (
-                      <p className="mt-3 line-clamp-2 text-xs font-semibold leading-5 opacity-80">
-                        {guidance.recommendation}
-                      </p>
-                    ) : null}
-                    {conditionalGuidance.length > 0 ? (
-                      <span className={`mt-3 inline-flex self-start rounded-[6px] border px-2 py-1 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}>
-                        장르 조건 있음
-                      </span>
-                    ) : null}
-                    {isActive ? (
-                      <span
-                        aria-hidden="true"
-                        className="mt-auto flex w-full justify-end pt-3"
+          {releaseStatusSelected && (
+            <>
+              <div>
+                <h2 className="font-display text-2xl text-foreground">방송국 패키지 선택</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  심의를 진행할 방송국을 선택해주세요. 발매 여부에 따른 추가금은 없습니다.
+                </p>
+              </div>
+              <div
+                data-preflight-field="package"
+                tabIndex={-1}
+                className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {packages.map((pkg, index) => {
+                  const isActive = activePackageId === pkg.id;
+                  const isDisabled =
+                    selectionLocked && selectedPackage?.id !== pkg.id;
+                  const tone =
+                    packageToneClasses[index % packageToneClasses.length];
+                  const displayPrice = pkg.priceKrw;
+                  const packageDiscountPercent = getAlbumReviewDiscountPercentForPackage(
+                    normalizedAlbumDiscountPercent,
+                    pkg.stationCount,
+                  );
+                  const discountedDisplayPrice = getDiscountedAlbumPrice(
+                    displayPrice,
+                    normalizedAlbumDiscountPercent,
+                    pkg.stationCount,
+                  );
+                  const hasDisplayDiscount =
+                    packageDiscountPercent > 0 &&
+                    discountedDisplayPrice < displayPrice;
+                  const guidance = packageGuidance[pkg.stationCount];
+                  const conditionalGuidance = guidance?.conditional ?? [];
+                  const includedStationsLabel = `포함 방송국 ${pkg.stations.length}개`;
+                  return (
+                    <article
+                      key={pkg.id}
+                      className={`flex h-full flex-col overflow-hidden rounded-[14px] border-2 text-left transition ${isDisabled ? "opacity-60" : ""} ${isActive
+                        ? tone.card
+                        : "border-[#111111] bg-card text-foreground hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:hover:shadow-[3px_3px_0_#f2cf27]"
+                        }`}
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => {
+                          if (selectionLocked && selectedPackage?.id !== pkg.id) {
+                            return;
+                          }
+                          setPackageConfirmTarget(pkg);
+                        }}
+                        disabled={isDisabled}
+                        className="flex flex-1 flex-col p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-inset disabled:cursor-not-allowed"
                       >
-                        <span className={selectedBadgeClass}>✓ 선택됨</span>
-                      </span>
-                    ) : null}
-                  </button>
-                  <details className="group border-t-2 border-current/25">
-                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-xs font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-inset [&::-webkit-details-marker]:hidden">
-                      <span>{includedStationsLabel}</span>
-                      <span
-                        aria-hidden="true"
-                        className="inline-flex h-6 w-6 items-center justify-center rounded-[5px] border-2 border-current text-sm font-black transition group-open:rotate-45"
-                      >
-                        +
-                      </span>
-                    </summary>
-                    <div className="space-y-3 px-4 pb-4">
-                      {conditionalGuidance.length > 0 ? (
-                        <div className="space-y-1.5">
-                          <p className="text-[10px] font-black uppercase tracking-[0.12em] opacity-70">
-                            선택 조건
-                          </p>
-                          {conditionalGuidance.map((item) => (
-                            <p key={item} className="text-[11px] font-semibold leading-4">
-                              {item}
-                            </p>
-                          ))}
+                        <div className="flex w-full flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            {guidance?.badge ? (
+                              <span className={`mb-2 inline-flex rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}>
+                                {guidance.badge}
+                              </span>
+                            ) : null}
+                            <h3 className="text-base font-black leading-tight sm:text-lg xl:text-base">
+                              {getPackageDisplayName(pkg)}
+                            </h3>
+                          </div>
+                          <div className="flex min-w-[78px] shrink-0 flex-col items-end gap-1.5 text-right">
+                            {hasDisplayDiscount ? (
+                              <span className="rounded-[6px] border border-[#111111]/20 bg-white/70 px-2 py-0.5 text-[10px] font-black text-[#111111]">
+                                {packageDiscountPercent}% 할인
+                              </span>
+                            ) : null}
+                            {hasDisplayDiscount ? (
+                              <span className="text-xs font-semibold opacity-60 line-through">
+                                {formatCurrency(displayPrice)}원
+                              </span>
+                            ) : null}
+                            <span className="text-sm font-black sm:text-base xl:text-sm">
+                              {formatCurrency(discountedDisplayPrice)}원
+                            </span>
+                          </div>
                         </div>
-                      ) : null}
-                      <div className="flex flex-wrap gap-1.5">
-                        {pkg.stations.map((station) => (
-                          <span
-                            key={station.id}
-                            className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${isActive ? tone.chip : "border-border/60 text-muted-foreground"}`}
-                          >
-                            {station.name}
+                        {guidance?.recommendation ? (
+                          <p className="mt-3 line-clamp-2 text-xs font-semibold leading-5 opacity-80">
+                            {guidance.recommendation}
+                          </p>
+                        ) : null}
+                        {conditionalGuidance.length > 0 ? (
+                          <span className={`mt-3 inline-flex self-start rounded-[6px] border px-2 py-1 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}>
+                            장르 조건 있음
                           </span>
-                        ))}
-                      </div>
-                    </div>
-                  </details>
-                </article>
-              );
-            })}
-          </div>
-          {selectionLocked && (
-            <p className="text-xs text-muted-foreground">
-              추가 앨범이 등록된 경우 패키지는 변경할 수 없습니다.
-            </p>
+                        ) : null}
+                        {isActive ? (
+                          <span
+                            aria-hidden="true"
+                            className="mt-auto flex w-full justify-end pt-3"
+                          >
+                            <span className={selectedBadgeClass}>✓ 선택됨</span>
+                          </span>
+                        ) : null}
+                      </button>
+                      <details className="group border-t-2 border-current/25">
+                        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-xs font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-inset [&::-webkit-details-marker]:hidden">
+                          <span>{includedStationsLabel}</span>
+                          <span
+                            aria-hidden="true"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-[5px] border-2 border-current text-sm font-black transition group-open:rotate-45"
+                          >
+                            +
+                          </span>
+                        </summary>
+                        <div className="space-y-3 px-4 pb-4">
+                          {conditionalGuidance.length > 0 ? (
+                            <div className="space-y-1.5">
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] opacity-70">
+                                선택 조건
+                              </p>
+                              {conditionalGuidance.map((item) => (
+                                <p key={item} className="text-[11px] font-semibold leading-4">
+                                  {item}
+                                </p>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="flex flex-wrap gap-1.5">
+                            {pkg.stations.map((station) => (
+                              <span
+                                key={station.id}
+                                className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${isActive ? tone.chip : "border-border/60 text-muted-foreground"}`}
+                              >
+                                {station.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </details>
+                    </article>
+                  );
+                })}
+              </div>
+              {selectionLocked && (
+                <p className="text-xs text-muted-foreground">
+                  추가 앨범이 등록된 경우 패키지는 변경할 수 없습니다.
+                </p>
+              )}
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isOneClick) {
+                      setApplicationFormMode("online");
+                      setStep(3);
+                      return;
+                    }
+                    setStep(2);
+                  }}
+                  disabled={!selectedPackage}
+                  className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
+                >
+                  {isOneClick ? "URL 입력으로 계속" : "신청서 작성으로 계속"}
+                </button>
+              </div>
+            </>
           )}
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                if (isOneClick) {
-                  setApplicationFormMode("online");
-                  setStep(3);
-                  return;
-                }
-                setStep(2);
-              }}
-              disabled={!selectedPackage}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
-            >
-              다음 단계
-            </button>
-          </div>
         </div>
       )}
 
@@ -4749,9 +4754,11 @@ export function AlbumWizard({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-2xl text-foreground">
               {step === 3
-                ? isDownloadedApplicationFlow
-                  ? "신청서 양식"
-                  : "기본 정보"
+                ? isOneClick
+                  ? "URL과 접수자 정보"
+                  : isDownloadedApplicationFlow
+                    ? "신청서 양식"
+                    : "기본 정보"
                 : "트랙 정보"}
             </h2>
             <span className="rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-semibold text-muted-foreground">
@@ -5012,17 +5019,17 @@ export function AlbumWizard({
                           1
                         </span>
                         <p className="text-sm font-black">
-                          원클릭 접수 안내
+                          발매된 음반 간편 접수
                         </p>
                       </div>
                       <p className="mt-3 text-sm font-semibold leading-6 text-foreground/80">
-                        이미 발매된 음원만 신청할 수 있습니다.
+                        앨범 URL을 보내주시면 관리자가 앨범·트랙 정보를 확인하고 심의 자료를 준비합니다. 별도의 신청서 작성이나 음원 파일 첨부 없이 접수할 수 있어요.
                       </p>
                       <ul
                         aria-label="필수 제출 항목"
-                        className="mt-4 grid grid-cols-3 gap-2"
+                        className="mt-4 grid grid-cols-2 gap-2"
                       >
-                        {["멜론 링크", "접수자 정보", "음원 파일"].map(
+                        {["멜론·지니 앨범 URL", "접수자 정보"].map(
                           (item) => (
                             <li
                               key={item}
@@ -5036,16 +5043,29 @@ export function AlbumWizard({
                     </div>
                     <div className="grid gap-4">
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          멜론 링크 *
+                        <label htmlFor="released-album-url" className="text-sm font-semibold text-foreground">
+                          멜론·지니 앨범 URL *
                         </label>
                         <input
+                          id="released-album-url"
+                          type="url"
+                          inputMode="url"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          aria-describedby="released-album-url-help"
                           data-preflight-field="melonUrl"
                           value={melonUrl}
-                          onChange={(event) => setMelonUrl(event.target.value)}
-                          placeholder="https://www.melon.com/..."
+                          onChange={(event) => {
+                            setMelonUrl(event.target.value);
+                            setNotice({});
+                          }}
+                          placeholder="멜론 또는 지니 앨범 페이지 주소를 붙여넣어주세요"
                           className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                         />
+                        <p id="released-album-url-help" className="text-xs leading-5 text-muted-foreground">
+                          곡이나 아티스트 페이지가 아닌 앨범 상세 페이지 주소를 넣어주세요. 멜론·지니 중 하나면 됩니다.
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -5073,10 +5093,11 @@ export function AlbumWizard({
                   )}
                   <div className="mt-3 grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-applicantName" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         접수자 *
                       </label>
                       <input
+                        id="album-applicantName"
                         data-preflight-field="applicantName"
                         value={applicantName}
                         onChange={(event) => setApplicantName(event.target.value)}
@@ -5085,10 +5106,11 @@ export function AlbumWizard({
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-applicantEmail" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         이메일 *
                       </label>
                       <input
+                        id="album-applicantEmail"
                         data-preflight-field="applicantEmail"
                         type="email"
                         value={applicantEmail}
@@ -5098,10 +5120,11 @@ export function AlbumWizard({
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-applicantPhone" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         연락처 *
                       </label>
                       <input
+                        id="album-applicantPhone"
                         data-preflight-field="applicantPhone"
                         value={applicantPhone}
                         onChange={(event) => setApplicantPhone(event.target.value)}
@@ -5425,10 +5448,10 @@ export function AlbumWizard({
                               }`}
                           >
                             {(draft.title.trim() ||
-                              (isOneClick ? "원클릭 접수" : "제목 미입력")) +
+                              (isOneClick ? "발매된 음반" : "제목 미입력")) +
                               " · " +
                               (draft.artistName.trim() ||
-                                (isOneClick ? "원클릭 접수" : "아티스트 미입력"))}
+                                (isOneClick ? "발매된 음반" : "아티스트 미입력"))}
                           </p>
                           </span>
                           <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.16em]">
@@ -5498,7 +5521,7 @@ export function AlbumWizard({
                 >
                   {step === 3
                     ? isOneClick
-                      ? "저장하고 파일 업로드"
+                      ? "저장하고 최종 확인"
                       : "저장하고 다음 단계"
                     : "다음 단계"}
                 </button>
@@ -5572,10 +5595,10 @@ export function AlbumWizard({
                           }`}
                       >
                         {(draft.title.trim() ||
-                          (isOneClick ? "원클릭 접수" : "제목 미입력")) +
+                          (isOneClick ? "발매된 음반" : "제목 미입력")) +
                           " · " +
                           (draft.artistName.trim() ||
-                            (isOneClick ? "원클릭 접수" : "아티스트 미입력"))}
+                            (isOneClick ? "발매된 음반" : "아티스트 미입력"))}
                       </p>
                     </div>
                     <span
@@ -5958,6 +5981,21 @@ export function AlbumWizard({
             }}
           />
 
+          {isOneClick && (
+            <section aria-label="접수할 앨범 URL 확인" className="rounded-[20px] border-2 border-[#111111] bg-card p-5 dark:border-[#f2cf27] sm:p-6">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-base font-black">접수할 앨범 URL</h2>
+                <button type="button" onClick={() => setStep(3)} className="min-h-11 rounded-full border border-border px-4 py-2 text-xs font-semibold hover:border-foreground">
+                  URL·접수자 정보 수정
+                </button>
+              </div>
+              <p className="mt-3 break-all text-sm text-foreground">{melonUrl}</p>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                결제 확인 후 관리자가 URL에서 심의 자료를 준비합니다. URL 접수 추가금은 0원입니다.
+              </p>
+            </section>
+          )}
+
           <div className="space-y-4">
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-5 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -5969,7 +6007,6 @@ export function AlbumWizard({
                     <p className="text-lg font-black text-foreground">
                       {getPackageDisplayName(
                         selectedPackageSummary,
-                        isOneClick,
                       )}
                     </p>
                     {totalAlbumCount > 1 ? (
@@ -5980,7 +6017,7 @@ export function AlbumWizard({
                   </div>
                   {isOneClick ? (
                     <span className="inline-flex rounded-full border border-border/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      원클릭 접수
+                      발매된 음반 · URL 접수
                     </span>
                   ) : null}
                 </div>
@@ -6345,7 +6382,7 @@ export function AlbumWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(5)}
+              onClick={() => setStep(isOneClick ? 3 : 5)}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white"
             >
               이전 단계
@@ -6462,12 +6499,11 @@ export function AlbumWizard({
             <p className="mt-2 text-lg font-semibold">
               {`${getPackageDisplayName(
                 packageConfirmTarget,
-                isOneClick,
               )}로 진행할까요?`}
             </p>
             <p className="mt-3 text-xs text-muted-foreground">
               {isOneClick
-                ? "선택을 확정하면 기본 정보 단계로 이동합니다."
+                ? "선택을 확정하면 URL과 접수자 정보 입력으로 이동합니다."
                 : "선택을 확정하면 작성 방식 단계로 이동합니다."}
             </p>
             {(packageGuidance[packageConfirmTarget.stationCount]?.conditional ?? [])
@@ -6577,40 +6613,7 @@ export function AlbumWizard({
         </div>
       )}
 
-      {showOneclickNotice && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="원클릭 접수 안내"
-            className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-border/60 bg-background p-5 shadow-xl sm:p-6"
-          >
-            <p className="text-sm font-semibold text-foreground">
-              원클릭 접수는 이미 발매된 앨범만 진행 가능합니다. 확인하셨나요?
-            </p>
-            <div className="mt-6 flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOneClick(false);
-                  setApplicationFormMode(null);
-                  setShowOneclickNotice(false);
-                }}
-                className="flex-1 rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:text-slate-900 dark:hover:text-foreground"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowOneclickNotice(false)}
-                className="flex-1 rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:bg-[#f6d64a] hover:text-black"
-              >
-                확인
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

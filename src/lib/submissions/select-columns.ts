@@ -10,6 +10,8 @@ export const SUBMISSION_USER_DETAIL_SELECT = [
   "artist_name_kr",
   "artist_name_en",
   "type",
+  "is_oneclick",
+  "melon_url",
   "status",
   "payment_status",
   "payment_method",

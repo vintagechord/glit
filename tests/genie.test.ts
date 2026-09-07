@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import PizZip from "pizzip";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   fetchGenieAlbumReviewData,
   parseGenieAlbumPage,
   parseGenieSongPage,
 } from "../src/lib/genie";
-import { buildExternalReviewDocSubmissionBundles } from "../src/lib/admin/review-docs";
+import {
+  buildExternalReviewDocSubmissionBundles,
+  buildReviewDocsZip,
+  loadReviewDocSubmissionBundles,
+} from "../src/lib/admin/review-docs";
 
 const genieAlbumHtml = `
   <div class="album-detail-infos">
@@ -154,6 +160,61 @@ const fetcher = async (input: Parameters<typeof fetch>[0]) => {
   }
   return new Response("", { status: 404 });
 };
+
+test("released album submissions are downloadable from the admin submission list", async () => {
+  const submissionId = "released-album";
+  const rows: Record<string, Record<string, unknown>[]> = {
+    submissions: [{ id: submissionId, type: "ALBUM", is_oneclick: true }],
+    album_tracks: [],
+    submission_files: [],
+    submission_events: [],
+  };
+  const client = {
+    from(table: string) {
+      const query = {
+        select() { return query; },
+        in() { return query; },
+        order() { return query; },
+        then(resolve: (value: unknown) => void) { return Promise.resolve({ data: rows[table], error: null }).then(resolve); },
+      };
+      return query;
+    },
+  } as unknown as SupabaseClient;
+  const bundles = await loadReviewDocSubmissionBundles(client, [submissionId]);
+  assert.equal(bundles.length, 1);
+  assert.equal(bundles[0].submission.is_oneclick, true);
+  assert.deepEqual(bundles[0].tracks, []);
+});
+
+for (const [provider, url] of [
+  ["Melon", "https://www.melon.com/album/detail.htm?albumId=13780811"],
+  ["Genie", "https://www.genie.co.kr/detail/albumInfo?axnm=87816941"],
+]) {
+  test(`URL-only ${provider} submission generates album and lyrics documents without uploaded files`, async () => {
+    const buffer = await buildReviewDocsZip([{
+      submission: { id: "released-album", type: "ALBUM", is_oneclick: true, melon_url: url },
+      tracks: [],
+      files: [],
+      events: [],
+    }], { fetcher });
+    const zip = new PizZip(buffer);
+    const documents = Object.values(zip.files).filter((file) => !file.dir && file.name.endsWith(".docx"));
+    assert.equal(documents.length, 9);
+    const xml = documents.map((file) => new PizZip(file.asNodeBuffer()).file("word/document.xml")?.asText() ?? "").join("\n");
+    assert.match(xml, /Test Album/);
+    assert.match(xml, /Test Artist/);
+    assert.match(xml, /First Song/);
+    assert.match(xml, /Line one/);
+    assert.match(xml, /Composer A/);
+  });
+}
+
+test("released album document generation rejects missing source links instead of producing blank forms", async () => {
+  await assert.rejects(buildReviewDocsZip([{
+    submission: { id: "released-album", type: "ALBUM", is_oneclick: true },
+    tracks: [], files: [], events: [],
+  }], { fetcher }), /앨범 링크/);
+});
 
 test("parseGenieAlbumPage extracts album metadata and tracks", () => {
   const album = parseGenieAlbumPage(genieAlbumHtml, "87816941");

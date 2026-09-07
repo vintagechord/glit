@@ -39,7 +39,7 @@ test("album applications require one explicit form mode before form entry", () =
   assert.match(source, /emailSubmitConfirmed: false/);
   assert.match(
     actions,
-    /if \(isOneClick && externalApplicationFormRequested\)[\s\S]*원클릭 접수와 파일 제출 방식은 함께 선택할 수 없습니다/,
+    /if \(isOneClick && externalApplicationFormRequested\)[\s\S]*발매된 음반은 앨범 링크로 접수해주세요/,
   );
 });
 

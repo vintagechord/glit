@@ -41,6 +41,7 @@ type Submission = {
   artist_name_kr?: string | null;
   artist_name_en?: string | null;
   type: string;
+  is_oneclick?: boolean | null;
   status: string;
   payment_status: string;
   payment_method?: string | null;
@@ -1494,10 +1495,10 @@ export function SubmissionDetailClient({
               Submission Detail
             </p>
             <h1 className="font-display mt-4 text-3xl font-black leading-tight text-foreground sm:text-4xl">
-              {submission.title || "제목 미입력"}
+              {submission.title || (submission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
             </h1>
             <p className="mt-3 text-lg font-semibold text-foreground/82 sm:text-xl">
-              {submission.artist_name || "아티스트 미입력"}
+              {submission.artist_name || (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
             </p>
             <div className="mt-6 w-full rounded-[8px] border-2 border-[#111111] bg-white/85 p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#111111]/55 dark:shadow-[4px_4px_0_#f2cf27]">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1739,7 +1740,7 @@ export function SubmissionDetailClient({
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">멜론 링크</p>
+                  <p className="text-sm text-muted-foreground">멜론·지니 앨범 링크</p>
                   <p className="mt-1 font-semibold">
                     {submission.melon_url || "-"}
                   </p>

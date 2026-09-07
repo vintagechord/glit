@@ -29,6 +29,7 @@ import {
 } from "@/lib/admin/review-docs-docx";
 import { validateReviewData, type ReviewDocumentData } from "@/lib/review-docs/model";
 import { renderTrackLyrics } from "@/lib/review-docs/translation";
+import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "templates", "review-docs");
 
@@ -119,7 +120,7 @@ export class ReviewDocsInputError extends Error {
 export class ReviewDocsUnsupportedTypeError extends Error {
   status = 400 as const;
 
-  constructor(message = "온라인 일반 음반 신청만 심의자료 자동 생성이 가능합니다.") {
+  constructor(message = "음반 심의 접수만 심의자료 자동 생성이 가능합니다.") {
     super(message);
     this.name = "ReviewDocsUnsupportedTypeError";
   }
@@ -596,10 +597,9 @@ const withDocumentContext = (
   },
 });
 
-const shouldHydrateFromMelon = (bundle: ReviewDocSubmissionBundle) => {
+const shouldHydrateFromReleasedAlbum = (bundle: ReviewDocSubmissionBundle) => {
   const submission = bundle.submission;
   if (!getBoolean(submission, "is_oneclick")) return false;
-  if (!getText(submission, "melon_url")) return false;
 
   const missingSubmissionBasics = [
     "title",
@@ -949,16 +949,19 @@ const melonTrackToRecord = (
     existing,
   );
 
-async function hydrateOneClickMelonBundle(
+async function hydrateReleasedAlbumBundle(
   bundle: ReviewDocSubmissionBundle,
+  options: ExternalReviewDocFetchOptions = {},
 ): Promise<ReviewDocSubmissionBundle> {
-  if (!shouldHydrateFromMelon(bundle)) return bundle;
+  if (!shouldHydrateFromReleasedAlbum(bundle)) return bundle;
 
-  const melonUrl = getText(bundle.submission, "melon_url");
+  // Keep the legacy column while supporting both music services for released albums.
+  const sourceUrl = parseReleasedAlbumUrl(getText(bundle.submission, "melon_url"));
+  if (!sourceUrl) {
+    throw new ReviewDocsInputError("접수된 멜론·지니 앨범 링크를 확인해주세요.");
+  }
   try {
-    const melonAlbum = await fetchMelonAlbumReviewData(melonUrl, {
-      requireLyrics: true,
-    });
+    const album = await fetchMusicSourceAlbum(sourceUrl.canonicalUrl, 0, options, true);
     const submissionId = getText(bundle.submission, "id");
     const existingByTrackNo = new Map(
       bundle.tracks.map((track, index) => [
@@ -971,31 +974,35 @@ async function hydrateOneClickMelonBundle(
       ...bundle,
       submission: {
         ...bundle.submission,
-        title: withFallback(bundle.submission.title, melonAlbum.albumTitle),
+        title: withFallback(bundle.submission.title, album.albumTitle),
         artist_name: withFallback(
           bundle.submission.artist_name,
-          melonAlbum.artistName,
+          album.artistName,
         ),
         release_date: withFallback(
           bundle.submission.release_date,
-          melonAlbum.releaseDate,
+          album.releaseDate,
         ),
-        genre: withFallback(bundle.submission.genre, melonAlbum.genre),
+        genre: withFallback(bundle.submission.genre, album.genre),
         distributor: withFallback(
           bundle.submission.distributor,
-          melonAlbum.distributor,
+          album.distributor,
         ),
         production_company: withFallback(
           bundle.submission.production_company,
-          melonAlbum.productionCompany,
+          album.productionCompany,
         ),
       },
-      tracks: melonAlbum.tracks.map((track) =>
-        melonTrackToRecord(submissionId, track, existingByTrackNo.get(track.trackNo)),
+      tracks: album.tracks.map((track) =>
+        sourceTrackToRecord(
+          submissionId,
+          { ...track, sourceNotes: `${SOURCE_LABELS[sourceUrl.provider]} 곡 ID: ${track.songId}` },
+          existingByTrackNo.get(track.trackNo),
+        ),
       ),
     };
   } catch (error) {
-    if (error instanceof MelonReviewDataError) {
+    if (error instanceof MelonReviewDataError || error instanceof GenieReviewDataError) {
       throw new ReviewDocsDataError(error.message);
     }
     throw error;
@@ -1190,8 +1197,7 @@ export async function loadReviewDocSubmissionBundles(
   const orderedSubmissions = uniqueIds.map((id) => byId.get(id)).filter(Boolean) as DbRecord[];
   const unsupported = orderedSubmissions.filter(
     (submission) =>
-      getText(submission, "type") !== "ALBUM" ||
-      getBoolean(submission, "is_oneclick"),
+      getText(submission, "type") !== "ALBUM",
   );
   if (unsupported.length > 0) {
     throw new ReviewDocsUnsupportedTypeError();
@@ -1512,12 +1518,14 @@ async function renderPreparedReviewDocuments(
 
 export async function buildReviewDocsZip(
   bundles: ReviewDocSubmissionBundle[],
-  options: { templateDir?: string } = {},
+  options: { templateDir?: string; fetcher?: typeof fetch } = {},
 ) {
   if (bundles.length === 0) throw new ReviewDocsNotFoundError("선택된 접수가 없습니다.");
   const applicationDate = seoulTodayParts();
   const templates = await loadReviewDocTemplates(options.templateDir);
-  const hydratedBundles = await Promise.all(bundles.map(hydrateOneClickMelonBundle));
+  const hydratedBundles = await Promise.all(
+    bundles.map((bundle) => hydrateReleasedAlbumBundle(bundle, { fetcher: options.fetcher })),
+  );
   const prepared = hydratedBundles.map((bundle, index) =>
     buildSubmissionTemplateData(bundle, index, hydratedBundles.length, applicationDate),
   );

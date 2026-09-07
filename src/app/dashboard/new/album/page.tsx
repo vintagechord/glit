@@ -97,8 +97,6 @@ const preparationChecklist = [
   "반복 후렴, 나레이션, 코러스 포함 전체 가사",
   "외국어 가사가 있는 경우 번역 가사",
   "실제 발매 앨범과 동일한 트랙 순서와 INST 포함 여부",
-  "접수자 이름, 이메일, 연락처",
-  "원클릭 접수 시 멜론 링크와 음원 파일",
 ];
 
 const isTestPackage = (name?: string | null) => name?.startsWith("[테스트]") ?? false;

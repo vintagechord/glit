@@ -77,7 +77,7 @@ export const mapSubmissionCartItem = (
 
 const getTypeLabel = (item: CartItem) => {
   if (item.type === "ALBUM") {
-    return item.isOneclick ? "원클릭 음반" : "음반";
+    return "음반";
   }
   if (item.type === "MV_DISTRIBUTION") return "MV · 온라인";
   if (item.type === "MV_BROADCAST") return "MV · 방송";
@@ -88,6 +88,9 @@ const getPaymentContext = (item: CartItem): InicisPopupContext =>
   item.type === "ALBUM" ? (item.isOneclick ? "oneclick" : "music") : "mv";
 
 const getDisplayTitle = (item: CartItem) => {
+  if (item.type === "ALBUM" && item.isOneclick && !item.title?.trim() && !item.artistName?.trim()) {
+    return "발매된 음반 · URL 접수";
+  }
   const artist = item.artistName?.trim() || "아티스트 미입력";
   const title = item.title?.trim() || "제목 미입력";
   return `${artist} - ${title}`;

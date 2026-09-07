@@ -32,7 +32,7 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
 
   const { data, error } = await supabase
     .from("submissions")
-    .select("id, type, status, payment_status, title, artist_name, updated_at")
+    .select("id, type, status, payment_status, title, artist_name, is_oneclick, updated_at")
     .eq("user_id", user.id)
     .in("status", ["DRAFT", "PRE_REVIEW"])
     .or("payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)")
@@ -50,6 +50,7 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
     payment_status: string | null;
     title: string | null;
     artist_name: string | null;
+    is_oneclick: boolean | null;
     updated_at: string | null;
   }>).map((row) => ({
     id: row.id,
@@ -58,6 +59,7 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
     paymentStatus: row.payment_status,
     title: row.title,
     artistName: row.artist_name,
+    isOneclick: row.is_oneclick,
     updatedAt: row.updated_at,
   }));
 

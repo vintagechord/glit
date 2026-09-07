@@ -9,8 +9,8 @@ export const metadata = {
 const submissionCards = [
   {
     meta: "음원 · 라디오/TV",
-    title: "음반 심의",
-    description: "방송 송출용 음원을 접수합니다.",
+    title: "음반 심의 접수",
+    description: "발매 여부를 선택하면 알맞은 접수 방법으로 안내합니다.",
     href: "/dashboard/new/album",
     icon: Disc3,
     tone: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",

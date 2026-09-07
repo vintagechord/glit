@@ -46,14 +46,14 @@ test("album final check only surfaces actionable issues", () => {
   assert.doesNotMatch(albumWizard, />\s*총 할인\s*</);
 });
 
-test("one-click guidance uses the site card system and scannable required items", () => {
+test("released album guidance uses the site card system and only requires URL and contact details", () => {
   assert.match(albumWizard, /rounded-\[14px\] border-2 border-\[#111111\]/);
   assert.match(albumWizard, /shadow-\[4px_4px_0_#111111\]/);
   assert.match(albumWizard, /aria-label="필수 제출 항목"/);
-  assert.match(albumWizard, /\["멜론 링크", "접수자 정보", "음원 파일"\]\.map/);
+  assert.match(albumWizard, /\["멜론·지니 앨범 URL", "접수자 정보"\]\.map/);
   assert.doesNotMatch(albumWizard, /이미 발매된 음원에 한정된 서비스입니다/);
-  assert.match(englishLanguagePack, /"원클릭 접수 안내": "One-Click Submission"/);
-  assert.match(englishLanguagePack, /"멜론 링크": "Melon Link"/);
+  assert.match(englishLanguagePack, /"발매된 음반 간편 접수": "Quick Submission for Released Albums"/);
+  assert.match(englishLanguagePack, /"멜론·지니 앨범 URL": "Melon or Genie Album URL"/);
 });
 
 test("album packages stay compact while preserving comparison and station details", () => {

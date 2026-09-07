@@ -4,6 +4,7 @@ import {
   isVideoUploadFile,
 } from "@/lib/submission-files";
 import { hasNonKoreanLyrics } from "@/lib/lyrics-tools";
+import { getReleasedAlbumUrlError } from "@/lib/released-album-url";
 
 export type SubmissionPreflightSeverity = "blocking" | "warning";
 
@@ -362,11 +363,18 @@ export const buildAlbumSubmissionPreflight = (
     }
 
     if (input.isOneClick) {
-      addRequiredTextIssue(issues, input.melonUrl, {
-        id: "album.melon-url",
-        title: "멜론 링크",
-        field: "melonUrl",
-      });
+      const albumUrlError = getReleasedAlbumUrlError(input.melonUrl);
+      if (albumUrlError) {
+        issues.push(
+          issue(
+            "album.melon-url",
+            "blocking",
+            "멜론·지니 앨범 링크",
+            albumUrlError,
+            { step: 3, field: "melonUrl" },
+          ),
+        );
+      }
     } else if (isOnlineForm) {
       const basicFields: Array<{
         value?: string | null;
@@ -542,7 +550,7 @@ export const buildAlbumSubmissionPreflight = (
     }
   }
 
-  if (!isAdminReviewer) {
+  if (!isAdminReviewer && !input.isOneClick) {
     const uploads = input.uploads ?? [];
     if (uploads.some((upload) => upload.status === "error")) {
       issues.push(

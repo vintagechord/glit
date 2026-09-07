@@ -19,6 +19,7 @@ import { ensureArtistByName } from "@/lib/artist";
 import { APP_CONFIG } from "@/lib/config";
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
 import { canEditSubmission } from "@/lib/submission-edit-access";
+import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
@@ -74,13 +75,6 @@ type EditableSubmissionRow = {
   album_base_price_krw: number | null;
   album_price_tier: string | null;
   is_oneclick: boolean | null;
-};
-
-const albumOneClickPriceMap: Record<number, number> = {
-  7: 100000,
-  10: 130000,
-  13: 150000,
-  15: 170000,
 };
 
 const albumAdditionalDiscountWindowMs = 30 * 60 * 1000;
@@ -886,7 +880,7 @@ export async function saveAlbumSubmissionAction(
     parsed.data.applicationFormMode === "upload" ||
     parsed.data.externalApplicationForm === true;
   if (isOneClick && externalApplicationFormRequested) {
-    return { error: "원클릭 접수와 파일 제출 방식은 함께 선택할 수 없습니다." };
+    return { error: "발매된 음반은 앨범 링크로 접수해주세요." };
   }
   const applicationFormMode = isOneClick
     ? "online"
@@ -898,8 +892,12 @@ export async function saveAlbumSubmissionAction(
           ? "online"
           : null;
   const usesExternalApplicationForm = applicationFormMode === "upload";
-  const titleValue = parsed.data.title?.trim() ?? "";
-  const artistNameValue = parsed.data.artistName?.trim() ?? "";
+  // A branch switch can leave the unreleased form values in the local draft.
+  // Released submissions must derive album metadata from their platform URL,
+  // so hidden values must never override that source during admin hydration.
+  const albumMetadata = isOneClick ? undefined : parsed.data;
+  const titleValue = albumMetadata?.title?.trim() ?? "";
+  const artistNameValue = albumMetadata?.artistName?.trim() ?? "";
   const guestNameValue = parsed.data.guestName?.trim() ?? "";
   const guestEmailValue = parsed.data.guestEmail?.trim() ?? "";
   const guestPhoneValue = parsed.data.guestPhone?.trim() ?? "";
@@ -1024,6 +1022,7 @@ export async function saveAlbumSubmissionAction(
   let effectiveSubmissionFiles = parsed.data.files ?? [];
   if (
     isSubmitted &&
+    !isOneClick &&
     parsed.data.files === undefined &&
     !parsed.data.filesSubmittedByEmail
   ) {
@@ -1046,6 +1045,7 @@ export async function saveAlbumSubmissionAction(
     const submittedFilesError = validateSubmittedFiles({
       kind: "ALBUM",
       isAdminReviewer,
+      isOneClick,
       filesSubmittedByEmail: Boolean(parsed.data.filesSubmittedByEmail),
       externalApplicationForm: usesExternalApplicationForm,
       files: effectiveSubmissionFiles,
@@ -1128,16 +1128,11 @@ export async function saveAlbumSubmissionAction(
       canonicalAlbumStationIds = stationSelection.stationIds;
     }
 
+    // Both release states use the selected package price. The URL collection
+    // service is included, and payment still uses a server-written snapshot.
     const serverOriginalBasePriceKrw = Math.max(
       0,
-      Math.round(
-        Number(
-          isOneClick && packageStationCount
-            ? albumOneClickPriceMap[packageStationCount] ??
-              selectedPackage.price_krw
-            : selectedPackage.price_krw,
-        ),
-      ),
+      Math.round(Number(selectedPackage.price_krw)),
     );
     serverBasePriceKrw = getDiscountedAlbumPrice(
       serverOriginalBasePriceKrw,
@@ -1237,11 +1232,12 @@ export async function saveAlbumSubmissionAction(
     shouldRequestPayment,
   });
 
-  const submittedTracks = parsed.data.tracks ?? [];
-  // A basic-information draft may intentionally omit tracks so an existing
-  // draft can keep them intact. Final one-click/downloaded-form submissions,
-  // however, must clear any rows left behind after switching application mode.
+  const submittedTracks = isOneClick ? [] : parsed.data.tracks ?? [];
+  // Unreleased basic-information drafts may omit tracks to keep them intact.
+  // Released drafts and final downloaded-form submissions clear rows left
+  // behind after switching application mode.
   const shouldReplaceTracks =
+    isOneClick ||
     parsed.data.tracks !== undefined ||
     (isSubmitted && (isOneClick || usesExternalApplicationForm));
   const trackRows = submittedTracks.map((track, index) => {
@@ -1309,7 +1305,7 @@ export async function saveAlbumSubmissionAction(
     }
   }
 
-  const artistId = await ensureArtistByName(artistNameValue);
+  const artistId = isOneClick ? null : await ensureArtistByName(artistNameValue);
 
   const submissionPayload = {
     id: parsed.data.submissionId,
@@ -1318,21 +1314,25 @@ export async function saveAlbumSubmissionAction(
     title: titleValue || null,
     artist_name: artistNameValue || null,
     artist_id: artistId,
-    artist_name_kr: parsed.data.artistNameKr?.trim() || null,
-    artist_name_en: parsed.data.artistNameEn?.trim() || null,
-    release_date: parsed.data.releaseDate || null,
-    genre: parsed.data.genre?.trim() || null,
-    distributor: parsed.data.distributor?.trim() || null,
-    production_company: parsed.data.productionCompany?.trim() || null,
+    artist_name_kr: albumMetadata?.artistNameKr?.trim() || null,
+    artist_name_en: albumMetadata?.artistNameEn?.trim() || null,
+    release_date: albumMetadata?.releaseDate || null,
+    genre: albumMetadata?.genre?.trim() || null,
+    distributor: albumMetadata?.distributor?.trim() || null,
+    production_company: albumMetadata?.productionCompany?.trim() || null,
     applicant_name: parsed.data.applicantName?.trim() || null,
     applicant_email: applicantEmailValue || null,
     applicant_phone: parsed.data.applicantPhone?.trim() || null,
-    previous_release: parsed.data.previousRelease?.trim() || null,
-    artist_type: parsed.data.artistType?.trim() || null,
-    artist_gender: parsed.data.artistGender?.trim() || null,
-    artist_members: parsed.data.artistMembers?.trim() || null,
+    previous_release: albumMetadata?.previousRelease?.trim() || null,
+    artist_type: albumMetadata?.artistType?.trim() || null,
+    artist_gender: albumMetadata?.artistGender?.trim() || null,
+    artist_members: albumMetadata?.artistMembers?.trim() || null,
     is_oneclick: isOneClick,
-    melon_url: parsed.data.melonUrl?.trim() || null,
+    melon_url: isOneClick
+      ? parseReleasedAlbumUrl(parsed.data.melonUrl)?.canonicalUrl ||
+        parsed.data.melonUrl?.trim() ||
+        null
+      : null,
     ai_used:
       typeof parsed.data.aiUsed === "boolean" ? parsed.data.aiUsed : null,
     package_id: parsed.data.packageId ?? null,
@@ -1343,7 +1343,7 @@ export async function saveAlbumSubmissionAction(
     album_discount_base_submission_id: null,
     album_draft_group_id: albumDraftGroupId,
     guest_name: isGuest ? guestNameValue || null : null,
-    guest_company: isGuest ? parsed.data.guestCompany?.trim() || null : null,
+    guest_company: isGuest ? albumMetadata?.guestCompany?.trim() || null : null,
     guest_email: isGuest ? guestEmailValue || null : null,
     guest_phone: isGuest ? guestPhoneValue || null : null,
     guest_token: isGuest ? parsed.data.guestToken : null,
@@ -1526,6 +1526,8 @@ export async function saveAlbumSubmissionAction(
   let receiptEmailSent = false;
   let bankGuideEmailSent = false;
   if (parsed.data.status === "SUBMITTED" && !wasPreviouslySubmitted) {
+    const notificationTitle =
+      titleValue || (isOneClick ? "발매된 음반 · URL 접수" : "제목 미입력");
     const recipientEmails = collectRecipientEmails(
       applicantEmailValue,
       guestEmailValue,
@@ -1547,7 +1549,7 @@ export async function saveAlbumSubmissionAction(
         send: () =>
           sendSubmissionReceiptEmail({
             email: recipientEmail,
-            title: titleValue || "제목 미입력",
+            title: notificationTitle,
             kind: "ALBUM",
             submissionId: parsed.data.submissionId,
             isGuest,
@@ -1565,7 +1567,7 @@ export async function saveAlbumSubmissionAction(
           send: () =>
             sendSubmissionBankRequestEmail({
               email: recipientEmail,
-              title: titleValue || "제목 미입력",
+              title: notificationTitle,
               artist: artistNameValue || null,
               kind: "ALBUM",
               amountKrw,
@@ -1584,7 +1586,7 @@ export async function saveAlbumSubmissionAction(
           guestPhoneValue ||
           memberPhoneValue,
         title: "음반 심의 접수 완료",
-        message: `${titleValue || "제목 미입력"} 접수가 완료되었습니다. 진행 상황은 온사이드에서 확인할 수 있습니다.`,
+        message: `${notificationTitle} 접수가 완료되었습니다. 진행 상황은 온사이드에서 확인할 수 있습니다.`,
         link,
       });
     })().catch((error) => {

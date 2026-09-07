@@ -15,6 +15,7 @@ export type DraftSubmissionItem = {
   paymentStatus?: string | null;
   title: string | null;
   artistName: string | null;
+  isOneclick?: boolean | null;
   updatedAt: string | null;
 };
 
@@ -49,6 +50,9 @@ const getResumePath = (type: DraftGroupType, localePrefix = "") =>
     : `${localePrefix}/dashboard/new/mv`;
 
 const buildDisplayTitle = (item: DraftSubmissionItem) => {
+  if (item.type === "ALBUM" && item.isOneclick && !item.title?.trim() && !item.artistName?.trim()) {
+    return "발매된 음반 · URL 접수";
+  }
   const artist = item.artistName?.trim() || "아티스트 미입력";
   const album = item.title?.trim() || "앨범명 미입력";
   return `${artist}-${album}`;

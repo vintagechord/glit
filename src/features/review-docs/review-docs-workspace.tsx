@@ -153,7 +153,7 @@ export function ReviewDocsWorkspace() {
     <section className={panelClass} aria-label="자료 입력">
       <div role="tablist" aria-label="생성 방식" className="flex flex-wrap gap-2">{tabs.map((item) => <button key={item.id} type="button" role="tab" id={`tab-${item.id}`} aria-selected={tab === item.id} aria-controls="review-input-panel" onClick={() => setTab(item.id)} className={`${buttonClass} ${tab === item.id ? "border-[#111111] bg-[#f2cf27] text-[#111111]" : ""}`}>{item.label}</button>)}</div>
       <div id="review-input-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="mt-5 space-y-4">
-        <p className="text-sm text-muted-foreground">{tab === "mv" ? "아티스트·곡명·가사로 곡별 DOCX를 만듭니다. 한 곡도 DOCX와 ZIP을 각각 다운로드할 수 있습니다." : tab === "urls" ? "기존 원클릭 수집기로 앨범 정보·트랙·크레딧·가사를 분석합니다. URL별 결과를 확인하고 같은 앨범의 자료를 합칠 수 있습니다." : "한 앨범의 자료를 여러 파일로, 여러 앨범을 한 파일로 업로드할 수 있습니다. 분석 후 원본 연결과 트랙 순서를 확인해주세요."}</p>
+        <p className="text-sm text-muted-foreground">{tab === "mv" ? "아티스트·곡명·가사로 곡별 DOCX를 만듭니다. 한 곡도 DOCX와 ZIP을 각각 다운로드할 수 있습니다." : tab === "urls" ? "멜론·지니 링크로 앨범 정보·트랙·크레딧·가사를 분석합니다. URL별 결과를 확인하고 같은 앨범의 자료를 합칠 수 있습니다." : "한 앨범의 자료를 여러 파일로, 여러 앨범을 한 파일로 업로드할 수 있습니다. 분석 후 원본 연결과 트랙 순서를 확인해주세요."}</p>
         {tab === "urls" ? <Field label="멜론·지니 URL (한 줄에 하나, 최대 8개)" value={urls} onChange={setUrls} multiline /> : <div>
           <label className="block text-sm font-semibold">기준파일 선택<input type="file" multiple accept=".doc,.docx,.hwp,.pdf" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} className={`${inputClass} file:mr-4 file:rounded file:border-0 file:px-3 file:py-1`} /></label>
           <p className="mt-2 text-xs text-muted-foreground">DOC · DOCX · HWP · PDF / 최대 8개, 파일당 10MB, 전체 40MB, PDF 파일당 80쪽</p>

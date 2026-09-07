@@ -282,7 +282,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="min-w-0 truncate text-sm font-semibold text-foreground">
-                    {submission.title}
+                    {submission.title || (submission.isOneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
                   </p>
                   {!hasPaymentAction ? (
                     <span
@@ -341,10 +341,10 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                   방송국별 현황
                 </p>
                 <h3 className="mt-2 break-words text-xl font-semibold text-foreground sm:text-2xl">
-                  {activeSubmission.title || "제목 미입력"}
+                  {activeSubmission.title || (activeSubmission.isOneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {activeSubmission.artistName || "아티스트 미입력"}
+                  {activeSubmission.artistName || (activeSubmission.isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
                 </p>
               </div>
               <button
@@ -356,7 +356,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               </button>
             </div>
 
-            {activeSubmission.isOneclick && (
+            {activeSubmission.isOneclick && activeSubmission.title && activeSubmission.artistName && (
               <div className="mt-4 rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-lg font-semibold text-foreground">
                 {(activeSubmission.artistName || "아티스트 미입력") +
                   " - " +

@@ -117,17 +117,19 @@ test("preflight returns every problem with a direct step and field target", () =
   );
 });
 
-test("one-click preflight skips the form-mode and track requirements", () => {
+test("released album preflight accepts only the URL and contact declaration without files or tracks", () => {
   const result = buildAlbumSubmissionPreflight(
     validOnlineInput({
       isOneClick: true,
       applicationFormMode: null,
-      melonUrl: "https://www.melon.com/song/detail.htm?songId=1",
+      melonUrl: "https://www.melon.com/album/detail.htm?albumId=1",
       title: "",
       artistName: "",
       artistNameKr: "",
       artistNameEn: "",
       tracks: [],
+      files: [],
+      uploads: [],
     }),
   );
 
@@ -140,6 +142,33 @@ test("one-click preflight skips the form-mode and track requirements", () => {
     result.issues.some((item) => item.id.startsWith("track")),
     false,
   );
+  assert.equal(
+    result.issues.some((item) => item.id.startsWith("files")),
+    false,
+  );
+});
+
+test("released album preflight accepts Genie and directs unsupported URLs back to the URL field", () => {
+  const input = validOnlineInput({
+    isOneClick: true,
+    applicationFormMode: null,
+    melonUrl: "https://www.genie.co.kr/detail/albumInfo?axnm=12345",
+    tracks: [],
+    files: [],
+    uploads: [],
+  });
+  assert.equal(buildAlbumSubmissionPreflight(input).canSubmit, true);
+
+  for (const melonUrl of [
+    "",
+    "https://example.com/album?albumId=12345",
+    "https://www.melon.com/song/detail.htm?songId=12345",
+  ]) {
+    const result = buildAlbumSubmissionPreflight({ ...input, melonUrl });
+    assert.equal(result.canSubmit, false);
+    assert.deepEqual(result.firstBlockingTarget, { step: 3, field: "melonUrl" });
+    assert.deepEqual(result.blockingIssues.map((item) => item.id), ["album.melon-url"]);
+  }
 });
 
 test("downloaded-form flow requires the completed form but not duplicate online fields", () => {

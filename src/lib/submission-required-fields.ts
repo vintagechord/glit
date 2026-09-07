@@ -3,6 +3,7 @@ import {
   isAudioUploadFile,
   isVideoUploadFile,
 } from "@/lib/submission-files";
+import { getReleasedAlbumUrlError } from "@/lib/released-album-url";
 
 type SubmissionFileInput = {
   originalName?: string | null;
@@ -59,7 +60,7 @@ export const validateAlbumSubmittedFields = (input: {
     return "AI 활용 여부를 선택해주세요.";
   }
   if (input.isOneClick) {
-    return hasText(input.melonUrl) ? null : "멜론 링크를 입력해주세요.";
+    return getReleasedAlbumUrlError(input.melonUrl);
   }
   if (
     !hasText(input.title) ||
@@ -163,9 +164,13 @@ export const validateSubmittedFiles = (input: {
   isAdminReviewer: boolean;
   filesSubmittedByEmail: boolean;
   externalApplicationForm?: boolean;
+  isOneClick?: boolean;
   files: SubmissionFileInput[];
 }) => {
   if (input.isAdminReviewer || input.filesSubmittedByEmail) return null;
+  // Released albums are collected by the administrator from the validated
+  // platform URL. Only this album flow can omit the original media files.
+  if (input.kind === "ALBUM" && input.isOneClick) return null;
   const hasMedia = input.files.some((file) =>
     input.kind === "ALBUM"
       ? isAudioUploadFile(file.originalName ?? "", file.mime ?? "")

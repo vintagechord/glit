@@ -320,9 +320,7 @@ export default async function AdminSubmissionsPage({
   const isDraftView = filters.status === "DRAFT";
   const reviewDocSelectableIds =
     activeType === "ALBUM"
-      ? submissions
-          .filter((submission) => !submission.is_oneclick)
-          .map((submission) => submission.id)
+      ? submissions.map((submission) => submission.id)
       : [];
 
   const buildPageHref = (targetPage: number) => {
@@ -580,19 +578,11 @@ export default async function AdminSubmissionsPage({
                       : "lg:grid-cols-[minmax(0,1.45fr)_minmax(190px,0.75fr)_minmax(190px,0.75fr)_auto]",
                   ].join(" ")}
                 >
-                  {activeType === "ALBUM" && !submission.is_oneclick ? (
+                  {activeType === "ALBUM" ? (
                     <ReviewDocsRowCheckbox
                       id={submission.id}
-                      label={submission.title || "제목 미입력"}
+                      label={submission.title || (submission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
                     />
-                  ) : activeType === "ALBUM" ? (
-                    <span
-                      className="mt-1 inline-flex h-4 w-4 items-center justify-center text-[10px] font-black text-muted-foreground"
-                      title="원클릭 접수는 자동 생성 대상이 아닙니다."
-                      aria-label="원클릭 접수 자동 생성 제외"
-                    >
-                      —
-                    </span>
                   ) : null}
                   <div className="min-w-0">
                     <Link
@@ -601,11 +591,11 @@ export default async function AdminSubmissionsPage({
                       className="block min-w-0 text-base font-black leading-6 text-foreground hover:underline"
                     >
                       <span className="block truncate">
-                        {submission.title || "제목 미입력"}
+                        {submission.title || (submission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
                       </span>
                     </Link>
                     <p className="mt-1 truncate text-xs font-semibold text-muted-foreground">
-                      {submission.artist_name || "아티스트 미입력"} · {typeLabel}
+                      {submission.artist_name || (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")} · {typeLabel}
                       {hasGuestColumns && submission.guest_name
                         ? ` · ${submission.guest_name}`
                         : ""}

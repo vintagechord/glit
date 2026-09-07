@@ -282,6 +282,33 @@ test("album and MV actions validate, claim, and atomically commit parent plus de
   assertOrder(mv, "MV", "validateMvSubmittedFields(", "VIDEO");
 });
 
+test("released submissions discard hidden unreleased metadata before saving or creating artists", () => {
+  const source = read("src/features/submissions/actions.ts");
+  const album = source.slice(
+    source.indexOf("export async function saveAlbumSubmissionAction"),
+    source.indexOf("export async function saveMvSubmissionAction"),
+  );
+  assert.match(album, /const albumMetadata = isOneClick \? undefined : parsed\.data/);
+  assert.match(album, /const titleValue = albumMetadata\?\.title\?\.trim\(\) \?\? ""/);
+  assert.match(album, /const artistNameValue = albumMetadata\?\.artistName\?\.trim\(\) \?\? ""/);
+  assert.match(album, /const artistId = isOneClick \? null : await ensureArtistByName\(artistNameValue\)/);
+
+  const payload = album.slice(
+    album.indexOf("const submissionPayload ="),
+    album.indexOf("const atomicParentPayload ="),
+  );
+  for (const field of [
+    "artistNameKr", "artistNameEn", "releaseDate", "genre", "distributor",
+    "productionCompany", "previousRelease", "artistType", "artistGender",
+    "artistMembers", "guestCompany",
+  ]) {
+    assert.ok(payload.includes(`albumMetadata?.${field}`), `${field} must exclude hidden released-form data`);
+    assert.equal(payload.includes(`parsed.data.${field}`), false, `${field} must not bypass release normalization`);
+  }
+  assert.match(album, /const submittedTracks = isOneClick \? \[\] : parsed\.data\.tracks \?\? \[\]/);
+  assert.match(album, /const shouldReplaceTracks =\s*isOneClick \|\|/);
+});
+
 test("service-role file metadata accepts only exact owned B2 keys and ignores client URLs", () => {
   const source = read("src/features/submissions/actions.ts");
   const helperStart = source.indexOf("const validateSubmissionFileObjectKeys");
