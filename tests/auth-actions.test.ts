@@ -29,6 +29,9 @@ test("auth actions validate, map transport failures, preserve safe login redirec
   const form = (values: Record<string, string>) => { const body = new FormData(); for (const [name, value] of Object.entries(values)) body.set(name, value); return body; };
   const signIn = { email: "qa@example.invalid", password: "legacy" };
   const originalResend = process.env.RESEND_API_KEY;
+  const originalSender = process.env.RESEND_FROM;
+  const validSender = "onside <noreply@example.invalid>";
+  process.env.RESEND_FROM = validSender;
   try {
     for (const throws of [false, true]) {
       auth.state.error = new TypeError("fetch failed"); auth.state.throws = throws;
@@ -43,6 +46,16 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     const invalidSignup = await auth.signupAction({}, form({ ...signIn, password: "123", confirmPassword: "123", agreeAge: "on", agreeTerms: "on", agreePrivacy: "on", agreeRefund: "on" }));
     assert.match(invalidSignup.fieldErrors?.password ?? "", /8자 이상/); assert.equal(auth.calls.length, 0);
     process.env.RESEND_API_KEY = "fixture-only";
+    for (const from of [undefined, "", "onside <myonside@daum.net>", "onside <noreply@example.invalid>\r\nBcc: private@example.invalid"]) {
+      if (from === undefined) delete process.env.RESEND_FROM;
+      else process.env.RESEND_FROM = from;
+      auth.calls.length = 0;
+      const blocked = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
+      assert.match(blocked.error ?? "", /메일 발송 설정/);
+      assert.equal(blocked.message, undefined);
+      assert.deepEqual(auth.calls, [], "invalid senders must not create a token, send custom mail, or fall back to default mail");
+    }
+    process.env.RESEND_FROM = validSender;
     auth.state.error = { message: "fetch failed", name: "AuthRetryableFetchError" };
     const reset = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
     assert.match(reset.error ?? "", /인증 서버에 연결/); assert.deepEqual(auth.calls.map((call) => call.method), ["generateLink"]);
@@ -85,5 +98,6 @@ test("auth actions validate, map transport failures, preserve safe login redirec
 
   } finally {
     if (originalResend === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = originalResend;
+    if (originalSender === undefined) delete process.env.RESEND_FROM; else process.env.RESEND_FROM = originalSender;
   }
 });

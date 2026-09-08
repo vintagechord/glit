@@ -8,6 +8,7 @@ import {
   sendWelcomeEmail,
 } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getEmailSenderConfiguration } from "@/lib/email-config";
 import {
   consumeRateLimit,
   getRequestIdentifier,
@@ -228,6 +229,11 @@ export async function resetPasswordAction(
     // generates another token and masks delivery/configuration errors with the
     // built-in provider's project-wide email quota.
     if (process.env.RESEND_API_KEY?.trim()) {
+      const sender = getEmailSenderConfiguration({ from: process.env.RESEND_FROM });
+      if (!sender.ok) {
+        console.error("[Email] password reset sender unavailable", { diagnostic: sender.diagnostic });
+        return { error: "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요." };
+      }
       const admin = createAdminClient();
       const { data, error } = await admin.auth.admin.generateLink({
         type: "recovery",

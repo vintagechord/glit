@@ -1,4 +1,5 @@
 import { APP_CONFIG } from "@/lib/config";
+import { classifyEmailProviderFailure, getEmailSenderConfiguration } from "@/lib/email-config";
 
 type WelcomeEmailPayload = {
   email: string;
@@ -74,20 +75,22 @@ type EmailSendResult = {
 
 const EMAIL_REQUEST_TIMEOUT_MS = 10_000;
 
-const getEmailFrom = () =>
-  process.env.RESEND_FROM?.trim() ||
-  `onside <${APP_CONFIG.supportEmail || "myonside@daum.net"}>`;
-
-const getResendConfig = () => ({
-  apiKey: process.env.RESEND_API_KEY?.trim() || "",
-  from: getEmailFrom(),
-});
+const getResendConfig = () => {
+  const sender = getEmailSenderConfiguration({ from: process.env.RESEND_FROM, supportEmail: APP_CONFIG.supportEmail });
+  return {
+    apiKey: process.env.RESEND_API_KEY?.trim() || "",
+    from: sender.ok ? sender.from : "",
+    replyTo: sender.ok ? sender.replyTo : undefined,
+    sender,
+  };
+};
 
 const logEmailTransportError = (operation: string, error: unknown) => {
   // Transport errors can carry request metadata. Keep production logs useful
   // without serializing recipient addresses, message bodies, or auth headers.
   console.error(`[Email] ${operation} failed`, {
-    errorName: error instanceof Error ? error.name : "UnknownError",
+    errorName: error instanceof Error && ["AbortError", "TimeoutError", "TypeError", "Error"].includes(error.name)
+      ? error.name : "UnknownError",
   });
 };
 
@@ -116,7 +119,7 @@ const escapeHtml = (value: string) =>
 export async function sendWelcomeEmail(payload: WelcomeEmailPayload) {
   const { apiKey, from } = getResendConfig();
 
-  if (!apiKey) {
+  if (!apiKey || !from) {
     return { ok: false, skipped: true } as const;
   }
 
@@ -169,7 +172,7 @@ const normalizeAbsoluteUrl = (value?: string) => {
 export async function sendPasswordResetEmail(
   payload: PasswordResetEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, replyTo, sender } = getResendConfig();
 
   if (!apiKey) {
     return {
@@ -179,6 +182,11 @@ export async function sendPasswordResetEmail(
       message:
         "RESEND_API_KEY가 설정되어 있지 않아 온사이드 발신 메일을 보내지 못했습니다.",
     };
+  }
+
+  if (!sender.ok) {
+    console.error("[Email] password reset sender unavailable", { diagnostic: sender.diagnostic });
+    return { ok: false, skipped: true, reason: "configuration" };
   }
 
   const normalizedLink = normalizeAbsoluteUrl(payload.link);
@@ -208,18 +216,17 @@ export async function sendPasswordResetEmail(
         from,
         to: payload.email,
         subject: "[onside] 비밀번호 재설정 안내",
+        ...(replyTo ? { reply_to: replyTo } : {}),
         html,
       }),
     });
 
     if (!response.ok) {
-      const reason = [400, 401, 403, 422].includes(response.status)
-        ? "configuration"
-        : response.status === 429 ? "rate_limit" : "delivery";
+      const providerError = await response.json().catch(() => null);
+      const { reason, diagnostic } = classifyEmailProviderFailure(response.status, providerError?.name);
       // Keep the sender failure observable without logging the recipient,
       // recovery credentials, or a provider payload that could contain them.
-      console.error("[Email] password reset rejected", { status: response.status, reason });
-      await response.arrayBuffer().catch(() => undefined);
+      console.error("[Email] password reset rejected", { status: response.status, reason, diagnostic });
       const retryHeader = Number(response.headers.get("retry-after"));
       return {
         ok: false,
@@ -251,7 +258,7 @@ export async function sendSubmissionReceiptEmail(
 ): Promise<EmailSendResult> {
   const { apiKey, from } = getResendConfig();
 
-  if (!apiKey) {
+  if (!apiKey || !from) {
     return {
       ok: false,
       skipped: true,
@@ -351,7 +358,7 @@ export async function sendResultEmail(
 ): Promise<EmailSendResult> {
   const { apiKey, from } = getResendConfig();
 
-  if (!apiKey) {
+  if (!apiKey || !from) {
     return {
       ok: false,
       skipped: true,
@@ -431,7 +438,7 @@ export async function sendSubmissionBankRequestEmail(
 ): Promise<EmailSendResult> {
   const { apiKey, from } = getResendConfig();
 
-  if (!apiKey) {
+  if (!apiKey || !from) {
     return {
       ok: false,
       skipped: true,
@@ -549,7 +556,7 @@ export async function sendSubmissionUpdateEmail(
 ): Promise<EmailSendResult> {
   const { apiKey, from } = getResendConfig();
 
-  if (!apiKey) {
+  if (!apiKey || !from) {
     return {
       ok: false,
       skipped: true,
@@ -638,7 +645,7 @@ export async function sendGuestSubmissionLookupEmail(
   payload: GuestSubmissionLookupEmailPayload,
 ): Promise<EmailSendResult> {
   const { apiKey, from } = getResendConfig();
-  if (!apiKey) {
+  if (!apiKey || !from) {
     return {
       ok: false,
       skipped: true,

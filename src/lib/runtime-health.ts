@@ -1,4 +1,5 @@
 import { APP_CONFIG } from "./config";
+import { getEmailSenderConfiguration } from "./email-config";
 import { checkSupabaseConfig } from "./supabase/health";
 
 export type RuntimeHealthCheck = {
@@ -79,16 +80,15 @@ const checkEmail = (
 ): RuntimeHealthCheck => {
   const missing = [
     !truthy(process.env.RESEND_API_KEY) ? "RESEND_API_KEY" : null,
-    !truthy(process.env.RESEND_FROM) && !truthy(APP_CONFIG.supportEmail)
-      ? "RESEND_FROM"
-      : null,
+    !truthy(process.env.RESEND_FROM) ? "RESEND_FROM" : null,
   ].filter((key): key is string => Boolean(key));
+  const sender = getEmailSenderConfiguration({ from: process.env.RESEND_FROM });
 
   return {
     name: "email env",
-    ok: missing.length === 0,
+    ok: missing.length === 0 && sender.ok,
     severity,
-    detail: missing.length ? `missing: ${missing.join(", ")}` : undefined,
+    detail: missing.length ? `missing: ${missing.join(", ")}` : !sender.ok ? sender.diagnostic : undefined,
   };
 };
 
