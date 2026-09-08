@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { removeGuestSubmissionCartEntries } from "@/lib/guest-submission-cart";
+import { readGuestSubmissionCartEntries, rememberGuestSubmissionOrderEntries, removeGuestSubmissionCartEntries } from "@/lib/guest-submission-cart";
+import { submissionOrderReturnHref } from "@/lib/inicis/popup-recovery";
 
 type Status = "SUCCESS" | "FAIL" | "CANCEL" | "ERROR";
 
@@ -43,6 +44,8 @@ function ReturnBridgeContent() {
   );
 
   useEffect(() => {
+    const orderSubmissionIds = new Set([...payload.submissionIds, ...(payload.submissionId ? [payload.submissionId] : [])]);
+    rememberGuestSubmissionOrderEntries(readGuestSubmissionCartEntries().filter(entry => orderSubmissionIds.has(entry.submissionId)));
     if (status === "SUCCESS" && payload.submissionIds.length > 0) {
       removeGuestSubmissionCartEntries(payload.submissionIds);
     }
@@ -50,17 +53,14 @@ function ReturnBridgeContent() {
     const hasOpener = typeof window !== "undefined" && !!window.opener && window.opener !== window;
     const buildRedirectTarget = () => {
       const statusParam = status.toLowerCase();
+      if (payload.submissionId) {
+        return `${submissionOrderReturnHref(payload.submissionId)}&payment=${statusParam}`;
+      }
       if (status === "SUCCESS") {
-        if (payload.submissionId) {
-          return `/dashboard/submissions/${payload.submissionId}?payment=success`;
-        }
         if (payload.requestId) {
           return `/karaoke-request?payment=success&requestId=${payload.requestId}`;
         }
       } else {
-        if (payload.submissionId) {
-          return `/dashboard/submissions/${payload.submissionId}?payment=${statusParam}`;
-        }
         if (payload.requestId) {
           return `/karaoke-request?payment=${statusParam}&requestId=${payload.requestId}`;
         }

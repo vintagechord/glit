@@ -14,16 +14,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { validateReleasedAlbumPaymentFiles } from "@/lib/submission-payment-files";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
+import { orderGuestTokensSchema } from "@/lib/submission-orders-http";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
   submissionIds: z.array(z.string().uuid()).min(1).max(100),
-  guestTokensBySubmissionId: z
-    .record(z.string().uuid(), z.string().min(8).max(120))
-    .optional(),
-});
+  guestTokensBySubmissionId: orderGuestTokensSchema.optional(),
+}).strict();
 
 type CartBankSubmission = {
   id: string;
@@ -36,6 +35,7 @@ type CartBankSubmission = {
   status: string | null;
   payment_status: string | null;
   album_draft_group_id: string | null;
+  current_order_id: string | null;
   applicant_email: string | null;
   guest_email: string | null;
 };
@@ -55,6 +55,10 @@ const getKind = (type?: string | null): "ALBUM" | "MV" =>
   type === "ALBUM" ? "ALBUM" : "MV";
 
 export async function POST(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  if ((origin && origin !== new URL(req.url).origin && origin !== getBaseUrl()) || req.headers.get("sec-fetch-site") === "cross-site") {
+    return NextResponse.json({ error: "같은 사이트에서 다시 요청해주세요." }, { status: 403 });
+  }
   const requestLimit = consumeRateLimit({
     namespace: "cart-bank-payment-ip",
     identifier: getRequestIdentifier(req.headers),
@@ -99,10 +103,11 @@ export async function POST(req: NextRequest) {
   let submissionQuery = admin
     .from("submissions")
     .select(
-      "id, user_id, guest_token, type, title, artist_name, amount_krw, status, payment_status, album_draft_group_id, applicant_email, guest_email",
+      "id, user_id, guest_token, type, title, artist_name, amount_krw, status, payment_status, current_order_id, album_draft_group_id, applicant_email, guest_email",
     )
     .in("id", submissionIds)
-    .or("payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)");
+    .or("payment_status.is.null,payment_status.eq.UNPAID")
+    .is("current_order_id", null);
   submissionQuery = user
     ? submissionQuery.eq("user_id", user.id)
     : submissionQuery
@@ -146,7 +151,8 @@ export async function POST(req: NextRequest) {
   const invalidSubmission = submissions.find((item) => {
     const amount = Math.round(Number(item.amount_krw ?? 0));
     return (
-      item.payment_status === "PAID" ||
+      (item.payment_status !== null && item.payment_status !== "UNPAID") ||
+      Boolean(item.current_order_id) ||
       !cartStatuses.has(String(item.status ?? "")) ||
       !Number.isFinite(amount) ||
       amount <= 0
@@ -232,9 +238,7 @@ export async function POST(req: NextRequest) {
       invalidAlbumPrice ||
       invalidAlbumDiscount ||
       incompleteAlbumGroup ||
-      (updateError?.code === "55000" &&
-        (updateError.message?.includes("PAYMENT_ALREADY_IN_PROGRESS") ||
-          updateError.message?.includes("SUBMISSION_NOT_PAYABLE")));
+      updateError?.code === "55000";
     return NextResponse.json(
       {
         error: invalidAlbumPrice
@@ -272,7 +276,7 @@ export async function POST(req: NextRequest) {
             link: buildUrl(
               submission.guest_token
                 ? `/track/${encodeURIComponent(submission.guest_token)}`
-                : `/dashboard/submissions/${submission.id}`,
+                : `/mypage/orders?focus=${submission.id}`,
               baseUrl,
             ),
             siteLink: buildUrl("/", baseUrl),
@@ -292,6 +296,10 @@ export async function POST(req: NextRequest) {
   revalidatePath("/mypage/cart");
   revalidatePath("/en/dashboard/cart");
   revalidatePath("/en/mypage/cart");
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/mypage/orders");
+  revalidatePath("/en/dashboard/orders");
+  revalidatePath("/en/mypage/orders");
   revalidatePath("/dashboard");
   revalidatePath("/mypage");
   revalidatePath("/en/dashboard");

@@ -42,6 +42,7 @@ type SubmissionSummary = {
   created_at?: string | null;
   updated_at: string;
   payment_status?: string | null;
+  current_order_id?: string | null;
   result_status?: string | null;
   result_notified_at?: string | null;
   mv_desired_rating?: string | null;
@@ -652,7 +653,7 @@ export function HomeReviewPanel({
           const { data } = await supabase
             .from("submissions")
             .select(
-              "id, title, artist_name, status, updated_at, payment_status, type, result_status, result_notified_at, mv_desired_rating, certificate_b2_path, certificate_original_name",
+              "id, title, artist_name, status, updated_at, payment_status, current_order_id, type, result_status, result_notified_at, mv_desired_rating, certificate_b2_path, certificate_original_name",
             )
             .eq("id", activeSubmissionId)
             .maybeSingle();
@@ -777,19 +778,19 @@ export function HomeReviewPanel({
           자세히 보기
         </Link>
       ) : null}
-      <Link
+      {!activeSubmission.current_order_id ? <Link
         href={editHref}
         onClick={prepareActiveSubmissionEdit}
         className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black tracking-normal text-[#111111] shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#fff7cf] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] sm:w-auto sm:min-w-[8.5rem]"
       >
         수정하기
-      </Link>
+      </Link> : null}
       <Link
-        href={`${localePrefix}/mypage/cart?focus=${activeSubmission.id}`}
+        href={`${localePrefix}/mypage/${activeSubmission.current_order_id ? "orders" : "cart"}?focus=${activeSubmission.id}`}
         className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] hover:shadow-[5px_5px_0_rgba(17,17,17,0.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] dark:text-[#06111f] dark:hover:bg-[#ff7a72] sm:w-auto sm:min-w-[10.5rem]"
       >
         <CreditCard aria-hidden="true" className="h-4 w-4" />
-        결제하기
+        {activeSubmission.current_order_id ? "주문 내역 보기" : "결제하기"}
         <ArrowRight aria-hidden="true" className="h-4 w-4" />
       </Link>
     </div>

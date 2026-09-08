@@ -6,6 +6,9 @@ export type GuestSubmissionCartEntry = {
 export const GUEST_SUBMISSION_CART_STORAGE_KEY =
   "onside:guest-submission-cart:v1";
 export const SUBMISSION_CART_UPDATED_EVENT = "onside:cart-updated";
+export const GUEST_SUBMISSION_ORDERS_STORAGE_KEY =
+  "onside:guest-submission-orders:v1";
+export const SUBMISSION_ORDERS_UPDATED_EVENT = "onside:orders-updated";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -94,6 +97,7 @@ export const mergeGuestSubmissionCartEntries = (
 export const addGuestSubmissionCartEntries = (
   entries: GuestSubmissionCartEntry[],
 ) => {
+  rememberGuestSubmissionOrderEntries(entries);
   const current = readGuestSubmissionCartEntries();
   return writeGuestSubmissionCartEntries(
     mergeGuestSubmissionCartEntries(current, entries),
@@ -118,3 +122,36 @@ export const toGuestTokensBySubmissionId = (
       entry.guestToken,
     ]),
   );
+
+// Order access survives checkout and removal from the shopping cart. These
+// credentials remain local; every order read/action checks ownership on the server.
+export const readGuestSubmissionOrderEntries = () => {
+  if (typeof window === "undefined") return [];
+  try {
+    return mergeGuestSubmissionCartEntries(
+      parseGuestSubmissionCartEntries(window.localStorage.getItem(GUEST_SUBMISSION_ORDERS_STORAGE_KEY)),
+      readGuestSubmissionCartEntries(),
+    );
+  } catch {
+    return readGuestSubmissionCartEntries();
+  }
+};
+
+export const rememberGuestSubmissionOrderEntries = (
+  entries: GuestSubmissionCartEntry[],
+) => {
+  if (typeof window === "undefined") return false;
+  try {
+    const stored = parseGuestSubmissionCartEntries(
+      window.localStorage.getItem(GUEST_SUBMISSION_ORDERS_STORAGE_KEY),
+    );
+    window.localStorage.setItem(
+      GUEST_SUBMISSION_ORDERS_STORAGE_KEY,
+      JSON.stringify(mergeGuestSubmissionCartEntries(stored, entries)),
+    );
+    window.dispatchEvent(new Event(SUBMISSION_ORDERS_UPDATED_EVENT));
+    return true;
+  } catch {
+    return false;
+  }
+};

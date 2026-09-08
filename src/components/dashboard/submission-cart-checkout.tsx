@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CommerceConfirmDialog } from "./commerce-confirm-dialog";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Check,
@@ -14,10 +15,11 @@ import {
 } from "lucide-react";
 import * as React from "react";
 
-import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import {
   readGuestSubmissionCartEntries,
+  rememberGuestSubmissionOrderEntries,
+  SUBMISSION_ORDERS_UPDATED_EVENT,
   removeGuestSubmissionCartEntries,
   toGuestTokensBySubmissionId,
 } from "@/lib/guest-submission-cart";
@@ -38,6 +40,7 @@ type CartItem = {
   status: string;
   paymentStatus: string | null;
   paymentMethod: string | null;
+  currentOrderId: string | null;
   title: string | null;
   artistName: string | null;
   amountKrw: number | null;
@@ -66,6 +69,7 @@ export const mapSubmissionCartItem = (
   status: item.status,
   paymentStatus: item.payment_status,
   paymentMethod: item.payment_method ?? null,
+  currentOrderId: item.current_order_id ?? null,
   title: item.title,
   artistName: item.artist_name,
   amountKrw: item.amount_krw,
@@ -103,10 +107,9 @@ const getPayableAmount = (item: CartItem) => {
   return Number.isFinite(amount) && amount > 0 ? amount : 0;
 };
 
-// Card orders may be retried while pending; bank/unknown pending payments
-// must stay locked until the customer explicitly reopens a bank request.
-const isPaymentConfirmationPending = (item: CartItem) =>
-  item.paymentStatus === "PAYMENT_PENDING" && item.paymentMethod !== "CARD";
+const isCartItem = (item: CartItem) =>
+  ["SUBMITTED", "WAITING_PAYMENT"].includes(item.status) &&
+  (item.paymentStatus === "UNPAID" || item.paymentStatus === null) && !item.currentOrderId;
 
 const getGuestTokensForItems = (items: CartItem[]) =>
   Object.fromEntries(
@@ -136,7 +139,7 @@ export function SubmissionCartCheckout({
   const searchParams = useSearchParams();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const localePrefix = isEnglishRoute ? "/en" : "";
-  const cartHref = isEnglishRoute ? "/en/mypage/cart" : "/mypage/cart";
+  const ordersHref = `${localePrefix}/mypage/orders`;
   const newSubmissionHref = isEnglishRoute ? "/en/dashboard/new" : "/dashboard/new";
   const focusedSubmissionId =
     searchParams.get("focus") ?? searchParams.get("added");
@@ -150,14 +153,10 @@ export function SubmissionCartCheckout({
     setCartItems(initialItems.map((item) => mapSubmissionCartItem(item)));
     setIsLoadingGuestCart(false);
   }, [initialItems, userId]);
-  const items = cartItems;
+  const items = React.useMemo(() => cartItems.filter(isCartItem), [cartItems]);
   const payableItems = React.useMemo(
     () =>
-      items.filter(
-        (item) =>
-          getPayableAmount(item) > 0 &&
-          !isPaymentConfirmationPending(item),
-      ),
+      items.filter((item) => getPayableAmount(item) > 0),
     [items],
   );
   const payableIds = React.useMemo(
@@ -172,40 +171,13 @@ export function SubmissionCartCheckout({
     React.useState<PaymentMethod>("CARD");
   const [isOpening, setIsOpening] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
-  const [isReopening, setIsReopening] = React.useState(false);
-  const [pendingReopenIds, setPendingReopenIds] = React.useState<string[] | null>(null);
   const [pendingDeleteIds, setPendingDeleteIds] = React.useState<string[] | null>(
     null,
   );
-  const [bankResult, setBankResult] = React.useState<{
-    count: number;
-    totalAmountKrw: number;
-  } | null>(null);
   const [notice, setNotice] = React.useState<{
     type: "info" | "error" | "success";
     message: string;
   } | null>(() => {
-    const payment = searchParams.get("payment");
-    if (payment === "success") {
-      return {
-        type: "success",
-        message: userId
-          ? "심의 내역에서 확인하세요."
-          : "조회 코드로 진행 상태를 확인하세요.",
-      };
-    }
-    if (payment === "cancel") {
-      return {
-        type: "error",
-        message: "결제가 취소되었습니다.",
-      };
-    }
-    if (payment === "fail" || payment === "error") {
-      return {
-        type: "error",
-        message: "결제를 완료하지 못했습니다.",
-      };
-    }
     if (searchParams.get("added")) {
       return {
         type: "success",
@@ -220,6 +192,7 @@ export function SubmissionCartCheckout({
     didAttemptGuestCartClaim.current = true;
 
     const entries = readGuestSubmissionCartEntries();
+    rememberGuestSubmissionOrderEntries(entries);
     if (entries.length === 0) return;
 
     const controller = new AbortController();
@@ -292,6 +265,7 @@ export function SubmissionCartCheckout({
     const controller = new AbortController();
     const loadGuestCart = async () => {
       const entries = readGuestSubmissionCartEntries();
+      rememberGuestSubmissionOrderEntries(entries);
       if (entries.length === 0) {
         setCartItems([]);
         setIsLoadingGuestCart(false);
@@ -393,10 +367,16 @@ export function SubmissionCartCheckout({
     () => items.filter((item) => selectedIds.has(item.id)),
     [items, selectedIds],
   );
-  const selectedItemsRef = React.useRef(selectedItems);
-  React.useEffect(() => {
-    selectedItemsRef.current = selectedItems;
-  }, [selectedItems]);
+  const checkoutItemsRef = React.useRef<CartItem[]>([]);
+  const moveItemsToOrders = React.useCallback((orderedItems: CartItem[]) => {
+    const orderedIds = new Set(orderedItems.map((item) => item.id));
+    rememberGuestSubmissionOrderEntries(orderedItems.flatMap((item) => item.guestToken
+      ? [{ submissionId: item.id, guestToken: item.guestToken }] : []));
+    removeGuestSubmissionCartEntries(Array.from(orderedIds));
+    setCartItems((prev) => prev.filter((item) => !orderedIds.has(item.id)));
+    setSelectedIds((prev) => new Set([...prev].filter((id) => !orderedIds.has(id))));
+    window.dispatchEvent(new Event(SUBMISSION_ORDERS_UPDATED_EVENT));
+  }, []);
   const selectedTotal = selectedItems.reduce(
     (sum, item) => sum + getPayableAmount(item),
     0,
@@ -406,59 +386,26 @@ export function SubmissionCartCheckout({
 
   React.useEffect(() => {
     const handler = (event: MessageEvent) => {
-      if (typeof window === "undefined") return;
       if (event.origin !== window.location.origin) return;
       const data = event.data;
       if (!data || typeof data !== "object") return;
       const type = (data as { type?: string }).type;
-      const payload = (data as { payload?: Record<string, unknown> }).payload ?? {};
       if (!type || !String(type).startsWith("INICIS:")) return;
-
-      const status = normalizeInicisStatus(String(type));
+      const status = normalizeInicisStatus(type);
+      if (!["SUCCESS", "FAIL", "CANCEL", "ERROR"].includes(status)) return;
+      const orderedItems = checkoutItemsRef.current;
+      if (orderedItems.length === 0) return;
+      checkoutItemsRef.current = [];
       cleanupInicisPaymentLayer();
-      if (status === "SUCCESS") {
-        const paidIds = new Set(
-          selectedItemsRef.current.map((item) => item.id),
-        );
-        if (!userId) {
-          removeGuestSubmissionCartEntries(Array.from(paidIds));
-          setCartItems((prev) =>
-            prev.filter((item) => !paidIds.has(item.id)),
-          );
-          setSelectedIds((prev) => {
-            const next = new Set(prev);
-            paidIds.forEach((id) => next.delete(id));
-            return next;
-          });
-        }
-        setNotice({
-          type: "success",
-          message: userId
-            ? "심의 내역에서 확인하세요."
-            : "조회 코드로 진행 상태를 확인하세요.",
-        });
-        setIsOpening(false);
-        router.push(`${cartHref}?payment=success`);
-        router.refresh();
-        return;
-      }
-
-      if (status === "FAIL" || status === "CANCEL" || status === "ERROR") {
-        const message =
-          typeof payload.message === "string"
-            ? payload.message
-            : status === "CANCEL"
-              ? "결제가 취소되었습니다."
-              : "결제를 완료하지 못했습니다.";
-        setNotice({ type: "error", message });
-        setIsOpening(false);
-        router.refresh();
-      }
+      moveItemsToOrders(orderedItems);
+      setIsOpening(false);
+      setNotice(null);
+      router.push(`${ordersHref}?focus=${encodeURIComponent(orderedItems[0].id)}`);
+      router.refresh();
     };
-
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [cartHref, router, userId]);
+  }, [moveItemsToOrders, ordersHref, router]);
 
   const toggleItem = (id: string) => {
     const groupIds = expandSubmissionCartGroupIds(
@@ -533,7 +480,7 @@ export function SubmissionCartCheckout({
   };
 
   const handleDeleteItems = (ids: string[]) => {
-    if (isDeleting || isOpening || isReopening) return;
+    if (isDeleting || isOpening) return;
     const targetIds = expandSubmissionCartGroupIds(
       items,
       Array.from(new Set(ids.filter(Boolean))),
@@ -578,7 +525,6 @@ export function SubmissionCartCheckout({
         deletedIds.forEach((id) => next.delete(id));
         return next;
       });
-      setBankResult(null);
       if (!userId) {
         removeGuestSubmissionCartEntries(Array.from(deletedIds));
       }
@@ -598,108 +544,26 @@ export function SubmissionCartCheckout({
     }
   };
 
-  const handleReopenItems = (id: string) => {
-    if (isDeleting || isOpening || isReopening) return;
-    setPendingReopenIds(expandSubmissionCartGroupIds(items, [id]));
-  };
-
-  const confirmReopenItems = async (targetIds: string[]) => {
-    if (isDeleting || isOpening || isReopening) return;
-    setIsReopening(true);
-    setNotice(null);
-    try {
-      const response = await fetch("/api/cart/reopen", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionIds: targetIds,
-          guestTokensBySubmissionId: getGuestTokensForItems(
-            items.filter((item) => targetIds.includes(item.id)),
-          ),
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as {
-        ok?: boolean;
-        reopenedIds?: string[];
-        error?: string;
-      };
-      if (!response.ok || !payload.ok || !Array.isArray(payload.reopenedIds) || payload.reopenedIds.length === 0) {
-        throw new Error(payload.error ?? "결제 수단을 다시 선택할 수 없습니다. 잠시 후 다시 시도해주세요.");
-      }
-      const reopenedIds = new Set(payload.reopenedIds);
-      setCartItems((prev) => prev.map((item) => reopenedIds.has(item.id)
-        ? { ...item, status: "SUBMITTED", paymentStatus: "UNPAID" }
-        : item));
-      const reopenedPayableIds = items
-        .filter((item) => reopenedIds.has(item.id) && getPayableAmount(item) > 0)
-        .map((item) => item.id);
-      setSelectedIds((prev) => new Set([...prev, ...reopenedPayableIds]));
-      setSelectedMethod("CARD");
-      setBankResult(null);
-      setNotice(null);
-      window.dispatchEvent(new Event("onside:cart-updated"));
-      router.refresh();
-    } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "결제 수단을 다시 선택할 수 없습니다. 잠시 후 다시 시도해주세요.",
-      });
-    } finally {
-      setIsReopening(false);
-    }
-  };
-
-  const handleBankTransfer = async () => {
+  const handleBankTransfer = async (orderedItems: CartItem[]) => {
     const response = await fetch("/api/cart/bank", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        submissionIds: selectedItems.map((item) => item.id),
-        guestTokensBySubmissionId: getGuestTokensForItems(selectedItems),
+        submissionIds: orderedItems.map((item) => item.id),
+        guestTokensBySubmissionId: getGuestTokensForItems(orderedItems),
       }),
     });
-    const payload = (await response.json().catch(() => ({}))) as {
-      error?: string;
-      count?: number;
-      totalAmountKrw?: number;
-    };
-
-    if (!response.ok) {
-      throw new Error(
-        payload.error ?? "무통장 입금 대기 상태로 변경하지 못했습니다.",
-      );
-    }
-
-    const nextResult = {
-      count: Math.max(0, Math.trunc(Number(payload.count ?? selectedItems.length))),
-      totalAmountKrw: Math.max(
-        0,
-        Math.round(Number(payload.totalAmountKrw ?? selectedTotal)),
-      ),
-    };
-    const pendingIds = new Set(selectedItems.map((item) => item.id));
-    setCartItems((prev) =>
-      prev.map((item) =>
-        pendingIds.has(item.id)
-          ? {
-              ...item,
-              status: "WAITING_PAYMENT",
-              paymentStatus: "PAYMENT_PENDING",
-              paymentMethod: "BANK",
-            }
-          : item,
-      ),
-    );
-    setBankResult(nextResult);
-    setNotice({
-      type: "success",
-      message: "입금 신청이 완료되었습니다.",
-    });
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    if (!response.ok) throw new Error(payload.error ?? "입금 신청을 완료하지 못했습니다. 다시 시도해주세요.");
+    checkoutItemsRef.current = [];
+    moveItemsToOrders(orderedItems);
+    setNotice(null);
+    router.push(`${ordersHref}?focus=${encodeURIComponent(orderedItems[0].id)}`);
     router.refresh();
   };
 
   const handleCheckout = async () => {
-    if (isOpening || isDeleting || isReopening) return;
+    if (isOpening || isDeleting) return;
     if (selectedItems.length === 0) {
       setNotice({ type: "error", message: "결제할 신청서를 선택해주세요." });
       return;
@@ -712,8 +576,11 @@ export function SubmissionCartCheckout({
     const primaryItem = selectedItems[0];
     if (!primaryItem) return;
 
+    const orderedItems = [...selectedItems];
+    checkoutItemsRef.current = orderedItems;
+    rememberGuestSubmissionOrderEntries(orderedItems.flatMap((item) => item.guestToken
+      ? [{ submissionId: item.id, guestToken: item.guestToken }] : []));
     setIsOpening(true);
-    setBankResult(null);
     setNotice({
       type: "info",
       message:
@@ -724,8 +591,9 @@ export function SubmissionCartCheckout({
 
     if (selectedMethod === "BANK") {
       try {
-        await handleBankTransfer();
+        await handleBankTransfer(orderedItems);
       } catch (error) {
+        checkoutItemsRef.current = [];
         setNotice({
           type: "error",
           message:
@@ -739,15 +607,25 @@ export function SubmissionCartCheckout({
       return;
     }
 
-    const { ok, error } = await openInicisCardPopup({
+    const { ok, error, orderId, redirected } = await openInicisCardPopup({
       context: getPaymentContext(primaryItem),
       submissionId: primaryItem.id,
-      submissionIds: selectedItems.map((item) => item.id),
+      submissionIds: orderedItems.map((item) => item.id),
       guestToken: primaryItem.guestToken ?? undefined,
-      guestTokensBySubmissionId: getGuestTokensForItems(selectedItems),
+      guestTokensBySubmissionId: getGuestTokensForItems(orderedItems),
     });
 
     if (!ok) {
+      if (orderId) {
+        checkoutItemsRef.current = [];
+        moveItemsToOrders(orderedItems);
+        setIsOpening(false);
+        setNotice(null);
+        router.push(`${ordersHref}?focus=${encodeURIComponent(primaryItem.id)}`);
+        router.refresh();
+        return;
+      }
+      checkoutItemsRef.current = [];
       setNotice({
         type: "error",
         message:
@@ -757,10 +635,8 @@ export function SubmissionCartCheckout({
       return;
     }
 
-    setNotice({
-      type: "info",
-      message: "결제창을 열었습니다.",
-    });
+    if (!redirected) moveItemsToOrders(orderedItems);
+    setNotice(null);
   };
 
   if (isLoadingGuestCart) {
@@ -784,6 +660,7 @@ export function SubmissionCartCheckout({
         <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-5 py-8 text-sm font-semibold text-muted-foreground">
           장바구니가 비어 있습니다.
         </div>
+        <Link href={ordersHref} className="inline-flex min-h-10 items-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-4 py-2 text-xs font-black text-[var(--background)]">주문내역 보기</Link>
         <Link
           href={newSubmissionHref}
           className="inline-flex h-10 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-4 text-xs font-black tracking-normal text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5"
@@ -805,7 +682,7 @@ export function SubmissionCartCheckout({
         />
       ) : null}
       {pendingDeleteIds ? (
-        <ConfirmDialog
+        <CommerceConfirmDialog
           message={
             pendingDeleteIds.length === 1
               ? "접수 현황도 함께 삭제됩니다. 삭제할까요?"
@@ -819,23 +696,6 @@ export function SubmissionCartCheckout({
           }}
         />
       ) : null}
-      {pendingReopenIds ? (
-        <ConfirmDialog
-          title="결제 다시 선택"
-          confirmLabel="결제 다시 선택"
-          message={[
-            pendingReopenIds.length > 1 ? `같은 신청서의 앨범 ${pendingReopenIds.length}건이 함께 변경됩니다.` : null,
-            "아직 입금하지 않았다면 입금 신청을 취소하고 결제 수단을 다시 선택할 수 있습니다.",
-            "이미 입금했다면 입금 확인을 기다려주세요.",
-          ].filter(Boolean).join("\n\n")}
-          onCancel={() => setPendingReopenIds(null)}
-          onConfirm={() => {
-            const targetIds = pendingReopenIds;
-            setPendingReopenIds(null);
-            void confirmReopenItems(targetIds);
-          }}
-        />
-      ) : null}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 py-2 text-xs font-black text-foreground shadow-[2px_2px_0_var(--bauhaus-shadow)]">
@@ -843,10 +703,11 @@ export function SubmissionCartCheckout({
             <span>{items.length}건</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Link href={ordersHref} className="inline-flex h-9 items-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)]">주문내역 보기</Link>
             <button
               type="button"
               onClick={toggleAll}
-              disabled={payableIds.length === 0 || isDeleting || isReopening}
+              disabled={payableIds.length === 0 || isDeleting || isOpening}
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
             >
               <Check size={14} strokeWidth={2.8} aria-hidden="true" />
@@ -855,7 +716,7 @@ export function SubmissionCartCheckout({
             <button
               type="button"
               onClick={() => void handleDeleteItems(Array.from(selectedIds))}
-              disabled={selectedIds.size === 0 || isDeleting || isOpening || isReopening}
+              disabled={selectedIds.size === 0 || isDeleting || isOpening}
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70 disabled:hover:translate-y-0 dark:text-[#06111f]"
             >
               <Trash2 size={14} strokeWidth={2.8} />
@@ -868,9 +729,7 @@ export function SubmissionCartCheckout({
           {items.map((item) => {
             const amount = getPayableAmount(item);
             const selected = selectedIds.has(item.id);
-            const paymentConfirmationPending = isPaymentConfirmationPending(item);
-            const canReopen = paymentConfirmationPending && item.paymentMethod === "BANK";
-            const disabled = amount <= 0 || paymentConfirmationPending;
+            const disabled = amount <= 0;
             const groupSize = items.filter(
               (candidate) =>
                 getSubmissionCartGroupKey(candidate) ===
@@ -888,14 +747,14 @@ export function SubmissionCartCheckout({
                   selected
                     ? "border-[var(--bauhaus-ink)] bg-[#fff4bd] shadow-[4px_4px_0_var(--bauhaus-shadow)] dark:bg-[#f2cf27]/18"
                     : "border-border bg-[var(--card)] hover:border-[var(--bauhaus-ink)]"
-                } ${disabled && !canReopen ? "opacity-60" : ""}`}
+                } ${disabled ? "opacity-60" : ""}`}
               >
                 <button
                   type="button"
                   onClick={() => {
                     if (!disabled) toggleItem(item.id);
                   }}
-                  disabled={disabled || isDeleting || isReopening}
+                  disabled={disabled || isDeleting || isOpening}
                   aria-pressed={selected}
                   aria-label={selectionLabel}
                   className={`flex h-9 w-9 items-center justify-center rounded-[6px] border-2 ${
@@ -911,7 +770,7 @@ export function SubmissionCartCheckout({
                   onClick={() => {
                     if (!disabled) toggleItem(item.id);
                   }}
-                  disabled={disabled || isDeleting || isReopening}
+                  disabled={disabled || isDeleting || isOpening}
                   className="min-w-0 text-left disabled:cursor-default"
                 >
                   <span className="flex flex-wrap items-center gap-2">
@@ -946,11 +805,6 @@ export function SubmissionCartCheckout({
                     <Eye size={14} strokeWidth={2.8} />
                     확인
                   </Link>
-                  {paymentConfirmationPending ? (
-                    <span className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-3 text-[11px] font-black text-[#111111]">
-                      입금 확인 중
-                    </span>
-                  ) : item.paymentStatus !== "PAYMENT_PENDING" ? (
                     <Link
                       href={getEditHref(item)}
                       onClick={() => prepareEditStorage(item)}
@@ -960,21 +814,10 @@ export function SubmissionCartCheckout({
                       <Pencil size={14} strokeWidth={2.8} />
                       수정
                     </Link>
-                  ) : null}
-                  {canReopen ? (
-                    <button
-                      type="button"
-                      onClick={() => handleReopenItems(item.id)}
-                      disabled={isDeleting || isOpening || isReopening}
-                      className="inline-flex min-h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-3 py-2 text-[11px] font-black text-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111] disabled:cursor-wait disabled:opacity-50"
-                    >
-                      {isReopening ? "변경 중" : "결제 다시 선택"}
-                    </button>
-                  ) : null}
                   <button
                     type="button"
                     onClick={() => void handleDeleteItems([item.id])}
-                    disabled={isDeleting || isOpening || isReopening}
+                    disabled={isDeleting || isOpening}
                     className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-red)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:hover:text-[#06111f]"
                     aria-label={`${getDisplayTitle(item)} 삭제`}
                   >
@@ -996,6 +839,8 @@ export function SubmissionCartCheckout({
           <button
             type="button"
             onClick={() => setSelectedMethod("CARD")}
+            disabled={isOpening || isDeleting}
+            aria-pressed={selectedMethod === "CARD"}
             className={`flex min-h-12 items-center gap-3 rounded-[8px] border-2 px-3 py-2 text-left text-xs font-black transition ${
               selectedMethod === "CARD"
                 ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]"
@@ -1008,6 +853,8 @@ export function SubmissionCartCheckout({
           <button
             type="button"
             onClick={() => setSelectedMethod("BANK")}
+            disabled={isOpening || isDeleting}
+            aria-pressed={selectedMethod === "BANK"}
             className={`flex min-h-12 items-center gap-3 rounded-[8px] border-2 px-3 py-2 text-left text-xs font-black transition ${
               selectedMethod === "BANK"
                 ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]"
@@ -1033,7 +880,7 @@ export function SubmissionCartCheckout({
         <button
           type="button"
           onClick={handleCheckout}
-          disabled={isOpening || isDeleting || isReopening || selectedItems.length === 0 || selectedTotal <= 0}
+          disabled={isOpening || isDeleting || selectedItems.length === 0 || selectedTotal <= 0}
           className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-4 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:text-[#06111f] dark:hover:bg-[#ff7a72]"
         >
           {selectedMethod === "BANK" ? (
@@ -1047,19 +894,8 @@ export function SubmissionCartCheckout({
               ? "입금 신청"
               : "결제하기"}
         </button>
-        {selectedMethod === "BANK" || bankResult ? (
-          <dl className="mt-4 grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-1 rounded-[8px] border-2 border-border bg-[var(--background)] p-3 text-xs font-semibold leading-5 text-foreground">
-            <dt className="text-muted-foreground">은행</dt>
-            <dd>{APP_CONFIG.bankName}</dd>
-            <dt className="text-muted-foreground">계좌</dt>
-            <dd className="break-all">{APP_CONFIG.bankAccount}</dd>
-            <dt className="text-muted-foreground">예금주</dt>
-            <dd>{APP_CONFIG.bankHolder}</dd>
-            <dt className="text-muted-foreground">입금액</dt>
-            <dd className="font-black text-[var(--bauhaus-red)]">
-              {formatCurrency(bankResult?.totalAmountKrw ?? selectedTotal)}원
-            </dd>
-          </dl>
+        {selectedMethod === "BANK" ? (
+          <p className="mt-4 text-xs leading-5 text-muted-foreground">입금 신청 후 주문내역에서 계좌와 입금 상태를 확인할 수 있습니다.</p>
         ) : null}
       </aside>
     </div>
@@ -1107,63 +943,6 @@ function NoticeDialog({
         >
           확인
         </button>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmDialog({
-  title = "삭제 확인",
-  confirmLabel = "삭제",
-  message,
-  onCancel,
-  onConfirm,
-}: {
-  title?: string;
-  confirmLabel?: string;
-  message: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  const dialogId = React.useId();
-  return (
-    <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 px-4 py-6"
-      role="presentation"
-    >
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby={`${dialogId}-title`}
-        aria-describedby={`${dialogId}-description`}
-        className="max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-center text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]"
-      >
-        <p id={`${dialogId}-title`} className="text-base font-black">
-          {title}
-        </p>
-        <p
-          id={`${dialogId}-description`}
-          className="mt-3 whitespace-pre-line text-sm font-semibold leading-6"
-        >
-          {message}
-        </p>
-        <div className="mt-5 flex justify-center gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            autoFocus
-            className="inline-flex h-10 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-4 text-xs font-black text-[#111111] transition hover:-translate-y-0.5"
-          >
-            취소
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="inline-flex h-10 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-4 text-xs font-black text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 dark:text-[#06111f]"
-          >
-            {confirmLabel}
-          </button>
-        </div>
       </div>
     </div>
   );

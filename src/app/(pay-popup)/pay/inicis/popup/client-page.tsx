@@ -7,6 +7,9 @@ import {
   consumeInicisPopupHandoff,
   type InicisPopupHandoffPayload,
 } from "@/lib/inicis/popup-handoff";
+import { rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
+import { cancelUnopenedInicisOrder, submissionOrderReturnHref } from "@/lib/inicis/popup-recovery";
+import { cleanupInicisPaymentLayer } from "@/lib/inicis/popup";
 
 type StdPayInit = {
   ok?: boolean;
@@ -43,7 +46,11 @@ const useStdPayScript = (src: string | null, onReady: () => void, onError: (mess
 
         let script = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
 
+        let settled = false;
         const done = (ok: boolean) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
           script?.removeEventListener("load", handleLoad);
           script?.removeEventListener("error", handleError);
           resolve(ok);
@@ -55,6 +62,7 @@ const useStdPayScript = (src: string | null, onReady: () => void, onError: (mess
         };
 
         const handleError = () => done(false);
+        const timer = window.setTimeout(() => done(false), 7000);
 
         if (!script) {
           script = document.createElement("script");
@@ -160,6 +168,12 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
   const [initData, setInitData] = React.useState<StdPayInit | null>(null);
   const [loadingBarVisible, setLoadingBarVisible] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const handleModuleError = React.useCallback((message: string) => {
+    setError(message);
+    if (initData && context !== "karaoke" && context !== "test1000") {
+      void cancelUnopenedInicisOrder(initData);
+    }
+  }, [context, initData]);
 
   React.useEffect(() => {
     if (!handoffId) {
@@ -182,11 +196,11 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
     if (!initData) return;
     const form = document.getElementById(FORM_ID) as HTMLFormElement | null;
     if (!form) {
-      setError("결제 폼을 찾을 수 없습니다.");
+      handleModuleError("결제 폼을 찾을 수 없습니다.");
       return;
     }
     if (!window.INIStdPay?.pay) {
-      setError("결제 모듈 로딩 실패, 다시 시도해주세요.");
+      handleModuleError("결제 모듈 로딩 실패, 다시 시도해주세요.");
       return;
     }
 
@@ -195,11 +209,11 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
       setLoadingBarVisible(false);
     } catch (err) {
       console.error("[Inicis][STDPay][popup][pay-error]", err);
-      setError("결제 모듈 실행 실패, 다시 시도해주세요.");
+      handleModuleError("결제 모듈 실행 실패, 다시 시도해주세요.");
     }
-  }, [initData]);
+  }, [initData, handleModuleError]);
 
-  useStdPayScript(initData?.stdJsUrl ?? null, triggerPay, setError);
+  useStdPayScript(initData?.stdJsUrl ?? null, triggerPay, handleModuleError);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -254,7 +268,12 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
         const raw = await res.text();
         const json = raw ? ((JSON.parse(raw) as StdPayInit) || null) : null;
 
-        if (cancelled) return;
+        if (cancelled) {
+          if (res.ok && json && context !== "karaoke" && context !== "test1000") {
+            await cancelUnopenedInicisOrder(json);
+          }
+          return;
+        }
 
         if (!res.ok || !json || json.error) {
           const message = json?.error ?? `초기화 실패 (status ${res.status})`;
@@ -269,6 +288,12 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
           return;
         }
 
+        if (submissionId && context !== "karaoke" && context !== "test1000") {
+          rememberGuestSubmissionOrderEntries(Object.entries({
+            ...(guestToken ? { [submissionId]: guestToken } : {}),
+            ...guestTokensBySubmissionId,
+          }).map(([id, token]) => ({ submissionId: id, guestToken: token })));
+        }
         setInitData(json);
         window.setTimeout(() => setLoadingBarVisible(false), 1200);
       } catch (err) {
@@ -302,6 +327,20 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
   React.useEffect(() => {
     if (error) setLoadingBarVisible(false);
   }, [error]);
+
+  React.useEffect(() => {
+    if (!submissionId || context === "karaoke" || context === "test1000") return;
+    const receiveResult = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || !event.data || typeof event.data !== "object") return;
+      const { type, payload } = event.data as { type?: string; payload?: { submissionId?: string } };
+      if (!type || !["INICIS:SUCCESS", "INICIS:FAIL", "INICIS:CANCEL", "INICIS:ERROR"].includes(type)) return;
+      if (payload?.submissionId && payload.submissionId !== submissionId) return;
+      cleanupInicisPaymentLayer();
+      window.location.replace(`${submissionOrderReturnHref(submissionId)}&payment=${type.slice(7).toLowerCase()}`);
+    };
+    window.addEventListener("message", receiveResult);
+    return () => window.removeEventListener("message", receiveResult);
+  }, [context, submissionId]);
 
   return (
     <div className="min-h-screen w-full bg-white">
@@ -386,6 +425,9 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
             <p className="font-semibold">결제 준비에 실패했습니다.</p>
             <p className="mt-1">{error}</p>
+            {submissionId && context !== "karaoke" && context !== "test1000" ? (
+              <a className="mt-3 inline-block underline" href={submissionOrderReturnHref(submissionId)}>주문 내역에서 확인하기</a>
+            ) : null}
           </div>
         </div>
       )}

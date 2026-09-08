@@ -3,6 +3,8 @@ import {
   createInicisPopupHandoff,
   type InicisPopupHandoffPayload,
 } from "@/lib/inicis/popup-handoff";
+import { rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
+import { cancelUnopenedInicisOrder, rememberPaymentReturnLocale } from "@/lib/inicis/popup-recovery";
 
 export type InicisPopupContext = InicisPaymentContext;
 
@@ -314,6 +316,15 @@ export const openInicisCardPopup = async (
     return { ok: false, error: "window is not available" };
   }
 
+  const isSubmission = options.context !== "karaoke" && options.context !== "test1000";
+  if (isSubmission && options.submissionId) {
+    rememberPaymentReturnLocale(options.submissionId);
+    rememberGuestSubmissionOrderEntries(Object.entries({
+      ...(options.guestToken ? { [options.submissionId]: options.guestToken } : {}),
+      ...options.guestTokensBySubmissionId,
+    }).map(([submissionId, guestToken]) => ({ submissionId, guestToken })));
+  }
+
   const { preferRedirectOnMobile = true } = options;
   if (preferRedirectOnMobile && isMobileUa(window.navigator.userAgent || "")) {
     try {
@@ -327,17 +338,20 @@ export const openInicisCardPopup = async (
     }
   }
 
+  let initData: StdPayInit | null = null;
   try {
     cleanupInicisPaymentLayer();
-    const initData = await fetchStdPayInit(options);
+    initData = await fetchStdPayInit(options);
     await ensureStdPayScript(initData.stdJsUrl);
     const formId = mountStdPayForm(initData.stdParams);
     window.INIStdPay?.pay(formId);
     return { ok: true, orderId: initData.orderId };
   } catch (error) {
+    if (initData && isSubmission) await cancelUnopenedInicisOrder(initData);
     console.error("[Inicis][STDPay][direct-open-error]", error);
     return {
       ok: false,
+      ...(initData ? { orderId: initData.orderId } : {}),
       error:
         error instanceof Error && error.message
           ? error.message

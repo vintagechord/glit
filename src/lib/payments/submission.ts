@@ -31,6 +31,7 @@ type SubmissionRecord = {
   amount_krw: number | null;
   payment_method: string | null;
   payment_status: string | null;
+  current_order_id?: string | null;
   album_draft_group_id?: string | null;
   mv_desired_rating: string | null;
   certificate_b2_path?: string | null;
@@ -65,9 +66,9 @@ type ApprovePaymentRpcRow = {
 };
 
 const submissionSelectWithResult =
-  "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, album_draft_group_id, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
+  "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, current_order_id, album_draft_group_id, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
 const submissionSelectFallback =
-  "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, mv_desired_rating, package:packages ( name )";
+  "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, current_order_id, mv_desired_rating, package:packages ( name )";
 
 const normalizeEmailValue = (value?: string | null) =>
   value?.trim().toLowerCase() ?? "";
@@ -253,6 +254,9 @@ export const createSubmissionPaymentOrder = async (
     }
     if (submission.payment_status === "PAID") {
       return { error: "이미 결제가 완료된 접수가 포함되어 있습니다." };
+    }
+    if (submission.current_order_id) {
+      return { error: "이미 주문이 생성된 신청서입니다. 주문내역에서 확인해주세요." };
     }
     if (
       submission.payment_status === "PAYMENT_PENDING" &&
@@ -565,7 +569,7 @@ export const markPaymentCanceled = async (
     return {
       ok: false,
       error,
-      submissionId: null,
+      submissionId: existingPayment.submission_id,
       guestToken: null,
     } satisfies PaymentCancelResult;
   }

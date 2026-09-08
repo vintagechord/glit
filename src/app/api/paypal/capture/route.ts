@@ -41,9 +41,10 @@ const redirectToStatus = (
   payment: "paid" | "cancelled" | "failed",
 ) => {
   const url = new URL(
-    `/en/submissions/${encodeURIComponent(submissionId)}`,
+    "/en/mypage/orders",
     getBaseUrl(),
   );
+  url.searchParams.set("focus", submissionId);
   url.searchParams.set("payment", payment);
   return NextResponse.redirect(url);
 };

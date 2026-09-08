@@ -15,6 +15,7 @@ type PayPalSubmission = {
   artist_name: string | null;
   status: string | null;
   payment_status: string | null;
+  current_order_id?: string | null;
   payment_method?: string | null;
   payment_provider?: string | null;
   payment_amount?: number | null;
@@ -307,9 +308,9 @@ const selectGlobalSubmission = async (
 ) => {
   const admin = createAdminClient();
   const withGlobal =
-    "id, user_id, guest_token, title, artist_name, status, payment_status, payment_method, payment_provider, payment_amount, payment_currency, paypal_order_id";
+    "id, user_id, guest_token, title, artist_name, status, payment_status, current_order_id, payment_method, payment_provider, payment_amount, payment_currency, paypal_order_id";
   const fallback =
-    "id, user_id, guest_token, title, artist_name, status, payment_status, payment_method";
+    "id, user_id, guest_token, title, artist_name, status, payment_status, current_order_id, payment_method";
 
   let primaryQuery = admin
     .from("submissions")
@@ -502,6 +503,9 @@ export const createPayPalOrderForSubmission = async ({
   if (!submission) return { error: access.error ?? "Submission not found." };
   if (submission.payment_status === "PAID") {
     return { error: "Payment is already confirmed." };
+  }
+  if (submission.current_order_id) {
+    return { error: "An order already exists for this submission. Please check your order history." };
   }
   if (!["SUBMITTED", "WAITING_PAYMENT"].includes(submission.status ?? "")) {
     return { error: "This submission is not ready for payment." };

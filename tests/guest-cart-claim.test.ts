@@ -100,3 +100,14 @@ test("guest cart claim RPC is service-only, exact-token, and row-locked", () => 
     /grant execute on function public\.claim_guest_cart_submissions\(uuid, jsonb\) to service_role/,
   );
 });
+
+test("guest cart claim excludes pending orders and failed orders still attached to their history", () => {
+  for (const changes of [
+    { payment_status: "PAYMENT_PENDING" },
+    { payment_status: "UNPAID", current_order_id: "order-in-history" },
+  ]) {
+    assert.deepEqual(partitionGuestCartClaimEntries({ [firstId]: "guest-token-one" }, [{
+      id: firstId, user_id: null, guest_token: "guest-token-one", status: "SUBMITTED", ...changes,
+    }]), { claimableEntries: {}, invalidSubmissionIds: [firstId] });
+  }
+});

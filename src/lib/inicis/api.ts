@@ -102,6 +102,8 @@ type InicisApprovalResult = {
   ok: boolean;
   data: InicisResponseData | null;
   secureSignatureMatches?: boolean;
+  confirmedFailure?: boolean;
+  netCancellation?: InicisNetCancelResult | null;
   error?: unknown;
 };
 
@@ -158,7 +160,7 @@ export async function requestStdPayNetCancel({
     const resultCode =
       data?.resultCode ?? data?.resultcode ?? data?.P_STATUS ?? null;
     const gatewayAccepted =
-      resultCode == null || isInicisSuccessCode(resultCode);
+      resultCode != null && isInicisSuccessCode(resultCode);
     return {
       ok: response.ok && gatewayAccepted,
       data,
@@ -217,8 +219,7 @@ export async function requestStdPayApproval({
 
   const doNetCancel = async () => {
     if (!netCancelUrl || skipNetCancel) return null;
-    await requestStdPayNetCancel({ netCancelUrl, authToken, timestamp });
-    return null;
+    return requestStdPayNetCancel({ netCancelUrl, authToken, timestamp });
   };
 
   try {
@@ -238,9 +239,11 @@ export async function requestStdPayApproval({
         resultMsg: "승인 응답 본문이 비어 있습니다.",
       } as Record<string, string | number | null | undefined>);
     if (!res.ok) {
-      await doNetCancel();
+      const netCancellation = await doNetCancel();
       return {
         ok: false,
+        netCancellation,
+        confirmedFailure: netCancellation?.ok === true,
         data: {
           ...data,
           resultCode:
@@ -273,17 +276,20 @@ export async function requestStdPayApproval({
     const success = isInicisSuccessCode(resultCode);
 
     if (!success) {
-      await doNetCancel();
+      const netCancellation = await doNetCancel();
       return {
         ok: false,
         data,
+        netCancellation,
+        // A missing or malformed result is not proof that no charge occurred.
+        confirmedFailure: netCancellation?.ok === true || Boolean(resultCode && resultCode !== String(res.status) && !data.raw),
         secureSignatureMatches: false,
       };
     }
 
     if (authSignature && secureSignature && authSignature !== secureSignature) {
-      await doNetCancel();
-      return { ok: false, data, secureSignatureMatches: false };
+      const netCancellation = await doNetCancel();
+      return { ok: false, data, netCancellation, confirmedFailure: netCancellation?.ok === true, secureSignatureMatches: false };
     }
 
     if (!secureSignature || !authSignature) {
@@ -292,8 +298,8 @@ export async function requestStdPayApproval({
 
     return { ok: true, data, secureSignatureMatches: true };
   } catch (error) {
-    await doNetCancel();
-    return { ok: false, data: null, error };
+    const netCancellation = await doNetCancel();
+    return { ok: false, data: null, error, netCancellation, confirmedFailure: netCancellation?.ok === true };
   }
 }
 

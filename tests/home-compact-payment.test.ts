@@ -25,8 +25,9 @@ test("the home payment state relies on actions instead of repeated status copy",
   assert.doesNotMatch(source, /입금 확인 후 방송국별 현황이 표시됩니다/);
 });
 
-test("the home panel hides review progress until payment without changing the CTA", () => {
+test("the home panel directs cart items to payment and existing orders to order history", () => {
   assert.match(source, /\{!needsPayment \? \(/);
-  assert.match(source, />\s*결제하기\s*/);
+  assert.match(source, /activeSubmission\.current_order_id \? "주문 내역 보기" : "결제하기"/);
+  assert.match(source, /activeSubmission\.current_order_id \? "orders" : "cart"/);
   assert.match(englishLanguagePackSource, /"결제하기": "Payment"/);
 });

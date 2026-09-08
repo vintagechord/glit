@@ -1,6 +1,7 @@
 export type SubmissionUploadState = {
   status?: string | null;
   payment_status?: string | null;
+  current_order_id?: string | null;
 };
 
 export type SubmissionUploadBlockReason = "PAID" | "NOT_EDITABLE";
@@ -21,6 +22,7 @@ export const getSubmissionUploadBlockReason = (
   submission: SubmissionUploadState | null | undefined,
 ): SubmissionUploadBlockReason | null => {
   if (submission?.payment_status === "PAID") return "PAID";
+  if (submission?.current_order_id) return "NOT_EDITABLE";
   if (submission?.payment_status === "PAYMENT_PENDING") {
     return "NOT_EDITABLE";
   }
@@ -43,7 +45,7 @@ export const getSubmissionUploadConflictMessage = (error: unknown) => {
   if (message.includes("SUBMISSION_FILE_PAID")) {
     return getSubmissionUploadBlockMessage("PAID");
   }
-  if (message.includes("SUBMISSION_FILE_STATE_INVALID")) {
+  if (message.includes("SUBMISSION_FILE_STATE_INVALID") || message.includes("RETURN_ORDER_TO_CART_BEFORE_EDIT")) {
     return getSubmissionUploadBlockMessage("NOT_EDITABLE");
   }
   return null;

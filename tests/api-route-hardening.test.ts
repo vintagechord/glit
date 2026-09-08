@@ -108,10 +108,12 @@ test("submission ownership is constrained in the service-role query", () => {
 });
 
 test("member payment page reads the submission through owner-scoped RLS", () => {
-  const source = read("src/app/dashboard/pay/[id]/page.tsx");
+  const page = read("src/app/dashboard/pay/[id]/page.tsx");
+  const source = read("src/lib/legacy-payment-redirect.ts");
 
+  assert.match(page, /redirectLegacyPaymentPage/);
   assert.doesNotMatch(source, /createAdminClient/);
-  assert.match(source, /if \(!user\) \{\s*redirect\(/);
+  assert.match(source, /if \(!user\) redirect\(/);
   assert.match(source, /await supabase\s*\.from\("submissions"\)/);
   assert.match(source, /\.eq\("user_id", user\.id\)/);
 });
@@ -136,13 +138,13 @@ test("guest cart and draft service queries include supplied bearer tokens", () =
   );
 });
 
-test("payment-method mutation is bounded, owner checked and rate limited", () => {
+test("legacy payment-method mutation is retired without a database or gateway write", () => {
   const source = read("src/app/api/submissions/[id]/payment-method/route.ts");
 
-  assert.match(source, /readBoundedJsonBody\(request, 8 \* 1024\)/);
-  assert.match(source, /ensureSubmissionOwner/);
-  assert.match(source, /namespace: "submission-payment-method-ip"/);
-  assert.match(source, /"Retry-After"/);
+  assert.match(source, /status: 410/);
+  assert.match(source, /cartHref: "\/mypage\/cart"/);
+  assert.match(source, /ordersHref: "\/mypage\/orders"/);
+  assert.doesNotMatch(source, /createAdminClient|\.rpc\(|\.update\(|fetch\(/);
 });
 
 test("logout uses the canonical origin and an internal-only redirect path", () => {

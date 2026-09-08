@@ -9,6 +9,7 @@ export type SubmissionCartItem = {
   artist_name: string | null;
   amount_krw: number | null;
   payment_method?: string | null;
+  current_order_id?: string | null;
   is_oneclick?: boolean | null;
   album_price_tier?: string | null;
   album_draft_group_id?: string | null;
@@ -26,12 +27,12 @@ type QueryError = {
 };
 
 const CART_PAYMENT_FILTER =
-  "payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)";
+  "payment_status.is.null,payment_status.eq.UNPAID";
 
 const CART_SELECT =
-  "id, type, status, payment_status, payment_method, title, artist_name, amount_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )";
+  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, amount_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )";
 const CART_LEGACY_SELECT =
-  "id, type, status, payment_status, payment_method, title, artist_name, amount_krw, is_oneclick, created_at, updated_at, package:packages ( name, station_count )";
+  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, amount_krw, is_oneclick, created_at, updated_at, package:packages ( name, station_count )";
 
 const isMissingCartOptionalColumn = (error?: QueryError | null) =>
   Boolean(
@@ -54,6 +55,7 @@ const buildCartQuery = (
     .from("submissions")
     .select(select)
     .eq("user_id", userId)
+    .is("current_order_id", null)
     .in("status", ["SUBMITTED", "WAITING_PAYMENT"])
     .or(CART_PAYMENT_FILTER);
 

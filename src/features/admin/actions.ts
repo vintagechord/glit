@@ -40,6 +40,7 @@ import {
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
+import { confirmLinkedOrderPayment } from "@/lib/admin/order-payment";
 import {
   PUBLIC_CATALOG_CACHE_TAG,
   PUBLIC_ALBUM_DISCOUNT_CACHE_TAG,
@@ -992,7 +993,7 @@ export async function updateSubmissionBasicInfoFormAction(
 export async function updatePaymentStatusAction(
   payload: z.infer<typeof paymentStatusSchema>,
 ): Promise<AdminActionState> {
-  await requireAdminAction();
+  const actor = await requireAdminAction();
   const parsed = paymentStatusSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "입력값을 확인해주세요." };
@@ -1001,7 +1002,7 @@ export async function updatePaymentStatusAction(
   const supabase = createAdminClient();
   const { data: submission, error: submissionError } = await supabase
     .from("submissions")
-    .select("id, status")
+    .select("id, status, payment_status, current_order_id")
     .eq("id", parsed.data.submissionId)
     .maybeSingle();
 
@@ -1010,6 +1011,20 @@ export async function updatePaymentStatusAction(
   }
   if (!submission) {
     return { error: "접수를 찾을 수 없습니다." };
+  }
+
+  const orderPayment = await confirmLinkedOrderPayment(supabase, {
+    orderId: submission.current_order_id,
+    currentPaymentStatus: submission.payment_status,
+    nextPaymentStatus: parsed.data.paymentStatus,
+    actorUserId: actor.id,
+    adminMemo: parsed.data.adminMemo,
+  });
+  if (orderPayment.error) return { error: orderPayment.error };
+  if (orderPayment.confirmedIds) {
+    for (const id of orderPayment.confirmedIds) revalidateUserDashboards(id);
+    for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
+    return { message: "주문 전체의 입금이 확인되었습니다." };
   }
 
   const nextStatus =
@@ -1022,7 +1037,7 @@ export async function updatePaymentStatusAction(
   const { data: updatedSubmission, error } = await supabase
     .from("submissions")
     .update({
-      payment_status: parsed.data.paymentStatus,
+      ...(!submission.current_order_id ? { payment_status: parsed.data.paymentStatus } : {}),
       status: nextStatus,
       admin_memo: parsed.data.adminMemo || null,
     })
@@ -2829,7 +2844,7 @@ export async function deleteArtistsFormAction(formData: FormData): Promise<void>
 export async function saveSubmissionAdminFormAction(
   formData: FormData,
 ): Promise<void> {
-  await requireAdminAction();
+  const actor = await requireAdminAction();
   const submissionId = String(formData.get("submissionId") ?? "").trim();
   if (!submissionId) {
     return;
@@ -2873,7 +2888,7 @@ export async function saveSubmissionAdminFormAction(
   const supabase = createAdminClient();
   const { data: currentSubmission, error: currentSubmissionError } = await supabase
     .from("submissions")
-    .select("id, status, payment_status, title, artist_name, admin_memo")
+    .select("id, status, payment_status, current_order_id, title, artist_name, admin_memo")
     .eq("id", submissionId)
     .maybeSingle();
 
@@ -2912,10 +2927,24 @@ export async function saveSubmissionAdminFormAction(
     nextStatus = "IN_PROGRESS";
   }
 
+  const orderPayment = await confirmLinkedOrderPayment(supabase, {
+    orderId: currentSubmissionRow.current_order_id,
+    currentPaymentStatus,
+    nextPaymentStatus,
+    actorUserId: actor.id,
+    adminMemo,
+  });
+  if (orderPayment.error) redirectWithError(orderPayment.error);
+  if (orderPayment.confirmedIds) {
+    if (nextStatus === "SUBMITTED") nextStatus = "IN_PROGRESS";
+    for (const id of orderPayment.confirmedIds) revalidateUserDashboards(id);
+    for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
+  }
+
   const submissionUpdate: Record<string, unknown> = {};
   submissionUpdate.status = nextStatus;
   submissionUpdate.admin_memo = adminMemo || null;
-  submissionUpdate.payment_status = nextPaymentStatus;
+  if (!currentSubmissionRow.current_order_id) submissionUpdate.payment_status = nextPaymentStatus;
   if (title) submissionUpdate.title = title;
   if (artistName) submissionUpdate.artist_name = artistName;
 

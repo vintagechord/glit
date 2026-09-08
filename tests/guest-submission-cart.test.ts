@@ -6,10 +6,40 @@ import {
   normalizeGuestSubmissionCartEntries,
   parseGuestSubmissionCartEntries,
   toGuestTokensBySubmissionId,
+  addGuestSubmissionCartEntries,
+  removeGuestSubmissionCartEntries,
+  readGuestSubmissionCartEntries,
+  readGuestSubmissionOrderEntries,
+  rememberGuestSubmissionOrderEntries,
+  GUEST_SUBMISSION_CART_STORAGE_KEY,
 } from "../src/lib/guest-submission-cart";
 
 const submissionId = (sequence: number) =>
   `00000000-0000-4000-8000-${sequence.toString(16).padStart(12, "0")}`;
+
+test("guest order credentials survive checkout removing items from the cart", () => {
+  const values = new Map<string, string>();
+  const original = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", { configurable: true, value: {
+    localStorage: { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) },
+    dispatchEvent() { return true; },
+  } });
+  try {
+    const entry = { submissionId: submissionId(1), guestToken: "private-guest-order-token" };
+    addGuestSubmissionCartEntries([entry]);
+    removeGuestSubmissionCartEntries([entry.submissionId]);
+    assert.deepEqual(readGuestSubmissionCartEntries(), []);
+    assert.deepEqual(readGuestSubmissionOrderEntries(), [entry]);
+    const legacy = { submissionId: submissionId(2), guestToken: "private-legacy-guest-token" };
+    values.set(GUEST_SUBMISSION_CART_STORAGE_KEY, JSON.stringify([legacy]));
+    rememberGuestSubmissionOrderEntries(readGuestSubmissionCartEntries());
+    removeGuestSubmissionCartEntries([legacy.submissionId]);
+    assert.deepEqual(readGuestSubmissionOrderEntries(), [entry, legacy]);
+  } finally {
+    if (original) Object.defineProperty(globalThis, "window", original);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});
 
 test("normalizeGuestSubmissionCartEntries trims and normalizes valid entries", () => {
   const id = submissionId(1);

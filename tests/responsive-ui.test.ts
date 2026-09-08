@@ -53,17 +53,19 @@ test("mobile form controls avoid focus zoom", () => {
   assert.match(source, /min-height: 100vh;\s*min-height: 100dvh;/);
 });
 
-test("dashboard navigation and cart stay compact on narrow screens", () => {
+test("dashboard navigation, cart and order details stay compact on narrow screens", () => {
   const shell = readSource("src/components/dashboard/dashboard-shell.tsx");
   const cart = readSource(
     "src/components/dashboard/submission-cart-checkout.tsx",
   );
+  const orders = readSource("src/components/dashboard/submission-orders-client.tsx");
 
   assert.match(shell, /label: "작성중"/);
   assert.match(shell, /label: "심의내역"/);
+  assert.match(shell, /label: "주문내역"/);
   assert.match(shell, /aria-current=\{activeTab === tab\.key \? "page"/);
   assert.match(cart, /grid-cols-\[36px_minmax\(0,1fr\)\]/);
-  assert.match(cart, /<dl className="[^"]*grid-cols-\[52px_minmax\(0,1fr\)\]/);
+  assert.match(orders, /<dl className="[^"]*grid-cols-\[52px_minmax\(0,1fr\)\]/);
   assert.doesNotMatch(
     cart,
     /선택한 신청서를 KG이니시스 카드 결제로 한 번에 결제합니다/,

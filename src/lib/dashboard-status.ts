@@ -19,6 +19,7 @@ type DashboardSubmission =
       created_at: string;
       updated_at: string;
       payment_status?: string | null;
+      current_order_id?: string | null;
       result_status?: string | null;
       result_notified_at?: string | null;
       mv_desired_rating?: string | null;
@@ -40,6 +41,7 @@ type DashboardSubmission =
       created_at: string;
       updated_at: string;
       payment_status?: string | null;
+      current_order_id?: string | null;
       result_status?: string | null;
       result_notified_at?: string | null;
       mv_desired_rating?: string | null;
@@ -130,7 +132,7 @@ export const getDashboardStatusData = async (
     let query = admin
       .from("submissions")
       .select(
-        "id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, package_id, package:packages ( name, station_count )",
+        "id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, current_order_id, package_id, package:packages ( name, station_count )",
       )
       .eq("user_id", userId)
       .eq("type", "ALBUM")
@@ -144,7 +146,7 @@ export const getDashboardStatusData = async (
   const buildMvBase = (includeUserVisibility = true) => {
     let query = admin
       .from("submissions")
-      .select("id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, result_status, result_notified_at, type, mv_desired_rating, certificate_b2_path, certificate_original_name, package_id, package:packages ( name, station_count )")
+      .select("id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, current_order_id, result_status, result_notified_at, type, mv_desired_rating, certificate_b2_path, certificate_original_name, package_id, package:packages ( name, station_count )")
       .eq("user_id", userId)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
       .not("status", "eq", "DRAFT");

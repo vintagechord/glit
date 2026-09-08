@@ -69,6 +69,7 @@ type EditableSubmissionRow = {
   guest_token: string | null;
   status: string | null;
   payment_status: string | null;
+  current_order_id: string | null;
   updated_at: string | null;
   package_id: string | null;
   amount_krw: number | null;
@@ -223,7 +224,7 @@ const loadEditableSubmissionByActor = async ({
   const normalizedUserId = userId?.trim() ?? "";
   const normalizedGuestToken = guestToken?.trim() ?? "";
   const columns =
-    "id, user_id, guest_token, status, payment_status, updated_at, package_id, amount_krw, album_base_price_krw, album_price_tier, is_oneclick";
+    "id, user_id, guest_token, status, payment_status, current_order_id, updated_at, package_id, amount_krw, album_base_price_krw, album_price_tier, is_oneclick";
 
   if (normalizedUserId) {
     const memberResult = await db
@@ -873,7 +874,8 @@ export async function saveAlbumSubmissionAction(
 
   const isGuest = !user;
   const isSubmitted = parsed.data.status === "SUBMITTED";
-  const deferPayment = isSubmitted && parsed.data.deferPayment === true;
+  // Saving completes the cart item. Only checkout creates an order/payment request.
+  const deferPayment = isSubmitted;
   const isAdminReviewer = isAdminReviewEmail(user?.email);
   const isOneClick = parsed.data.isOneClick ?? false;
   const externalApplicationFormRequested =
@@ -1641,7 +1643,7 @@ export async function saveMvSubmissionAction(
 
   const isGuest = !user;
   const isSubmitted = parsed.data.status === "SUBMITTED";
-  const deferPayment = isSubmitted && parsed.data.deferPayment === true;
+  const deferPayment = isSubmitted;
   const isAdminReviewer = isAdminReviewEmail(user?.email);
   const titleValue = parsed.data.title?.trim() ?? "";
   const artistNameValue = parsed.data.artistName?.trim() ?? "";

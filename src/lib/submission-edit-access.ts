@@ -3,6 +3,7 @@ export type SubmissionEditOwner = {
   guest_token: string | null;
   status: string | null;
   payment_status: string | null;
+  current_order_id?: string | null;
 };
 
 export type SubmissionEditActor = {
@@ -20,6 +21,7 @@ export const canEditSubmission = (
   actor: SubmissionEditActor,
 ) => {
   if (!submission) return false;
+  if (submission.current_order_id) return false;
   // PAYMENT_PENDING is an active bank-payment reconciliation state. Editing
   // it as an ordinary unpaid draft would silently cancel that state and can
   // make an incoming deposit impossible to match.

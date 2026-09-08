@@ -54,8 +54,8 @@ export default async function proxy(request: NextRequest) {
   const isAdminRoute = authPathname.startsWith("/admin");
   const isDashboardRoute = authPathname.startsWith("/dashboard");
   const isMypageRoute = authPathname.startsWith("/mypage");
-  const isPublicCartRoute =
-    authPathname === "/mypage/cart" || authPathname === "/dashboard/cart";
+  const isPublicCommerceRoute =
+    ["/mypage/cart", "/dashboard/cart", "/mypage/orders", "/dashboard/orders"].includes(authPathname);
   const isSubmissionDetailRoute =
     /^\/dashboard\/submissions\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       authPathname,
@@ -68,11 +68,11 @@ export default async function proxy(request: NextRequest) {
   );
   const isPublicDashboardRoute =
     authPathname.startsWith("/dashboard/new") ||
-    isPublicCartRoute ||
+    isPublicCommerceRoute ||
     (isSubmissionDetailRoute && hasPaymentResultGrant);
   const isUserProtectedRoute =
     (isDashboardRoute && !isPublicDashboardRoute) ||
-    (isMypageRoute && !isPublicCartRoute);
+    (isMypageRoute && !isPublicCommerceRoute);
   const requiresSessionCookie =
     isUserProtectedRoute || isAdminRoute;
 

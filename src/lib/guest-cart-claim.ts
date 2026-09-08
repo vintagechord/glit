@@ -5,16 +5,18 @@ export type GuestCartClaimCandidate = {
   status: string | null;
   payment_status: string | null;
   user_deleted_at?: string | null;
+  current_order_id?: string | null;
 };
 
 const claimableStatuses = new Set(["SUBMITTED", "WAITING_PAYMENT"]);
-const claimablePaymentStatuses = new Set(["UNPAID", "PAYMENT_PENDING"]);
+const claimablePaymentStatuses = new Set(["UNPAID"]);
 
 const isClaimableGuestCartRow = (
   row: GuestCartClaimCandidate,
   guestToken: string | undefined,
 ) =>
   !row.user_id &&
+  !row.current_order_id &&
   Boolean(row.guest_token) &&
   Boolean(guestToken) &&
   row.guest_token === guestToken &&

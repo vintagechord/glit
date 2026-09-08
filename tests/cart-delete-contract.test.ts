@@ -35,8 +35,9 @@ test("cart DELETE avoids the PostgREST OR-filter regression", () => {
   assert.match(deleteMutation, /\.delete\(\)/);
   assert.match(
     deleteMutation,
-    /\.in\("payment_status", \["UNPAID", "PAYMENT_PENDING"\]\)/,
+    /\.in\("payment_status", \["UNPAID"\]\)/,
   );
+  assert.match(deleteMutation, /\.is\("current_order_id", null\)/);
   assert.doesNotMatch(deleteMutation, /\.or\(cartPaymentFilter\)/);
 });
 

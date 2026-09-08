@@ -12,11 +12,12 @@ const orderIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
 const callbackStatePattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const postMessageResponse = (payloadData: Record<string, unknown> = {}) => {
+const postMessageResponse = (payloadData: Record<string, unknown> = {}, canceled = false) => {
+  const submissionId = typeof payloadData.submissionId === "string" ? payloadData.submissionId : null;
   const payload = serializeInlineScriptJson({
-    type: "INICIS:CANCEL",
+    type: canceled ? "INICIS:CANCEL" : "INICIS:ERROR",
     payload: {
-      message: "사용자가 결제를 취소했습니다.",
+      message: canceled ? "사용자가 결제를 취소했습니다." : "주문내역에서 결제 상태를 확인해주세요.",
       ...payloadData,
     },
   });
@@ -34,6 +35,13 @@ const postMessageResponse = (payloadData: Record<string, unknown> = {}) => {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage(${payload}, window.location.origin);
       }
+      var submissionId = ${serializeInlineScriptJson(submissionId)};
+      if (submissionId && !window.opener && window.parent === window) {
+        var prefix = "";
+        try { if (window.sessionStorage.getItem("onside:payment-locale:" + submissionId) === "en") prefix = "/en"; } catch (e) {}
+        window.location.replace(prefix + "/mypage/orders?focus=" + encodeURIComponent(submissionId) + ${serializeInlineScriptJson(canceled ? "&payment=cancel" : "&payment=error")});
+        return;
+      }
     } catch (e) {
       console.error("INICIS postMessage error", e);
     }
@@ -49,7 +57,7 @@ const postMessageResponse = (payloadData: Record<string, unknown> = {}) => {
 `;
   return new NextResponse(html, {
     status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Inicis-Cancellation-Persisted": String(canceled) },
   });
 };
 
@@ -66,6 +74,7 @@ export async function GET(req: Request) {
     : "";
   const payloadData: Record<string, unknown> = {};
   let paymentResultGrant: string | null = null;
+  let canceled = false;
 
   if (orderId && closeState) {
     const rawResponse = {
@@ -86,6 +95,7 @@ export async function GET(req: Request) {
         close_state: closeState,
       }),
     ]);
+    canceled = submissionResult.ok || karaokeResult.ok;
     if (submissionResult.submissionId) {
       payloadData.submissionId = submissionResult.submissionId;
     }
@@ -117,7 +127,7 @@ export async function GET(req: Request) {
     });
   }
 
-  const response = postMessageResponse(payloadData);
+  const response = postMessageResponse(payloadData, canceled);
   if (paymentResultGrant) {
     setPaymentResultGrantCookie(response, paymentResultGrant);
   }

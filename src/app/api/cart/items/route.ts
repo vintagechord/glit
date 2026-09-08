@@ -46,13 +46,14 @@ type CartDeleteSubmission = {
   user_deleted_at: string | null;
   album_price_tier: string | null;
   album_draft_group_id: string | null;
+  current_order_id: string | null;
 };
 
 const cartItemSelect =
-  "id, type, status, payment_status, payment_method, title, artist_name, amount_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, user_id, guest_token, package:packages ( name, station_count )";
+  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, amount_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, user_id, guest_token, package:packages ( name, station_count )";
 
 const cartGroupSelect =
-  "id, type, user_id, guest_token, status, payment_status, user_deleted_at, album_price_tier, album_draft_group_id";
+  "id, type, user_id, guest_token, status, payment_status, current_order_id, user_deleted_at, album_price_tier, album_draft_group_id";
 
 const cartStatuses = new Set(["SUBMITTED", "WAITING_PAYMENT"]);
 const groupedDeleteStatuses = new Set([
@@ -62,14 +63,14 @@ const groupedDeleteStatuses = new Set([
   "WAITING_PAYMENT",
 ]);
 const cartPaymentFilter =
-  "payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)";
+  "payment_status.is.null,payment_status.eq.UNPAID";
 
 const isCartSubmission = (row: CartDeleteSubmission) =>
-  row.payment_status !== "PAID" &&
+  !row.current_order_id && (!row.payment_status || row.payment_status === "UNPAID") &&
   cartStatuses.has(String(row.status ?? ""));
 
 const isGroupedDeleteSubmission = (row: CartDeleteSubmission) =>
-  row.payment_status !== "PAID" &&
+  !row.current_order_id && (!row.payment_status || row.payment_status === "UNPAID") &&
   groupedDeleteStatuses.has(String(row.status ?? ""));
 
 const hasGuestOwnership = (
@@ -187,6 +188,7 @@ export async function POST(request: Request) {
     .in("id", submissionIds)
     .is("user_id", null)
     .in("guest_token", guestTokens)
+    .is("current_order_id", null)
     .in("status", ["SUBMITTED", "WAITING_PAYMENT"])
     .or(cartPaymentFilter)
     .is("user_deleted_at", null)
@@ -285,6 +287,7 @@ export async function PATCH(request: Request) {
     .select(cartGroupSelect)
     .in("id", submissionIds)
     .is("user_id", null)
+    .is("current_order_id", null)
     .in("guest_token", guestTokens);
 
   if (loadError) {
@@ -434,6 +437,7 @@ export async function DELETE(request: Request) {
     .from("submissions")
     .select(cartGroupSelect)
     .in("id", submissionIds)
+    .is("current_order_id", null)
     .or(cartPaymentFilter);
   loadQuery = user
     ? loadQuery.eq("user_id", user.id)
@@ -544,9 +548,8 @@ export async function DELETE(request: Request) {
 
   const b2ObjectRefs = await loadSubmissionB2ObjectRefs(admin, submissionIds);
 
-  // All submission relations use ON DELETE CASCADE (migration 0071). Deleting
-  // the parent rows in one statement keeps the cleanup atomic and prevents the
-  // half-deleted state that a sequence of child-table deletes could leave.
+  // Delete only unsubmitted-to-checkout cart rows in one statement. Draft
+  // relations cascade; previous order snapshots survive with a null live FK.
   let deleteQuery = admin
     .from("submissions")
     .delete()
@@ -556,7 +559,8 @@ export async function DELETE(request: Request) {
     // DELETE requests (`submissions.payment_status` -> SQLSTATE 42703).
     // payment_status is NOT NULL in the current schema, so the equivalent
     // explicit IN predicate keeps the final ownership/state check atomic.
-    .in("payment_status", ["UNPAID", "PAYMENT_PENDING"]);
+    .in("payment_status", ["UNPAID"])
+    .is("current_order_id", null);
   deleteQuery = user
     ? deleteQuery.eq("user_id", user.id)
     : deleteQuery

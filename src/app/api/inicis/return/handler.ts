@@ -4,6 +4,7 @@ import {
   requestStdPayApproval,
   requestStdPayNetCancel,
 } from "@/lib/inicis/api";
+import { claimInicisSubmissionApproval, settleInicisSubmissionApproval } from "@/lib/payments/inicis-approval";
 import { getStdPayConfig } from "@/lib/inicis/config";
 import {
   getInicisTimestamp,
@@ -171,6 +172,7 @@ const toStrOrNull = (value: string | number | null | undefined) =>
 
 export async function handleInicisReturn(req: NextRequest) {
   let parsed: ParsedReturn | null = null;
+  let approvalClaim: { orderId: string; callbackState: string; submissionId: string } | null = null;
   try {
     parsed = await parseParams(req);
     const { baseUrl, contentType, method, params, keys } = parsed;
@@ -361,7 +363,7 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    const saveFailure = async (code: string, message: string, raw?: Record<string, unknown>) => {
+    const saveFailure = async (code: string, message: string, raw?: Record<string, unknown>, confirmedFailure = false) => {
       if (!callbackStateVerified) {
         console.warn("[INICIS][failure_not_persisted] callback state mismatch", {
           orderId,
@@ -372,7 +374,12 @@ export async function handleInicisReturn(req: NextRequest) {
         return;
       }
       const scrubbed = scrubInicisPaymentAudit(raw ?? params);
-      if (submissionId) {
+      if (submissionId && approvalClaim) {
+        await settleInicisSubmissionApproval({
+          orderId, callbackState: approvalClaim.callbackState, confirmedFailure,
+          resultCode: code, resultMessage: message, rawResponse: scrubbed,
+        });
+      } else if (submissionId) {
         await markPaymentFailure(orderId, {
           result_code: code,
           result_message: message,
@@ -525,6 +532,23 @@ export async function handleInicisReturn(req: NextRequest) {
         message: resultMsg || "결제 인증이 완료되지 않았습니다.",
         resultCode: resultCode || "AUTH_MISSING",
       });
+    }
+
+    if (submissionId) {
+      // Claim while holding the payment row lock before making any gateway
+      // request. Closing the window or replaying a callback cannot race it.
+      const claim = callbackStateVerified
+        ? await claimInicisSubmissionApproval(orderId, receivedCallbackState)
+        : null;
+      if (!claim || claim.alreadyProcessing || claim.alreadyApproved) {
+        return buildBridgeRedirect(baseUrl, {
+          status: claim?.alreadyApproved ? "SUCCESS" : "ERROR",
+          orderId, submissionId,
+          submissionIds: claim?.alreadyApproved ? paidSubmissionIds : undefined,
+          message: claim?.alreadyProcessing ? "결제 승인 결과를 확인 중입니다." : "유효하지 않거나 종료된 결제 요청입니다.",
+        });
+      }
+      approvalClaim = { orderId, callbackState: receivedCallbackState, submissionId };
     }
 
     console.info("[INICIS][auth_call_start]", {
@@ -711,8 +735,8 @@ export async function handleInicisReturn(req: NextRequest) {
           verifyStatus,
           sigMismatchReason,
         },
-        compensation: cancellation,
-      });
+        compensation: cancellation ?? approval.netCancellation,
+      }, cancellation?.ok === true || approval.confirmedFailure === true);
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
         orderId,
@@ -748,8 +772,8 @@ export async function handleInicisReturn(req: NextRequest) {
       await saveFailure(authResultCode, failMessage, {
         returnParams: scrubParams(params),
         approval: authData,
-        compensation: cancellation,
-      });
+        compensation: cancellation ?? approval.netCancellation,
+      }, cancellation?.ok === true || approval.confirmedFailure === true);
 
       console.info("[INICIS][final]", {
         orderId,
@@ -803,7 +827,7 @@ export async function handleInicisReturn(req: NextRequest) {
         expectedAmount: paymentAmount,
         approvedAmount: Number.isFinite(totPrice) ? totPrice : null,
         compensation: cancellation,
-      });
+      }, cancellation.ok);
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
         orderId,
@@ -904,7 +928,11 @@ export async function handleInicisReturn(req: NextRequest) {
       (submissionId && !submissionSuccess.ok) ||
       (karaokeRequestId && !karaokeSuccess.ok);
     if (persistFailed) {
-      const cancellation = await compensateApprovedGateway("persist_failed");
+      // A lost database response may have committed successfully. Keep the
+      // charge for reconciliation instead of cancelling a possibly paid order.
+      const cancellation = approvalClaim
+        ? { ok: false, data: null, skipped: true }
+        : await compensateApprovedGateway("persist_failed");
       await saveFailure(
         "PERSIST_FAIL",
         cancellation.ok
@@ -915,6 +943,7 @@ export async function handleInicisReturn(req: NextRequest) {
           approval: authData,
           compensation: cancellation,
         },
+        cancellation.ok,
       );
       console.error("[INICIS][persist][error]", {
         orderId,
@@ -970,10 +999,18 @@ export async function handleInicisReturn(req: NextRequest) {
         { status: error.status },
       );
     }
+    if (approvalClaim) {
+      await settleInicisSubmissionApproval({
+        orderId: approvalClaim.orderId, callbackState: approvalClaim.callbackState,
+        confirmedFailure: false, resultCode: "APPROVAL_EXCEPTION",
+        resultMessage: "결제 승인 결과를 확인해야 합니다.",
+      }).catch(() => false);
+    }
     console.error("[INICIS][final][error]", error);
     const fallbackBase = parsed?.baseUrl ?? getBaseUrl();
     return buildBridgeRedirect(fallbackBase, {
       status: "ERROR",
+      submissionId: approvalClaim?.submissionId,
       message: "결제 처리 중 오류가 발생했습니다.",
     });
   }
