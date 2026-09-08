@@ -5246,14 +5246,29 @@ export function AlbumWizard({
                                   <Info className="h-4 w-4" aria-hidden="true" />
                                 </button>
                               </div>
-                              <button
-                                type="button"
-                                onClick={handleTranslateLyrics}
-                                disabled={isTranslatingLyrics}
-                                className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                자동번역 {isTranslatingLyrics ? "중..." : ""}
-                              </button>
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={handleTranslateLyrics}
+                                  disabled={isTranslatingLyrics}
+                                  className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  자동번역 {isTranslatingLyrics ? "중..." : ""}
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label="자동 번역 안내"
+                                  aria-haspopup="dialog"
+                                  title="자동 번역 안내"
+                                  onClick={() => void showCenteredAlert(
+                                    "직접 번역이 어려운 경우 자동 번역으로 심의 진행 가능합니다.",
+                                    { title: "자동 번역 안내" },
+                                  )}
+                                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                >
+                                  <Info className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                              </div>
                             </div>
                             {showLyricsToolNotice && (
                               <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">

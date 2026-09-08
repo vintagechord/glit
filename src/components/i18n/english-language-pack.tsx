@@ -291,6 +291,9 @@ const exactTranslations: Record<string, string> = {
   "욕설 포함 곡 심의 안내": "Review Guidance for Tracks with Profanity",
   "욕설이 있는 곡은 심의 부적격 대상이며, 한 곡만 포함돼도 앨범 전체 심의가 중단될 수 있습니다. 해당 곡은 제외하고 신청해주세요.":
     "Tracks containing profanity are ineligible for approval. Even one such track may halt the review of the entire album. Please exclude these tracks from your submission.",
+  "자동 번역 안내": "Automatic Translation Guidance",
+  "직접 번역이 어려운 경우 자동 번역으로 심의 진행 가능합니다.":
+    "If translating the lyrics yourself is difficult, you can use automatic translation for the review.",
   "트랙 · 파일 자동 확인": "Automatic Track and File Check",
   "트랙명과 음원 파일명이 모두 연결되었습니다.":
     "Every track has been matched to an audio file.",
