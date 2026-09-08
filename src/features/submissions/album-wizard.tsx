@@ -4855,11 +4855,13 @@ export function AlbumWizard({
 
               {step === 3 && (
                 <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  기본 정보
-                </p>
+                {isOneClick && (
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                    기본 정보
+                  </p>
+                )}
                 {!isOneClick ? (
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         앨범 제목 *
@@ -5144,10 +5146,7 @@ export function AlbumWizard({
 
               {step === 4 && !isOneClick && (
                 <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                      트랙 정보
-                    </p>
+                  <div className="flex items-center justify-end">
                     <span className="text-xs text-muted-foreground">
                       총 {tracks.length}곡
                     </span>
@@ -5834,9 +5833,11 @@ export function AlbumWizard({
                       <p className="font-semibold text-foreground">
                         선택된 파일이 없습니다.
                       </p>
-                      <p className="mt-2 text-[11px] text-muted-foreground">
-                        {isOneClick ? "음원 파일(WAV 또는 ZIP)을 사이트에 업로드해주세요." : "파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요."}
-                      </p>
+                      {!isOneClick && (
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요.
+                        </p>
+                      )}
                       {!isOneClick && <div className="mt-3 flex items-center justify-center gap-2">
                         <button
                           type="button"

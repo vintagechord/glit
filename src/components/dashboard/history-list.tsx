@@ -356,14 +356,6 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               </button>
             </div>
 
-            {activeSubmission.isOneclick && activeSubmission.title && activeSubmission.artistName && (
-              <div className="mt-4 rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-lg font-semibold text-foreground">
-                {(activeSubmission.artistName || "아티스트 미입력") +
-                  " - " +
-                  (activeSubmission.title || "제목 미입력")}
-              </div>
-            )}
-
             <div className="mt-4 grid gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 text-xs text-muted-foreground md:grid-cols-2">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.2em]">유형</p>

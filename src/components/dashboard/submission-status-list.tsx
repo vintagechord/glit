@@ -277,14 +277,6 @@ export function SubmissionStatusList({
               </button>
             </div>
 
-            {activeSubmission.is_oneclick && activeSubmission.title && activeSubmission.artist_name && (
-              <div className="mt-4 rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-lg font-semibold text-foreground">
-                {(activeSubmission.artist_name || "아티스트 미입력") +
-                  " - " +
-                  (activeSubmission.title || "제목 미입력")}
-              </div>
-            )}
-
             <div className="mt-4 grid gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 text-sm text-muted-foreground md:grid-cols-2">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em]">

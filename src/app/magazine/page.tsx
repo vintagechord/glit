@@ -330,9 +330,6 @@ export async function MagazinePageView({
                 <span className="inline-flex h-11 w-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white">
                   <Coins className="h-5 w-5" aria-hidden="true" />
                 </span>
-                <span className="rounded-[6px] border border-[#111111]/25 px-2 py-1 text-[11px] font-black">
-                  음반 1건 = +1
-                </span>
               </div>
               <div className="mt-5">
                 <p className="text-xs font-black">보유 크레딧</p>

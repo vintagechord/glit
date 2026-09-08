@@ -152,39 +152,32 @@ function StationLogoWithFallback({
 }: {
   station?: { id?: string | null; name?: string | null; code?: string | null; logo_url?: string | null } | null;
 }) {
-  const key = (station?.name ?? station?.code ?? "").trim() || "S";
+  const stationName = station?.name?.trim() || station?.code?.trim() || "방송국";
   const mappedLogo = getLocalStationLogoSource(station);
-  const initialSrc = mappedLogo?.src ?? station?.logo_url ?? fallbackStationLogoPath;
+  const logoSrc = mappedLogo?.src ?? station?.logo_url?.trim();
+  const initialSrc = logoSrc && logoSrc !== fallbackStationLogoPath ? logoSrc : null;
   const [src, setSrc] = React.useState<string | null>(initialSrc);
 
   React.useEffect(() => {
     setSrc(initialSrc);
   }, [initialSrc]);
 
-  const handleError = React.useCallback(() => {
-    if (src !== fallbackStationLogoPath) {
-      setSrc(fallbackStationLogoPath);
-      return;
-    }
-    setSrc(null);
-  }, [src]);
-
   return (
-    <div className="flex h-[52px] w-[136px] shrink-0 items-center justify-center overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white p-1.5 dark:border-[#f2cf27]">
+    <div className="flex min-h-[52px] w-[136px] shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white p-1.5 dark:border-[#f2cf27]" title={stationName}>
       {src ? (
         <Image
           src={src}
-          alt={station?.name ?? station?.code ?? "station logo"}
+          alt={stationName}
           width={136}
           height={52}
-          className="h-full w-full object-contain"
+          className="h-[36px] w-full object-contain"
           unoptimized
           loading="lazy"
-          onError={handleError}
+          onError={() => setSrc(null)}
         />
       ) : (
-        <span className="truncate text-xs font-semibold uppercase text-foreground">
-          {key.slice(0, 8)}
+        <span className="break-words text-center text-xs font-semibold text-[#111111]">
+          {stationName}
         </span>
       )}
     </div>
@@ -1135,7 +1128,7 @@ export function SubmissionDetailClient({
                   });
                 }
               };
-              const stationName = review.station?.name?.trim() || "-";
+              const stationName = review.station?.name?.trim() || stationCode?.trim() || "방송국";
 
               return (
                 <div
@@ -1149,11 +1142,8 @@ export function SubmissionDetailClient({
                     >
                       <StationLogoWithFallback station={review.station} />
                       <div className="min-w-0">
-                        <p className="truncate font-black text-foreground">
-                          {stationName}
-                        </p>
                         <p
-                          className="mt-1 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
+                          className="text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
                           title={formatDateTime(review.updated_at)}
                           aria-label={`Updated ${formatDateTime(review.updated_at)}`}
                         >
@@ -1167,6 +1157,7 @@ export function SubmissionDetailClient({
                     <button
                       type="button"
                       onClick={handleResultClick}
+                      aria-label={[stationName, resultDisplayStatus.label, trackSummaryLine].filter(Boolean).join(" · ")}
                       className={`inline-flex min-h-[42px] w-full flex-col items-center justify-center rounded-[6px] border-2 border-[#111111] px-3 py-1.5 text-[13px] font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] sm:w-auto sm:min-w-[112px] ${
                         resultDisplayStatus.tone
                       } ${

@@ -331,7 +331,7 @@ function getSubmissionLabels(submission?: SubmissionSummary | null) {
 }
 
 function getStationName(station?: StationItem["station"] | null) {
-  return station?.name?.trim() || "-";
+  return station?.name?.trim() || station?.code?.trim() || "방송국";
 }
 
 function getLatestStationUpdatedAt(stations: StationItem[]) {
@@ -395,9 +395,13 @@ function StationLogo({
   const logoFrameClass = compact
     ? "h-10 w-[96px]"
     : "h-11 w-[112px] sm:h-12 sm:w-[132px]";
+  const fallbackFrameClass = compact
+    ? "min-h-10 w-[96px]"
+    : "min-h-11 w-[112px] sm:min-h-12 sm:w-[132px]";
   const mappedLogo = getLocalStationLogoSource(station);
 
-  const initialSrc = mappedLogo?.src ?? station?.logo_url ?? fallbackStationLogoPath;
+  const logoSrc = mappedLogo?.src ?? station?.logo_url?.trim();
+  const initialSrc = logoSrc && logoSrc !== fallbackStationLogoPath ? logoSrc : null;
   const [src, setSrc] = React.useState<string | null>(initialSrc);
 
   React.useEffect(() => {
@@ -405,12 +409,8 @@ function StationLogo({
   }, [initialSrc]);
 
   const handleError = React.useCallback(() => {
-    if (src !== fallbackStationLogoPath) {
-      setSrc(fallbackStationLogoPath);
-      return;
-    }
     setSrc(null);
-  }, [src]);
+  }, []);
 
   if (src) {
     return (
@@ -419,7 +419,7 @@ function StationLogo({
       >
         <Image
           src={src}
-          alt={station?.name ?? station?.code ?? "station logo"}
+          alt={getStationName(station)}
           width={132}
           height={48}
           className="h-full w-full object-contain"
@@ -434,11 +434,11 @@ function StationLogo({
   const badge = stationBadgeMap[key] ?? { label: key || "-", color: "#111", bg: "#e5e7eb" };
   return (
     <span
-      className={`${visibilityClass} ${logoFrameClass} shrink-0 items-center justify-center rounded-[8px] border border-border/60 text-xs font-bold uppercase`}
+      className={`${visibilityClass} ${fallbackFrameClass} shrink-0 items-center justify-center break-words rounded-[8px] border border-border/60 p-1.5 text-center text-xs font-bold leading-tight`}
       style={{ color: badge.color, backgroundColor: badge.bg }}
-      aria-hidden
+      title={getStationName(station)}
     >
-      {badge.label.slice(0, 8)}
+      {getStationName(station)}
     </span>
   );
 }
@@ -835,7 +835,7 @@ export function HomeReviewPanel({
   const rowsPerPage = Math.max(1, Math.floor(stationRowsPerPage));
   const latestStationUpdatedAt = getLatestStationUpdatedAt(activeStations);
   const stationGridRowsPerPage = Math.max(1, Math.ceil(rowsPerPage / 2));
-  const stationCardHeight = compact ? 116 : 86;
+  const stationCardHeight = compact ? 100 : 86;
   const stationCardGap = compact ? 8 : 10;
   const listPadding = compact ? 8 : 12;
   const listViewportHeight =
@@ -873,7 +873,7 @@ export function HomeReviewPanel({
     ? "grid grid-cols-1 gap-2 sm:grid-cols-2"
     : "grid grid-cols-1 gap-2.5 sm:grid-cols-2";
   const stationCardClass = compact
-    ? "flex min-h-[116px] flex-col items-center justify-center gap-2 rounded-xl border border-border/50 bg-background/85 px-2.5 py-2 text-xs shadow-sm"
+    ? "flex min-h-[100px] flex-col items-center justify-center gap-2 rounded-xl border border-border/50 bg-background/85 px-2.5 py-2 text-xs shadow-sm"
     : "flex min-h-[86px] items-center justify-between gap-3 rounded-xl border border-border/50 bg-background/85 px-3 py-2.5 text-sm shadow-sm";
   const stationStatusActionClass = compact
     ? "min-h-[34px] min-w-[90px] px-2"
@@ -881,9 +881,6 @@ export function HomeReviewPanel({
   const stationInfoClass = compact
     ? "flex min-w-0 flex-col items-center gap-1 text-center"
     : "flex min-w-0 flex-1 items-center gap-3";
-  const stationNameClass = compact
-    ? "block max-w-full truncate text-[11px] font-black text-foreground"
-    : "block truncate font-black text-foreground";
   const stationListRef = React.useRef<HTMLDivElement | null>(null);
   const mouseDragPointerId = React.useRef<number | null>(null);
   const mouseDragStartY = React.useRef(0);
@@ -1313,16 +1310,6 @@ export function HomeReviewPanel({
                               station={station.station ?? undefined}
                               compact={compact}
                             />
-                            <div className="min-w-0">
-                              <span className={stationNameClass}>
-                                {stationName}
-                              </span>
-                              {!canOpenResultModal && displayStatus.summaryText ? (
-                                <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground">
-                                  {displayStatus.summaryText}
-                                </span>
-                              ) : null}
-                            </div>
                           </div>
                           {canOpenResultModal ? (
                             <button
@@ -1339,6 +1326,7 @@ export function HomeReviewPanel({
                                 )
                               }
                               className={`bauhaus-status-chip bauhaus-status-chip--compact ${stationStatusActionClass} shrink-0 flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
+                              aria-label={`${stationName} ${displayStatus.label} 결과 보기`}
                             >
                               <span>{displayStatus.label}</span>
                               {displayStatus.summaryText ? (

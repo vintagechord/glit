@@ -8,7 +8,6 @@ import {
   updateProfileAction,
   type ActionState,
 } from "@/features/auth/actions";
-import { AdminSaveToast } from "@/components/admin/save-toast";
 
 type ProfileFormProps = {
   defaultValues: {
@@ -29,11 +28,6 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
   const router = useRouter();
   const hasRefreshed = useRef(false);
   const passwordFormRef = useRef<HTMLFormElement | null>(null);
-  const saveMessage = state?.message
-    ? "저장되었습니다."
-    : passwordState?.message
-      ? "비밀번호가 변경되었습니다."
-      : "";
 
   // After a successful save, refresh to pull updated profile values back into the form
   useEffect(() => {
@@ -51,7 +45,6 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
 
   return (
     <>
-      <AdminSaveToast message={saveMessage} />
       <form action={formAction} className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
@@ -102,7 +95,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
           </p>
         )}
         {state.message && (
-          <p className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]">
+          <p role="status" className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]">
             {state.message}
           </p>
         )}
@@ -169,7 +162,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
             </p>
           )}
           {passwordState.message && (
-            <p className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]">
+            <p role="status" className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]">
               {passwordState.message}
             </p>
           )}
