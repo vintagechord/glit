@@ -1,6 +1,6 @@
 # 내 음악 관리 — 구현 및 운영 안내
 
-확인일: 2026-09-08. 사용자의 운영 반영 승인에 따라 Supabase 운영 DB에 0095를 적용했다. 웹은 기존 Render `glit`의 main 자동 배포 경로를 사용한다. 외부기관 신청·결제·음악 제공처 이용 계약은 수행하지 않았다.
+확인일: 2026-09-08. 사용자의 운영 반영 승인에 따라 Supabase 운영 DB에 0095를 적용하고 Render `glit`의 main 자동 배포를 완료했다. 최종 코드 `9eff20a`의 실제 저장·조회·증빙 검증도 통과했다. 상세 결과는 [운영 배포 기록](music-archive-deployment.md)에 있다. 외부기관 신청·결제·음악 제공처 이용 계약은 수행하지 않았다.
 
 ## 진입과 사용
 
@@ -109,9 +109,9 @@ npm run music-archive:worker -- --once
 - 도메인/실제 어댑터 모의 응답/재동기화/CSV/원본 결과 연결 테스트는 `tests/music-archive-*.test.ts`에 있다.
 - 실제 PostgreSQL 검증은 `tests/sql/music-archive.sql`. Docker가 준비된 로컬에서 `npm run music-archive:test:sql`로 임시 DB 생성·검증·정리를 재현할 수 있다. 운영 DB와 분리한 `postgres:17-alpine`에서 0095를 적용하고 소유권·버전·원자적 커서·작업 점유·공식 안내 권한·증빙 범위를 검증했다.
 - UI 검증은 별도 모의 API/상태 저장소를 사용한 브라우저 테스트이며 실제 기관 신청이나 운영 회원 데이터 변경 테스트가 아니다.
-- 최종 검증: 신규 도메인·어댑터·서버 보안 테스트 54개, 기존 인증·관리자 보호·심의 저장·결제 관련 회귀 테스트 49개 통과. 회원 브라우저 6개(390/1440px), 관리자 브라우저 2개(390/1280px) 통과. 실제 로컬 SQL 통합 검증, 프로덕션 빌드, TypeScript, 변경 파일 ESLint, diff 공백 검사도 통과했다. 브라우저와 API 단위 검증의 외부 서비스 응답은 모의 응답이며 운영 연동 검증으로 간주하지 않는다.
+- 최종 검증: 신규 도메인·어댑터·서버 보안 테스트 55개(Render 프록시 Origin 회귀 포함), 기존 인증·관리자 보호·심의 저장·결제 관련 회귀 테스트 49개 통과. 회원 브라우저 6개(390/1440px), 관리자 브라우저 2개(390/1280px) 통과. 실제 로컬 SQL 통합 검증, 프로덕션 빌드, TypeScript, 변경 파일 ESLint, diff 공백 검사도 통과했다. 브라우저와 API 단위 검증의 외부 서비스 응답은 모의 응답이며 운영 연동 검증으로 간주하지 않는다.
 - 운영 DB dry-run에서 0095만 미적용임을 확인한 뒤 `supabase db push --linked --yes`로 적용했다. 로컬·운영 마이그레이션 기록 0095 일치, 재차 dry-run에서 미적용 없음, 새 테이블 7개와 목록 RPC HTTP 200을 확인했다. 기존 `submissions`와 `station_reviews` 조회도 정상이다.
-- 기존 B2 버킷의 실제 `allPrivate` 설정 확인을 통과했다. 실제 증빙 업로드와 배포 후 로그인 흐름은 웹 배포 완료 후 검증한다. 외부 API 모의 테스트 통과를 실서비스 승인으로 보고하지 않는다.
+- 기존 B2 버킷의 실제 `allPrivate` 설정 확인과 운영 PDF 증빙 업로드·다운로드 원본 해시 일치·삭제 검증을 통과했다. 실제 임시 회원 로그인 세션으로 아티스트·발매작·다른 녹음 버전 2개·단일 트랙 TJ 기록 저장 및 재조회를 검증했다. 해당 회원의 아카이브 행과 계정은 검증 후 삭제했다. 음악 제공처 수집이나 외부기관 신청 검증은 아니다.
 
 재현 명령: `node --test --import tsx tests/music-archive*.test.ts`, `npm run music-archive:test:sql`, `npx playwright test --config=playwright.config.ts tests/e2e/music-archive.spec.ts tests/e2e/music-archive-admin.spec.ts --workers=1`, `npm run build`. 브라우저 테스트는 저장소의 실제 클라이언트를 독립적으로 번들링하며 운영 로그인 우회를 추가하지 않는다.
 
