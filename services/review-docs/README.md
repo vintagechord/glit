@@ -13,6 +13,10 @@ Conservative structure parsing recognizes Korean/English explicit album/track fi
 
 Install only on the dedicated worker using `services/review-docs/Dockerfile`, which includes antiword, Poppler, Tesseract Korean/English/Japanese, and the fully pinned Python requirements. `REVIEW_DOCS_PYTHON` points to that venv. No paid OCR service is used.
 
+Before deployment, run `npm run review-docs:worker -- --check` in the worker image with its intended environment. This read-only command checks converter imports, executable readers and OCR languages, all eight DOCX templates, zero-row reads of the four job tables, and the actual B2 bucket's private setting. It never claims jobs, publishes a heartbeat, processes or deletes documents, or calls translation. Missing `OPENAI_API_KEY` produces `TRANSLATION_UNAVAILABLE` as a warning; document generation and manual translation remain available. A configured key is not proof that the provider accepts requests.
+
+Normal worker startup performs the same checks before its first claim/heartbeat. A failed check exits with a fixed configuration code and safe instructions; raw SDK errors, subprocess output and credentials are not logged. Once started, the existing lease and hard deadline still govern jobs. The database preflight does not invoke the claim RPC or test write permissions; runtime failures therefore remain possible after successful connectivity checks.
+
 Web and worker must share `B2_PREFIX`. Review files use `<B2_PREFIX>review-doc-jobs/<owner UUID>/<job UUID>/<file UUID>` so existing prefix-restricted B2 keys can store them. The bucket must still be `allPrivate`, and cleanup only accepts the exact owner/job/file namespace. Keep the prefix stable while retained jobs exist.
 
 Licenses: pyhwp 0.1b15 is AGPL-3.0-or-later (https://github.com/mete0r/pyhwp); it is invoked as an unmodified isolated reader. Preserve its notices and corresponding-source availability when distributing the worker. Its upstream license is also retained with the input fixtures. Other dependency notices remain in installed packages. No commercial service/license was purchased.

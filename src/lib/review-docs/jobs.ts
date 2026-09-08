@@ -29,17 +29,21 @@ export async function loadReviewJob(id: string, owner: string) {
 export function assertJobLive(job: ReviewJob) {
   if (job.status === "expired" || Date.parse(job.expires_at) <= Date.now()) throw new ReviewJobError("보존기간이 만료되었습니다. 새 작업으로 업로드해주세요.", 410, "JOB_EXPIRED");
 }
+function hasRecentWorkerHeartbeat(heartbeat: { updated_at: string } | null) {
+  return !!heartbeat && Date.parse(heartbeat.updated_at) > Date.now() - 90_000;
+}
 export async function listReviewJobs(owner: string) {
   const admin = createAdminClient();
   const { data, error } = await admin.from("review_document_jobs").select("id,mode,input_kind,status,operation,version,result_version,sources,outputs,zip_output,counts,validation,template_version,error_code,error_message,retryable,attempts,extraction_attempts,application_date,created_at,updated_at,expires_at").eq("created_by", owner).order("created_at", { ascending: false }).limit(20);
   jobDatabaseError(error);
-  const { data: heartbeat } = await admin.from("review_document_worker_heartbeat").select("updated_at").eq("singleton", true).maybeSingle();
-  return { jobs: data as ReviewJob[], workerReady: !!heartbeat && Date.parse(heartbeat.updated_at) > Date.now() - 90_000 };
+  const { data: heartbeat, error: heartbeatError } = await admin.from("review_document_worker_heartbeat").select("updated_at").eq("singleton", true).maybeSingle();
+  jobDatabaseError(heartbeatError);
+  return { jobs: data as ReviewJob[], workerReady: hasRecentWorkerHeartbeat(heartbeat) };
 }
 async function requireReviewWorker() {
   const { data, error } = await createAdminClient().from("review_document_worker_heartbeat").select("updated_at").eq("singleton", true).maybeSingle();
   jobDatabaseError(error);
-  if (!data || Date.parse(data.updated_at) < Date.now() - 90_000) throw new ReviewJobError("문서 처리 워커가 실행 중이지 않습니다. npm run review-docs:worker 실행 후 다시 시도해주세요.", 503, "WORKER_UNAVAILABLE");
+  if (!hasRecentWorkerHeartbeat(data)) throw new ReviewJobError("문서 처리 작업자와 연결되지 않았습니다. 연결이 복구되면 다시 시도해주세요.", 503, "WORKER_UNAVAILABLE");
 }
 async function createJob(owner: string, mode: "album" | "mv", kind: "files" | "urls", sources: ReviewJobSource[], fingerprint: string, id: string) {
   const { data, error } = await createAdminClient().rpc("create_review_document_job", { p_id: id, p_owner: owner, p_mode: mode, p_kind: kind, p_sources: sources, p_fingerprint: fingerprint });

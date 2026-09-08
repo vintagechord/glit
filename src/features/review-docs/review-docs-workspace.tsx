@@ -19,11 +19,21 @@ const toggle = (items: string[], value: string, checked: boolean) => checked ? [
 const formatDate = (value: string) => new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, { ...options, cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(60_000) });
-  let body: Record<string, unknown>;
-  try { body = await response.json(); } catch { throw new Error("서버 응답을 읽을 수 없습니다. 연결 상태를 확인한 후 다시 시도해주세요."); }
-  if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "작업을 처리할 수 없습니다. 다시 시도해주세요.");
-  return body as T;
+  const controller = new AbortController();
+  const cancel = () => controller.abort(options?.signal?.reason);
+  if (options?.signal?.aborted) cancel();
+  else options?.signal?.addEventListener("abort", cancel, { once: true });
+  const timeout = setTimeout(() => controller.abort(new DOMException("서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.", "TimeoutError")), 60_000);
+  try {
+    const response = await fetch(url, { ...options, cache: "no-store", credentials: "same-origin", signal: controller.signal });
+    let body: Record<string, unknown>;
+    try { body = await response.json(); } catch { throw new Error("서버 응답을 읽을 수 없습니다. 연결 상태를 확인한 후 다시 시도해주세요."); }
+    if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "작업을 처리할 수 없습니다. 다시 시도해주세요.");
+    return body as T;
+  } finally {
+    clearTimeout(timeout);
+    options?.signal?.removeEventListener("abort", cancel);
+  }
 }
 function Field({ label, value, onChange, multiline = false, type = "text" }: { label: string; value: string; onChange: (value: string) => void; multiline?: boolean; type?: string }) {
   return <label className="block min-w-0 text-xs font-semibold text-muted-foreground">{label}{multiline
@@ -46,10 +56,15 @@ export function ReviewDocsWorkspace() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
   const [workerReady, setWorkerReady] = useState<boolean | null>(null);
+  const mounted = useRef(false);
+  const historyRequest = useRef<{ controller: AbortController; promise: Promise<void> } | null>(null);
+  const detailRequest = useRef<AbortController | null>(null);
   const dirtyRef = useRef(false);
   const selectedId = useRef<string | null>(null);
   const loadSequence = useRef(0);
+  const jobId = job?.id;
   const running = Boolean(job && busyStatuses.has(job.status));
   const editable = Boolean(job && !running && !pending && !["cancelled", "expired"].includes(job.status));
   let issues: ReviewIssue[] = [];
@@ -63,33 +78,81 @@ export function ReviewDocsWorkspace() {
 
   const markDirty = useCallback((value: boolean) => { dirtyRef.current = value; setDirty(value); }, []);
   const acceptJob = useCallback((next: Job, replaceDraft = false) => {
+    if (!mounted.current) return;
     loadSequence.current += 1;
     setJob(next); selectedId.current = next.id;
     setJobs((current) => [next, ...current.filter((item) => item.id !== next.id)].sort((a, b) => b.created_at.localeCompare(a.created_at)));
     if (replaceDraft || !dirtyRef.current) { setDraft(next.data); markDirty(false); }
   }, [markDirty]);
-  const loadHistory = useCallback(async () => {
-    try { const result = await api<{ jobs: Job[]; workerReady: boolean }>("/api/admin/review-docs/jobs"); setJobs(result.jobs); setWorkerReady(result.workerReady); }
-    catch (error) { setError(error instanceof Error ? error.message : "작업 이력을 불러오지 못했습니다."); }
-    finally { setHistoryLoading(false); }
+  const loadHistory = useCallback(() => {
+    if (historyRequest.current) return historyRequest.current.promise;
+    const controller = new AbortController();
+    const sequence = loadSequence.current;
+    const promise = (async () => {
+      try {
+        const result = await api<{ jobs: Job[]; workerReady: boolean }>("/api/admin/review-docs/jobs", { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        // A history response started before a save/selection must not replace newer job summaries.
+        if (sequence === loadSequence.current) setJobs(result.jobs);
+        setWorkerReady(result.workerReady === true); setHistoryError("");
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setWorkerReady(null);
+        setHistoryError(error instanceof Error ? error.message : "작업 이력과 연결 상태를 불러오지 못했습니다. 잠시 후 다시 확인합니다.");
+      } finally {
+        if (!controller.signal.aborted) setHistoryLoading(false);
+        if (historyRequest.current?.controller === controller) historyRequest.current = null;
+      }
+    })();
+    historyRequest.current = { controller, promise };
+    return promise;
   }, []);
   const loadJob = useCallback(async (id: string, replaceDraft = false) => {
     const sequence = ++loadSequence.current;
-    const result = await api<{ job: Job }>(`/api/admin/review-docs/jobs/${id}`);
-    if (sequence !== loadSequence.current) return;
-    acceptJob(result.job, replaceDraft);
+    detailRequest.current?.abort();
+    const controller = new AbortController(); detailRequest.current = controller;
+    try {
+      const result = await api<{ job: Job }>(`/api/admin/review-docs/jobs/${id}`, { signal: controller.signal });
+      if (!controller.signal.aborted && sequence === loadSequence.current) acceptJob(result.job, replaceDraft);
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+    } finally {
+      if (detailRequest.current === controller) detailRequest.current = null;
+    }
   }, [acceptJob]);
 
-  useEffect(() => { void loadHistory(); }, [loadHistory]);
   useEffect(() => {
-    if (!job || !running) return;
-    const id = job.id;
-    const timer = window.setInterval(() => {
-      if (selectedId.current !== id) return;
-      void loadJob(id).catch((error: unknown) => setError(error instanceof Error ? error.message : "작업 상태 조회에 실패했습니다. 상태 새로고침을 눌러주세요."));
-    }, 4_000);
-    return () => window.clearInterval(timer);
-  }, [job, running, loadJob]);
+    mounted.current = true;
+    void loadHistory();
+    const refresh = () => { if (!document.hidden) void loadHistory(); };
+    const timer = window.setInterval(refresh, 15_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      mounted.current = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      historyRequest.current?.controller.abort(); historyRequest.current = null;
+      detailRequest.current?.abort(); detailRequest.current = null;
+      loadSequence.current += 1;
+    };
+  }, [loadHistory]);
+  useEffect(() => {
+    if (!jobId || !running) return;
+    const id = jobId;
+    let stopped = false;
+    let timer: number;
+    const refresh = async () => {
+      if (selectedId.current === id && !document.hidden && !detailRequest.current) {
+        try { await loadJob(id); }
+        catch (error) { if (!stopped && mounted.current) setError(error instanceof Error ? error.message : "작업 상태 조회에 실패했습니다. 상태 새로고침을 눌러주세요."); }
+      }
+      if (!stopped) timer = window.setTimeout(() => void refresh(), 4_000);
+    };
+    timer = window.setTimeout(() => void refresh(), 4_000);
+    return () => { stopped = true; window.clearTimeout(timer); };
+  }, [jobId, running, loadJob]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -110,11 +173,11 @@ export function ReviewDocsWorkspace() {
     if (pending) return;
     setPending(true); setError(""); setNotice("");
     try { await task(); } catch (error) {
-      setError(error instanceof Error && error.name !== "TimeoutError" ? error.message : "서버 응답이 지연되고 있습니다. 작업 이력을 새로고침해 접수 여부를 확인해주세요.");
-    } finally { setPending(false); }
+      if (mounted.current) setError(error instanceof Error && error.name !== "TimeoutError" ? error.message : "서버 응답이 지연되고 있습니다. 작업 이력을 새로고침해 접수 여부를 확인해주세요.");
+    } finally { if (mounted.current) setPending(false); }
   }
   async function createJob() {
-    if (dirty) return;
+    if (dirty || workerReady !== true) return;
     await perform(async () => {
       let options: RequestInit;
       if (tab === "urls") {
@@ -129,6 +192,7 @@ export function ReviewDocsWorkspace() {
         options = { method: "POST", body };
       }
       const result = await api<{ job: Job; duplicate: boolean }>("/api/admin/review-docs/jobs", options);
+      if (!mounted.current) return;
       acceptJob(result.job, true); setNotice(result.duplicate ? "같은 입력으로 생성된 기존 작업을 열었습니다. 중복 작업은 생성하지 않았습니다." : "작업이 접수되었습니다. 분석이 끝나면 아래에서 결과를 확인해주세요.");
     });
   }
@@ -136,11 +200,12 @@ export function ReviewDocsWorkspace() {
     if (!job || !draft) return;
     await perform(async () => {
       const result = await api<{ job: Job }>(`/api/admin/review-docs/jobs/${job.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: job.version, data: draft }) });
+      if (!mounted.current) return;
       acceptJob(result.job, true); setNotice("수정 내용을 저장했습니다.");
     });
   }
   async function action(action: "generate" | "translate" | "retry" | "cancel") {
-    if (!job || dirty) return;
+    if (!job || dirty || (action !== "cancel" && workerReady !== true)) return;
     await perform(async () => {
       const result = await api<{ job: Job }>(`/api/admin/review-docs/jobs/${job.id}/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: job.version }) });
       acceptJob(result.job, true);
@@ -149,7 +214,7 @@ export function ReviewDocsWorkspace() {
   const sourceChecks = (selected: string[], onChange: (ids: string[]) => void) => <div className="flex flex-wrap gap-x-5 gap-y-2">{draft?.sources.map((source) => <Check key={source.id} label={source.name} checked={selected.includes(source.id)} onChange={(checked) => onChange(toggle(selected, source.id, checked))} />)}</div>;
 
   return <div className="mt-7 space-y-6">
-    {workerReady === false && <p role="status" className="rounded-[8px] border-2 border-amber-500/60 bg-amber-500/10 p-4 text-sm">문서 처리 작업자가 연결되어 있지 않습니다. 작업 이력은 조회할 수 있으며, 새 분석·번역·생성은 작업자 연결 후 진행해주세요.</p>}
+    {workerReady === false && <p role="status" className="rounded-[8px] border-2 border-amber-500/60 bg-amber-500/10 p-4 text-sm">문서 처리 작업자가 연결되어 있지 않습니다. 연결 상태를 자동으로 확인하고 있습니다. 기존 자료를 확인·수정할 수 있으며, 새 분석·번역·생성은 연결이 복구되면 진행할 수 있습니다.</p>}
     <section className={panelClass} aria-label="자료 입력">
       <div role="tablist" aria-label="생성 방식" className="flex flex-wrap gap-2">{tabs.map((item) => <button key={item.id} type="button" role="tab" id={`tab-${item.id}`} aria-selected={tab === item.id} aria-controls="review-input-panel" onClick={() => setTab(item.id)} className={`${buttonClass} ${tab === item.id ? "border-[#111111] bg-[#f2cf27] text-[#111111]" : ""}`}>{item.label}</button>)}</div>
       <div id="review-input-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="mt-5 space-y-4">
@@ -159,12 +224,12 @@ export function ReviewDocsWorkspace() {
           <p className="mt-2 text-xs text-muted-foreground">DOC · DOCX · HWP · PDF / 최대 8개, 파일당 10MB, 전체 40MB, PDF 파일당 80쪽</p>
           {files.length > 0 && <ul className="mt-3 space-y-1 text-sm">{files.map((file, index) => <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3"><span className="break-all">{file.name} ({(file.size / 1024 / 1024).toFixed(2)}MB)</span><button type="button" className="shrink-0 text-xs underline" onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}>제외</button></li>)}</ul>}
         </div>}
-        <button type="button" className="bauhaus-button px-5 py-3 text-sm disabled:opacity-50" onClick={() => void createJob()} disabled={pending || dirty || workerReady === false}>{pending ? "처리 중…" : "업로드·분석 시작"}</button>
+        <button type="button" className="bauhaus-button px-5 py-3 text-sm disabled:opacity-50" onClick={() => void createJob()} disabled={pending || dirty || workerReady !== true}>{pending ? "처리 중…" : "업로드·분석 시작"}</button>
         <details className="text-xs leading-6 text-muted-foreground"><summary className="cursor-pointer font-semibold">처리 범위와 보관 기간</summary><p>최대 8개 앨범·100곡, 번역 요청당 60,000자, 작업당 추가 번역 요청은 최대 3회. 한 관리자당 진행 중 작업은 최대 3개이며, 변환은 한 번에 1개씩 처리합니다. 작업은 최대 15분, 원본·결과는 7일간 비공개 보관합니다. 스캔 PDF는 OCR 설치 상태와 인식 결과를 확인해야 합니다. 변환기나 템플릿이 없으면 해당 원인을 표시합니다.</p></details>
       </div>
     </section>
 
-    {error && <div role="alert" className="rounded-[8px] border-2 border-red-500/60 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">{error}</div>}
+    {(error || historyError) && <div role="alert" className="rounded-[8px] border-2 border-red-500/60 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">{error || historyError}</div>}
     {notice && <p role="status" className="rounded-[8px] border-2 border-emerald-600/50 bg-emerald-500/10 p-4 text-sm">{notice}</p>}
 
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
@@ -175,7 +240,7 @@ export function ReviewDocsWorkspace() {
             <ol className="mt-4 flex flex-wrap gap-2 text-xs" aria-label="처리 단계">{["자료 입력", "분석·번역", "확인·수정", "생성·검사", "다운로드"].map((label, index) => <li key={label} className="rounded border border-border px-2 py-1">{index + 1}. {label}</li>)}</ol>
             <p className="mt-3 text-sm" role="status" aria-live="polite">{running ? `${statusLabels[job.status]}입니다. 다른 페이지로 이동해도 최근 작업 이력에서 다시 확인할 수 있습니다.` : dirty ? "저장하지 않은 수정 내용이 있습니다. 저장 후 번역·생성을 진행해주세요." : "원문과 추출 내용을 확인한 뒤 저장·생성을 진행해주세요."}</p>
             {job.error_message && <p className="mt-3 rounded bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{job.error_message}</p>}
-            <div className="mt-4 flex flex-wrap gap-2">{running && <button type="button" className={buttonClass} disabled={pending || dirty} onClick={() => void action("cancel")}>작업 취소</button>}{job.status === "failed" && job.retryable && <button type="button" className={buttonClass} disabled={pending || dirty} onClick={() => void action("retry")}>실패한 단계 재시도</button>}{job.status === "needs_review" && failedSourceCount > 0 && <button type="button" className={buttonClass} disabled={pending || dirty || workerReady === false || (job.extraction_attempts ?? 0) >= 3} onClick={() => void action("retry")}>실패한 원본 다시 분석 ({failedSourceCount}개)</button>}</div>{job.status === "needs_review" && failedSourceCount > 0 && (job.extraction_attempts ?? 0) >= 3 && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">원본 재분석 횟수를 모두 사용했습니다. 오류 원인을 확인하고 수정된 파일·URL로 새 작업을 시작해주세요.</p>}
+            <div className="mt-4 flex flex-wrap gap-2">{running && <button type="button" className={buttonClass} disabled={pending || dirty} onClick={() => void action("cancel")}>작업 취소</button>}{job.status === "failed" && job.retryable && <button type="button" className={buttonClass} disabled={pending || dirty || workerReady !== true} onClick={() => void action("retry")}>실패한 단계 재시도</button>}{job.status === "needs_review" && failedSourceCount > 0 && <button type="button" className={buttonClass} disabled={pending || dirty || workerReady !== true || (job.extraction_attempts ?? 0) >= 3} onClick={() => void action("retry")}>실패한 원본 다시 분석 ({failedSourceCount}개)</button>}</div>{job.status === "needs_review" && failedSourceCount > 0 && (job.extraction_attempts ?? 0) >= 3 && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">원본 재분석 횟수를 모두 사용했습니다. 오류 원인을 확인하고 수정된 파일·URL로 새 작업을 시작해주세요.</p>}
           </section>
 
           <section className={panelClass} aria-label="입력 원본">
@@ -226,14 +291,14 @@ export function ReviewDocsWorkspace() {
               </section>)}
             </fieldset>
 
-            <section className={`${panelClass} sticky bottom-3 z-10 shadow-lg`} aria-label="저장 및 생성"><div className="flex flex-wrap gap-2"><button type="button" className={buttonClass} disabled={!editable || !dirty} onClick={() => void save()}>수정 내용 저장</button>{dirty && <button type="button" className={buttonClass} disabled={pending} onClick={() => { setDraft(job.data); markDirty(false); setNotice("저장 전 내용으로 되돌렸습니다."); }}>저장 전으로 되돌리기</button>}<button type="button" className={buttonClass} disabled={!editable || dirty || workerReady === false} onClick={() => void action("translate")}>누락 번역 요청</button><button type="button" className="bauhaus-button px-5 py-2 text-sm disabled:opacity-50" disabled={!editable || dirty || blocking.length > 0 || workerReady === false} onClick={() => void action("generate")}>{draft.mode === "mv" ? "곡별 가사 DOCX 생성" : "전체 심의자료 생성"}</button></div><p className="mt-2 text-xs text-muted-foreground">{dirty ? "수정한 내용을 먼저 저장해주세요." : blocking.length ? `필수 확인 ${blocking.length}건을 보완하면 생성할 수 있습니다.` : "현재 저장된 버전으로 생성합니다. 수정 후에는 새로 생성해야 합니다."}</p></section>
+            <section className={`${panelClass} sticky bottom-3 z-10 shadow-lg`} aria-label="저장 및 생성"><div className="flex flex-wrap gap-2"><button type="button" className={buttonClass} disabled={!editable || !dirty} onClick={() => void save()}>수정 내용 저장</button>{dirty && <button type="button" className={buttonClass} disabled={pending} onClick={() => { setDraft(job.data); markDirty(false); setNotice("저장 전 내용으로 되돌렸습니다."); }}>저장 전으로 되돌리기</button>}<button type="button" className={buttonClass} disabled={!editable || dirty || workerReady !== true} onClick={() => void action("translate")}>누락 번역 요청</button><button type="button" className="bauhaus-button px-5 py-2 text-sm disabled:opacity-50" disabled={!editable || dirty || blocking.length > 0 || workerReady !== true} onClick={() => void action("generate")}>{draft.mode === "mv" ? "곡별 가사 DOCX 생성" : "전체 심의자료 생성"}</button></div><p className="mt-2 text-xs text-muted-foreground">{dirty ? "수정한 내용을 먼저 저장해주세요." : blocking.length ? `필수 확인 ${blocking.length}건을 보완하면 생성할 수 있습니다.` : "현재 저장된 버전으로 생성합니다. 수정 후에는 새로 생성해야 합니다."}</p></section>
           </>}
 
           {job.status === "completed" && <section className={panelClass} aria-label="완료 결과"><h2 className="text-lg font-black">완료 결과 · 자료 버전 {job.result_version}</h2><p className="mt-2 text-sm">앨범 {job.counts?.albumCount ?? 0}개 · 곡 {job.counts?.trackCount ?? 0}개 · DOCX {job.counts?.docxCount ?? job.outputs.length}개</p><p className="mt-1 text-xs text-muted-foreground">{job.validation?.structureChecked ? "문서 구조 검사 완료" : "문서 구조 검사 정보 없음"} · {job.validation?.rendered ? "문서 렌더링 검사 완료" : "Word/PDF 렌더링 육안 검수는 별도로 필요합니다."}</p><p className="mt-1 text-xs text-muted-foreground">다운로드 기한: {formatDate(job.expires_at)}</p><div className="mt-4 flex flex-wrap gap-2">{job.has_zip && !dirty && <a className="bauhaus-button px-5 py-3 text-sm" href={`/api/admin/review-docs/jobs/${job.id}/download?file=zip`}>전체 ZIP 다운로드</a>}{!dirty && job.outputs.map((output) => <a key={output.id} className={`${buttonClass} break-all`} href={`/api/admin/review-docs/jobs/${job.id}/download?file=${encodeURIComponent(output.id)}`}>{output.name}</a>)}</div>{dirty && <p className="mt-2 text-sm text-amber-700">수정 중인 자료와 이전 결과가 다릅니다. 저장 후 다시 생성해주세요.</p>}</section>}
         </> : <div className={`${panelClass} py-16 text-center text-sm text-muted-foreground`}>새 자료를 분석하거나 최근 작업을 선택해주세요.</div>}
       </div>
 
-      <aside className={panelClass} aria-label="최근 생성 작업 이력"><div className="flex items-center justify-between gap-2"><h2 className="font-black">최근 작업</h2><button type="button" className="text-xs underline" onClick={() => void loadHistory()}>새로고침</button></div>{dirty && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">현재 수정 내용을 저장한 뒤 다른 작업을 선택해주세요.</p>}{historyLoading ? <p className="mt-4 text-sm">이력 불러오는 중…</p> : <ul className="mt-4 space-y-3">{jobs.map((item) => <li key={item.id}><button type="button" disabled={dirty || pending} className={`w-full rounded-[8px] border-2 p-3 text-left disabled:opacity-50 ${job?.id === item.id ? "border-[#1556a4] bg-blue-500/5" : "border-border"}`} onClick={() => void perform(async () => { await loadJob(item.id, true); setTab(item.mode === "mv" ? "mv" : item.input_kind === "urls" ? "urls" : "files"); })}><span className="block text-sm font-bold">{item.mode === "mv" ? "영등위 가사" : "음반 자료"} · {statusLabels[item.status]}</span><span className="mt-1 block truncate text-xs">{item.sources[0]?.name || "새 작업"}{item.sources.length > 1 ? ` 외 ${item.sources.length - 1}개` : ""}</span><span className="mt-1 block text-[11px] text-muted-foreground">{formatDate(item.created_at)} · v{item.version}</span></button></li>)}</ul>}{!historyLoading && !jobs.length && <p className="mt-4 text-xs text-muted-foreground">최근 생성 작업이 없습니다.</p>}</aside>
+      <aside className={panelClass} aria-label="최근 생성 작업 이력"><div className="flex items-center justify-between gap-2"><h2 className="font-black">최근 작업</h2><button type="button" className="text-xs underline" onClick={() => void loadHistory()}>새로고침</button></div>{dirty && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">현재 수정 내용을 저장한 뒤 다른 작업을 선택해주세요.</p>}{historyLoading ? <p className="mt-4 text-sm">이력 불러오는 중…</p> : <ul className="mt-4 space-y-3">{jobs.map((item) => <li key={item.id}><button type="button" disabled={dirty || pending} className={`w-full rounded-[8px] border-2 p-3 text-left disabled:opacity-50 ${job?.id === item.id ? "border-[#1556a4] bg-blue-500/5" : "border-border"}`} onClick={() => void perform(async () => { await loadJob(item.id, true); if (!mounted.current) return; setTab(item.mode === "mv" ? "mv" : item.input_kind === "urls" ? "urls" : "files"); })}><span className="block text-sm font-bold">{item.mode === "mv" ? "영등위 가사" : "음반 자료"} · {statusLabels[item.status]}</span><span className="mt-1 block truncate text-xs">{item.sources[0]?.name || "새 작업"}{item.sources.length > 1 ? ` 외 ${item.sources.length - 1}개` : ""}</span><span className="mt-1 block text-[11px] text-muted-foreground">{formatDate(item.created_at)} · v{item.version}</span></button></li>)}</ul>}{!historyLoading && !jobs.length && <p className="mt-4 text-xs text-muted-foreground">최근 생성 작업이 없습니다.</p>}</aside>
     </div>
   </div>;
 }

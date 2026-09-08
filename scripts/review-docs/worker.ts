@@ -5,8 +5,9 @@ import { loadEnvConfig } from "@next/env";
 import { createAdminClient } from "../../src/lib/supabase/admin";
 import { REVIEW_JOB_LIMITS, ReviewJobError, type ReviewJob } from "../../src/lib/review-docs/jobs-types";
 import { cleanupReviewJobs, failReviewJob } from "../../src/lib/review-docs/worker";
+import { safeReviewWorkerStartupError, startCheckedReviewWorker } from "./preflight";
 
-loadEnvConfig(process.cwd());
+loadEnvConfig(process.cwd(), false, { info: () => {}, error: () => {} });
 let stopped = false; let child: ChildProcess | null = null;
 const kill = () => { if (child?.pid) { try { process.kill(-child.pid, "SIGKILL"); } catch { /* already exited */ } } };
 for (const signal of ["SIGTERM", "SIGINT"] as const) process.on(signal, () => { stopped = true; kill(); });
@@ -21,8 +22,9 @@ async function run(job: ReviewJob) {
     void (async () => {
       const admin = createAdminClient();
       const { data, error } = await admin.from("review_document_jobs").update({ lease_until: new Date(Date.now() + 90000).toISOString() }).eq("id", job.id).eq("lease_token", job.lease_token!).select("id").maybeSingle();
-      await admin.from("review_document_worker_heartbeat").upsert({ singleton: true, updated_at: new Date().toISOString() });
-      if (error || !data) stopRunning();
+      if (error || !data) { stopRunning(); return; }
+      const { error: heartbeatError } = await admin.from("review_document_worker_heartbeat").upsert({ singleton: true, updated_at: new Date().toISOString() });
+      if (heartbeatError) stopRunning();
     })().catch(stopRunning);
   }, 20000);
   try {
@@ -48,4 +50,10 @@ async function main() {
     }
   }
 }
-void main();
+void startCheckedReviewWorker(process.argv.slice(2), {
+  run: main,
+  report: (result) => console.info("[review-docs-worker] 사전 점검 완료", result),
+}).catch((error: unknown) => {
+  console.error("[review-docs-worker] 시작 실패", safeReviewWorkerStartupError(error));
+  process.exitCode = 1;
+});

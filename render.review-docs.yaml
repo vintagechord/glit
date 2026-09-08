@@ -1,8 +1,12 @@
-# Optional, separate Blueprint. Do NOT apply without approval for a worker service.
+# Separate paid worker Blueprint. The previous no-new-cost deployment did not
+# create this service; deploying the web app alone does not start this worker.
+# Review the recurring compute cost before creating it (see deployment report).
 # Existing production render.yaml is intentionally unaffected.
 services:
   - type: worker
     name: onside-review-docs-worker
+    repo: https://github.com/vintagechord/glit
+    branch: main
     runtime: docker
     dockerfilePath: ./services/review-docs/Dockerfile
     dockerContext: .
@@ -10,27 +14,10 @@ services:
     numInstances: 1
     autoDeployTrigger: off
     envVars:
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: B2_S3_ENDPOINT
-        sync: false
-      - key: B2_REGION
-        sync: false
-      - key: B2_BUCKET
-        sync: false
-      - key: B2_PREFIX
-        sync: false
-      - key: REVIEW_DOCS_B2_BUCKET
-        sync: false
-      - key: B2_KEY_ID
-        sync: false
-      - key: B2_APPLICATION_KEY
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
+      # Prepared during the original web/DB rollout but never linked to a worker.
+      # Must contain the same Supabase and private B2 settings as the web service.
+      - fromGroup: onside-review-docs
+      # OPENAI_API_KEY may be added to the worker's environment for automatic
+      # translation. It is optional for extraction and DOCX/ZIP generation.
       - key: OPENAI_TRANSLATION_MODEL
         value: gpt-5.5
