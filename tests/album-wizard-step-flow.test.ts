@@ -50,12 +50,11 @@ test("track entry preserves compilation overrides and saves before upload", () =
   assert.match(source, /applyAlbumTrackCreditsToBlankTracks\(prev, activeTrackIndex\)/);
   assert.match(source, /<AlbumTrackTableEditor/);
   assert.match(source, /onApplyCurrentCredits=\{applyCurrentCreditsToBlankTracks\}/);
-  assert.match(source, /onPaste=\{applyPastedTracks\}/);
+  assert.doesNotMatch(source, /onPaste=\{applyPastedTracks\}/);
   assert.match(tableEditor, /같은 참여진으로 추가/);
   assert.match(tableEditor, /빈 트랙 추가/);
   assert.match(tableEditor, /빈 참여진 채우기/);
-  assert.match(tableEditor, /여러 트랙 붙여넣기/);
-  assert.match(tableEditor, /parseAlbumTrackTablePaste\(pasteText\)/);
+  assert.doesNotMatch(tableEditor, /여러 트랙 붙여넣기|parseAlbumTrackTablePaste|onPaste/);
   assert.match(
     source,
     /handleTrackTemporarySave\(\)[\s\S]*?>\s*임시 저장\s*<\/button>/,
@@ -98,8 +97,6 @@ test("progress and English UI support dynamic five- to seven-step flows", () => 
     "같은 참여진으로 추가",
     "빈 트랙 추가",
     "빈 참여진 채우기",
-    "여러 트랙 붙여넣기",
-    "표에 적용",
     "최종 점검",
     "임시 저장",
     "다음 단계",

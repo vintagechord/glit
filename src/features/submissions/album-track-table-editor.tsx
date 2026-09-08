@@ -1,12 +1,5 @@
 "use client";
 
-import * as React from "react";
-
-import {
-  parseAlbumTrackTablePaste,
-  type AlbumTrackPasteRow,
-} from "@/lib/album-track-table";
-
 export type AlbumTrackTableRow = {
   trackTitle: string;
   performer: string;
@@ -37,7 +30,6 @@ type AlbumTrackTableEditorProps<TTrack extends AlbumTrackTableRow> = {
   onApplyCurrentCredits: () => void;
   onRemove: (index: number) => void;
   onMove: (fromIndex: number, toIndex: number) => void;
-  onPaste: (rows: readonly AlbumTrackPasteRow[], startIndex: number) => void;
 };
 
 const columns: Array<{ field: EditableField; label: string; width: string }> = [
@@ -59,20 +51,7 @@ export function AlbumTrackTableEditor<TTrack extends AlbumTrackTableRow>({
   onApplyCurrentCredits,
   onRemove,
   onMove,
-  onPaste,
 }: AlbumTrackTableEditorProps<TTrack>) {
-  const [pasteText, setPasteText] = React.useState("");
-  const parsedPaste = React.useMemo(
-    () => parseAlbumTrackTablePaste(pasteText),
-    [pasteText],
-  );
-
-  const applyPaste = () => {
-    if (parsedPaste.rows.length === 0) return;
-    onPaste(parsedPaste.rows, 0);
-    setPasteText("");
-  };
-
   return (
     <section aria-labelledby="album-track-table-title" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -110,46 +89,6 @@ export function AlbumTrackTableEditor<TTrack extends AlbumTrackTableRow>({
           </button>
         </div>
       </div>
-
-      <details className="rounded-[14px] border border-border/70 bg-background/60 px-4 py-3">
-        <summary className="cursor-pointer text-xs font-black text-foreground">
-          여러 트랙 붙여넣기
-        </summary>
-        <div className="mt-3 space-y-3">
-          <p className="text-xs font-semibold leading-5 text-muted-foreground">
-            Excel·Sheets의 곡명·가수명·작곡·작사·편곡 열을 그대로 붙여넣으세요. 입력된 열만 반영됩니다.
-          </p>
-          <textarea
-            value={pasteText}
-            onChange={(event) => setPasteText(event.target.value)}
-            placeholder={"곡명\t가수명\t작곡\t작사\t편곡\n첫 번째 곡\t가수 A\t작곡가\t작사가\t편곡가"}
-            className="min-h-32 w-full resize-y rounded-[12px] border-2 border-border bg-background px-3 py-3 font-mono text-sm text-foreground outline-none transition focus:border-foreground"
-            aria-label="붙여넣을 트랙 표"
-          />
-          {parsedPaste.issues.length > 0 || parsedPaste.ignoredHeaders.length > 0 ? (
-            <div className="rounded-[10px] border border-[#e7b900]/60 bg-[#f2cf27]/10 px-3 py-2 text-xs font-semibold text-foreground">
-              {[...parsedPaste.issues, ...(parsedPaste.ignoredHeaders.length > 0
-                ? [`반영하지 않는 열: ${parsedPaste.ignoredHeaders.join(", ")}`]
-                : [])].join(" ")}
-            </div>
-          ) : null}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-muted-foreground">
-              {parsedPaste.rows.length > 0
-                ? `${parsedPaste.rows.length}개 트랙 확인`
-                : "붙여넣은 내용이 여기에 반영됩니다."}
-            </span>
-            <button
-              type="button"
-              onClick={applyPaste}
-              disabled={parsedPaste.rows.length === 0}
-              className="rounded-full bg-foreground px-4 py-2 text-xs font-black text-background transition hover:bg-[#f2cf27] hover:text-[#111111] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-            >
-              표에 적용
-            </button>
-          </div>
-        </div>
-      </details>
 
       <div
         className="overflow-x-auto rounded-[14px] border-2 border-[#111111] bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-[#f2cf27]"

@@ -282,21 +282,15 @@ const exactTranslations: Record<string, string> = {
   "곡별 값은 표에서 비교하고, 가사와 타이틀 설정은 상세 편집에서 입력합니다.":
     "Compare track details in the table, then add lyrics and title-track settings in Details.",
   "빈 참여진 채우기": "Fill Blank Credits",
-  "여러 트랙 붙여넣기": "Paste Multiple Tracks",
-  "Excel·Sheets의 곡명·가수명·작곡·작사·편곡 열을 그대로 붙여넣으세요. 입력된 열만 반영됩니다.":
-    "Paste the song title, performer, composer, lyricist, and arranger columns from Excel or Google Sheets. Only supplied columns are applied.",
-  "붙여넣을 트랙 표": "Track Table to Paste",
-  "곡명\t가수명\t작곡\t작사\t편곡\n첫 번째 곡\t가수 A\t작곡가\t작사가\t편곡가":
-    "Song Title\tPerformer\tComposer\tLyricist\tArranger\nFirst Song\tArtist A\tComposer\tLyricist\tArranger",
-  "붙여넣은 내용이 여기에 반영됩니다.":
-    "Your pasted tracks will appear here.",
-  "표에 적용": "Apply to Table",
   "트랙 표 입력": "Track Table Entry",
   "트랙별 곡명, 가수명, 작곡, 작사, 편곡 빠른 입력":
     "Quick entry of song title, performer, composer, lyricist, and arranger for each track",
   "작업": "Actions",
   "상세": "Details",
   "가사 작성 기준": "Lyrics Guidelines",
+  "욕설 포함 곡 심의 안내": "Review Guidance for Tracks with Profanity",
+  "욕설이 있는 곡은 심의 부적격 대상이며, 한 곡만 포함돼도 앨범 전체 심의가 중단될 수 있습니다. 해당 곡은 제외하고 신청해주세요.":
+    "Tracks containing profanity are ineligible for approval. Even one such track may halt the review of the entire album. Please exclude these tracks from your submission.",
   "트랙 · 파일 자동 확인": "Automatic Track and File Check",
   "트랙명과 음원 파일명이 모두 연결되었습니다.":
     "Every track has been matched to an audio file.",
@@ -1704,7 +1698,6 @@ const phraseTranslations: Array<[RegExp, string]> = [
   [/확인 권장\s*(\d+)/g, "$1 Recommendations"],
   [/선택 내역\s*(\d+)건/g, "$1 Selected"],
   [/(\d+)\/(\d+)곡 연결/g, "$1/$2 Tracks Matched"],
-  [/(\d+)개 트랙 확인/g, "$1 Tracks Ready"],
   [/트랙\s*(\d+)\s*상세 편집/g, "Track $1 Details"],
   [/(\d+)번 트랙 · 곡명/g, "Track $1 · Song Title"],
   [/(\d+)번 트랙 · 가수명/g, "Track $1 · Performer"],

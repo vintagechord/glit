@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Info } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { PendingOverlay } from "@/components/ui/pending-overlay";
@@ -12,11 +13,8 @@ import { matchAlbumTracksToAudioFiles } from "@/lib/album-track-file-matching";
 import {
   appendAlbumTrackRowKey,
   createAlbumTrackRowKeyState,
-  mergeAlbumTrackPasteRows,
   moveAlbumTrackRowKey,
   removeAlbumTrackRowKey,
-  resizeAlbumTrackRowKeyState,
-  type AlbumTrackPasteRow,
 } from "@/lib/album-track-table";
 import {
   getAlbumReviewDiscountPercentForPackage,
@@ -24,7 +22,7 @@ import {
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
 import { orderAlbumDraftRowsForResume } from "@/lib/album-draft-order";
-import { showCenteredConfirm } from "@/lib/centered-dialog";
+import { showCenteredAlert, showCenteredConfirm } from "@/lib/centered-dialog";
 import { getReleasedAlbumUrlError } from "@/lib/released-album-url";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
@@ -1611,28 +1609,6 @@ export function AlbumWizard({
       }
       return currentIndex;
     });
-  };
-
-  const applyPastedTracks = (
-    pastedRows: readonly AlbumTrackPasteRow[],
-    startIndex: number,
-  ) => {
-    if (trackStructureMutationRef.current) return;
-    trackStructureMutationRef.current = true;
-    queueMicrotask(() => {
-      trackStructureMutationRef.current = false;
-    });
-    const next = mergeAlbumTrackPasteRows(
-      tracks,
-      pastedRows,
-      () => ({ ...initialTrack }),
-      startIndex,
-    );
-    setTracks(next);
-    setTrackRowKeys((keyState) =>
-      resizeAlbumTrackRowKeyState(keyState, next.length),
-    );
-    setActiveTrackIndex(Math.min(startIndex, Math.max(0, next.length - 1)));
   };
 
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
@@ -5163,7 +5139,6 @@ export function AlbumWizard({
                       onApplyCurrentCredits={applyCurrentCreditsToBlankTracks}
                       onRemove={removeTrack}
                       onMove={moveTrack}
-                      onPaste={applyPastedTracks}
                     />
                   </div>
 
@@ -5249,13 +5224,28 @@ export function AlbumWizard({
                           </label>
                           <div className="group/lyrics-tools">
                             <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={handleProfanityCheck}
-                                className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer"
-                              >
-                                욕설 체크
-                              </button>
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={handleProfanityCheck}
+                                  className="rounded-full border border-border/70 bg-background px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 active:translate-y-0 active:shadow-none cursor-pointer"
+                                >
+                                  욕설 체크
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label="욕설 포함 곡 심의 안내"
+                                  aria-haspopup="dialog"
+                                  title="욕설 포함 곡 심의 안내"
+                                  onClick={() => void showCenteredAlert(
+                                    "욕설이 있는 곡은 심의 부적격 대상이며, 한 곡만 포함돼도 앨범 전체 심의가 중단될 수 있습니다. 해당 곡은 제외하고 신청해주세요.",
+                                    { title: "욕설 포함 곡 심의 안내" },
+                                  )}
+                                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                >
+                                  <Info className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                              </div>
                               <button
                                 type="button"
                                 onClick={handleTranslateLyrics}
