@@ -5025,21 +5025,6 @@ export function AlbumWizard({
                       <p className="mt-3 text-sm font-semibold leading-6 text-foreground/80">
                         앨범 URL을 보내주시면 관리자가 앨범·트랙 정보를 확인하고 심의 자료를 준비합니다. 별도의 신청서 작성이나 음원 파일 첨부 없이 접수할 수 있어요.
                       </p>
-                      <ul
-                        aria-label="필수 제출 항목"
-                        className="mt-4 grid grid-cols-2 gap-2"
-                      >
-                        {["멜론·지니 앨범 URL", "접수자 정보"].map(
-                          (item) => (
-                            <li
-                              key={item}
-                              className="flex min-h-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-1.5 py-2 text-center text-[11px] font-black leading-4 text-[#111111] sm:px-3 sm:text-xs"
-                            >
-                              {item}
-                            </li>
-                          ),
-                        )}
-                      </ul>
                     </div>
                     <div className="grid gap-4">
                       <div className="space-y-2">
