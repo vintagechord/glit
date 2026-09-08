@@ -4789,7 +4789,7 @@ export function MvWizard({
                                 );
                                 setFileDigest("");
                               }}
-                              className="min-h-11 rounded-full border border-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500 disabled:cursor-wait disabled:opacity-50"
+                              className="min-h-11 rounded-full border border-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition enabled:hover:border-foreground enabled:hover:bg-foreground enabled:hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-wait disabled:opacity-50"
                             >
                               삭제
                             </button>

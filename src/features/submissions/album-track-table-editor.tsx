@@ -168,7 +168,7 @@ export function AlbumTrackTableEditor<TTrack extends AlbumTrackTableRow>({
                         onClick={() => onRemove(index)}
                         disabled={tracks.length === 1}
                         aria-label={`${index + 1}번 트랙 삭제`}
-                        className="h-9 rounded-[8px] border border-rose-300 px-2 text-rose-700 disabled:opacity-30 dark:text-rose-200"
+                        className="h-9 rounded-[8px] border-2 border-foreground/60 bg-card px-2 font-semibold text-foreground transition enabled:hover:border-foreground enabled:hover:bg-foreground enabled:hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-30"
                       >
                         삭제
                       </button>

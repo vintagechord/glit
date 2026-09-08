@@ -5188,7 +5188,7 @@ export function AlbumWizard({
                             <button
                               type="button"
                               onClick={() => removeTrack(activeTrackIndex)}
-                              className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700 transition hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 dark:border-rose-500/70 dark:bg-rose-500/15 dark:text-rose-200 dark:hover:border-rose-400 dark:hover:bg-rose-500/25 dark:hover:text-rose-100"
+                              className="min-h-9 rounded-[8px] border-2 border-foreground/60 bg-card px-3 py-1 text-xs font-semibold text-foreground transition hover:border-foreground hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                             >
                               트랙 삭제
                             </button>
@@ -5819,7 +5819,7 @@ export function AlbumWizard({
                               );
                               setFileDigest("");
                             }}
-                            className="min-h-11 rounded-full border border-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500 disabled:cursor-wait disabled:opacity-50"
+                            className="min-h-11 rounded-full border border-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition enabled:hover:border-foreground enabled:hover:bg-foreground enabled:hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-wait disabled:opacity-50"
                           >
                             삭제
                           </button>
