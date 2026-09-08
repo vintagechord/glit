@@ -207,7 +207,7 @@ test("Apple connection validates the selected artist, saves ownership-scoped dat
   h.state.tables.music_archive_libraries = [library()];
   h.state.appleLookupRows = [artist(100, "Kim Singer", "김수아")];
   h.state.tables.music_archive_jobs = [
-    { id: "old-own", owner_id: OWNER, library_id: LIBRARY, provider: "apple", status: "queued" },
+    { id: "old-own", owner_id: OWNER, library_id: LIBRARY, provider: "apple", external_artist_id: "200", status: "queued" },
     { id: "other-member", owner_id: OTHER_OWNER, library_id: LIBRARY, provider: "apple", status: "queued" },
     { id: "other-provider", owner_id: OWNER, library_id: LIBRARY, provider: "musicbrainz", status: "queued" },
   ];
@@ -222,7 +222,7 @@ test("Apple connection validates the selected artist, saves ownership-scoped dat
   assert.equal(body.job.external_artist_id, "100");
   assert.equal(body.job.status, "queued");
   assert.equal(body.job.owner_id, OWNER);
-  assert.deepEqual(h.state.tables.music_archive_jobs.slice(0, 3).map(row => row.status), ["cancelled", "queued", "queued"]);
+  assert.deepEqual(h.state.tables.music_archive_jobs.slice(0, 3).map(row => row.status), ["queued", "queued", "queued"]);
   assert.equal(h.calls.filter(call => call.method === "after").length, 1);
   assert.equal(h.calls.filter(call => call.name === "save_music_archive_library").length, 1);
   assert.equal(fetches(h).length, 1);
@@ -266,24 +266,62 @@ test("an Apple lookup returning a different artist ID cannot save a connection o
   assert.equal(h.calls.filter(call => call.table === "music_archive_artist_index").length, 0);
 });
 
-test("failure to cancel prior collection preserves the saved connection and never enqueues another job", async () => {
+test("failure to cancel a removed profile preserves the saved removal and never cancels another profile", async () => {
+  const h = await harness();
+  const row = library();
+  const data = row.data as ArchiveLibrary["data"];
+  data.connections = ["100", "200"].map(id => ({ provider: "apple", externalArtistId: id, url: `https://music.apple.com/kr/artist/${id}`, confirmed: true, status: "automatic" }));
+  h.state.tables.music_archive_libraries = [row];
+  h.state.tables.music_archive_jobs = [{ id: "prior", owner_id: OWNER, library_id: LIBRARY, provider: "apple", external_artist_id: "100", status: "queued" }];
+  h.state.failure = { table: "music_archive_jobs", operation: "update", code: "XX000", message: "private cancellation error" };
+  const response = await h.apiPOST(post({ action: "command", libraryId: LIBRARY, version: 1, command: { type: "remove_connection", provider: "apple", externalArtistId: "100" } }));
+  assert.equal(response.status, 200);
+  const body = await response.json() as { library: ArchiveLibrary; syncNotice?: string; job?: unknown };
+  assert.equal(body.library.version, 2);
+  assert.deepEqual(body.library.data.connections.map(item => item.externalArtistId), ["200"]);
+  assert.ok(body.syncNotice);
+  assert.equal(body.job, undefined);
+  assert.equal(h.state.tables.music_archive_jobs[0].status, "queued");
+  const update = h.calls.find(call => call.table === "music_archive_jobs" && operation(call, "update"));
+  assert.ok(update?.operations?.some(op => op.method === "eq" && op.args[0] === "external_artist_id" && op.args[1] === "100"));
+  assert.equal(h.calls.filter(call => call.table === "music_archive_jobs" && operation(call, "insert")).length, 0);
+  assert.doesNotMatch(JSON.stringify(body), /private cancellation error/);
+});
+
+test("connecting a second confirmed profile preserves the first queue and a provider-wide sync returns both without duplicates", async () => {
   const h = await harness();
   h.state.tables.music_archive_libraries = [library()];
   h.state.appleLookupRows = [artist(100)];
-  h.state.tables.music_archive_jobs = [{ id: "prior", owner_id: OWNER, library_id: LIBRARY, provider: "apple", external_artist_id: "999", status: "queued" }];
-  h.state.failure = { table: "music_archive_jobs", operation: "update", code: "XX000", message: "private cancellation error" };
-  const response = await h.apiPOST(post(connect));
-  assert.equal(response.status, 200);
-  const body = await response.json() as { library: ArchiveLibrary; syncNotice?: string; job?: unknown; runLibraryId?: string };
-  assert.equal(body.library.version, 2);
-  assert.equal(body.library.data.connections[0].externalArtistId, "100");
-  assert.ok(body.syncNotice);
-  assert.equal(body.job, undefined);
-  assert.equal(body.runLibraryId, undefined);
-  assert.equal(h.state.tables.music_archive_jobs.length, 1);
-  assert.equal(h.state.tables.music_archive_jobs[0].status, "queued");
-  assert.equal(h.calls.filter(call => call.table === "music_archive_jobs" && operation(call, "insert")).length, 0);
-  assert.equal(h.calls.filter(call => call.method === "rate" && call.args?.namespace === "archive-sync").length, 0);
-  assert.equal(h.calls.filter(call => call.method === "after").length, 0);
-  assert.doesNotMatch(JSON.stringify(body), /private cancellation error/);
+  const first = await (await h.apiPOST(post(connect))).json() as { library: ArchiveLibrary; job: Row };
+  h.state.appleLookupRows = [artist(200)];
+  const second = await (await h.apiPOST(post({ ...connect, version: first.library.version, url: "https://music.apple.com/kr/artist/200" }))).json() as { library: ArchiveLibrary; job: Row; jobs: Row[] };
+  assert.deepEqual(second.library.data.connections.map(item => item.externalArtistId), ["100", "200"]);
+  assert.equal(second.job.external_artist_id, "200");
+  assert.deepEqual(second.jobs.map(item => item.external_artist_id), ["200"]);
+  assert.deepEqual(h.state.tables.music_archive_jobs.map(item => [item.external_artist_id, item.status]), [["100", "queued"], ["200", "queued"]]);
+  const all = await (await h.apiPOST(post({ action: "sync", libraryId: LIBRARY, provider: "apple" }))).json() as { jobs: Row[] };
+  assert.deepEqual(all.jobs.map(item => item.external_artist_id), ["100", "200"]);
+  assert.equal(h.state.tables.music_archive_jobs.length, 2);
+  assert.equal(h.calls.filter(call => call.table === "music_archive_jobs" && operation(call, "update")).length, 0);
+  const repeat = await h.apiPOST(post({ ...connect, version: second.library.version, url: "https://music.apple.com/kr/artist/200" }));
+  assert.equal(repeat.status, 202);
+  assert.equal(h.state.tables.music_archive_jobs.length, 2);
+  assert.equal((h.state.tables.music_archive_libraries[0].data as ArchiveLibrary["data"]).connections.length, 2);
+});
+
+test("the second same-provider profile resumes by exact identity and removing it cancels only its own queued work", async () => {
+  const h = await harness();
+  const row = library();
+  (row.data as ArchiveLibrary["data"]).connections = ["100", "200"].map(id => ({ provider: "apple", externalArtistId: id, url: `https://music.apple.com/kr/artist/${id}`, confirmed: true, status: "automatic" }));
+  h.state.tables.music_archive_libraries = [row];
+  const idA = "30000000-0000-4000-8000-000000000001";
+  const idB = "30000000-0000-4000-8000-000000000002";
+  h.state.tables.music_archive_jobs = [idA, idB].map((id,i) => ({ id, owner_id: OWNER, library_id: LIBRARY, provider: "apple", external_artist_id: i ? "200" : "100", status: i ? "partial" : "queued", available_at: "2020-01-01T00:00:00Z", updated_at: "2020-01-01T00:00:00Z", cursor: {}, counts: {} }));
+  const resumed = await h.apiPOST(post({ action: "resume", jobId: idB }));
+  assert.equal(resumed.status, 202);
+  assert.equal(h.state.tables.music_archive_jobs[1].status, "queued");
+  const removed = await h.apiPOST(post({ action: "command", libraryId: LIBRARY, version: 1, command: { type: "remove_connection", provider: "apple", externalArtistId: "200" } }));
+  assert.equal(removed.status, 200);
+  assert.deepEqual(h.state.tables.music_archive_jobs.map(item => item.status), ["queued", "cancelled"]);
+  assert.deepEqual((h.state.tables.music_archive_libraries[0].data as ArchiveLibrary["data"]).connections.map(item => item.externalArtistId), ["100"]);
 });

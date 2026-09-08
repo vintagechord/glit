@@ -4,7 +4,7 @@ import type { ImportedRelease } from "./providers";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 24);
 /** Exact provider IDs only. Metadata suggestions never overwrite private corrections/history. */
-export function mergeArchiveImports(input: ArchiveData, releases: ImportedRelease[]) {
+export function mergeArchiveImports(input: ArchiveData, releases: ImportedRelease[], options: { combineManagedProfiles?: boolean } = {}) {
   const data = validateArchiveData(input);
   const conflict = (entityType: "release" | "track", existing: ArchiveRelease | ArchiveTrack, field: ArchiveConflict["field"], incoming: string | number | boolean | undefined, source: ArchiveConflict["source"]) => {
     const current = (existing as unknown as Record<string, unknown>)[field] ?? null;
@@ -21,7 +21,10 @@ export function mergeArchiveImports(input: ArchiveData, releases: ImportedReleas
       existing = { id: `${prefix}-release:${release.externalId}`, ...values, source, links: [{ provider: release.provider, url: release.url, externalId: release.externalId }], excluded: false, userEdited: false };
       data.releases.push(existing);
     } else {
-      for (const field of ["title", "type", "releaseDate", "artistName", "version", "participation", "barcode"] as const) conflict("release", existing, field, values[field], source);
+      // Confirmed profiles together represent one managed artist. Broaden only
+      // derived ownership scope; explicit member corrections/exclusions stay intact.
+      if (options.combineManagedProfiles && !existing.userEdited && !release.participation) existing.participation = "primary";
+      for (const field of ["title", "type", "releaseDate", "artistName", "version", "participation", "barcode"] as const) if (!(options.combineManagedProfiles && field === "participation" && existing.participation === "primary" && values.participation === "participation")) conflict("release", existing, field, values[field], source);
       existing.source = source;
     }
     for (const track of release.tracks) {
@@ -38,7 +41,8 @@ export function mergeArchiveImports(input: ArchiveData, releases: ImportedReleas
       const previous = data.tracks.find(item => item.releaseId === existing!.id && item.source?.provider === release.provider && item.source.externalId === track.externalId);
       const trackValues = { title: track.title, artistName: track.artistName, version: track.version || undefined, discNumber: track.discNumber, trackNumber: track.position, managed: track.managedByArtist, recordingId };
       if (previous) {
-        for (const field of ["title", "artistName", "version", "discNumber", "trackNumber", "managed", "recordingId"] as const) conflict("track", previous, field, trackValues[field], trackSource);
+        if (options.combineManagedProfiles && !previous.userEdited && track.managedByArtist) previous.managed = true;
+        for (const field of ["title", "artistName", "version", "discNumber", "trackNumber", "managed", "recordingId"] as const) if (!(options.combineManagedProfiles && field === "managed" && previous.managed && !trackValues.managed)) conflict("track", previous, field, trackValues[field], trackSource);
         previous.source = trackSource;
       } else data.tracks.push({ id: `${prefix}-track:${release.externalId}:${track.externalId}`, releaseId: existing.id, ...trackValues, source: trackSource, links: [{ provider: release.provider, url: track.url, externalId: release.provider === "musicbrainz" ? track.recordingId ?? release.externalId : track.externalId }], excluded: false, userEdited: false });
       if (conflictingRecordingId) {

@@ -113,7 +113,7 @@ export const archiveCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("save_recording"), recording: archiveRecordingSchema.omit({ source: true, userEdited: true }) }).strict(),
   z.object({ type: z.literal("save_work"), work: archiveWorkSchema.omit({ source: true, userEdited: true }) }).strict(),
   z.object({ type: z.literal("set_connection"), connection: archiveConnectionSchema.omit({ status: true, checkedAt: true }) }).strict(),
-  z.object({ type: z.literal("remove_connection"), provider: providerSchema }).strict(),
+  z.object({ type: z.literal("remove_connection"), provider: providerSchema, externalArtistId: short.min(1).optional() }).strict(),
   z.object({ type: z.literal("save_affiliation"), affiliation: archiveAffiliationSchema }).strict(),
   z.object({ type: z.literal("resolve_conflict"), conflictId: id, resolution: z.enum(["keep", "accept"]) }).strict(),
 ]);
@@ -135,6 +135,9 @@ function addUnique<T extends { id: string }>(items: T[], item: T) {
 function put<T extends { id: string }>(items: T[], item: T) {
   const index = items.findIndex(existing => existing.id === item.id);
   if (index < 0) items.push(item); else items[index] = item;
+}
+function connectionKey(connection: Pick<ArchiveConnection, "provider" | "externalArtistId">): string {
+  return JSON.stringify([connection.provider, connection.externalArtistId || ""]);
 }
 function assertTrackIdentityChange(data: ArchiveData, track: ArchiveTrack, patch: Partial<ArchiveTrack>) {
   const changingVersion = ("recordingId" in patch && patch.recordingId !== track.recordingId) || ("version" in patch && patch.version !== track.version);
@@ -161,7 +164,7 @@ export function validateArchiveData(input: unknown): ArchiveData {
   const recordingMap = new Map(data.recordings.map(item => [item.id, item]));
   const recordings = new Set(recordingMap.keys());
   const works = new Set(data.works.map(item => item.id));
-  if (new Set(data.connections.map(item => item.provider)).size !== data.connections.length) throw new ArchiveDomainError("제공처 연결이 중복되었습니다.");
+  if (new Set(data.connections.map(connectionKey)).size !== data.connections.length) throw new ArchiveDomainError("같은 아티스트의 제공처 연결이 중복되었습니다.");
   for (const track of data.tracks) {
     if (!releases.has(track.releaseId) || (track.recordingId && !recordings.has(track.recordingId))) throw new ArchiveDomainError("트랙의 발매작 또는 녹음 연결이 올바르지 않습니다.");
   }
@@ -258,10 +261,19 @@ export function applyArchiveCommand(input: ArchiveData, rawCommand: unknown): Ar
     }
     case "set_connection": {
       if (command.connection.url) serviceLinkSchema.parse({ provider: command.connection.provider, url: command.connection.url });
+      const index = data.connections.findIndex(item => connectionKey(item) === connectionKey(command.connection));
+      const existing = data.connections[index];
       const connection: ArchiveConnection = { ...command.connection, status: command.connection.provider === "musicbrainz" ? "needs_configuration" : "link_only" };
-      data.connections = [...data.connections.filter(item => item.provider !== connection.provider), connection]; break;
+      // Reconfirming an unchanged profile preserves server verification. A new
+      // profile or changed URL must be verified by the server again.
+      if (existing?.confirmed && connection.confirmed && existing.url === connection.url) {
+        connection.status = existing.status;
+        if (existing.checkedAt) connection.checkedAt = existing.checkedAt;
+      }
+      if (index < 0) data.connections.push(connection); else data.connections[index] = connection;
+      break;
     }
-    case "remove_connection": data.connections = data.connections.filter(item => item.provider !== command.provider); break;
+    case "remove_connection": data.connections = data.connections.filter(item => item.provider !== command.provider || (command.externalArtistId !== undefined && item.externalArtistId !== command.externalArtistId)); break;
     case "save_affiliation": put(data.affiliations, command.affiliation); break;
     case "resolve_conflict": {
       const conflict = getById(data.conflicts, command.conflictId);

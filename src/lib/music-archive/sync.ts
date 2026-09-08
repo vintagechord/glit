@@ -21,20 +21,41 @@ function syncPermission(provider: string) {
   const support = getMusicProviderStatuses().find(item => item.id === provider);
   if (!support || support.status !== "available" || !["musicbrainz", "apple"].includes(provider)) throw new ArchiveError(support?.message ?? "이 제공처는 수동 연결을 지원합니다.", 422, support?.status ?? "UNSUPPORTED");
 }
-export async function enqueueArchiveSync(owner: string, library: ArchiveLibrary, provider: string) {
+/** Each confirmed catalog profile has its own durable cursor, even within one provider. */
+export async function enqueueArchiveSync(owner: string, library: ArchiveLibrary, provider: string, externalArtistId?: string) {
   syncPermission(provider);
   if (library.archived_at) throw new ArchiveError("아티스트를 복구한 뒤 수집해주세요.", 409);
-  const connection = library.data.connections.find(item => item.provider === provider && item.confirmed);
-  if (!connection?.externalArtistId) throw new ArchiveError("아티스트 후보를 확인하고 제공처를 먼저 연결해주세요.", 422);
+  const connections = library.data.connections.filter(item => item.provider === provider && item.confirmed && item.externalArtistId && (!externalArtistId || item.externalArtistId === externalArtistId));
+  if (!connections.length) throw new ArchiveError("아티스트 후보를 확인하고 제공처를 먼저 연결해주세요.", 422);
   const rate = consumeRateLimit({ namespace: "archive-sync", identifier: owner, limit: 10, windowMs: 3600000 });
   if (!rate.allowed) throw new ArchiveError("새 동기화는 시간당 10회까지 가능합니다. 기존 작업의 이어서 수집을 이용해주세요.", 429);
   const admin = createAdminClient();
-  const { data: existing, error: existingError } = await admin.from("music_archive_jobs").select("*").eq("owner_id", owner).eq("library_id", library.id).eq("provider", provider).in("status", ["queued", "running", "partial", "blocked"]).maybeSingle();
-  archiveDatabaseError(existingError);
-  if (existing) return ["partial", "blocked"].includes(existing.status) ? resumeArchiveSync(owner, existing.id) : { job: existing, runLibraryId: library.id };
-  const { data, error } = await admin.from("music_archive_jobs").insert({ id: randomUUID(), owner_id: owner, library_id: library.id, provider, external_artist_id: connection.externalArtistId, status: "queued", cursor: {}, counts: {} }).select("*").single();
-  archiveDatabaseError(error);
-  return { job: data, runLibraryId: library.id };
+  const jobs: ArchiveSyncJob[] = [];
+  let missed = 0;
+  let failure: unknown;
+  for (const connection of connections) {
+    try {
+      const { data: existing, error: existingError } = await admin.from("music_archive_jobs").select("*").eq("owner_id", owner).eq("library_id", library.id).eq("provider", provider).eq("external_artist_id", connection.externalArtistId!).in("status", ["queued", "running", "partial", "blocked"]).maybeSingle();
+      archiveDatabaseError(existingError);
+      if (existing) {
+        // A result-window limit cannot advance by retrying the same cursor.
+        if (["partial", "blocked"].includes(existing.status) && existing.cursor?.providerCursor?.phase !== "limited") jobs.push((await resumeArchiveSync(owner, existing.id)).job);
+        else jobs.push(existing);
+        continue;
+      }
+      const { data, error } = await admin.from("music_archive_jobs").insert({ id: randomUUID(), owner_id: owner, library_id: library.id, provider, external_artist_id: connection.externalArtistId, status: "queued", cursor: {}, counts: {} }).select("*").single();
+      if (error?.code === "23505") {
+        // A simultaneous request may have reserved this exact profile first.
+        const { data: concurrent, error: concurrentError } = await admin.from("music_archive_jobs").select("*").eq("owner_id", owner).eq("library_id", library.id).eq("provider", provider).eq("external_artist_id", connection.externalArtistId!).in("status", ["queued", "running", "partial", "blocked"]).maybeSingle();
+        archiveDatabaseError(concurrentError);
+        if (concurrent) { jobs.push(concurrent); continue; }
+      }
+      archiveDatabaseError(error);
+      jobs.push(data);
+    } catch (error) { missed += 1; failure = error; }
+  }
+  if (!jobs.length) throw failure ?? new ArchiveError("앨범 불러오기를 시작하지 못했습니다.", 503);
+  return { job: jobs[0], jobs, runLibraryId: library.id, ...(missed ? { syncNotice: "일부 연결의 불러오기는 시작하지 못했습니다. 시작한 작업은 계속 진행되며 나머지는 잠시 후 다시 시도해주세요." } : {}) };
 }
 export async function resumeArchiveSync(actor: string, jobId: string, adminRetry = false) {
   const admin = createAdminClient();
@@ -45,7 +66,7 @@ export async function resumeArchiveSync(actor: string, jobId: string, adminRetry
   if (!job) throw new ArchiveError("수집 작업을 찾을 수 없습니다.", 404);
   syncPermission(job.provider);
   const library = await getOwnedLibrary(job.owner_id, job.library_id);
-  if (library.archived_at || library.data.connections.find(item => item.provider === job.provider)?.externalArtistId !== job.external_artist_id) throw new ArchiveError("아티스트 연결이 변경되었습니다. 새 수집을 시작해주세요.", 409);
+  if (library.archived_at || !library.data.connections.some(item => item.provider === job.provider && item.externalArtistId === job.external_artist_id && item.confirmed)) throw new ArchiveError("아티스트 연결이 변경되었습니다. 새 수집을 시작해주세요.", 409);
   if (job.status === "completed" || job.status === "cancelled") throw new ArchiveError("완료되거나 취소된 작업입니다. 새 동기화를 시작해주세요.", 409);
   if (job.status === "running" && job.lease_until && Date.parse(job.lease_until) > Date.now()) return { job, runLibraryId: library.id };
   if (Date.parse(job.available_at) > Date.now()) throw new ArchiveError("제공처의 재시도 대기 시간이 남았습니다. 잠시 후 이어서 수집해주세요.", 429, "RETRY_AFTER");
@@ -69,7 +90,7 @@ export async function runArchiveJob(libraryId?: string) {
   if (!job?.id) return false;
   try {
     const before = await getOwnedLibrary(job.owner_id, job.library_id);
-    if (before.archived_at || before.data.connections.find(item => item.provider === job.provider && item.confirmed)?.externalArtistId !== job.external_artist_id) throw new ArchiveError("연결이 변경되어 수집이 취소되었습니다.", 409, "CONNECTION_CHANGED");
+    if (before.archived_at || !before.data.connections.some(item => item.provider === job.provider && item.externalArtistId === job.external_artist_id && item.confirmed)) throw new ArchiveError("연결이 변경되어 수집이 취소되었습니다.", 409, "CONNECTION_CHANGED");
     const cursor = job.cursor.providerCursor ? job.cursor.providerCursor as unknown as MusicBrainzCursor : null;
     const releaseIds = new Set(Array.isArray(job.cursor.releaseIds) ? job.cursor.releaseIds as string[] : []);
     syncPermission(job.provider);
@@ -78,7 +99,7 @@ export async function runArchiveJob(libraryId?: string) {
       : await collectMusicBrainzStep(job.external_artist_id, cursor, { acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
     // Refetch after the network wait; optimistic commit still protects a concurrent edit.
     const library = await getOwnedLibrary(job.owner_id, job.library_id);
-    const merged = mergeArchiveImports(library.data, step.releases);
+    const merged = mergeArchiveImports(library.data, step.releases, { combineManagedProfiles: library.data.connections.filter(item => item.provider === job.provider && item.confirmed).length > 1 });
     const connection = merged.connections.find(item => item.provider === job.provider && item.externalArtistId === job.external_artist_id);
     if (connection) { connection.checkedAt = step.checkedAt; connection.status = "automatic"; }
     for (const release of step.releases) {

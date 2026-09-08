@@ -16,9 +16,9 @@ test.setTimeout(25000);
 let html: string;
 test.beforeAll(async () => { html = await archiveClientDocument("./src/features/music-archive/music-archive-client", "MusicArchiveClient"); });
 
-type Harness = { libraries: Library[]; jobs: SyncJob[]; reviews: Submission[]; writes: Record<string, unknown>[]; errors: string[]; searches: string[]; connectFailures: number; jobStatus: string };
+type Harness = { libraries: Library[]; jobs: SyncJob[]; reviews: Submission[]; writes: Record<string, unknown>[]; errors: string[]; searches: string[]; connectFailures: number; jobStatus: string; jobsArrayResponse: boolean };
 async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
-  const harness: Harness = { libraries: structuredClone(initial), jobs: [], reviews: [], writes: [], errors: [], searches: [], connectFailures: 0, jobStatus: "partial" };
+  const harness: Harness = { libraries: structuredClone(initial), jobs: [], reviews: [], writes: [], errors: [], searches: [], connectFailures: 0, jobStatus: "partial", jobsArrayResponse: false };
   page.on("pageerror", (error) => harness.errors.push(error.message));
   await page.context().route("**/*", async (route) => {
     const request = route.request(); const url = new URL(request.url());
@@ -33,7 +33,8 @@ async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
       const body = request.postDataJSON() as Record<string, unknown>; harness.writes.push(body);
       if (body.action === "create") { const library: Library = {id:artistOne,version:1,data:createArchiveData(String(body.name)),updated_at:"2026-09-08T00:00:00Z"}; harness.libraries.push(library); await route.fulfill({json:{library}}); return; }
       const index = harness.libraries.findIndex((item) => item.id === body.libraryId); const library = harness.libraries[index];
-      if (body.action === "sync" || body.action === "resume") { harness.jobs = [{id:"sync-one",library_id:artistOne,provider:"apple",status:"partial",counts:{releases:23,tracks:126},cursor:{providerCursor:{phase:"artist",offset:25,total:68,pending:["next-release"]}},checked_at:"2026-09-08T00:00:00Z",error_message:"일부 페이지를 처리했습니다. 다음 위치에서 계속 수집할 수 있습니다."}]; await route.fulfill({json:{job:harness.jobs[0]}}); return; }
+      if (body.action === "sync") { harness.jobs = library.data.connections.filter((item) => item.provider === body.provider).map((connection, index) => ({id:`sync-${connection.externalArtistId}`,library_id:artistOne,provider:connection.provider,external_artist_id:connection.externalArtistId,status:harness.jobStatus,counts:{releases:index + 1,tracks:(index + 1) * 3},updated_at:"2026-09-08T00:02:00Z"})); await route.fulfill({json:{jobs:harness.jobs,...(!harness.jobsArrayResponse ? {job:harness.jobs[0]} : {})}}); return; }
+      if (body.action === "resume") { harness.jobs = [{id:"sync-one",library_id:artistOne,provider:"apple",status:"partial",counts:{releases:23,tracks:126},cursor:{providerCursor:{phase:"artist",offset:25,total:68,pending:["next-release"]}},checked_at:"2026-09-08T00:00:00Z",error_message:"일부 페이지를 처리했습니다. 다음 위치에서 계속 수집할 수 있습니다."}]; await route.fulfill({json:{job:harness.jobs[0]}}); return; }
       if (!library) { await route.fulfill({status:404,json:{error:"라이브러리 없음"}}); return; }
       if (body.version !== library.version) { await route.fulfill({status:409,json:{error:"동시에 변경된 자료입니다."}}); return; }
       let data = library.data;
@@ -42,10 +43,10 @@ async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
       if (body.action === "connect") {
         if (harness.connectFailures > 0) { harness.connectFailures -= 1; await route.fulfill({status:503,json:{error:"일시적으로 연결하지 못했습니다. 다시 시도해 주세요."}}); return; }
         data = applyArchiveCommand(data,{type:"set_connection",connection:{provider:body.provider,url:body.url,externalArtistId:body.externalId,confirmed:true}});
-        if (body.provider === "apple") harness.jobs = [{id:"sync-one",library_id:artistOne,provider:"apple",status:harness.jobStatus,counts:{releases:23,tracks:126},cursor:{providerCursor:{offset:25,total:68,pending:["next"]}},updated_at:"2026-09-08T00:00:00Z",error_code:"PERMISSION_REQUIRED",error_message:"서버 이용 허가 확인 필요"}];
+        if (body.provider === "apple") harness.jobs = [{id:`sync-${body.externalId}`,library_id:artistOne,provider:"apple",external_artist_id:String(body.externalId),status:harness.jobStatus,counts:{releases:23,tracks:126},cursor:{providerCursor:{offset:25,total:68,pending:["next"]}},updated_at:"2026-09-08T00:00:00Z",error_code:"PERMISSION_REQUIRED",error_message:"서버 이용 허가 확인 필요"},...harness.jobs.filter((job) => job.external_artist_id !== body.externalId)];
       }
       const next = {...library,data,version:library.version+1,...(body.action === "archive" ? {archived_at:"2026-09-08T00:00:00Z"} : body.action === "restore" ? {archived_at:null} : {})}; harness.libraries[index] = next;
-      await route.fulfill({json:{library:next,...(body.action === "connect" && harness.jobs.length ? {job:harness.jobs[0],runLibraryId:next.id} : {})}}); return;
+      await route.fulfill({json:{library:next,...(body.action === "connect" && body.provider === "apple" && harness.jobs.length ? {...(harness.jobsArrayResponse ? {jobs:[harness.jobs[0]]} : {job:harness.jobs[0]}),runLibraryId:next.id} : {})}}); return;
     }
     if (url.protocol === "https:") { await route.fulfill({contentType:"text/html",body:"<!doctype html><title>공식 링크 모의 페이지</title>"}); return; }
     await route.fulfill({status:404,body:"Unexpected request blocked by the UI test."});
@@ -270,3 +271,54 @@ test("an unmatched initials query suggests the full artist name", async ({page})
   await page.getByRole("combobox",{name:"아티스트 이름",exact:true}).fill("ㅂㅌㅈㅋㄷ");
   await expect(page.getByRole("dialog")).toContainText("아티스트의 전체 이름으로 검색해 주세요"); await expect(page.getByRole("dialog")).toContainText("이전 검색에서 확인한 아티스트");
 });
+
+for (const width of [390, 1440]) {
+  test(`multiple profiles share one artist, keep separate sync progress and disconnect only the selected ID at ${width}px`, async ({page}, testInfo) => {
+    await page.setViewportSize({width,height:900});
+    let data = createArchiveData("동명 아티스트");
+    for (const command of [
+      {type:"set_connection",connection:{provider:"apple",externalArtistId:candidateOne,url:`https://music.apple.com/kr/artist/${candidateOne}`,confirmed:true}},
+      {type:"add_release",release:{id:"saved-album",title:"기존에 수정한 앨범",type:"album",participation:"primary",links:[]}},
+      {type:"add_track",track:{id:"saved-track",releaseId:"saved-album",title:"보존할 트랙",discNumber:1,trackNumber:1,managed:true,links:[]}},
+      {type:"save_tasks",id:"saved-task",trackIds:["saved-track"],task:{kind:"review",agency:"KBS",status:"completed",result:"eligible",attachmentIds:[]}},
+    ]) data = applyArchiveCommand(data,command);
+    const harness = await mount(page,[{id:artistOne,version:1,data}]); harness.jobStatus = "completed"; harness.jobsArrayResponse = true;
+    harness.jobs = [
+      {id:"old-first",library_id:artistOne,provider:"apple",external_artist_id:candidateOne,status:"partial",updated_at:"2026-09-07T00:00:00Z"},
+      {id:`sync-${candidateOne}`,library_id:artistOne,provider:"apple",external_artist_id:candidateOne,status:"completed",counts:{releases:1,tracks:1},updated_at:"2026-09-08T00:00:00Z"},
+    ];
+    await page.getByRole("button",{name:/동명 아티스트/}).first().click();
+    await page.getByRole("button",{name:"앨범 찾아보기",exact:true}).first().click();
+    await expect(page.getByRole("dialog")).toContainText("여러 프로필에 나뉘어 있다면 각각 연결");
+    await page.getByRole("dialog").getByRole("option",{name:/서울 인디 밴드/}).click();
+    await expect(page.getByRole("dialog")).toContainText("기존 연결·발매작과 업무 1건을 보존");
+    await page.getByRole("button",{name:"이 아티스트의 앨범 불러오기",exact:true}).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    const status = page.getByLabel("앨범 불러오기 현황");
+    await expect(status.getByText(`아티스트 ID ${candidateOne}`,{exact:true}).first()).toBeVisible();
+    await expect(status.getByText(`아티스트 ID ${candidateTwo}`,{exact:true})).toBeVisible();
+    await expect(status.getByText("불러오기 완료",{exact:true})).toHaveCount(2);
+    await expect(status.getByText("이전 불러오기 기록 (1건)",{exact:true})).toBeVisible();
+    expect(harness.libraries).toHaveLength(1); expect(harness.libraries[0].data.connections.map(item => item.externalArtistId)).toEqual([candidateOne,candidateTwo]);
+    expect(harness.libraries[0].data.releases).toEqual(data.releases); expect(harness.libraries[0].data.tracks).toEqual(data.tracks); expect(harness.libraries[0].data.tasks).toEqual(data.tasks);
+    expect(harness.writes.map(item => item.action)).toEqual(["connect"]);
+
+    harness.jobStatus = "queued";
+    await page.getByRole("button",{name:"새 발매작 확인",exact:true}).click();
+    await expect(status.getByText("불러오기 준비 중",{exact:true})).toHaveCount(2);
+    await expect(status).toContainText("발매작 1개 · 트랙 3개"); await expect(status).toContainText("발매작 2개 · 트랙 6개");
+    harness.jobs = harness.jobs.map(job => ({...job,status:"completed"}));
+    await page.getByRole("button",{name:"새로고침",exact:true}).click();
+    await expect(status.getByText("불러오기 완료",{exact:true})).toHaveCount(2);
+    await page.getByText("아티스트 링크 (2)",{exact:true}).click();
+    const secondConnection = page.locator("div.rounded-lg.border").filter({has:page.getByText(new RegExp(`^아티스트 ID ${candidateTwo} · 연결일`))});
+    await expect(secondConnection.getByRole("button",{name:"연결 해제",exact:true})).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({path:testInfo.outputPath(`multiple-profiles-${width}.png`),fullPage:true});
+    await secondConnection.getByRole("button",{name:"연결 해제",exact:true}).click();
+    await expect.poll(() => harness.libraries[0].data.connections.map(item => item.externalArtistId)).toEqual([candidateOne]);
+    expect(harness.writes.at(-1)?.command).toEqual({type:"remove_connection",provider:"apple",externalArtistId:candidateTwo});
+    expect(harness.libraries[0].data.releases).toEqual(data.releases); expect(harness.libraries[0].data.tasks).toEqual(data.tasks);
+    expect(harness.writes.filter(item => item.action === "create")).toHaveLength(0); expect(harness.errors).toEqual([]);
+  });
+}

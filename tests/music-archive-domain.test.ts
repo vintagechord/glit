@@ -172,6 +172,71 @@ test("manual affiliation and provider connection do not verify rights or imply i
   assert.equal(data.affiliations[0].status, "joined");
 });
 
+test("one artist can retain two profiles from the same provider and reconfirm them idempotently", () => {
+  const first = { provider: "apple", externalArtistId: "1259084205", url: "https://music.apple.com/kr/artist/1259084205", confirmed: true };
+  const second = { provider: "apple", externalArtistId: "1112117967", url: "https://music.apple.com/kr/artist/1112117967", confirmed: true };
+  let data = applyArchiveCommand(fixture(), { type: "set_connection", connection: first });
+  data.connections[0].status = "automatic";
+  data.connections[0].checkedAt = "2026-09-09T00:00:00Z";
+  const verified = { ...data.connections[0] };
+  data = applyArchiveCommand(data, { type: "set_connection", connection: second });
+  assert.deepEqual(data.connections[0], verified);
+  assert.equal(data.connections[1].externalArtistId, second.externalArtistId);
+  assert.equal(data.connections[1].status, "link_only");
+  const before = structuredClone(data);
+  data = applyArchiveCommand(data, { type: "set_connection", connection: first });
+  data = applyArchiveCommand(data, { type: "set_connection", connection: second });
+  assert.deepEqual(data, before);
+  assert.throws(() => validateArchiveData({ ...data, connections: [...data.connections, verified] }), /중복/);
+});
+
+test("provider connection identity does not collapse different providers or unnamed legacy slots", () => {
+  let data = fixture();
+  for (const connection of [
+    { provider: "apple", externalArtistId: "123", confirmed: true },
+    { provider: "melon", externalArtistId: "123", confirmed: true },
+    { provider: "apple", confirmed: false },
+  ]) data = applyArchiveCommand(data, { type: "set_connection", connection });
+  assert.equal(data.connections.length, 3);
+  data = applyArchiveCommand(data, { type: "set_connection", connection: { provider: "apple", externalArtistId: "", confirmed: false } });
+  assert.equal(data.connections.length, 3);
+  assert.throws(() => validateArchiveData({ ...data, connections: [...data.connections, { provider: "apple", confirmed: false }] }), /중복/);
+});
+
+test("removing one profile retains the other catalog, edits, exclusions and private history", () => {
+  let data = task(fixture());
+  data = applyArchiveCommand(data, { type: "link_review", link: { id: "review", submissionId: "20000000-0000-4000-8000-000000000001", releaseId: "release", trackId: "track-a" } });
+  data = applyArchiveCommand(data, { type: "set_excluded", entityType: "track", id: "track-b", excluded: true });
+  data.releases[0].source = { provider: "apple", externalId: "album-a", checkedAt: "2026-09-09T00:00:00Z" };
+  for (const externalArtistId of ["1259084205", "1112117967"]) data = applyArchiveCommand(data, { type: "set_connection", connection: { provider: "apple", externalArtistId, confirmed: true } });
+  data = applyArchiveCommand(data, { type: "set_connection", connection: { provider: "melon", externalArtistId: "882441", confirmed: true } });
+  const removed = applyArchiveCommand(data, { type: "remove_connection", provider: "apple", externalArtistId: "1112117967" });
+  assert.deepEqual(removed.connections, [data.connections[0], data.connections[2]]);
+  assert.deepEqual({ ...removed, connections: [] }, { ...data, connections: [] });
+  assert.deepEqual(applyArchiveCommand(removed, { type: "remove_connection", provider: "apple", externalArtistId: "1112117967" }), removed);
+  assert.deepEqual(applyArchiveCommand(data, { type: "remove_connection", provider: "apple" }).connections, [data.connections[2]]);
+});
+
+test("client cannot carry verified provenance to new or changed connections", () => {
+  const connection = { provider: "apple", externalArtistId: "123", url: "https://music.apple.com/kr/artist/123", confirmed: true };
+  const data = applyArchiveCommand(fixture(), { type: "set_connection", connection });
+  data.connections[0].status = "automatic";
+  data.connections[0].checkedAt = "2026-09-09T00:00:00Z";
+  for (const forged of [{ status: "automatic" }, { checkedAt: "2026-09-09T00:00:00Z" }]) {
+    assert.throws(() => applyArchiveCommand(data, { type: "set_connection", connection: { ...connection, ...forged } }));
+  }
+  for (const changed of [{ url: "https://music.apple.com/kr/artist/changed/123" }, { confirmed: false }]) {
+    const reset = applyArchiveCommand(data, { type: "set_connection", connection: { ...connection, ...changed } });
+    assert.equal(reset.connections[0].status, "link_only");
+    assert.equal(reset.connections[0].checkedAt, undefined);
+  }
+  const added = applyArchiveCommand(data, { type: "set_connection", connection: { ...connection, externalArtistId: "456", url: "https://music.apple.com/kr/artist/456" } });
+  assert.equal(added.connections[1].status, "link_only");
+  assert.equal(added.connections[1].checkedAt, undefined);
+  assert.throws(() => applyArchiveCommand(data, { type: "set_connection", connection: { ...connection, url: "https://melon.com/artist/detail.htm?artistId=123" } }));
+  assert.throws(() => applyArchiveCommand(data, { type: "remove_connection", provider: "apple", externalArtistId: "" }));
+});
+
 test("task recording and work references must match the selected track relation", () => {
   let data = fixture();
   for (const id of ["work-a", "work-b"]) data = applyArchiveCommand(data, { type: "save_work", work: { id, title: id } });

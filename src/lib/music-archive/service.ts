@@ -190,13 +190,16 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
   await validateCommandAccess(owner, library, command);
   const updated = applyArchiveCommand(library.data, command);
   const result = await saveArchiveLibrary(owner, library, updated, command.type, owner, library.archived_at, { command });
-  if (["set_connection", "remove_connection"].includes(command.type)) {
-    const provider = command.type === "set_connection" ? command.connection.provider : command.type === "remove_connection" ? command.provider : "";
-    const { error } = await createAdminClient().from("music_archive_jobs").update({ status: "cancelled", lease_token: null, lease_until: null, updated_at: new Date().toISOString() }).eq("owner_id", owner).eq("library_id", library.id).eq("provider", provider).in("status", ["queued", "running", "partial", "blocked", "failed"]);
-    if (error) return { library: result, syncNotice: "연결 변경을 저장했습니다. 이전 불러오기 작업을 정리하지 못해 새 수집은 시작하지 않았습니다. 잠시 후 다시 시도해주세요." };
+  if (command.type === "remove_connection" || (command.type === "set_connection" && !command.connection.confirmed)) {
+    const provider = command.type === "remove_connection" ? command.provider : command.connection.provider;
+    const externalId = command.type === "remove_connection" ? command.externalArtistId : command.connection.externalArtistId;
+    let cancellation = createAdminClient().from("music_archive_jobs").update({ status: "cancelled", lease_token: null, lease_until: null, updated_at: new Date().toISOString() }).eq("owner_id", owner).eq("library_id", library.id).eq("provider", provider).in("status", ["queued", "running", "partial", "blocked", "failed"]);
+    if (externalId) cancellation = cancellation.eq("external_artist_id", externalId);
+    const { error } = await cancellation;
+    if (error) return { library: result, syncNotice: "연결 변경을 저장했습니다. 해당 불러오기 작업은 다음 실행 때 연결 해제를 확인하고 중단됩니다." };
   }
-  if (command.type === "set_connection" && command.connection.provider === "apple") {
-    try { return { library: result, ...await enqueueArchiveSync(owner, result, "apple") }; }
+  if (command.type === "set_connection" && command.connection.provider === "apple" && command.connection.confirmed) {
+    try { return { library: result, ...await enqueueArchiveSync(owner, result, "apple", command.connection.externalArtistId) }; }
     catch { return { library: result, syncNotice: "아티스트 연결을 저장했습니다. 앨범 불러오기를 다시 눌러주세요." }; }
   }
   return { library: result };

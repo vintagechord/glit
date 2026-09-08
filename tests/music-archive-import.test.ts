@@ -98,3 +98,26 @@ test("Apple import remains distinct from matching MusicBrainz IDs and preserves 
   assert.equal(replay.releases.length, 2);
   assert.equal(replay.tracks.length, 2);
 });
+
+
+test("confirmed profiles union exact shared album scope without duplicating tracks or overriding explicit corrections", () => {
+  const otherProfile = release("shared");
+  otherProfile.participation = true;
+  otherProfile.tracks[0].managedByArtist = false;
+  let data = mergeArchiveImports(createArchiveData("같은 음악인"), [otherProfile]);
+  const ownProfile = { ...otherProfile, participation: false, tracks: [{ ...otherProfile.tracks[0], managedByArtist: true }] };
+  data = mergeArchiveImports(data, [ownProfile], { combineManagedProfiles: true });
+  assert.equal(data.releases.length, 1);
+  assert.equal(data.tracks.length, 1);
+  assert.equal(data.releases[0].participation, "primary");
+  assert.equal(data.tracks[0].managed, true);
+  assert.equal(data.conflicts.length, 0);
+  const replay = mergeArchiveImports(data, [otherProfile], { combineManagedProfiles: true });
+  assert.equal(replay.tracks[0].managed, true);
+  assert.equal(replay.releases[0].participation, "primary");
+  assert.equal(replay.conflicts.length, 0);
+  const edited = applyArchiveCommand(data, { type: "update_track", trackId: data.tracks[0].id, patch: { managed: false } });
+  const checked = mergeArchiveImports(edited, [ownProfile], { combineManagedProfiles: true });
+  assert.equal(checked.tracks[0].managed, false);
+  assert.ok(checked.conflicts.some(item => item.field === "managed"));
+});

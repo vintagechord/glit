@@ -113,7 +113,7 @@ export function ArtistConnect({ existingName, impactCount = 0, onChoose, onLink,
     catch (error) { if (mounted.current) setError(error instanceof Error ? error.message : "아티스트를 추가하지 못했습니다. 다시 시도해 주세요."); }
   }
   return <div className="space-y-5">
-    <p className="text-sm leading-6 text-muted-foreground">아티스트를 찾고 내 음악 목록을 만들어 보세요. 같은 이름의 아티스트가 있다면 활동 정보를 확인해 주세요.</p>
+    <p className="text-sm leading-6 text-muted-foreground">{existingName ? "같은 아티스트의 음악이 여러 프로필에 나뉘어 있다면 각각 연결해 한 목록에서 관리할 수 있습니다." : "아티스트를 찾고 내 음악 목록을 만들어 보세요. 같은 이름의 아티스트가 있다면 활동 정보를 확인해 주세요."}</p>
     <div className="flex flex-wrap gap-2" aria-label="아티스트 추가 방법">{modes.map(([key, label]) => <Button key={key} primary={activeMode === key} aria-pressed={activeMode === key} disabled={busy} onClick={() => setMode(key)}>{label}</Button>)}</div>
     {error && <Notice error>{error}</Notice>}
     {activeMode === "search" && <>
@@ -136,7 +136,7 @@ export function ArtistConnect({ existingName, impactCount = 0, onChoose, onLink,
       {searched && !searching && candidates.length === 0 && <Notice>{/^[ㄱ-ㅎ\s]+$/.test(query.trim()) ? "일치하는 초성 후보가 없습니다. 아티스트의 전체 이름으로 검색해 주세요." : "검색 결과가 없습니다. 다른 활동명으로 검색하거나 아티스트 링크를 입력해 주세요."}</Notice>}
       {selected && <div className="space-y-4 rounded-xl border-2 border-foreground bg-background p-4">
         <div className="flex items-start gap-3"><ArtistPortrait candidate={selected} /><div className="min-w-0 flex-1"><p className="flex items-center gap-2 font-black"><Check className="h-4 w-4 shrink-0" aria-hidden />{selected.name}</p>{selected.disambiguation && <p className="mt-1 text-sm text-muted-foreground">{selected.disambiguation}</p>}{selected.representativeRelease && <p className="mt-1 text-sm">{selected.representativeRelease}</p>}<External href={selected.url}>{providerNames[selected.provider]} 아티스트 확인</External></div></div>
-        {existingName && <p className="text-xs leading-5 text-muted-foreground">기존 발매작과 업무 {impactCount}건을 보존하고 이 아티스트의 새 발매작을 확인합니다.</p>}
+        {existingName && <p className="text-xs leading-5 text-muted-foreground">기존 연결·발매작과 업무 {impactCount}건을 보존하고 선택한 프로필의 발매작을 추가합니다.</p>}
         <Button primary disabled={busy} onClick={() => void act(() => onChoose(selected.name, selected))}>{busy ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />아티스트 연결 중…</> : "이 아티스트의 앨범 불러오기"}</Button>
       </div>}
     </>}
@@ -147,7 +147,7 @@ export function ArtistConnect({ existingName, impactCount = 0, onChoose, onLink,
     }}>
       <Field label="아티스트 링크" hint="멜론·지니뮤직·벅스의 아티스트 페이지 주소를 붙여넣어 주세요."><input className={inputClass} type="url" value={url} onChange={(event) => setUrl(event.target.value)} required disabled={busy} maxLength={2048} placeholder="https://www.melon.com/artist/…" /></Field>
       <Field label="관리할 아티스트 이름"><input className={inputClass} value={manualName} onChange={(event) => setManualName(event.target.value)} required disabled={busy} maxLength={200} /></Field>
-      {existingName && <p className="text-xs leading-5 text-muted-foreground">연결을 바꿔도 기존 발매작과 업무 {impactCount}건은 보존됩니다.</p>}
+      {existingName && <p className="text-xs leading-5 text-muted-foreground">기존 연결·발매작과 업무 {impactCount}건을 보존하고 새 링크를 추가합니다.</p>}
       <p className="text-sm text-muted-foreground">링크를 저장한 뒤 ‘앨범 찾아보기’에서 발매작을 추가할 수 있습니다.</p>
       <Button primary type="submit" disabled={busy}>{busy ? "링크 저장 중…" : "아티스트 링크 추가"}</Button>
     </form>}
