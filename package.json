@@ -16,7 +16,9 @@
     "review-docs:worker": "tsx scripts/review-docs/worker.ts",
     "review-docs:fixtures": "tsx scripts/review-docs-render-fixtures.ts",
     "test:e2e": "playwright test --config=playwright.config.ts",
-    "spellcheck:smoke": "node --import tsx scripts/spellcheck_smoke.ts"
+    "spellcheck:smoke": "node --import tsx scripts/spellcheck_smoke.ts",
+    "music-archive:worker": "tsx scripts/music-archive-worker.ts",
+    "music-archive:test:sql": "bash scripts/music-archive-sql-test.sh"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1111.0",

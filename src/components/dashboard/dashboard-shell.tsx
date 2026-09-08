@@ -5,6 +5,7 @@ import {
   Coins,
   FilePenLine,
   History,
+  Music2,
   ShoppingCart,
   UserRound,
   type LucideIcon,
@@ -17,6 +18,7 @@ export const defaultDashboardTabs: DashboardTab[] = [
   { key: "drafts", label: "작성중", href: "/mypage/drafts" },
   { key: "cart", label: "장바구니", href: "/mypage/cart" },
   { key: "history", label: "심의내역", href: "/mypage/history" },
+  { key: "music", label: "내 음악 관리", href: "/mypage/music" },
   { key: "credits", label: "크레딧", href: "/mypage/credits" },
   { key: "profile", label: "계정", href: "/mypage/profile" },
 ];
@@ -52,6 +54,7 @@ const tabIcons: Record<string, LucideIcon> = {
   drafts: FilePenLine,
   cart: ShoppingCart,
   history: History,
+  music: Music2,
   credits: Coins,
   profile: UserRound,
 };

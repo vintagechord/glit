@@ -123,6 +123,10 @@ export default async function AdminPage() {
         <FileArchive className="h-5 w-5" aria-hidden="true" />
         심의자료 생성
       </Link>
+      <Link href="/admin/music" className="mt-5 ml-0 inline-flex items-center gap-2 rounded-[8px] border-2 border-border bg-card px-4 py-3 text-sm font-black text-foreground sm:ml-3">
+        <ClipboardList className="h-5 w-5" aria-hidden="true" />
+        음악 관리 운영
+      </Link>
 
       <section
         aria-label="관리자 처리 요약"
