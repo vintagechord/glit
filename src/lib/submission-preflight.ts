@@ -1,6 +1,7 @@
 import {
   isApplicationFormFile,
   isAudioUploadFile,
+  isReleasedAlbumAudioFile,
   isVideoUploadFile,
 } from "@/lib/submission-files";
 import { hasNonKoreanLyrics } from "@/lib/lyrics-tools";
@@ -550,7 +551,7 @@ export const buildAlbumSubmissionPreflight = (
     }
   }
 
-  if (!isAdminReviewer && !input.isOneClick) {
+  if (!isAdminReviewer || input.isOneClick) {
     const uploads = input.uploads ?? [];
     if (uploads.some((upload) => upload.status === "error")) {
       issues.push(
@@ -578,9 +579,11 @@ export const buildAlbumSubmissionPreflight = (
       );
     }
 
-    if (!input.filesSubmittedByEmail) {
+    if (input.isOneClick || !input.filesSubmittedByEmail) {
       const audioFiles = input.files.filter((file) =>
-        isAudioUploadFile(file.originalName ?? "", file.mime ?? ""),
+        input.isOneClick
+          ? isReleasedAlbumAudioFile(file.originalName, file.mime)
+          : isAudioUploadFile(file.originalName ?? "", file.mime ?? ""),
       );
       if (audioFiles.length === 0) {
         issues.push(
@@ -588,7 +591,9 @@ export const buildAlbumSubmissionPreflight = (
             "files.audio-required",
             "blocking",
             "음원 파일",
-            "음원 파일을 업로드하거나 이메일 제출을 선택해주세요.",
+            input.isOneClick
+              ? "음원 파일(WAV 또는 ZIP)을 사이트에 업로드해주세요."
+              : "음원 파일을 업로드하거나 이메일 제출을 선택해주세요.",
             { step: 5, field: "files" },
           ),
         );

@@ -47,6 +47,39 @@ export const isAudioUploadFile = (
   );
 };
 
+/** URL reception replaces only the application form; the uploaded master is WAV or ZIP. */
+export const isReleasedAlbumAudioFile = (
+  filename?: string | null,
+  mimeType?: string | null,
+) => {
+  const name = (filename ?? "").trim();
+  const mime = (mimeType ?? "").split(";", 1)[0].trim().toLowerCase();
+  const extension = name.match(/\.([a-z0-9]+)$/i)?.[1].toLowerCase();
+  const genericMime = !mime || mime === "application/octet-stream";
+  const wavMime = ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"].includes(mime);
+  const zipMime = ["application/zip", "application/x-zip-compressed", "application/x-zip"].includes(mime);
+  if (extension === "wav") return genericMime || wavMime;
+  if (extension === "zip") return genericMime || zipMime;
+  if (extension) return false;
+  // Older stored metadata can lack the original filename, but not the format.
+  return wavMime || zipMime;
+};
+
+export type StoredReleasedAlbumAudioFile = {
+  original_name?: string | null;
+  mime?: string | null;
+  status?: string | null;
+  file_path?: string | null;
+  object_key?: string | null;
+  size?: number | null;
+};
+
+export const isStoredReleasedAlbumAudioFile = (file: StoredReleasedAlbumAudioFile) =>
+  (file.status == null || file.status === "UPLOADED") &&
+  Boolean((file.object_key || file.file_path)?.trim()) &&
+  (file.size == null || (Number.isFinite(Number(file.size)) && Number(file.size) > 0)) &&
+  isReleasedAlbumAudioFile(file.original_name, file.mime);
+
 export const isVideoUploadFile = (
   filename?: string | null,
   mimeType?: string | null,

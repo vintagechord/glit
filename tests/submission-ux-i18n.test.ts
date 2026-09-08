@@ -57,7 +57,9 @@ test("unified release choice and URL submission have exact English translations"
     "멜론 또는 지니 앨범 페이지 주소를 붙여넣어주세요",
     "멜론 또는 지니의 앨범 링크를 입력해주세요.",
     "멜론 또는 지니의 앨범 상세 페이지 URL을 확인해주세요. 곡·아티스트 링크는 사용할 수 없습니다.",
-    "저장하고 최종 확인",
+    "저장하고 음원 첨부",
+    "음원 업로드",
+    "심의에 사용할 전체 음원을 WAV 파일 또는 ZIP 파일로 첨부해주세요.",
   ]);
 });
 

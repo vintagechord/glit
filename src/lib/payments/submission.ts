@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validateReleasedAlbumPaymentFiles } from "@/lib/submission-payment-files";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
 import { getInicisMode, getStdPayConfig } from "@/lib/inicis/config";
@@ -316,6 +317,9 @@ export const createSubmissionPaymentOrder = async (
       };
     }
   }
+
+  const mediaError = await validateReleasedAlbumPaymentFiles(admin, submissionIds);
+  if (mediaError) return { error: mediaError };
 
   const amountKrw = submissions.reduce(
     (sum, item) => sum + Math.round(Number(item.amount_krw ?? 0)),

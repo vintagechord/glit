@@ -1,6 +1,7 @@
 import {
   isApplicationFormFile,
   isAudioUploadFile,
+  isReleasedAlbumAudioFile,
   isVideoUploadFile,
 } from "@/lib/submission-files";
 import { getReleasedAlbumUrlError } from "@/lib/released-album-url";
@@ -167,10 +168,12 @@ export const validateSubmittedFiles = (input: {
   isOneClick?: boolean;
   files: SubmissionFileInput[];
 }) => {
+  if (input.kind === "ALBUM" && input.isOneClick) {
+    return input.files.some((file) => isReleasedAlbumAudioFile(file.originalName, file.mime))
+      ? null
+      : "음원 파일(WAV 또는 ZIP)을 사이트에 업로드해주세요.";
+  }
   if (input.isAdminReviewer || input.filesSubmittedByEmail) return null;
-  // Released albums are collected by the administrator from the validated
-  // platform URL. Only this album flow can omit the original media files.
-  if (input.kind === "ALBUM" && input.isOneClick) return null;
   const hasMedia = input.files.some((file) =>
     input.kind === "ALBUM"
       ? isAudioUploadFile(file.originalName ?? "", file.mime ?? "")

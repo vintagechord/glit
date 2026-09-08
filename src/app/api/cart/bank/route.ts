@@ -11,6 +11,7 @@ import {
 } from "@/lib/request-rate-limit";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validateReleasedAlbumPaymentFiles } from "@/lib/submission-payment-files";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 
@@ -196,6 +197,11 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
+  }
+
+  const mediaError = await validateReleasedAlbumPaymentFiles(admin, submissionIds);
+  if (mediaError) {
+    return NextResponse.json({ error: mediaError }, { status: 409 });
   }
 
   const totalAmountKrw = submissions.reduce(

@@ -23,7 +23,7 @@ import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
-import { isApplicationFormFile } from "@/lib/submission-files";
+import { isApplicationFormFile, isStoredReleasedAlbumAudioFile } from "@/lib/submission-files";
 import {
   cleanupUnreferencedSubmissionB2Objects,
   loadSubmissionB2ObjectRefs,
@@ -1022,19 +1022,20 @@ export async function saveAlbumSubmissionAction(
   let effectiveSubmissionFiles = parsed.data.files ?? [];
   if (
     isSubmitted &&
-    !isOneClick &&
     parsed.data.files === undefined &&
-    !parsed.data.filesSubmittedByEmail
+    (isOneClick || !parsed.data.filesSubmittedByEmail)
   ) {
     const { data: existingFiles, error: existingFilesError } = await db
       .from("submission_files")
-      .select("original_name, mime")
+      .select("original_name, mime, status, file_path, object_key, size")
       .eq("submission_id", parsed.data.submissionId)
       .eq("kind", "AUDIO");
     if (existingFilesError) {
       return { error: "기존 파일 정보를 확인할 수 없습니다." };
     }
-    effectiveSubmissionFiles = (existingFiles ?? []).map((file) => ({
+    effectiveSubmissionFiles = (existingFiles ?? [])
+      .filter((file) => !isOneClick || isStoredReleasedAlbumAudioFile(file))
+      .map((file) => ({
       path: "",
       originalName: file.original_name ?? "",
       mime: file.mime ?? undefined,
@@ -1375,7 +1376,7 @@ export async function saveAlbumSubmissionAction(
         ? taxInvoiceBusinessNumberDigits || null
         : null,
     application_form_mode: applicationFormMode,
-    files_submitted_by_email: Boolean(parsed.data.filesSubmittedByEmail),
+    files_submitted_by_email: !isOneClick && Boolean(parsed.data.filesSubmittedByEmail),
     status: saveState.finalStatus,
     payment_status: saveState.finalPaymentStatus,
   };

@@ -117,7 +117,7 @@ test("preflight returns every problem with a direct step and field target", () =
   );
 });
 
-test("released album preflight accepts only the URL and contact declaration without files or tracks", () => {
+test("released album preflight requires uploaded audio while the URL replaces form and track entry", () => {
   const result = buildAlbumSubmissionPreflight(
     validOnlineInput({
       isOneClick: true,
@@ -133,7 +133,7 @@ test("released album preflight accepts only the URL and contact declaration with
     }),
   );
 
-  assert.equal(result.canSubmit, true);
+  assert.equal(result.canSubmit, false);
   assert.equal(
     result.issues.some((item) => item.id === "application-mode.required"),
     false,
@@ -143,8 +143,8 @@ test("released album preflight accepts only the URL and contact declaration with
     false,
   );
   assert.equal(
-    result.issues.some((item) => item.id.startsWith("files")),
-    false,
+    result.issues.some((item) => item.id === "files.audio-required"),
+    true,
   );
 });
 
@@ -154,7 +154,7 @@ test("released album preflight accepts Genie and directs unsupported URLs back t
     applicationFormMode: null,
     melonUrl: "https://www.genie.co.kr/detail/albumInfo?axnm=12345",
     tracks: [],
-    files: [],
+    files: [{ originalName: "masters.zip", mime: "application/zip" }],
     uploads: [],
   });
   assert.equal(buildAlbumSubmissionPreflight(input).canSubmit, true);
@@ -531,4 +531,30 @@ test("a cart snapshot for another submission never triggers a price warning", ()
 
   assert.equal(result.canSubmit, true);
   assert.equal(result.requiresPriceChangeConfirmation, false);
+});
+
+
+test("released album upload progress and failures block even with an existing audio file", () => {
+  const base = validOnlineInput({ isOneClick: true, melonUrl: "https://www.melon.com/album/detail.htm?albumId=1", tracks: [], filesSubmittedByEmail: true, isAdminReviewer: true });
+  for (const status of ["pending", "uploading", "error"] as const) {
+    const result = buildAlbumSubmissionPreflight({ ...base, uploads: [{ name: "new-master.wav", status }] });
+    assert.equal(result.canSubmit, false);
+    assert.equal(result.firstBlockingTarget?.step, 5);
+    assert.equal(result.blockingIssues[0].id, status === "error" ? "files.upload-error" : "files.upload-pending");
+  }
+  assert.equal(buildAlbumSubmissionPreflight({ ...base, uploads: [{ name: "master.wav", status: "done" }] }).canSubmit, true);
+});
+
+test("released album preflight rejects MP3, email and administrator upload exemptions", () => {
+  const base = validOnlineInput({ isOneClick: true, melonUrl: "https://www.genie.co.kr/detail/albumInfo?axnm=12345", tracks: [], files: [], uploads: [] });
+  for (const overrides of [{}, { filesSubmittedByEmail: true }, { isAdminReviewer: true }, { filesSubmittedByEmail: true, isAdminReviewer: true }, { files: [{ originalName: "track.mp3", mime: "audio/mpeg" }] }]) {
+    const result = buildAlbumSubmissionPreflight({ ...base, ...overrides });
+    assert.equal(result.canSubmit, false);
+    assert.deepEqual(result.blockingIssues.map(item => item.id), ["files.audio-required"]);
+  }
+  for (const file of [{ originalName: "track.wav", mime: "audio/wav" }, { originalName: "album.zip", mime: "application/octet-stream" }]) {
+    const result = buildAlbumSubmissionPreflight({ ...base, files: [file] });
+    assert.equal(result.canSubmit, true);
+    assert.equal(result.issues.some(item => item.id.includes("application-form") || item.id.startsWith("tracks.")), false);
+  }
 });

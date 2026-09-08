@@ -275,8 +275,8 @@ test("submitted media and downloaded application forms are enforced server-side"
   assert.ok(validateSubmittedFiles({ ...base, kind: "ALBUM" as const, files: [] }));
   assert.equal(
     validateSubmittedFiles({ ...base, kind: "ALBUM", isOneClick: true, files: [] }),
-    null,
-    "released albums are collected from their validated platform URL",
+    "음원 파일(WAV 또는 ZIP)을 사이트에 업로드해주세요.",
+    "the URL replaces the application form, not the master audio upload",
   );
   assert.ok(
     validateSubmittedFiles({ ...base, kind: "MV", isOneClick: true, files: [] }),
