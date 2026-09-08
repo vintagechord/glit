@@ -2,6 +2,7 @@ import { ZodError } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { consumeRateLimit } from "@/lib/request-rate-limit";
 import { readBoundedJsonBody } from "@/lib/request-body";
+import { getBaseUrl } from "@/lib/url";
 
 export class ArchiveError extends Error {
   constructor(message: string, public status = 400, public code = "INVALID_REQUEST") { super(message); }
@@ -10,7 +11,9 @@ export class ArchiveError extends Error {
 export async function authorizeArchiveRequest(request: Request, mutation = false) {
   if (mutation) {
     const origin = request.headers.get("origin");
-    if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") {
+    // Render can expose an internal request URL after TLS termination. Reuse
+    // the configured public origin; forwarded host headers are not an allowlist.
+    if ((origin && origin !== new URL(request.url).origin && origin !== getBaseUrl()) || request.headers.get("sec-fetch-site") === "cross-site") {
       throw new ArchiveError("같은 사이트에서 다시 요청해주세요.", 403, "ORIGIN_MISMATCH");
     }
   }

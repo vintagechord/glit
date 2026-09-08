@@ -217,6 +217,49 @@ test("real API routes reject unauthenticated, cross-site, rate-limited and non-a
   assert.equal(mutations(h).length, 0);
 });
 
+test("configured public origins allow authenticated writes behind Render while forged proxy headers stay untrusted", async () => {
+  const publicOrigin = "https://glit-b1yn.onrender.com";
+  const keys = ["NEXT_PUBLIC_APP_URL", "NEXT_PUBLIC_SITE_URL"] as const;
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const internalRequest = (headers: Record<string, string> = {}) => new Request("http://localhost:10000/api/music-archive", {
+    method: "POST", headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify({ action: "create", name: "Proxy origin regression" }),
+  });
+  try {
+    for (const configuredKey of keys) {
+      for (const key of keys) delete process.env[key];
+      process.env[configuredKey] = publicOrigin;
+      const h = await harness();
+      const accepted = await h.apiPOST(internalRequest({ origin: publicOrigin, "sec-fetch-site": "same-origin" }));
+      assert.equal(accepted.status, 200, `${configuredKey} must allow the configured public origin with an internal request URL`);
+      assert.deepEqual(mutations(h).map(call => call.name), ["create_music_archive_library"]);
+
+      const rejectedHeaders: Record<string, string>[] = [
+        { origin: "https://attacker.test" },
+        { origin: "https://attacker.test", "x-forwarded-host": "attacker.test", "x-forwarded-proto": "https" },
+        { origin: "https://attacker.test", "x-forwarded-host": "glit-b1yn.onrender.com", "x-forwarded-proto": "https" },
+        { origin: "https://glit-b1yn.onrender.com.attacker.test", "x-forwarded-host": "glit-b1yn.onrender.com.attacker.test" },
+        { origin: publicOrigin, "sec-fetch-site": "cross-site" },
+      ];
+      for (const headers of rejectedHeaders) {
+        const response = await h.apiPOST(internalRequest(headers));
+        assert.equal(response.status, 403, `must reject ${JSON.stringify(headers)}`);
+        assert.equal((await response.json() as { code: string }).code, "ORIGIN_MISMATCH");
+      }
+      assert.equal(mutations(h).length, 1, "rejected proxy requests must not write data");
+
+      const withoutOrigin = await h.apiPOST(internalRequest());
+      assert.equal(withoutOrigin.status, 200, "authenticated requests without Origin retain their existing behavior");
+      assert.equal(mutations(h).length, 2);
+    }
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
+});
+
 test("admin guide updates preserve array/text types and reject nonofficial, credentialed and insecure URLs", async () => {
   const h = await harness();
   h.state.isAdmin = true;
