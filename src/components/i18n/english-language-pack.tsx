@@ -1131,6 +1131,29 @@ const exactTranslations: Record<string, string> = {
   "총 결제 금액": "Total Payment",
   "선택 결제하기": "Pay for Selected Items",
   "결제 준비 중": "Preparing Payment",
+  "결제 다시 선택": "Choose Payment Again",
+  "변경 중": "Updating",
+  "아직 입금하지 않았다면 입금 신청을 취소하고 결제 수단을 다시 선택할 수 있습니다.":
+    "If you have not transferred the payment, you can cancel the bank-transfer request and choose a payment method again.",
+  "이미 입금했다면 입금 확인을 기다려주세요.":
+    "If you have already transferred the payment, please wait for deposit verification.",
+  "결제 수단을 다시 선택할 수 없습니다. 잠시 후 다시 시도해주세요.":
+    "Payment selection could not be reopened. Please try again shortly.",
+  "같은 사이트에서 다시 요청해주세요.": "Please try again from this site.",
+  "결제 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.":
+    "Too many payment requests. Please try again shortly.",
+  "결제 수단을 다시 선택할 신청서를 확인해주세요.":
+    "Select the applications whose payment method you want to choose again.",
+  "신청서 정보를 확인하지 못했습니다.": "The application details could not be verified.",
+  "신청서의 소유권을 확인할 수 없습니다.": "Application ownership could not be verified.",
+  "함께 작성한 앨범 묶음 전체의 결제 수단을 다시 선택해주세요.":
+    "Choose the payment method again for the entire album group.",
+  "결제 또는 심의 상태가 변경되었습니다. 입금 전인 무통장 신청만 취소할 수 있습니다.":
+    "The payment or review status has changed. Only bank-transfer requests awaiting payment can be canceled.",
+  "무통장 입금 신청을 취소하지 못했습니다. 잠시 후 다시 시도해주세요.":
+    "The bank-transfer request could not be canceled. Please try again shortly.",
+  "변경된 결제 상태를 확인하지 못했습니다. 장바구니를 새로고침해주세요.":
+    "The updated payment status could not be verified. Please refresh your cart.",
   "무통장 입금으로 선택": "Continue with Bank Transfer",
   "계좌": "Account",
   "입금 금액": "Transfer Amount",
@@ -1660,6 +1683,8 @@ const phraseTranslations: Array<[RegExp, string]> = [
     "$1 guest applications were moved to your account cart."],
   [/(\d+)개 장바구니 항목이 삭제되었습니다\./g,
     "$1 cart items were deleted."],
+  [/같은 신청서의 앨범 (\d+)건이 함께 변경됩니다\./g,
+    "All $1 albums in this application will be updated together."],
   [/선택한 (\d+)개 장바구니 항목을 삭제할까요\? 연결된 접수 현황도 함께 삭제되며 복구할 수 없습니다\./g,
     "Delete the $1 selected cart items? Their linked submission statuses will also be deleted and cannot be restored."],
   [/최근 수정/g, "Last updated"],

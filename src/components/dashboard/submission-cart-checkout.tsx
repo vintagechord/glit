@@ -37,6 +37,7 @@ type CartItem = {
   type: string;
   status: string;
   paymentStatus: string | null;
+  paymentMethod: string | null;
   title: string | null;
   artistName: string | null;
   amountKrw: number | null;
@@ -64,6 +65,7 @@ export const mapSubmissionCartItem = (
   type: item.type,
   status: item.status,
   paymentStatus: item.payment_status,
+  paymentMethod: item.payment_method ?? null,
   title: item.title,
   artistName: item.artist_name,
   amountKrw: item.amount_krw,
@@ -100,6 +102,11 @@ const getPayableAmount = (item: CartItem) => {
   const amount = Math.round(Number(item.amountKrw ?? 0));
   return Number.isFinite(amount) && amount > 0 ? amount : 0;
 };
+
+// Card orders may be retried while pending; bank/unknown pending payments
+// must stay locked until the customer explicitly reopens a bank request.
+const isPaymentConfirmationPending = (item: CartItem) =>
+  item.paymentStatus === "PAYMENT_PENDING" && item.paymentMethod !== "CARD";
 
 const getGuestTokensForItems = (items: CartItem[]) =>
   Object.fromEntries(
@@ -149,7 +156,7 @@ export function SubmissionCartCheckout({
       items.filter(
         (item) =>
           getPayableAmount(item) > 0 &&
-          item.paymentStatus !== "PAYMENT_PENDING",
+          !isPaymentConfirmationPending(item),
       ),
     [items],
   );
@@ -165,6 +172,8 @@ export function SubmissionCartCheckout({
     React.useState<PaymentMethod>("CARD");
   const [isOpening, setIsOpening] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isReopening, setIsReopening] = React.useState(false);
+  const [pendingReopenIds, setPendingReopenIds] = React.useState<string[] | null>(null);
   const [pendingDeleteIds, setPendingDeleteIds] = React.useState<string[] | null>(
     null,
   );
@@ -524,7 +533,7 @@ export function SubmissionCartCheckout({
   };
 
   const handleDeleteItems = (ids: string[]) => {
-    if (isDeleting || isOpening) return;
+    if (isDeleting || isOpening || isReopening) return;
     const targetIds = expandSubmissionCartGroupIds(
       items,
       Array.from(new Set(ids.filter(Boolean))),
@@ -589,6 +598,57 @@ export function SubmissionCartCheckout({
     }
   };
 
+  const handleReopenItems = (id: string) => {
+    if (isDeleting || isOpening || isReopening) return;
+    setPendingReopenIds(expandSubmissionCartGroupIds(items, [id]));
+  };
+
+  const confirmReopenItems = async (targetIds: string[]) => {
+    if (isDeleting || isOpening || isReopening) return;
+    setIsReopening(true);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/cart/reopen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionIds: targetIds,
+          guestTokensBySubmissionId: getGuestTokensForItems(
+            items.filter((item) => targetIds.includes(item.id)),
+          ),
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        reopenedIds?: string[];
+        error?: string;
+      };
+      if (!response.ok || !payload.ok || !Array.isArray(payload.reopenedIds) || payload.reopenedIds.length === 0) {
+        throw new Error(payload.error ?? "결제 수단을 다시 선택할 수 없습니다. 잠시 후 다시 시도해주세요.");
+      }
+      const reopenedIds = new Set(payload.reopenedIds);
+      setCartItems((prev) => prev.map((item) => reopenedIds.has(item.id)
+        ? { ...item, status: "SUBMITTED", paymentStatus: "UNPAID" }
+        : item));
+      const reopenedPayableIds = items
+        .filter((item) => reopenedIds.has(item.id) && getPayableAmount(item) > 0)
+        .map((item) => item.id);
+      setSelectedIds((prev) => new Set([...prev, ...reopenedPayableIds]));
+      setSelectedMethod("CARD");
+      setBankResult(null);
+      setNotice(null);
+      window.dispatchEvent(new Event("onside:cart-updated"));
+      router.refresh();
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "결제 수단을 다시 선택할 수 없습니다. 잠시 후 다시 시도해주세요.",
+      });
+    } finally {
+      setIsReopening(false);
+    }
+  };
+
   const handleBankTransfer = async () => {
     const response = await fetch("/api/cart/bank", {
       method: "POST",
@@ -625,6 +685,7 @@ export function SubmissionCartCheckout({
               ...item,
               status: "WAITING_PAYMENT",
               paymentStatus: "PAYMENT_PENDING",
+              paymentMethod: "BANK",
             }
           : item,
       ),
@@ -638,7 +699,7 @@ export function SubmissionCartCheckout({
   };
 
   const handleCheckout = async () => {
-    if (isOpening) return;
+    if (isOpening || isDeleting || isReopening) return;
     if (selectedItems.length === 0) {
       setNotice({ type: "error", message: "결제할 신청서를 선택해주세요." });
       return;
@@ -758,6 +819,23 @@ export function SubmissionCartCheckout({
           }}
         />
       ) : null}
+      {pendingReopenIds ? (
+        <ConfirmDialog
+          title="결제 다시 선택"
+          confirmLabel="결제 다시 선택"
+          message={[
+            pendingReopenIds.length > 1 ? `같은 신청서의 앨범 ${pendingReopenIds.length}건이 함께 변경됩니다.` : null,
+            "아직 입금하지 않았다면 입금 신청을 취소하고 결제 수단을 다시 선택할 수 있습니다.",
+            "이미 입금했다면 입금 확인을 기다려주세요.",
+          ].filter(Boolean).join("\n\n")}
+          onCancel={() => setPendingReopenIds(null)}
+          onConfirm={() => {
+            const targetIds = pendingReopenIds;
+            setPendingReopenIds(null);
+            void confirmReopenItems(targetIds);
+          }}
+        />
+      ) : null}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 py-2 text-xs font-black text-foreground shadow-[2px_2px_0_var(--bauhaus-shadow)]">
@@ -768,7 +846,7 @@ export function SubmissionCartCheckout({
             <button
               type="button"
               onClick={toggleAll}
-              disabled={payableIds.length === 0 || isDeleting}
+              disabled={payableIds.length === 0 || isDeleting || isReopening}
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
             >
               <Check size={14} strokeWidth={2.8} aria-hidden="true" />
@@ -777,7 +855,7 @@ export function SubmissionCartCheckout({
             <button
               type="button"
               onClick={() => void handleDeleteItems(Array.from(selectedIds))}
-              disabled={selectedIds.size === 0 || isDeleting || isOpening}
+              disabled={selectedIds.size === 0 || isDeleting || isOpening || isReopening}
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70 disabled:hover:translate-y-0 dark:text-[#06111f]"
             >
               <Trash2 size={14} strokeWidth={2.8} />
@@ -790,8 +868,8 @@ export function SubmissionCartCheckout({
           {items.map((item) => {
             const amount = getPayableAmount(item);
             const selected = selectedIds.has(item.id);
-            const paymentConfirmationPending =
-              item.paymentStatus === "PAYMENT_PENDING";
+            const paymentConfirmationPending = isPaymentConfirmationPending(item);
+            const canReopen = paymentConfirmationPending && item.paymentMethod === "BANK";
             const disabled = amount <= 0 || paymentConfirmationPending;
             const groupSize = items.filter(
               (candidate) =>
@@ -810,14 +888,14 @@ export function SubmissionCartCheckout({
                   selected
                     ? "border-[var(--bauhaus-ink)] bg-[#fff4bd] shadow-[4px_4px_0_var(--bauhaus-shadow)] dark:bg-[#f2cf27]/18"
                     : "border-border bg-[var(--card)] hover:border-[var(--bauhaus-ink)]"
-                } ${disabled ? "opacity-60" : ""}`}
+                } ${disabled && !canReopen ? "opacity-60" : ""}`}
               >
                 <button
                   type="button"
                   onClick={() => {
                     if (!disabled) toggleItem(item.id);
                   }}
-                  disabled={disabled || isDeleting}
+                  disabled={disabled || isDeleting || isReopening}
                   aria-pressed={selected}
                   aria-label={selectionLabel}
                   className={`flex h-9 w-9 items-center justify-center rounded-[6px] border-2 ${
@@ -833,7 +911,7 @@ export function SubmissionCartCheckout({
                   onClick={() => {
                     if (!disabled) toggleItem(item.id);
                   }}
-                  disabled={disabled || isDeleting}
+                  disabled={disabled || isDeleting || isReopening}
                   className="min-w-0 text-left disabled:cursor-default"
                 >
                   <span className="flex flex-wrap items-center gap-2">
@@ -872,7 +950,7 @@ export function SubmissionCartCheckout({
                     <span className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-3 text-[11px] font-black text-[#111111]">
                       입금 확인 중
                     </span>
-                  ) : (
+                  ) : item.paymentStatus !== "PAYMENT_PENDING" ? (
                     <Link
                       href={getEditHref(item)}
                       onClick={() => prepareEditStorage(item)}
@@ -882,11 +960,21 @@ export function SubmissionCartCheckout({
                       <Pencil size={14} strokeWidth={2.8} />
                       수정
                     </Link>
-                  )}
+                  ) : null}
+                  {canReopen ? (
+                    <button
+                      type="button"
+                      onClick={() => handleReopenItems(item.id)}
+                      disabled={isDeleting || isOpening || isReopening}
+                      className="inline-flex min-h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-3 py-2 text-[11px] font-black text-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111] disabled:cursor-wait disabled:opacity-50"
+                    >
+                      {isReopening ? "변경 중" : "결제 다시 선택"}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => void handleDeleteItems([item.id])}
-                    disabled={isDeleting || isOpening}
+                    disabled={isDeleting || isOpening || isReopening}
                     className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-red)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:hover:text-[#06111f]"
                     aria-label={`${getDisplayTitle(item)} 삭제`}
                   >
@@ -945,7 +1033,7 @@ export function SubmissionCartCheckout({
         <button
           type="button"
           onClick={handleCheckout}
-          disabled={isOpening || selectedItems.length === 0 || selectedTotal <= 0}
+          disabled={isOpening || isDeleting || isReopening || selectedItems.length === 0 || selectedTotal <= 0}
           className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-4 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:text-[#06111f] dark:hover:bg-[#ff7a72]"
         >
           {selectedMethod === "BANK" ? (
@@ -1025,14 +1113,19 @@ function NoticeDialog({
 }
 
 function ConfirmDialog({
+  title = "삭제 확인",
+  confirmLabel = "삭제",
   message,
   onCancel,
   onConfirm,
 }: {
+  title?: string;
+  confirmLabel?: string;
   message: string;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const dialogId = React.useId();
   return (
     <div
       className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 px-4 py-6"
@@ -1041,15 +1134,15 @@ function ConfirmDialog({
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-labelledby="cart-delete-dialog-title"
-        aria-describedby="cart-delete-dialog-description"
+        aria-labelledby={`${dialogId}-title`}
+        aria-describedby={`${dialogId}-description`}
         className="max-h-[calc(100dvh-3rem)] w-full max-w-sm overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] p-5 text-center text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]"
       >
-        <p id="cart-delete-dialog-title" className="text-base font-black">
-          삭제 확인
+        <p id={`${dialogId}-title`} className="text-base font-black">
+          {title}
         </p>
         <p
-          id="cart-delete-dialog-description"
+          id={`${dialogId}-description`}
           className="mt-3 whitespace-pre-line text-sm font-semibold leading-6"
         >
           {message}
@@ -1058,6 +1151,7 @@ function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
+            autoFocus
             className="inline-flex h-10 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-4 text-xs font-black text-[#111111] transition hover:-translate-y-0.5"
           >
             취소
@@ -1065,10 +1159,9 @@ function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            autoFocus
             className="inline-flex h-10 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-4 text-xs font-black text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 dark:text-[#06111f]"
           >
-            삭제
+            {confirmLabel}
           </button>
         </div>
       </div>
