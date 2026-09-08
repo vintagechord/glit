@@ -4,6 +4,7 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 
 const exactTranslations: Record<string, string> = {
+  "내 음악 관리": "My Music",
   "주문 내역에서 확인하기": "View in Orders",
   "주문내역에서 결제 상태를 확인해주세요.": "Please check the payment status in Orders.",
   "주문 내역 보기": "View Orders",

@@ -24,14 +24,14 @@ import { SiteLogo } from "./site-logo";
 const navLinks = [
   { label: "심의 신청", mobileLabel: "신청", href: "/dashboard/new", match: "prefix" as const },
   { label: "결과 조회", mobileLabel: "조회", href: "/track", match: "prefix" as const },
-  { label: "크레딧", mobileLabel: "크레딧", href: "/magazine", match: "prefix" as const },
+  { label: "내 음악 관리", mobileLabel: "내 음악 관리", href: "/mypage/music", match: "prefix" as const },
   { label: "이용가이드", mobileLabel: "가이드", href: "/guide", match: "prefix" as const },
 ];
 
 const englishNavLinks = [
   { label: "Apply", mobileLabel: "Apply", href: "/en/dashboard/new", match: "prefix" as const },
   { label: "Results", mobileLabel: "Results", href: "/en/track", match: "prefix" as const },
-  { label: "Credits", mobileLabel: "Credits", href: "/en/magazine", match: "prefix" as const },
+  { label: "My Music", mobileLabel: "My Music", href: "/en/mypage/music", match: "prefix" as const },
   { label: "Guide", mobileLabel: "Guide", href: "/en/guide", match: "prefix" as const },
 ];
 
@@ -302,6 +302,7 @@ export function SiteHeader() {
               <ReliableLink
                 key={link.href}
                 href={link.href}
+                aria-current={activeLink ? "page" : undefined}
                 className={`${navLinkClass} ${
                   activeLink
                     ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-none"
@@ -404,6 +405,7 @@ export function SiteHeader() {
               <ReliableLink
                 key={link.href}
                 href={link.href}
+                aria-current={activeLink ? "page" : undefined}
                 className={`${mobileNavLinkClass} ${
                   activeLink
                     ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-none"
