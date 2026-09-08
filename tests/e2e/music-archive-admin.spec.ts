@@ -49,7 +49,7 @@ for (const width of [1280, 390]) test(`admin guide save and durable retry UI at 
   await expect(page.getByText("불러온 발매작 12개", { exact: false })).toBeVisible();
   await page.getByLabel("표시할 작업").selectOption("all");
   await page.getByRole("button", { name: "저장 지점부터 재시도" }).click();
-  await expect(page.getByText("수집 대기", { exact: true })).toBeVisible();
+  await expect(page.getByText("불러오기 준비 중", { exact: true })).toBeVisible();
   expect(mutations[0]).toEqual({ action: "admin-retry", jobId: "job-1" });
   await page.getByLabel("수정할 안내").selectOption("komca");
   await page.getByLabel("안내 제목", { exact: true }).fill("KOMCA · 확인된 공식 절차");

@@ -1,0 +1,37 @@
+{
+  "resultCount": 3,
+  "results": [
+    {
+      "wrapperType": "artist",
+      "artistType": "Artist",
+      "artistName": "Vintagechord",
+      "artistLinkUrl": "https://music.apple.com/kr/artist/%EB%B9%88%ED%8B%B0%EC%A7%80%EC%BD%94%EB%93%9C/1112117967?uo=4",
+      "artistId": 1112117967,
+      "primaryGenreName": "힙합/랩"
+    },
+    {
+      "wrapperType": "collection",
+      "collectionType": "Album",
+      "artistId": 1112117967,
+      "collectionId": 1886162774,
+      "artistName": "빈티지코드",
+      "collectionName": "KozyTape pt.6",
+      "collectionViewUrl": "https://music.apple.com/kr/album/kozytape-pt-6/1886162774?uo=4",
+      "trackCount": 7,
+      "releaseDate": "2018-09-07T07:00:00Z",
+      "primaryGenreName": "한국 힙합"
+    },
+    {
+      "wrapperType": "collection",
+      "collectionType": "Album",
+      "artistId": 1030217441,
+      "collectionId": 1112117650,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "collectionName": "오브제텐",
+      "collectionViewUrl": "https://music.apple.com/kr/album/%EC%98%A4%EB%B8%8C%EC%A0%9C%ED%85%90/1112117650?uo=4",
+      "trackCount": 10,
+      "releaseDate": "2016-05-11T07:00:00Z",
+      "primaryGenreName": "K-Pop"
+    }
+  ]
+}

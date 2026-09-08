@@ -25,10 +25,10 @@ test("official provider URLs canonicalize IDs and reject SSRF/lookalike/protocol
 });
 
 test("provider statuses never advertise unimplemented domestic or Spotify scraping; commercial permission gates all MB calls", async () => {
-  assert.equal(getMusicProviderStatuses({})[0].status, "permission_required");
-  assert.equal(getMusicProviderStatuses({ MUSICBRAINZ_COMMERCIAL_USE_APPROVED: "true" })[0].status, "configuration_required");
-  assert.equal(getMusicProviderStatuses(env)[0].status, "available");
-  assert.ok(getMusicProviderStatuses(env).slice(1).every((value) => !value.automaticImplemented && value.status !== "available"));
+  assert.equal(getMusicProviderStatuses({}).find(item => item.id === "musicbrainz")!.status, "permission_required");
+  assert.equal(getMusicProviderStatuses({ MUSICBRAINZ_COMMERCIAL_USE_APPROVED: "true" }).find(item => item.id === "musicbrainz")!.status, "configuration_required");
+  assert.equal(getMusicProviderStatuses(env).find(item => item.id === "musicbrainz")!.status, "available");
+  assert.ok(getMusicProviderStatuses(env).filter(item => !["apple", "musicbrainz"].includes(item.id)).every((value) => !value.automaticImplemented && value.status !== "available"));
   let called = false;
   await assert.rejects(() => searchMusicBrainzArtists("Nirvana", { ...options(() => { called = true; return {}; }), env: {} }), (error: unknown) => error instanceof MusicProviderError && error.code === "permission_required");
   assert.equal(called, false);
@@ -147,4 +147,12 @@ test("all registration guides have actionable official instructions; administrat
   assert.equal(isOfficialAgencyUrl("javascript:alert(1)"), false);
   assert.equal(isOfficialAgencyUrl("https://www.komca.or.kr.evil.test/"), false);
   assert.equal(isOfficialAgencyUrl("https://user@www.fkmp.kr/"), false);
+});
+
+
+test("Apple Korea metadata catalog is available and URL identities are validated", () => {
+  assert.equal(getMusicProviderStatuses({}).find(item => item.id === "apple")?.status, "available");
+  assert.equal(parseMusicProviderUrl("https://music.apple.com/kr/artist/빈티지코드/1259084205?uo=4", "artist")?.externalId, "1259084205");
+  assert.equal(parseMusicProviderUrl("https://music.apple.com/us/album/title/123?i=124", "track")?.externalId, "124");
+  for (const bad of ["https://music.apple.com.evil.test/kr/artist/123", "https://music.apple.com/kr/artist/../123", "https://music.apple.com/kr/artist/123/extra", "https://music.apple.com:444/kr/artist/123"]) assert.equal(parseMusicProviderUrl(bad, "artist"), null);
 });

@@ -1,0 +1,17 @@
+{
+  "resultCount": 1,
+  "results": [
+    {
+      "wrapperType": "collection",
+      "collectionType": "Album",
+      "artistId": 1259084205,
+      "collectionId": 1259083959,
+      "artistName": "빈티지코드",
+      "collectionName": "The Moon and the Stars",
+      "collectionViewUrl": "https://music.apple.com/kr/album/the-moon-and-the-stars/1259083959?uo=4",
+      "trackCount": 9,
+      "releaseDate": "2017-04-11T07:00:00Z",
+      "primaryGenreName": "힙합/랩"
+    }
+  ]
+}

@@ -6,6 +6,8 @@ import { ArchiveError, archiveDatabaseError } from "./http";
 import { applyArchiveCommand, archiveCommandSchema, createArchiveData, validateArchiveData, type ArchiveLibrary } from "./model";
 import { getMusicProviderStatuses, parseMusicProviderUrl } from "./providers";
 import { MusicProviderError, searchMusicBrainzArtists } from "./musicbrainz";
+import { lookupAppleArtist } from "./apple";
+import { searchCatalogArtists, indexCatalogArtists } from "./catalog-search";
 import { agencyGuides } from "./guides";
 import { submissionArchiveColumns, normalizeSubmissionTitles } from "./reviews";
 import { enqueueArchiveSync, resumeArchiveSync, acquireArchiveProviderPermit } from "./sync";
@@ -47,7 +49,7 @@ export async function getArchiveOverview(owner: string, page = 0) {
     admin.from("music_archive_libraries").select("id", { count: "exact", head: true }).eq("owner_id", owner),
   ]);
   archiveDatabaseError(libraries.error); archiveDatabaseError(jobs.error); archiveDatabaseError(count.error);
-  return { libraries: libraries.data ?? [], jobs: jobs.data ?? [], guides, providers: getMusicProviderStatuses(), page: paging(page), total: count.count ?? 0, nextPage: start + 20 < (count.count ?? 0) ? paging(page) + 1 : null };
+  return { libraries: libraries.data ?? [], jobs: jobs.data ?? [], guides, providers: getMusicProviderStatuses().filter(item => item.status === "available" && item.id !== "musicbrainz"), page: paging(page), total: count.count ?? 0, nextPage: start + 20 < (count.count ?? 0) ? paging(page) + 1 : null };
 }
 
 export async function getArchiveDetail(owner: string, libraryId: string) {
@@ -75,14 +77,21 @@ export async function searchOwnedSubmissions(owner: string, query: string, page 
 }
 
 export async function searchArchiveArtists(owner: string, params: URLSearchParams) {
-  if (params.get("provider") && params.get("provider") !== "musicbrainz") return { items: [], queryStatus: "unsupported", message: "이 제공처는 공식 링크 연결과 수동 입력을 지원합니다.", providers: getMusicProviderStatuses() };
-  const rate = consumeRateLimit({ namespace: "archive-provider-search", identifier: owner, limit: 12, windowMs: 60000 });
-  if (!rate.allowed) throw new ArchiveError("외부 검색은 분당 12회까지 가능합니다.", 429);
-  try { const result = await searchMusicBrainzArtists(params.get("q") ?? "", { offset: paging(Number(params.get("offset") ?? 0)), acquirePermit: acquireArchiveProviderPermit }); return { ...result, queryStatus: result.items.length ? "success" : "no_results" }; }
-  catch (error) {
+  const provider = params.get("provider") ?? "apple";
+  if (!["apple", "musicbrainz"].includes(provider)) return { items: [], total: 0, nextOffset: null, queryStatus: "unsupported", message: "아티스트 이름으로 앨범을 찾아주세요." };
+  const rate = consumeRateLimit({ namespace: "archive-provider-search", identifier: owner, limit: 40, windowMs: 60000 });
+  if (!rate.allowed) throw new ArchiveError("검색 요청이 많습니다. 잠시 후 다시 검색해주세요.", 429);
+  const query = z.string().trim().min(1).max(200).parse(params.get("q") ?? "");
+  const offset = Math.min(180, paging(Number(params.get("offset") ?? 0)));
+  try {
+    const result = provider === "apple"
+      ? await searchCatalogArtists(query, offset, () => acquireArchiveProviderPermit("apple"))
+      : await searchMusicBrainzArtists(query, { offset, acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
+    return { ...result, queryStatus: result.items.length ? "success" : "no_results" };
+  } catch (error) {
     if (!(error instanceof MusicProviderError)) throw error;
     if (error.code === "invalid_input") throw new ArchiveError(error.message, 422, "INVALID_INPUT");
-    return { items: [], total: 0, nextOffset: null, queryStatus: error.code === "not_found" ? "no_results" : ["permission_required", "configuration_required"].includes(error.code) ? "forbidden" : "temporary_error", code: error.code, message: error.message, providers: getMusicProviderStatuses() };
+    return { items: [], total: 0, nextOffset: null, queryStatus: error.code === "not_found" ? "no_results" : ["permission_required", "configuration_required"].includes(error.code) ? "forbidden" : "temporary_error", code: error.code, message: provider === "apple" ? "검색을 잠시 이용할 수 없습니다. 잠시 후 다시 시도해주세요." : error.message };
   }
 }
 
@@ -171,6 +180,11 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
   if (command.type === "set_connection") {
     const parsed = command.connection.url ? parseMusicProviderUrl(command.connection.url, "artist") : command.connection.provider === "musicbrainz" && command.connection.externalArtistId ? parseMusicProviderUrl(command.connection.externalArtistId, "artist") : null;
     if (!parsed || parsed.provider !== command.connection.provider || (command.connection.externalArtistId && parsed.externalId !== command.connection.externalArtistId)) throw new ArchiveError("아티스트 URL과 식별자를 확인해주세요.", 422);
+    if (parsed.provider === "apple") {
+      // Revalidate the chosen ID; never silently map an unrelated domestic provider ID by name.
+      const candidate = await lookupAppleArtist(parsed.externalId, { acquirePermit: () => acquireArchiveProviderPermit("apple") });
+      await indexCatalogArtists([candidate], new Date().toISOString());
+    }
     command.connection.url = parsed.url; command.connection.externalArtistId = parsed.externalId;
   }
   await validateCommandAccess(owner, library, command);
@@ -179,7 +193,11 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
   if (["set_connection", "remove_connection"].includes(command.type)) {
     const provider = command.type === "set_connection" ? command.connection.provider : command.type === "remove_connection" ? command.provider : "";
     const { error } = await createAdminClient().from("music_archive_jobs").update({ status: "cancelled", lease_token: null, lease_until: null, updated_at: new Date().toISOString() }).eq("owner_id", owner).eq("library_id", library.id).eq("provider", provider).in("status", ["queued", "running", "partial", "blocked", "failed"]);
-    archiveDatabaseError(error);
+    if (error) return { library: result, syncNotice: "연결 변경을 저장했습니다. 이전 불러오기 작업을 정리하지 못해 새 수집은 시작하지 않았습니다. 잠시 후 다시 시도해주세요." };
+  }
+  if (command.type === "set_connection" && command.connection.provider === "apple") {
+    try { return { library: result, ...await enqueueArchiveSync(owner, result, "apple") }; }
+    catch { return { library: result, syncNotice: "아티스트 연결을 저장했습니다. 앨범 불러오기를 다시 눌러주세요." }; }
   }
   return { library: result };
 }

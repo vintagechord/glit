@@ -81,3 +81,20 @@ test("separate owner documents sharing public metadata never share private task 
   assert.equal(mergeArchiveImports(ownerB, [release()]).tasks.length, 0);
   assert.equal(ownerA.tasks[0].memo, "비공개 메모");
 });
+
+test("Apple import remains distinct from matching MusicBrainz IDs and preserves edits on replay", () => {
+  const mb = release("123");
+  const apple: ImportedRelease = { ...mb, provider: "apple", url: "https://music.apple.com/kr/album/123", tracks: [{ ...mb.tracks[0], externalId: "124", recordingId: null, url: "https://music.apple.com/us/album/example/123?i=124" }] };
+  let data = mergeArchiveImports(createArchiveData("동명이인"), [mb, apple]);
+  assert.equal(data.releases.length, 2);
+  assert.equal(data.tracks.length, 2);
+  assert.equal(data.recordings.length, 1, "Apple track ID is not a recording identity or ISRC");
+  assert.equal(data.tracks[1].links[0].externalId, "124");
+  data = applyArchiveCommand(data, { type: "update_release", releaseId: "apple-release:123", patch: { title: "직접 수정" } });
+  data = applyArchiveCommand(data, { type: "set_excluded", entityType: "track", id: "apple-track:123:124", excluded: true });
+  const replay = mergeArchiveImports(data, [apple]);
+  assert.equal(replay.releases[1].title, "직접 수정");
+  assert.equal(replay.tracks[1].excluded, true);
+  assert.equal(replay.releases.length, 2);
+  assert.equal(replay.tracks.length, 2);
+});

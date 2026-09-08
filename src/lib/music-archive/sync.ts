@@ -3,13 +3,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { consumeRateLimit } from "@/lib/request-rate-limit";
 import { ArchiveError, archiveDatabaseError } from "./http";
 import { getMusicProviderStatuses, type MusicBrainzCursor } from "./providers";
+import { collectAppleStep, type AppleCursor } from "./apple";
 import { collectMusicBrainzStep, MusicProviderError } from "./musicbrainz";
 import { type ArchiveLibrary, type ArchiveSyncJob } from "./model";
 import { getOwnedLibrary } from "./service";
 import { mergeArchiveImports } from "./import";
 
-export async function acquireArchiveProviderPermit() {
-  const { data, error } = await createAdminClient().rpc("reserve_music_archive_provider_slot", { p_provider: "musicbrainz" });
+export async function acquireArchiveProviderPermit(provider: "musicbrainz" | "apple" = "musicbrainz") {
+  const { data, error } = await createAdminClient().rpc("reserve_music_archive_provider_slot", { p_provider: provider });
   archiveDatabaseError(error);
   const wait = Number(data);
   if (!Number.isFinite(wait) || wait < 0 || wait > 5000) throw new MusicProviderError("rate_limited", "공유 호출 한도에 도달했습니다. 잠시 후 이어서 시도해주세요.", 6);
@@ -18,7 +19,7 @@ export async function acquireArchiveProviderPermit() {
 
 function syncPermission(provider: string) {
   const support = getMusicProviderStatuses().find(item => item.id === provider);
-  if (!support || support.status !== "available" || provider !== "musicbrainz") throw new ArchiveError(support?.message ?? "이 제공처는 수동 연결을 지원합니다.", 422, support?.status ?? "UNSUPPORTED");
+  if (!support || support.status !== "available" || !["musicbrainz", "apple"].includes(provider)) throw new ArchiveError(support?.message ?? "이 제공처는 수동 연결을 지원합니다.", 422, support?.status ?? "UNSUPPORTED");
 }
 export async function enqueueArchiveSync(owner: string, library: ArchiveLibrary, provider: string) {
   syncPermission(provider);
@@ -71,7 +72,10 @@ export async function runArchiveJob(libraryId?: string) {
     if (before.archived_at || before.data.connections.find(item => item.provider === job.provider && item.confirmed)?.externalArtistId !== job.external_artist_id) throw new ArchiveError("연결이 변경되어 수집이 취소되었습니다.", 409, "CONNECTION_CHANGED");
     const cursor = job.cursor.providerCursor ? job.cursor.providerCursor as unknown as MusicBrainzCursor : null;
     const releaseIds = new Set(Array.isArray(job.cursor.releaseIds) ? job.cursor.releaseIds as string[] : []);
-    const step = await collectMusicBrainzStep(job.external_artist_id, cursor, { acquirePermit: acquireArchiveProviderPermit });
+    syncPermission(job.provider);
+    const step = job.provider === "apple"
+      ? await collectAppleStep(job.external_artist_id, job.cursor.providerCursor as unknown as AppleCursor ?? null, { acquirePermit: () => acquireArchiveProviderPermit("apple") })
+      : await collectMusicBrainzStep(job.external_artist_id, cursor, { acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
     // Refetch after the network wait; optimistic commit still protects a concurrent edit.
     const library = await getOwnedLibrary(job.owner_id, job.library_id);
     const merged = mergeArchiveImports(library.data, step.releases);
@@ -80,11 +84,11 @@ export async function runArchiveJob(libraryId?: string) {
     for (const release of step.releases) {
       const payload: Record<string, unknown> = Object.fromEntries(Object.entries(release).filter(([key]) => key !== "participation" && key !== "tracks"));
       payload.tracks = release.tracks.map(track => Object.fromEntries(Object.entries(track).filter(([key]) => key !== "managedByArtist")));
-      const { error: sourceError } = await admin.from("music_archive_sources").upsert({ provider: "musicbrainz", external_id: release.externalId, kind: "release", payload, checked_at: step.checkedAt }, { onConflict: "provider,external_id,kind" });
+      const { error: sourceError } = await admin.from("music_archive_sources").upsert({ provider: job.provider, external_id: release.externalId, kind: "release", payload, checked_at: step.checkedAt }, { onConflict: "provider,external_id,kind" });
       archiveDatabaseError(sourceError);
     }
     for (const release of step.releases) releaseIds.add(release.externalId);
-    const managedReleaseIds = new Set(merged.releases.filter(item => item.source?.provider === "musicbrainz" && releaseIds.has(item.source.externalId)).map(item => item.id));
+    const managedReleaseIds = new Set(merged.releases.filter(item => item.source?.provider === job.provider && releaseIds.has(item.source.externalId)).map(item => item.id));
     const counts = { releases: releaseIds.size, tracks: merged.tracks.filter(item => managedReleaseIds.has(item.releaseId)).length, managedTracks: merged.tracks.filter(item => managedReleaseIds.has(item.releaseId) && item.managed && !item.excluded).length, steps: (job.counts.steps ?? 0) + 1, consecutiveErrors: 0 };
     const { error: commitError } = await admin.rpc("commit_music_archive_step", { p_job: job.id, p_token: token, p_version: library.version, p_data: merged, p_cursor: { providerCursor: step.nextCursor, releaseIds: [...releaseIds], scopeNote: step.scopeNote }, p_counts: counts, p_status: step.status === "completed" ? "completed" : "queued", p_checked_at: step.checkedAt });
     archiveDatabaseError(commitError);

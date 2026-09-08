@@ -40,5 +40,7 @@ $$;
 create table public.profiles(user_id uuid primary key references auth.users(id),role text not null);
 SQL
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0095_music_archive.sql"
+docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0099_music_archive_domestic_catalog.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive.sql"
+docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive-domestic.sql"
 echo "Music archive SQL integration checks passed; disposable container will be removed."

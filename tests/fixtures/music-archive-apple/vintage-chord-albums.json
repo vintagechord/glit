@@ -1,0 +1,97 @@
+{
+  "resultCount": 8,
+  "results": [
+    {
+      "wrapperType": "artist",
+      "artistType": "Artist",
+      "artistName": "Vintage Chord",
+      "artistLinkUrl": "https://music.apple.com/kr/artist/%EB%B9%88%ED%8B%B0%EC%A7%80%EC%BD%94%EB%93%9C/1259084205?uo=4",
+      "artistId": 1259084205,
+      "primaryGenreName": "R&B/소울"
+    },
+    {
+      "wrapperType": "collection",
+      "collectionType": "Album",
+      "artistId": 1259084205,
+      "collectionId": 1566325272,
+      "artistName": "빈티지코드 & 가연",
+      "collectionName": "gray - Single",
+      "collectionViewUrl": "https://music.apple.com/kr/album/gray-single/1566325272?uo=4",
+      "trackCount": 2,
+      "releaseDate": "2021-05-09T07:00:00Z",
+      "primaryGenreName": "R&B/소울"
+    },
+    {
+      "wrapperType": "collection",
+      "collectionType": "Album",
+      "artistId": 914793067,
+      "collectionId": 1867153642,
+      "artistName": "이윤정 & 빈티지코드",
+      "collectionName": "Whispers in the Dark - Single",
+      "collectionViewUrl": "https://music.apple.com/kr/album/whispers-in-the-dark-single/1867153642?uo=4",
+      "trackCount": 1,
+      "releaseDate": "2026-01-12T08:00:00Z",
+      "primaryGenreName": "R&B/소울"
+    },
+    {
+      "wrapperType": "collection",
+      "collectionType": "Album",
+      "artistId": 1259084205,
+      "collectionId": 1259083959,
+      "artistName": "빈티지코드",
+      "collectionName": "The Moon and the Stars",
+      "collectionViewUrl": "https://music.apple.com/kr/album/the-moon-and-the-stars/1259083959?uo=4",
+      "trackCount": 9,
+      "releaseDate": "2017-04-11T07:00:00Z",
+      "primaryGenreName": "힙합/랩"
+    },
+    {
+      "wrapperType": "collection",
+      "collectionType": "Album",
+      "artistId": 1259084205,
+      "collectionId": 1565556412,
+      "artistName": "빈티지코드",
+      "collectionName": "comma of Maison D - EP",
+      "collectionViewUrl": "https://music.apple.com/kr/album/comma-of-maison-d-ep/1565556412?uo=4",
+      "trackCount": 4,
+      "releaseDate": "2018-05-11T07:00:00Z",
+      "primaryGenreName": "힙합/랩"
+    },
+    {
+      "wrapperType": "collection",
+      "collectionType": "Album",
+      "artistId": 1259084205,
+      "collectionId": 1514940761,
+      "artistName": "빈티지코드 & Ruwa",
+      "collectionName": "Riverside Stories",
+      "collectionViewUrl": "https://music.apple.com/kr/album/riverside-stories/1514940761?uo=4",
+      "trackCount": 8,
+      "releaseDate": "2019-04-10T07:00:00Z",
+      "primaryGenreName": "R&B/소울"
+    },
+    {
+      "wrapperType": "collection",
+      "collectionType": "Album",
+      "artistId": 1259084205,
+      "collectionId": 1540899841,
+      "artistName": "빈티지코드 & 가연",
+      "collectionName": "Sun - Single",
+      "collectionViewUrl": "https://music.apple.com/kr/album/sun-single/1540899841?uo=4",
+      "trackCount": 1,
+      "releaseDate": "2020-11-18T08:00:00Z",
+      "primaryGenreName": "R&B/소울"
+    },
+    {
+      "wrapperType": "collection",
+      "collectionType": "Album",
+      "artistId": 1499759696,
+      "collectionId": 1795396871,
+      "artistName": "OVRSIZE, OTWO & 빈티지코드",
+      "collectionName": "Take It Away - Single",
+      "collectionViewUrl": "https://music.apple.com/kr/album/take-it-away-single/1795396871?uo=4",
+      "trackCount": 1,
+      "releaseDate": "2023-11-30T08:00:00Z",
+      "primaryGenreName": "힙합/랩"
+    }
+  ]
+}

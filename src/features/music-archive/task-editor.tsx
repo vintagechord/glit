@@ -1,17 +1,17 @@
 "use client";
 import { useState } from "react";
-import { kindLabels, statusLabels, resultLabels, sourceLabels, queryStatusLabels, type ArchiveData, type ArchiveTask, type ArchiveTaskFields, type ArchiveTrack, type ArchiveCommand } from "@/lib/music-archive/model";
+import { kindLabels, statusLabels, resultLabels, sourceLabels, type ArchiveData, type ArchiveTask, type ArchiveTaskFields, type ArchiveTrack, type ArchiveCommand } from "@/lib/music-archive/model";
 import type { AgencyGuide } from "@/lib/music-archive/guides";
 import { Badge, Button, Field, Notice, External, inputClass } from "./ui";
 
 const agencies: Record<ArchiveTask["kind"], string[]> = { review: ["KBS", "MBC", "SBS", "기타 방송사"], copyright_work: ["KOMCA", "KOSCAP", "기타 관리기관"], copyright_legal: ["한국저작권위원회"], performer: ["한국음악실연자연합회", "기타 실연자 기관"], karaoke: ["TJ", "금영"] };
 const results: Record<ArchiveTask["kind"], ArchiveTask["result"][]> = { review: ["unknown", "eligible", "ineligible", "rejected"], copyright_work: ["unknown", "information_found", "approved", "rejected"], copyright_legal: ["unknown", "information_found", "approved", "rejected"], performer: ["unknown", "information_found", "approved", "rejected"], karaoke: ["unknown", "listed", "not_listed", "rejected"] };
 
-export function TaskEditor({ data, tracks, kind, initial, busy, onSave }: { data: ArchiveData; tracks: ArchiveTrack[]; kind: ArchiveTask["kind"]; initial?: ArchiveTask; busy: boolean; onSave: (command: ArchiveCommand) => Promise<void> }) {
+export function TaskEditor({ data, tracks, kind, initial, suggested, busy, onSave }: { data: ArchiveData; tracks: ArchiveTrack[]; kind: ArchiveTask["kind"]; initial?: ArchiveTask; suggested?: { agency: string; participant?: string }; busy: boolean; onSave: (command: ArchiveCommand) => Promise<void> }) {
   const [selected, setSelected] = useState<string[]>(initial ? [initial.trackId] : tracks.filter((track) => track.managed && !track.excluded && !track.mergedInto).map((track) => track.id).slice(0, 200));
   const [values, setValues] = useState<ArchiveTaskFields>(() => initial ? {
     kind: initial.kind, agency: initial.agency, status: initial.status, result: initial.result, participant: initial.participant, role: initial.role, executor: initial.executor, agencyName: initial.agencyName, recordingId: initial.recordingId, workId: initial.workId, applicationDate: initial.applicationDate, completedDate: initial.completedDate, checkedDate: initial.checkedDate, recheckDate: initial.recheckDate, referenceNumber: initial.referenceNumber, songNumber: initial.songNumber, applicationUrl: initial.applicationUrl, memo: initial.memo, attachmentIds: initial.attachmentIds,
-  } : { kind, agency: agencies[kind][0], status: "needs_check", result: "unknown", executor: "self", attachmentIds: [] });
+  } : { kind, agency: suggested?.agency ?? agencies[kind][0], participant: suggested?.participant, status: "needs_check", result: "unknown", executor: "self", attachmentIds: [] });
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState("");
   const set = <K extends keyof ArchiveTaskFields>(key: K, value: ArchiveTaskFields[K]) => setValues((old) => ({ ...old, [key]: value }));
@@ -35,7 +35,8 @@ export function TaskEditor({ data, tracks, kind, initial, busy, onSave }: { data
   </form>;
 }
 
-export function TaskBadges({ task }: { task: ArchiveTask }) { return <div className="flex flex-wrap gap-1.5"><Badge attention={["needs_check","needs_changes"].includes(task.status)}>{statusLabels[task.status]}</Badge><Badge>{resultLabels[task.result]}</Badge><Badge>{sourceLabels[task.source]}</Badge><Badge>{queryStatusLabels[task.queryStatus]}</Badge></div>; }
+const customerQueryLabels: Record<ArchiveTask["queryStatus"], string> = { not_queried: "공식 조회 전", querying: "공식 조회 중", success: "공식 조회 완료", no_results: "조회된 정보 없음", forbidden: "공식 조회 미확인", unsupported: "공식 조회 미확인", temporary_error: "다시 확인 필요" };
+export function TaskBadges({ task }: { task: ArchiveTask }) { return <div className="flex flex-wrap gap-1.5"><Badge attention={["needs_check","needs_changes"].includes(task.status)}>{statusLabels[task.status]}</Badge><Badge>{resultLabels[task.result]}</Badge><Badge>{sourceLabels[task.source]}</Badge><Badge>{customerQueryLabels[task.queryStatus]}</Badge></div>; }
 
 export function Guides({ guides, kind }: { guides: AgencyGuide[]; kind: "review" | "copyright" | "performer" | "karaoke" }) {
   return <section className="space-y-3" aria-label="공식 등록 방법 안내"><h3 className="font-black">등록 방법과 공식 안내</h3>{guides.filter((guide) => guide.visible && guide.kind === kind).map((guide) => <details key={guide.id} className="rounded-lg border border-border bg-background p-3"><summary className="cursor-pointer text-sm font-bold">{guide.name} · 등록 방법 보기</summary><div className="mt-3 space-y-3 text-sm leading-6"><p>{guide.introduction}</p><p><strong>누가 확인하나요: </strong>{guide.eligibility}</p><div><strong>준비할 정보</strong><ul className="list-disc pl-5">{guide.preparation.map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>공식 신청 경로</strong><ol className="list-decimal pl-5">{guide.steps.map((item) => <li key={item}>{item}</li>)}</ol></div><div><strong>신청 후 확인 / 온사이드 기록</strong><ul className="list-disc pl-5">{guide.after.map((item) => <li key={item}>{item}</li>)}</ul></div><Notice>{guide.costNote}</Notice><div className="flex flex-wrap gap-x-4 gap-y-1">{guide.searchUrl && <External href={guide.searchUrl}>공식 정보 조회</External>}<External href={guide.applyUrl || guide.url}>공식 사이트에서 신청</External></div><p className="text-xs text-muted-foreground">외부기관에 직접 진행합니다. 온사이드가 제휴·대행하거나 이 화면에서 제출하지 않습니다. 공식 출처 확인일: {guide.checkedAt}</p><div className="flex flex-wrap gap-x-3">{guide.sources.map((source) => <External key={source.url} href={source.url}>{source.title}</External>)}</div></div></details>)}{!guides.some((guide) => guide.visible && guide.kind === kind) && <Notice>현재 노출 중인 공식 안내가 없습니다. 관리자에게 링크 확인을 요청할 수 있으며 업무 기록은 사용할 수 있습니다.</Notice>}</section>;

@@ -19,7 +19,13 @@ export async function GET(request: Request) {
     }
     if (params.get("action") === "search") return archiveJson(await searchArchiveArtists(user.id, params));
     if (params.get("action") === "submissions") return archiveJson(await searchOwnedSubmissions(user.id, params.get("q") ?? "", Number(params.get("page") ?? 0)));
-    if (params.has("libraryId")) return archiveJson(await getArchiveDetail(user.id, z.uuid().parse(params.get("libraryId"))));
+    if (params.has("libraryId")) {
+      const detail = await getArchiveDetail(user.id, z.uuid().parse(params.get("libraryId")));
+      if (detail.jobs.some(job => ["queued", "running"].includes(job.status))) {
+        after(async () => { await runArchiveBatch(detail.library.id).catch(() => undefined); });
+      }
+      return archiveJson(detail);
+    }
     return archiveJson(await getArchiveOverview(user.id, Number(params.get("page") ?? 0)));
   } catch (error) { return archiveError(error); }
 }
