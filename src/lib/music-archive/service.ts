@@ -9,7 +9,7 @@ import { MusicProviderError, searchMusicBrainzArtists } from "./musicbrainz";
 import { lookupAppleArtist } from "./apple";
 import { searchCatalogArtists, indexCatalogArtists } from "./catalog-search";
 import { agencyGuides } from "./guides";
-import { submissionArchiveColumns, normalizeSubmissionTitles } from "./reviews";
+import { submissionArchiveColumns, normalizeSubmissionTitles, matchArchiveReviews } from "./reviews";
 import { enqueueArchiveSync, resumeArchiveSync, acquireArchiveProviderPermit } from "./sync";
 import { previewArchiveCsv, importArchiveCsv } from "./csv";
 
@@ -56,14 +56,31 @@ export async function getArchiveDetail(owner: string, libraryId: string) {
   const library = await getOwnedLibrary(owner, libraryId);
   const admin = createAdminClient();
   const ids = [...new Set(library.data.reviewLinks.map(link => link.submissionId))];
-  const [jobs, evidence, events, reviews] = await Promise.all([
+  const [jobs, evidence, events, candidates] = await Promise.all([
     admin.from("music_archive_jobs").select(publicJobFields).eq("owner_id", owner).eq("library_id", libraryId).order("created_at", { ascending: false }).limit(25),
     admin.from("music_archive_attachments").select("id,task_id,file_name,mime_type,size_bytes,created_at").eq("owner_id", owner).eq("library_id", libraryId).is("deleted_at", null),
-    admin.from("music_archive_events").select("id,actor_id,action,before_version,after_version,created_at").eq("owner_id", owner).eq("library_id", libraryId).order("created_at", { ascending: false }).limit(50),
-    ids.length ? admin.from("submissions").select(submissionArchiveColumns).eq("user_id", owner).is("user_deleted_at", null).in("id", ids) : Promise.resolve({ data: [], error: null }),
+    admin.from("music_archive_events").select("id,actor_id,action,before_version,after_version,created_at,details").eq("owner_id", owner).eq("library_id", libraryId).order("created_at", { ascending: false }).limit(100),
+    (async () => {
+      const rows: { id: string; status: string; melon_url?: string | null; archive_review_context?: unknown; album_tracks?: { track_no?: number; track_title?: string | null; track_title_kr?: string | null; track_title_en?: string | null }[] }[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        const result = await admin.from("submissions").select("id,status,melon_url,archive_review_context,album_tracks(track_no,track_title,track_title_kr,track_title_en)").eq("user_id", owner).eq("type", "ALBUM").is("user_deleted_at", null).order("created_at", { ascending: false }).order("id").range(offset, offset + 999);
+        archiveDatabaseError(result.error);
+        rows.push(...(result.data ?? []));
+        if (!result.data || result.data.length < 1000) return rows;
+      }
+    })(),
   ]);
-  for (const result of [jobs, evidence, events, reviews]) archiveDatabaseError(result.error);
-  return { library, jobs: jobs.data ?? [], evidence: evidence.data ?? [], events: events.data ?? [], reviews: (reviews.data ?? []).map(normalizeSubmissionTitles) };
+  for (const result of [jobs, evidence, events]) archiveDatabaseError(result.error);
+  const onsideReviews = matchArchiveReviews(library.data, candidates, library.id);
+  const matchedIds = new Set([...ids, ...onsideReviews.map(review => review.submissionId)]);
+  const reviews = [];
+  const reviewIds = [...matchedIds];
+  for (let offset = 0; offset < reviewIds.length; offset += 100) {
+    const result = await admin.from("submissions").select(submissionArchiveColumns).eq("user_id", owner).eq("type", "ALBUM").is("user_deleted_at", null).in("id", reviewIds.slice(offset, offset + 100));
+    archiveDatabaseError(result.error);
+    reviews.push(...(result.data ?? []).map(normalizeSubmissionTitles));
+  }
+  return { library, jobs: jobs.data ?? [], evidence: evidence.data ?? [], events: events.data ?? [], reviews, onsideReviews };
 }
 
 export async function searchOwnedSubmissions(owner: string, query: string, page = 0) {
@@ -110,14 +127,64 @@ async function validateCommandAccess(owner: string, library: ArchiveLibrary, com
   }
 }
 
-export async function getArchiveAdmin() {
-  const { data, error } = await createAdminClient().from("music_archive_jobs").select(publicJobFields).order("updated_at", { ascending: false }).limit(100);
+export async function getArchiveAdmin(query = "", page = 0) {
+  const start = paging(page) * 20;
+  const q = query.trim().slice(0, 100).replace(/[,%()\\_]/g, " ");
+  let listing = createAdminClient().from("music_archive_admin_libraries").select("*", { count: "exact" });
+  if (q) listing = listing.or(`artist_name.ilike.%${q}%${uuid.safeParse(q).success ? `,owner_id.eq.${q},id.eq.${q}` : ""}`);
+  const [jobs, libraries, guides] = await Promise.all([
+    createAdminClient().from("music_archive_jobs").select(publicJobFields).order("updated_at", { ascending: false }).limit(100),
+    listing.order("updated_at", { ascending: false }).range(start, start + 19),
+    getArchiveGuides(true),
+  ]);
+  archiveDatabaseError(jobs.error); archiveDatabaseError(libraries.error);
+  return { jobs: jobs.data ?? [], guides, providers: getMusicProviderStatuses(), libraries: libraries.data ?? [], total: libraries.count ?? 0, nextPage: start + 20 < (libraries.count ?? 0) ? paging(page) + 1 : null };
+}
+
+/** Only called after the route has verified the requesting administrator. */
+export async function getArchiveAdminDetail(libraryId: string) {
+  const { data, error } = await createAdminClient().from("music_archive_libraries").select("owner_id").eq("id", uuid.parse(libraryId)).maybeSingle();
   archiveDatabaseError(error);
-  return { jobs: data ?? [], guides: await getArchiveGuides(true), providers: getMusicProviderStatuses() };
+  if (!data) throw new ArchiveError("관리 항목을 찾을 수 없습니다.", 404, "NOT_FOUND");
+  return getArchiveDetail(data.owner_id, libraryId);
+}
+
+/** Persist exact archive scope after the ordinary owner-checked submission save. */
+export async function linkArchiveSubmission(owner: string, context: { libraryId: string; releaseId: string; trackId?: string }, submissionId: string, submissionTrackIds?: string[]) {
+  const { data: submission, error } = await createAdminClient().from("submissions").select("id,archive_review_context,album_tracks(id,track_no)").eq("id", uuid.parse(submissionId)).eq("user_id", owner).eq("type", "ALBUM").is("user_deleted_at", null).maybeSingle();
+  archiveDatabaseError(error);
+  if (!submission) throw new ArchiveError("심의 신청을 찾을 수 없습니다.", 404);
+  const savedTracks = [...submission.album_tracks].sort((a, b) => a.track_no - b.track_no);
+  const targetIds = submissionTrackIds ?? savedTracks.map(track => track.id);
+  if (targetIds.some(id => !savedTracks.some(track => track.id === id)) || new Set(targetIds).size !== targetIds.length) throw new ArchiveError("심의 트랙 연결을 확인해주세요.", 422);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const library = await getOwnedLibrary(owner, context.libraryId);
+    const release = library.data.releases.find(row => row.id === context.releaseId && !row.excluded && !row.mergedInto);
+    const availableTracks = library.data.tracks.filter(row => row.releaseId === context.releaseId && row.managed && !row.excluded && !row.mergedInto && (!context.trackId || row.id === context.trackId)).sort((a, b) => a.discNumber - b.discNumber || a.trackNumber - b.trackNumber);
+    const snapshot = submission.archive_review_context as { libraryId?: string; releaseId?: string; trackIds?: string[] } | null;
+    const tracks = snapshot?.libraryId === context.libraryId && snapshot.releaseId === context.releaseId && Array.isArray(snapshot.trackIds)
+      ? snapshot.trackIds.flatMap(id => availableTracks.find(track => track.id === id) ?? []) : availableTracks;
+    if (!release || !tracks.length || tracks.length !== targetIds.length) throw new ArchiveError("앨범과 심의 트랙 구성이 달라졌습니다. 새로고침해주세요.", 409);
+    const links = tracks.map((track, index) => ({ id: `onside:${submissionId}:${index}`, submissionId, releaseId: release.id, trackId: track.id, submissionTrackId: targetIds[index] }));
+    // Track links preserve participation/subset scope even for an album-level application.
+    const data = { ...library.data, reviewLinks: [...library.data.reviewLinks.filter(link => link.submissionId !== submissionId), ...links] };
+    if (JSON.stringify(data.reviewLinks) === JSON.stringify(library.data.reviewLinks)) return;
+    try { await saveArchiveLibrary(owner, library, data, "link_review", owner, library.archived_at, { submissionId, releaseId: release.id, trackIds: tracks.map(track => track.id) }); return; }
+    catch (error) { if (!(error instanceof ArchiveError) || error.code !== "VERSION_CONFLICT" || attempt === 3) throw error; }
+  }
 }
 
 export async function mutateArchive(owner: string, raw: unknown, isAdmin = false): Promise<{ library?: ArchiveLibrary; job?: unknown; runLibraryId?: string; [key: string]: unknown }> {
   const body = z.object({ action: z.string(), libraryId: uuid.optional(), version: z.number().int().positive().optional() }).passthrough().parse(raw);
+  if (body.action === "admin-resolve-conflict" && isAdmin) {
+    const { data: target, error } = await createAdminClient().from("music_archive_libraries").select("owner_id").eq("id", uuid.parse(body.libraryId)).maybeSingle();
+    archiveDatabaseError(error);
+    if (!target) throw new ArchiveError("관리 항목을 찾을 수 없습니다.", 404);
+    const library = await getOwnedLibrary(target.owner_id, String(body.libraryId));
+    if (body.version !== library.version) throw new ArchiveError("변경된 자료를 새로고침한 뒤 다시 저장해주세요.", 409, "VERSION_CONFLICT");
+    const command = archiveCommandSchema.parse({ type: "resolve_conflict", conflictId: body.conflictId, resolution: body.resolution });
+    return { library: await saveArchiveLibrary(target.owner_id, library, applyArchiveCommand(library.data, command), "admin_resolve_conflict", owner, library.archived_at, { command }) };
+  }
   if (body.action === "create") {
     const { name } = z.object({ name: z.string().trim().min(1).max(500) }).parse(body);
     const { data, error } = await createAdminClient().rpc("create_music_archive_library", { p_id: randomUUID(), p_owner: owner, p_data: createArchiveData(name, randomUUID()) });

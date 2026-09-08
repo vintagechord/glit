@@ -118,7 +118,7 @@ export default async function SubmissionDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ payment?: string | string[] | undefined }>;
+  searchParams?: Promise<{ payment?: string | string[] | undefined; view?: string | string[] | undefined }>;
 }) {
   const { id } = await params;
   const resolvedSearchParams = (await searchParams) ?? {};
@@ -188,11 +188,13 @@ export default async function SubmissionDetailPage({
     const maxAttempts = Math.max(6, selectClause.split(",").length);
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const { data, error: err } = await client
-        .from("submissions")
-        .select(selectClause)
-        .eq("id", submissionId)
-        .maybeSingle();
+      let query = client.from("submissions").select(selectClause).eq("id", submissionId);
+      if (resolvedSearchParams.view === "archive-result") {
+        // Archive popups only show the signed-in member's own active records,
+        // including when an administrator opens the member-facing route.
+        query = query.eq("user_id", user?.id ?? "00000000-0000-0000-0000-000000000000").is("user_deleted_at", null);
+      }
+      const { data, error: err } = await query.maybeSingle();
       submission = (data as SubmissionRow | null) ?? null;
       error = err as PostgrestError | null;
       if (!error) break;
@@ -487,6 +489,7 @@ export default async function SubmissionDetailPage({
       initialStationReviews={initialStationReviews}
       initialFiles={[]}
       paymentState={paymentState}
+      resultsOnly={resolvedSearchParams.view === "archive-result"}
     />
   );
 }

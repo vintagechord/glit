@@ -16,46 +16,36 @@ export function EntityEditor({ data, kind, release, track, busy, onSave }: { dat
   const [version, setVersion] = useState(track?.version ?? release?.version ?? "");
   const [releaseType, setReleaseType] = useState<ArchiveRelease["type"]>(release?.type ?? "album");
   const [releaseDate, setReleaseDate] = useState(release?.releaseDate ?? "");
-  const [participation, setParticipation] = useState<ArchiveRelease["participation"]>(release?.participation ?? "primary");
-  const [links, setLinks] = useState<ServiceLink[]>(kind === "artist" ? data.artist.links : track?.links ?? (kind === "track" ? [] : release?.links) ?? []);
-  const [note, setNote] = useState(data.artist.note ?? ""); const [disambiguation, setDisambiguation] = useState(data.artist.disambiguation ?? "");
-  const [discNumber, setDiscNumber] = useState(track?.discNumber ?? 1); const [trackNumber, setTrackNumber] = useState(track?.trackNumber ?? (data.tracks.filter((item) => item.releaseId === release?.id).length + 1));
-  const [managed, setManaged] = useState(track?.managed ?? true);
-  const [recordingId, setRecordingId] = useState(track?.recordingId ?? "new");
-  const initialRecording = data.recordings.find((recording) => recording.id === track?.recordingId);
-  const [isrc, setIsrc] = useState(initialRecording?.isrc ?? "");
-  const [editRecording, setEditRecording] = useState(false); const [recordingTitle, setRecordingTitle] = useState(initialRecording?.title ?? ""); const [recordingVersion, setRecordingVersion] = useState(initialRecording?.version ?? ""); const [recordingWorks, setRecordingWorks] = useState<string[]>(initialRecording?.workIds ?? []);
-  const [workId, setWorkId] = useState(initialRecording?.workIds[0] ?? "");
-  const [workTitle, setWorkTitle] = useState(track?.title ?? ""); const [writers, setWriters] = useState(""); const [iswc, setIswc] = useState("");
+  const [trackNumber, setTrackNumber] = useState(track?.trackNumber ?? data.tracks.filter((item) => item.releaseId === release?.id).length + 1);
   const [error, setError] = useState("");
   async function save() {
     setError("");
     try {
       const commands: ArchiveCommand[] = [];
-      if (kind === "artist") commands.push({ type: "update_artist", patch: { name: title, disambiguation, note, links } });
+      if (kind === "artist") commands.push({ type: "update_artist", patch: { name: title } });
       if (kind === "release") {
-        const value = { title, artistName, version, type: releaseType, ...(releaseDate ? { releaseDate } : {}), participation, links };
-        commands.push(release ? { type: "update_release", releaseId: release.id, patch: value } : { type: "add_release", release: { id: crypto.randomUUID(), ...value } });
+        const value = { title, artistName, version, type: releaseType, ...(releaseDate ? { releaseDate } : {}) };
+        commands.push(release ? { type: "update_release", releaseId: release.id, patch: value } : { type: "add_release", release: { id: crypto.randomUUID(), ...value, participation: "primary", links: [] } });
       }
       if (kind === "track" && release) {
-        let chosenRecording = recordingId;
-        if (recordingId === "new") {
-          let chosenWork = workId;
-          if (workId === "new") { chosenWork = crypto.randomUUID(); commands.push({ type: "save_work", work: { id: chosenWork, title: workTitle || title, writers, iswc, institutionNumbers: [] } }); }
-          chosenRecording = crypto.randomUUID();
-          commands.push({ type: "save_recording", recording: { id: chosenRecording, title, version, isrc, workIds: chosenWork ? [chosenWork] : [] } });
+        const value = { title, artistName, version, trackNumber };
+        if (track) commands.push({ type: "update_track", trackId: track.id, patch: value });
+        else {
+          const recordingId = crypto.randomUUID();
+          commands.push({ type: "save_recording", recording: { id: recordingId, title, version, workIds: [] } });
+          commands.push({ type: "add_track", track: { id: crypto.randomUUID(), releaseId: release.id, ...value, recordingId, discNumber: 1, managed: true, links: [] } });
         }
-        if (recordingId !== "new" && editRecording) { const existing = data.recordings.find((item) => item.id === recordingId); if (existing) commands.push({ type: "save_recording", recording: { id: existing.id, title: recordingTitle, version: recordingVersion, isrc, workIds: recordingWorks } }); }
-        const value = { releaseId: release.id, title, artistName, version, discNumber, trackNumber, managed, links, ...(chosenRecording ? { recordingId: chosenRecording } : {}) };
-        commands.push(track ? { type: "update_track", trackId: track.id, patch: value } : { type: "add_track", track: { id: crypto.randomUUID(), ...value } });
       }
       await onSave(commands);
-    } catch (e) { setError((e as Error).message); }
+    } catch (error) { setError(error instanceof Error ? error.message : "저장하지 못했습니다."); }
   }
-  return <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-4">{error && <Notice error>{error}</Notice>}<div className="grid gap-4 sm:grid-cols-2"><Field label={kind === "artist" ? "아티스트 활동명" : kind === "release" ? "앨범 / 발매작 제목" : "트랙 제목"}><input className={inputClass} value={title} required maxLength={500} onChange={(e) => setTitle(e.target.value)} /></Field>{kind === "artist" ? <Field label="동명이인 구분 정보"><input className={inputClass} value={disambiguation} maxLength={500} onChange={(e) => setDisambiguation(e.target.value)} /></Field> : <><Field label="아티스트 / 참여 크레딧"><input className={inputClass} value={artistName} maxLength={500} onChange={(e) => setArtistName(e.target.value)} /></Field><Field label="버전" hint="원곡·클린·라이브·리믹스 등. 버전이 다르면 심의 결과를 자동 승계하지 않습니다."><input className={inputClass} value={version} maxLength={500} onChange={(e) => setVersion(e.target.value)} /></Field></>}{kind === "release" && <><Field label="발매 형식"><select className={inputClass} value={releaseType} onChange={(e) => setReleaseType(e.target.value as ArchiveRelease["type"])}>{Object.entries(releaseLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></Field><Field label="발매일" hint="확보한 범위로 입력: YYYY 또는 YYYY-MM 또는 YYYY-MM-DD"><input className={inputClass} value={releaseDate} pattern="[0-9]{4}(-[0-9]{2})?(-[0-9]{2})?" onChange={(e) => setReleaseDate(e.target.value)} /></Field><Field label="본인 명의 / 참여작"><select className={inputClass} value={participation} onChange={(e) => setParticipation(e.target.value as ArchiveRelease["participation"])}><option value="primary">본인 명의 발매작</option><option value="participation">참여작 / OST / 컴필레이션</option><option value="unknown">확인 필요</option></select></Field></>}{kind === "track" && <><Field label="디스크 번호"><input type="number" min={1} max={1000} required className={inputClass} value={discNumber} onChange={(e) => setDiscNumber(Number(e.target.value))} /></Field><Field label="트랙 순서"><input type="number" min={1} max={10000} required className={inputClass} value={trackNumber} onChange={(e) => setTrackNumber(Number(e.target.value))} /></Field></>}</div>
-    {kind === "artist" && <Field label="개인 메모"><textarea className={inputClass} rows={3} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} /></Field>}
-    {kind === "track" && <section className="space-y-3 rounded-lg border border-border p-3"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={managed} onChange={(e) => setManaged(e.target.checked)} />이 트랙을 내 업무 관리 대상으로 지정</label><Field label="녹음 / 음원 버전 연결" hint="같은 녹음의 다른 앨범 수록본만 기존 녹음에 연결해 주세요. 제목만으로 자동 합치지 않습니다."><select className={inputClass} value={recordingId} onChange={(e) => { setRecordingId(e.target.value); setEditRecording(false); const selected = data.recordings.find((item) => item.id === e.target.value); setIsrc(selected?.isrc ?? ""); setRecordingTitle(selected?.title ?? ""); setRecordingVersion(selected?.version ?? ""); setRecordingWorks(selected?.workIds ?? []); }}><option value="new">별도 녹음 버전으로 등록</option>{data.recordings.map((recording) => <option key={recording.id} value={recording.id}>{recording.title} · {recording.version || "버전 미기록"} · {recording.isrc || "ISRC 없음"}</option>)}</select></Field>{recordingId === "new" ? <><Field label="ISRC (실제 확인한 경우)"><input className={inputClass} value={isrc} onChange={(e) => setIsrc(e.target.value)} maxLength={500} /></Field><Field label="음악저작물 연결"><select className={inputClass} value={workId} onChange={(e) => setWorkId(e.target.value)}><option value="">추후 확인</option><option value="new">저작물 직접 등록</option>{data.works.map((work) => <option key={work.id} value={work.id}>{work.title} · {work.writers || "저작자 미기록"} · {work.iswc || "ISWC 없음"}</option>)}</select></Field>{workId === "new" && <div className="grid gap-3 sm:grid-cols-2"><Field label="저작물명"><input className={inputClass} value={workTitle} placeholder={title} onChange={(e) => setWorkTitle(e.target.value)} maxLength={500} /></Field><Field label="작사 / 작곡자"><input className={inputClass} value={writers} onChange={(e) => setWriters(e.target.value)} maxLength={500} /></Field><Field label="ISWC (확인한 경우)"><input className={inputClass} value={iswc} onChange={(e) => setIswc(e.target.value)} maxLength={500} /></Field></div>}</> : <><Notice>선택한 녹음: {data.recordings.find((item) => item.id === recordingId)?.title}. 현재 {data.tracks.filter((item) => item.recordingId === recordingId).length}개 수록 트랙에서 사용 중입니다. 업무 결과는 버전별로 보존합니다.</Notice><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editRecording} onChange={(e) => setEditRecording(e.target.checked)} />선택한 녹음의 식별 정보와 저작물 연결도 수정</label>{editRecording && <div className="space-y-3"><Notice>이 녹음을 함께 사용하는 수록 트랙 {data.tracks.filter((item) => item.recordingId === recordingId).map((item) => `${item.title} (${data.releases.find((release) => release.id === item.releaseId)?.title})`).join(", ")}의 녹음 메타데이터가 함께 바뀝니다. 업무 기록은 변경하지 않습니다.</Notice><Field label="녹음 제목"><input className={inputClass} value={recordingTitle} required maxLength={500} onChange={(e) => setRecordingTitle(e.target.value)} /></Field><Field label="녹음 버전"><input className={inputClass} value={recordingVersion} maxLength={500} onChange={(e) => setRecordingVersion(e.target.value)} /></Field><Field label="확인한 ISRC"><input className={inputClass} value={isrc} maxLength={500} onChange={(e) => setIsrc(e.target.value)} /></Field><fieldset className="space-y-2"><legend className="text-sm font-bold">연결할 기존 저작물</legend>{data.works.map((work) => <label key={work.id} className="flex gap-2 text-sm"><input type="checkbox" checked={recordingWorks.includes(work.id)} onChange={(e) => setRecordingWorks((old) => e.target.checked ? [...old,work.id] : old.filter((id) => id !== work.id))} />{work.title} · {work.writers || "저작자 미기록"} · {work.iswc || "ISWC 없음"}</label>)}</fieldset></div>}</>}</section>}
-    <LinksEditor kind={kind} value={links} onChange={setLinks} /><Button primary type="submit" disabled={busy}>{busy ? "저장 중" : "정보 저장"}</Button>
+  return <form onSubmit={(event) => { event.preventDefault(); void save(); }} className="space-y-4">
+    {error && <Notice error>{error}</Notice>}
+    <Field label={kind === "artist" ? "아티스트 활동명" : kind === "release" ? "앨범 제목" : "트랙 제목"}><input className={inputClass} value={title} required maxLength={500} onChange={(event) => setTitle(event.target.value)} /></Field>
+    {kind !== "artist" && <Field label="아티스트"><input className={inputClass} value={artistName} maxLength={500} onChange={(event) => setArtistName(event.target.value)} /></Field>}
+    {kind === "release" && <div className="grid gap-4 sm:grid-cols-2"><Field label="발매 형식"><select className={inputClass} value={releaseType} onChange={(event) => setReleaseType(event.target.value as ArchiveRelease["type"])}>{Object.entries(releaseLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></Field><Field label="발매일"><input className={inputClass} value={releaseDate} placeholder="YYYY-MM-DD" pattern="[0-9]{4}(-[0-9]{2})?(-[0-9]{2})?" onChange={(event) => setReleaseDate(event.target.value)} /></Field></div>}
+    {kind === "track" && <div className="grid gap-4 sm:grid-cols-2"><Field label="트랙 순서"><input type="number" min={1} max={10000} required className={inputClass} value={trackNumber} onChange={(event) => setTrackNumber(Number(event.target.value))} /></Field><Field label="버전"><input className={inputClass} value={version} maxLength={500} placeholder="원곡, 클린, 라이브 등" onChange={(event) => setVersion(event.target.value)} /></Field></div>}
+    <Button primary type="submit" disabled={busy}>{busy ? "저장 중…" : "저장"}</Button>
   </form>;
 }
 

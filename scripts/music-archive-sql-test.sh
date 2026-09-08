@@ -43,6 +43,7 @@ SQL
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0095_music_archive.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0099_music_archive_domestic_catalog.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0100_music_archive_multiple_profiles.sql"
+docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0101_music_archive_admin_summary.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive-domestic.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive-multiple-profiles.sql"

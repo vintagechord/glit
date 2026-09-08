@@ -54,3 +54,10 @@ test("released album URLs reject unrelated pages, malformed IDs and untrusted or
     null,
   );
 });
+
+test("archive release pages accept canonical Apple/Bugs albums without accepting individual-song URLs", () => {
+  assert.deepEqual(parseReleasedAlbumUrl("https://music.apple.com/kr/album/album-name/1259084205?uo=4"), { provider: "apple", albumId: "1259084205", canonicalUrl: "https://music.apple.com/kr/album/1259084205" });
+  assert.equal(parseReleasedAlbumUrl("https://music.apple.com/kr/album/1259084205")?.albumId, "1259084205");
+  assert.equal(parseReleasedAlbumUrl("https://music.bugs.co.kr/album/12345?ref=share")?.canonicalUrl, "https://music.bugs.co.kr/album/12345");
+  for (const url of ["https://music.apple.com/kr/album/name/1259084205?i=123", "https://music.apple.com/kr/artist/name/1259084205", "https://music.apple.com.evil.example/kr/album/123", "https://music.apple.com/kr/album/0", "https://music.bugs.co.kr/track/12345"]) assert.equal(parseReleasedAlbumUrl(url), null, url);
+});

@@ -954,12 +954,19 @@ async function hydrateReleasedAlbumBundle(
   options: ExternalReviewDocFetchOptions = {},
 ): Promise<ReviewDocSubmissionBundle> {
   if (!shouldHydrateFromReleasedAlbum(bundle)) return bundle;
+  // Archive requests have an explicit track scope. Fetching every track from
+  // the album URL would include songs the owner did not request for review.
+  if (bundle.tracks.some(track => getText(track, "notes").startsWith("온사이드 내 음악 관리 선택 트랙"))) return bundle;
 
   // Keep the legacy column while supporting both music services for released albums.
   const sourceUrl = parseReleasedAlbumUrl(getText(bundle.submission, "melon_url"));
   if (!sourceUrl) {
     throw new ReviewDocsInputError("접수된 멜론·지니 앨범 링크를 확인해주세요.");
   }
+  // These released-album links are prepared by staff using the saved scope;
+  // the existing Melon/Genie document importer does not fetch these services.
+  if (sourceUrl.provider === "apple" || sourceUrl.provider === "bugs") return bundle;
+  const sourceLabel = SOURCE_LABELS[sourceUrl.provider];
   try {
     const album = await fetchMusicSourceAlbum(sourceUrl.canonicalUrl, 0, options, true);
     const submissionId = getText(bundle.submission, "id");
@@ -996,7 +1003,7 @@ async function hydrateReleasedAlbumBundle(
       tracks: album.tracks.map((track) =>
         sourceTrackToRecord(
           submissionId,
-          { ...track, sourceNotes: `${SOURCE_LABELS[sourceUrl.provider]} 곡 ID: ${track.songId}` },
+          { ...track, sourceNotes: `${sourceLabel} 곡 ID: ${track.songId}` },
           existingByTrackNo.get(track.trackNo),
         ),
       ),

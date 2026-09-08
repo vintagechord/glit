@@ -10,7 +10,7 @@ export const mergeSyncJobs = (current: SyncJob[], incoming: SyncJob[]) => [...in
 export type Submission = { id: string; title: string; artist_name?: string; release_date?: string; status: string; created_at?: string; updated_at?: string; album_tracks?: { id: string; track_no: number; track_title: string }[]; station_reviews?: { id: string; status: string; result_note?: string | null; track_results_json?: unknown; updated_at?: string; station?: { name: string } | { name: string }[] }[]; submission_events?: { id: string; message?: string; note?: string; event_type?: string; created_at?: string }[] };
 export type Evidence = { id: string; task_id: string; file_name: string; size_bytes: number; created_at: string };
 export type ArchiveEvent = { id: string; action: string; before_version: number; after_version: number; created_at: string };
-export type LibraryDetail = { library: Library; jobs: SyncJob[]; reviews: Submission[]; evidence: Evidence[]; events: ArchiveEvent[] };
+export type LibraryDetail = { library: Library; jobs: SyncJob[]; reviews: Submission[]; evidence: Evidence[]; events: ArchiveEvent[]; onsideReviews?: { submissionId: string; releaseId: string; trackIds: string[]; status: string }[] };
 export type ArchiveIndex = { libraries: Library[]; providers: ProviderSupport[]; guides: AgencyGuide[]; jobs: SyncJob[]; nextPage?: number | null; total?: number };
 export const providerNames: Record<string, string> = { musicbrainz: "MusicBrainz", spotify: "Spotify", apple: "Apple Music 한국 카탈로그", melon: "멜론", genie: "지니뮤직", bugs: "벅스", user: "사용자 입력", manual: "사용자 입력" };
 export const isDomesticMusicProvider = (provider: string) => ["melon", "genie", "bugs"].includes(provider);

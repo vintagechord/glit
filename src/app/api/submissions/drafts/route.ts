@@ -14,6 +14,7 @@ import {
 } from "@/lib/request-rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getArchiveReviewEntry, storedArchiveReviewContextSchema } from "@/lib/music-archive/review-entry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ const deleteSchema = schema.extend({
 });
 
 const selectAlbumColumns = [
+  "archive_review_context",
   "id",
   "type",
   "status",
@@ -517,8 +519,19 @@ export async function POST(request: Request) {
     stationReviewsBySubmission.set(submissionId, list);
   });
 
+  const archiveEntries = new Map<string, Awaited<ReturnType<typeof getArchiveReviewEntry>>>();
+  if (user) {
+    for (const draft of drafts) {
+      const stored = storedArchiveReviewContextSchema.safeParse(draft.archive_review_context);
+      if (!stored.success) continue;
+      const { trackIds, ...context } = stored.data;
+      try { archiveEntries.set(String(draft.id), await getArchiveReviewEntry(user.id, context, trackIds)); }
+      catch { /* Keep the draft available; saving will enforce its original scope. */ }
+    }
+  }
   const payload = drafts.map((draft) => ({
     ...draft,
+    archive_review_entry: archiveEntries.get(String(draft.id)) ?? null,
     tracks: tracksBySubmission.get(String(draft.id)) ?? [],
     files: filesBySubmission.get(String(draft.id)) ?? [],
     station_reviews: stationReviewsBySubmission.get(String(draft.id)) ?? [],

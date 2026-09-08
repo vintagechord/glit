@@ -515,6 +515,7 @@ export function SubmissionDetailClient({
   guestToken,
   paymentState,
   refreshIntervalMs,
+  resultsOnly = false,
 }: {
   submissionId: string;
   initialSubmission: Submission;
@@ -524,6 +525,7 @@ export function SubmissionDetailClient({
   guestToken?: string;
   paymentState?: string;
   refreshIntervalMs?: number;
+  resultsOnly?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -1373,7 +1375,17 @@ export function SubmissionDetailClient({
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+    <div className={resultsOnly ? "mx-auto w-full max-w-6xl p-4 sm:p-6" : "mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10"}>
+      {resultsOnly ? (
+        <div className="space-y-5">
+          <div>
+            <h1 className="text-xl font-black">{submission.title || "심의 결과"}</h1>
+            {submission.artist_name ? <p className="mt-1 text-sm text-muted-foreground">{submission.artist_name}</p> : null}
+            <p className="mt-3 text-sm font-semibold">{currentStatusLabel}</p>
+          </div>
+          {renderStationReviewSection()}
+        </div>
+      ) : <>
       {paymentFeedback ? (
         <div
           className={`mb-6 rounded-[10px] border-2 px-5 py-4 shadow-[5px_5px_0_#111111] dark:shadow-[5px_5px_0_#f2cf27] ${paymentFeedback.tone}`}
@@ -2095,6 +2107,8 @@ export function SubmissionDetailClient({
           </div>
         </div>
       </div>
+
+      </>}
 
       {trackResultModal && (
         <div

@@ -20,6 +20,8 @@ import { APP_CONFIG } from "@/lib/config";
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
 import { canEditSubmission } from "@/lib/submission-edit-access";
 import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
+import { archiveReviewContextSchema, getArchiveReviewEntry, storedArchiveReviewContextSchema } from "@/lib/music-archive/review-entry";
+import { linkArchiveSubmission } from "@/lib/music-archive/service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
@@ -76,6 +78,7 @@ type EditableSubmissionRow = {
   album_base_price_krw: number | null;
   album_price_tier: string | null;
   is_oneclick: boolean | null;
+  archive_review_context?: unknown;
 };
 
 const albumAdditionalDiscountWindowMs = 30 * 60 * 1000;
@@ -224,7 +227,7 @@ const loadEditableSubmissionByActor = async ({
   const normalizedUserId = userId?.trim() ?? "";
   const normalizedGuestToken = guestToken?.trim() ?? "";
   const columns =
-    "id, user_id, guest_token, status, payment_status, current_order_id, updated_at, package_id, amount_krw, album_base_price_krw, album_price_tier, is_oneclick";
+    "id, user_id, guest_token, status, payment_status, current_order_id, updated_at, package_id, amount_krw, album_base_price_krw, album_price_tier, is_oneclick, archive_review_context";
 
   if (normalizedUserId) {
     const memberResult = await db
@@ -588,6 +591,7 @@ const fileSchema = z.object({
 });
 
 const albumSubmissionSchema = z.object({
+  archiveReview: archiveReviewContextSchema.optional(),
   submissionId: z.string().uuid(),
   albumDraftGroupId: z.string().uuid().optional(),
   albumDraftGroupGuestToken: z.string().min(8).max(120).optional(),
@@ -877,6 +881,43 @@ export async function saveAlbumSubmissionAction(
   // Saving completes the cart item. Only checkout creates an order/payment request.
   const deferPayment = isSubmitted;
   const isAdminReviewer = isAdminReviewEmail(user?.email);
+  const adminDb = createAdminClient();
+  const { data: existingSubmission, error: existingSubmissionError } =
+    await loadEditableSubmissionByActor({
+      db: adminDb,
+      submissionId: parsed.data.submissionId,
+      userId: user?.id,
+      guestToken: parsed.data.guestToken,
+    });
+  if (existingSubmissionError) {
+    console.error("Submission ownership lookup failed", existingSubmissionError);
+    return { error: "접수 소유권을 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
+  }
+  if (
+    !canEditSubmission(existingSubmission, {
+      userId: user?.id,
+      guestToken: parsed.data.guestToken,
+    })
+  ) {
+    return { error: "접수 수정 권한을 확인할 수 없습니다." };
+  }
+  if (!existingSubmission?.updated_at) {
+    return { error: "접수 저장 상태를 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
+  }
+  let archiveEntry: Awaited<ReturnType<typeof getArchiveReviewEntry>> | undefined;
+  const storedArchiveContext = existingSubmission.archive_review_context == null ? undefined : storedArchiveReviewContextSchema.safeParse(existingSubmission.archive_review_context);
+  if (storedArchiveContext && !storedArchiveContext.success) return { error: "저장된 심의 신청 범위를 확인할 수 없습니다. 고객센터에 문의해주세요." };
+  const savedContext = storedArchiveContext?.success ? storedArchiveContext.data : undefined;
+  const archiveContext = savedContext ? { libraryId: savedContext.libraryId, releaseId: savedContext.releaseId, trackId: savedContext.trackId } : parsed.data.archiveReview;
+  if (archiveContext) {
+    if (savedContext && parsed.data.archiveReview && (parsed.data.archiveReview.libraryId !== savedContext.libraryId || parsed.data.archiveReview.releaseId !== savedContext.releaseId || parsed.data.archiveReview.trackId !== savedContext.trackId)) return { error: "다른 음원으로 변경하려면 새 심의 신청을 열어주세요." };
+    if (!user) return { error: "내 음악 관리에서 다시 로그인해 신청해주세요." };
+    try { archiveEntry = await getArchiveReviewEntry(user.id, archiveContext, savedContext?.trackIds); }
+    catch (error) { return { error: error instanceof Error ? error.message : "신청할 음원을 다시 선택해주세요." }; }
+    // Only the server-owned archive may supply metadata or a track subset in URL mode.
+    parsed.data.isOneClick = true;
+    parsed.data.melonUrl = archiveEntry.albumUrl;
+  }
   const isOneClick = parsed.data.isOneClick ?? false;
   const externalApplicationFormRequested =
     parsed.data.applicationFormMode === "upload" ||
@@ -897,7 +938,10 @@ export async function saveAlbumSubmissionAction(
   // A branch switch can leave the unreleased form values in the local draft.
   // Released submissions must derive album metadata from their platform URL,
   // so hidden values must never override that source during admin hydration.
-  const albumMetadata = isOneClick ? undefined : parsed.data;
+  const albumMetadata = archiveEntry ? {
+    title: archiveEntry.title, artistName: archiveEntry.artistName,
+    releaseDate: archiveEntry.releaseDate?.length === 10 ? archiveEntry.releaseDate : undefined,
+  } as Partial<typeof parsed.data> : isOneClick ? undefined : parsed.data;
   const titleValue = albumMetadata?.title?.trim() ?? "";
   const artistNameValue = albumMetadata?.artistName?.trim() ?? "";
   const guestNameValue = parsed.data.guestName?.trim() ?? "";
@@ -945,29 +989,6 @@ export async function saveAlbumSubmissionAction(
     return { error: "접수자 이메일 형식을 확인해주세요." };
   }
 
-  const adminDb = createAdminClient();
-  const { data: existingSubmission, error: existingSubmissionError } =
-    await loadEditableSubmissionByActor({
-      db: adminDb,
-      submissionId: parsed.data.submissionId,
-      userId: user?.id,
-      guestToken: parsed.data.guestToken,
-    });
-  if (existingSubmissionError) {
-    console.error("Submission ownership lookup failed", existingSubmissionError);
-    return { error: "접수 소유권을 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
-  }
-  if (
-    !canEditSubmission(existingSubmission, {
-      userId: user?.id,
-      guestToken: parsed.data.guestToken,
-    })
-  ) {
-    return { error: "접수 수정 권한을 확인할 수 없습니다." };
-  }
-  if (!existingSubmission?.updated_at) {
-    return { error: "접수 저장 상태를 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
-  }
   const wasPreviouslySubmitted = ["SUBMITTED", "WAITING_PAYMENT"].includes(
     existingSubmission.status ?? "",
   );
@@ -1235,7 +1256,10 @@ export async function saveAlbumSubmissionAction(
     shouldRequestPayment,
   });
 
-  const submittedTracks = isOneClick ? [] : parsed.data.tracks ?? [];
+  const submittedTracks: NonNullable<typeof parsed.data.tracks> = archiveEntry
+    ? archiveEntry.tracks.map(track => ({ trackTitle: track.title, performer: track.artistName,
+      notes: `온사이드 내 음악 관리 선택 트랙 · 발매 순서 ${track.discNumber}-${track.trackNumber}`, broadcastSelected: false }))
+    : isOneClick ? [] : parsed.data.tracks ?? [];
   // Unreleased basic-information drafts may omit tracks to keep them intact.
   // Released drafts and final downloaded-form submissions clear rows left
   // behind after switching application mode.
@@ -1331,6 +1355,7 @@ export async function saveAlbumSubmissionAction(
     artist_gender: albumMetadata?.artistGender?.trim() || null,
     artist_members: albumMetadata?.artistMembers?.trim() || null,
     is_oneclick: isOneClick,
+    archive_review_context: archiveEntry ? { ...archiveEntry.context, trackIds: archiveEntry.tracks.map(track => track.id) } : null,
     melon_url: isOneClick
       ? parseReleasedAlbumUrl(parsed.data.melonUrl)?.canonicalUrl ||
         parsed.data.melonUrl?.trim() ||
@@ -1499,6 +1524,14 @@ export async function saveAlbumSubmissionAction(
     return {
       error: "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.",
     };
+  }
+
+  if (archiveEntry && user) {
+    try { await linkArchiveSubmission(user.id, archiveEntry.context, parsed.data.submissionId); }
+    catch (error) {
+      console.error("[Archive Review] submission link failed", { submissionId: parsed.data.submissionId, message: error instanceof Error ? error.message : "link error" });
+      return { error: "신청서는 저장되었습니다. 내 음악 관리 연결을 완료하도록 다시 저장해주세요." };
+    }
   }
 
   scheduleReplacedSubmissionFileCleanup(db, replacedFileRefs);

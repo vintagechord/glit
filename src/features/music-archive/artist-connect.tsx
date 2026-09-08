@@ -4,8 +4,8 @@ import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type K
 import Image from "next/image";
 import { Check, LoaderCircle, Music2, Search } from "lucide-react";
 import { parseMusicProviderUrl, type ArtistCandidate, type MusicProviderLink, type ProviderSupport } from "@/lib/music-archive/providers";
-import { archiveRequest, isDomesticMusicProvider, providerNames } from "./types";
-import { Button, Field, Notice, External, inputClass } from "./ui";
+import { archiveRequest, isDomesticMusicProvider } from "./types";
+import { Button, Field, Notice, inputClass } from "./ui";
 
 type SearchResult = { items: ArtistCandidate[]; nextOffset?: number | null; total?: number; queryStatus?: string; message?: string; scopeNote?: string };
 type Mode = "search" | "url" | "manual";
@@ -19,7 +19,7 @@ function ArtistPortrait({ candidate }: { candidate: ArtistCandidate }) {
   </span>;
 }
 
-export function ArtistConnect({ existingName, impactCount = 0, onChoose, onLink, busy }: {
+export function ArtistConnect({ existingName, onChoose, onLink, busy }: {
   providers: ProviderSupport[]; existingName?: string; impactCount?: number; busy: boolean;
   onChoose: (name: string, candidate?: ArtistCandidate) => Promise<void>;
   onLink: (name: string, link: MusicProviderLink) => Promise<void>;
@@ -37,7 +37,6 @@ export function ArtistConnect({ existingName, impactCount = 0, onChoose, onLink,
   const [selected, setSelected] = useState<ArtistCandidate | null>(null);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [scopeNote, setScopeNote] = useState("");
   const [composing, setComposing] = useState(false);
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
@@ -73,7 +72,6 @@ export function ArtistConnect({ existingName, impactCount = 0, onChoose, onLink,
         return items.filter((item, index) => items.findIndex((other) => other.provider === item.provider && other.externalId === item.externalId) === index);
       });
       setNextOffset(result.nextOffset ?? null);
-      setScopeNote(result.scopeNote ?? "");
       setSearched(true);
     } catch {
       if (mounted.current && currentSequence === sequence.current && (!controller.signal.aborted || timedOut)) setError(searchFailure);
@@ -89,7 +87,7 @@ export function ArtistConnect({ existingName, impactCount = 0, onChoose, onLink,
     return () => { mounted.current = false; cancelSearch(); };
   }, [cancelSearch]);
   useEffect(() => {
-    cancelSearch(); setSelected(null); setCandidates([]); setNextOffset(null); setSearched(false); setSearching(false); setHighlighted(-1); setError(""); setScopeNote("");
+    cancelSearch(); setSelected(null); setCandidates([]); setNextOffset(null); setSearched(false); setSearching(false); setHighlighted(-1); setError("");
     if (activeMode === "search" && query.trim() && !composing) debounce.current = setTimeout(() => void search(query), 650);
     return cancelSearch;
   }, [query, activeMode, composing, search, cancelSearch]);
@@ -113,7 +111,7 @@ export function ArtistConnect({ existingName, impactCount = 0, onChoose, onLink,
     catch (error) { if (mounted.current) setError(error instanceof Error ? error.message : "아티스트를 추가하지 못했습니다. 다시 시도해 주세요."); }
   }
   return <div className="space-y-5">
-    <p className="text-sm leading-6 text-muted-foreground">{existingName ? "같은 아티스트의 음악이 여러 프로필에 나뉘어 있다면 각각 연결해 한 목록에서 관리할 수 있습니다." : "아티스트를 찾고 내 음악 목록을 만들어 보세요. 같은 이름의 아티스트가 있다면 활동 정보를 확인해 주세요."}</p>
+    <p className="text-sm text-muted-foreground">{existingName ? "같은 아티스트의 다른 앨범도 추가할 수 있습니다." : "내 아티스트를 선택해 주세요."}</p>
     <div className="flex flex-wrap gap-2" aria-label="아티스트 추가 방법">{modes.map(([key, label]) => <Button key={key} primary={activeMode === key} aria-pressed={activeMode === key} disabled={busy} onClick={() => setMode(key)}>{label}</Button>)}</div>
     {error && <Notice error>{error}</Notice>}
     {activeMode === "search" && <>
@@ -127,16 +125,14 @@ export function ArtistConnect({ existingName, impactCount = 0, onChoose, onLink,
       {open && candidates.length > 0 && <div className="space-y-3">
         <ul id={listId} role="listbox" aria-label="아티스트 검색 후보" className="max-h-[360px] space-y-2 overflow-y-auto rounded-xl border border-border bg-background p-2">
           {candidates.map((candidate, index) => <li key={`${candidate.provider}-${candidate.externalId}`} id={`${listId}-${index}`} role="option" aria-selected={selected?.provider === candidate.provider && selected.externalId === candidate.externalId} onMouseDown={(event) => event.preventDefault()} onMouseMove={() => setHighlighted(index)} onClick={() => choose(candidate)} className={`flex cursor-pointer items-start gap-3 rounded-lg border-2 p-3 ${highlighted === index ? "border-foreground bg-card" : "border-transparent hover:bg-card"}`}>
-            <ArtistPortrait candidate={candidate} /><span className="min-w-0 flex-1 space-y-1"><strong className="block break-words">{candidate.name}</strong>{[candidate.disambiguation, candidate.type, candidate.country].filter(Boolean).length > 0 && <span className="block text-xs leading-5 text-muted-foreground">{[candidate.disambiguation, candidate.type, candidate.country].filter(Boolean).join(" · ")}</span>}{candidate.representativeRelease && <span className="block text-xs leading-5">대표 발매작 · {candidate.representativeRelease}</span>}<span className="block text-xs text-muted-foreground">{providerNames[candidate.provider]}</span></span>
+            <ArtistPortrait candidate={candidate} /><span className="min-w-0 flex-1 space-y-1"><strong className="block break-words">{candidate.name}</strong>{[candidate.disambiguation, candidate.type, candidate.country].filter(Boolean).length > 0 && <span className="block text-xs leading-5 text-muted-foreground">{[candidate.disambiguation, candidate.type, candidate.country].filter(Boolean).join(" · ")}</span>}{candidate.representativeRelease && <span className="block text-xs leading-5">대표 발매작 · {candidate.representativeRelease}</span>}</span>
           </li>)}
-        </ul><p className="text-xs text-muted-foreground">↑ ↓로 이동하고 Enter로 선택할 수 있습니다.</p>
+        </ul>
         {nextOffset !== null && <Button disabled={searching || busy} onClick={() => void search(query, nextOffset)}>검색 결과 더 보기</Button>}
       </div>}
-      {searched && scopeNote && <p className="text-xs leading-5 text-muted-foreground">{scopeNote}</p>}
       {searched && !searching && candidates.length === 0 && <Notice>{/^[ㄱ-ㅎ\s]+$/.test(query.trim()) ? "일치하는 초성 후보가 없습니다. 아티스트의 전체 이름으로 검색해 주세요." : "검색 결과가 없습니다. 다른 활동명으로 검색하거나 아티스트 링크를 입력해 주세요."}</Notice>}
       {selected && <div className="space-y-4 rounded-xl border-2 border-foreground bg-background p-4">
-        <div className="flex items-start gap-3"><ArtistPortrait candidate={selected} /><div className="min-w-0 flex-1"><p className="flex items-center gap-2 font-black"><Check className="h-4 w-4 shrink-0" aria-hidden />{selected.name}</p>{selected.disambiguation && <p className="mt-1 text-sm text-muted-foreground">{selected.disambiguation}</p>}{selected.representativeRelease && <p className="mt-1 text-sm">{selected.representativeRelease}</p>}<External href={selected.url}>{providerNames[selected.provider]} 아티스트 확인</External></div></div>
-        {existingName && <p className="text-xs leading-5 text-muted-foreground">기존 연결·발매작과 업무 {impactCount}건을 보존하고 선택한 프로필의 발매작을 추가합니다.</p>}
+        <div className="flex items-start gap-3"><ArtistPortrait candidate={selected} /><div className="min-w-0 flex-1"><p className="flex items-center gap-2 font-black"><Check className="h-4 w-4 shrink-0" aria-hidden />{selected.name}</p>{selected.disambiguation && <p className="mt-1 text-sm text-muted-foreground">{selected.disambiguation}</p>}{selected.representativeRelease && <p className="mt-1 text-sm">{selected.representativeRelease}</p>}</div></div>
         <Button primary disabled={busy} onClick={() => void act(() => onChoose(selected.name, selected))}>{busy ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />아티스트 연결 중…</> : "이 아티스트의 앨범 불러오기"}</Button>
       </div>}
     </>}
@@ -147,14 +143,12 @@ export function ArtistConnect({ existingName, impactCount = 0, onChoose, onLink,
     }}>
       <Field label="아티스트 링크" hint="멜론·지니뮤직·벅스의 아티스트 페이지 주소를 붙여넣어 주세요."><input className={inputClass} type="url" value={url} onChange={(event) => setUrl(event.target.value)} required disabled={busy} maxLength={2048} placeholder="https://www.melon.com/artist/…" /></Field>
       <Field label="관리할 아티스트 이름"><input className={inputClass} value={manualName} onChange={(event) => setManualName(event.target.value)} required disabled={busy} maxLength={200} /></Field>
-      {existingName && <p className="text-xs leading-5 text-muted-foreground">기존 연결·발매작과 업무 {impactCount}건을 보존하고 새 링크를 추가합니다.</p>}
       <p className="text-sm text-muted-foreground">링크를 저장한 뒤 ‘앨범 찾아보기’에서 발매작을 추가할 수 있습니다.</p>
       <Button primary type="submit" disabled={busy}>{busy ? "링크 저장 중…" : "아티스트 링크 추가"}</Button>
     </form>}
     {activeMode === "manual" && <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void act(() => onChoose(manualName)); }}>
       <Field label="아티스트 활동명"><input className={inputClass} value={manualName} onChange={(event) => setManualName(event.target.value)} required disabled={busy} maxLength={200} /></Field>
-      <p className="text-sm text-muted-foreground">직접 앨범과 트랙을 추가하고 심의·등록 업무를 기록할 수 있습니다.</p><Button primary type="submit" disabled={busy}>{busy ? "추가 중…" : "아티스트 직접 추가"}</Button>
+      <Button primary type="submit" disabled={busy}>{busy ? "추가 중…" : "아티스트 직접 추가"}</Button>
     </form>}
-    <p className="text-xs leading-5 text-muted-foreground">아티스트 연결은 내 계정의 관리 목록에만 적용됩니다. 본인·권리자 인증을 대신하지 않습니다.</p>
   </div>;
 }

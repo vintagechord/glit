@@ -1,7 +1,8 @@
 import { after } from "next/server";
 import { z } from "zod";
 import { authorizeArchiveRequest, archiveJson, archiveError, readArchiveJson, ArchiveError } from "@/lib/music-archive/http";
-import { getArchiveOverview, getArchiveDetail, searchOwnedSubmissions, mutateArchive, searchArchiveArtists, getArchiveAdmin } from "@/lib/music-archive/service";
+import { getArchiveOverview, getArchiveDetail, searchOwnedSubmissions, mutateArchive, searchArchiveArtists, getArchiveAdmin, getArchiveAdminDetail } from "@/lib/music-archive/service";
+import { memberArchiveResponse } from "@/lib/music-archive/member-view";
 import { runArchiveBatch } from "@/lib/music-archive/sync";
 
 export const runtime = "nodejs";
@@ -12,10 +13,10 @@ export async function GET(request: Request) {
   try {
     const { user, supabase } = await authorizeArchiveRequest(request);
     const params = new URL(request.url).searchParams;
-    if (params.get("action") === "admin") {
+    if (["admin", "admin-library"].includes(params.get("action") ?? "")) {
       const { data } = await supabase.rpc("is_admin");
       if (data !== true) throw new ArchiveError("관리자 권한이 필요합니다.", 403, "FORBIDDEN");
-      return archiveJson(await getArchiveAdmin());
+      return archiveJson(params.get("action") === "admin-library" ? await getArchiveAdminDetail(z.uuid().parse(params.get("libraryId"))) : await getArchiveAdmin(params.get("q") ?? "", Number(params.get("page") ?? 0)));
     }
     if (params.get("action") === "search") return archiveJson(await searchArchiveArtists(user.id, params));
     if (params.get("action") === "submissions") return archiveJson(await searchOwnedSubmissions(user.id, params.get("q") ?? "", Number(params.get("page") ?? 0)));
@@ -24,9 +25,9 @@ export async function GET(request: Request) {
       if (detail.jobs.some(job => ["queued", "running"].includes(job.status))) {
         after(async () => { await runArchiveBatch(detail.library.id).catch(() => undefined); });
       }
-      return archiveJson(detail);
+      return archiveJson(memberArchiveResponse(detail));
     }
-    return archiveJson(await getArchiveOverview(user.id, Number(params.get("page") ?? 0)));
+    return archiveJson(memberArchiveResponse(await getArchiveOverview(user.id, Number(params.get("page") ?? 0))));
   } catch (error) { return archiveError(error); }
 }
 
@@ -46,6 +47,6 @@ export async function POST(request: Request) {
       const libraryId = result.runLibraryId;
       after(async () => { await runArchiveBatch(libraryId).catch(() => undefined); });
     }
-    return archiveJson(result, result.job ? 202 : 200);
+    return archiveJson(isAdmin ? result : memberArchiveResponse(result), result.job ? 202 : 200);
   } catch (error) { return archiveError(error); }
 }

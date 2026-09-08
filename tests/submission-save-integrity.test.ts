@@ -288,7 +288,10 @@ test("released submissions discard hidden unreleased metadata before saving or c
     source.indexOf("export async function saveAlbumSubmissionAction"),
     source.indexOf("export async function saveMvSubmissionAction"),
   );
-  assert.match(album, /const albumMetadata = isOneClick \? undefined : parsed\.data/);
+  assert.match(album, /const albumMetadata = archiveEntry \? \{/);
+  assert.match(album, /getArchiveReviewEntry\(user\.id, archiveContext, savedContext\?\.trackIds\)/);
+  assert.match(album, /title: archiveEntry\.title, artistName: archiveEntry\.artistName/);
+  assert.match(album, /: isOneClick \? undefined : parsed\.data/);
   assert.match(album, /const titleValue = albumMetadata\?\.title\?\.trim\(\) \?\? ""/);
   assert.match(album, /const artistNameValue = albumMetadata\?\.artistName\?\.trim\(\) \?\? ""/);
   assert.match(album, /const artistId = isOneClick \? null : await ensureArtistByName\(artistNameValue\)/);
@@ -305,7 +308,8 @@ test("released submissions discard hidden unreleased metadata before saving or c
     assert.ok(payload.includes(`albumMetadata?.${field}`), `${field} must exclude hidden released-form data`);
     assert.equal(payload.includes(`parsed.data.${field}`), false, `${field} must not bypass release normalization`);
   }
-  assert.match(album, /const submittedTracks = isOneClick \? \[\] : parsed\.data\.tracks \?\? \[\]/);
+  assert.match(album, /const submittedTracks:[\s\S]*?= archiveEntry\s*\? archiveEntry\.tracks\.map/);
+  assert.match(album, /: isOneClick \? \[\] : parsed\.data\.tracks \?\? \[\]/);
   assert.match(album, /const shouldReplaceTracks =\s*isOneClick \|\|/);
 });
 

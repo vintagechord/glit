@@ -26,9 +26,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isPaymentPopupRoute = pathname.startsWith("/pay/inicis");
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const basePath = pathname.replace(/^\/en(?=\/|$)/, "") || "/";
+  const isArchiveResultRoute = /^\/mypage\/music\/results\/[0-9a-f-]+$/i.test(basePath);
   const isAdminRoute = basePath.startsWith("/admin");
   const isAuthRoute = ["/login", "/signup", "/forgot-password", "/reset-password"].includes(basePath);
-  const shouldLoadChatbot = !isPaymentPopupRoute && !isAdminRoute && !isAuthRoute;
+  const shouldLoadChatbot = !isPaymentPopupRoute && !isArchiveResultRoute && !isAdminRoute && !isAuthRoute;
 
   React.useEffect(() => {
     if (!shouldLoadChatbot || loadChatbot) return;
@@ -57,6 +58,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       }
     };
   }, [loadChatbot, shouldLoadChatbot]);
+
+  if (isArchiveResultRoute) {
+    return <main className="min-h-dvh bg-background text-foreground">{isEnglishRoute ? <EnglishLanguagePack /> : null}{children}</main>;
+  }
 
   if (isPaymentPopupRoute) {
     return (

@@ -24,6 +24,7 @@ import {
 import { orderAlbumDraftRowsForResume } from "@/lib/album-draft-order";
 import { showCenteredAlert, showCenteredConfirm } from "@/lib/centered-dialog";
 import { getReleasedAlbumUrlError } from "@/lib/released-album-url";
+import type { ArchiveReviewEntry } from "@/lib/music-archive/review-entry-url";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -405,6 +406,8 @@ export function AlbumWizard({
   profanityTerms = [],
   profanityFilterV2Enabled = false,
   albumDiscountPercent = 0,
+  initialArchiveEntry: archiveEntrySeed,
+  initialApplicant,
 }: {
   packages: PackageOption[];
   userId?: string | null;
@@ -412,7 +415,10 @@ export function AlbumWizard({
   profanityTerms?: ProfanityTerm[];
   profanityFilterV2Enabled?: boolean;
   albumDiscountPercent?: number;
+  initialArchiveEntry?: ArchiveReviewEntry;
+  initialApplicant?: { name: string; email: string; phone: string };
 }) {
+  const [initialArchiveEntry, setArchiveEntry] = React.useState(archiveEntrySeed);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -421,8 +427,8 @@ export function AlbumWizard({
   const isGuest = !userId;
   const isAdminReviewer =
     userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
-  const isFromDraftsTab = searchParams?.get("from") === "drafts";
-  const [step, setStep] = React.useState(1);
+  const isFromDraftsTab = !initialArchiveEntry && searchParams?.get("from") === "drafts";
+  const [step, setStep] = React.useState(initialArchiveEntry ? 5 : 1);
   const wizardRef = React.useRef<HTMLDivElement | null>(null);
   const previousStepRef = React.useRef(step);
   React.useEffect(() => {
@@ -435,10 +441,10 @@ export function AlbumWizard({
       block: "start",
     });
   }, [step]);
-  const [isOneClick, setIsOneClick] = React.useState(false);
-  const [releaseStatusSelected, setReleaseStatusSelected] = React.useState(false);
+  const [isOneClick, setIsOneClick] = React.useState(Boolean(initialArchiveEntry));
+  const [releaseStatusSelected, setReleaseStatusSelected] = React.useState(Boolean(initialArchiveEntry));
   const [applicationFormMode, setApplicationFormMode] =
-    React.useState<ApplicationFormMode | null>(null);
+    React.useState<ApplicationFormMode | null>(initialArchiveEntry ? "online" : null);
   const [selectedPackage, setSelectedPackage] =
     React.useState<PackageOption | null>(packages[0] ?? null);
   const [currentAlbumPriceTier, setCurrentAlbumPriceTier] = React.useState<
@@ -449,23 +455,23 @@ export function AlbumWizard({
     createAlbumTrackRowKeyState(1),
   );
   const [activeTrackIndex, setActiveTrackIndex] = React.useState(0);
-  const [title, setTitle] = React.useState("");
-  const [artistName, setArtistName] = React.useState("");
+  const [title, setTitle] = React.useState(initialArchiveEntry?.title ?? "");
+  const [artistName, setArtistName] = React.useState(initialArchiveEntry?.artistName ?? "");
   const [artistNameKr, setArtistNameKr] = React.useState("");
   const [artistNameEn, setArtistNameEn] = React.useState("");
-  const [releaseDate, setReleaseDate] = React.useState("");
+  const [releaseDate, setReleaseDate] = React.useState(initialArchiveEntry?.releaseDate ?? "");
   const [genreSelection, setGenreSelection] = React.useState("");
   const [genreCustom, setGenreCustom] = React.useState("");
   const [distributor, setDistributor] = React.useState("");
   const [productionCompany, setProductionCompany] = React.useState("");
-  const [applicantName, setApplicantName] = React.useState("");
-  const [applicantEmail, setApplicantEmail] = React.useState("");
-  const [applicantPhone, setApplicantPhone] = React.useState("");
+  const [applicantName, setApplicantName] = React.useState(initialApplicant?.name ?? "");
+  const [applicantEmail, setApplicantEmail] = React.useState(initialApplicant?.email ?? "");
+  const [applicantPhone, setApplicantPhone] = React.useState(initialApplicant?.phone ?? "");
   const [previousRelease, setPreviousRelease] = React.useState("");
   const [artistType, setArtistType] = React.useState("");
   const [artistGender, setArtistGender] = React.useState("");
   const [artistMembers, setArtistMembers] = React.useState("");
-  const [melonUrl, setMelonUrl] = React.useState("");
+  const [melonUrl, setMelonUrl] = React.useState(initialArchiveEntry?.albumUrl ?? "");
   const [aiUsed, setAiUsed] = React.useState<boolean | null>(null);
   const [paymentMethod, setPaymentMethod] = React.useState<"CARD" | "BANK">(
     "BANK",
@@ -574,8 +580,8 @@ export function AlbumWizard({
   const currentGuestTokenRef = React.useRef(currentGuestToken);
   const hydratedGuestTokenStorageKeyRef = React.useRef<string | null>(null);
   const draftStorageKey = React.useMemo(
-    () => `onside:draft:album:${userId ?? "guest"}`,
-    [userId],
+    () => `onside:draft:album:${userId ?? "guest"}${initialArchiveEntry ? `:archive:${encodeURIComponent(JSON.stringify(initialArchiveEntry.context))}` : ""}`,
+    [userId, initialArchiveEntry],
   );
   const guestTokenStorageKey = React.useMemo(
     () => `onside:guest-token:album:${userId ?? "guest"}`,
@@ -597,14 +603,14 @@ export function AlbumWizard({
     !isOneClick && applicationFormMode === "upload";
   const hasTrackStep =
     !isOneClick && applicationFormMode === "online";
-  const progressSteps = isOneClick
+  const progressSteps = initialArchiveEntry ? ["음원 업로드", "신청 확인", "접수 완료"] : isOneClick
     ? oneClickSteps
     : isDownloadedApplicationFlow
       ? uploadFormSteps
       : hasTrackStep
         ? standardSteps
         : compactSteps;
-  const progressCurrentStep = isOneClick
+  const progressCurrentStep = initialArchiveEntry ? (step <= 5 ? 1 : step === 6 ? 2 : 3) : isOneClick
     ? step === 1
       ? 1
       : step === 3
@@ -2633,6 +2639,8 @@ export function AlbumWizard({
     const restoredReleaseStatusSelected = Boolean(
       restoredIsOneClick || nextPackageId || restoredApplicationFormMode,
     );
+    const restoredArchiveEntry = baseRow.archive_review_entry && typeof baseRow.archive_review_entry === "object" ? baseRow.archive_review_entry as ArchiveReviewEntry : undefined;
+    setArchiveEntry(restoredArchiveEntry ?? initialArchiveEntry);
     setIsOneClick(restoredIsOneClick);
     setReleaseStatusSelected(restoredReleaseStatusSelected);
     setApplicationFormMode(restoredApplicationFormMode);
@@ -2673,8 +2681,8 @@ export function AlbumWizard({
       setStep(1);
       return;
     }
-    setStep(restoredIsOneClick || restoredApplicationFormMode ? 3 : 2);
-  }, [applyDraftToForm, mapDraftFiles, mapDraftTracks, normalizeDateValue, packages]);
+    setStep(restoredArchiveEntry || initialArchiveEntry ? 5 : restoredIsOneClick || restoredApplicationFormMode ? 3 : 2);
+  }, [applyDraftToForm, initialArchiveEntry, mapDraftFiles, mapDraftTracks, normalizeDateValue, packages]);
 
   const handleResumeDraftConfirm = React.useCallback(() => {
     if (!resumePrompt) return;
@@ -3336,6 +3344,7 @@ export function AlbumWizard({
         const artistValue = draft.artistName.trim();
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
+          archiveReview: initialArchiveEntry?.context,
           albumDraftGroupId,
           albumDraftGroupGuestToken: isGuest
             ? albumDraftGroupGuestToken
@@ -3863,6 +3872,7 @@ export function AlbumWizard({
   };
 
   const handleStep3Next = async () => {
+    if (initialArchiveEntry && !validateBasicInfoStep()) return;
     const draftsForUpload = resolveUploadDrafts();
     if (!draftsForUpload) return;
     if (!(await validateUploadStep(draftsForUpload))) {
@@ -4002,6 +4012,7 @@ export function AlbumWizard({
         }
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
+          archiveReview: initialArchiveEntry?.context,
           albumDraftGroupId,
           albumDraftGroupGuestToken: isGuest
             ? albumDraftGroupGuestToken
@@ -4208,7 +4219,7 @@ export function AlbumWizard({
       if (typeof target.trackIndex === "number") {
         setActiveTrackIndex(target.trackIndex);
       }
-      setStep(target.step);
+      setStep(initialArchiveEntry && target.step < 5 ? 5 : target.step);
       window.setTimeout(() => {
         const element = Array.from(
           document.querySelectorAll<HTMLElement>("[data-preflight-field]"),
@@ -4223,7 +4234,7 @@ export function AlbumWizard({
         element?.focus({ preventScroll: true });
       }, 80);
     },
-    [],
+    [initialArchiveEntry],
   );
 
   const albumCheckpointSnapshot: AlbumCheckpointSnapshot = {
@@ -4334,7 +4345,7 @@ export function AlbumWizard({
       });
       const restoredStep = Math.max(1, Math.min(6, snapshot.step));
       setStep(
-        snapshot.isOneClick && [2, 4].includes(restoredStep)
+        initialArchiveEntry && restoredStep < 5 ? 5 : snapshot.isOneClick && [2, 4].includes(restoredStep)
           ? 3
           : restoredStep,
       );
@@ -4343,6 +4354,7 @@ export function AlbumWizard({
       albumDrafts,
       applyDraftToForm,
       currentSubmissionId,
+      initialArchiveEntry,
       packages,
       uploadedFiles,
       uploadDrafts,
@@ -5545,10 +5557,22 @@ export function AlbumWizard({
           {isDraggingOver && (
             <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
           )}
-          <h2 className="font-display text-2xl text-foreground">파일 첨부</h2>
-          {isOneClick && <p className="text-sm leading-6 text-muted-foreground">심의에 사용할 전체 음원을 WAV 파일 또는 ZIP 파일로 첨부해주세요.</p>}
+          {initialArchiveEntry ? <section aria-label="심의 신청 대상" className="rounded-xl border border-border bg-card p-5">
+            <h2 className="text-xl font-black">{initialArchiveEntry.context.trackId ? initialArchiveEntry.tracks[0]?.title : initialArchiveEntry.title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{initialArchiveEntry.artistName}{initialArchiveEntry.context.trackId ? ` · ${initialArchiveEntry.title}` : ` · ${initialArchiveEntry.tracks.length}곡`}</p>
+            {initialArchiveEntry.context.trackId ? <p className="mt-3 text-sm font-semibold">선택한 곡만 심의합니다.</p> : <details className="mt-3 text-sm"><summary className="cursor-pointer">신청 음원 보기</summary><ol className="mt-2 space-y-1">{initialArchiveEntry.tracks.map(track => <li key={track.id}>{track.trackNumber}. {track.title}</li>)}</ol></details>}
+            <div className="mt-5"><label className="text-sm font-bold" htmlFor="archive-review-package">심의 방송국</label><select id="archive-review-package" data-preflight-field="package" value={selectedPackage?.id ?? ""} onChange={event => setSelectedPackage(packages.find(pkg => pkg.id === event.target.value) ?? null)} className="mt-2 min-h-11 w-full rounded-lg border border-border bg-background px-3">{packages.map(pkg => <option key={pkg.id} value={pkg.id}>{getPackageDisplayName(pkg)} · {formatCurrency(getDiscountedAlbumPrice(pkg.priceKrw, normalizedAlbumDiscountPercent, pkg.stationCount))}원</option>)}</select></div>
+            <div className="mt-5" data-preflight-field="aiUsed"><AiUsageSelector value={aiUsed} onChange={setAiUsed} context="album" /></div>
+            <details open={!initialApplicant?.name || !initialApplicant?.email || !initialApplicant?.phone} className="mt-5"><summary className="cursor-pointer text-sm font-bold">접수자 정보</summary><div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <label className="text-sm">이름<input data-preflight-field="applicantName" autoComplete="name" value={applicantName} onChange={event => setApplicantName(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-border bg-background px-3" /></label>
+              <label className="text-sm">이메일<input data-preflight-field="applicantEmail" type="email" autoComplete="email" value={applicantEmail} onChange={event => setApplicantEmail(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-border bg-background px-3" /></label>
+              <label className="text-sm">연락처<input data-preflight-field="applicantPhone" type="tel" autoComplete="tel" value={applicantPhone} onChange={event => setApplicantPhone(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-border bg-background px-3" /></label>
+            </div></details>
+          </section> : null}
+          <h2 className="font-display text-2xl text-foreground">음원 첨부</h2>
+          {isOneClick && <p className="text-sm leading-6 text-muted-foreground">{initialArchiveEntry?.context.trackId ? "선택한 곡의 WAV 파일 또는 ZIP 파일을 첨부해주세요." : "심의에 사용할 음원을 WAV 파일 또는 ZIP 파일로 첨부해주세요."}</p>}
 
-          <details className="rounded-[20px] border border-border/60 bg-background/70 px-5 py-4 text-xs text-muted-foreground">
+          {!initialArchiveEntry && <details className="rounded-[20px] border border-border/60 bg-background/70 px-5 py-4 text-xs text-muted-foreground">
             <summary className="cursor-pointer font-semibold text-foreground">
               파일 준비 기준
             </summary>
@@ -5569,7 +5593,7 @@ export function AlbumWizard({
               </li>
               <li>{isOneClick ? "음원 파일 업로드 필수" : "업로드가 어려우면 파일 없이 진행 가능"}</li>
             </ul>
-          </details>
+          </details>}
 
           {uploadDrafts && uploadDrafts.length > 0 && (!isOneClick || uploadDrafts.length > 1) && (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -5638,9 +5662,9 @@ export function AlbumWizard({
             tabIndex={-1}
             className="rounded-[28px] border border-border/60 bg-card/80 p-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+            {!initialArchiveEntry && <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               {isDownloadedApplicationFlow ? "신청서와 음원 업로드" : "전체 음원 파일 업로드"}
-            </p>
+            </p>}
             {!isOneClick && <div className="mt-4 grid gap-2 rounded-2xl border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
               <button
                 type="button"
@@ -5746,9 +5770,9 @@ export function AlbumWizard({
                         <span className="text-white/70">·</span>
                         최대 <span className="font-mono text-[12px]">{uploadMaxLabel}</span>
                       </span>
-                      <span className="text-center text-[11px] font-normal text-muted-foreground">
+                      {!initialArchiveEntry && <span className="text-center text-[11px] font-normal text-muted-foreground">
                         * 수록곡이 많은 경우 ZIP으로 압축한 하나의 파일로 업로드해주세요.
-                      </span>
+                      </span>}
                       {!currentSubmissionId && !isPreparingDraft ? (
                         <button
                           type="button"
@@ -5953,7 +5977,7 @@ export function AlbumWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep(hasTrackStep ? 4 : 3)}
+              onClick={() => initialArchiveEntry ? router.push(`${localePrefix}/mypage/music?artist=${initialArchiveEntry.context.libraryId}`) : setStep(hasTrackStep ? 4 : 3)}
               disabled={isSaving || isAddingAlbum}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
             >
@@ -6001,7 +6025,7 @@ export function AlbumWizard({
             }}
           />
 
-          {isOneClick && (
+          {isOneClick && !initialArchiveEntry && (
             <section aria-label="접수할 앨범 URL 확인" className="rounded-[20px] border-2 border-[#111111] bg-card p-5 dark:border-[#f2cf27] sm:p-6">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-base font-black">접수할 앨범 URL</h2>
@@ -6016,6 +6040,7 @@ export function AlbumWizard({
             </section>
           )}
 
+          {initialArchiveEntry ? <section className="rounded-xl border border-border bg-card p-5"><h2 className="font-black">{initialArchiveEntry.context.trackId ? initialArchiveEntry.tracks[0]?.title : initialArchiveEntry.title}</h2><p className="mt-1 text-sm text-muted-foreground">{initialArchiveEntry.artistName} · {initialArchiveEntry.tracks.length}곡</p></section> : null}
           <div className="space-y-4">
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-5 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">

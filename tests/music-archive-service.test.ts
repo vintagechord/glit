@@ -123,6 +123,50 @@ test("library service and real detail route hide another owner's same-artist arc
   assert.equal(mutations(h).length, 0);
 });
 
+test("member detail redacts provenance and audit records while admin detail retains them behind a role check", async () => {
+  const h = await harness();
+  const data = libraryData();
+  data.releases[0].source = { provider: "apple", externalId: "123", checkedAt: "2026-09-09T00:00:00Z" };
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, data)];
+  h.state.tables.music_archive_events = [{ id: "event", owner_id: OWNER, library_id: LIBRARY, action: "sync", details: { private: "audit-payload" } }];
+  const member = await h.apiGET(new Request(`https://onside.test/api/music-archive?libraryId=${LIBRARY}`));
+  assert.equal(member.status, 200);
+  assert.doesNotMatch(await member.text(), /audit-payload|"source"|checkedAt|owner_id/);
+  const url = `https://onside.test/api/music-archive?action=admin-library&libraryId=${LIBRARY}`;
+  assert.equal((await h.apiGET(new Request(url))).status, 403);
+  h.state.isAdmin = true;
+  const admin = await h.apiGET(new Request(url));
+  assert.equal(admin.status, 200);
+  assert.match(await admin.text(), /audit-payload/);
+});
+
+test("automatic review matching filters the owner before exact URL matching", async () => {
+  const h = await harness();
+  const data = libraryData();
+  data.releases[0].links = [{ provider: "melon", url: "https://www.melon.com/album/detail.htm?albumId=123" }];
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, data)];
+  h.state.tables.submissions = [OWNER, OTHER_OWNER].map((owner, i) => ({ ...submissionRow(owner, i ? OTHER_SUBMISSION : SUBMISSION), status: "COMPLETED", album_tracks: [], melon_url: data.releases[0].links[0].url }));
+  const detail = await h.getArchiveDetail(OWNER, LIBRARY);
+  assert.deepEqual(detail.onsideReviews.map(row => row.submissionId), [SUBMISSION]);
+  assert.deepEqual(detail.reviews.map(row => row.id), [SUBMISSION]);
+});
+
+test("saved archive application links exact owned track IDs, is idempotent, and rejects foreign submissions", async () => {
+  const h = await harness();
+  h.state.tables.music_archive_libraries = [libraryRow()];
+  h.state.tables.submissions = [{ ...submissionRow(), album_tracks: [{ id: SUBMISSION_TRACK, track_no: 1 }] }, submissionRow(OTHER_OWNER, OTHER_SUBMISSION)];
+  const context = { libraryId: LIBRARY, releaseId: "release-one", trackId: "track-one" };
+  await assert.rejects(() => h.linkArchiveSubmission(OWNER, context, OTHER_SUBMISSION), status(404));
+  assert.equal(mutations(h).length, 0);
+  await h.linkArchiveSubmission(OWNER, context, SUBMISSION);
+  await h.linkArchiveSubmission(OWNER, context, SUBMISSION);
+  const library = await h.getOwnedLibrary(OWNER, LIBRARY);
+  assert.equal(library.version, 2);
+  assert.equal(library.data.reviewLinks.length, 1);
+  assert.equal(library.data.reviewLinks[0].trackId, "track-one");
+  assert.equal(library.data.reviewLinks[0].submissionTrackId, SUBMISSION_TRACK);
+});
+
 test("owned submission search filters owner, album type and deletion state before returning candidates", async () => {
   const h = await harness();
   h.state.tables.submissions = [submissionRow(), submissionRow(OTHER_OWNER, OTHER_SUBMISSION), { ...submissionRow(OWNER, OTHER_SUBMISSION), user_deleted_at: "2026-09-01" }, { ...submissionRow(OWNER, OTHER_SUBMISSION), type: "MV" }];
@@ -342,4 +386,33 @@ test("related work-recording-track edits commit once and invalid final relations
   assert.equal(result.library?.data.recordings[0].workIds[0], "work-new");
   assert.equal(mutations(h).length, 1);
   assert.equal(mutations(h)[0].name, "save_music_archive_library");
+});
+
+test("archive review linking preserves saved track identity and order after archive reordering or new tracks", async () => {
+  const h = await harness();
+  let data = libraryData();
+  data = applyArchiveCommand(data, { type: "update_track", trackId: "track-one", patch: { trackNumber: 3 } });
+  data = applyArchiveCommand(data, { type: "add_track", track: { id: "track-two", releaseId: "release-one", title: "Second saved track", trackNumber: 1 } });
+  data = applyArchiveCommand(data, { type: "add_track", track: { id: "track-added-later", releaseId: "release-one", title: "Newly imported track", trackNumber: 2 } });
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, data)];
+  const context = { libraryId: LIBRARY, releaseId: "release-one" };
+  h.state.tables.submissions = [{ ...submissionRow(), archive_review_context: { ...context, trackIds: ["track-one", "track-two"] }, album_tracks: [{ id: SUBMISSION_TRACK, track_no: 1 }, { id: OTHER_SUBMISSION_TRACK, track_no: 2 }] }];
+  await h.linkArchiveSubmission(OWNER, context, SUBMISSION);
+  await h.linkArchiveSubmission(OWNER, context, SUBMISSION);
+  const library = await h.getOwnedLibrary(OWNER, LIBRARY);
+  assert.equal(library.version, 2, "retry remains idempotent after preserving the saved scope");
+  assert.deepEqual(library.data.reviewLinks.map(link => [link.trackId, link.submissionTrackId]), [["track-one", SUBMISSION_TRACK], ["track-two", OTHER_SUBMISSION_TRACK]]);
+  assert.ok(library.data.reviewLinks.every(link => link.trackId !== "track-added-later"), "later imports must never inherit this application's review result");
+});
+
+test("archive review linking rejects a saved track that is no longer available instead of substituting another track", async () => {
+  const h = await harness();
+  let data = libraryData();
+  data.tracks[0].excluded = true;
+  data = applyArchiveCommand(data, { type: "add_track", track: { id: "track-replacement", releaseId: "release-one", title: "Different recording", trackNumber: 2 } });
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, data)];
+  const context = { libraryId: LIBRARY, releaseId: "release-one" };
+  h.state.tables.submissions = [{ ...submissionRow(), archive_review_context: { ...context, trackIds: ["track-one"] }, album_tracks: [{ id: SUBMISSION_TRACK, track_no: 1 }] }];
+  await assert.rejects(() => h.linkArchiveSubmission(OWNER, context, SUBMISSION), status(409));
+  assert.equal(mutations(h).length, 0);
 });

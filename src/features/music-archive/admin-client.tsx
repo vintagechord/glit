@@ -7,9 +7,10 @@ import type { AgencyGuide } from "@/lib/music-archive/guides";
 import type { ProviderSupport } from "@/lib/music-archive/providers";
 import { archiveRequest, jobLabels, providerNames, supportLabels } from "./types";
 import { Badge, Button, External, Field, Notice, displayDate, inputClass, panelClass } from "./ui";
+import { AdminLibraryInspector, type AdminLibraryIndex } from "./admin-library-inspector";
 
 type AdminJob = Pick<ArchiveSyncJob, "id" | "library_id" | "provider" | "external_artist_id" | "status" | "cursor" | "counts" | "error_code" | "error_message" | "attempts" | "available_at" | "checked_at" | "updated_at">;
-type AdminData = { jobs: AdminJob[]; guides: AgencyGuide[]; providers: ProviderSupport[] };
+type AdminData = AdminLibraryIndex & { jobs: AdminJob[]; guides: AgencyGuide[]; providers: ProviderSupport[] };
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "요청을 처리하지 못했습니다.";
 const textFields = [
   ["name", "안내 제목"], ["introduction", "업무 설명"], ["eligibility", "확인·신청 대상"], ["costNote", "비용·승인 안내"],
@@ -68,6 +69,7 @@ export function MusicArchiveAdminClient() {
     {message && <div role="status"><Notice>{message}</Notice></div>}
     {loading && !data && <p role="status" className="text-sm">음악 관리 운영 정보를 불러오고 있습니다.</p>}
     {data && <>
+      <AdminLibraryInspector initial={data} />
       <section className={panelClass} aria-labelledby="provider-operations-heading">
         <h2 id="provider-operations-heading" className="text-lg font-black">제공처 연결 상태</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">{data.providers.map(provider => <div key={provider.id} className="rounded-lg border border-border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><strong>{provider.name}</strong><Badge attention={provider.status !== "available"}>{supportLabels[provider.status] ?? provider.status}</Badge></div><p className="mt-2 text-sm leading-6 text-muted-foreground">{provider.message}</p><External href={provider.url}>공식 이용 조건</External></div>)}</div>
