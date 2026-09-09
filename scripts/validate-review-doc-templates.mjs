@@ -33,7 +33,7 @@ const templates = new Map([
   ],
   [
     "pbc-integrated.docx",
-    ["{#albums}", "{/albums}", "{album_title}", "{company_actual}"],
+    ["{#albums}", "{/albums}", "{album_title}", "{title_track_title_primary}", "{title_track_title_secondary}"],
   ],
 ]);
 

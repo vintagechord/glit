@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { translateLyricsWithOpenAI } from "../openai-translation";
+import { inlineLyricTranslation } from "../foreign-lyrics";
+import { isUsableLyricsTranslation, translateLyricsBatch } from "../server-lyrics-translation";
 import { foreignLyricSpans, REVIEW_DOC_LIMITS, reviewDocumentDataSchema, type ReviewDocumentData, type ReviewTrack } from "./model";
 
 export function renderTrackLyrics(track: ReviewTrack) {
@@ -8,17 +9,134 @@ export function renderTrackLyrics(track: ReviewTrack) {
   let lyrics = track.lyrics;
   for (const segment of [...track.translationSegments].sort((a, b) => b.start - a.start)) {
     if (!segment.translation.trim() || segment.end <= segment.start || lyrics.slice(segment.start, segment.end) !== segment.source) continue;
-    if (/^\s*\((?:번역|해석)\s*[:：]/.test(lyrics.slice(segment.end))) continue;
+    if (inlineLyricTranslation(lyrics.slice(segment.end))) continue;
     lyrics = `${lyrics.slice(0, segment.end)} (번역 : ${segment.translation.trim()})${lyrics.slice(segment.end)}`;
   }
   return lyrics.replace(/\r\n?/g, "\n").replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, "\n\n").trim();
 }
 
-type TranslationProvider = (segments: string[]) => Promise<string[] | null>;
+export type TranslationProvider = (segments: string[]) => Promise<string[] | null>;
+
+export class ReviewLyricsTranslationError extends Error {
+  readonly code = "REVIEW_TRANSLATION_FAILED";
+  readonly status = 502;
+  constructor(message = "외국어 가사의 한글 번역을 완료하지 못했습니다. 잠시 후 DOCX ZIP 생성을 다시 시도해주세요.") {
+    super(message);
+    this.name = "ReviewLyricsTranslationError";
+  }
+}
+
+type ReviewLyricsInput = { lyrics: string; translatedLyrics?: string | null; lyricsWithTranslation?: string | null };
+
+function hasSameOriginalLyrics(original: string, candidate: string) {
+  let sourceIndex = 0;
+  let candidateIndex = 0;
+  while (sourceIndex < original.length || candidateIndex < candidate.length) {
+    if (/\s/.test(original[sourceIndex] ?? "")) { sourceIndex += 1; continue; }
+    if (/\s/.test(candidate[candidateIndex] ?? "")) { candidateIndex += 1; continue; }
+    // Matching original parentheses take precedence over skipping new annotations.
+    if (original[sourceIndex] === candidate[candidateIndex]) { sourceIndex += 1; candidateIndex += 1; continue; }
+    const annotation = inlineLyricTranslation(candidate.slice(candidateIndex));
+    if (annotation) { candidateIndex += annotation.text.length; continue; }
+    const existing = /^(?:\(|（|\[|\{)?[ \t]*(?:번역|해석)[ \t]*[:：]/.test(original.slice(sourceIndex))
+      ? inlineLyricTranslation(original.slice(sourceIndex)) : null;
+    if (existing) { sourceIndex += existing.text.length; continue; }
+    return false;
+  }
+  return true;
+}
+
+/** One shared translation pass feeds every DOCX, including saved URL submissions. */
+export async function translateLyricsForReviewDocuments(
+  tracks: ReviewLyricsInput[],
+  options: { translate?: TranslationProvider; timeoutMs?: number } = {},
+): Promise<string[]> {
+  const prepared = tracks.map((track) => {
+    let lyrics = track.lyrics.replace(/\r\n?/g, "\n");
+    let separateTranslation = "";
+    for (const { candidate, translationOnlyAllowed } of [
+      { candidate: track.lyricsWithTranslation, translationOnlyAllowed: false },
+      { candidate: track.translatedLyrics, translationOnlyAllowed: true },
+    ]) {
+      if (!candidate?.trim() || candidate.trim() === lyrics.trim()) continue;
+      if (hasSameOriginalLyrics(lyrics, candidate)) {
+        lyrics = candidate.replace(/\r\n?/g, "\n");
+        break;
+      }
+      // A saved full lyric text with different originals may be stale; never replace current lyrics.
+      if (translationOnlyAllowed && foreignLyricSpans(lyrics).length && !foreignLyricSpans(candidate).length) separateTranslation = candidate.trim();
+    }
+    const pending = foreignLyricSpans(lyrics).filter((span) => !inlineLyricTranslation(lyrics.slice(span.end)));
+    if (separateTranslation && new Set(pending.map((span) => span.source)).size === 1) {
+      for (const span of [...pending].reverse()) {
+        lyrics = `${lyrics.slice(0, span.end)} (번역 : ${separateTranslation})${lyrics.slice(span.end)}`;
+      }
+      separateTranslation = "";
+    }
+    return { lyrics, separateTranslation, spans: foreignLyricSpans(lyrics).filter((span) => !inlineLyricTranslation(lyrics.slice(span.end))) };
+  });
+  const sources = [...new Set(prepared.flatMap((track) => track.spans.map((span) => span.source)))];
+  if (sources.reduce((sum, source) => sum + source.length, 0) > REVIEW_DOC_LIMITS.translationCharacters) {
+    throw new ReviewLyricsTranslationError("외국어 가사가 한 번에 번역 가능한 60,000자를 넘었습니다. 음반을 나누어 DOCX ZIP을 생성해주세요.");
+  }
+  const controller = new AbortController();
+  const deadline = Date.now() + (options.timeoutMs ?? 55_000);
+  const provider = options.translate ?? ((segments) => translateLyricsBatch(segments, { source: "auto", target: "ko", signal: controller.signal }));
+  const sourceChunks = new Map(sources.map((source) => {
+    const chunks: string[] = [];
+    let remaining = source;
+    while (remaining.length > 4000) {
+      const space = remaining.lastIndexOf(" ", 4000);
+      let end = space > 2000 ? space : 4000;
+      // Never cut between UTF-16 surrogate halves.
+      if (/[\uD800-\uDBFF]/.test(remaining[end - 1])) end -= 1;
+      chunks.push(remaining.slice(0, end));
+      remaining = remaining.slice(end).trimStart();
+    }
+    if (remaining) chunks.push(remaining);
+    return [source, chunks] as const;
+  }));
+  const uniqueChunks = [...new Set([...sourceChunks.values()].flat())];
+  const batches: string[][] = [];
+  for (const chunk of uniqueChunks) {
+    let batch = batches.at(-1);
+    if (!batch || batch.length >= 20 || batch.reduce((sum, value) => sum + value.length, 0) + chunk.length > 4000) {
+      batch = [];
+      batches.push(batch);
+    }
+    batch.push(chunk);
+  }
+  const translated = new Map<string, string>();
+  // Limit model response size while sharing repeated chorus translations across all tracks.
+  for (const batch of batches) {
+    let result: string[] | null;
+    try {
+      result = await new Promise<string[] | null>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          controller.abort();
+          reject(new ReviewLyricsTranslationError());
+        }, Math.max(0, deadline - Date.now()));
+        Promise.resolve().then(() => provider(batch)).then(resolve, reject).finally(() => clearTimeout(timer));
+      });
+    } catch { throw new ReviewLyricsTranslationError(); }
+    if (!result || result.length !== batch.length || result.some((value, index) => typeof value !== "string" || !isUsableLyricsTranslation(value, batch[index]))) {
+      throw new ReviewLyricsTranslationError();
+    }
+    result.forEach((value, index) => translated.set(batch[index], value.trim()));
+  }
+  return prepared.map(({ lyrics, spans, separateTranslation }) => {
+    for (const span of [...spans].reverse()) {
+      const translation = sourceChunks.get(span.source)!.map((chunk) => translated.get(chunk)!).join(" ");
+      lyrics = `${lyrics.slice(0, span.end)} (번역 : ${translation})${lyrics.slice(span.end)}`;
+    }
+    return separateTranslation ? `${lyrics}\n\n(번역 : ${separateTranslation})` : lyrics;
+  });
+}
+
 export async function translateReviewData(input: ReviewDocumentData, options: { translate?: TranslationProvider } = {}): Promise<ReviewDocumentData> {
   const data = reviewDocumentDataSchema.parse(structuredClone(input));
   data.issues = data.issues.filter((issue) => !["TRANSLATION_UNAVAILABLE", "TRANSLATION_LIMIT"].includes(issue.code));
-  const provider = options.translate ?? ((segments) => translateLyricsWithOpenAI(segments, { source: "auto", target: "ko" }));
+  const provider = options.translate ?? ((segments) => translateLyricsBatch(segments, { source: "auto", target: "ko" }));
   // Scope cache to this snapshot; no cross-customer lyrics or indefinite in-memory storage.
   const pending = new Map<string, string>();
   for (const album of data.albums) for (const track of album.tracks) {
@@ -29,11 +147,11 @@ export async function translateReviewData(input: ReviewDocumentData, options: { 
         if (existingSegment.origin === "provider" && !existingSegment.translation.trim()) pending.set(existingSegment.source, existingSegment.source);
         continue;
       }
-      const inline = track.lyrics.slice(span.end).match(/^\s*\((?:번역|해석)\s*[:：]\s*([^)]+)\)/);
+      const inline = inlineLyricTranslation(track.lyrics.slice(span.end));
       // Separately supplied translations require explicit alignment; never replace them with a new guess.
       if (track.existingTranslation.trim() && !inline) continue;
       const id = createHash("sha256").update(`${track.id}:${span.start}:${span.source}`).digest("hex").slice(0, 20);
-      track.translationSegments.push({ id, ...span, translation: inline?.[1].trim() ?? "", origin: inline ? "existing" : "provider", confirmed: !!inline });
+      track.translationSegments.push({ id, ...span, translation: inline?.translation ?? "", origin: inline ? "existing" : "provider", confirmed: !!inline });
       if (!inline) pending.set(span.source, span.source);
     }
   }
@@ -51,7 +169,8 @@ export async function translateReviewData(input: ReviewDocumentData, options: { 
       const result = await provider(batch);
       if (!result || result.length !== batch.length) { failed = true; return; }
       result.forEach((translation, index) => {
-        if (typeof translation === "string" && translation.trim() && /[가-힣]/.test(translation) && !/^(TODO|번역문|translation)$/i.test(translation.trim())) translated.set(batch[index], translation.trim());
+        if (typeof translation === "string" && isUsableLyricsTranslation(translation, batch[index])) translated.set(batch[index], translation.trim());
+        else failed = true;
       });
     } catch { failed = true; }
     batch = [];
@@ -65,6 +184,6 @@ export async function translateReviewData(input: ReviewDocumentData, options: { 
   for (const album of data.albums) for (const track of album.tracks) for (const segment of track.translationSegments) {
     if (segment.origin === "provider" && !segment.translation && translated.has(segment.source)) segment.translation = translated.get(segment.source)!;
   }
-  if (failed) data.issues.push({ id: "translation:unavailable", code: "TRANSLATION_UNAVAILABLE", severity: "warning", message: "기존 번역 서비스가 설정되지 않았거나 요청에 실패했습니다. 환경설정(OPENAI_API_KEY)을 확인 후 재시도하거나 구간별 한글 번역을 입력해주세요." });
+  if (failed) data.issues.push({ id: "translation:unavailable", code: "TRANSLATION_UNAVAILABLE", severity: "warning", message: "번역 서비스 요청이 실패했거나 일부 구간을 번역하지 못했습니다. 재시도하거나 구간별 한글 번역을 입력해주세요." });
   return data;
 }

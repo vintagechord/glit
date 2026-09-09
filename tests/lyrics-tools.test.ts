@@ -26,6 +26,15 @@ test("buildInlineTranslatedLyrics preserves Korean lyrics and translates foreign
   assert.deepEqual(sentencesToTranslate, ["I love you", "singing."]);
   assert.deepEqual(
     buildInlineTranslatedLyrics(lines, segmentMap, ["사랑해", "노래해"]),
-    ["I love you (번역: 사랑해) 난 너를", "오늘도 singing. (번역: 노래해)"],
+    ["I love you (번역 : 사랑해) 난 너를", "오늘도 singing. (번역 : 노래해)"],
   );
+});
+
+test("inline lyric editing preserves sentence spacing and skips all existing translation markers", () => {
+  const value = "  Bonjour!\tJe t’aime. 한글\nЯ люблю тебя (번역 : 사랑해)\nأحبك（해석：사랑해）";
+  const { lines, segmentMap, sentencesToTranslate } = collectForeignLyricsSegments(value);
+  assert.deepEqual(sentencesToTranslate, ["Bonjour!", "Je t’aime."]);
+  assert.equal(buildInlineTranslatedLyrics(lines, segmentMap, ["안녕!", "널 사랑해."]).join("\n"),
+    "  Bonjour! (번역 : 안녕!)\tJe t’aime. (번역 : 널 사랑해.) 한글\nЯ люблю тебя (번역 : 사랑해)\nأحبك（해석：사랑해）");
+  assert.throws(() => buildInlineTranslatedLyrics(lines, segmentMap, ["안녕!"]), /Translation failed/);
 });

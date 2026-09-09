@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { findForeignLyricsSpans, inlineLyricTranslation } from "../foreign-lyrics";
 
 export const REVIEW_DOC_LIMITS = {
   files: 8, fileBytes: 10 * 1024 * 1024, totalBytes: 40 * 1024 * 1024,
@@ -153,7 +154,7 @@ export function validateReviewData(input: ReviewDocumentData): ReviewIssue[] {
       for (const sourceId of track.sourceIds) if (!sourceIds.has(sourceId)) add("SOURCE_INVALID", "곡에 연결된 원본이 없습니다.", album, track);
       if (!track.instrumentalConfirmed && track.existingTranslation.trim() && !track.translationSegments.length && !track.reviewedFields.includes("existingTranslation")) add("EXISTING_TRANSLATION_ALIGNMENT", "별도 번역의 원문 대응 관계를 확인해주세요. 줄 번호만으로 합치지 않습니다.", album, track, "translationSegments");
       if (!track.instrumentalConfirmed) for (const span of foreignLyricSpans(track.lyrics)) {
-        const inline = /^\s*\((?:번역|해석)\s*[:：]\s*[^)]+\)/.test(track.lyrics.slice(span.end));
+        const inline = inlineLyricTranslation(track.lyrics.slice(span.end));
         if (!inline && !track.translationSegments.some((s) => s.start <= span.start && s.end >= span.end && s.translation.trim())) add("TRANSLATION_MISSING", "외국어 가사의 한글 번역 또는 구간별 번역 확인이 필요합니다.", album, track, "translationSegments");
       }
       let previousEnd = 0;
@@ -169,17 +170,5 @@ export function validateReviewData(input: ReviewDocumentData): ReviewIssue[] {
 
 /** Character offsets anchor translations to exact source spans, including repeated occurrences. */
 export function foreignLyricSpans(lyrics: string): { start: number; end: number; source: string; language: "en" | "ja" | "other" }[] {
-  const spans: { start: number; end: number; source: string; language: "en" | "ja" | "other" }[] = [];
-  const annotations = [...lyrics.matchAll(/\((?:번역\s*[:：]|해석\s*[:：])[^)]*\)/g)].map((m) => ({ start: m.index, end: m.index + m[0].length }));
-  // Foreign spans are bounded by Hangul/newlines. CJK with kana is Japanese; no English label is guessed.
-  const pattern = /[A-Za-z\u3040-\u30ff\u3400-\u9fff][A-Za-z\u3040-\u30ff\u3400-\u9fff0-9 \t'’“”,.!?\-]*(?:[A-Za-z\u3040-\u30ff\u3400-\u9fff0-9.!?])?/g;
-  for (const match of lyrics.matchAll(pattern)) {
-    const source = match[0].trimEnd();
-    const start = match.index;
-    if (annotations.some((a) => start >= a.start && start < a.end)) continue;
-    if (/^(?:oh|ooh|ah|aah|uh|hmm|la|na|yeah|hey|woah|woo)(?:[\s,!?.]+(?:oh|ooh|ah|aah|uh|hmm|la|na|yeah|hey|woah|woo))*[,!?.]*$/i.test(source)) continue;
-    if (!source.trim()) continue;
-    spans.push({ start, end: start + source.length, source, language: /[\u3040-\u30ff]/.test(source) ? "ja" : /[\u3400-\u9fff]/.test(source) ? "other" : "en" });
-  }
-  return spans;
+  return findForeignLyricsSpans(lyrics);
 }

@@ -1,7 +1,8 @@
+import { findForeignLyricsSpans, inlineLyricTranslation } from "./foreign-lyrics";
+
 const koreanLetterPattern = /[ㄱ-ㅎㅏ-ㅣ가-힣]/;
 const unicodeLetterPattern = /\p{L}/u;
 const sentencePattern = /[^.!?。！？…]+[.!?。！？…]*/gu;
-const translationMarkerPattern = /^[\s([{（]*번역\s*:/;
 const maxTranslateChunkLength = 1200;
 const browserTranslationRetryCount = 2;
 const lingvaTranslateOrigins = ["https://lingva.ml"];
@@ -26,61 +27,11 @@ export const splitForeignSentences = (value: string) => {
   return matches?.map((item) => item.trim()).filter(Boolean) ?? [];
 };
 
-const isForeignLetter = (char: string) =>
-  unicodeLetterPattern.test(char) && !koreanLetterPattern.test(char);
-
 export const extractForeignSegments = (
   line: string,
-): ForeignLyricSegment[] => {
-  const segments: ForeignLyricSegment[] = [];
-  let start = -1;
-  let hasForeign = false;
-
-  const pushSegment = (end: number) => {
-    if (start < 0) return;
-    const raw = line.slice(start, end);
-    const trimmed = raw.trim();
-    const alreadyTranslated =
-      trimmed.includes("번역:") ||
-      translationMarkerPattern.test(line.slice(end));
-
-    if (!hasForeign || !trimmed || alreadyTranslated) {
-      start = -1;
-      hasForeign = false;
-      return;
-    }
-
-    const sentences = splitForeignSentences(trimmed);
-    if (sentences.length > 0) {
-      segments.push({
-        raw,
-        start,
-        end,
-        sentences,
-      });
-    }
-    start = -1;
-    hasForeign = false;
-  };
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    const isKorean = koreanLetterPattern.test(char);
-    if (isKorean) {
-      pushSegment(index);
-      continue;
-    }
-    if (start < 0 && isForeignLetter(char)) {
-      start = index;
-    }
-    if (start >= 0 && isForeignLetter(char)) {
-      hasForeign = true;
-    }
-  }
-
-  pushSegment(line.length);
-  return segments;
-};
+): ForeignLyricSegment[] => findForeignLyricsSpans(line)
+  .filter((span) => !inlineLyricTranslation(line.slice(span.end)))
+  .map((span) => ({ raw: span.source, start: span.start, end: span.end, sentences: splitForeignSentences(span.source) }));
 
 export const collectForeignLyricsSegments = (lyrics: string) => {
   const lines = lyrics.split("\n");
@@ -105,20 +56,19 @@ export const buildInlineTranslatedLyrics = (
 
     let nextLine = line;
     const replacements = segments.map((segment) => {
-      const translatedSentences = segment.sentences.map((sentence) => {
-        const translation = translations[translationIndex] ?? "";
+      let sentenceOffset = 0;
+      let replacement = "";
+      for (const sentence of segment.sentences) {
+        const sentenceStart = segment.raw.indexOf(sentence, sentenceOffset);
+        const sentenceEnd = sentenceStart + sentence.length;
+        const translated = translations[translationIndex]?.trim();
         translationIndex += 1;
-        const translated = translation.trim() || "번역 실패";
-        return `${sentence} (번역: ${translated})`;
-      });
-      const leading = segment.raw.match(/^\s*/)?.[0] ?? "";
-      const trailing = segment.raw.match(/\s*$/)?.[0] ?? "";
-
-      return {
-        start: segment.start,
-        end: segment.end,
-        replacement: `${leading}${translatedSentences.join(" ")}${trailing}`,
-      };
+        if (!translated) throw new Error("Translation failed");
+        replacement += `${segment.raw.slice(sentenceOffset, sentenceEnd)} (번역 : ${translated})`;
+        sentenceOffset = sentenceEnd;
+      }
+      replacement += segment.raw.slice(sentenceOffset);
+      return { start: segment.start, end: segment.end, replacement };
     });
 
     replacements

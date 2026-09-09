@@ -14,7 +14,7 @@ test("album applications require one explicit form mode before form entry", () =
 
   assert.match(
     source,
-    /React\.useState<ApplicationFormMode \| null>\(null\)/,
+    /React\.useState<ApplicationFormMode \| null>\(initialArchiveEntry \? "online" : null\)/,
   );
   assert.match(source, /\{step === 2 && !isOneClick && \(/);
   assert.match(source, /disabled=\{!applicationFormMode\}/);
@@ -34,7 +34,7 @@ test("album applications require one explicit form mode before form entry", () =
   assert.doesNotMatch(modeSelector, /setFiles|setUploads|setUploadedFiles/);
   assert.match(
     source,
-    /setStep\(restoredIsOneClick \|\| restoredApplicationFormMode \? 3 : 2\)/,
+    /setStep\(restoredArchiveEntry \|\| initialArchiveEntry \? 5 : restoredIsOneClick \|\| restoredApplicationFormMode \? 3 : 2\)/,
   );
   assert.match(source, /emailSubmitConfirmed: false/);
   assert.match(

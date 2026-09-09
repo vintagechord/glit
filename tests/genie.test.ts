@@ -196,7 +196,7 @@ for (const [provider, url] of [
       tracks: [],
       files: [],
       events: [],
-    }], { fetcher });
+    }], { fetcher, translate: async (segments) => segments.map((line) => line === "Line one" ? "첫 번째 줄" : "두 번째 줄") });
     const zip = new PizZip(buffer);
     const documents = Object.values(zip.files).filter((file) => !file.dir && file.name.endsWith(".docx"));
     assert.equal(documents.length, 9);
@@ -206,6 +206,11 @@ for (const [provider, url] of [
     assert.match(xml, /First Song/);
     assert.match(xml, /Line one/);
     assert.match(xml, /Composer A/);
+    for (const document of documents.filter((file) => /\/(심의폼_|앨범정보_|가사전체파일_|01_)/.test(file.name))) {
+      const text = new PizZip(document.asNodeBuffer()).file("word/document.xml")!.asText().replace(/<[^>]+>/g, "");
+      assert.match(text, /Line one \(번역 : 첫 번째 줄\)/, document.name);
+      assert.match(text, /Line two \(번역 : 두 번째 줄\)/, document.name);
+    }
   });
 }
 
@@ -335,7 +340,7 @@ test("buildExternalReviewDocSubmissionBundles treats parenthesized English artis
   );
 
   assert.equal(bundle.submission.artist_name, "Test Artist (TA)");
-  assert.equal(bundle.tracks[0].performer, "Test Artist (TA)");
+  assert.equal(bundle.tracks[0].performer, "");
 });
 
 test("buildExternalReviewDocSubmissionBundles tolerates contributor spacing differences", async () => {

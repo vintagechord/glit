@@ -136,6 +136,6 @@ test("buildMelonReviewDocSubmissionBundles maps melon albums to review doc bundl
   assert.equal(bundle.submission.artist_name, "Test Artist");
   assert.equal(bundle.submission.is_oneclick, false);
   assert.equal(bundle.tracks[0].track_title, "First Song");
-  assert.equal(bundle.tracks[0].performer, "Test Artist");
+  assert.equal(bundle.tracks[0].performer, "");
   assert.equal(bundle.tracks[0].lyrics, "Line one\n\nLine two");
 });

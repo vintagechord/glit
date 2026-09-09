@@ -178,7 +178,7 @@ test("admin selected submission review docs zip uses example-like docx packaging
     rowHeights: ["1690", "833", "831", "842", "841", "853"],
     isCentered: true,
     hasFixedLayout: true,
-    hasCantSplitRows: true,
+    hasCantSplitRows: false,
     hasShading: false,
   });
   assert.deepEqual(tables[1], {
@@ -189,7 +189,7 @@ test("admin selected submission review docs zip uses example-like docx packaging
     rowHeights: ["558", "558", "558"],
     isCentered: true,
     hasFixedLayout: true,
-    hasCantSplitRows: true,
+    hasCantSplitRows: false,
     hasShading: false,
   });
   assert.deepEqual(tables[2].grid, [1097, 1098, 6821]);
@@ -334,7 +334,7 @@ test("review docs normalize artist, company, dates, filenames, lyrics, and instr
   assert.doesNotMatch(inferredInstrumentalXml, /\(Inst\.\)|가사 없음 \/ Instrumental/);
 });
 
-test("integrated templates repeat one preserved table row per selected album", async () => {
+test("integrated templates repeat the reference album rows and retain the PBC title slots", async () => {
   const first = templateSourceFixture()[0];
   const second = {
     ...first,
@@ -359,20 +359,54 @@ test("integrated templates repeat one preserved table row per selected album", a
   const expectedColumns = new Map([
     ["TBS신청서_통합.docx", 6],
     ["WBS신청서_통합.docx", 9],
-    ["PBC신청서_통합.docx", 7],
+    ["PBC신청서_통합.docx", 6],
   ]);
   for (const [filename, cellCount] of expectedColumns) {
     const archiveName = `통합신청서/${filename}`;
     const xml = getDocXml(zip.file(archiveName)?.asNodeBuffer() ?? Buffer.alloc(0));
     const tables = getTableSummaries(xml);
     assert.equal(tables.length, 1, filename);
-    assert.equal(tables[0].rowCount, 3, filename);
-    assert.deepEqual(tables[0].cellCounts, [cellCount, cellCount, cellCount]);
+    const isPbc = filename.startsWith("PBC");
+    assert.equal(tables[0].rowCount, isPbc ? 6 : 3, filename);
+    assert.deepEqual(tables[0].cellCounts, isPbc ? [4, 6, 6, 6, 6, 6] : [cellCount, cellCount, cellCount]);
     assert.equal(tables[0].hasFixedLayout, true);
     assert.equal(tables[0].hasCantSplitRows, true);
-    assert.match(xml, /검증 제작사/);
-    assert.match(xml, /두 번째 제작사/);
+    if (isPbc) {
+      assert.doesNotMatch(xml, /회사명|검증 제작사|두 번째 제작사/);
+      assert.match(xml, /gridSpan[^>]*val="3"/);
+      assert.match(xml, /vMerge[^>]*val="restart"/);
+      assert.match(xml, /두 번째 타이틀곡/);
+      for (const [row] of [...xml.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/g)].slice(2)) {
+        // Centered vertically merged cells overlapped the next album after a
+        // page break in the multi-page PBC render fixture.
+        assert.doesNotMatch(row, /vAlign val="center"/);
+        assert.match(row, /vAlign val="top"/);
+      }
+    } else {
+      assert.match(xml, /검증 제작사/);
+      assert.match(xml, /두 번째 제작사/);
+    }
+    assert.match(xml, /tblHeader/);
     assert.doesNotMatch(xml, /\{[#/]?albums\}/);
+  }
+});
+
+test("long metadata, credits and translated lyrics retain text and permit table pagination", async () => {
+  const data = templateSourceFixture();
+  const longValue = Array.from({ length: 90 }, (_, i) => `${i + 1}번째 긴 내용`).join("\n");
+  data[0].submission.title = `앨범 ${longValue}`;
+  data[0].tracks[0].composer = `작곡 ${longValue}`;
+  data[0].tracks[0].lyrics = `${longValue}\n마지막 가사`;
+  const zip = new PizZip(await buildReviewDocsZip(data));
+  for (const file of Object.values(zip.files).filter((file) => !file.dir)) {
+    const xml = getDocXml(file.asNodeBuffer());
+    for (const [row] of xml.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/g)) {
+      if (!row.includes("90번째 긴 내용")) continue;
+      assert.doesNotMatch(row, /cantSplit|hRule="exact"|noWrap|tcFitText/);
+      assert.match(row, /keepNext val="0"/);
+      assert.match(row, /keepLines val="0"/);
+    }
+    if (/심의폼_|앨범정보_|가사전체파일_|\/01_/.test(file.name)) assert.match(xml, /마지막 가사/);
   }
 });
 

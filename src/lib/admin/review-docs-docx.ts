@@ -63,7 +63,8 @@ const REQUIRED_TEMPLATE_MARKERS: Record<string, string[]> = {
     "{#albums}",
     "{/albums}",
     "{album_title}",
-    "{company_actual}",
+    "{title_track_title_primary}",
+    "{title_track_title_secondary}",
   ],
   "lyrics-mv.docx": ["{artist_display}", "{track_title}", "{lyrics_with_translation}"],
 };
@@ -75,6 +76,22 @@ const docxText = (xml: string) => xml
   .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
   .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&")
   .replace(/\s+/g, "").normalize("NFC");
+
+const hasEnabledWordProperty = (xml: string, property: string) =>
+  [...xml.matchAll(new RegExp(`<w:${property}\\b[^>]*>`, "g"))].some(
+    ([tag]) => !/w:val=["'](?:0|false|off)["']/.test(tag),
+  );
+
+function validateTemplateContentFlow(xml: string, templateName: string) {
+  for (const [row] of xml.matchAll(/<w:tr\b[^>]*>[\s\S]*?<\/w:tr>/g)) {
+    if (!/\{[\s\S]*?\}/.test(docxText(row))) continue;
+    if (["cantSplit", "keepNext", "keepLines", "noWrap", "tcFitText"].some(
+      (property) => hasEnabledWordProperty(row, property),
+    )) {
+      throw new ReviewDocTemplateRenderError(templateName, "내용이 들어가는 표 행과 문단은 다음 페이지로 나뉠 수 있어야 합니다.");
+    }
+  }
+}
 
 /** Structural validation only. This does not claim Word/PDF visual verification. */
 function validateRenderedDocx(zip: PizZip, templateName: string, data: Record<string, ReviewDocTemplateValue>, templateXml: string) {
@@ -88,7 +105,11 @@ function validateRenderedDocx(zip: PizZip, templateName: string, data: Record<st
   const text = docxText(xml);
   const rows = (value: string) => (value.match(/<w:tr(?:\s[^>]*)?>/g) ?? []).length;
   if (templateName.endsWith("-integrated.docx") && Array.isArray(data.albums)) {
-    if (rows(xml) !== rows(templateXml) - 1 + data.albums.length) {
+    const templateRows = [...templateXml.matchAll(/<w:tr\b[^>]*>[\s\S]*?<\/w:tr>/g)].map(([row]) => row);
+    const startRow = templateRows.findIndex((row) => docxText(row).includes("{#albums}"));
+    const endRow = templateRows.findIndex((row) => docxText(row).includes("{/albums}"));
+    const repeatedRows = endRow - startRow + 1;
+    if (startRow < 0 || endRow < startRow || rows(xml) !== rows(templateXml) - repeatedRows + repeatedRows * data.albums.length) {
       throw new ReviewDocTemplateRenderError(templateName, "통합신청서의 앨범 반복 행 수가 일치하지 않습니다.");
     }
   }
@@ -158,6 +179,7 @@ export function renderReviewDocTemplate({
   try {
     const zip = new PizZip(template, { checkCRC32: true });
     const templateXml = zip.file("word/document.xml")?.asText() ?? "";
+    validateTemplateContentFlow(templateXml, templateName);
     const document = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,

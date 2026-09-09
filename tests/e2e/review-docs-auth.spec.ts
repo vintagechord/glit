@@ -16,6 +16,19 @@ test("all review document API entry points reject unauthenticated requests", asy
   }
 });
 
+test("legacy link, single and bulk ZIP routes reject unauthenticated requests", async ({ request }) => {
+  const legacyEndpoints = [
+    ["POST", "/api/admin/review-docs/melon"],
+    ["GET", `/api/admin/submissions/${id}/review-docs`],
+    ["POST", "/api/admin/submissions/review-docs"],
+  ];
+  for (const [method, url] of legacyEndpoints) {
+    const response = await request.fetch(url, { method });
+    expect(response.status(), `${method} ${url}`).toBe(401);
+    expect((await response.json()).error).toBe("로그인이 필요합니다.");
+  }
+});
+
 test("review document administrator page redirects anonymous visitors to login", async ({ request }) => {
   const response = await request.get("/admin/review-docs", { maxRedirects: 0 });
   expect(response.status()).toBe(307);

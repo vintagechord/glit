@@ -28,7 +28,12 @@ import {
   type ReviewDocTemplateValue,
 } from "@/lib/admin/review-docs-docx";
 import { validateReviewData, type ReviewDocumentData } from "@/lib/review-docs/model";
-import { renderTrackLyrics } from "@/lib/review-docs/translation";
+import {
+  renderTrackLyrics,
+  ReviewLyricsTranslationError,
+  translateLyricsForReviewDocuments,
+  type TranslationProvider,
+} from "@/lib/review-docs/translation";
 import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "templates", "review-docs");
@@ -242,7 +247,7 @@ const seoulTodayParts = () => {
 const two = (value: number) => String(value).padStart(2, "0");
 
 const formatLongKorean = (parts: ReturnType<typeof seoulTodayParts>) =>
-  `${parts.year}년 ${two(parts.month)}월 ${two(parts.day)}일`;
+  `${parts.year}년  ${two(parts.month)}월  ${two(parts.day)}일`;
 
 const formatLongDot = (parts: ReturnType<typeof seoulTodayParts> | null) =>
   parts ? `${parts.year}. ${two(parts.month)}. ${two(parts.day)}.` : "";
@@ -270,22 +275,7 @@ const compactLyrics = (value: string) =>
     .join("\n")
     .trim();
 
-const appendTranslatedLyrics = (lyrics: string, translatedLyrics: string) => {
-  const base = compactLyrics(lyrics);
-  const translated = compactLyrics(translatedLyrics);
-  if (!base && !translated) return "";
-  if (!translated) {
-    // 1차 구현은 저장된 translated_lyrics만 사용한다. 서버에서 임의로
-    // 외부 번역 API를 호출하지 않으며, 번역이 없으면 원문을 그대로 둔다.
-    return base;
-  }
-  if (!base) return translated;
-  if (base.includes("번역 :") || base.includes("번역:")) return base;
-  return `${base}\n\n(번역 : ${translated})`;
-};
-
 const getGenreCheckboxLine = (genre: string) => {
-  const normalized = genre.toLowerCase();
   const labels = [
     ["댄스", /dance|댄스/],
     ["발라드", /ballad|발라드/],
@@ -300,7 +290,12 @@ const getGenreCheckboxLine = (genre: string) => {
     ["락발라드", /락발라드|록발라드/],
     ["레게", /reggae|레게/],
   ] as const;
-  const matched = labels.find(([, pattern]) => pattern.test(normalized));
+  // Preserve the source's representative genre and test specific rock subgenres
+  // before broad matches such as "락" and "발라드".
+  const candidates = [labels[10], labels[9], ...labels.filter((_, index) => index !== 9 && index !== 10)];
+  const matched = genre.toLowerCase().split(/[,，/;]+/)
+    .map((part) => candidates.find(([, pattern]) => pattern.test(part)))
+    .find(Boolean);
   return labels
     .map(([label]) => `${label}${matched?.[0] === label ? "■" : "□"}`)
     .join("  ")
@@ -364,7 +359,7 @@ const normalizeTrack = (track: DbRecord, index: number) => {
   const trackTitleForDocs = [title, ...titleMarkers].join(" ");
   const lyricsDisplay = isInstrumental
     ? "가사 없음 / Instrumental"
-    : getText(track, "lyrics_with_translation") || appendTranslatedLyrics(lyrics, translatedLyrics);
+    : compactLyrics(getText(track, "lyrics_with_translation") || lyrics);
   const creditParts = [
     !isInstrumental && lyricist ? `작사: ${lyricist}` : "",
     getText(track, "composer") ? `작곡: ${getText(track, "composer")}` : "",
@@ -463,8 +458,7 @@ function buildSubmissionTemplateData(
     })
     .map((track, trackIndex) => normalizeTrack({
       ...track,
-      performer: getText(track, "performer") || getText(track, "performers") ||
-        (submission.preserve_missing_performers === true ? "" : artistNameRaw),
+      performer: getText(track, "performer") || getText(track, "performers"),
     }, trackIndex));
   const files = bundle.files.map(normalizeRecord);
   const events = bundle.events.map(normalizeRecord);
@@ -570,6 +564,8 @@ function buildSubmissionTemplateData(
     track_count: tracks.length,
     track_count_label: `${tracks.length}곡`,
     title_track_title: titleTracks.map((track) => track.track_title).join(", ") || integratedTitleTrack?.track_title || "",
+    title_track_title_primary: integratedTitleTrack?.track_title || "",
+    title_track_title_secondary: titleTracks.slice(1).map((track) => track.track_title).join(", "),
     title_tracks_text:
       titleTracks.map((track) => track.track_title).join(", ") ||
       integratedTitleTrack?.track_title ||
@@ -926,7 +922,8 @@ const sourceTrackToRecord = (
   composer: withFallback(existing?.composer, track.composer),
   lyricist: withFallback(existing?.lyricist, track.lyricist),
   arranger: withFallback(existing?.arranger, track.arranger),
-  performer: withFallback(existing?.performer ?? existing?.performers, track.artistName),
+  // A credited singer is not evidence of instrumental performance credits.
+  performer: getText(existing ?? {}, "performer") || getText(existing ?? {}, "performers"),
   lyrics: withFallback(existing?.lyrics, track.lyrics),
   notes: getText(existing ?? {}, "notes") || track.sourceNotes || `음원 곡 ID: ${track.songId}`,
   is_title: existing?.is_title === true || track.isTitle,
@@ -1525,7 +1522,7 @@ async function renderPreparedReviewDocuments(
 
 export async function buildReviewDocsZip(
   bundles: ReviewDocSubmissionBundle[],
-  options: { templateDir?: string; fetcher?: typeof fetch } = {},
+  options: { templateDir?: string; fetcher?: typeof fetch; translate?: TranslationProvider } = {},
 ) {
   if (bundles.length === 0) throw new ReviewDocsNotFoundError("선택된 접수가 없습니다.");
   const applicationDate = seoulTodayParts();
@@ -1533,8 +1530,24 @@ export async function buildReviewDocsZip(
   const hydratedBundles = await Promise.all(
     bundles.map((bundle) => hydrateReleasedAlbumBundle(bundle, { fetcher: options.fetcher })),
   );
+  // Both direct Melon/Genie imports and saved URL submissions enter here.
+  // Translate once per ZIP so every lyric-bearing form receives identical text.
+  const tracks = hydratedBundles.flatMap((bundle) => bundle.tracks);
+  const vocalTracks = tracks.filter((track, index) => !normalizeTrack(track, index).is_instrumental);
+  const lyrics = await translateLyricsForReviewDocuments(vocalTracks.map((track) => ({
+    lyrics: getText(track, "lyrics"),
+    translatedLyrics: getText(track, "translated_lyrics"),
+    lyricsWithTranslation: getText(track, "lyrics_with_translation"),
+  })), { translate: options.translate });
+  const translatedTracks = new Map(vocalTracks.map((track, index) => [track, lyrics[index]]));
   const prepared = hydratedBundles.map((bundle, index) =>
-    buildSubmissionTemplateData(bundle, index, hydratedBundles.length, applicationDate),
+    buildSubmissionTemplateData({
+      ...bundle,
+      tracks: bundle.tracks.map((track) => ({
+        ...track,
+        lyrics_with_translation: translatedTracks.get(track) ?? "",
+      })),
+    }, index, hydratedBundles.length, applicationDate, false),
   );
   return (await renderPreparedReviewDocuments(prepared, templates)).zip;
 }
@@ -1592,7 +1605,6 @@ export async function generateReviewDocuments(
     return buildSubmissionTemplateData({
       submission: {
         title: album.title,
-        preserve_missing_performers: true,
         artist_name: album.artistName,
         artist_name_en: album.artistNameEn,
         production_company: album.company,
@@ -1635,12 +1647,14 @@ export function getReviewDocsErrorPayload(error: unknown) {
     error instanceof ReviewDocsNotFoundError ||
     error instanceof ReviewDocsInputError ||
     error instanceof ReviewDocsUnsupportedTypeError ||
-    error instanceof ReviewDocsRenderError
+    error instanceof ReviewDocsRenderError ||
+    error instanceof ReviewLyricsTranslationError
   ) {
     return {
       status: error.status,
       body: {
         error: error.message,
+        ...(error instanceof ReviewLyricsTranslationError ? { code: error.code } : {}),
         missing:
           error instanceof ReviewDocsTemplateMissingError ? error.missing : undefined,
       },

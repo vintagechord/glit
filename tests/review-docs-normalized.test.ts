@@ -28,7 +28,7 @@ test("normalized album generation is side effect free and reports exact ZIP coun
   assert.doesNotMatch(xml(form.buffer), /<w:sz(?:Cs)? w:val="(?!22)\d+"/);
   assert.match(visible(form.buffer), /26\.09\.11/);
   const request = out.files.find((f) => f.name.includes("/가요심의요청서_"))!;
-  assert.match(visible(request.buffer), /2026년 09월 07일/);
+  assert.match(visible(request.buffer), /2026년  09월  07일/);
   assert.match(visible(request.buffer), /2곡/);
   assert.doesNotMatch(visible(request.buffer), /\(타이틀\)/);
   assert.ok(out.files.every((f) => !f.name.includes("타이틀")));
