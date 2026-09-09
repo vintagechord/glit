@@ -1,4 +1,5 @@
 import { translateLyricsWithOpenAI } from "./openai-translation";
+import { translateSpelledOutLetters } from "./foreign-lyrics";
 
 /** A nonempty response is not enough: untranslated source text must not pass as Korean. */
 export const isUsableLyricsTranslation = (translation: string, source: string, target = "ko") => {
@@ -164,7 +165,10 @@ const translateLineOnce = async (
     }
   }
 
-  return "";
+  // Providers commonly echo names sung letter by letter. Preserve the original
+  // lyrics and supply the Korean letter names instead of failing the whole ZIP.
+  // Ordinary words and sentences still require a successful semantic translation.
+  return baseLanguageCode(target) === "ko" ? translateSpelledOutLetters(text) ?? "" : "";
 };
 
 const translateLine = async (

@@ -1,6 +1,20 @@
 const koreanLetter = /\p{Script=Hangul}/u;
 const letter = /\p{L}/u;
-const adlib = /^(?:oh|ooh|ah|aah|uh|hmm|la|na|yeah|hey|woah|woo)(?:[\s,!?.]+(?:oh|ooh|ah|aah|uh|hmm|la|na|yeah|hey|woah|woo))*[,!?.]*$/i;
+const adlibToken = "(?:o+h+|o{2,}h*|a+h+|u+h+|hm+|la+|na+|ye+a+h+|he+y+|wo+a+h+|wo{2,}h*)";
+const adlib = new RegExp(`^${adlibToken}(?:[\\s,!?.…\\-\\u2010-\\u2015]+${adlibToken})*[,!?.…]*$`, "i");
+
+const koreanLetterNames = [
+  "에이", "비", "시", "디", "이", "에프", "지", "에이치", "아이", "제이", "케이", "엘", "엠",
+  "엔", "오", "피", "큐", "아르", "에스", "티", "유", "브이", "더블유", "엑스", "와이", "제트",
+];
+
+/** A last-resort reading of explicitly spelled letters, without guessing a name or meaning. */
+export function translateSpelledOutLetters(value: string): string | null {
+  const match = value.trim().match(/^([A-Z](?:[ \t]*[-\u2010-\u2015][ \t]*[A-Z]){2,})([,!?.…]*)$/);
+  if (!match) return null;
+  const letters = match[1].match(/[A-Z]/g)!;
+  return letters.map((letter) => koreanLetterNames[letter.charCodeAt(0) - 65]).join(" ") + match[2];
+}
 
 /** Keep existing Korean annotations intact, including the older UI's marker. */
 export function inlineLyricTranslation(value: string) {
