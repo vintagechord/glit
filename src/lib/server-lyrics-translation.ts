@@ -17,6 +17,44 @@ const maxTranslateChunkLength = 1200;
 const translateConcurrency = 3;
 const lingvaTranslateOrigins = ["https://lingva.ml"];
 
+type TranslationProviderName = "openai" | "google" | "lingva";
+type TranslationFailureCategory = "http" | "network" | "timeout" | "aborted" | "invalid_response" | "not_configured" | "unknown";
+
+class TranslationProviderError extends Error {
+  constructor(readonly category: TranslationFailureCategory, readonly status?: number) {
+    super(category);
+  }
+}
+
+/** Log only allowlisted metadata: fetch errors and response bodies can contain lyrics or credentials. */
+const logTranslationProviderFailure = (provider: TranslationProviderName, error: unknown) => {
+  let category: TranslationFailureCategory = "unknown";
+  let status: number | undefined;
+  if (error instanceof TranslationProviderError) {
+    category = error.category;
+    status = error.status;
+  } else if (error instanceof Error) {
+    // The OpenAI adapter exposes its HTTP status in this fixed, locally authored message.
+    const openAIStatus = provider === "openai"
+      ? /^OpenAI translation request failed \(([1-5]\d{2})\)$/.exec(error.message)
+      : null;
+    if (openAIStatus) { category = "http"; status = Number(openAIStatus[1]); }
+    else if (error.name === "TimeoutError") category = "timeout";
+    else if (error.name === "AbortError") category = "aborted";
+    else if (error instanceof TypeError) category = "network";
+    else if (error instanceof SyntaxError || (provider === "openai" && [
+      "OpenAI translation returned empty output",
+      "OpenAI translation response is missing translations",
+      "OpenAI translation count mismatch",
+    ].includes(error.message))) category = "invalid_response";
+  }
+  console.error("[translate] provider failed", {
+    provider,
+    category,
+    ...(Number.isInteger(status) && status! >= 100 && status! <= 599 ? { status } : {}),
+  });
+};
+
 const normalizeLanguageCode = (value: string, fallback: string) => {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return fallback;
@@ -91,11 +129,15 @@ const translateLineWithGoogle = async (
   });
 
   if (!response.ok) {
-    throw new Error("Translation request failed");
+    throw new TranslationProviderError("http", response.status);
   }
 
-  const data = (await response.json()) as unknown;
-  if (!Array.isArray(data) || !Array.isArray(data[0])) return "";
+  const data = (await response.json().catch(() => {
+    throw new TranslationProviderError("invalid_response", response.status);
+  })) as unknown;
+  if (!Array.isArray(data) || !Array.isArray(data[0])) {
+    throw new TranslationProviderError("invalid_response", response.status);
+  }
   return normalizeTranslationOutput(
     data[0]
       .map((chunk: unknown) =>
@@ -117,29 +159,36 @@ const translateLineWithLingva = async (
 
   for (const origin of lingvaTranslateOrigins) {
     const url = `${origin}/api/v1/${encodeURIComponent(sourceCode)}/${encodeURIComponent(targetCode)}/${encodeURIComponent(text)}`;
-    const response = await fetchImpl(url, {
-      method: "GET",
-      cache: "no-store",
-      signal: AbortSignal.timeout(8_000),
-      headers: {
-        Accept: "application/json",
-        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-        "User-Agent":
-          "Mozilla/5.0 (compatible; ONSIDE-Translate/1.0; +https://onside17.com)",
-      },
-    }).catch(() => null);
+    try {
+      const response = await fetchImpl(url, {
+        method: "GET",
+        cache: "no-store",
+        signal: AbortSignal.timeout(8_000),
+        headers: {
+          Accept: "application/json",
+          "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+          "User-Agent":
+            "Mozilla/5.0 (compatible; ONSIDE-Translate/1.0; +https://onside17.com)",
+        },
+      });
 
-    if (!response?.ok) continue;
-    const data = (await response.json().catch(() => null)) as unknown;
-    const translation =
-      data &&
-      typeof data === "object" &&
-      "translation" in data &&
-      typeof data.translation === "string"
-        ? data.translation
-        : "";
-    const normalized = normalizeTranslationOutput(translation);
-    if (normalized) return normalized;
+      if (!response.ok) throw new TranslationProviderError("http", response.status);
+      const data = (await response.json().catch(() => {
+        throw new TranslationProviderError("invalid_response", response.status);
+      })) as unknown;
+      const translation =
+        data &&
+        typeof data === "object" &&
+        "translation" in data &&
+        typeof data.translation === "string"
+          ? data.translation
+          : "";
+      const normalized = normalizeTranslationOutput(translation);
+      if (normalized) return normalized;
+      throw new TranslationProviderError("invalid_response", response.status);
+    } catch (error) {
+      logTranslationProviderFailure("lingva", error);
+    }
   }
 
   return "";
@@ -154,14 +203,14 @@ const translateLineOnce = async (
   const providers = [
     { name: "google", translate: translateLineWithGoogle },
     { name: "lingva", translate: translateLineWithLingva },
-  ];
+  ] as const;
 
   for (const provider of providers) {
     try {
       const translated = await provider.translate(text, source, target, fetchImpl);
       if (isUsableLyricsTranslation(translated, text, target)) return translated;
-    } catch {
-      console.error("[translate] provider failed", provider.name);
+    } catch (error) {
+      logTranslationProviderFailure(provider.name, error);
     }
   }
 
@@ -243,14 +292,17 @@ export const translateLyricsBatch = async (
         target,
         fetchImpl,
       });
+      if (!openAITranslations) {
+        logTranslationProviderFailure("openai", new TranslationProviderError("not_configured"));
+      }
       openAITranslations?.forEach((translation, index) => {
         const text = uniqueTexts[index];
         if (!text) return;
         const normalized = normalizeTranslationOutput(translation);
         if (isUsableLyricsTranslation(normalized, text, target)) normalizedCache.set(text, normalized);
       });
-    } catch {
-      console.error("[translate] openai provider failed");
+    } catch (error) {
+      logTranslationProviderFailure("openai", error);
     }
 
     const fallbackTexts = uniqueTexts.filter(

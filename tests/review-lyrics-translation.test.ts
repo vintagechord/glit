@@ -117,3 +117,46 @@ test("shared server translation rejects partial long-line chunks instead of retu
   });
   assert.deepEqual(result, [""]);
 });
+
+test("album translation overlaps at most two batches and keeps translations aligned", async () => {
+  const sources = Array.from({ length: 41 }, (_, index) => `Song ${String.fromCharCode(65 + Math.floor(index / 26))}${String.fromCharCode(65 + index % 26)}`);
+  let active = 0;
+  let peak = 0;
+  const requests: string[][] = [];
+  const release: Array<() => void> = [];
+  const resultPromise = translateLyricsForReviewDocuments([{ lyrics: sources.join("\n") }], {
+    translate: async (batch) => {
+      requests.push(batch);
+      peak = Math.max(peak, ++active);
+      if (requests.length <= 2) await new Promise<void>((resolve) => release.push(resolve));
+      active--;
+      return batch.map((source) => `노래 ${sources.indexOf(source)}`);
+    },
+  });
+  assert.equal(requests.length, 2, "the second batch starts before the first finishes");
+  release.forEach((resolve) => resolve());
+  const [result] = await resultPromise;
+  assert.equal(peak, 2);
+  assert.deepEqual(requests.map((batch) => batch.length), [20, 20, 1]);
+  assert.equal(result, sources.map((source, index) => `${source} (번역 : 노래 ${index})`).join("\n"));
+});
+
+test("missing production translation configuration gives an actionable error only after fallback fails", async (t) => {
+  const previousKey = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  t.mock.method(globalThis, "fetch", async () => new Response("", { status: 429 }));
+  t.mock.method(console, "error", () => {});
+  try {
+    await assert.rejects(translateLyricsForReviewDocuments([{ lyrics: "Stay with me" }]), (error: unknown) => {
+      assert.ok(error instanceof ReviewLyricsTranslationError);
+      assert.match(error.message, /OPENAI_API_KEY/);
+      assert.doesNotMatch(error.message, /잠시 후/);
+      return true;
+    });
+    t.mock.method(globalThis, "fetch", async () => Response.json([[["함께 있어줘"]]]));
+    assert.deepEqual(await translateLyricsForReviewDocuments([{ lyrics: "Stay with me" }]), ["Stay with me (번역 : 함께 있어줘)"]);
+  } finally {
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
+});

@@ -20,7 +20,7 @@ export type TranslationProvider = (segments: string[]) => Promise<string[] | nul
 export class ReviewLyricsTranslationError extends Error {
   readonly code = "REVIEW_TRANSLATION_FAILED";
   readonly status = 502;
-  constructor(message = "외국어 가사의 한글 번역을 완료하지 못했습니다. 잠시 후 DOCX ZIP 생성을 다시 시도해주세요.") {
+  constructor(message = "외국어 가사 번역 서비스 연결에 실패했습니다. 번역 서비스 설정과 운영 로그를 확인한 뒤 다시 생성해주세요.") {
     super(message);
     this.name = "ReviewLyricsTranslationError";
   }
@@ -80,8 +80,13 @@ export async function translateLyricsForReviewDocuments(
     throw new ReviewLyricsTranslationError("외국어 가사가 한 번에 번역 가능한 60,000자를 넘었습니다. 음반을 나누어 DOCX ZIP을 생성해주세요.");
   }
   const controller = new AbortController();
-  const deadline = Date.now() + (options.timeoutMs ?? 55_000);
+  const timeoutMs = options.timeoutMs ?? 180_000;
   const provider = options.translate ?? ((segments) => translateLyricsBatch(segments, { source: "auto", target: "ko", signal: controller.signal }));
+  const providerError = () => new ReviewLyricsTranslationError(
+    !options.translate && !process.env.OPENAI_API_KEY?.trim()
+      ? "외국어 가사 번역에 실패했습니다. 서버에 번역용 OPENAI_API_KEY가 없고 대체 번역 서비스도 응답하지 못했습니다. 관리자에게 번역 서비스 설정을 요청해주세요."
+      : undefined,
+  );
   const sourceChunks = new Map(sources.map((source) => {
     const chunks: string[] = [];
     let remaining = source;
@@ -107,22 +112,36 @@ export async function translateLyricsForReviewDocuments(
     batch.push(chunk);
   }
   const translated = new Map<string, string>();
-  // Limit model response size while sharing repeated chorus translations across all tracks.
-  for (const batch of batches) {
-    let result: string[] | null;
+  // Bound concurrent requests and the whole album pass. Serial model timeouts
+  // must not consume the entire budget before later tracks can be translated.
+  if (batches.length) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let nextBatch = 0;
     try {
-      result = await new Promise<string[] | null>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          controller.abort();
-          reject(new ReviewLyricsTranslationError());
-        }, Math.max(0, deadline - Date.now()));
-        Promise.resolve().then(() => provider(batch)).then(resolve, reject).finally(() => clearTimeout(timer));
-      });
-    } catch { throw new ReviewLyricsTranslationError(); }
-    if (!result || result.length !== batch.length || result.some((value, index) => typeof value !== "string" || !isUsableLyricsTranslation(value, batch[index]))) {
-      throw new ReviewLyricsTranslationError();
+      await Promise.race([
+        Promise.all(Array.from({ length: Math.min(2, batches.length) }, async () => {
+          while (nextBatch < batches.length) {
+            controller.signal.throwIfAborted();
+            const batch = batches[nextBatch++];
+            const result = await provider(batch);
+            if (!result || result.length !== batch.length || result.some((value, index) => typeof value !== "string" || !isUsableLyricsTranslation(value, batch[index]))) {
+              throw providerError();
+            }
+            result.forEach((value, index) => translated.set(batch[index], value.trim()));
+          }
+        })),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new ReviewLyricsTranslationError(
+            "외국어 가사 번역 대기 시간을 초과했습니다. 음반을 나누어 생성하거나 번역 서비스 상태를 확인해주세요.",
+          )), timeoutMs);
+        }),
+      ]);
+    } catch (error) {
+      controller.abort();
+      throw error instanceof ReviewLyricsTranslationError ? error : providerError();
+    } finally {
+      clearTimeout(timer);
     }
-    result.forEach((value, index) => translated.set(batch[index], value.trim()));
   }
   return prepared.map(({ lyrics, spans, separateTranslation }) => {
     for (const span of [...spans].reverse()) {
