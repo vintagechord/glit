@@ -210,3 +210,19 @@ test("dynamic track, save, and file-match labels are translated before generic w
     );
   }
 });
+
+test("file and checkout recovery errors have exact English translations", () => {
+  assertExactTranslations([
+    "파일 조회 응답이 지연되고 있습니다. 다시 시도해주세요.",
+    "파일 주소를 확인할 수 없습니다.",
+    "파일을 불러오지 못했습니다. 다시 시도해주세요.",
+    "파일 열기",
+    "확인 중",
+    "결제 모듈을 불러오지 못했습니다. 다시 시도해주세요.",
+    "결제 모듈을 실행하지 못했습니다. 다시 시도해주세요.",
+    "모바일 결제 폼을 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.",
+    "모바일 결제 화면을 열지 못했습니다. 다시 시도해주세요.",
+    "결제 모듈 로딩에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    "업로드 응답이 지연되어 중단했습니다. 다시 시도하거나 이메일로 파일을 보내주세요.",
+  ]);
+});

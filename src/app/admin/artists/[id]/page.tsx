@@ -5,7 +5,7 @@ import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/format";
 import { updateArtistAction } from "@/features/admin/actions";
-import { ArtistThumbnailUploader } from "@/components/admin/artist-thumbnail-uploader";
+import { ArtistEditorForm } from "@/components/admin/artist-editor-form";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 
 export const metadata = {
@@ -175,41 +175,7 @@ export default async function AdminArtistDetailPage({
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           기본 정보
         </p>
-        <form action={updateArtistAction} className="mt-4 grid gap-4 md:grid-cols-2">
-          <input type="hidden" name="artistId" value={artist.id} />
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              아티스트명
-            </label>
-            <input
-              name="name"
-              defaultValue={artist.name}
-              className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-            />
-            <details className="text-[11px] text-muted-foreground">
-              <summary className="cursor-pointer font-semibold text-foreground">
-                이름 변경 안내
-              </summary>
-              <p className="mt-1 leading-5">
-                연결된 심의는 유지되지만 화면의 아티스트 표시는 변경될 수 있습니다.
-              </p>
-            </details>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              썸네일 이미지
-            </label>
-            <ArtistThumbnailUploader initialUrl={artist.thumbnail_url ?? ""} />
-          </div>
-          <div className="md:col-span-2 flex justify-end">
-            <button
-              type="submit"
-              className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black"
-            >
-              저장
-            </button>
-          </div>
-        </form>
+        <ArtistEditorForm artistId={artist.id} initialName={artist.name} initialThumbnailUrl={artist.thumbnail_url} action={updateArtistAction} />
       </div>
 
       <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">

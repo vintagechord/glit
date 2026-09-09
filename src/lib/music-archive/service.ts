@@ -5,13 +5,16 @@ import { consumeRateLimit } from "@/lib/request-rate-limit";
 import { ArchiveError, archiveDatabaseError } from "./http";
 import { applyArchiveCommand, archiveCommandSchema, createArchiveData, validateArchiveData, type ArchiveLibrary } from "./model";
 import { getMusicProviderStatuses, parseMusicProviderUrl } from "./providers";
-import { MusicProviderError, searchMusicBrainzArtists } from "./musicbrainz";
-import { lookupAppleArtist } from "./apple";
+import { MusicProviderError, searchMusicBrainzArtists, lookupMusicBrainzRelease } from "./musicbrainz";
+import { lookupAppleArtist, lookupAppleAlbum } from "./apple";
 import { searchCatalogArtists, indexCatalogArtists } from "./catalog-search";
 import { agencyGuides } from "./guides";
 import { submissionArchiveColumns, normalizeSubmissionTitles, matchArchiveReviews } from "./reviews";
 import { enqueueArchiveSync, resumeArchiveSync, acquireArchiveProviderPermit } from "./sync";
 import { previewArchiveCsv, importArchiveCsv } from "./csv";
+import { mergeArchiveImports } from "./import";
+import { getOwnedCreditSubmissions, mergeSubmissionCredits } from "./credits";
+import { fetchDomesticAlbumCredits, linkedDomesticAlbumUrl, mergeDomesticAlbumCredits } from "./domestic-credits";
 
 const uuid = z.string().uuid();
 const paging = (value: number) => Number.isSafeInteger(value) && value >= 0 && value <= 10000 ? value : 0;
@@ -127,18 +130,30 @@ async function validateCommandAccess(owner: string, library: ArchiveLibrary, com
   }
 }
 
-export async function getArchiveAdmin(query = "", page = 0) {
-  const start = paging(page) * 20;
+export const archiveAdminFiltersSchema = z.object({
+  state: z.enum(["active", "archived", "all"]).default("active"),
+  content: z.enum(["all", "no_albums", "no_tracks"]).default("all"),
+  sort: z.enum(["recent", "oldest", "artist", "albums"]).default("recent"),
+  pageSize: z.coerce.number().refine(value => [20, 50, 100].includes(value)).default(20),
+});
+export async function getArchiveAdmin(query = "", page = 0, rawFilters: unknown = {}) {
+  const filters = archiveAdminFiltersSchema.parse(rawFilters);
+  const start = paging(page) * filters.pageSize;
   const q = query.trim().slice(0, 100).replace(/[,%()\\_]/g, " ");
   let listing = createAdminClient().from("music_archive_admin_libraries").select("*", { count: "exact" });
-  if (q) listing = listing.or(`artist_name.ilike.%${q}%${uuid.safeParse(q).success ? `,owner_id.eq.${q},id.eq.${q}` : ""}`);
+  if (q) listing = listing.or(`artist_name.ilike.%${q}%,member_name.ilike.%${q}%,member_company.ilike.%${q}%${uuid.safeParse(q).success ? `,owner_id.eq.${q},id.eq.${q}` : ""}`);
+  if (filters.state === "active") listing = listing.is("archived_at", null);
+  else if (filters.state === "archived") listing = listing.not("archived_at", "is", null);
+  if (filters.content === "no_albums") listing = listing.eq("release_count", 0);
+  if (filters.content === "no_tracks") listing = listing.eq("track_count", 0);
+  const sortColumn = filters.sort === "artist" ? "artist_name" : filters.sort === "albums" ? "release_count" : "updated_at";
   const [jobs, libraries, guides] = await Promise.all([
     createAdminClient().from("music_archive_jobs").select(publicJobFields).order("updated_at", { ascending: false }).limit(100),
-    listing.order("updated_at", { ascending: false }).range(start, start + 19),
+    listing.order(sortColumn, { ascending: ["artist", "oldest"].includes(filters.sort) }).order("id").range(start, start + filters.pageSize - 1),
     getArchiveGuides(true),
   ]);
   archiveDatabaseError(jobs.error); archiveDatabaseError(libraries.error);
-  return { jobs: jobs.data ?? [], guides, providers: getMusicProviderStatuses(), libraries: libraries.data ?? [], total: libraries.count ?? 0, nextPage: start + 20 < (libraries.count ?? 0) ? paging(page) + 1 : null };
+  return { jobs: jobs.data ?? [], guides, providers: getMusicProviderStatuses(), libraries: libraries.data ?? [], total: libraries.count ?? 0, pageSize: filters.pageSize, nextPage: start + filters.pageSize < (libraries.count ?? 0) ? paging(page) + 1 : null };
 }
 
 /** Only called after the route has verified the requesting administrator. */
@@ -176,6 +191,19 @@ export async function linkArchiveSubmission(owner: string, context: { libraryId:
 
 export async function mutateArchive(owner: string, raw: unknown, isAdmin = false): Promise<{ library?: ArchiveLibrary; job?: unknown; runLibraryId?: string; [key: string]: unknown }> {
   const body = z.object({ action: z.string(), libraryId: uuid.optional(), version: z.number().int().positive().optional() }).passthrough().parse(raw);
+  if (body.action === "admin-commands" && isAdmin) {
+    const { data: target, error } = await createAdminClient().from("music_archive_libraries").select("owner_id").eq("id", uuid.parse(body.libraryId)).maybeSingle();
+    archiveDatabaseError(error);
+    if (!target) throw new ArchiveError("관리 항목을 찾을 수 없습니다.", 404);
+    const library = await getOwnedLibrary(target.owner_id, String(body.libraryId));
+    if (body.version !== library.version) throw new ArchiveError("변경된 자료를 새로고침한 뒤 다시 저장해주세요.", 409, "VERSION_CONFLICT");
+    if (library.archived_at) throw new ArchiveError("보관된 아카이브에는 앨범을 추가할 수 없습니다.", 409);
+    const commands = z.array(archiveCommandSchema).min(1).max(100).parse(body.commands);
+    if (commands.some(command => !["add_release", "add_track", "update_release", "update_track"].includes(command.type))) throw new ArchiveError("앨범·트랙 정보만 추가하거나 수정할 수 있습니다.", 422);
+    let updated = library.data;
+    for (const command of commands) updated = applyArchiveCommand(updated, command);
+    return { library: await saveArchiveLibrary(library.owner_id, library, updated, "admin_catalog_edit", owner, library.archived_at, { commands }) };
+  }
   if (body.action === "admin-resolve-conflict" && isAdmin) {
     const { data: target, error } = await createAdminClient().from("music_archive_libraries").select("owner_id").eq("id", uuid.parse(body.libraryId)).maybeSingle();
     archiveDatabaseError(error);
@@ -226,9 +254,52 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
     return { library: saved };
   }
   if (library.archived_at) throw new ArchiveError("제외한 아티스트를 먼저 복구해주세요.", 409);
+  if (body.action === "refresh-metadata") {
+    const releaseId = z.string().min(1).max(256).optional().parse(body.releaseId);
+    const offset = z.number().int().min(0).max(5000).default(0).parse(body.offset);
+    const releases = library.data.releases.filter(item => !item.excluded && !item.mergedInto && (!releaseId || item.id === releaseId));
+    if (releaseId && !releases.length) throw new ArchiveError("앨범을 찾을 수 없습니다.", 404);
+    let updated = library.data;
+    const creditSubmissions = await getOwnedCreditSubmissions(owner);
+    const refreshDeadline = AbortSignal.timeout(45_000);
+    const notices: string[] = [];
+    let checkedAlbums = 0;
+    for (const release of releases.slice(offset, offset + 3)) {
+      const domesticUrl = linkedDomesticAlbumUrl(updated, release.id, creditSubmissions, library.id);
+      if (domesticUrl) {
+        try {
+          const fetched = await fetchDomesticAlbumCredits(domesticUrl, { signal: refreshDeadline });
+          updated = mergeDomesticAlbumCredits(updated, release.id, fetched.album, fetched.provider, new Date().toISOString(), fetched.imageUrl);
+          checkedAlbums++;
+          if (fetched.partial) notices.push(`${release.title}: 일부 곡의 정보를 조회하지 못했습니다. 가져온 정보는 저장했습니다.`);
+        } catch { notices.push(`${release.title}: 음원 사이트 연결 또는 앨범 정보를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.`); }
+      }
+      const source = release.source;
+      const connection = library.data.connections.find(item => item.provider === source?.provider && item.confirmed && item.externalArtistId);
+      if (!source || !connection?.externalArtistId || !["apple", "musicbrainz"].includes(source.provider)) continue;
+      try {
+        const imported = source.provider === "apple"
+          ? await lookupAppleAlbum(source.externalId, connection.externalArtistId, { acquirePermit: () => acquireArchiveProviderPermit("apple") })
+          : await lookupMusicBrainzRelease(source.externalId, connection.externalArtistId, { acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
+        updated = mergeArchiveImports(updated, [imported], { metadataOnly: true });
+        if (!domesticUrl) checkedAlbums++;
+      } catch (error) {
+        if (!(error instanceof MusicProviderError)) throw error;
+        notices.push(`${release.title}: ${error.message}`);
+      }
+    }
+    updated = mergeSubmissionCredits(updated, creditSubmissions, library.id);
+    const saved = await saveArchiveLibrary(owner, library, updated, "refresh_metadata", owner, library.archived_at, { releaseId, offset, notices });
+    const nextOffset = offset + 3 < releases.length ? offset + 3 : null;
+    const scopeIds = new Set(releases.map(release => release.id));
+    const scopedTracks = updated.tracks.filter(track => scopeIds.has(track.releaseId) && !track.excluded && !track.mergedInto);
+    const creditCount = scopedTracks.filter(track => updated.recordings.find(recording => recording.id === track.recordingId)?.workIds.some(id => updated.works.find(work => work.id === id)?.contributors?.length)).length;
+    const summary = `${checkedAlbums ? `음원 사이트에서 앨범 ${checkedAlbums}개를 다시 확인했습니다.` : "다시 조회할 수 있는 음원 사이트 정보가 없습니다."} ${creditCount ? `저작자 정보 ${creditCount}곡이 연결되어 있습니다.` : "현재 연결된 자료에서 작사·작곡·편곡 정보를 찾지 못했습니다. 직접 입력할 수 있습니다."}`;
+    return { library: saved, nextOffset, metadataNotice: [summary, ...notices].join("\n"), creditCount };
+  }
   if (body.action === "csv-import") return { library: await saveArchiveLibrary(owner, library, importArchiveCsv(z.string().max(400000).parse(body.csv), library.data), "csv_import") };
   if (body.action === "commands") {
-    const commands = z.array(archiveCommandSchema).min(1).max(12).parse(body.commands);
+    const commands = z.array(archiveCommandSchema).min(1).max(100).parse(body.commands);
     let updated = library.data;
     for (const command of commands) {
       if (["set_connection", "remove_connection"].includes(command.type)) throw new ArchiveError("제공처 연결은 별도로 변경해주세요.");

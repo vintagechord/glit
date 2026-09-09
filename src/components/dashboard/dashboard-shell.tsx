@@ -16,10 +16,10 @@ export type DashboardTab = { key: string; label: string; href: string };
 
 export const defaultDashboardTabs: DashboardTab[] = [
   { key: "status", label: "접수현황", href: "/mypage" },
+  { key: "history", label: "심의내역", href: "/mypage/history" },
   { key: "drafts", label: "작성중", href: "/mypage/drafts" },
   { key: "cart", label: "장바구니", href: "/mypage/cart" },
   { key: "orders", label: "주문내역", href: "/mypage/orders" },
-  { key: "history", label: "심의내역", href: "/mypage/history" },
   { key: "music", label: "내 음악 관리", href: "/mypage/music" },
   { key: "credits", label: "크레딧", href: "/mypage/credits" },
   { key: "profile", label: "계정", href: "/mypage/profile" },
@@ -38,10 +38,11 @@ const prefixTabHrefs = (tabs: DashboardTab[], prefix: string) =>
 export const englishDefaultDashboardTabs: DashboardTab[] = prefixTabHrefs(
   [
     { key: "status", label: "Status", href: "/mypage" },
+    { key: "history", label: "History", href: "/mypage/history" },
     { key: "drafts", label: "Drafts", href: "/mypage/drafts" },
     { key: "cart", label: "Cart", href: "/mypage/cart" },
     { key: "orders", label: "Orders", href: "/mypage/orders" },
-    { key: "history", label: "History", href: "/mypage/history" },
+    { key: "music", label: "My Music", href: "/mypage/music" },
     { key: "credits", label: "Credits", href: "/mypage/credits" },
     { key: "profile", label: "Account", href: "/mypage/profile" },
   ],
@@ -82,6 +83,20 @@ export function DashboardShell({
 }) {
   const tabList = tabs ?? defaultDashboardTabs;
   const shouldRenderTabs = tabList.length > 1;
+  const english = tabList.some((tab) => tab.href.startsWith("/en/"));
+  const groups = [
+    { key: "review", label: english ? "Applications & Reviews" : "접수 · 심의", keys: ["status", "history", "drafts"] },
+    { key: "payment", label: english ? "Payments" : "결제 · 주문", keys: ["cart", "orders"] },
+    { key: "music", label: english ? "Music & Credits" : "음악 · 크레딧", keys: ["music", "credits"] },
+    { key: "account", label: english ? "Account" : "내 계정", keys: ["profile"] },
+  ];
+  const knownKeys = new Set(groups.flatMap((group) => group.keys));
+  const navigationGroups = groups.map((group) => ({
+    ...group,
+    tabs: group.keys.flatMap((key) => tabList.filter((tab) => tab.key === key)),
+  })).filter((group) => group.tabs.length > 0);
+  const otherTabs = tabList.filter((tab) => !knownKeys.has(tab.key));
+  if (otherTabs.length) navigationGroups.push({ key: "other", label: english ? "More" : "기타", keys: [], tabs: otherTabs });
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-9">
@@ -116,26 +131,33 @@ export function DashboardShell({
       {shouldRenderTabs ? (
         <nav
           aria-label={contextLabel}
-          className="mt-4 flex w-full items-center gap-2 overflow-x-auto pb-1 text-xs font-black text-muted-foreground scrollbar-none sm:inline-flex sm:w-auto sm:flex-wrap"
+          className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-[1.5fr_1fr_1fr_0.65fr]"
         >
-          {tabList.map((tab) => {
-            const Icon = tabIcons[tab.key];
-            return (
-              <Link
-                key={tab.key}
-                href={tab.href}
-                aria-current={activeTab === tab.key ? "page" : undefined}
-                className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-[8px] border-2 px-3 py-2 transition ${
-                  activeTab === tab.key
-                    ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
-                    : "border-border bg-card text-muted-foreground hover:border-[#111111] hover:text-foreground dark:hover:border-[#f2cf27]"
-                }`}
-              >
-                {Icon ? <Icon className="h-4 w-4" aria-hidden="true" /> : null}
-                {tab.label}
-              </Link>
-            );
-          })}
+          {navigationGroups.map((group) => (
+            <div key={group.key} className="min-w-0 rounded-xl border border-border bg-card/60 p-2.5 sm:p-3">
+              <p className="mb-2 px-1 text-[11px] font-bold tracking-wide text-muted-foreground">{group.label}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {group.tabs.map((tab) => {
+                  const Icon = tabIcons[tab.key];
+                  return (
+                    <Link
+                      key={tab.key}
+                      href={tab.href}
+                      aria-current={activeTab === tab.key ? "page" : undefined}
+                      className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-bold transition ${
+                        activeTab === tab.key
+                          ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
+                          : "border-transparent text-muted-foreground hover:border-border hover:bg-background hover:text-foreground"
+                      }`}
+                    >
+                      {Icon ? <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /> : null}
+                      {tab.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       ) : null}
 

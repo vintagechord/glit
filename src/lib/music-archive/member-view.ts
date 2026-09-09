@@ -19,10 +19,10 @@ export function memberLibrary(value: unknown) {
     data: {
       schemaVersion: data.schemaVersion,
       artist: keep(artist, ["id", "name", "disambiguation", "note", "links"]),
-      releases: rows(data.releases).map(row => keep(row, ["id", "title", "type", "releaseDate", "participation", "version", "artistName", "barcode", "links", "excluded", "mergedInto", "userEdited"])),
+      releases: rows(data.releases).map(row => keep(row, ["id", "title", "type", "releaseDate", "participation", "version", "artistName", "barcode", "imageUrl", "links", "excluded", "mergedInto", "userEdited"])),
       tracks: rows(data.tracks).map(row => keep(row, ["id", "releaseId", "title", "discNumber", "trackNumber", "recordingId", "version", "artistName", "managed", "links", "excluded", "mergedInto", "userEdited"])),
       recordings: rows(data.recordings).map(row => keep(row, ["id", "title", "version", "isrc", "workIds", "userEdited"])),
-      works: rows(data.works).map(row => keep(row, ["id", "title", "writers", "iswc", "institutionNumbers", "userEdited"])),
+      works: rows(data.works).map(row => keep(row, ["id", "title", "writers", "contributors", "iswc", "institutionNumbers", "userEdited"])),
       tasks: rows(data.tasks).map(row => keep(row, ["id", "trackId", "kind", "agency", "status", "result", "participant", "role", "recordingId", "workId", "applicationDate", "completedDate", "checkedDate", "referenceNumber", "songNumber", "memo"])),
       reviewLinks: rows(data.reviewLinks).map(row => keep(row, ["id", "submissionId", "releaseId", "trackId", "submissionTrackId"])),
       connections: rows(data.connections).map(row => keep(row, ["provider", "externalArtistId", "url", "confirmed"])),

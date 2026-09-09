@@ -1,5 +1,12 @@
 # Bounded review-document input converter
 
+The web application now reads DOCX directly in Node with bounded ZIP/XML validation;
+it also processes URL, translation and generation jobs through the shared durable
+queue (`0103_review_document_web_dispatcher.sql`). The Python converter below remains
+the DOC/HWP/PDF path. `Dockerfile.web` is an optional combined web/converter image
+for an existing service with at least 2GB RAM; it does not change production plans.
+See [connection and deployment steps](../../docs/review-docs/worker-connection.md).
+
 `extract.py <private-local-file> <doc|docx|hwp|pdf>` returns a JSON block stream. Node `extractFileBlocks` invokes it with generated filenames in a `0700` temporary directory, writes `0600` input, deletes it in `finally`, limits stdout to 12 MiB and wall time to 90 seconds. CPU is capped at 80 seconds (85 hard); on Linux address space is 768 MiB, file output 100 MiB, descriptors 128. Conversion is serial in the single dedicated worker; the worker supervisor caps and kills the complete process group. The converter receives no database/storage/API credentials and never fetches external resources or executes document macros/field instructions. It is a parser subprocess, not an OS security sandbox; worker/container isolation remains required.
 
 Supported engines:

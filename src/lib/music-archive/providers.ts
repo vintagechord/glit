@@ -1,3 +1,4 @@
+import type { ArchiveContributor } from "./model";
 /** Provider URLs are links, never arbitrary URLs to fetch. See docs/music-archive-providers.md. */
 export type MusicProvider = "musicbrainz" | "spotify" | "melon" | "genie" | "bugs" | "apple";
 export type MusicEntityKind = "artist" | "release" | "track" | "recording" | "work";
@@ -73,8 +74,8 @@ export function isValidMusicBrainzUserAgent(value: string) {
 }
 
 export type ArtistCandidate = { provider: MusicProvider; externalId: string; name: string; sortName: string; disambiguation: string; country: string; type: string; url: string; imageUrl: string | null; representativeRelease: string | null };
-export type ImportedTrack = { externalId: string; recordingId: string | null; title: string; version: string; artistName: string; artistIds: string[]; position: number; discNumber: number; durationMs: number | null; isrcs: string[]; managedByArtist: boolean; url: string };
-export type ImportedRelease = { provider: "musicbrainz" | "apple"; externalId: string; title: string; date: string; type: "album" | "ep" | "single" | "other"; secondaryTypes: string[]; participation: boolean; artistName: string; artistIds: string[]; barcode: string | null; version: string; country: string; tracks: ImportedTrack[]; url: string; imageUrl: null; checkedAt: string };
+export type ImportedTrack = { externalId: string; recordingId: string | null; title: string; version: string; artistName: string; artistIds: string[]; position: number; discNumber: number; durationMs: number | null; isrcs: string[]; managedByArtist: boolean; url: string; works?: { externalId: string; title: string; iswc?: string; contributors: ArchiveContributor[] }[] };
+export type ImportedRelease = { provider: "musicbrainz" | "apple"; externalId: string; title: string; date: string; type: "album" | "ep" | "single" | "other"; secondaryTypes: string[]; participation: boolean; artistName: string; artistIds: string[]; barcode: string | null; version: string; country: string; tracks: ImportedTrack[]; url: string; imageUrl: string | null; checkedAt: string };
 /** Persist atomically with imported metadata; retry the old cursor after a failed commit. */
 export type MusicBrainzCursor = { version: 1; artistId: string; phase: "artist" | "track_artist" | "done"; offset: number; pending: string[]; total?: number };
 export type MusicBrainzStep = { releases: ImportedRelease[]; nextCursor: MusicBrainzCursor | null; status: "collecting" | "completed"; checkedAt: string; scopeNote: string };

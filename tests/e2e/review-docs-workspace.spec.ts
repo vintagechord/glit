@@ -41,6 +41,16 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => { await new Promise<void>((resolve) => server?.close(() => resolve())); });
 
+test("web processing enables analysis and clearly limits uploads to DOCX without a dedicated worker", async ({ page }) => {
+  await page.route(`**${apiPath}`, (route) => route.fulfill({ json: { jobs: [], workerReady: true, workerMode: "web", supportedFormats: ["docx"] } }));
+  await page.goto(origin);
+  await expect(page.getByRole("button", { name: "업로드·분석 시작" })).toBeEnabled();
+  await expect(page.getByRole("status")).toContainText("DOCX 파일과 멜론·지니 URL은 바로 분석할 수 있습니다.");
+  await expect(page.getByLabel("기준파일 선택")).toHaveAttribute("accept", ".docx");
+  await page.getByRole("tab", { name: "멜론·지니 URL · 음반" }).click();
+  await expect(page.getByRole("button", { name: "업로드·분석 시작" })).toBeEnabled();
+});
+
 test("an offline worker reconnects automatically without reloading or losing entered URLs", async ({ page }) => {
   let workerReady = false;
   await page.route(`**${apiPath}`, (route) => route.fulfill({ json: { jobs: [], workerReady } }));

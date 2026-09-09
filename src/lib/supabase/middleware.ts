@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 import { getSupabaseEnv } from "./env";
 
@@ -24,6 +25,7 @@ export async function middleware(req: NextRequest) {
   let res = NextResponse.next();
 
   const supabase = createServerClient(url, anonKey, {
+    global: { fetch: fetchWithTimeout },
     cookies: {
       getAll() {
         return req.cookies.getAll();

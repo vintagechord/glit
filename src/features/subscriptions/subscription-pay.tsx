@@ -1,7 +1,7 @@
-/* eslint-disable @next/next/no-sync-scripts */
 "use client";
 
 import React from "react";
+import { ensureStdPayScript } from "@/lib/inicis/popup";
 
 type StdPayParams = Record<string, string>;
 type MobileParams = Record<string, string>;
@@ -34,6 +34,8 @@ export function SubscriptionPayButtons({
   const stdFormId = React.useId().replace(/:/g, "");
   const mobileFormId = React.useId().replace(/:/g, "");
   const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const paymentAttempt = React.useRef(false);
 
   const logStdPayParams = React.useCallback(
     (params: Record<string, string>) => {
@@ -56,72 +58,46 @@ export function SubscriptionPayButtons({
     [stdJsUrl],
   );
 
-  const ensureStdPayReady = React.useCallback(async () => {
-    if (typeof window === "undefined") return false;
-    if (window.INIStdPay) return true;
-    let script = document.querySelector(`script[src="${stdJsUrl}"]`) as
-      | HTMLScriptElement
-      | null;
-    if (!script) {
-      script = document.createElement("script");
-      script.src = stdJsUrl;
-      script.type = "text/javascript";
-      script.async = true;
-      document.body.appendChild(script);
-    }
-    return new Promise<boolean>((resolve) => {
-      const onReady = () => cleanup(Boolean(window.INIStdPay));
-      const onError = () => cleanup(false);
-      const cleanup = (value: boolean) => {
-        script?.removeEventListener("load", onReady);
-        script?.removeEventListener("error", onError);
-        window.clearTimeout(timeout);
-        window.clearTimeout(poll);
-        resolve(value);
-      };
-      const timeout = window.setTimeout(() => cleanup(Boolean(window.INIStdPay)), 2000);
-      const poll = window.setInterval(() => {
-        if (window.INIStdPay) {
-          cleanup(true);
-        }
-      }, 200);
-      script?.addEventListener("load", onReady);
-      script?.addEventListener("error", onError);
-    });
-  }, [stdJsUrl]);
-
-  const handleStdPay = () => {
-    const run = async () => {
-      setLoading(true);
-      const ready = await ensureStdPayReady();
+  const handleStdPay = async () => {
+    if (paymentAttempt.current) return;
+    paymentAttempt.current = true;
+    setLoading(true);
+    setError(null);
+    try {
+      await ensureStdPayScript(stdJsUrl);
       logStdPayParams(stdParams);
-      if (!ready || !window.INIStdPay) {
-        alert("결제 모듈을 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
-        setLoading(false);
-        return;
-      }
-      try {
-        window.INIStdPay.pay(stdFormId);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void run();
+      if (!window.INIStdPay?.pay) throw new Error("결제 모듈을 불러오지 못했습니다. 다시 시도해주세요.");
+      window.INIStdPay.pay(stdFormId);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "결제 모듈을 실행하지 못했습니다. 다시 시도해주세요.");
+    } finally {
+      paymentAttempt.current = false;
+      setLoading(false);
+    }
   };
 
   const handleMobilePay = () => {
+    if (paymentAttempt.current) return;
+    setError(null);
     const form = document.getElementById(mobileFormId) as HTMLFormElement | null;
     if (!form) {
-      alert("모바일 결제 폼을 찾을 수 없습니다.");
+      setError("모바일 결제 폼을 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.");
       return;
     }
+    paymentAttempt.current = true;
     setLoading(true);
-    form.submit();
+    try {
+      form.submit();
+    } catch {
+      setError("모바일 결제 화면을 열지 못했습니다. 다시 시도해주세요.");
+    } finally {
+      paymentAttempt.current = false;
+      setLoading(false);
+    }
   };
 
   return (
     <>
-      <script src={stdJsUrl} type="text/javascript" />
       <div className="rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
         <div className="flex flex-col gap-2">
           <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
@@ -133,6 +109,7 @@ export function SubscriptionPayButtons({
           </p>
           <p className="text-lg font-black text-foreground">{amountLabel}</p>
         </div>
+        {error && <p role="alert" className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:bg-red-950 dark:text-red-100">{error}</p>}
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"

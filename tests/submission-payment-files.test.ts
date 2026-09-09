@@ -32,11 +32,12 @@ test("released master validation accepts WAV/ZIP and rejects MP3 or conflicting 
   assert.equal(isAudioUploadFile("master.mp3", "audio/mpeg"), true, "pre-release audio formats remain unchanged");
 });
 
-test("released final submission cannot use email, admin or external-form flags to skip site audio", () => {
+test("released final submission accepts an explicit email handoff while retaining audio format validation", () => {
   for (const flags of [{}, { filesSubmittedByEmail: true }, { isAdminReviewer: true }, { filesSubmittedByEmail: true, isAdminReviewer: true }, { externalApplicationForm: true }]) {
     const input = { kind: "ALBUM" as const, isOneClick: true, isAdminReviewer: false, filesSubmittedByEmail: false, ...flags };
-    assert.equal(validateSubmittedFiles({ ...input, files: [] }), requiredMessage);
-    assert.equal(validateSubmittedFiles({ ...input, files: [{ originalName: "master.mp3", mime: "audio/mpeg" }] }), requiredMessage);
+    const expected = input.filesSubmittedByEmail ? null : requiredMessage;
+    assert.equal(validateSubmittedFiles({ ...input, files: [] }), expected);
+    assert.equal(validateSubmittedFiles({ ...input, files: [{ originalName: "master.mp3", mime: "audio/mpeg" }] }), expected);
     assert.equal(validateSubmittedFiles({ ...input, files: [{ originalName: "masters.zip", mime: "application/zip" }] }), null);
   }
   assert.equal(validateSubmittedFiles({ kind: "ALBUM", isOneClick: false, isAdminReviewer: false, filesSubmittedByEmail: true, files: [] }), null);
@@ -96,4 +97,19 @@ test("large checkout bundles continue past the first stored-file result page", a
   const fixture = dbFixture([album(), album("released-b")], files);
   assert.equal(await validateReleasedAlbumPaymentFiles(fixture.db, ["released-a", "released-b"]), null);
   assert.equal(fixture.calls.filter(table => table === "submission_files").length, 2);
+});
+
+
+test("checkout accepts saved email handoffs without waiting for failed or pending audio uploads", async () => {
+  const byEmail = { ...album(), files_submitted_by_email: true };
+  for (const files of [[], [{ ...uploaded, status: "UPLOADING" }], [{ ...uploaded, status: "FAILED" }]]) {
+    const fixture = dbFixture([byEmail], files);
+    assert.equal(await validateReleasedAlbumPaymentFiles(fixture.db, ["released-a"]), null);
+    assert.deepEqual(fixture.calls, ["submissions"], "an email handoff must not require upload completion");
+  }
+  const mixed = dbFixture([byEmail, album("released-b")], [{ ...uploaded, submission_id: "released-b" }]);
+  assert.equal(await validateReleasedAlbumPaymentFiles(mixed.db, ["released-a", "released-b"]), null);
+  const missing = dbFixture([byEmail, album("released-b")], []);
+  assert.equal(await validateReleasedAlbumPaymentFiles(missing.db, ["released-a", "released-b"]), requiredMessage,
+    "one album's email handoff does not exempt another album");
 });

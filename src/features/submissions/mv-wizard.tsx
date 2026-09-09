@@ -1,5 +1,8 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+
+import { watchUploadProgress } from "@/lib/upload-watchdog";
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -458,6 +461,7 @@ export function MvWizard({
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadResult[]>([]);
   const [fileDigest, setFileDigest] = React.useState("");
   const [emailSubmitConfirmed, setEmailSubmitConfirmed] = React.useState(false);
+  const videoUploadRunRef = React.useRef(0);
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const uploadInProgress = uploads.some((upload) => upload.status === "uploading");
   const [isSaving, setIsSaving] = React.useState(false);
@@ -596,7 +600,7 @@ export function MvWizard({
       return profanityTermsRef.current;
     }
     if (!profanityTermsRequestRef.current) {
-      profanityTermsRequestRef.current = fetch("/api/profanity/terms", {
+      profanityTermsRequestRef.current = fetchWithTimeout("/api/profanity/terms", {
         cache: "force-cache",
       })
         .then(async (res) => {
@@ -760,7 +764,7 @@ export function MvWizard({
     }, draftDeleteTimeoutMs);
 
     try {
-      const res = await fetch("/api/submissions/drafts", {
+      const res = await fetchWithTimeout("/api/submissions/drafts", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -786,7 +790,7 @@ export function MvWizard({
     submissionId: string,
     guestToken?: string | null,
   ) => {
-    const res = await fetch("/api/cart/items", {
+    const res = await fetchWithTimeout("/api/cart/items", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -885,7 +889,7 @@ export function MvWizard({
       setIsPreparingDraft(true);
       setDraftError(null);
       try {
-        const res = await fetch("/api/submissions/draft", {
+        const res = await fetchWithTimeout("/api/submissions/draft", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1343,18 +1347,24 @@ export function MvWizard({
       const url = URL.createObjectURL(file);
       const video = document.createElement("video");
       video.preload = "metadata";
-      video.onloadedmetadata = () => {
-        const duration =
-          Number.isFinite(video.duration) && video.duration > 0
-            ? video.duration
-            : null;
+      let settled = false;
+      const finish = (duration: number | null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        video.onloadedmetadata = null;
+        video.onerror = null;
+        video.removeAttribute("src");
+        video.load();
         URL.revokeObjectURL(url);
         resolve(duration);
       };
-      video.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve(null);
-      };
+      // Some codecs never dispatch metadata/error. Duration is optional and must not block an upload.
+      const timer = setTimeout(() => finish(null), 8_000);
+      video.onloadedmetadata = () => finish(
+        Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null,
+      );
+      video.onerror = () => finish(null);
       video.src = url;
     });
 
@@ -1366,6 +1376,7 @@ export function MvWizard({
   ) =>
     new Promise<string | null>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      watchUploadProgress(xhr, reject);
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
         onProgress(event.loaded, event.total);
@@ -1445,7 +1456,7 @@ export function MvWizard({
     const urlMap = new Map<number, string>();
     for (let i = 0; i < params.partNumbers.length; i += chunkSize) {
       const chunk = params.partNumbers.slice(i, i + chunkSize);
-      const res = await fetch("/api/uploads/multipart/presign", {
+      const res = await fetchWithTimeout("/api/uploads/multipart/presign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1480,7 +1491,7 @@ export function MvWizard({
     durationSeconds?: number | null,
   ) => {
     const submissionId = requireSubmissionId();
-    const initRes = await fetch("/api/uploads/init", {
+    const initRes = await fetchWithTimeout("/api/uploads/init", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1518,7 +1529,7 @@ export function MvWizard({
       { contentType },
     );
 
-    const completeRes = await fetch("/api/uploads/complete", {
+    const completeRes = await fetchWithTimeout("/api/uploads/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1563,7 +1574,7 @@ export function MvWizard({
     let partSize = resumeState?.partSize ?? null;
 
     if (!grantId || !uploadId || !key || !partSize) {
-      const initRes = await fetch("/api/uploads/multipart/init", {
+      const initRes = await fetchWithTimeout("/api/uploads/multipart/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1738,7 +1749,7 @@ export function MvWizard({
       (part): part is { partNumber: number; etag: string } => Boolean(part),
     );
 
-    const completeRes = await fetch("/api/uploads/multipart/complete", {
+    const completeRes = await fetchWithTimeout("/api/uploads/multipart/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1833,10 +1844,13 @@ export function MvWizard({
       return uploadedFiles;
     }
 
+    const uploadRun = ++videoUploadRunRef.current;
+    const isCurrentUpload = () => uploadRun === videoUploadRunRef.current;
     let results = uploadedFiles.map((file) => ({ ...file }));
     const nextUploads = initialUploads.map((upload) => ({ ...upload }));
 
     for (let index = 0; index < targetFiles.length; index += 1) {
+      if (!isCurrentUpload()) return results;
       const file = targetFiles[index];
       const localKey = getLocalUploadKey(file);
       let uploadIndex = nextUploads.findIndex(
@@ -1874,16 +1888,19 @@ export function MvWizard({
       let durationSeconds: number | undefined;
       try {
         const uploadResult = await uploadWithProgress(file, (progress) => {
+          if (!isCurrentUpload()) return;
           nextUploads[uploadIndex] = {
             ...nextUploads[uploadIndex],
             progress,
           };
           setUploads([...nextUploads]);
         });
+        if (!isCurrentUpload()) return results;
         path = uploadResult.objectKey;
         accessUrl = uploadResult.accessUrl;
         durationSeconds = uploadResult.durationSeconds;
       } catch (error) {
+        if (!isCurrentUpload()) return results;
         nextUploads[uploadIndex] = {
           ...nextUploads[uploadIndex],
           status: "error",
@@ -1916,6 +1933,7 @@ export function MvWizard({
           durationSeconds,
         },
       ]);
+      setUploadedFiles(results);
     }
 
     setUploadedFiles(results);
@@ -1967,7 +1985,7 @@ export function MvWizard({
 
   const selectUploadDeliveryMode = React.useCallback(
     (mode: "upload" | "email") => {
-      if (uploads.some((upload) => upload.status === "uploading")) {
+      if (mode === "upload" && uploads.some((upload) => upload.status === "uploading")) {
         setNotice({ error: "현재 파일 업로드가 끝난 뒤 변경해주세요." });
         return;
       }
@@ -1980,6 +1998,10 @@ export function MvWizard({
         setNotice({});
         return;
       }
+      videoUploadRunRef.current += 1;
+      setFiles([]);
+      setUploads((previous) => previous.filter((upload) => upload.status === "done"));
+      setFileDigest("");
       setEmailSubmitConfirmed(true);
       setNotice({});
     },
@@ -2287,7 +2309,7 @@ export function MvWizard({
       const storedGuestToken =
         stored?.guestToken ?? (isGuest ? guestTokenRef.current : null);
       try {
-        const res = await fetch("/api/submissions/drafts", {
+        const res = await fetchWithTimeout("/api/submissions/drafts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2700,7 +2722,7 @@ export function MvWizard({
   };
 
   const validateMvUploads = () => {
-    if (isAdminReviewer) return true;
+    if (isAdminReviewer || emailSubmitConfirmed) return true;
     if (uploads.some((upload) => upload.status === "error")) {
       setNotice({ error: "업로드에 실패한 파일이 있습니다." });
       return false;
@@ -2709,7 +2731,6 @@ export function MvWizard({
       setNotice({ error: "파일 업로드가 완료될 때까지 기다려주세요." });
       return false;
     }
-    if (emailSubmitConfirmed) return true;
     if (uploads.length === 0) {
       setNotice({
         error: isDownloadedApplicationFlow
@@ -2874,7 +2895,7 @@ export function MvWizard({
 
       try {
         const uploaded = options.includeFiles
-          ? options.snapshot
+          ? options.snapshot || source.emailSubmitConfirmed
             ? source.uploadedFiles
             : await uploadFiles()
           : undefined;
@@ -3038,7 +3059,7 @@ export function MvWizard({
     }
 
     try {
-      const uploaded = uploads.length > 0 ? await uploadFiles() : [];
+      const uploaded = emailSubmitConfirmed ? uploadedFiles : uploads.length > 0 ? await uploadFiles() : [];
       const submissionPaymentMethod = deferPayment ? "BANK" : paymentMethod;
       if (
         !deferPayment &&
@@ -4633,7 +4654,6 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
-                disabled={uploadInProgress}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
                   ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
@@ -4749,7 +4769,7 @@ export function MvWizard({
                           </span>
                           <div className="flex shrink-0 items-center gap-3">
                             {upload.status === "done" ? (
-                              <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                              <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
                                 첨부 완료
                               </span>
                             ) : (

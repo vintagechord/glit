@@ -59,10 +59,10 @@ export function AlbumIntroPanel({
             <div className="rounded-[10px] border-2 border-border bg-background p-5">
               <h2 className="text-sm font-black text-foreground">이미 발매된 음반</h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                멜론 또는 지니의 앨범 링크와 심의용 음원 파일(WAV 또는 ZIP)을 준비해주세요. 링크로 신청서 작성을 대신하며, 음원 파일은 사이트에 직접 첨부해야 합니다.
+                멜론 또는 지니의 앨범 링크와 심의용 음원 파일(WAV 또는 ZIP)을 준비해주세요. 링크로 신청서 작성을 대신하며, 음원 파일은 다음 단계에서 첨부하거나 이메일로 보내주세요.
               </p>
               <p className="mt-4 text-sm font-semibold leading-6 text-foreground">
-                추가금 없이 이용하며, 접수한 링크와 첨부한 음원으로 관리자가 심의 자료를 준비합니다.
+                접수한 앨범 URL과 제출한 음원으로 관리자가 심의 자료를 준비합니다.
               </p>
             </div>
           </div>

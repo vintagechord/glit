@@ -267,7 +267,8 @@ export const translateLyricsBatch = async (
 ) => {
   const source = normalizeLanguageCode(options.source ?? "auto", "auto");
   const target = normalizeLanguageCode(options.target ?? "ko", "ko");
-  const signal = options.signal ?? AbortSignal.timeout(55_000);
+  const deadline = AbortSignal.timeout(55_000);
+  const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
   const fetchImpl: typeof fetch = (input, init) => {
     signal.throwIfAborted();
     return (options.fetchImpl ?? fetch)(input, {

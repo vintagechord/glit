@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { REVIEW_DOC_LIMITS } from "./model";
 
-// Lightweight web upload checks. Full document parsing runs only in the worker.
+// Lightweight upload checks. Parsing runs only after the durable queue claims it.
 export class ReviewExtractionError extends Error {
   constructor(public code: string, message: string) { super(message); this.name = "ReviewExtractionError"; }
 }

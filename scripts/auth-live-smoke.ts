@@ -68,6 +68,72 @@ async function main() {
     await login(oldPassword);
     pass(stage);
 
+    if (process.env.AUTH_QA_ROUTE_AUDIT === "1") {
+      stage = "save the dedicated profile twice without losing entered values";
+      await page.goto(new URL("/mypage/profile", target).href);
+      for (const name of ["Temporary QA first save", "Temporary QA second save"]) {
+        await page.getByLabel("담당자명", { exact: true }).fill(name);
+        await page.getByLabel("연락처", { exact: true }).fill("01000000000");
+        await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
+        await expect(page.getByRole("button", { name: "프로필 저장", exact: true })).toBeEnabled();
+        await expect(page.getByRole("status").filter({ hasText: "프로필이 저장되었습니다." })).toBeVisible();
+        await expect(page.getByLabel("담당자명", { exact: true })).toHaveValue(name);
+        const profile: { data: { name: string } | null; error: unknown } = await admin.from("profiles").select("name").eq("user_id", userId).single();
+        assert.equal(profile.error, null);
+        assert.equal(profile.data?.name, name);
+      }
+      pass(stage);
+
+      const inspectRoutes = async (routes: string[]) => {
+        for (const route of routes) {
+          stage = `render ${route}`;
+          // HTTP only: no administrator hydration, read-receipt PATCH, uploads,
+          // customer changes, payment, email, screenshots, or private page output.
+          const response = await context!.request.get(new URL(route, target).href, { timeout: 60_000 });
+          const html = await response.text();
+          assert.equal(response.status(), 200, `Route failed: ${route}`);
+          assert.equal(new URL(response.url()).pathname, route, `Unexpected redirect: ${route}`);
+          assert.ok(!html.includes('id="__next_error__"') && !html.includes('"digest":"'), `Server render failed: ${route}`);
+          pass(stage);
+        }
+      };
+      await inspectRoutes(["/mypage", "/mypage/drafts", "/mypage/cart", "/mypage/orders", "/mypage/history", "/mypage/music", "/mypage/credits", "/mypage/profile", "/dashboard/new/album", "/dashboard/new/mv", "/karaoke-request", "/subscription"]);
+      stage = "grant the disposable QA account temporary administrator access";
+      const promoted = await admin.from("profiles").update({ role: "admin" }).eq("user_id", userId).eq("role", "user").select("user_id").single();
+      assert.equal(promoted.error, null);
+      assert.equal(promoted.data?.user_id, userId);
+      try {
+        await inspectRoutes(["/admin", "/admin/submissions", "/admin/users", "/admin/artists", "/admin/files", "/admin/credits", "/admin/credits/requests", "/admin/magazine", "/admin/banners", "/admin/config", "/admin/inquiries", "/admin/chat", "/admin/music", "/admin/karaoke", "/admin/review-docs", "/admin/payments"]);
+      } finally {
+        const demoted = await admin.from("profiles").update({ role: "user" }).eq("user_id", userId);
+        assert.equal(demoted.error, null, "Temporary QA role cleanup failed.");
+      }
+    }
+
+    if (process.env.AUTH_QA_API_AUDIT === "1") {
+      const inspectApis = async (routes: string[]) => {
+        for (const route of routes) {
+          stage = `read ${route}`;
+          const response = await context!.request.get(new URL(route, target).href, { timeout: 60_000 });
+          assert.equal(response.status(), 200, `API failed: ${route}`);
+          const result = await response.json();
+          assert.ok(result && !result.error, `API returned an error: ${route}`);
+          pass(stage);
+        }
+      };
+      await inspectApis(["/api/dashboard/status", "/api/cart/count", "/api/orders", "/api/music-archive"]);
+      const promoted = await admin.from("profiles").update({ role: "admin" }).eq("user_id", userId).eq("role", "user").select("user_id").single();
+      assert.equal(promoted.error, null);
+      assert.equal(promoted.data?.user_id, userId);
+      try {
+        // Deliberately excludes review jobs GET, which can resume queued work.
+        await inspectApis(["/api/music-archive?action=admin", "/api/admin/chat", "/api/admin/mv-submissions", "/api/admin/mv-rating-assets"]);
+      } finally {
+        const demoted = await admin.from("profiles").update({ role: "user" }).eq("user_id", userId);
+        assert.equal(demoted.error, null, "Temporary QA role cleanup failed.");
+      }
+    }
+
     stage = "generate recovery link without email";
     const generated = await admin.auth.admin.generateLink({
       type: "recovery", email,

@@ -14,6 +14,7 @@ export function CommerceConfirmDialog({
     typeof document === "undefined" ? null : document.activeElement,
   );
   React.useEffect(() => {
+    cancelRef.current?.focus();
     return () => {
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
     };

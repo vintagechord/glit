@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import Link from "next/link";
 import { CommerceConfirmDialog } from "./commerce-confirm-dialog";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -199,7 +200,7 @@ export function SubmissionCartCheckout({
     const claimGuestCart = async () => {
       setIsLoadingGuestCart(true);
       try {
-        const response = await fetch("/api/cart/items", {
+        const response = await fetchWithTimeout("/api/cart/items", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -275,7 +276,7 @@ export function SubmissionCartCheckout({
       try {
         const guestTokensBySubmissionId =
           toGuestTokensBySubmissionId(entries);
-        const response = await fetch("/api/cart/items", {
+        const response = await fetchWithTimeout("/api/cart/items", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ guestTokensBySubmissionId }),
@@ -326,16 +327,15 @@ export function SubmissionCartCheckout({
   }, [userId]);
 
   React.useEffect(() => {
+    const autoSelect = !didAutoSelectPayableItems.current && payableIds.length > 0;
+    if (autoSelect) didAutoSelectPayableItems.current = true;
     setSelectedIds((prev) => {
       const next = new Set<string>();
       const validIds = new Set(payableIds);
       prev.forEach((id) => {
         if (validIds.has(id)) next.add(id);
       });
-      if (!didAutoSelectPayableItems.current && payableIds.length > 0) {
-        payableIds.forEach((id) => next.add(id));
-        didAutoSelectPayableItems.current = true;
-      }
+      if (autoSelect) payableIds.forEach((id) => next.add(id));
       return new Set(expandSubmissionCartGroupIds(payableItems, next));
     });
   }, [payableIds, payableItems]);
@@ -496,7 +496,7 @@ export function SubmissionCartCheckout({
     setIsDeleting(true);
     setNotice(null);
     try {
-      const response = await fetch("/api/cart/items", {
+      const response = await fetchWithTimeout("/api/cart/items", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -545,7 +545,7 @@ export function SubmissionCartCheckout({
   };
 
   const handleBankTransfer = async (orderedItems: CartItem[]) => {
-    const response = await fetch("/api/cart/bank", {
+    const response = await fetchWithTimeout("/api/cart/bank", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

@@ -47,6 +47,7 @@ type Harness = {
   items: SubmissionCartItem[]; orders: SubmissionOrder[]; writes: { path: string; body: Body }[];
   reads: { method: string; body: Body | null; offset: number }[]; unexpected: string[]; errors: string[];
   bankError: string | null; returnError: string | null; holdReturn: boolean; releaseReturn?: () => void;
+  holdOrders?: boolean; releaseOrders?: () => void;
   invalidIds: string[]; pageSize: number; cardMode: "reject" | "open";
 };
 let isolatedDocument = "";
@@ -91,6 +92,7 @@ async function mount(page: Page, options: { items?: SubmissionCartItem[]; orders
       const body = request.method() === "POST" ? request.postDataJSON() as Body : null;
       const offset = Number(body?.offset ?? url.searchParams.get("offset") ?? 0);
       harness.reads.push({ method: request.method(), body, offset });
+      if (harness.holdOrders) await new Promise<void>(resolve => { harness.releaseOrders = resolve; });
       const next = offset + harness.pageSize;
       await route.fulfill({ json: { orders: harness.orders.slice(offset, next), nextOffset: harness.orders.length > next ? next : null } }); return;
     }
@@ -174,6 +176,22 @@ test.describe("isolated commerce account fixtures", () => {
   for (const identity of ["member-a", "member-b", null]) test(`${identity ?? "guest"}: only unpaid items without an order are payable`, async ({ page }) => {
     const harness = await mount(page, { items: mixedItems(), identity }); await verifyMixedCart(page); expect(harness.writes).toHaveLength(0); expectClean(harness);
   });
+  test("order polling does not cancel an ongoing slow refresh and retains the returned update", async ({ page }) => {
+    const harness = await mount(page, { view: "orders", orders: [bankGroup()], identity: "member-a" });
+    await page.clock.install();
+    harness.holdOrders = true;
+    try {
+      await page.getByRole("button", { name: "새로고침", exact: true }).click();
+      await expect.poll(() => harness.reads.length).toBe(2);
+      await page.clock.fastForward(15_001);
+      expect(harness.reads).toHaveLength(2);
+      harness.orders[0] = { ...harness.orders[0], status: "PAID", canReturnToCart: false };
+      harness.holdOrders = false; harness.releaseOrders?.();
+      await expect(page.getByRole("button", { name: "새로고침", exact: true })).toBeEnabled();
+      await expect(orderRow(page, orderIds[0])).toContainText("결제 완료");
+      expectClean(harness);
+    } finally { harness.holdOrders = false; harness.releaseOrders?.(); }
+  });
   test("guest cart pruning preserves credentials for previous orders", async ({ page }) => {
     const harness = await mount(page, { items: [item(0, { current_order_id: orderIds[0], payment_status: "PAYMENT_PENDING" })], invalidIds: [ids[0]] });
     await expect(page.getByText("장바구니가 비어 있습니다.", { exact: true })).toBeVisible();
@@ -223,7 +241,8 @@ test.describe("isolated commerce account fixtures", () => {
     await expect(orderRow(page, orderIds[5])).toContainText("기존 주문 이력은 보관됩니다."); await expect(orderRow(page, orderIds[5]).getByRole("link")).toHaveCount(0);
     for (const index of [3, 5, 6, 7]) await expect(returnButton(page, orderIds[index])).toHaveCount(0);
     await expect(payment(page)).toHaveCount(0); await expect(page.getByRole("button", { name: "입금 신청", exact: true })).toHaveCount(0);
-    for (const [label, count] of [["대기", 2], ["진행", 2], ["완료", 2], ["실패·취소", 2], ["전체", 8]] as const) {
+    await expect(page.getByRole("button", { name: "진행", exact: true })).toHaveCount(0);
+    for (const [label, count] of [["대기", 4], ["완료", 1], ["실패·취소", 3], ["전체", 8]] as const) {
       await page.getByRole("button", { name: label, exact: true }).click(); await expect(page.getByRole("article")).toHaveCount(count);
     }
     expect(harness.reads[0].method).toBe(identity ? "GET" : "POST");

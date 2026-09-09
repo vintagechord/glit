@@ -12,17 +12,14 @@ type Options = {
 
 export const spellcheckText = async (text: string, options: Options = {}): Promise<SpellcheckProxyResult> => {
   const timeoutMs = options.timeoutMs ?? 12_000;
-  const controller = options.signal ? null : new AbortController();
-  const signal = options.signal ?? controller?.signal;
-  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
   try {
-    const response = await fetch("/api/spellcheck", {
+    const response = await fetchWithTimeout("/api/spellcheck", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
-      signal,
-    });
+      signal: options.signal,
+    }, timeoutMs);
     const payload = await response.json().catch(() => null);
     const corrected =
       typeof payload?.correctedText === "string"
@@ -62,7 +59,6 @@ export const spellcheckText = async (text: string, options: Options = {}): Promi
       corrected: text,
       warnings: ["client_error"],
     };
-  } finally {
-    if (timer) clearTimeout(timer);
   }
 };
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";

@@ -152,10 +152,11 @@ export async function translateLyricsForReviewDocuments(
   });
 }
 
-export async function translateReviewData(input: ReviewDocumentData, options: { translate?: TranslationProvider } = {}): Promise<ReviewDocumentData> {
+export async function translateReviewData(input: ReviewDocumentData, options: { translate?: TranslationProvider; signal?: AbortSignal } = {}): Promise<ReviewDocumentData> {
+  options.signal?.throwIfAborted();
   const data = reviewDocumentDataSchema.parse(structuredClone(input));
   data.issues = data.issues.filter((issue) => !["TRANSLATION_UNAVAILABLE", "TRANSLATION_LIMIT"].includes(issue.code));
-  const provider = options.translate ?? ((segments) => translateLyricsBatch(segments, { source: "auto", target: "ko" }));
+  const provider = options.translate ?? ((segments) => translateLyricsBatch(segments, { source: "auto", target: "ko", signal: options.signal }));
   // Scope cache to this snapshot; no cross-customer lyrics or indefinite in-memory storage.
   const pending = new Map<string, string>();
   for (const album of data.albums) for (const track of album.tracks) {
@@ -184,6 +185,7 @@ export async function translateReviewData(input: ReviewDocumentData, options: { 
   let batch: string[] = [];
   async function flush() {
     if (!batch.length || failed) return;
+    options.signal?.throwIfAborted();
     try {
       const result = await provider(batch);
       if (!result || result.length !== batch.length) { failed = true; return; }
@@ -191,7 +193,7 @@ export async function translateReviewData(input: ReviewDocumentData, options: { 
         if (typeof translation === "string" && isUsableLyricsTranslation(translation, batch[index])) translated.set(batch[index], translation.trim());
         else failed = true;
       });
-    } catch { failed = true; }
+    } catch { options.signal?.throwIfAborted(); failed = true; }
     batch = [];
   }
   for (const source of sourceTexts) {

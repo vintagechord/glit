@@ -551,7 +551,7 @@ export const buildAlbumSubmissionPreflight = (
     }
   }
 
-  if (!isAdminReviewer || input.isOneClick) {
+  if ((!isAdminReviewer || input.isOneClick) && !input.filesSubmittedByEmail) {
     const uploads = input.uploads ?? [];
     if (uploads.some((upload) => upload.status === "error")) {
       issues.push(
@@ -579,7 +579,7 @@ export const buildAlbumSubmissionPreflight = (
       );
     }
 
-    if (input.isOneClick || !input.filesSubmittedByEmail) {
+    if (!input.filesSubmittedByEmail) {
       const audioFiles = input.files.filter((file) =>
         input.isOneClick
           ? isReleasedAlbumAudioFile(file.originalName, file.mime)

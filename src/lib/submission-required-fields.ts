@@ -168,6 +168,7 @@ export const validateSubmittedFiles = (input: {
   isOneClick?: boolean;
   files: SubmissionFileInput[];
 }) => {
+  if (input.filesSubmittedByEmail) return null;
   if (input.kind === "ALBUM" && input.isOneClick) {
     return input.files.some((file) => isReleasedAlbumAudioFile(file.originalName, file.mime))
       ? null

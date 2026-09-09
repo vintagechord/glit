@@ -15,7 +15,7 @@ let html = "";
 test.beforeAll(async () => {
   const root = process.cwd();
   const [bundle, styles] = await Promise.all([
-    build({ absWorkingDir: root, stdin: { contents: 'import React from "react";import { createRoot } from "react-dom/client";import { MusicArchiveAdminClient } from "./src/features/music-archive/admin-client";createRoot(document.getElementById("app")).render(<MusicArchiveAdminClient />);', loader: "tsx", resolveDir: root }, bundle: true, write: false, platform: "browser", format: "iife", define: { "process.env.NODE_ENV": '"production"' } }),
+    build({ absWorkingDir: root, stdin: { contents: 'import React from "react";import { createRoot } from "react-dom/client";import { MusicArchiveAdminClient } from "./src/features/music-archive/admin-client";createRoot(document.getElementById("app")).render(<MusicArchiveAdminClient />);', loader: "tsx", resolveDir: root }, bundle: true, write: false, platform: "browser", format: "iife", define: { "process.env": '{"NODE_ENV":"production"}' } }),
     readFile(path.join(root, "src/app/globals.css"), "utf8").then(source => postcss([tailwind()]).process(source, { from: path.join(root, "src/app/globals.css") })),
   ]);
   html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${styles.css}</style></head><body><main style="max-width:1152px;margin:auto;padding:16px"><h1>음악 관리 운영</h1><div id="app"></div></main><script>${bundle.outputFiles[0].text.replace(/<\/script/gi, "<\\/script")}</script></body></html>`;
@@ -71,12 +71,13 @@ for (const width of [1280, 390]) test(`admin inspects member source, task and au
     return route.fulfill({ json: { guides: agencyGuides, providers: getMusicProviderStatuses({}), jobs: [], libraries: [fixture.summary], total: 1, nextPage: null } });
   });
   await page.goto("http://music-archive.test/admin/music");
-  await page.getByLabel("아티스트 이름 검색").fill("빈티지코드");
+  await page.getByLabel("회원·아티스트 검색").fill("빈티지코드");
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await expect.poll(() => queries.some(url => url.searchParams.get("q") === "빈티지코드")).toBe(true);
   await page.getByRole("button", { name: "빈티지코드 운영 정보 보기" }).click();
   const dialog = page.getByRole("dialog", { name: "빈티지코드 운영 정보" });
   await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "출처·연결", exact: true }).click();
   expect(queries.some(url => url.searchParams.get("action") === "admin-library" && url.searchParams.get("libraryId") === fixture.summary.id)).toBe(true);
   await expect(dialog.getByRole("heading", { name: "아티스트 연결" })).toBeVisible();
   await expect(dialog.getByText("아티스트 ID: 1259084205", { exact: true })).toBeVisible();

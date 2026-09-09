@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowUpRight, Landmark, RefreshCw, ShoppingCart } from "lucide-react";
@@ -15,15 +16,14 @@ import {
 import type { SubmissionOrder, SubmissionOrderItem, SubmissionOrderStatus, SubmissionOrdersPage } from "@/lib/submission-orders-types";
 
 const statusLabels: Record<SubmissionOrderStatus, string> = {
-  BANK_PENDING: "입금 대기", CARD_PENDING: "카드 결제 진행 중", PAYPAL_PENDING: "PayPal 결제 진행 중",
+  BANK_PENDING: "입금 대기", CARD_PENDING: "결제 확인 대기", PAYPAL_PENDING: "결제 확인 대기",
   PAID: "결제 완료", FAILED: "결제 실패", CANCELED: "주문 취소", REFUNDED: "환불 완료", REVIEW_REQUIRED: "확인 필요",
 };
 const filters = [
   { id: "all", label: "전체", statuses: [] },
-  { id: "waiting", label: "대기", statuses: ["BANK_PENDING", "REVIEW_REQUIRED"] },
-  { id: "processing", label: "진행", statuses: ["CARD_PENDING", "PAYPAL_PENDING"] },
-  { id: "completed", label: "완료", statuses: ["PAID", "REFUNDED"] },
-  { id: "closed", label: "실패·취소", statuses: ["FAILED", "CANCELED"] },
+  { id: "waiting", label: "대기", statuses: ["BANK_PENDING", "CARD_PENDING", "PAYPAL_PENDING", "REVIEW_REQUIRED"] },
+  { id: "completed", label: "완료", statuses: ["PAID"] },
+  { id: "closed", label: "실패·취소", statuses: ["FAILED", "CANCELED", "REFUNDED"] },
 ] as const;
 type FilterId = typeof filters[number]["id"];
 const panelClass = "rounded-[10px] border-2 border-[var(--bauhaus-ink)] bg-card p-4 shadow-[4px_4px_0_var(--bauhaus-shadow)] sm:p-5";
@@ -64,6 +64,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
   const guestTokens = toGuestTokensBySubmissionId(guestEntries);
 
   const loadOrders = React.useCallback(async (offset = 0, append = false) => {
+    if (append && activeRequest.current) return;
     const sequence = ++requestSequence.current;
     activeRequest.current?.abort();
     const controller = new AbortController(); activeRequest.current = controller;
@@ -71,7 +72,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
     try {
       const entries = readGuestSubmissionOrderEntries();
       if (!userId && entries.length === 0) { setOrders([]); setNextOffset(null); return; }
-      const response = await fetch(userId ? `/api/orders?offset=${offset}` : "/api/orders", {
+      const response = await fetchWithTimeout(userId ? `/api/orders?offset=${offset}` : "/api/orders", {
         method: userId ? "GET" : "POST", cache: "no-store", signal: controller.signal,
         ...(userId ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guestTokensBySubmissionId: toGuestTokensBySubmissionId(entries), offset }) }),
       });
@@ -83,7 +84,10 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
     } catch (failure) {
       if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "주문내역을 불러오지 못했습니다. 다시 시도해주세요.");
     } finally {
-      if (sequence === requestSequence.current && !controller.signal.aborted) { setLoading(false); setLoaded(true); }
+      if (sequence === requestSequence.current) {
+        activeRequest.current = null;
+        if (!controller.signal.aborted) { setLoading(false); setLoaded(true); }
+      }
     }
   }, [userId]);
 
@@ -114,7 +118,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
     try {
       const entries = readGuestSubmissionOrderEntries();
       const itemIds = new Set(order.items.map((item) => item.submissionId ?? item.submissionRef));
-      const response = await fetch("/api/orders/return", {
+      const response = await fetchWithTimeout("/api/orders/return", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId: order.id, guestTokensBySubmissionId: userId ? {} : toGuestTokensBySubmissionId(entries.filter((entry) => itemIds.has(entry.submissionId))) }),
       });
@@ -137,7 +141,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <p className="max-w-xl text-sm leading-6 text-muted-foreground">결제와 입금 상태를 확인하고 주문을 관리하세요. 다시 결제할 주문은 장바구니로 돌릴 수 있습니다.</p>
+        <p className="max-w-xl text-sm leading-6 text-muted-foreground">카드 결제와 무통장 입금이 확인된 주문은 완료에 표시됩니다. 입금 확인 전에는 대기에서 확인하세요.</p>
         <div className="flex flex-wrap gap-2">
           <Link href={cartHref} className={buttonClass}><ShoppingCart size={15} aria-hidden />장바구니</Link>
           <button type="button" className={buttonClass} onClick={() => void loadOrders()} disabled={loading || Boolean(returningId)}><RefreshCw size={15} className={loading ? "animate-spin" : ""} aria-hidden />새로고침</button>

@@ -27,6 +27,7 @@
     "@aws-sdk/s3-request-presigner": "3.1111.0",
     "@supabase/ssr": "0.12.4",
     "@supabase/supabase-js": "2.112.3",
+    "@xmldom/xmldom": "0.9.12",
     "busboy": "^1.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

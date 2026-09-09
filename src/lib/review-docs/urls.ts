@@ -3,6 +3,8 @@ import { fetchMelonAlbumReviewData, type MelonAlbumReviewData } from "../melon";
 import { fetchGenieAlbumReviewData } from "../genie";
 import { emptyReviewData, explicitInstrumental, normalizeReviewDate, REVIEW_DOC_LIMITS, reviewAlbumSchema, reviewTrackSchema, type ReviewDocumentData, type ReviewEvidence } from "./model";
 import { ReviewExtractionError } from "./upload-validation";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { awaitReviewAbort } from "./abort";
 
 type AllowedUrl = { url: string; provider: "melon" | "genie"; id: string; kind: "album" | "song" };
 export function canonicalReviewUrl(input: string, allowSong = false): AllowedUrl {
@@ -29,22 +31,30 @@ export function canonicalReviewUrls(raw: string[]) {
 }
 
 /** Adapter around the EXISTING fetchers: bounded concurrency/bytes/time and validated redirects. */
-export function createReviewUrlFetcher(fetchImpl: typeof fetch = fetch): typeof fetch {
+export function createReviewUrlFetcher(fetchImpl: typeof fetch = fetch, jobSignal?: AbortSignal): typeof fetch {
   let active = 0;
   const waiting: (() => void)[] = [];
   const cache = new Map<string, string>();
   let cacheBytes = 0;
   return (async (input: string | URL | Request, init?: RequestInit) => {
+    const signals = [jobSignal, init?.signal, input instanceof Request ? input.signal : undefined].filter((signal): signal is AbortSignal => !!signal);
+    const signal = signals.length ? AbortSignal.any(signals) : undefined;
+    signal?.throwIfAborted();
     const requested = canonicalReviewUrl(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url, true);
     if (cache.has(requested.url)) return new Response(cache.get(requested.url), { status: 200 });
-    if (active >= 3) await new Promise<void>((resolve) => waiting.push(resolve));
+    if (active >= 3) {
+      let resume!: () => void;
+      try { await awaitReviewAbort(new Promise<void>((resolve) => { resume = resolve; waiting.push(resolve); }), signal); }
+      catch (error) { const index = waiting.indexOf(resume); if (index >= 0) waiting.splice(index, 1); throw error; }
+    }
     active++;
     try {
+      signal?.throwIfAborted();
       let current = requested.url;
       for (let redirects = 0; redirects <= 3; redirects++) {
         let response: Response | undefined;
         for (let attempt = 0; attempt < 2; attempt++) {
-          response = await fetchImpl(current, { ...init, redirect: "manual", signal: AbortSignal.timeout(20_000) });
+          response = await fetchWithTimeout(current, { ...init, redirect: "manual", signal }, 20_000, fetchImpl);
           if (!(response.status === 429 || response.status >= 500) || attempt === 1) break;
           await response.body?.cancel();
         }
@@ -74,13 +84,14 @@ export function createReviewUrlFetcher(fetchImpl: typeof fetch = fetch): typeof 
     } finally { active--; waiting.shift()?.(); }
   }) as typeof fetch;
 }
-export async function extractUrls(raw: string[], applicationDate: string, options: { fetcher?: typeof fetch } = {}): Promise<ReviewDocumentData> {
+export async function extractUrls(raw: string[], applicationDate: string, options: { fetcher?: typeof fetch; signal?: AbortSignal } = {}): Promise<ReviewDocumentData> {
   const { urls, duplicates } = canonicalReviewUrls(raw);
   const data = emptyReviewData("album", applicationDate);
-  const fetcher = createReviewUrlFetcher(options.fetcher);
+  const fetcher = createReviewUrlFetcher(options.fetcher, options.signal);
   duplicates.forEach((url, i) => data.issues.push({ id: `url-duplicate:${i}`, code: "DUPLICATE_URL", severity: "warning", message: `중복 URL 생성을 제외했습니다: ${url}` }));
   let totalTracks = 0;
   for (const url of urls) {
+    options.signal?.throwIfAborted();
     const validated = canonicalReviewUrl(url);
     const id = `${validated.provider}-${validated.id}`;
     try {
@@ -98,6 +109,7 @@ export async function extractUrls(raw: string[], applicationDate: string, option
       data.albums.push(album);
       data.sources.push({ id, kind: validated.provider, name: `${fetched.artistName} - ${fetched.albumTitle}`, url, text: originalText, warnings: [] });
     } catch (error) {
+      options.signal?.throwIfAborted();
       const message = error instanceof Error ? error.message : "앨범 조회에 실패했습니다.";
       data.sources.push({ id, kind: validated.provider, name: url, url, text: "", warnings: [message] });
       data.issues.push({ id: `url-error:${createHash("sha256").update(url).digest("hex").slice(0, 16)}`, code: "URL_EXTRACTION_FAILED", severity: "error", sourceId: id, message: `${url}: ${message} URL을 확인하고 일시적 오류는 재시도해주세요.` });

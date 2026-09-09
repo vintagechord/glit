@@ -6,6 +6,7 @@ import { ReviewJobError } from "../src/lib/review-docs/jobs-types";
 process.env.SUPABASE_URL = "https://review-status-test.supabase.co";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
+process.env.REVIEW_DOCS_WEB_DISABLED = "true";
 
 test("heartbeat lookup failures remain database errors instead of reporting an offline worker", async (t) => {
   let code = "42501";

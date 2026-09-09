@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useId, Children, isValidElement, cloneElement, type ReactNode, type ButtonHTMLAttributes } from "react";
+import { useEffect, useRef, useId, useState, Children, isValidElement, cloneElement, type ReactNode, type ButtonHTMLAttributes } from "react";
+import Image from "next/image";
 import { X, ExternalLink, Disc3 } from "lucide-react";
 
 export const inputClass = "min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground";
@@ -22,8 +23,10 @@ export function External({ href, children }: { href: string; children: ReactNode
   if (!/^https:\/\//i.test(href)) return <span>{children}</span>;
   return <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 max-w-full items-center gap-1 text-sm font-semibold text-foreground underline underline-offset-4">{children}<ExternalLink className="h-3 w-3 shrink-0" aria-hidden /></a>;
 }
-export function Cover({ small = false }: { small?: boolean }) {
-  return <div aria-label="기본 앨범 이미지" className={`flex shrink-0 items-center justify-center rounded-lg border-2 border-border bg-background text-foreground ${small ? "h-14 w-14" : "h-24 w-24 sm:h-32 sm:w-32"}`}><Disc3 className={small ? "h-8 w-8" : "h-14 w-14"} aria-hidden /></div>;
+export function Cover({ small = false, src, title }: { small?: boolean; src?: string | null; title?: string }) {
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  const imageUrl = src && src !== failedSource && /^https:\/\//i.test(src) ? src : null;
+  return <div aria-label={imageUrl ? undefined : "기본 앨범 이미지"} className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 border-border bg-background text-foreground ${small ? "h-14 w-14" : "h-24 w-24 sm:h-32 sm:w-32"}`}>{imageUrl ? <Image src={imageUrl} alt={title ? `${title} 앨범 커버` : "앨범 커버"} width={small ? 56 : 128} height={small ? 56 : 128} unoptimized className="h-full w-full object-cover" onError={() => setFailedSource(imageUrl)} /> : <Disc3 className={small ? "h-8 w-8" : "h-14 w-14"} aria-hidden />}</div>;
 }
 export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);

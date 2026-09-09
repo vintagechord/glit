@@ -102,6 +102,18 @@ export async function searchMusicBrainzArtists(query: string, options: MusicBrai
   if (!items.length && offset < total) throw new MusicProviderError("invalid_response", "검색 중간 페이지가 비어 있습니다. 다시 조회해 주세요.");
   return { items, total, nextOffset: offset + items.length < total ? offset + items.length : null, checkedAt };
 }
+function recordingWorks(recording: Json): NonNullable<ImportedTrack["works"]> {
+  const roles = { lyricist: "lyrics", composer: "composition", arranger: "arrangement", "music arranger": "arrangement" } as const;
+  return list(recording.relations).flatMap(relation => {
+    const work = object(relation.work); const externalId = id(work.id); const title = string(work.title, 500);
+    if (relation["target-type"] !== "work" || !externalId || !title) return [];
+    const contributors = list(work.relations).flatMap(entry => {
+      const role = roles[string(entry.type) as keyof typeof roles]; const name = string(object(entry.artist).name, 500).trim();
+      return role && name ? [{ name, role }] : [];
+    });
+    return [{ externalId, title, contributors: contributors.filter((entry, index) => contributors.findIndex(item => item.name === entry.name && item.role === entry.role) === index).slice(0, 100), ...(Array.isArray(work.iswcs) && typeof work.iswcs[0] === "string" ? { iswc: work.iswcs[0].slice(0, 500) } : {}) }];
+  });
+}
 export function normalizeMusicBrainzRelease(data: Json, artistId: string, checkedAt: string): ImportedRelease {
   const externalId = id(data.id);
   if (!externalId || !string(data.title) || !Array.isArray(data.media)) throw new MusicProviderError("invalid_response", "발매본의 식별 정보 또는 트랙 목록이 누락되었습니다.");
@@ -123,7 +135,7 @@ export function normalizeMusicBrainzRelease(data: Json, artistId: string, checke
       const trackCredit = credit(track["artist-credit"]);
       const recordingCredit = credit(recording["artist-credit"]);
       const actualCredit = trackCredit.ids.length ? trackCredit : recordingCredit;
-      tracks.push({ externalId: trackId, recordingId, title, version: string(recording.disambiguation), artistName: actualCredit.name, artistIds: actualCredit.ids, position, discNumber: disc, durationMs: integer(track.length) ?? integer(recording.length), isrcs: Array.isArray(recording.isrcs) ? recording.isrcs.filter((value): value is string => typeof value === "string" && /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(value)) : [], managedByArtist: actualCredit.ids.includes(artistId), url: recordingId ? `https://musicbrainz.org/recording/${recordingId}` : `https://musicbrainz.org/release/${externalId}` });
+      tracks.push({ works: recordingWorks(recording), externalId: trackId, recordingId, title, version: string(recording.disambiguation), artistName: actualCredit.name, artistIds: actualCredit.ids, position, discNumber: disc, durationMs: integer(track.length) ?? integer(recording.length), isrcs: Array.isArray(recording.isrcs) ? recording.isrcs.filter((value): value is string => typeof value === "string" && /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(value)) : [], managedByArtist: actualCredit.ids.includes(artistId), url: recordingId ? `https://musicbrainz.org/recording/${recordingId}` : `https://musicbrainz.org/release/${externalId}` });
     }
   }
   return { provider: "musicbrainz", externalId, title: string(data.title), date: string(data.date, 10), type: primary === "album" || primary === "ep" || primary === "single" ? primary : "other", secondaryTypes: Array.isArray(group["secondary-types"]) ? group["secondary-types"].filter((value): value is string => typeof value === "string").map((value) => value.slice(0, 100)) : [], participation: !releaseCredit.ids.includes(artistId), artistName: releaseCredit.name, artistIds: releaseCredit.ids, barcode: string(data.barcode, 30) || null, version: string(data.disambiguation), country: string(data.country, 10), tracks, url: `https://musicbrainz.org/release/${externalId}`, imageUrl: null, checkedAt };
@@ -138,7 +150,7 @@ export async function collectMusicBrainzStep(artistId: string, cursor?: MusicBra
   const checkedAt = new Date(options.now?.() ?? Date.now()).toISOString();
   if (current.pending.length) {
     const releaseId = current.pending[0];
-    const data = await request(`release/${releaseId}`, { inc: "recordings+artist-credits+release-groups+isrcs" }, options);
+    const data = await request(`release/${releaseId}`, { inc: "recordings+artist-credits+release-groups+isrcs+recording-level-rels+work-level-rels+work-rels+artist-rels" }, options);
     const release = normalizeMusicBrainzRelease(data, artistId, checkedAt);
     if (release.externalId !== releaseId) throw new MusicProviderError("invalid_response", "요청한 발매본과 반환된 식별자가 다릅니다. 연결 확인이 필요합니다.");
     current.pending.shift();
@@ -158,4 +170,12 @@ export async function collectMusicBrainzStep(artistId: string, cursor?: MusicBra
   if (current.offset >= total) { current.phase = current.phase === "artist" ? "track_artist" : "done"; current.offset = 0; delete current.total; }
   const done = current.phase === "done" && !current.pending.length;
   return { releases: [], nextCursor: done ? null : current, status: done ? "completed" : "collecting", checkedAt, scopeNote };
+}
+
+export async function lookupMusicBrainzRelease(releaseId: string, artistId: string, options: MusicBrainzOptions = {}) {
+  if (!isMusicBrainzId(releaseId) || !isMusicBrainzId(artistId)) throw new MusicProviderError("invalid_input", "올바른 MusicBrainz 식별자가 필요합니다.");
+  const data = await request(`release/${releaseId}`, { inc: "recordings+artist-credits+release-groups+isrcs+recording-level-rels+work-level-rels+work-rels+artist-rels" }, options);
+  const result = normalizeMusicBrainzRelease(data, artistId, new Date(options.now?.() ?? Date.now()).toISOString());
+  if (result.externalId !== releaseId) throw new MusicProviderError("invalid_response", "요청한 앨범 식별자와 응답이 다릅니다.");
+  return result;
 }

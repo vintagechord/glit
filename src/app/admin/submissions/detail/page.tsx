@@ -18,7 +18,7 @@ import {
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
-import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { getPackageStationCodes } from "@/lib/station-reviews";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
 import { requireAdminPage } from "@/lib/admin/page-auth";
@@ -540,15 +540,6 @@ export default async function AdminSubmissionDetailPage({
           ? paymentDocument.tax_invoice_business_number ?? "-"
           : "-";
 
-  if (submission.type === "ALBUM") {
-    await ensureAlbumStationReviews(
-      supabase,
-      submission.id,
-      packageInfo?.station_count ?? null,
-      packageInfo?.name ?? null,
-    );
-  }
-
   const stationSelectWithTracks =
     "id, status, result_note, track_results:track_results_json, updated_at, station_id, station:stations ( id, name, code )";
   const stationSelectLegacyTracks =
@@ -595,6 +586,24 @@ export default async function AdminSubmissionDetailPage({
       stationReviews = (fallback.data as typeof stationReviews) ?? stationReviews;
     } else {
       stationReviews = (legacy.data as typeof stationReviews) ?? stationReviews;
+    }
+  }
+
+  if (submission.type === "ALBUM") {
+    // Missing rows are displayed as unsent and created by the explicit save action.
+    // Merely viewing an admin page must not create or reset review records.
+    const expectedCodes = getPackageStationCodes(packageInfo?.station_count, packageInfo?.name);
+    if (expectedCodes.length > 0) {
+      const { data: expectedStations } = await supabase.from("stations")
+        .select("id, name, code").in("code", expectedCodes);
+      const existingStationIds = new Set((stationReviews ?? []).map(review => review.station_id));
+      stationReviews = [...(stationReviews ?? []), ...(expectedStations ?? [])
+        .filter(station => !existingStationIds.has(station.id))
+        .map(station => ({
+          id: `pending-${station.id}`, status: "NOT_SENT", result_note: null,
+          track_results: null, updated_at: submission.updated_at,
+          station_id: station.id, station: [station],
+        }))];
     }
   }
 

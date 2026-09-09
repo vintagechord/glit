@@ -8,13 +8,14 @@ export async function validateReleasedAlbumPaymentFiles(
 ): Promise<string | null> {
   if (!submissionIds.length) return null;
   const { data: albums, error: albumError } = await db.from("submissions")
-    .select("id")
+    .select("id, files_submitted_by_email")
     .in("id", [...new Set(submissionIds)])
     .eq("type", "ALBUM")
     .eq("is_oneclick", true);
   if (albumError) return "음원 업로드 상태를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.";
   if (!albums?.length) return null;
-  const releasedIds = albums.map(album => String(album.id));
+  const releasedIds = albums.filter(album => !album.files_submitted_by_email).map(album => String(album.id));
+  if (!releasedIds.length) return null;
   const readyIds = new Set<string>();
   // Supabase caps result pages. A large album bundle must not lose later albums
   // simply because earlier submissions contain many individual WAV files.

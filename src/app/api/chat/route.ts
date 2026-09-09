@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { loadChatHistory, parseChatHistoryCursor, type ChatHistoryCursor } from "@/lib/support-chat-history";
 
 import {
   type SupportChatConversation,
@@ -155,27 +156,8 @@ async function getViewer() {
   return { user, profile };
 }
 
-async function loadMessages(conversationId: string) {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("support_chat_messages")
-    .select(messageSelect)
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
-    .limit(200);
-
-  if (error) {
-    throw error;
-  }
-
-  return ((data ?? []) as MessageRow[]).map(mapMessage);
-}
-
-async function buildPayload(row: ConversationRow): Promise<SupportChatPayload> {
-  return {
-    conversation: mapConversation(row),
-    messages: await loadMessages(row.id),
-  };
+async function buildPayload(row: ConversationRow, cursor?: ChatHistoryCursor): Promise<SupportChatPayload> {
+  return { conversation: mapConversation(row), ...await loadChatHistory(createAdminClient(), row.id, cursor) };
 }
 
 async function listVisitorConversations(params: {
@@ -297,9 +279,10 @@ export async function GET(request: NextRequest) {
 
   try {
     return NextResponse.json(
-      await buildPayload(conversationResult.data as ConversationRow),
+      await buildPayload(conversationResult.data as ConversationRow, parseChatHistoryCursor(request.nextUrl.searchParams)),
     );
   } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ error: "이전 메시지 조회 정보를 확인해주세요." }, { status: 400 });
     console.error("[support-chat][get] messages error", error);
     return NextResponse.json(
       { error: "채팅 메시지를 불러오지 못했습니다." },

@@ -1,5 +1,6 @@
 import { getServiceRoleKey, getSupabaseEnv, validateSupabaseUrl } from "./env";
 import type { RuntimeHealthCheck } from "../runtime-health";
+import { fetchWithTimeout } from "../fetch-with-timeout";
 
 export function checkSupabaseConfig(): RuntimeHealthCheck {
   try {
@@ -41,12 +42,11 @@ export async function checkSupabaseConnection(fetcher: typeof fetch = fetch): Pr
   ];
   return Promise.all(targets.map(async ({ name, path, method }) => {
     try {
-      const response = await fetcher(`${config.url}${path}`, {
+      const response = await fetchWithTimeout(`${config.url}${path}`, {
         method: method ?? "GET",
         headers: { apikey: config.anonKey },
-        signal: AbortSignal.timeout(8_000),
         redirect: "error",
-      });
+      }, 8_000, fetcher);
       await response.body?.cancel();
       return { name, ok: response.ok, severity: "error" as const,
         detail: response.ok ? `HTTP ${response.status}` : `HTTP ${response.status}. Check the project's URL, key, API availability, and catalog permissions.` };

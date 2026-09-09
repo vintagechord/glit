@@ -535,7 +535,7 @@ test("a cart snapshot for another submission never triggers a price warning", ()
 
 
 test("released album upload progress and failures block even with an existing audio file", () => {
-  const base = validOnlineInput({ isOneClick: true, melonUrl: "https://www.melon.com/album/detail.htm?albumId=1", tracks: [], filesSubmittedByEmail: true, isAdminReviewer: true });
+  const base = validOnlineInput({ isOneClick: true, melonUrl: "https://www.melon.com/album/detail.htm?albumId=1", tracks: [], filesSubmittedByEmail: false, isAdminReviewer: true });
   for (const status of ["pending", "uploading", "error"] as const) {
     const result = buildAlbumSubmissionPreflight({ ...base, uploads: [{ name: "new-master.wav", status }] });
     assert.equal(result.canSubmit, false);
@@ -545,16 +545,45 @@ test("released album upload progress and failures block even with an existing au
   assert.equal(buildAlbumSubmissionPreflight({ ...base, uploads: [{ name: "master.wav", status: "done" }] }).canSubmit, true);
 });
 
-test("released album preflight rejects MP3, email and administrator upload exemptions", () => {
+test("released album preflight accepts email handoffs but otherwise requires WAV or ZIP", () => {
   const base = validOnlineInput({ isOneClick: true, melonUrl: "https://www.genie.co.kr/detail/albumInfo?axnm=12345", tracks: [], files: [], uploads: [] });
   for (const overrides of [{}, { filesSubmittedByEmail: true }, { isAdminReviewer: true }, { filesSubmittedByEmail: true, isAdminReviewer: true }, { files: [{ originalName: "track.mp3", mime: "audio/mpeg" }] }]) {
     const result = buildAlbumSubmissionPreflight({ ...base, ...overrides });
-    assert.equal(result.canSubmit, false);
-    assert.deepEqual(result.blockingIssues.map(item => item.id), ["files.audio-required"]);
+    const byEmail = "filesSubmittedByEmail" in overrides && overrides.filesSubmittedByEmail;
+    assert.equal(result.canSubmit, Boolean(byEmail));
+    assert.deepEqual(result.blockingIssues.map(item => item.id), byEmail ? [] : ["files.audio-required"]);
   }
   for (const file of [{ originalName: "track.wav", mime: "audio/wav" }, { originalName: "album.zip", mime: "application/octet-stream" }]) {
     const result = buildAlbumSubmissionPreflight({ ...base, files: [file] });
     assert.equal(result.canSubmit, true);
     assert.equal(result.issues.some(item => item.id.includes("application-form") || item.id.startsWith("tracks.")), false);
+  }
+});
+
+
+test("email handoff allows album checkout despite missing, pending or failed uploads", () => {
+  for (const isOneClick of [false, true]) {
+    for (const status of ["pending", "uploading", "error"] as const) {
+      const result = buildAlbumSubmissionPreflight(validOnlineInput({
+        isOneClick,
+        melonUrl: "https://www.melon.com/album/detail.htm?albumId=1",
+        filesSubmittedByEmail: true,
+        files: [],
+        uploads: [{ name: "master.wav", status }],
+      }));
+      assert.equal(result.canSubmit, true, `${isOneClick ? "released" : "pre-release"} / ${status}`);
+      assert.equal(result.issues.some(issue => issue.id.startsWith("files.")), false);
+    }
+  }
+});
+
+test("MV email handoff permits checkout after failed or still-pending uploads", () => {
+  for (const status of ["error", "uploading", "pending"] as const) {
+    const result = buildMvSubmissionPreflight(validMvInput({
+      filesSubmittedByEmail: true,
+      files: [],
+      uploads: [{ name: "video.mp4", status }],
+    }));
+    assert.equal(result.canSubmit, true, status);
   }
 });

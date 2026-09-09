@@ -1,0 +1,11 @@
+.git
+.env*
+node_modules
+.next
+tmp
+output
+.codex
+services/**/.venv
+services/**/__pycache__
+# Next type-checks repository QA scripts which import these fixtures. They are
+# included only in the build stage; Dockerfile.web never copies tests to runtime.

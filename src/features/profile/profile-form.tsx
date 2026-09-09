@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -20,42 +20,44 @@ type ProfileFormProps = {
 const initialState: ActionState = {};
 
 export function ProfileForm({ defaultValues }: ProfileFormProps) {
-  const [state, formAction] = useActionState(updateProfileAction, initialState);
-  const [passwordState, passwordFormAction] = useActionState(
+  const [state, formAction, profilePending] = useActionState(updateProfileAction, initialState);
+  const [values, setValues] = useState(defaultValues);
+  const [passwordState, passwordFormAction, passwordPending] = useActionState(
     updatePasswordAction,
     initialState,
   );
   const router = useRouter();
-  const hasRefreshed = useRef(false);
   const passwordFormRef = useRef<HTMLFormElement | null>(null);
 
   // After a successful save, refresh to pull updated profile values back into the form
   useEffect(() => {
-    if (state?.message && !hasRefreshed.current) {
-      hasRefreshed.current = true;
+    if (state.message) {
       router.refresh();
     }
-  }, [state?.message, router]);
+  }, [state, router]);
 
   useEffect(() => {
     if (passwordState?.message) {
       passwordFormRef.current?.reset();
     }
-  }, [passwordState?.message]);
+  }, [passwordState]);
 
   return (
     <>
       <form action={formAction} className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <label htmlFor="profile-name" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               담당자명
             </label>
             <input
+              id="profile-name"
               name="name"
+              disabled={profilePending}
               type="text"
               required
-              defaultValue={defaultValues.name}
+              value={values.name}
+              onChange={(event) => setValues(current => ({ ...current, name: event.target.value }))}
               className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />
             {state.fieldErrors?.name && (
@@ -63,25 +65,31 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
             )}
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <label htmlFor="profile-company" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               회사/기획사
             </label>
             <input
+              id="profile-company"
               name="company"
+              disabled={profilePending}
               type="text"
-              defaultValue={defaultValues.company}
+              value={values.company}
+              onChange={(event) => setValues(current => ({ ...current, company: event.target.value }))}
               className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <label htmlFor="profile-phone" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               연락처
             </label>
             <input
+              id="profile-phone"
               name="phone"
+              disabled={profilePending}
               type="tel"
               required
-              defaultValue={defaultValues.phone}
+              value={values.phone}
+              onChange={(event) => setValues(current => ({ ...current, phone: event.target.value }))}
               className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />
             {state.fieldErrors?.phone && (
@@ -90,7 +98,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
           </div>
         </div>
         {state.error && (
-          <p className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
+          <p role="alert" className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
             {state.error}
           </p>
         )}
@@ -101,9 +109,10 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
         )}
         <button
           type="submit"
+          disabled={profilePending}
           className="bauhaus-button px-6 py-3 text-sm"
         >
-          프로필 저장
+          {profilePending ? "저장 중..." : "프로필 저장"}
         </button>
       </form>
       <div className="mt-8 rounded-[8px] border-2 border-border bg-background/70 p-4">
@@ -120,11 +129,13 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
         >
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              <label htmlFor="profile-newPassword" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 새 비밀번호
               </label>
               <input
+                id="profile-newPassword"
                 name="newPassword"
+                disabled={passwordPending}
                 type="password"
                 autoComplete="new-password"
                 minLength={8}
@@ -138,11 +149,13 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
               )}
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              <label htmlFor="profile-confirmPassword" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 새 비밀번호 확인
               </label>
               <input
+                id="profile-confirmPassword"
                 name="confirmPassword"
+                disabled={passwordPending}
                 type="password"
                 autoComplete="new-password"
                 minLength={8}
@@ -157,7 +170,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
             </div>
           </div>
           {passwordState.error && (
-            <p className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
+            <p role="alert" className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
               {passwordState.error}
             </p>
           )}
@@ -168,9 +181,10 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
           )}
           <button
             type="submit"
+            disabled={passwordPending}
             className="bauhaus-button px-6 py-3 text-sm"
           >
-            비밀번호 변경
+            {passwordPending ? "변경 중..." : "비밀번호 변경"}
           </button>
         </form>
       </div>

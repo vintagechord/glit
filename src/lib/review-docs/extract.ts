@@ -5,6 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import { z } from "zod";
 import { ReviewExtractionError, validateReviewUpload } from "./upload-validation";
+import { extractDocxBlocks } from "./docx-extract";
 import { emptyReviewData, explicitInstrumental, explicitTitle, normalizeReviewDate, REVIEW_DOC_LIMITS, reviewAlbumSchema, reviewTrackSchema, type ReviewAlbum, type ReviewDocumentData, type ReviewIssue, type ReviewMode, type ReviewSource, type ReviewTrack } from "./model";
 
 export type ReviewUpload = { id: string; name: string; mime: string; buffer: Buffer };
@@ -14,12 +15,15 @@ const extractionResultSchema = z.object({ format: z.string(), blocks: z.array(ex
 export type ExtractedBlocks = z.infer<typeof extractionResultSchema>;
 export async function extractFileBlocks(file: ReviewUpload): Promise<ExtractedBlocks> {
   const { extension } = validateReviewUpload(file);
+  if (extension === "docx") return extractionResultSchema.parse(extractDocxBlocks(file.buffer));
   const directory = await mkdtemp(path.join(os.tmpdir(), "onside-review-"));
   const input = path.join(directory, `source.${extension}`);
   await writeFile(input, file.buffer, { mode: 0o600 });
   try {
     return await new Promise((resolve, reject) => {
-      const child = spawn(process.env.REVIEW_DOCS_PYTHON || "python3", [path.join(process.cwd(), "services/review-docs/extract.py"), input, extension], { stdio: ["ignore", "pipe", "pipe"], env: { NODE_ENV: process.env.NODE_ENV ?? "production", PATH: process.env.PATH, LANG: "C.UTF-8", HOME: directory, PYTHONIOENCODING: "utf-8", PYTHONNOUSERSITE: process.env.REVIEW_DOCS_PYTHON ? "1" : "0" } });
+      // This executable belongs to the dedicated image. The web queue only
+      // claims native DOCX/URL jobs; never trace an arbitrary Python env path.
+      const child = spawn(/* turbopackIgnore: true */ process.env.REVIEW_DOCS_PYTHON || "python3", [path.join(process.cwd(), "services/review-docs/extract.py"), input, extension], { stdio: ["ignore", "pipe", "pipe"], env: { NODE_ENV: process.env.NODE_ENV ?? "production", PATH: process.env.PATH, LANG: "C.UTF-8", HOME: directory, PYTHONIOENCODING: "utf-8", PYTHONNOUSERSITE: process.env.REVIEW_DOCS_PYTHON ? "1" : "0" } });
       const stdout: Buffer[] = []; let size = 0;
       const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new ReviewExtractionError("CONVERTER_TIMEOUT", "문서 변환이 90초 제한을 초과했습니다. 페이지를 나눠 다시 업로드해주세요.")); }, REVIEW_DOC_LIMITS.conversionSeconds * 1000);
       child.stdout.on("data", (chunk: Buffer) => { size += chunk.length; if (size > 12 * 1024 * 1024) { child.kill("SIGKILL"); reject(new ReviewExtractionError("EXTRACTION_LIMIT", "추출 데이터 용량 제한을 초과했습니다.")); } else stdout.push(chunk); });

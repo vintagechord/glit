@@ -303,31 +303,28 @@ export async function updateProfileAction(
     };
   }
 
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return { error: "로그인이 필요합니다." };
-  }
-
-  const { error } = await supabase.from("profiles").upsert(
-    {
+  try {
+    const supabase = await createServerSupabase();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError && isAuthConnectionError(userError)) {
+      return { error: "인증 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요." };
+    }
+    if (userError || !user) return { error: "로그인이 필요합니다." };
+    const { error } = await supabase.from("profiles").upsert({
       user_id: user.id,
       name: parsed.data.name,
       company: parsed.data.company ?? "",
       phone: parsed.data.phone,
-    },
-    { onConflict: "user_id" },
-  );
-
-  if (error) {
-    return { error: "프로필 저장에 실패했습니다." };
+    }, { onConflict: "user_id" });
+    if (error) {
+      logAuthError("update profile", error);
+      return { error: "프로필 저장에 실패했습니다. 잠시 후 다시 시도해주세요." };
+    }
+    return { message: "프로필이 저장되었습니다." };
+  } catch (error) {
+    logAuthError("update profile", error);
+    return { error: "프로필 저장에 실패했습니다. 연결 상태를 확인하고 다시 시도해주세요." };
   }
-
-  return { message: "프로필이 저장되었습니다." };
 }
 
 export async function updatePasswordAction(

@@ -11,6 +11,8 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { chatHistoryQuery, type ChatHistoryCursor } from "@/lib/support-chat-history";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
 import {
   supportChatAdminChannelName,
@@ -35,6 +37,7 @@ type ConversationListPayload = {
 type ConversationThreadPayload = {
   conversation?: SupportChatConversation;
   messages?: SupportChatMessage[];
+  earlierCursor?: ChatHistoryCursor | null;
   error?: string;
 };
 
@@ -109,7 +112,7 @@ const mergeMessage = (
   return [...messages, nextMessage].sort(
     (a, b) =>
       new Date(a.createdAt ?? 0).getTime() -
-      new Date(b.createdAt ?? 0).getTime(),
+      new Date(b.createdAt ?? 0).getTime() || a.id.localeCompare(b.id),
   );
 };
 
@@ -133,7 +136,13 @@ export function AdminChatClient({
     initialConversations[0]?.id ?? null,
   );
   const [messages, setMessages] = React.useState<SupportChatMessage[]>([]);
-  const [draft, setDraft] = React.useState("");
+  const [drafts, setDrafts] = React.useState<Record<string, string>>({});
+  const draft = selectedId ? drafts[selectedId] ?? "" : "";
+  const [earlierCursor, setEarlierCursor] = React.useState<ChatHistoryCursor | null>(null);
+  const [loadingEarlier, setLoadingEarlier] = React.useState(false);
+  const skipAutoScrollRef = React.useRef(false);
+  const historyScopeRef = React.useRef<string | null>(null);
+  const selectedIdRef = React.useRef(selectedId);
   const [loadingThread, setLoadingThread] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [sending, setSending] = React.useState(false);
@@ -150,6 +159,13 @@ export function AdminChatClient({
   );
   const listRequestIdRef = React.useRef(0);
   const threadRequestIdRef = React.useRef(0);
+
+  const selectConversation = React.useCallback((id: string | null) => {
+    selectedIdRef.current = id;
+    threadRequestIdRef.current++;
+    historyScopeRef.current = null;
+    setSelectedId(id); setMessages([]); setEarlierCursor(null); setLoadingEarlier(false); setLoadingThread(false);
+  }, []);
 
   const selectedConversation = React.useMemo(
     () =>
@@ -169,17 +185,17 @@ export function AdminChatClient({
       setRefreshing(true);
     }
     try {
-      const response = await fetch("/api/admin/chat", { cache: "no-store" });
+      const response = await fetchWithTimeout("/api/admin/chat", { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as
         | ConversationListPayload
         | null;
-      if (!response.ok || !payload) {
+      if (!response.ok || !Array.isArray(payload?.conversations)) {
         throw new Error(payload?.error ?? "채팅 목록을 불러오지 못했습니다.");
       }
       if (requestId !== listRequestIdRef.current) return;
       setConversations(sortConversations(payload.conversations ?? []));
     } catch (listError) {
-      if (!options?.quiet && requestId === listRequestIdRef.current) {
+      if (requestId === listRequestIdRef.current) {
         setError(
           listError instanceof Error
             ? listError.message
@@ -187,7 +203,7 @@ export function AdminChatClient({
         );
       }
     } finally {
-      if (!options?.quiet && requestId === listRequestIdRef.current) {
+      if (requestId === listRequestIdRef.current) {
         setRefreshing(false);
       }
     }
@@ -206,19 +222,24 @@ export function AdminChatClient({
       try {
         const params = new URLSearchParams({ conversationId });
         const shouldMarkRead = options?.markRead ?? isDocumentVisible();
-        const response = await fetch(`/api/admin/chat?${params.toString()}`, {
+        const response = await fetchWithTimeout(`/api/admin/chat?${params.toString()}`, {
           cache: "no-store",
         });
         const payload = (await response.json().catch(() => null)) as
           | ConversationThreadPayload
           | null;
-        if (!response.ok || !payload?.conversation) {
+        if (!response.ok || !payload?.conversation || !Array.isArray(payload.messages)) {
           throw new Error(payload?.error ?? "대화를 불러오지 못했습니다.");
         }
         if (requestId !== threadRequestIdRef.current) return;
         let nextConversation = payload.conversation;
+        // Reading the thread does not depend on whether updating its read receipt succeeds.
+        setConversations(current => upsertConversation(current, payload.conversation!));
+        setMessages(current => payload.messages!.reduce(mergeMessage, current.filter(message => message.conversationId === conversationId)));
+        setLoadingThread(false);
+        if (!options?.quiet || historyScopeRef.current !== conversationId) { setEarlierCursor(payload.earlierCursor ?? null); historyScopeRef.current = conversationId; }
         if (shouldMarkRead && nextConversation.unreadAdminCount) {
-          const markResponse = await fetch("/api/admin/chat", {
+          const markResponse = await fetchWithTimeout("/api/admin/chat", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ conversationId, markRead: true }),
@@ -237,9 +258,9 @@ export function AdminChatClient({
         setConversations((current) =>
           upsertConversation(current, nextConversation),
         );
-        setMessages(payload.messages ?? []);
+
       } catch (loadError) {
-        if (!options?.quiet && requestId === threadRequestIdRef.current) {
+        if (requestId === threadRequestIdRef.current) {
           setError(
             loadError instanceof Error
               ? loadError.message
@@ -247,7 +268,7 @@ export function AdminChatClient({
           );
         }
       } finally {
-        if (!options?.quiet && requestId === threadRequestIdRef.current) {
+        if (requestId === threadRequestIdRef.current) {
           setLoadingThread(false);
         }
       }
@@ -264,7 +285,7 @@ export function AdminChatClient({
           current.filter((item) => item.id !== payload.deletedId),
         );
         if (selectedId === payload.deletedId) {
-          setSelectedId(null);
+          selectConversation(null);
           setMessages([]);
         }
         return true;
@@ -281,7 +302,7 @@ export function AdminChatClient({
 
       return Boolean(payload.conversation || payload.message);
     },
-    [selectedId],
+    [selectedId, selectConversation],
   );
 
   const handleBroadcastPayload = React.useCallback(
@@ -330,7 +351,7 @@ export function AdminChatClient({
 
   React.useEffect(() => {
     if (!selectedId && conversations[0]) {
-      setSelectedId(conversations[0].id);
+      selectConversation(conversations[0].id);
       return;
     }
     if (
@@ -338,9 +359,9 @@ export function AdminChatClient({
       conversations.length > 0 &&
       !conversations.some((conversation) => conversation.id === selectedId)
     ) {
-      setSelectedId(conversations[0].id);
+      selectConversation(conversations[0].id);
     }
-  }, [conversations, selectedId]);
+  }, [conversations, selectedId, selectConversation]);
 
   React.useEffect(() => {
     if (!selectedId) {
@@ -407,6 +428,7 @@ export function AdminChatClient({
   ]);
 
   React.useEffect(() => {
+    if (skipAutoScrollRef.current) { skipAutoScrollRef.current = false; return; }
     threadRef.current?.scrollTo({
       top: threadRef.current.scrollHeight,
       behavior: "smooth",
@@ -419,10 +441,11 @@ export function AdminChatClient({
     const body = draft.trim();
     if (!body) return;
 
+    const conversationId = selectedConversation.id;
     setSending(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/chat", {
+      const response = await fetchWithTimeout("/api/admin/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -440,9 +463,9 @@ export function AdminChatClient({
       setConversations((current) =>
         upsertConversation(current, payload.conversation!),
       );
-      setMessages((current) => mergeMessage(current, payload.message!));
-      setDraft("");
-      await broadcastChatUpdate(payload);
+      if (selectedIdRef.current === conversationId) setMessages((current) => mergeMessage(current, payload.message!));
+      setDrafts(current => current[conversationId]?.trim() === body ? { ...current, [conversationId]: "" } : current);
+      await broadcastChatUpdate(payload, { conversationChannel: selectedIdRef.current === conversationId });
     } catch (replyError) {
       setError(
         replyError instanceof Error
@@ -459,7 +482,7 @@ export function AdminChatClient({
     setSavingStatus(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/chat", {
+      const response = await fetchWithTimeout("/api/admin/chat", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -477,7 +500,7 @@ export function AdminChatClient({
       setConversations((current) =>
         upsertConversation(current, payload.conversation!),
       );
-      await broadcastChatUpdate(payload);
+      await broadcastChatUpdate(payload, { conversationChannel: selectedIdRef.current === payload.conversation.id });
     } catch (statusError) {
       setError(
         statusError instanceof Error
@@ -500,7 +523,7 @@ export function AdminChatClient({
     setDeletingId(conversation.id);
     setError(null);
     try {
-      const response = await fetch("/api/admin/chat", {
+      const response = await fetchWithTimeout("/api/admin/chat", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversationId: conversation.id }),
@@ -512,20 +535,13 @@ export function AdminChatClient({
         throw new Error(payload?.error ?? "상담을 삭제하지 못했습니다.");
       }
 
-      const nextConversations = conversations.filter(
-        (item) => item.id !== conversation.id,
-      );
-      setConversations(nextConversations);
-      if (selectedId === conversation.id) {
-        setSelectedId(nextConversations[0]?.id ?? null);
-        if (nextConversations.length === 0) {
-          setMessages([]);
-        }
-      }
+      const wasSelected = selectedIdRef.current === conversation.id;
+      setConversations(current => current.filter(item => item.id !== conversation.id));
       await broadcastChatUpdate(
         { deletedId: conversation.id },
-        { conversationChannel: selectedId === conversation.id },
+        { conversationChannel: wasSelected },
       );
+      if (selectedIdRef.current === conversation.id) selectConversation(null);
     } catch (deleteError) {
       setError(
         deleteError instanceof Error
@@ -537,6 +553,25 @@ export function AdminChatClient({
     }
   };
 
+  async function loadEarlier() {
+    const conversationId = selectedIdRef.current;
+    if (!conversationId || !earlierCursor || loadingEarlier) return;
+    setLoadingEarlier(true); setError(null);
+    const params = chatHistoryQuery(earlierCursor); params.set("conversationId", conversationId);
+    const previousHeight = threadRef.current?.scrollHeight ?? 0;
+    try {
+      const response = await fetchWithTimeout(`/api/admin/chat?${params}`);
+      const payload = await response.json() as ConversationThreadPayload;
+      if (!response.ok || !Array.isArray(payload.messages)) throw new Error(payload.error || "이전 메시지를 불러오지 못했습니다.");
+      if (selectedIdRef.current !== conversationId) return;
+      skipAutoScrollRef.current = true;
+      setMessages(current => payload.messages!.reduce(mergeMessage, current));
+      setEarlierCursor(payload.earlierCursor ?? null);
+      requestAnimationFrame(() => { if (threadRef.current && selectedIdRef.current === conversationId) threadRef.current.scrollTop += threadRef.current.scrollHeight - previousHeight; });
+    } catch (error) { if (selectedIdRef.current === conversationId) setError(error instanceof Error ? error.message : "이전 메시지를 불러오지 못했습니다."); }
+    finally { if (selectedIdRef.current === conversationId) setLoadingEarlier(false); }
+  }
+
   const totalUnread = conversations.reduce(
     (sum, conversation) => sum + conversation.unreadAdminCount,
     0,
@@ -544,6 +579,7 @@ export function AdminChatClient({
 
   return (
     <div className="mt-8 grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+      {error && !selectedConversation && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-700 lg:col-span-2">{error}</p>}
       <aside className="overflow-hidden rounded-[18px] border-2 border-[#111111] bg-card shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
         <div className="flex items-center justify-between gap-3 border-b-2 border-[#111111] bg-background px-4 py-3">
           <div>
@@ -586,7 +622,7 @@ export function AdminChatClient({
                 >
                   <button
                     type="button"
-                    onClick={() => setSelectedId(conversation.id)}
+                    onClick={() => selectConversation(conversation.id)}
                     className="min-w-0 flex-1 px-4 py-3 text-left"
                   >
                     <span className="flex items-start justify-between gap-3">
@@ -708,6 +744,7 @@ export function AdminChatClient({
               ref={threadRef}
               className="h-[min(58vh,560px)] min-h-[360px] space-y-3 overflow-y-auto bg-background/60 px-5 py-5"
             >
+              {earlierCursor && !loadingThread && <div className="flex justify-center"><button type="button" onClick={() => void loadEarlier()} disabled={loadingEarlier} className="rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold disabled:opacity-50">{loadingEarlier ? "불러오는 중..." : "이전 메시지 더 보기"}</button></div>}
               {loadingThread ? (
                 <div className="flex h-full items-center justify-center text-sm font-semibold text-muted-foreground">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
@@ -758,7 +795,7 @@ export function AdminChatClient({
               <div className="flex items-end gap-3">
                 <textarea
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={(event) => { if (selectedId) setDrafts(current => ({ ...current, [selectedId]: event.target.value })); }}
                   disabled={selectedConversation.status === "CLOSED"}
                   rows={3}
                   placeholder={

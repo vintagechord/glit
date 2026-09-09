@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
@@ -57,7 +59,7 @@ export function MvRatingControl({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/submissions/${submissionId}/mv-rating`, {
+      const res = await fetchWithTimeout(`/api/admin/submissions/${submissionId}/mv-rating`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating }),

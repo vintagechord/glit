@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { loadChatHistory, parseChatHistoryCursor } from "@/lib/support-chat-history";
 
 import {
   type SupportChatConversation,
@@ -129,18 +130,6 @@ async function listConversations() {
   return ((data ?? []) as ConversationRow[]).map(mapConversation);
 }
 
-async function loadMessages(conversationId: string) {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("support_chat_messages")
-    .select(messageSelect)
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
-    .limit(300);
-
-  if (error) throw error;
-  return ((data ?? []) as MessageRow[]).map(mapMessage);
-}
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin();
@@ -168,9 +157,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       conversation: mapConversation(data as ConversationRow),
-      messages: await loadMessages(conversationId),
+      ...await loadChatHistory(admin, conversationId, parseChatHistoryCursor(request.nextUrl.searchParams), 300),
     });
   } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ error: "이전 메시지 조회 정보를 확인해주세요." }, { status: 400 });
     console.error("[admin-chat][get] error", error);
     return NextResponse.json(
       { error: "채팅 정보를 불러오지 못했습니다." },

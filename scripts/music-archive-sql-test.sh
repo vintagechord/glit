@@ -38,13 +38,15 @@ create table auth.users(id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid
 $$;
-create table public.profiles(user_id uuid primary key references auth.users(id),role text not null);
+create table public.profiles(user_id uuid primary key references auth.users(id),role text not null,name text not null default '',company text);
 SQL
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0095_music_archive.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0099_music_archive_domestic_catalog.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0100_music_archive_multiple_profiles.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0101_music_archive_admin_summary.sql"
+docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/0104_music_archive_admin_directory.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive-domestic.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive-multiple-profiles.sql"
+docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive-admin-directory.sql"
 echo "Music archive SQL integration checks passed; disposable container will be removed."

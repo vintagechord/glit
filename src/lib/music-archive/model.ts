@@ -28,7 +28,7 @@ export const releaseInputSchema = z.object({
   id, title: short.min(1), type: z.enum(["album", "ep", "single", "other"]).default("album"),
   releaseDate: z.string().regex(/^\d{4}(-\d{2})?(-\d{2})?$/).optional(),
   participation: z.enum(["primary", "participation", "unknown"]).default("primary"),
-  version: short.optional(), artistName: short.optional(), barcode: short.optional(), links,
+  version: short.optional(), artistName: short.optional(), barcode: short.optional(), imageUrl: safeWebUrlSchema.optional(), links,
 }).strict();
 const metaFields = { source: sourceReferenceSchema.optional(), excluded: z.boolean().default(false), mergedInto: id.optional(), userEdited: z.boolean().default(false) };
 export const archiveReleaseSchema = releaseInputSchema.extend(metaFields);
@@ -39,7 +39,9 @@ export const trackInputSchema = z.object({
 }).strict();
 export const archiveTrackSchema = trackInputSchema.extend(metaFields);
 export const archiveRecordingSchema = z.object({ id, title: short.min(1), version: short.optional(), isrc: short.optional(), workIds: z.array(id).max(100).default([]), source: sourceReferenceSchema.optional(), userEdited: z.boolean().optional() }).strict();
-export const archiveWorkSchema = z.object({ id, title: short.min(1), writers: short.optional(), iswc: short.optional(), institutionNumbers: z.array(z.object({ agency: short.min(1), number: short.min(1) }).strict()).max(20).default([]), source: sourceReferenceSchema.optional(), userEdited: z.boolean().optional() }).strict();
+export const archiveContributorSchema = z.object({ name: short.min(1), role: z.enum(["lyrics", "composition", "arrangement"]) }).strict();
+export type ArchiveContributor = z.infer<typeof archiveContributorSchema>;
+export const archiveWorkSchema = z.object({ id, contributors: z.array(archiveContributorSchema).max(100).optional(), title: short.min(1), writers: short.optional(), iswc: short.optional(), institutionNumbers: z.array(z.object({ agency: short.min(1), number: short.min(1) }).strict()).max(20).default([]), source: sourceReferenceSchema.optional(), userEdited: z.boolean().optional() }).strict();
 export const taskKindSchema = z.enum(["review", "copyright_work", "copyright_legal", "performer", "karaoke"]);
 export const taskStatusSchema = z.enum(["needs_check", "not_started", "preparing", "submitted", "processing", "needs_changes", "completed", "rejected", "not_applicable", "later"]);
 export const taskResultSchema = z.enum(["unknown", "eligible", "ineligible", "approved", "rejected", "listed", "not_listed", "information_found"]);
@@ -64,7 +66,7 @@ export const archiveTaskSchema = taskFieldsSchema.omit({ queryStatus: true }).ex
 export const archiveReviewLinkSchema = z.object({ id, submissionId: z.string().uuid(), releaseId: id.optional(), trackId: id.optional(), submissionTrackId: z.string().uuid().optional(), note: optionalText }).strict().refine(link => Boolean(link.releaseId || link.trackId), "심의 내역을 연결할 발매작 또는 트랙을 선택해주세요.");
 export const archiveConnectionSchema = z.object({ provider: providerSchema, externalArtistId: short.optional(), url: safeWebUrlSchema.optional(), confirmed: z.boolean().default(false), status: z.enum(["automatic", "needs_configuration", "partnership_required", "link_only", "manual"]).default("link_only"), checkedAt: timestamp.optional() }).strict();
 export const archiveAffiliationSchema = z.object({ id, agency: short.min(1), participant: short.min(1), role: short.optional(), status: z.enum(["unknown", "not_joined", "applying", "joined", "not_applicable"]), memo: optionalText }).strict();
-export const archiveConflictSchema = z.object({ id, entityType: z.enum(["release", "track"]), entityId: id, field: z.enum(["title", "releaseDate", "version", "artistName", "barcode", "participation", "type", "discNumber", "trackNumber", "recordingId", "managed"]), current: z.union([z.string(), z.number(), z.boolean(), z.null()]), incoming: z.union([z.string(), z.number(), z.boolean(), z.null()]), source: sourceReferenceSchema, createdAt: timestamp, resolved: z.enum(["keep", "accept"]).optional() }).strict();
+export const archiveConflictSchema = z.object({ id, entityType: z.enum(["release", "track"]), entityId: id, field: z.enum(["title", "releaseDate", "version", "artistName", "barcode", "imageUrl", "participation", "type", "discNumber", "trackNumber", "recordingId", "managed"]), current: z.union([z.string(), z.number(), z.boolean(), z.null()]), incoming: z.union([z.string(), z.number(), z.boolean(), z.null()]), source: sourceReferenceSchema, createdAt: timestamp, resolved: z.enum(["keep", "accept"]).optional() }).strict();
 export const archiveDataSchema = z.object({
   schemaVersion: z.literal(1), artist: archiveArtistSchema,
   releases: z.array(archiveReleaseSchema).max(5000), tracks: z.array(archiveTrackSchema).max(50000),

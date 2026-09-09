@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Loader2, MessageSquareText, SendHorizontal, X } from "lucide-react";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 type SupportInquiryModalProps = {
   className?: string;
@@ -63,7 +64,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
     setSending(true);
     setError(null);
     try {
-      const response = await fetch("/api/support/inquiries", {
+      const response = await fetchWithTimeout("/api/support/inquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, body, contact }),
@@ -80,7 +81,9 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
       setContact("");
     } catch (submitError) {
       setError(
-        submitError instanceof Error
+        submitError instanceof Error && ["TimeoutError", "AbortError", "TypeError"].includes(submitError.name)
+          ? "문의 접수 결과를 확인하지 못했습니다. 연결 상태를 확인하고 잠시 후 다시 시도해주세요."
+          : submitError instanceof Error
           ? submitError.message
           : "문의 접수 중 오류가 발생했습니다.",
       );
@@ -94,7 +97,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
       <button
         type="button"
         onClick={() => {
-          resetForm();
+          if (submitted && !sending) resetForm();
           setOpen(true);
         }}
         className={className}
@@ -159,6 +162,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                   제목
                   <input
                     value={title}
+                    disabled={sending}
                     onChange={(event) => setTitle(event.target.value)}
                     required
                     maxLength={120}
@@ -170,6 +174,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                   내용
                   <textarea
                     value={body}
+                    disabled={sending}
                     onChange={(event) => setBody(event.target.value)}
                     required
                     maxLength={4000}
@@ -182,6 +187,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                   이메일 또는 연락처
                   <input
                     value={contact}
+                    disabled={sending}
                     onChange={(event) => setContact(event.target.value)}
                     required
                     maxLength={160}
@@ -191,7 +197,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                 </label>
 
                 {error ? (
-                  <div className="rounded-[8px] border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-600">
+                  <div role="alert" className="rounded-[8px] border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-600">
                     {error}
                   </div>
                 ) : null}

@@ -18,4 +18,6 @@ create function auth.uid() returns uuid language sql as $$ select nullif(current
 create function public.is_admin() returns boolean language sql as $$ select coalesce(current_setting('request.jwt.claim.admin',true),'false')='true' $$;
 SQL
 docker exec -i "$task_test_db" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/0094_review_document_jobs.sql
+docker exec -i "$task_test_db" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/0103_review_document_web_dispatcher.sql
 docker exec -i "$task_test_db" psql -U postgres -v ON_ERROR_STOP=1 < tests/sql/review-document-jobs.sql
+docker exec -i "$task_test_db" psql -U postgres -v ON_ERROR_STOP=1 < tests/sql/review-document-web-jobs.sql

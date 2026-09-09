@@ -9,6 +9,7 @@ type UploadRun = {
   initiated: Array<{ filename: string; mimeType: string; sizeBytes: number; guestToken?: string }>;
   completed: Array<{ key: string; filename: string; guestToken?: string }>;
   puts: number;
+  saved: string[];
   holdPut: boolean;
   releasePut?: () => void;
 };
@@ -40,7 +41,7 @@ test.beforeAll(async () => {
 test.beforeEach(async ({ page }) => {
   const errors: string[] = [];
   browserErrors.set(page, errors);
-  uploadRuns.set(page, { initiated: [], completed: [], puts: 0, holdPut: false });
+  uploadRuns.set(page, { initiated: [], completed: [], puts: 0, saved: [], holdPut: false });
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
@@ -86,6 +87,7 @@ test.beforeEach(async ({ page }) => {
     }
 
     if (request.headers()["next-action"]) {
+      uploads.saved.push(request.postData() ?? "");
       // The action returns data only; no router tree patch is needed. Server
       // validation and authoritative prices have separate unit coverage.
       await route.fulfill({
@@ -124,10 +126,10 @@ const fillApplicant = async (page: Page) => {
 
 const saveUrlAndOpenUpload = async (page: Page) => {
   await page.getByRole("button", { name: "저장하고 음원 첨부", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "음원 첨부", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "트랙 정보", exact: true })).not.toBeVisible();
-  await expect(page.getByRole("button", { name: "파일 없이 진행", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("navigation", { name: "신청 진행 단계" })).toContainText("음원 업로드");
+  await expect(page.getByRole("button", { name: "파일 없이 진행", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "신청 진행 단계" })).toContainText("음원 첨부");
 };
 
 const closeInputError = async (page: Page, message: string) => {
@@ -153,7 +155,7 @@ const openFinalReview = async (page: Page, url: string) => {
   await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "접수할 앨범 URL 확인" })).toContainText(url);
   await expect(page.getByRole("button", { name: "장바구니에 담기", exact: true })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "담고 결제하기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "결제하기", exact: true })).toBeEnabled();
 };
 
 test("asks release status before showing packages and uses the same prices for both choices", async ({ page }) => {
@@ -177,23 +179,19 @@ test("asks release status before showing packages and uses the same prices for b
   await expect(releaseChoice(page, false)).toHaveAttribute("aria-pressed", "false");
   expect(await cards.allTextContents()).toEqual(prereleaseCards);
   await expect(page.getByRole("button", { name: "URL 입력으로 계속" })).toBeVisible();
-  await expect(page.getByText("URL 접수 추가금 0원", { exact: true })).toBeVisible();
+  await expect(page.getByText("URL 접수 추가금 0원", { exact: true })).toHaveCount(0);
 });
 
-test("prerelease albums retain application mode selection and entered basic information", async ({ page }) => {
+test("prerelease albums open the online application directly and preserve entered information", async ({ page }) => {
   await page.goto(albumPath);
   await releaseChoice(page, false).click();
   await page.getByRole("button", { name: "신청서 작성으로 계속" }).click();
-  await expect(page.getByRole("radio", { name: /온라인 작성/ })).toBeVisible();
-  await expect(page.getByRole("radio", { name: /파일로 제출/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "선택하고 계속" })).toBeDisabled();
-  await page.getByRole("radio", { name: /온라인 작성/ }).click();
-  await page.getByRole("button", { name: "선택하고 계속" }).click();
+  await expect(page.getByRole("radio", { name: /온라인 작성/ })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "신청 진행 단계" })).toContainText("온라인 신청서 작성");
   await expect(page.getByRole("heading", { name: "기본 정보", exact: true })).toBeVisible();
   await page.locator('[data-preflight-field="title"]').fill("발매 전 앨범");
   await expect(page.locator("#released-album-url")).not.toBeVisible();
 
-  await page.getByRole("button", { name: "이전 단계", exact: true }).click();
   await page.getByRole("button", { name: "이전 단계", exact: true }).click();
   await releaseChoice(page, true).click();
   await page.getByRole("button", { name: "URL 입력으로 계속" }).click();
@@ -201,8 +199,6 @@ test("prerelease albums retain application mode selection and entered basic info
   await page.getByRole("button", { name: "이전 단계", exact: true }).click();
   await releaseChoice(page, false).click();
   await page.getByRole("button", { name: "신청서 작성으로 계속" }).click();
-  await page.getByRole("radio", { name: /온라인 작성/ }).click();
-  await page.getByRole("button", { name: "선택하고 계속" }).click();
   await expect(page.locator('[data-preflight-field="title"]')).toHaveValue("발매 전 앨범");
 });
 
@@ -221,7 +217,7 @@ test("a package confirmation opens URL entry for released albums", async ({ page
 test("legacy oneclick links select the released flow without a separate fee", async ({ page }) => {
   await page.goto(`${albumPath}?mode=oneclick`);
   await expect(releaseChoice(page, true)).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText("URL 접수 추가금 0원", { exact: true })).toBeVisible();
+  await expect(page.getByText("URL 접수 추가금 0원", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "URL 입력으로 계속" }).click();
   await expect(page.getByRole("heading", { name: "URL과 접수자 정보" })).toBeVisible();
 });
@@ -230,7 +226,7 @@ for (const [provider, url, uploadKind] of [
   ["Melon", "https://www.melon.com/album/detail.htm?albumId=1234567", "wav"],
   ["Genie", "https://www.genie.co.kr/detail/albumInfo?axnm=1234567", "zip"],
 ] as const) {
-  test(`${provider} URL replaces the application form while completed ${uploadKind.toUpperCase()} audio is required before final review`, async ({ page }) => {
+  test(`${provider} URL replaces the application form while ${uploadKind.toUpperCase()} audio can be attached before payment`, async ({ page }) => {
     await page.goto(albumPath);
     await releaseChoice(page, true).click();
     await page.getByRole("button", { name: "URL 입력으로 계속" }).click();
@@ -242,13 +238,13 @@ for (const [provider, url, uploadKind] of [
     await expect(input).toHaveAttribute("accept", /\.zip/);
     await expect(input).not.toHaveAttribute("accept", /\.mp3|\.hwp|\.doc/);
 
-    // A valid URL does not satisfy the separate mandatory audio upload step.
+    // Continuing without audio offers the supported email handoff.
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).not.toBeVisible();
-    await expect(page.getByRole("button", { name: "담고 결제하기", exact: true })).not.toBeVisible();
+    const emailDialog = page.getByRole("alertdialog", { name: "확인해주세요." });
+    await expect(emailDialog).toContainText("이메일로 음원 파일을 보내주세요.");
+    await emailDialog.getByRole("button", { name: "취소", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "음원 첨부", exact: true })).toBeVisible();
     expect(uploadRuns.get(page)!.completed).toHaveLength(0);
-    await closeInputError(page, "음원 파일(WAV 또는 ZIP)을 사이트에 업로드해주세요.");
 
     const filename = await uploadAudio(page, uploadKind);
     await openFinalReview(page, url);
@@ -258,7 +254,7 @@ for (const [provider, url, uploadKind] of [
 
     // Final review returns to the audio step; its previous step returns to URL/contact.
     await page.getByRole("button", { name: "이전 단계", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "음원 첨부", exact: true })).toBeVisible();
     await expect(page.getByText(filename, { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "이전 단계", exact: true }).click();
     await expect(page.getByRole("heading", { name: "URL과 접수자 정보" })).toBeVisible();
@@ -272,26 +268,21 @@ for (const [provider, url, uploadKind] of [
   });
 }
 
-test("switching from a downloaded application to a released album drops the form requirement but retains mandatory audio", async ({ page }) => {
-  await page.goto(albumPath);
-  await releaseChoice(page, false).click();
-  await page.getByRole("button", { name: "신청서 작성으로 계속" }).click();
-  await page.getByRole("radio", { name: /파일로 제출/ }).click();
-  await page.getByRole("button", { name: "선택하고 계속" }).click();
-  await expect(page.getByRole("heading", { name: "신청서 양식", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "이전 단계", exact: true }).click();
-  await page.getByRole("button", { name: "이전 단계", exact: true }).click();
-  await releaseChoice(page, true).click();
+test("released albums can reach payment with no upload by selecting email delivery", async ({ page }) => {
+  await page.goto(`${albumPath}?mode=oneclick`);
   await page.getByRole("button", { name: "URL 입력으로 계속" }).click();
-  await page.getByLabel("멜론·지니 앨범 URL *", { exact: true }).fill("https://www.genie.co.kr/detail/albumInfo?axnm=1234567");
+  const url = "https://www.genie.co.kr/detail/albumInfo?axnm=1234567";
+  await page.getByLabel("멜론·지니 앨범 URL *", { exact: true }).fill(url);
   await fillApplicant(page);
   await saveUrlAndOpenUpload(page);
-  await expect(page.locator('[data-preflight-field="files"] input[type="file"]')).not.toHaveAttribute("accept", /\.hwp|\.doc/);
-  await uploadAudio(page);
-  await openFinalReview(page, "https://www.genie.co.kr/detail/albumInfo?axnm=1234567");
+  await page.getByRole("button", { name: "파일 없이 진행", exact: true }).first().click();
+  await expect(page.getByText("파일 첨부 대신 아래 이메일 주소로 음원 파일을 보내주세요.")).toBeVisible();
+  await openFinalReview(page, url);
+  expect(uploadRuns.get(page)!.completed).toHaveLength(0);
+  expect(uploadRuns.get(page)!.saved.some(body => body.includes('"filesSubmittedByEmail":true'))).toBe(true);
 });
 
-test("rejects song URLs before advancing to mandatory audio upload", async ({ page }) => {
+test("rejects song URLs before advancing to audio attachment", async ({ page }) => {
   await page.goto(`${albumPath}?mode=oneclick`);
   await page.getByRole("button", { name: "URL 입력으로 계속" }).click();
   await page.getByLabel("멜론·지니 앨범 URL *", { exact: true }).fill("https://www.melon.com/song/detail.htm?songId=1234567");
@@ -302,10 +293,11 @@ test("rejects song URLs before advancing to mandatory audio upload", async ({ pa
   await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).not.toBeVisible();
 });
 
-test("released audio cannot be bypassed with MP3, an unfinished upload, or a removed file", async ({ page }) => {
+test("released albums can continue while an upload is stalled and ignore its late UI updates", async ({ page }) => {
   await page.goto(`${albumPath}?mode=oneclick`);
   await page.getByRole("button", { name: "URL 입력으로 계속" }).click();
-  await page.getByLabel("멜론·지니 앨범 URL *", { exact: true }).fill("https://www.melon.com/album/detail.htm?albumId=1234567");
+  const url = "https://www.melon.com/album/detail.htm?albumId=1234567";
+  await page.getByLabel("멜론·지니 앨범 URL *", { exact: true }).fill(url);
   await fillApplicant(page); await saveUrlAndOpenUpload(page);
   const uploads = uploadRuns.get(page)!;
   const field = page.locator('[data-preflight-field="files"]');
@@ -314,26 +306,23 @@ test("released audio cannot be bypassed with MP3, an unfinished upload, or a rem
   await expect(field.getByText("선택된 파일이 없습니다.", { exact: true })).toBeVisible();
   expect(uploads.initiated).toHaveLength(0);
   await closeInputError(page, "음원 파일(WAV 또는 ZIP)을 사이트에 업로드해주세요.");
-
   uploads.holdPut = true;
-  try {
-    await input.setInputFiles({ name: "pending-audio.wav", mimeType: "audio/wav", buffer: wavBytes });
-    await expect.poll(() => uploads.puts).toBe(1);
-    await expect(field.getByText(/업로드 중 ·/)).toBeVisible();
-    const next = page.getByRole("button", { name: "다음 단계", exact: true });
-    if (await next.isEnabled()) {
-      await next.click();
-      await closeInputError(page, "파일 업로드가 완료될 때까지 기다려주세요.");
-    }
-    await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).not.toBeVisible();
-    expect(uploads.completed).toHaveLength(0);
-  } finally { uploads.holdPut = false; uploads.releasePut?.(); }
-  await expect(field.getByText("첨부 완료", { exact: true })).toBeVisible();
-  await field.getByRole("button", { name: "삭제", exact: true }).click();
+  await input.setInputFiles({ name: "pending-audio.wav", mimeType: "audio/wav", buffer: wavBytes });
+  await expect.poll(() => uploads.puts).toBe(1);
+  await expect(field.getByText(/업로드 중 ·/)).toBeVisible();
   await page.getByRole("button", { name: "다음 단계", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).not.toBeVisible();
+  const emailDialog = page.getByRole("alertdialog", { name: "확인해주세요." });
+  await expect(emailDialog).toContainText("이메일로 음원 파일을 보내주세요.");
+  await emailDialog.getByRole("button", { name: "확인", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "결제하기", exact: true })).toBeEnabled();
+  expect(uploads.completed).toHaveLength(0);
+  expect(uploads.saved.some(body => body.includes('"filesSubmittedByEmail":true'))).toBe(true);
+  uploads.holdPut = false; uploads.releasePut?.();
+  await expect.poll(() => uploads.completed.length).toBe(1);
+  await page.getByRole("button", { name: "이전 단계", exact: true }).click();
+  await expect(page.getByText("파일 첨부 대신 아래 이메일 주소로 음원 파일을 보내주세요.")).toBeVisible();
+  await openFinalReview(page, url);
 });
 
 for (const width of [390, 1440]) {

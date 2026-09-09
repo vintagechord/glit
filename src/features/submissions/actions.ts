@@ -1046,7 +1046,7 @@ export async function saveAlbumSubmissionAction(
   if (
     isSubmitted &&
     parsed.data.files === undefined &&
-    (isOneClick || !parsed.data.filesSubmittedByEmail)
+    !parsed.data.filesSubmittedByEmail
   ) {
     const { data: existingFiles, error: existingFilesError } = await db
       .from("submission_files")
@@ -1403,7 +1403,7 @@ export async function saveAlbumSubmissionAction(
         ? taxInvoiceBusinessNumberDigits || null
         : null,
     application_form_mode: applicationFormMode,
-    files_submitted_by_email: !isOneClick && Boolean(parsed.data.filesSubmittedByEmail),
+    files_submitted_by_email: Boolean(parsed.data.filesSubmittedByEmail),
     status: saveState.finalStatus,
     payment_status: saveState.finalPaymentStatus,
   };

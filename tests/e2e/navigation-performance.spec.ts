@@ -15,7 +15,7 @@ test("a slow menu transition finishes without restarting the document", async ({
   let releaseResponse!: () => void;
   const clicked = new Promise<void>((resolve) => { releaseResponse = resolve; });
   let delayedRequests = 0;
-  await page.route("**/magazine?*", async (route) => {
+  await page.route("**/guide?*", async (route) => {
     if (route.request().headers().rsc !== "1") return route.fallback();
     delayedRequests += 1;
     await clicked;
@@ -31,10 +31,10 @@ test("a slow menu transition finishes without restarting the document", async ({
     }
   });
   const navigation = page.getByRole("navigation", { name: "주요 메뉴", exact: true });
-  await navigation.getByRole("link", { name: "크레딧", exact: true }).click();
+  await navigation.getByRole("link", { name: "이용가이드", exact: true }).click();
   releaseResponse();
-  await expect(page).toHaveURL(/\/magazine$/);
-  await expect(page.getByRole("heading", { name: "앨범심의 결제 완료 1건당 크레딧 1개가 지급됩니다." })).toBeVisible();
+  await expect(page).toHaveURL(/\/guide$/);
+  await expect(page.getByRole("heading", { name: "심의 안내", exact: true })).toBeVisible();
   expect(delayedRequests).toBeGreaterThan(0);
   expect(documentRequests).toEqual([]);
 });

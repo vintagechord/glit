@@ -48,6 +48,7 @@ const MODE_THRESHOLD: Record<SpellcheckMode, number> = {
 
 const PROVIDER_TIMEOUT_MS = 2500;
 const CACHE_TTL_MS = 1000 * 60 * 5;
+const DEGRADED_CACHE_TTL_MS = 5_000;
 const CIRCUIT_FAIL_THRESHOLD = 3;
 const CIRCUIT_OPEN_MS = 30_000;
 const MAX_SUGGESTIONS = 900;
@@ -215,13 +216,14 @@ const fetchCustomRules = async () => {
     const { data, error } = await supabase
       .from("spellcheck_terms")
       .select("from_text, to_text, language")
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .abortSignal(AbortSignal.timeout(1_500));
     if (error) throw error;
     const rules = buildCustomRules(data ?? []);
     cachedCustomRules = { rules, expiresAt: now + 5 * 60_000 };
     return rules;
-  } catch (error) {
-    console.error("[spellcheck][custom_rules][error]", error);
+  } catch {
+    console.error("[spellcheck][custom_rules] custom rules unavailable; using bundled rules");
     cachedCustomRules = { rules: [], expiresAt: now + 60_000 };
     return [];
   }
@@ -409,12 +411,21 @@ const runProvider = async (
 
   const start = Date.now();
   const controller = new AbortController();
-  const signal = context.signal ?? controller.signal;
-  const result = await withTimeout(
-    provider.check(text, { ...context, signal }),
-    PROVIDER_TIMEOUT_MS,
-    () => ({ suggestions: [], confidence: 0, warnings: ["timeout"] }),
-  );
+  const signal = context.signal ? AbortSignal.any([context.signal, controller.signal]) : controller.signal;
+  let result: ProviderResult;
+  try {
+    result = await withTimeout(
+      Promise.resolve().then(() => provider.check(text, { ...context, signal })),
+      PROVIDER_TIMEOUT_MS,
+      () => {
+        controller.abort(new DOMException("Spellcheck provider timed out", "TimeoutError"));
+        return { suggestions: [], confidence: 0, warnings: ["timeout"] };
+      },
+    );
+  } catch {
+    // A disconnected optional service must not discard local rule corrections.
+    result = { suggestions: [], confidence: 0, warnings: [signal.aborted ? "timeout" : "service_error"] };
+  }
   const ms = Date.now() - start;
   const warnings = result?.warnings ?? [];
   const ok =
@@ -595,7 +606,8 @@ export const runSpellcheckPipeline = async (
       },
     };
 
-    cache.set(cacheKey, { value: response, expiresAt: Date.now() + CACHE_TTL_MS });
+    const cacheTtl = providerMeta.some((provider) => !provider.ok) ? DEGRADED_CACHE_TTL_MS : CACHE_TTL_MS;
+    cache.set(cacheKey, { value: response, expiresAt: Date.now() + cacheTtl });
     return response;
   })();
 

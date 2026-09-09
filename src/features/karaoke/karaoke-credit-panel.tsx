@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { watchUploadProgress } from "@/lib/upload-watchdog";
 import * as React from "react";
 
 import { createKaraokePromotionRecommendationAction } from "@/features/karaoke/actions";
@@ -98,6 +100,7 @@ export function KaraokeCreditPanel({
   const uploadWithProgress = async (signedUrl: string, selected: File) => {
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      watchUploadProgress(xhr, reject);
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
         const percent = Math.round((event.loaded / event.total) * 100);
@@ -123,7 +126,7 @@ export function KaraokeCreditPanel({
     if (!userId) {
       throw new Error("User required");
     }
-    const response = await fetch("/api/uploads/presign", {
+    const response = await fetchWithTimeout("/api/uploads/presign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -188,8 +191,9 @@ export function KaraokeCreditPanel({
       setNotice({ message: result.message });
       setRecommendationFile(null);
       setRecommendationUpload({ name: "", progress: 0, status: "idle" });
-    } catch {
-      setNotice({ error: "추천 처리 중 오류가 발생했습니다." });
+    } catch (error) {
+      setRecommendationUpload(previous => previous.status === "uploading" ? { ...previous, status: "error" } : previous);
+      setNotice({ error: error instanceof Error ? error.message : "추천 처리 중 오류가 발생했습니다." });
     } finally {
       setIsSubmitting(false);
     }

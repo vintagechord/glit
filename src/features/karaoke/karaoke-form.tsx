@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { watchUploadProgress } from "@/lib/upload-watchdog";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
@@ -58,6 +60,8 @@ export function KaraokeForm({
   });
   const [notice, setNotice] = React.useState<KaraokeActionState>({});
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const submissionInFlight = React.useRef(false);
+  const pendingCardRequest = React.useRef<{ signature: string; requestId: string } | null>(null);
   const guestTokenRef = React.useRef<string | null>(null);
   const uploadIdRef = React.useRef<string | null>(null);
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
@@ -108,6 +112,7 @@ export function KaraokeForm({
   const uploadWithProgress = async (signedUrl: string, selected: File) => {
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      watchUploadProgress(xhr, reject);
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
         const percent = Math.round((event.loaded / event.total) * 100);
@@ -130,7 +135,7 @@ export function KaraokeForm({
   };
 
   const createSignedUpload = async (selected: File) => {
-    const response = await fetch("/api/uploads/presign", {
+    const response = await fetchWithTimeout("/api/uploads/presign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -156,7 +161,16 @@ export function KaraokeForm({
     return payload as { uploadUrl: string; objectKey: string };
   };
 
+  const startCardPayment = async (requestId: string) => {
+    setNotice({ message: "이니시스 결제 모듈을 준비 중입니다." });
+    const { ok, error } = await openInicisCardPopup({ context: "karaoke", requestId });
+    setNotice(ok
+      ? { message: "결제 모듈을 실행했습니다. 결제를 완료해주세요." }
+      : { error: error ?? "결제 모듈을 실행하지 못했습니다. 잠시 후 다시 시도해주세요." });
+  };
+
   const handleSubmit = async () => {
+    if (submissionInFlight.current) return;
     if (!title || !contact) {
       setNotice({ error: "곡명과 연락처를 입력해주세요." });
       return;
@@ -191,9 +205,17 @@ export function KaraokeForm({
     //   return;
     // }
 
+    submissionInFlight.current = true;
     setIsSubmitting(true);
     setNotice({});
+    const signature = JSON.stringify({ userId, title, artist, contact, notes, paymentMethod, tjRequested, kyRequested,
+      file: file ? [file.name, file.size, file.type, file.lastModified] : null });
     try {
+      // A failed payment launch must retry the already-created request, not create another application.
+      if (paymentMethod === "CARD" && pendingCardRequest.current?.signature === signature) {
+        await startCardPayment(pendingCardRequest.current.requestId);
+        return;
+      }
       let filePath: string | undefined;
       if (file) {
         setUpload((prev) => ({ ...prev, status: "uploading" }));
@@ -250,23 +272,12 @@ export function KaraokeForm({
           setNotice({ error: "결제 요청 ID를 받을 수 없습니다. 다시 시도해주세요." });
           return;
         }
-        setNotice({ message: "이니시스 결제 모듈을 준비 중입니다." });
-        const { ok, error } = await openInicisCardPopup({
-          context: "karaoke",
-          requestId,
-        });
-        if (!ok) {
-          setNotice({
-            error:
-              error ??
-              "결제 모듈을 실행하지 못했습니다. 잠시 후 다시 시도해주세요.",
-          });
-          return;
-        }
-        setNotice({ message: "결제 모듈을 실행했습니다. 결제를 완료해주세요." });
+        pendingCardRequest.current = { signature, requestId };
+        await startCardPayment(requestId);
         return;
       }
 
+      pendingCardRequest.current = null;
       setNotice({ message: result.message, requestId: result.requestId });
       setTitle("");
       setArtist("");
@@ -283,9 +294,11 @@ export function KaraokeForm({
       // setPromotionCredits(Math.min(10, Math.max(0, creditBalance)));
       setFile(null);
       setUpload({ name: "", progress: 0, status: "idle" });
-    } catch {
-      setNotice({ error: "요청 처리 중 오류가 발생했습니다." });
+    } catch (error) {
+      setUpload(previous => previous.status === "uploading" ? { ...previous, status: "error" } : previous);
+      setNotice({ error: error instanceof Error ? error.message : "요청 처리 중 오류가 발생했습니다." });
     } finally {
+      submissionInFlight.current = false;
       setIsSubmitting(false);
     }
   };
@@ -301,6 +314,7 @@ export function KaraokeForm({
       if (!type || !String(type).startsWith("INICIS:")) return;
       const status = String(type).replace("INICIS:", "");
       if (status === "SUCCESS") {
+        pendingCardRequest.current = null;
         router.push("/karaoke-request?payment=success");
         return;
       }

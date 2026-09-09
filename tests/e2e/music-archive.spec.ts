@@ -41,6 +41,12 @@ async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
       let data = library.data;
       if (body.action === "command") data = applyArchiveCommand(data,body.command);
       if (body.action === "commands") for (const command of body.commands as ArchiveCommand[]) data = applyArchiveCommand(data,command);
+      if (body.action === "refresh-metadata") {
+        data = structuredClone(data);
+        data.releases[0].imageUrl = "https://is1-ssl.mzstatic.com/image/thumb/test/100x100bb.jpg";
+        data.works = [{id:"work-credit",title:"같은 제목",contributors:[{name:"확인된 작곡가",role:"composition"},{name:"확인된 편곡가",role:"arrangement"}],institutionNumbers:[]}];
+        data.recordings[0].workIds = ["work-credit"];
+      }
       if (body.action === "connect") {
         if (harness.connectFailures > 0) { harness.connectFailures -= 1; await route.fulfill({status:503,json:{error:"일시적으로 연결하지 못했습니다. 다시 시도해 주세요."}}); return; }
         data = applyArchiveCommand(data,{type:"set_connection",connection:{provider:body.provider,url:body.url,externalArtistId:body.externalId,confirmed:true}});
@@ -50,6 +56,7 @@ async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
       await route.fulfill({json:memberArchiveResponse({library:next,...(body.action === "connect" && body.provider === "apple" && harness.jobs.length ? {...(harness.jobsArrayResponse ? {jobs:[harness.jobs[0]]} : {job:harness.jobs[0]}),runLibraryId:next.id} : {})})}); return;
     }
     if (url.pathname.startsWith("/mypage/music/results/")) { await route.fulfill({contentType:"text/html",body:"<!doctype html><h1>온사이드 심의 결과</h1><p>KBS 적격</p>"}); return; }
+    if (url.hostname === "is1-ssl.mzstatic.com") { await route.fulfill({contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBl8AAAAASUVORK5CYII=","base64")}); return; }
     if (url.protocol === "https:") { await route.fulfill({contentType:"text/html",body:"<!doctype html><title>공식 링크 모의 페이지</title>"}); return; }
     await route.fulfill({status:404,body:"Unexpected request blocked by the UI test."});
   });
@@ -93,7 +100,7 @@ for (const width of [390, 1440]) {
     await expect(page.getByRole("region", {name:"노래방 정보"})).toContainText("등록 정보 없음");
     await page.getByRole("button", {name:"수록 정보 입력",exact:true}).click();
     await page.getByLabel("음원", {exact:true}).selectOption("original");
-    await page.getByLabel("수록 상태", {exact:true}).selectOption("listed");
+    await expect(page.getByLabel("수록 상태", {exact:true})).toHaveCount(0);
     await page.getByLabel("곡번호", {exact:true}).fill("12345");
     await page.getByRole("button", {name:"저장",exact:true}).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -109,7 +116,7 @@ for (const width of [390, 1440]) {
     await page.getByRole("button", {name:"닫기",exact:true}).click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await page.screenshot({path:testInfo.outputPath(`simple-member-${width}.png`),fullPage:true});
-    expect(harness.errors).toEqual([]); expect(harness.writes.every((item) => item.action === "command")).toBe(true);
+    expect(harness.errors).toEqual([]); expect(harness.writes.every((item) => item.action === "commands")).toBe(true);
   });
 }
 
@@ -119,9 +126,10 @@ test("copyright and performer entries save and edit without exposing audit detai
   for (const [name, participantLabel, participant, role] of [["저작권 등록","저작자","작곡자 이름","작곡"],["실연자 등록","실연자","연주자 이름","기타"]]) {
     await tab(page,name);
     await page.getByRole("button",{name:"등록 정보 입력",exact:true}).click();
-    await page.getByLabel("등록 상태",{exact:true}).selectOption("approved");
-    await page.getByLabel(participantLabel,{exact:true}).fill(participant);
-    await page.getByLabel("역할",{exact:true}).fill(role);
+    await expect(page.getByLabel("등록 상태",{exact:true})).toHaveCount(0);
+    await page.getByLabel(`${participantLabel} 1`,{exact:true}).fill(participant);
+    if (name === "저작권 등록") await page.getByLabel("역할 1",{exact:true}).selectOption(role);
+    else await page.getByLabel("악기 / 역할 1",{exact:true}).fill(role);
     await page.getByLabel("등록번호 (선택)",{exact:true}).fill("TEST-01");
     await page.getByRole("button",{name:"저장",exact:true}).click();
     const region = page.getByRole("region",{name:`${name} 정보`});
@@ -201,5 +209,99 @@ test("album cards share review status including partial and payment pending with
   await expect(page.getByRole("button",{name:/발매 후 첫 앨범/})).toContainText("심의 정보 없음");
   await page.evaluate(() => document.documentElement.classList.add("dark"));
   await page.screenshot({path:testInfo.outputPath("simple-albums-dark.png"),fullPage:true,animations:"disabled"});
+  expect(harness.errors).toEqual([]);
+});
+
+
+test("manual reviews save selected broadcasters atomically and show ineligibility reasons", async ({page}, testInfo) => {
+  await page.setViewportSize({width:390,height:844});
+  const harness = await mount(page, [fixture()]); await openAlbum(page);
+  await page.getByRole("button", {name:"심의 내역 입력",exact:true}).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("확인번호 (선택)",{exact:true})).toHaveCount(0);
+  await expect(dialog.getByLabel("심의 결과",{exact:true}).locator("option")).toHaveText(["적격", "부적격"]);
+  await dialog.getByRole("checkbox", {name:/방송사 전체 선택/}).check();
+  const stationCount = await dialog.getByRole("checkbox").count() - 1;
+  expect(stationCount).toBeGreaterThan(15);
+  await dialog.getByLabel("심의 결과",{exact:true}).selectOption("ineligible");
+  await dialog.getByLabel("부적격 사유",{exact:true}).fill("특정 상품명 포함");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({path:testInfo.outputPath("review-broadcasters-mobile.png"),fullPage:true});
+  await dialog.getByRole("button", {name:"저장",exact:true}).click();
+  await expect(dialog).toHaveCount(0);
+  expect(harness.writes).toHaveLength(1);
+  expect(harness.writes[0].action).toBe("commands");
+  expect(harness.libraries[0].data.tasks).toHaveLength(stationCount * 2);
+  expect(harness.libraries[0].data.tasks.every(task => task.result === "ineligible" && task.status === "completed" && task.memo === "특정 상품명 포함")).toBe(true);
+  await expect(page.getByRole("region",{name:"심의 정보"})).toContainText("부적격 사유: 특정 상품명 포함");
+  await page.reload();
+  await expect(page.getByRole("region",{name:"심의 정보"})).toContainText("KBS · 부적격");
+  expect(harness.errors).toEqual([]);
+});
+
+test("multiple writers and instrumental performers retain individual roles after reload", async ({page}, testInfo) => {
+  const harness = await mount(page, [fixture()]); await openAlbum(page);
+  await page.getByLabel("관리할 음악",{exact:true}).selectOption("original");
+  await tab(page,"저작권 등록");
+  await page.getByRole("button",{name:"등록 정보 입력",exact:true}).click();
+  for (const [index, name] of [[1,"작사가"],[2,"작곡가"],[3,"편곡가"]] as const) await page.getByLabel(`저작자 ${index}`,{exact:true}).fill(name);
+  await page.getByRole("button",{name:"저작자 추가",exact:true}).click();
+  await page.getByLabel("저작자 4",{exact:true}).fill("공동 작곡가");
+  await page.screenshot({path:testInfo.outputPath("multiple-writers.png"),fullPage:true});
+  await page.getByRole("button",{name:"저장",exact:true}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(harness.libraries[0].data.tasks.map(task => [task.participant, task.role])).toEqual([["작사가","작사"],["작곡가","작곡"],["편곡가","편곡"],["공동 작곡가","작곡"]]);
+  await tab(page,"실연자 등록");
+  await page.getByRole("button",{name:"등록 정보 입력",exact:true}).click();
+  await page.getByLabel("실연자 1",{exact:true}).fill("기타 연주자");
+  await page.getByLabel("악기 / 역할 1",{exact:true}).fill("기타");
+  await page.getByRole("button",{name:"실연자 추가",exact:true}).click();
+  await page.getByLabel("실연자 2",{exact:true}).fill("드럼 연주자");
+  await page.getByLabel("악기 / 역할 2",{exact:true}).fill("드럼");
+  await page.getByRole("button",{name:"저장",exact:true}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(harness.libraries[0].data.tasks).toHaveLength(6);
+  expect(harness.libraries[0].data.tasks.every(task => task.trackId === "original" && task.status === "completed" && task.result === "approved")).toBe(true);
+  await page.reload();
+  await expect(page.getByRole("region",{name:"실연자 등록 정보"})).toContainText("드럼 연주자 · 드럼");
+  expect(harness.errors).toEqual([]);
+});
+
+
+test("refresh applies album artwork and pre-fills confirmed writers for the correct recording", async ({page}) => {
+  const harness = await mount(page, [fixture()]); await openAlbum(page);
+  await tab(page,"저작권 등록");
+  await page.getByRole("button",{name:"저작자 정보 다시 가져오기",exact:true}).click();
+  await expect(page.getByRole("img",{name:"발매 후 첫 앨범 앨범 커버",exact:true})).toHaveAttribute("src",/mzstatic/);
+  await expect(page.getByRole("region",{name:"저작권 등록 정보"})).toContainText("확인된 작곡가");
+  expect(harness.writes[0]).toMatchObject({action:"refresh-metadata",libraryId:artistOne,releaseId:"album",version:1});
+  await page.getByRole("button",{name:"등록 정보 입력",exact:true}).click();
+  await page.getByLabel("음원",{exact:true}).selectOption("original");
+  await expect(page.getByLabel("저작자 1",{exact:true})).toHaveValue("확인된 작곡가");
+  await expect(page.getByLabel("역할 1",{exact:true})).toHaveValue("작곡");
+  await page.getByLabel("음원",{exact:true}).selectOption("clean");
+  await expect(page.getByLabel("저작자 1",{exact:true})).toHaveValue("");
+  await page.getByRole("button",{name:"취소",exact:true}).click();
+  await page.reload();
+  await expect(page.getByRole("img",{name:"발매 후 첫 앨범 앨범 커버",exact:true})).toBeVisible();
+  expect(harness.errors).toEqual([]);
+});
+
+test("album editing connects a domestic album URL while preserving its imported identity", async ({page}) => {
+  const harness = await mount(page, [fixture()]); await openAlbum(page);
+  await page.getByRole("button",{name:"수정",exact:true}).click();
+  await page.getByLabel("음원 사이트 앨범 URL (선택)",{exact:true}).fill("https://www.genie.co.kr/detail/albumInfo?axnm=12345678");
+  await page.getByRole("button",{name:"저장",exact:true}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(harness.libraries[0].data.releases[0].links.map(link => link.provider)).toEqual(["apple", "genie"]);
+  expect(harness.libraries[0].data.releases[0].source?.externalId).toBe("private-provider-id");
+  await page.getByRole("button",{name:"수정",exact:true}).click();
+  await expect(page.getByLabel("음원 사이트 앨범 URL (선택)",{exact:true})).toHaveValue("https://www.genie.co.kr/detail/albumInfo?axnm=12345678");
+  await page.getByLabel("음원 사이트 앨범 URL (선택)",{exact:true}).fill("https://www.melon.com/album/detail.htm?albumId=23456789");
+  await page.getByRole("button",{name:"저장",exact:true}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(harness.libraries[0].data.releases[0].links.map(link => link.provider)).toEqual(["apple", "melon"]);
+  await page.getByRole("button",{name:"수정",exact:true}).click();
+  await expect(page.getByLabel("음원 사이트 앨범 URL (선택)",{exact:true})).toHaveValue("https://www.melon.com/album/detail.htm?albumId=23456789");
   expect(harness.errors).toEqual([]);
 });

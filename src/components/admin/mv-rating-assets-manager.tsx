@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+
 import * as React from "react";
 import { ImageUp, RotateCcw } from "lucide-react";
 
@@ -59,11 +61,11 @@ export function MvRatingAssetsManager() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/mv-rating-assets", {
+      const response = await fetchWithTimeout("/api/admin/mv-rating-assets", {
         cache: "no-store",
       });
       const payload = (await response.json().catch(() => null)) as AssetsPayload | null;
-      if (!response.ok || payload?.error) {
+      if (!response.ok || !Array.isArray(payload?.assets) || payload.error) {
         throw new Error(payload?.error || "연령등급 이미지를 불러오지 못했습니다.");
       }
       setAssets(payload?.assets ?? []);
@@ -126,12 +128,12 @@ export function MvRatingAssetsManager() {
       formData.append("sizeBytes", String(file.size));
       formData.append("file", file);
 
-      const response = await fetch("/api/admin/mv-rating-assets", {
+      const response = await fetchWithTimeout("/api/admin/mv-rating-assets", {
         method: "POST",
         body: formData,
-      });
+      }, 300_000);
       const payload = (await response.json().catch(() => null)) as AssetsPayload | null;
-      if (!response.ok || payload?.error) {
+      if (!response.ok || !Array.isArray(payload?.assets) || payload.error) {
         throw new Error(payload?.error || "업로드에 실패했습니다.");
       }
 
@@ -165,13 +167,13 @@ export function MvRatingAssetsManager() {
     setNotice(null);
     setError(null);
     try {
-      const response = await fetch("/api/admin/mv-rating-assets", {
+      const response = await fetchWithTimeout("/api/admin/mv-rating-assets", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating: asset.code }),
       });
       const payload = (await response.json().catch(() => null)) as AssetsPayload | null;
-      if (!response.ok || payload?.error) {
+      if (!response.ok || !Array.isArray(payload?.assets) || payload.error) {
         throw new Error(payload?.error || "삭제에 실패했습니다.");
       }
 

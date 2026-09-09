@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
@@ -112,10 +114,10 @@ export function CertificateUploader({
       form.append("sizeBytes", String(file.size));
       form.append("file", file);
 
-      const res = await fetch(`/api/admin/submissions/${submissionId}/certificate`, {
+      const res = await fetchWithTimeout(`/api/admin/submissions/${submissionId}/certificate`, {
         method: "POST",
         body: form,
-      });
+      }, 300_000);
       const json = (await res.json().catch(() => null)) as CertificateUploadResponse | null;
       if (!res.ok || json?.error) {
         throw new Error(json?.error || "업로드에 실패했습니다.");

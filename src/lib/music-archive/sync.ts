@@ -8,6 +8,7 @@ import { collectMusicBrainzStep, MusicProviderError } from "./musicbrainz";
 import { type ArchiveLibrary, type ArchiveSyncJob } from "./model";
 import { getOwnedLibrary } from "./service";
 import { mergeArchiveImports } from "./import";
+import { importOwnedSubmissionCredits } from "./credits";
 
 export async function acquireArchiveProviderPermit(provider: "musicbrainz" | "apple" = "musicbrainz") {
   const { data, error } = await createAdminClient().rpc("reserve_music_archive_provider_slot", { p_provider: provider });
@@ -99,7 +100,8 @@ export async function runArchiveJob(libraryId?: string) {
       : await collectMusicBrainzStep(job.external_artist_id, cursor, { acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
     // Refetch after the network wait; optimistic commit still protects a concurrent edit.
     const library = await getOwnedLibrary(job.owner_id, job.library_id);
-    const merged = mergeArchiveImports(library.data, step.releases, { combineManagedProfiles: library.data.connections.filter(item => item.provider === job.provider && item.confirmed).length > 1 });
+    let merged = mergeArchiveImports(library.data, step.releases, { combineManagedProfiles: library.data.connections.filter(item => item.provider === job.provider && item.confirmed).length > 1 });
+    if (step.releases.length) merged = await importOwnedSubmissionCredits(job.owner_id, merged, library.id);
     const connection = merged.connections.find(item => item.provider === job.provider && item.externalArtistId === job.external_artist_id);
     if (connection) { connection.checkedAt = step.checkedAt; connection.status = "automatic"; }
     for (const release of step.releases) {

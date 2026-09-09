@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
@@ -151,7 +153,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
       setNotice(null);
       const ids = Array.from(selectedIds);
       try {
-        const response = await fetch("/api/submissions/delete", {
+        const response = await fetchWithTimeout("/api/submissions/delete", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

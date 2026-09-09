@@ -5,7 +5,7 @@ import test from "node:test";
 const read = (relativePath: string) =>
   readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
-test("album applications require one explicit form mode before form entry", () => {
+test("album applications default to online entry while preserving restored file-submission drafts", () => {
   const source = read("src/features/submissions/album-wizard.tsx");
   const actions = read("src/features/submissions/actions.ts");
   const oneClickStart = source.indexOf("const oneClickSteps");
@@ -24,7 +24,7 @@ test("album applications require one explicit form mode before form entry", () =
     /const isDownloadedApplicationFlow =\s*!isOneClick && applicationFormMode === "upload"/,
   );
   assert.doesNotMatch(oneClickSteps, /작성 방식 선택/);
-  assert.match(source, /setStep\(isOneClick \? 3 : 2\)/);
+  assert.match(source, /setApplicationFormMode\("online"\);\s*setStep\(3\)/);
   assert.match(source, /applicationFormMode: applicationFormMode \?\? undefined/);
   const modeSelector = source.slice(
     source.indexOf("const selectApplicationFormMode"),

@@ -7,6 +7,7 @@ import { getReviewRetrySourceIds } from "./retry";
 import { recordManualReviewEdits } from "./manual-edits";
 import { REVIEW_JOB_LIMITS, ReviewJobError, type ReviewJob, type ReviewJobSource } from "./jobs-types";
 import { assertPrivateReviewBucket, deleteReviewObject, putReviewObject, reviewObjectKey } from "./storage";
+import { assertReviewFormats, reviewProcessor } from "./web-runtime";
 
 export function jobDatabaseError(error: { message?: string; code?: string } | null) {
   if (!error) return;
@@ -38,19 +39,19 @@ export async function listReviewJobs(owner: string) {
   jobDatabaseError(error);
   const { data: heartbeat, error: heartbeatError } = await admin.from("review_document_worker_heartbeat").select("updated_at").eq("singleton", true).maybeSingle();
   jobDatabaseError(heartbeatError);
-  return { jobs: data as ReviewJob[], workerReady: hasRecentWorkerHeartbeat(heartbeat) };
+  return { jobs: data as ReviewJob[], ...await reviewProcessor(hasRecentWorkerHeartbeat(heartbeat)) };
 }
-async function requireReviewWorker() {
+async function requireReviewWorker(names: string[] = []) {
   const { data, error } = await createAdminClient().from("review_document_worker_heartbeat").select("updated_at").eq("singleton", true).maybeSingle();
   jobDatabaseError(error);
-  if (!hasRecentWorkerHeartbeat(data)) throw new ReviewJobError("문서 처리 작업자와 연결되지 않았습니다. 연결이 복구되면 다시 시도해주세요.", 503, "WORKER_UNAVAILABLE");
+  assertReviewFormats(await reviewProcessor(hasRecentWorkerHeartbeat(data)), names);
 }
 async function createJob(owner: string, mode: "album" | "mv", kind: "files" | "urls", sources: ReviewJobSource[], fingerprint: string, id: string) {
   const { data, error } = await createAdminClient().rpc("create_review_document_job", { p_id: id, p_owner: owner, p_mode: mode, p_kind: kind, p_sources: sources, p_fingerprint: fingerprint });
   jobDatabaseError(error); return data as ReviewJob;
 }
 export async function createFileReviewJob(owner: string, mode: "album" | "mv", files: { name: string; mime: string; buffer: Buffer }[]) {
-  await requireReviewWorker();
+  await requireReviewWorker(files.map((file) => file.name));
   const id = randomUUID();
   const sources: ReviewJobSource[] = [];
   for (const file of files) {
@@ -116,7 +117,7 @@ export async function changeReviewJob(job: ReviewJob, owner: string, action: str
     const current = job.draft_data ?? job.extracted_data;
     if (!current || !getReviewRetrySourceIds(current, job.sources).length || job.extraction_attempts >= 3) throw new ReviewJobError("다시 분석할 실패 원본이 없거나 분석 한도 3회를 사용했습니다. 원문을 확인해 수동 보완해주세요.", 422, "RETRY_LIMIT");
   }
-  if (["generate", "translate", "retry"].includes(action)) await requireReviewWorker();
+  if (["generate", "translate", "retry"].includes(action)) await requireReviewWorker(action === "retry" && job.input_kind === "files" && (job.status === "needs_review" || ["extract", "reextract"].includes(job.operation)) ? job.sources.map((source) => source.name) : []);
   const { data, error } = await createAdminClient().rpc("change_review_document_job", { p_id: job.id, p_owner: owner, p_version: version, p_action: action, p_data: draft });
   jobDatabaseError(error); return data as ReviewJob;
 }

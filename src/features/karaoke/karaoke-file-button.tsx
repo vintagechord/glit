@@ -18,23 +18,36 @@ export function KaraokeFileButton({
 }) {
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [fileUrl, setFileUrl] = React.useState<string | null>(null);
 
   const handleClick = async () => {
+    if (isLoading) return;
     setIsLoading(true);
     setErrorMessage(null);
-    const result =
-      kind === "request"
-        ? await getKaraokeRequestFileUrlAction({ requestId: targetId })
-        : await getKaraokeRecommendationFileUrlAction({
-            recommendationId: targetId,
-          });
-    setIsLoading(false);
-    if (result.error) {
-      setErrorMessage(result.error);
-      return;
-    }
-    if (result.url) {
-      window.open(result.url, "_blank", "noopener,noreferrer");
+    setFileUrl(null);
+    // Reserve the tab during the click so browsers do not block an async popup.
+    let preview: Window | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      preview = window.open("about:blank", "_blank");
+      if (preview) preview.opener = null;
+      const result = await Promise.race([
+        kind === "request"
+          ? getKaraokeRequestFileUrlAction({ requestId: targetId })
+          : getKaraokeRecommendationFileUrlAction({ recommendationId: targetId }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("파일 조회 응답이 지연되고 있습니다. 다시 시도해주세요.")), 20_000);
+        }),
+      ]);
+      if (result.error || !result.url) throw new Error(result.error || "파일 주소를 확인할 수 없습니다.");
+      if (preview && !preview.closed) preview.location.replace(result.url);
+      else setFileUrl(result.url);
+    } catch (error) {
+      preview?.close();
+      setErrorMessage(error instanceof Error ? error.message : "파일을 불러오지 못했습니다. 다시 시도해주세요.");
+    } finally {
+      if (timer) clearTimeout(timer);
+      setIsLoading(false);
     }
   };
 
@@ -48,8 +61,9 @@ export function KaraokeFileButton({
       >
         {isLoading ? "확인 중" : label}
       </button>
+      {fileUrl && <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold underline">파일 열기</a>}
       {errorMessage && (
-        <span className="text-[11px] text-red-500">{errorMessage}</span>
+        <span role="alert" className="text-[11px] text-red-500">{errorMessage}</span>
       )}
     </div>
   );

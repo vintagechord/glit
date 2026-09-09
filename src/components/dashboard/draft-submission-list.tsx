@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
@@ -223,7 +225,7 @@ export function DraftSubmissionList({
 
       if (albumIds.length > 0) {
         try {
-          const response = await fetch("/api/submissions/drafts", {
+          const response = await fetchWithTimeout("/api/submissions/drafts", {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ type: "ALBUM", ids: albumIds }),
@@ -249,7 +251,7 @@ export function DraftSubmissionList({
 
       if (mvIds.length > 0) {
         try {
-          const response = await fetch("/api/submissions/drafts", {
+          const response = await fetchWithTimeout("/api/submissions/drafts", {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ type: "MV", ids: mvIds }),

@@ -16,7 +16,8 @@ import {
   getDiscountedAlbumPrice,
 } from "@/lib/album-pricing";
 import { formatCurrency } from "@/lib/format";
-import { syncAlbumStationCatalog } from "@/lib/station-reviews";
+import { AdminActionForm } from "@/components/admin/action-form";
+import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata = {
@@ -87,12 +88,12 @@ export default async function AdminConfigPage({
 }: {
   searchParams?: Promise<{ saved?: string | string[] }>;
 }) {
+  await requireAdminPage();
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const savedFlag = Array.isArray(resolvedSearchParams?.saved)
     ? resolvedSearchParams?.saved[0]
     : resolvedSearchParams?.saved;
   const supabase = await createServerSupabase();
-  await syncAlbumStationCatalog(supabase);
   const albumDiscountPercent = await getAlbumReviewDiscountPercent(supabase);
   const { data: packages } = await supabase
     .from("packages")
@@ -104,8 +105,6 @@ export default async function AdminConfigPage({
   const { data: stations } = await supabase
     .from("stations")
     .select("id, name, code, is_active")
-    .in("code", albumStationCodes)
-    .eq("is_active", true)
     .order("name", { ascending: true });
 
   const { data: profanityTerms } = await supabase
@@ -156,7 +155,7 @@ export default async function AdminConfigPage({
             </span>
           </div>
 
-          <form
+          <AdminActionForm
             action={updateAlbumReviewDiscountFormAction}
             className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]"
           >
@@ -196,7 +195,7 @@ export default async function AdminConfigPage({
             >
               할인 해제
             </button>
-          </form>
+          </AdminActionForm>
 
           {sampleOriginalPrice > 0 ? (
             <div className="rounded-2xl border border-border/60 bg-background/70 p-4 text-sm">
@@ -258,7 +257,7 @@ export default async function AdminConfigPage({
                   className="rounded-2xl border border-border/60 bg-background/70 p-4"
                 >
                   <div className="grid gap-3 md:grid-cols-6">
-                    <form
+                    <AdminActionForm
                       action={upsertPackageFormAction}
                       className="grid gap-3 md:col-span-5 md:grid-cols-5"
                     >
@@ -301,8 +300,8 @@ export default async function AdminConfigPage({
                       >
                         저장
                       </button>
-                    </form>
-                    <form
+                    </AdminActionForm>
+                    <AdminActionForm
                       action={deletePackageFormAction}
                       className="flex items-center justify-end md:col-span-1"
                     >
@@ -313,10 +312,10 @@ export default async function AdminConfigPage({
                       >
                         삭제
                       </button>
-                    </form>
+                    </AdminActionForm>
                   </div>
 
-                  <form
+                  <AdminActionForm
                     action={updatePackageStationsFormAction}
                     className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]"
                   >
@@ -333,7 +332,7 @@ export default async function AdminConfigPage({
                     >
                       방송국 매핑 저장
                     </button>
-                  </form>
+                  </AdminActionForm>
                 </div>
               );
             })}
@@ -343,7 +342,7 @@ export default async function AdminConfigPage({
             <h3 className="text-sm font-semibold text-foreground">
               새 패키지 추가
             </h3>
-            <form action={upsertPackageFormAction} className="mt-3 grid gap-3 md:grid-cols-6">
+            <AdminActionForm action={upsertPackageFormAction} className="mt-3 grid gap-3 md:grid-cols-6">
               <input
                 name="name"
                 placeholder="패키지명"
@@ -381,7 +380,7 @@ export default async function AdminConfigPage({
               >
                 추가
               </button>
-            </form>
+            </AdminActionForm>
           </div>
         </section>
 
@@ -395,7 +394,7 @@ export default async function AdminConfigPage({
                 key={station.id}
                 className="grid gap-3 rounded-2xl border border-border/60 bg-background/70 p-4 md:grid-cols-[1.2fr_1fr_1fr_auto_auto]"
               >
-                <form
+                <AdminActionForm
                   action={upsertStationFormAction}
                   className="grid gap-3 md:col-span-4 md:grid-cols-[1.2fr_1fr_1fr_auto]"
                 >
@@ -425,8 +424,8 @@ export default async function AdminConfigPage({
                   >
                     저장
                   </button>
-                </form>
-                <form
+                </AdminActionForm>
+                <AdminActionForm
                   action={deleteStationFormAction}
                   className="flex items-center justify-end"
                 >
@@ -437,7 +436,7 @@ export default async function AdminConfigPage({
                   >
                     삭제
                   </button>
-                </form>
+                </AdminActionForm>
               </div>
             ))}
           </div>
@@ -446,7 +445,7 @@ export default async function AdminConfigPage({
             <h3 className="text-sm font-semibold text-foreground">
               새 방송국 추가
             </h3>
-            <form
+            <AdminActionForm
               action={upsertStationFormAction}
               className="mt-3 grid gap-3 md:grid-cols-[1.2fr_1fr_auto_auto]"
             >
@@ -475,7 +474,7 @@ export default async function AdminConfigPage({
               >
                 추가
               </button>
-            </form>
+            </AdminActionForm>
           </div>
         </section>
 
@@ -489,7 +488,7 @@ export default async function AdminConfigPage({
                 key={term.id}
                 className="grid gap-3 rounded-2xl border border-border/60 bg-background/70 p-4 md:grid-cols-[1fr_auto]"
               >
-                <form
+                <AdminActionForm
                   action={upsertProfanityTermFormAction}
                   className="grid gap-3 md:grid-cols-[1.6fr_0.6fr_auto_auto]"
                 >
@@ -522,8 +521,8 @@ export default async function AdminConfigPage({
                   >
                     저장
                   </button>
-                </form>
-                <form
+                </AdminActionForm>
+                <AdminActionForm
                   action={deleteProfanityTermFormAction}
                   className="flex items-center justify-end"
                 >
@@ -534,7 +533,7 @@ export default async function AdminConfigPage({
                   >
                     삭제
                   </button>
-                </form>
+                </AdminActionForm>
               </div>
             ))}
           </div>
@@ -543,7 +542,7 @@ export default async function AdminConfigPage({
             <h3 className="text-sm font-semibold text-foreground">
               새 욕설/비속어 추가
             </h3>
-            <form
+            <AdminActionForm
               action={upsertProfanityTermFormAction}
               className="mt-3 grid gap-3 md:grid-cols-[1.6fr_0.6fr_auto_auto]"
             >
@@ -575,7 +574,7 @@ export default async function AdminConfigPage({
               >
                 추가
               </button>
-            </form>
+            </AdminActionForm>
           </div>
         </section>
 

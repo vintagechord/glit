@@ -6,7 +6,7 @@ export type AppleArtistCandidate = Omit<ArtistCandidate, "provider"> & { provide
 export type AppleImportedRelease = Omit<ImportedRelease, "provider"> & { provider: "apple" };
 export type AppleAlbumMetadata = {
   id: string; title: string; artistId: string; artistName: string;
-  date: string; trackCount: number; url: string;
+  date: string; trackCount: number; url: string; imageUrl?: string | null;
 };
 export type AppleCursor = {
   provider: "apple"; version: 1; artistId: string;
@@ -144,12 +144,21 @@ function releaseDate(value: unknown) {
   if (new Date(date).toISOString().slice(0, 10) !== date) invalid("음악 카탈로그 발매일이 유효하지 않습니다.");
   return date;
 }
+/** Keep only the thumbnail URL supplied by Apple's public catalog, never image bytes. */
+export function appleArtworkUrl(value: unknown): string | null {
+  try {
+    const url = new URL(text(value, 2000));
+    if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.port || !["mzstatic.com", "itunes.apple.com"].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`))) return null;
+    url.protocol = "https:";
+    return url.toString();
+  } catch { return null; }
+}
 function albumMetadata(row: Json): AppleAlbumMetadata {
   const id = identifier(row.collectionId); const artistId = identifier(row.artistId);
   if (row.wrapperType !== "collection" || row.collectionType !== "Album" || !id || !artistId || !text(row.collectionName) || !text(row.artistName) || !integer(row.trackCount) || row.trackCount < 1 || row.trackCount > 10000) return invalid("음악 카탈로그 앨범의 필수 정보가 누락되었습니다.");
-  return { id, title: text(row.collectionName), artistId, artistName: text(row.artistName), date: releaseDate(row.releaseDate), trackCount: row.trackCount, url: storeLink(row.collectionViewUrl, "album", id) };
+  return { id, title: text(row.collectionName), artistId, artistName: text(row.artistName), date: releaseDate(row.releaseDate), trackCount: row.trackCount, url: storeLink(row.collectionViewUrl, "album", id), imageUrl: appleArtworkUrl(row.artworkUrl100) ?? appleArtworkUrl(row.artworkUrl60) };
 }
-/** No artwork/preview/copyright text is retained; catalog track IDs are not ISRCs or recording IDs. */
+/** No audio preview or copyright text is retained; catalog track IDs are not ISRCs or recording IDs. */
 export function normalizeAppleAlbum(rows: Json[], metadata: AppleAlbumMetadata, artistId: string, linkedTrackIds: readonly string[], checkedAt: string): AppleImportedRelease {
   requireId(artistId);
   const collections = rows.filter((row) => row.wrapperType === "collection");
@@ -170,14 +179,14 @@ export function normalizeAppleAlbum(rows: Json[], metadata: AppleAlbumMetadata, 
   // Apple exposes only one primary artist ID. Exact artist-song lookup membership
   // supplies additional participation, never title/name substring matching.
   const participation = metadata.artistId !== artistId;
-  return { provider: "apple", externalId: metadata.id, title: metadata.title, date: metadata.date, type: / - Single$/i.test(metadata.title) ? "single" : / - EP$/i.test(metadata.title) ? "ep" : "album", secondaryTypes: [], participation, artistName: metadata.artistName, artistIds: [...new Set([metadata.artistId, ...(tracks.some((track) => track.managedByArtist) ? [artistId] : [])])], barcode: null, version: "", country: "", tracks, url: metadata.url, imageUrl: null, checkedAt };
+  return { provider: "apple", externalId: metadata.id, title: metadata.title, date: metadata.date, type: / - Single$/i.test(metadata.title) ? "single" : / - EP$/i.test(metadata.title) ? "ep" : "album", secondaryTypes: [], participation, artistName: metadata.artistName, artistIds: [...new Set([metadata.artistId, ...(tracks.some((track) => track.managedByArtist) ? [artistId] : [])])], barcode: null, version: "", country: "", tracks, url: metadata.url, imageUrl: metadata.imageUrl ?? collection.imageUrl ?? null, checkedAt };
 }
 function cursorFor(artistId: string, input?: AppleCursor | null): AppleCursor {
   if (!input) return { provider: "apple", version: 1, artistId, phase: "albums", pending: [], albums: [], linkedTrackIds: [], limited: false };
   if (input.provider !== "apple" || input.version !== 1 || input.artistId !== artistId || !["albums", "artist_songs", "tracks", "limited", "done"].includes(input.phase) || !Array.isArray(input.pending) || !Array.isArray(input.albums) || !Array.isArray(input.linkedTrackIds) || input.pending.length > limit || input.albums.length > limit || input.linkedTrackIds.length > limit || input.pending.some((id) => identifier(id) !== id) || input.linkedTrackIds.some((id) => identifier(id) !== id) || new Set(input.pending).size !== input.pending.length || new Set(input.linkedTrackIds).size !== input.linkedTrackIds.length || typeof input.limited !== "boolean" || (input.total !== undefined && (!integer(input.total) || input.total > limit))) throw new MusicProviderError("invalid_input", "음악 카탈로그 수집 중단 지점이 유효하지 않습니다.");
   const albums = input.albums.map((entry) => {
     const value = object(entry);
-    return albumMetadata({ wrapperType: "collection", collectionType: "Album", collectionId: value.id, collectionName: value.title, artistId: value.artistId, artistName: value.artistName, releaseDate: `${value.date}T00:00:00Z`, trackCount: value.trackCount, collectionViewUrl: value.url });
+    return albumMetadata({ wrapperType: "collection", collectionType: "Album", collectionId: value.id, collectionName: value.title, artistId: value.artistId, artistName: value.artistName, releaseDate: `${value.date}T00:00:00Z`, trackCount: value.trackCount, collectionViewUrl: value.url, artworkUrl100: value.imageUrl });
   });
   if (new Set(albums.map((album) => album.id)).size !== albums.length || input.pending.some((id) => !albums.some((album) => album.id === id)) || (input.phase === "albums" && (albums.length || input.pending.length || input.linkedTrackIds.length)) || (["limited", "done"].includes(input.phase) && input.pending.length)) throw new MusicProviderError("invalid_input", "음악 카탈로그의 저장된 앨범 목록과 중단 지점이 일치하지 않습니다.");
   return { ...input, pending: [...input.pending], albums, linkedTrackIds: [...input.linkedTrackIds] };
@@ -216,4 +225,13 @@ export async function collectAppleStep(artistId: string, cursor?: AppleCursor | 
   }
   const complete = state.phase === "done";
   return { releases, nextCursor: complete ? null : state, status: complete ? "completed" : "collecting", checkedAt, scopeNote: APPLE_ARCHIVE_SCOPE };
+}
+
+/** Re-fetch an existing album by its exact catalog ID, including artwork. */
+export async function lookupAppleAlbum(albumId: string, artistId: string, options: AppleOptions = {}): Promise<AppleImportedRelease> {
+  requireId(albumId); requireId(artistId);
+  const rows = await request("lookup", { id: albumId, entity: "song", country: "US", limit: String(limit) }, options);
+  const row = rows.find(row => row.wrapperType === "collection" && identifier(row.collectionId) === albumId);
+  if (!row) return invalid("선택한 앨범의 카탈로그 정보를 찾지 못했습니다.");
+  return normalizeAppleAlbum(rows, albumMetadata(row), artistId, [], new Date(options.now?.() ?? Date.now()).toISOString());
 }

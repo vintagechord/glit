@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import type { ArchiveData } from "@/lib/music-archive/model";
 import type { ProviderSupport } from "@/lib/music-archive/providers";
 import type { AgencyGuide } from "@/lib/music-archive/guides";
@@ -19,7 +20,7 @@ export const supportLabels: Record<string, string> = { available: "자동 조회
 export const jobLabels: Record<string, string> = { queued: "불러오기 준비 중", running: "앨범·트랙 불러오는 중", partial: "일부 불러옴", completed: "불러오기 완료", blocked: "불러오기 중단", failed: "다시 시도 필요", cancelled: "중단됨" };
 export const releaseLabels: Record<string, string> = { album: "앨범", ep: "EP", single: "싱글", other: "기타" };
 export async function archiveRequest<T>(query: string = "", body?: unknown, options?: { signal?: AbortSignal }): Promise<T> {
-  const response = await fetch(`/api/music-archive${query}`, { cache: "no-store", signal: options?.signal, ...(body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) });
+  const response = await fetchWithTimeout(`/api/music-archive${query}`, { cache: "no-store", signal: options?.signal, ...(body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) }, 60_000);
   const result = await response.json().catch(() => ({}));
   if (!response.ok) { const error = new Error(result.error || "요청을 처리하지 못했습니다.") as Error & { status: number }; error.status = response.status; throw error; }
   return result as T;

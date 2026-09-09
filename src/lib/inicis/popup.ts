@@ -1,4 +1,5 @@
 import { type InicisPaymentContext } from "@/lib/inicis/context";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import {
   createInicisPopupHandoff,
   type InicisPopupHandoffPayload,
@@ -193,12 +194,12 @@ const fetchStdPayInit = async (
   let response: Response;
 
   if (options.context === "test1000") {
-    response = await fetch("/api/inicis/test-100", { method: "POST" });
+    response = await fetchWithTimeout("/api/inicis/test-100", { method: "POST" });
   } else if (options.context === "karaoke") {
     if (!options.requestId) {
       throw new Error("결제 요청 ID가 필요합니다.");
     }
-    response = await fetch("/api/inicis/karaoke/order", {
+    response = await fetchWithTimeout("/api/inicis/karaoke/order", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -210,7 +211,7 @@ const fetchStdPayInit = async (
     if (!options.submissionId) {
       throw new Error("접수 ID가 필요합니다.");
     }
-    response = await fetch("/api/inicis/submission/order", {
+    response = await fetchWithTimeout("/api/inicis/submission/order", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -236,7 +237,7 @@ const fetchStdPayInit = async (
   return json;
 };
 
-const ensureStdPayScript = async (src: string) =>
+export const ensureStdPayScript = async (src: string) =>
   await new Promise<void>((resolve, reject) => {
     if (typeof window === "undefined") {
       reject(new Error("window is not available"));
@@ -266,6 +267,8 @@ const ensureStdPayScript = async (src: string) =>
         resolve();
         return;
       }
+      // A failed script must be replaced on retry; its load/error event will not fire again.
+      script?.remove();
       reject(new Error("결제 모듈 로딩에 실패했습니다. 잠시 후 다시 시도해주세요."));
     };
 

@@ -34,6 +34,7 @@ export type SupportChatMessage = {
 };
 
 export type SupportChatPayload = {
+  earlierCursor?: { createdAt: string; id: string } | null;
   conversation: SupportChatConversation;
   messages: SupportChatMessage[];
 };

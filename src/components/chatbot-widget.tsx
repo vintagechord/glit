@@ -15,6 +15,8 @@ import {
   X,
 } from "lucide-react";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { chatHistoryQuery, type ChatHistoryCursor } from "@/lib/support-chat-history";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
 import {
   supportChatAdminChannelName,
@@ -33,6 +35,7 @@ type ChatView = "home" | "conversations" | "thread";
 type ChatApiPayload = {
   conversation: SupportChatConversation | null;
   messages: SupportChatMessage[];
+  earlierCursor?: ChatHistoryCursor | null;
   error?: string;
 };
 
@@ -162,7 +165,7 @@ const mergeMessage = (
   return [...messages, nextMessage].sort(
     (a, b) =>
       new Date(a.createdAt ?? 0).getTime() -
-      new Date(b.createdAt ?? 0).getTime(),
+      new Date(b.createdAt ?? 0).getTime() || a.id.localeCompare(b.id),
   );
 };
 
@@ -211,7 +214,13 @@ export function ChatbotWidget() {
     SupportChatConversation[]
   >([]);
   const [messages, setMessages] = React.useState<SupportChatMessage[]>([]);
-  const [draft, setDraft] = React.useState("");
+  const [drafts, setDrafts] = React.useState<Record<string, string>>({});
+  const draft = drafts[activeToken ?? "new"] ?? "";
+  const [earlierCursor, setEarlierCursor] = React.useState<ChatHistoryCursor | null>(null);
+  const [loadingEarlier, setLoadingEarlier] = React.useState(false);
+  const skipAutoScrollRef = React.useRef(false);
+  const historyScopeRef = React.useRef<string | null>(null);
+  const selectionRef = React.useRef(0);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
@@ -271,6 +280,7 @@ export function ChatbotWidget() {
         return nextTokens;
       });
       if (options?.active !== false) {
+        activeTokenRef.current = token;
         setActiveToken(token);
       }
     },
@@ -303,10 +313,13 @@ export function ChatbotWidget() {
   );
 
   const clearActiveThread = React.useCallback(() => {
+    selectionRef.current++; threadRequestIdRef.current++; activeTokenRef.current = null;
+    historyScopeRef.current = null;
+    setEarlierCursor(null); setLoadingEarlier(false); setLoadingThread(false);
     setConversation(null);
     setActiveToken(null);
     setMessages([]);
-    setDraft("");
+    setDrafts(current => ({ ...current, new: "" }));
     setMenuOpen(false);
   }, []);
 
@@ -320,7 +333,7 @@ export function ChatbotWidget() {
       try {
         const params = new URLSearchParams({ list: "1" });
         const requestTokens = options?.tokens ?? storedTokensRef.current;
-        const response = await fetch(`/api/chat?${params.toString()}`, {
+        const response = await fetchWithTimeout(`/api/chat?${params.toString()}`, {
           cache: "no-store",
           headers:
             requestTokens.length > 0
@@ -330,7 +343,7 @@ export function ChatbotWidget() {
         const payload = (await response.json().catch(() => null)) as
           | ChatListApiPayload
           | null;
-        if (!response.ok || !payload) {
+        if (!response.ok || !Array.isArray(payload?.conversations)) {
           throw new Error(payload?.error ?? "채팅 목록을 불러오지 못했습니다.");
         }
         if (requestId !== listRequestIdRef.current) return;
@@ -338,7 +351,7 @@ export function ChatbotWidget() {
         setConversations(nextConversations);
         syncStoredTokensFromConversations(nextConversations);
       } catch (loadError) {
-        if (!options?.quiet && requestId === listRequestIdRef.current) {
+        if (requestId === listRequestIdRef.current) {
           setError(
             loadError instanceof Error
               ? loadError.message
@@ -346,7 +359,7 @@ export function ChatbotWidget() {
           );
         }
       } finally {
-        if (!options?.quiet && requestId === listRequestIdRef.current) {
+        if (requestId === listRequestIdRef.current) {
           setLoadingList(false);
         }
       }
@@ -367,20 +380,27 @@ export function ChatbotWidget() {
       }
       setError(null);
       try {
-        const response = await fetch("/api/chat", {
+        const response = await fetchWithTimeout("/api/chat", {
           cache: "no-store",
           headers: { "X-Support-Chat-Token": token },
         });
         const payload = (await response.json().catch(() => null)) as
           | ChatApiPayload
           | null;
-        if (!response.ok || !payload) {
+        if (!response.ok || !payload || !Array.isArray(payload.messages)) {
           throw new Error(payload?.error ?? "채팅 내역을 불러오지 못했습니다.");
         }
         if (requestId !== threadRequestIdRef.current) return;
         let nextConversation = payload.conversation;
+        if (nextConversation) {
+          setConversation(nextConversation);
+          setConversations(current => upsertConversation(current, payload.conversation!));
+        }
+        setMessages(current => payload.messages.reduce(mergeMessage, current.filter(message => message.conversationId === nextConversation?.id)));
+        setLoadingThread(false);
+        if (!options?.quiet || historyScopeRef.current !== token) { setEarlierCursor(payload.earlierCursor ?? null); historyScopeRef.current = token; }
         if (options?.markRead && nextConversation?.unreadVisitorCount) {
-          const markResponse = await fetch("/api/chat", {
+          const markResponse = await fetchWithTimeout("/api/chat", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ accessToken: token }),
@@ -408,9 +428,9 @@ export function ChatbotWidget() {
             clearActiveThread();
           }
         }
-        setMessages(payload.messages ?? []);
+
       } catch (loadError) {
-        if (!options?.quiet && requestId === threadRequestIdRef.current) {
+        if (requestId === threadRequestIdRef.current) {
           setError(
             loadError instanceof Error
               ? loadError.message
@@ -418,7 +438,7 @@ export function ChatbotWidget() {
           );
         }
       } finally {
-        if (!options?.quiet && requestId === threadRequestIdRef.current) {
+        if (requestId === threadRequestIdRef.current) {
           setLoadingThread(false);
         }
       }
@@ -514,7 +534,7 @@ export function ChatbotWidget() {
         payload,
       };
       await Promise.allSettled(
-        [channelRef.current, adminChannelRef.current]
+        [payload.conversation?.accessToken === activeTokenRef.current ? channelRef.current : null, adminChannelRef.current]
           .filter(Boolean)
           .map((channel) => channel!.send(broadcast)),
       );
@@ -624,6 +644,7 @@ export function ChatbotWidget() {
   ]);
 
   React.useEffect(() => {
+    if (skipAutoScrollRef.current) { skipAutoScrollRef.current = false; return; }
     threadRef.current?.scrollTo({
       top: threadRef.current.scrollHeight,
       behavior: "smooth",
@@ -658,6 +679,9 @@ export function ChatbotWidget() {
   };
 
   const openConversation = (nextConversation: SupportChatConversation) => {
+    selectionRef.current++; threadRequestIdRef.current++;
+    historyScopeRef.current = null;
+    setEarlierCursor(null); setLoadingEarlier(false);
     setConversation(nextConversation);
     setMessages([]);
     setError(null);
@@ -677,14 +701,16 @@ export function ChatbotWidget() {
     const body = draft.trim();
     if (!body || sending) return;
 
+    const requestToken = activeTokenRef.current;
+    const requestSelection = selectionRef.current;
     setSending(true);
     setError(null);
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetchWithTimeout("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...(activeToken ? { accessToken: activeToken } : {}),
+          ...(requestToken ? { accessToken: requestToken } : {}),
           body,
         }),
       });
@@ -695,14 +721,22 @@ export function ChatbotWidget() {
         throw new Error(payload?.error ?? "메시지를 보내지 못했습니다.");
       }
 
-      setConversation(payload.conversation);
-      setConversations((current) =>
-        upsertConversation(current, payload.conversation!),
-      );
-      rememberAccessToken(payload.conversation.accessToken);
-      setMessages((current) => mergeMessage(current, payload.message!));
-      setDraft("");
-      setView("thread");
+      const stillSelected = requestSelection === selectionRef.current && requestToken === activeTokenRef.current;
+      setConversations((current) => upsertConversation(current, payload.conversation!));
+      rememberAccessToken(payload.conversation.accessToken, { active: stillSelected });
+      if (stillSelected) {
+        setConversation(payload.conversation);
+        setMessages((current) => mergeMessage(current, payload.message!));
+        setView("thread");
+      }
+      const draftKey = requestToken ?? "new";
+      setDrafts(current => {
+        const remainder = current[draftKey]?.trim() === body ? "" : current[draftKey] ?? "";
+        if (!requestToken && stillSelected) {
+          return { ...current, new: "", [payload.conversation!.accessToken]: remainder };
+        }
+        return { ...current, [draftKey]: remainder };
+      });
 
       await broadcastChatUpdate({
         conversation: payload.conversation,
@@ -717,6 +751,24 @@ export function ChatbotWidget() {
     } finally {
       setSending(false);
     }
+  };
+
+  const loadEarlier = async () => {
+    const token = activeTokenRef.current;
+    if (!token || !earlierCursor || loadingEarlier) return;
+    setLoadingEarlier(true); setError(null);
+    const previousHeight = threadRef.current?.scrollHeight ?? 0;
+    try {
+      const response = await fetchWithTimeout(`/api/chat?${chatHistoryQuery(earlierCursor)}`, { headers: { "X-Support-Chat-Token": token } });
+      const payload = await response.json() as ChatApiPayload;
+      if (!response.ok || !Array.isArray(payload.messages)) throw new Error(payload.error || "이전 메시지를 불러오지 못했습니다.");
+      if (activeTokenRef.current !== token) return;
+      skipAutoScrollRef.current = true;
+      setMessages(current => payload.messages.reduce(mergeMessage, current));
+      setEarlierCursor(payload.earlierCursor ?? null);
+      requestAnimationFrame(() => { if (threadRef.current && activeTokenRef.current === token) threadRef.current.scrollTop += threadRef.current.scrollHeight - previousHeight; });
+    } catch (error) { if (activeTokenRef.current === token) setError(error instanceof Error ? error.message : "이전 메시지를 불러오지 못했습니다."); }
+    finally { if (activeTokenRef.current === token) setLoadingEarlier(false); }
   };
 
   const leaveConversation = async () => {
@@ -736,7 +788,7 @@ export function ChatbotWidget() {
     setLeaving(true);
     setError(null);
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetchWithTimeout("/api/chat", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accessToken: activeToken }),
@@ -756,11 +808,13 @@ export function ChatbotWidget() {
       }
 
       const leftId = payload.leftId ?? conversation.id;
-      const nextConversations = conversations.filter((item) => item.id !== leftId);
-      setConversations(nextConversations);
+      const nextConversations = conversationsRef.current.filter((item) => item.id !== leftId);
+      setConversations(current => current.filter(item => item.id !== leftId));
       forgetAccessToken(activeToken);
-      clearActiveThread();
-      setView(nextConversations.length > 0 ? "conversations" : "home");
+      if (activeTokenRef.current === activeToken) {
+        clearActiveThread();
+        setView(nextConversations.length > 0 ? "conversations" : "home");
+      }
     } catch (leaveError) {
       setError(
         leaveError instanceof Error
@@ -1101,6 +1155,7 @@ export function ChatbotWidget() {
         ref={threadRef}
         className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-background/70 px-4 py-4"
       >
+        {earlierCursor && !loadingThread && <div className="flex justify-center"><button type="button" onClick={() => void loadEarlier()} disabled={loadingEarlier} className="rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold disabled:opacity-50">{loadingEarlier ? "불러오는 중..." : "이전 메시지 더 보기"}</button></div>}
         {loadingThread ? (
           <div className="flex h-full min-h-[220px] items-center justify-center text-sm font-semibold text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
@@ -1161,7 +1216,7 @@ export function ChatbotWidget() {
         <div className="flex items-end gap-2">
           <textarea
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => setDrafts(current => ({ ...current, [activeToken ?? "new"]: event.target.value }))}
             rows={2}
             placeholder="메시지를 입력하세요."
             className="max-h-28 min-h-12 flex-1 resize-none rounded-[8px] border-2 border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-[#1556a4]"

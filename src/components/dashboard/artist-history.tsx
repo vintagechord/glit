@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -334,7 +336,7 @@ export function ArtistHistoryTabs({
       });
 
       try {
-        const response = await fetch("/api/submissions/delete", {
+        const response = await fetchWithTimeout("/api/submissions/delete", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

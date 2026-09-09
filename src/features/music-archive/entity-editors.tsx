@@ -16,6 +16,8 @@ export function EntityEditor({ data, kind, release, track, busy, onSave }: { dat
   const [version, setVersion] = useState(track?.version ?? release?.version ?? "");
   const [releaseType, setReleaseType] = useState<ArchiveRelease["type"]>(release?.type ?? "album");
   const [releaseDate, setReleaseDate] = useState(release?.releaseDate ?? "");
+  const editableAlbumLink = release?.links.find(link => ["melon", "genie"].includes(link.provider)) ?? release?.links[0];
+  const [albumUrl, setAlbumUrl] = useState(editableAlbumLink?.url ?? "");
   const [trackNumber, setTrackNumber] = useState(track?.trackNumber ?? data.tracks.filter((item) => item.releaseId === release?.id).length + 1);
   const [error, setError] = useState("");
   async function save() {
@@ -24,8 +26,12 @@ export function EntityEditor({ data, kind, release, track, busy, onSave }: { dat
       const commands: ArchiveCommand[] = [];
       if (kind === "artist") commands.push({ type: "update_artist", patch: { name: title } });
       if (kind === "release") {
-        const value = { title, artistName, version, type: releaseType, ...(releaseDate ? { releaseDate } : {}) };
-        commands.push(release ? { type: "update_release", releaseId: release.id, patch: value } : { type: "add_release", release: { id: crypto.randomUUID(), ...value, participation: "primary", links: [] } });
+        const link = albumUrl.trim() ? parseMusicProviderUrl(albumUrl.trim(), "release") : null;
+        if (albumUrl.trim() && !link) throw new Error("지원하는 음원 사이트의 앨범 URL을 입력해 주세요.");
+        const replacingDomesticLink = editableAlbumLink && ["melon", "genie"].includes(editableAlbumLink.provider);
+        const links = link ? [...(release?.links ?? []).filter(item => item.provider !== link.provider && !(replacingDomesticLink && item.url === editableAlbumLink.url)), { provider: link.provider, url: link.url, externalId: link.externalId }] : (release?.links ?? []).filter(item => item.url !== editableAlbumLink?.url);
+        const value = { title, artistName, version, type: releaseType, links, ...(releaseDate ? { releaseDate } : {}) };
+        commands.push(release ? { type: "update_release", releaseId: release.id, patch: value } : { type: "add_release", release: { id: crypto.randomUUID(), ...value, participation: "primary" } });
       }
       if (kind === "track" && release) {
         const value = { title, artistName, version, trackNumber };
@@ -44,8 +50,9 @@ export function EntityEditor({ data, kind, release, track, busy, onSave }: { dat
     <Field label={kind === "artist" ? "아티스트 활동명" : kind === "release" ? "앨범 제목" : "트랙 제목"}><input className={inputClass} value={title} required maxLength={500} onChange={(event) => setTitle(event.target.value)} /></Field>
     {kind !== "artist" && <Field label="아티스트"><input className={inputClass} value={artistName} maxLength={500} onChange={(event) => setArtistName(event.target.value)} /></Field>}
     {kind === "release" && <div className="grid gap-4 sm:grid-cols-2"><Field label="발매 형식"><select className={inputClass} value={releaseType} onChange={(event) => setReleaseType(event.target.value as ArchiveRelease["type"])}>{Object.entries(releaseLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></Field><Field label="발매일"><input className={inputClass} value={releaseDate} placeholder="YYYY-MM-DD" pattern="[0-9]{4}(-[0-9]{2})?(-[0-9]{2})?" onChange={(event) => setReleaseDate(event.target.value)} /></Field></div>}
+    {kind === "release" && <Field label="음원 사이트 앨범 URL (선택)" hint="멜론·지니 앨범 주소를 연결하면 공개된 저작자 정보를 다시 가져올 수 있습니다."><input type="url" className={inputClass} value={albumUrl} maxLength={2000} placeholder="https://…" onChange={event => setAlbumUrl(event.target.value)} /></Field>}
     {kind === "track" && <div className="grid gap-4 sm:grid-cols-2"><Field label="트랙 순서"><input type="number" min={1} max={10000} required className={inputClass} value={trackNumber} onChange={(event) => setTrackNumber(Number(event.target.value))} /></Field><Field label="버전"><input className={inputClass} value={version} maxLength={500} placeholder="원곡, 클린, 라이브 등" onChange={(event) => setVersion(event.target.value)} /></Field></div>}
-    <Button primary type="submit" disabled={busy}>{busy ? "저장 중…" : "저장"}</Button>
+    <div className="flex justify-end border-t border-border pt-4"><Button primary type="submit" className="min-w-28" disabled={busy}>{busy ? "저장 중…" : "저장"}</Button></div>
   </form>;
 }
 

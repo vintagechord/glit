@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 import { getSupabaseEnv } from "@/lib/supabase/env";
 import {
@@ -20,6 +21,7 @@ import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
 const createPublicCatalogClient = () => {
   const { url, anonKey } = getSupabaseEnv();
   return createClient(url, anonKey, {
+    global: { fetch: fetchWithTimeout },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 };

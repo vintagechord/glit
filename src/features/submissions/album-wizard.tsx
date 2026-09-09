@@ -1,5 +1,8 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+
+import { watchUploadProgress } from "@/lib/upload-watchdog";
 import * as React from "react";
 import { Info } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -171,43 +174,10 @@ const initialTrack: TrackInput = {
   broadcastSelected: false,
 };
 
-const standardSteps = [
-  "발매 여부 · 패키지",
-  "작성 방식 선택",
-  "기본 정보",
-  "트랙 정보",
-  "파일 업로드",
-  "최종 점검",
-  "접수 완료",
-];
+const standardSteps = ["온라인 신청서 작성", "음원 첨부", "결제", "신청 완료"];
+const oneClickSteps = ["URL 입력", "음원 첨부", "결제", "신청 완료"];
+const uploadFormSteps = ["신청서 작성", "음원 첨부", "결제", "신청 완료"];
 
-const compactSteps = [
-  "발매 여부 · 패키지",
-  "작성 방식 선택",
-  "기본 정보",
-  "파일 업로드",
-  "최종 점검",
-  "접수 완료",
-];
-
-const oneClickSteps = [
-  "발매 여부 · 패키지",
-  "URL · 접수자 정보",
-  "음원 업로드",
-  "최종 점검",
-  "접수 완료",
-];
-
-const uploadFormSteps = [
-  "발매 여부 · 패키지",
-  "작성 방식 선택",
-  "신청서 양식",
-  "파일 업로드",
-  "최종 점검",
-  "접수 완료",
-];
-
-const deferredPaymentNotice = "신청서를 장바구니에 담았습니다.";
 const paymentFailureStorageNotice = "신청서는 장바구니에 보관됩니다.";
 const paymentFailureDraftNotice =
   `결제에 실패했습니다. ${paymentFailureStorageNotice}`;
@@ -495,6 +465,15 @@ export function AlbumWizard({
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadResult[]>([]);
   const [fileDigest, setFileDigest] = React.useState("");
   const [emailSubmitConfirmed, setEmailSubmitConfirmed] = React.useState(false);
+  const audioUploadRunRef = React.useRef(0);
+  const handOffAudioByEmail = React.useCallback(() => {
+    // Ignore late upload callbacks after the user moves on to email delivery.
+    audioUploadRunRef.current += 1;
+    setFiles([]);
+    setUploads((previous) => previous.filter((upload) => upload.status === "done"));
+    setFileDigest("");
+    setEmailSubmitConfirmed(true);
+  }, []);
   const [showCdInfo, setShowCdInfo] = React.useState(false);
   const [packageConfirmTarget, setPackageConfirmTarget] =
     React.useState<PackageOption | null>(null);
@@ -603,28 +582,12 @@ export function AlbumWizard({
     !isOneClick && applicationFormMode === "upload";
   const hasTrackStep =
     !isOneClick && applicationFormMode === "online";
-  const progressSteps = initialArchiveEntry ? ["음원 업로드", "신청 확인", "접수 완료"] : isOneClick
+  const progressSteps = isOneClick
     ? oneClickSteps
     : isDownloadedApplicationFlow
       ? uploadFormSteps
-      : hasTrackStep
-        ? standardSteps
-        : compactSteps;
-  const progressCurrentStep = initialArchiveEntry ? (step <= 5 ? 1 : step === 6 ? 2 : 3) : isOneClick
-    ? step === 1
-      ? 1
-      : step === 3
-        ? 2
-        : step <= 5
-          ? 3
-          : step === 6
-            ? 4
-            : 5
-    : hasTrackStep
-      ? step
-      : step <= 3
-        ? step
-        : step - 1;
+      : standardSteps;
+  const progressCurrentStep = step <= 4 ? 1 : step === 5 ? 2 : step === 6 ? 3 : 4;
   const selectApplicationFormMode = (mode: ApplicationFormMode) => {
     // Switching the authoring method must be reversible. Keep selected and
     // uploaded files intact; the active mode controls which files are required,
@@ -717,9 +680,9 @@ export function AlbumWizard({
       priceKrw: basePriceKrw,
     }
     : null;
-  const filesReady = (uploaded: UploadResult[], email: boolean) => isOneClick
+  const filesReady = (uploaded: UploadResult[], email: boolean) => email || (isOneClick
     ? uploaded.some((file) => isReleasedAlbumAudioFile(file.originalName, file.mime))
-    : uploaded.length > 0 || email;
+    : uploaded.length > 0);
   const albumFilesReady = uploadDrafts?.length
     ? uploadDrafts.every((draft, index) =>
       index === uploadDraftIndex
@@ -727,8 +690,8 @@ export function AlbumWizard({
         : filesReady(draft.files, draft.emailSubmitConfirmed),
     )
     : filesReady(uploadedFiles, emailSubmitConfirmed);
-  const uploadStatusLabel = !isOneClick && emailSubmitConfirmed
-    ? "파일 없이 진행 선택"
+  const uploadStatusLabel = emailSubmitConfirmed
+    ? "이메일 제출 예정"
     : uploads.some((upload) => upload.status === "uploading")
       ? "업로드 진행 중"
       : uploads.some((upload) => upload.status === "error")
@@ -811,7 +774,7 @@ export function AlbumWizard({
         tracks,
         files: uploadedFiles,
         uploads,
-        filesSubmittedByEmail: !isOneClick && emailSubmitConfirmed,
+        filesSubmittedByEmail: emailSubmitConfirmed,
       }),
     [
       aiUsed,
@@ -975,7 +938,7 @@ export function AlbumWizard({
     }, draftDeleteTimeoutMs);
 
     try {
-      const res = await fetch("/api/submissions/drafts", {
+      const res = await fetchWithTimeout("/api/submissions/drafts", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1001,7 +964,7 @@ export function AlbumWizard({
     submissionIds: string[],
     guestTokensBySubmissionId: Record<string, string>,
   ) => {
-    const res = await fetch("/api/cart/items", {
+    const res = await fetchWithTimeout("/api/cart/items", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1033,7 +996,7 @@ export function AlbumWizard({
       draftErrorRef.current = null;
       setDraftError(null);
       try {
-        const res = await fetch("/api/submissions/draft", {
+        const res = await fetchWithTimeout("/api/submissions/draft", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1123,7 +1086,7 @@ export function AlbumWizard({
 
   const createAdditionalAlbumDraft = React.useCallback(async () => {
     const requestedGuestToken = isGuest ? safeRandomUUID() : undefined;
-    const res = await fetch("/api/submissions/draft", {
+    const res = await fetchWithTimeout("/api/submissions/draft", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1225,7 +1188,8 @@ export function AlbumWizard({
     if (!packageConfirmTarget) return;
     setSelectedPackage(packageConfirmTarget);
     setPackageConfirmTarget(null);
-    setStep(isOneClick ? 3 : 2);
+    setApplicationFormMode("online");
+    setStep(3);
   };
 
   const handleCancelPackage = () => setPackageConfirmTarget(null);
@@ -1823,6 +1787,7 @@ export function AlbumWizard({
   ) =>
     new Promise<string | null>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      watchUploadProgress(xhr, reject);
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
         onProgress(event.loaded, event.total);
@@ -1902,7 +1867,7 @@ export function AlbumWizard({
     const urlMap = new Map<number, string>();
     for (let index = 0; index < params.partNumbers.length; index += 100) {
       const partNumbers = params.partNumbers.slice(index, index + 100);
-      const response = await fetch("/api/uploads/multipart/presign", {
+      const response = await fetchWithTimeout("/api/uploads/multipart/presign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1944,7 +1909,7 @@ export function AlbumWizard({
     let partSize = resumeState?.partSize ?? null;
 
     if (!grantId || !uploadId || !key || !partSize) {
-      const initResponse = await fetch("/api/uploads/multipart/init", {
+      const initResponse = await fetchWithTimeout("/api/uploads/multipart/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2096,7 +2061,7 @@ export function AlbumWizard({
     );
     await Promise.all(workers);
 
-    const completeResponse = await fetch("/api/uploads/multipart/complete", {
+    const completeResponse = await fetchWithTimeout("/api/uploads/multipart/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2138,7 +2103,7 @@ export function AlbumWizard({
     const isApplicationFormUpload =
       isApplicationFormFile(file.name) || isApplicationFormMime(file.type);
     const completeUpload = async (objectKey: string) => {
-      const completeRes = await fetch("/api/uploads/complete", {
+      const completeRes = await fetchWithTimeout("/api/uploads/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2182,6 +2147,7 @@ export function AlbumWizard({
         formData.append("file", file);
 
         const xhr = new XMLHttpRequest();
+      watchUploadProgress(xhr, reject);
         xhr.upload.onprogress = (event) => {
           if (!event.lengthComputable) return;
           const percent = Math.round((event.loaded / event.total) * 100);
@@ -2230,7 +2196,7 @@ export function AlbumWizard({
       error?: string;
     } = {};
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      initRes = await fetch("/api/uploads/init", {
+      initRes = await fetchWithTimeout("/api/uploads/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2263,6 +2229,7 @@ export function AlbumWizard({
     const putPresignedFile = () =>
       new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+      watchUploadProgress(xhr, reject);
         xhr.upload.onprogress = (event) => {
           if (!event.lengthComputable) return;
           const percent = Math.round((event.loaded / event.total) * 100);
@@ -2321,10 +2288,13 @@ export function AlbumWizard({
       return uploadedFiles;
     }
 
+    const uploadRun = ++audioUploadRunRef.current;
+    const isCurrentUpload = () => uploadRun === audioUploadRunRef.current;
     const nextUploads = initialUploads.map((upload) => ({ ...upload }));
     let results = uploadedFiles.map((file) => ({ ...file }));
 
     for (let index = 0; index < targetFiles.length; index += 1) {
+      if (!isCurrentUpload()) return results;
       const file = targetFiles[index];
       const localKey = getLocalUploadKey(file);
       let uploadIndex = nextUploads.findIndex(
@@ -2359,14 +2329,17 @@ export function AlbumWizard({
       let path: string;
       try {
         const uploadResult = await uploadWithProgress(file, (progress) => {
+          if (!isCurrentUpload()) return;
           nextUploads[uploadIndex] = {
             ...nextUploads[uploadIndex],
             progress,
           };
           setUploads([...nextUploads]);
         });
+        if (!isCurrentUpload()) return results;
         path = uploadResult.objectKey;
       } catch (error) {
+        if (!isCurrentUpload()) return results;
         nextUploads[uploadIndex] = {
           ...nextUploads[uploadIndex],
           status: "error",
@@ -2397,6 +2370,7 @@ export function AlbumWizard({
           size: file.size,
         },
       ]);
+      setUploadedFiles(results);
     }
 
     setUploads(nextUploads);
@@ -2818,7 +2792,7 @@ export function AlbumWizard({
           : undefined,
       };
       try {
-        const res = await fetch("/api/submissions/drafts", {
+        const res = await fetchWithTimeout("/api/submissions/drafts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -2896,7 +2870,7 @@ export function AlbumWizard({
     includeUpload?: boolean;
   }): Promise<AlbumDraft> => {
     const includeUpload = options?.includeUpload ?? true;
-    const uploaded = includeUpload ? await uploadFiles() : uploadedFiles;
+    const uploaded = includeUpload && !emailSubmitConfirmed ? await uploadFiles() : uploadedFiles;
     return {
       submissionId: requireSubmissionId(),
       guestToken: currentGuestTokenRef.current,
@@ -2926,33 +2900,27 @@ export function AlbumWizard({
   };
 
   const confirmEmailSubmission = React.useCallback(async () => {
-    if (isOneClick) return false;
-    if (uploads.some((upload) => upload.status === "uploading")) {
-      setNotice({ error: "현재 파일 업로드가 끝난 뒤 변경해주세요." });
-      return false;
-    }
     const message =
-      "음원 파일 첨부가 완료되지 않으면 파일 없이 다음 단계로 진행할 수 있습니다. 예전 온사이드 사이트에서도 동일하게 접수할 수 있습니다.\n파일 없이 계속 진행하시겠습니까?";
+      `업로드가 완료되지 않거나 문제가 생긴 경우 이메일로 음원 파일을 보내주세요.\n${APP_CONFIG.supportEmail}로 음원 파일을 보내고 다음 단계로 이동하시겠습니까?`;
     const confirmed = await showCenteredConfirm(message);
     if (confirmed) {
-      setEmailSubmitConfirmed(true);
+      handOffAudioByEmail();
       setNotice({});
       setUploadDrafts((prev) => {
         if (!prev) return prev;
         return prev.map((draft, index) =>
           index === uploadDraftIndex
-            ? { ...draft, files: [], emailSubmitConfirmed: true }
+            ? { ...draft, emailSubmitConfirmed: true }
             : draft,
         );
       });
     }
     return confirmed;
-  }, [isOneClick, uploadDraftIndex, uploads]);
+  }, [handOffAudioByEmail, uploadDraftIndex]);
 
   const selectUploadDeliveryMode = React.useCallback(
     (mode: "upload" | "email") => {
-      if (isOneClick && mode === "email") return;
-      if (uploads.some((upload) => upload.status === "uploading")) {
+      if (mode === "upload" && uploads.some((upload) => upload.status === "uploading")) {
         setNotice({ error: "현재 파일 업로드가 끝난 뒤 변경해주세요." });
         return;
       }
@@ -2973,7 +2941,7 @@ export function AlbumWizard({
         setNotice({});
         return;
       }
-      setEmailSubmitConfirmed(true);
+      handOffAudioByEmail();
       setNotice({});
       setUploadDrafts((prev) => {
         if (!prev) return prev;
@@ -2984,7 +2952,7 @@ export function AlbumWizard({
         );
       });
     },
-    [emailSubmitConfirmed, isOneClick, uploadDraftIndex, uploads],
+    [emailSubmitConfirmed, handOffAudioByEmail, uploadDraftIndex, uploads],
   );
 
   const mapTracksForSave = (trackList: TrackInput[]) => {
@@ -3136,38 +3104,24 @@ export function AlbumWizard({
   };
 
   const validateUploadStep = async (drafts: AlbumDraft[]) => {
-    if (uploads.some((upload) => upload.status === "error")) {
-      setNotice({ error: "업로드에 실패한 파일이 있습니다." });
-      return false;
-    }
-    if (uploads.some((upload) => upload.status !== "done")) {
-      setNotice({ error: "파일 업로드가 완료될 때까지 기다려주세요." });
-      return false;
-    }
-
-    if (isOneClick) {
-      if (drafts.some((draft) => !draft.files.some((file) => isReleasedAlbumAudioFile(file.originalName, file.mime)))) {
-        setNotice({ error: "음원 파일(WAV 또는 ZIP)을 사이트에 업로드해주세요." });
-        return false;
-      }
-      return true;
-    }
-
-    const missingUploads = drafts.filter(
-      (draft) => draft.files.length === 0 && !draft.emailSubmitConfirmed,
+    const currentDraft = drafts[uploadDraftIndex] ?? drafts[0];
+    const unfinishedUploads = uploads.some((upload) => upload.status !== "done");
+    const hasAudio = (draft: AlbumDraft) => draft.files.some((file) =>
+      isOneClick
+        ? isReleasedAlbumAudioFile(file.originalName, file.mime)
+        : isAudioUploadFile(file.originalName, file.mime),
     );
-    if (missingUploads.length > 0) {
-      if (isAdminReviewer) {
-        return true;
-      }
-      if (missingUploads.length === 1 && (await confirmEmailSubmission())) {
-        return true;
-      }
-      setNotice({
-        error: "음원 파일을 업로드하거나 이메일 제출을 선택해주세요.",
-      });
+    if (currentDraft && !currentDraft.emailSubmitConfirmed &&
+        (unfinishedUploads || !hasAudio(currentDraft)) && !isAdminReviewer) {
+      if (!(await confirmEmailSubmission())) return false;
+      // Persist the same snapshot that is validated; React state updates are asynchronous.
+      currentDraft.emailSubmitConfirmed = true;
+    }
+    if (drafts.some((draft) => !draft.emailSubmitConfirmed && !hasAudio(draft)) && !isAdminReviewer) {
+      setNotice({ error: "각 앨범의 음원 파일을 업로드하거나 이메일 제출을 선택해주세요." });
       return false;
     }
+    if (isOneClick) return true;
 
     if (!isAdminReviewer) {
       const missingAudioFiles = drafts.filter(
@@ -3371,7 +3325,7 @@ export function AlbumWizard({
               : undefined,
           isOneClick: sourceIsOneClick,
           aiUsed: draft.aiUsed ?? undefined,
-          filesSubmittedByEmail: !sourceIsOneClick && draft.emailSubmitConfirmed,
+          filesSubmittedByEmail: draft.emailSubmitConfirmed,
           applicationFormMode: sourceSnapshot.applicationFormMode,
           externalApplicationForm: sourceDownloadedApplicationFlow,
           melonUrl: sourceIsOneClick ? draft.melonUrl || undefined : undefined,
@@ -3891,7 +3845,7 @@ export function AlbumWizard({
 
   const handleSave = async (
     status: "DRAFT" | "SUBMITTED",
-    options?: { deferPayment?: boolean; redirectToCart?: boolean },
+    options?: { deferPayment?: boolean },
   ) => {
     if (finalSaveInFlightRef.current || isSaving || isAddingAlbum) return;
     finalSaveInFlightRef.current = true;
@@ -4039,7 +3993,7 @@ export function AlbumWizard({
               : undefined,
           isOneClick,
           aiUsed: draft.aiUsed ?? undefined,
-          filesSubmittedByEmail: !isOneClick && draft.emailSubmitConfirmed,
+          filesSubmittedByEmail: draft.emailSubmitConfirmed,
           applicationFormMode,
           externalApplicationForm: isDownloadedApplicationFlow,
           melonUrl: isOneClick ? draft.melonUrl || undefined : undefined,
@@ -4138,23 +4092,9 @@ export function AlbumWizard({
               ),
             );
           }
-          if (options?.redirectToCart) {
-            router.push(
-              `${localePrefix}/mypage/cart?added=${encodeURIComponent(submissionIds[0])}`,
-            );
-            return;
-          }
-          setNotice({
-            emailNotice: emailNotice
-              ? `${deferredPaymentNotice} ${emailNotice}`
-              : deferredPaymentNotice,
-          });
-          setCompletionId(submissionIds[0]);
-          setCompletionSubmissionIds(submissionIds);
-          if (guestTokens.length > 0) {
-            setCompletionTokens(guestTokens);
-          }
-          setStep(7);
+          router.push(
+            `${localePrefix}/mypage/cart?added=${encodeURIComponent(submissionIds[0])}`,
+          );
           return;
         }
         if (paymentMethod === "CARD") {
@@ -4517,8 +4457,8 @@ export function AlbumWizard({
             </p>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {[
-                { released: false, title: "발매 전이에요", description: "앨범·트랙 정보를 작성하고 음원 파일을 제출해요.", detail: "신청서 작성 → 파일 첨부 → 접수" },
-                { released: true, title: "이미 발매됐어요", description: "멜론이나 지니의 앨범 URL로 간편하게 접수해요.", detail: "URL 입력 → 음원 첨부 → 관리자 자료 준비" },
+                { released: false, title: "발매 전이에요", description: "앨범·트랙 정보를 작성하고 음원 파일을 제출해요.", detail: "온라인 신청서 작성 → 음원 첨부 → 결제 → 신청 완료" },
+                { released: true, title: "이미 발매됐어요", description: "멜론이나 지니의 앨범 URL로 간편하게 접수해요.", detail: "URL 입력 → 음원 첨부 → 결제 → 신청 완료" },
               ].map((option) => {
                 const selected = releaseStatusSelected && isOneClick === option.released;
                 return (
@@ -4530,7 +4470,7 @@ export function AlbumWizard({
                     onClick={() => {
                       if (selectionLocked) return;
                       if (isOneClick !== option.released) {
-                        setApplicationFormMode(option.released ? "online" : null);
+                        setApplicationFormMode("online");
                       }
                       setIsOneClick(option.released);
                       setReleaseStatusSelected(true);
@@ -4547,7 +4487,6 @@ export function AlbumWizard({
                     </span>
                     <span className="mt-3 block text-sm leading-6 opacity-80">{option.description}</span>
                     <span className="mt-4 block text-xs font-semibold leading-5">{option.detail}</span>
-                    {option.released && <span className="mt-3 inline-flex rounded-full border border-current/30 px-2.5 py-1 text-xs font-black">URL 접수 추가금 0원</span>}
                   </button>
                 );
               })}
@@ -4708,12 +4647,8 @@ export function AlbumWizard({
                 <button
                   type="button"
                   onClick={() => {
-                    if (isOneClick) {
-                      setApplicationFormMode("online");
-                      setStep(3);
-                      return;
-                    }
-                    setStep(2);
+                    setApplicationFormMode("online");
+                    setStep(3);
                   }}
                   disabled={!selectedPackage}
                   className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
@@ -5033,7 +4968,7 @@ export function AlbumWizard({
                         </p>
                       </div>
                       <p className="mt-3 text-sm font-semibold leading-6 text-foreground/80">
-                        앨범 URL을 보내주시면 관리자가 앨범·트랙 정보를 확인하고 심의 자료를 준비합니다. 별도의 신청서 작성은 필요 없으며, 심의에 사용할 음원 파일(WAV 또는 ZIP)은 다음 단계에서 첨부해주세요.
+                        앨범 URL을 입력하면, 관리자가 심의 자료를 준비합니다. 별도의 신청서 작성은 필요 없으며, 심의에 사용할 음원 파일(WAV 또는 ZIP)은 다음 단계에서 첨부해주세요.
                       </p>
                     </div>
                     <div className="grid gap-4">
@@ -5502,7 +5437,7 @@ export function AlbumWizard({
               <div className="flex flex-wrap justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep(step === 3 ? (isOneClick ? 1 : 2) : 3)}
+                  onClick={() => setStep(step === 3 ? 1 : 3)}
                   disabled={isSaving || isAddingAlbum}
                   className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                 >
@@ -5591,7 +5526,7 @@ export function AlbumWizard({
                   ? "신청서와 음원·CD 트랙 순서 일치"
                   : "음원·CD 트랙 순서 일치"}
               </li>
-              <li>{isOneClick ? "음원 파일 업로드 필수" : "업로드가 어려우면 파일 없이 진행 가능"}</li>
+              <li>업로드가 어려우면 이메일로 음원 제출 가능</li>
             </ul>
           </details>}
 
@@ -5647,7 +5582,7 @@ export function AlbumWizard({
                     >
                       {draft.files.length > 0
                         ? "업로드 완료"
-                        : !isOneClick && draft.emailSubmitConfirmed
+                        : draft.emailSubmitConfirmed
                           ? "이메일 제출"
                           : "업로드 필요"}
                     </span>
@@ -5665,7 +5600,7 @@ export function AlbumWizard({
             {!initialArchiveEntry && <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               {isDownloadedApplicationFlow ? "신청서와 음원 업로드" : "전체 음원 파일 업로드"}
             </p>}
-            {!isOneClick && <div className="mt-4 grid gap-2 rounded-2xl border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
+            <div className="mt-4 grid gap-2 rounded-2xl border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("upload")}
@@ -5680,7 +5615,6 @@ export function AlbumWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
-                disabled={uploadInProgress}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
                   ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
@@ -5699,8 +5633,8 @@ export function AlbumWizard({
                   파일 없이 진행
                 </span>
               </button>
-            </div>}
-            {!isOneClick && emailSubmitConfirmed ? (
+            </div>
+            {emailSubmitConfirmed ? (
               <div className="mt-4 rounded-2xl border-2 border-primary/25 bg-primary/8 px-4 py-5 text-sm text-foreground shadow-[4px_4px_0_rgba(0,113,227,0.18)] dark:border-[#2997ff]/35 dark:bg-[#2997ff]/12">
                 <p className="text-xs font-semibold text-muted-foreground">
                   파일 첨부 대신 아래 이메일 주소로 음원 파일을 보내주세요.
@@ -5804,7 +5738,7 @@ export function AlbumWizard({
                         </span>
                         <div className="flex shrink-0 items-center gap-3">
                           {upload.status === "done" ? (
-                            <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                            <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
                               첨부 완료
                             </span>
                           ) : (
@@ -5862,12 +5796,10 @@ export function AlbumWizard({
                       <p className="font-semibold text-foreground">
                         선택된 파일이 없습니다.
                       </p>
-                      {!isOneClick && (
-                        <p className="mt-2 text-[11px] text-muted-foreground">
+                      <p className="mt-2 text-[11px] text-muted-foreground">
                           파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요.
                         </p>
-                      )}
-                      {!isOneClick && <div className="mt-3 flex items-center justify-center gap-2">
+                      <div className="mt-3 flex items-center justify-center gap-2">
                         <button
                           type="button"
                           onClick={() => selectUploadDeliveryMode("email")}
@@ -5875,7 +5807,7 @@ export function AlbumWizard({
                         >
                           파일 없이 진행
                         </button>
-                      </div>}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -5950,15 +5882,18 @@ export function AlbumWizard({
                   {isOneClick ? "WAV 파일을 개별로 첨부하거나, 전체 음원을 ZIP 파일로 묶어 업로드해주세요." : <>업로드가 어려우면 파일 없이 진행한 뒤 {APP_CONFIG.supportEmail}로 보내주세요.</>}
                 </p>
                 <p>
-                  {isOneClick ? "업로드가 완료되지 않으면 접수할 수 없습니다. 문제가 계속되면 고객센터로 문의해주세요." : <>실물 앨범을 발표했다면{" "}
+                  업로드가 완료되지 않거나 문제가 생긴 경우 이메일로 음원 파일을 보내주세요.
+                  <a href={`mailto:${APP_CONFIG.supportEmail}`} className="ml-1 font-semibold underline">{APP_CONFIG.supportEmail}</a>
+                </p>
+                {!isOneClick && <p>실물 앨범을 발표했다면{" "}
                   <button
                     type="button"
                     onClick={() => setShowCdInfo(true)}
                     className="font-semibold text-primary transition hover:text-primary/80"
                   >
                     CD 제출 기준 보기 →
-                  </button></>}
-                </p>
+                  </button>
+                </p>}
               </div>
             </details>
           </div>
@@ -5992,7 +5927,7 @@ export function AlbumWizard({
                   const uploadsReady =
                     uploads.length > 0 &&
                     uploads.every((upload) => upload.status === "done");
-                  const includeFiles = uploadsReady || (isOneClick ? uploadedFiles.length > 0 : emailSubmitConfirmed);
+                  const includeFiles = uploadsReady || uploadedFiles.length > 0 || emailSubmitConfirmed;
                   await saveAlbumDrafts(draftsForUpload, { includeFiles });
                 }}
                 disabled={isSaving || isAddingAlbum}
@@ -6035,7 +5970,7 @@ export function AlbumWizard({
               </div>
               <p className="mt-3 break-all text-sm text-foreground">{melonUrl}</p>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                결제 확인 후 관리자가 앨범 URL과 첨부한 음원으로 심의 자료를 준비합니다. URL 접수 추가금은 0원입니다.
+                결제 확인 후 관리자가 앨범 URL과 제출한 음원으로 심의 자료를 준비합니다.
               </p>
             </section>
           )}
@@ -6445,13 +6380,12 @@ export function AlbumWizard({
               onClick={() =>
                 handleSave("SUBMITTED", {
                   deferPayment: true,
-                  redirectToCart: true,
                 })
               }
               disabled={isSaving || isAddingAlbum || !albumPaymentReady}
               className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
             >
-              담고 결제하기
+              결제하기
             </button>
           </div>
         </div>
@@ -6462,7 +6396,7 @@ export function AlbumWizard({
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
             ✓
           </div>
-          <h2 className="font-display mt-4 text-3xl text-foreground">접수 완료</h2>
+          <h2 className="font-display mt-4 text-3xl text-foreground">신청 완료</h2>
           {notice.emailNotice ? (
             <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
               {notice.emailNotice}

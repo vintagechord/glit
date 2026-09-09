@@ -11,11 +11,8 @@ test("normal album submissions save basic information before track entry", () =>
   const trackStart = source.indexOf("const handleTrackTemporarySave", basicStart);
   const basicHandler = source.slice(basicStart, trackStart);
 
-  assert.match(
-    source,
-    /const standardSteps = \[[\s\S]*"작성 방식 선택",[\s\S]*"기본 정보",[\s\S]*"트랙 정보",[\s\S]*"접수 완료"/,
-  );
-  assert.match(source, /const compactSteps = \[[\s\S]*"작성 방식 선택",[\s\S]*"기본 정보",[\s\S]*"파일 업로드"/);
+  assert.match(source, /const standardSteps = \["온라인 신청서 작성", "음원 첨부", "결제", "신청 완료"\]/);
+  assert.match(source, /const oneClickSteps = \["URL 입력", "음원 첨부", "결제", "신청 완료"\]/);
   assert.match(
     source,
     /const hasTrackStep =\s*!isOneClick && applicationFormMode === "online"/,
@@ -75,7 +72,7 @@ test("track entry preserves compilation overrides and saves before upload", () =
   assert.match(tableEditor, /key=\{rowKeys\[index\] \?\? `track-row-\$\{index\}`\}/);
 });
 
-test("progress and English UI support dynamic five- to seven-step flows", () => {
+test("progress and English UI support the four-stage album flow and other submission lengths", () => {
   const progress = read("src/features/submissions/submission-progress.tsx");
   const translations = read(
     "src/components/i18n/english-language-pack.tsx",

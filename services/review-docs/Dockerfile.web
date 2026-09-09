@@ -1,0 +1,37 @@
+# Optional image for the EXISTING web service; no service or plan changes.
+# Full document conversion requires at least 2GB RAM.
+FROM node:22-bookworm-slim AS runtime-base
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv antiword libreoffice-writer poppler-utils \
+    tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng tesseract-ocr-jpn \
+    fonts-noto-cjk fonts-liberation ca-certificates tini \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY services/review-docs/requirements.txt /app/services/review-docs/requirements.txt
+RUN python3 -m venv /opt/review-venv && /opt/review-venv/bin/pip install --no-cache-dir -r /app/services/review-docs/requirements.txt
+ENV PATH="/opt/review-venv/bin:$PATH" REVIEW_DOCS_PYTHON=/opt/review-venv/bin/python
+
+FROM runtime-base AS build
+COPY . .
+# Public browser configuration only. Supply secret service keys at runtime.
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+RUN npm run build
+
+FROM runtime-base AS runtime
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/public ./public
+COPY --from=build /app/next.config.ts /app/tsconfig.json ./
+COPY --from=build /app/src ./src
+COPY --from=build /app/scripts/review-docs ./scripts/review-docs
+COPY --from=build /app/services/review-docs ./services/review-docs
+COPY --from=build /app/templates/review-docs ./templates/review-docs
+ENV NODE_ENV=production
+RUN chown -R node:node /app/.next
+USER node
+EXPOSE 3000
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "scripts/review-docs/start-web.mjs"]

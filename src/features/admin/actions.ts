@@ -2182,28 +2182,30 @@ export async function notifySubmissionResultAction(): Promise<AdminActionState> 
   };
 }
 
-export async function updateArtistAction(formData: FormData): Promise<void> {
+export async function updateArtistAction(_previous: AdminActionState, formData: FormData): Promise<AdminActionState> {
   await requireAdminAction();
   const artistId = String(formData.get("artistId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const thumbnailUrl = String(formData.get("thumbnailUrl") ?? "").trim();
-  if (!artistId || !name) {
-    return;
-  }
+  if (!z.string().uuid().safeParse(artistId).success) return { error: "아티스트 정보를 확인한 뒤 다시 저장해주세요." };
+  if (!name || name.length > 500) return { error: "아티스트명은 1~500자로 입력해주세요." };
   const admin = createAdminClient();
-  const { error } = await admin
+  const { data, error } = await admin
     .from("artists")
     .update({ name, thumbnail_url: thumbnailUrl || null })
-    .eq("id", artistId);
+    .eq("id", artistId)
+    .select("id")
+    .maybeSingle();
   if (error) {
     console.error("updateArtistAction failed", error);
-    return;
+    return { error: error.code === "23505" ? "이미 사용 중인 아티스트명입니다. 다른 이름을 입력해주세요." : "아티스트 정보를 저장하지 못했습니다. 입력 내용을 확인하고 다시 시도해주세요." };
   }
+  if (!data) return { error: "아티스트를 찾을 수 없습니다. 목록을 새로고침해주세요." };
   revalidatePath("/admin/artists");
   revalidatePath(`/admin/artists/${artistId}`);
   revalidatePath(`/dashboard/artists/${artistId}`);
   revalidateUserDashboards();
-  redirect(withSavedQuery(`/admin/artists/${artistId}`));
+  return { message: "아티스트 정보를 저장했습니다." };
 }
 
 export async function upsertPackageAction(
@@ -2235,7 +2237,7 @@ export async function upsertPackageAction(
 
 export async function upsertPackageFormAction(
   formData: FormData,
-): Promise<void> {
+): Promise<AdminActionState | void> {
   const id = String(formData.get("id") ?? "");
   const result = await upsertPackageAction({
     id: id ? id : undefined,
@@ -2246,8 +2248,7 @@ export async function upsertPackageFormAction(
     isActive: formData.get("isActive") === "on",
   });
   if (result.error) {
-    console.error(result.error);
-    return;
+    return result;
   }
   revalidatePath("/admin/config");
   redirect(withSavedQuery("/admin/config"));
@@ -2280,7 +2281,7 @@ export async function upsertStationAction(
 
 export async function upsertStationFormAction(
   formData: FormData,
-): Promise<void> {
+): Promise<AdminActionState | void> {
   const id = String(formData.get("id") ?? "");
   const result = await upsertStationAction({
     id: id ? id : undefined,
@@ -2289,8 +2290,7 @@ export async function upsertStationFormAction(
     isActive: formData.get("isActive") === "on",
   });
   if (result.error) {
-    console.error(result.error);
-    return;
+    return result;
   }
   revalidatePath("/admin/config");
   redirect(withSavedQuery("/admin/config"));
@@ -2351,14 +2351,13 @@ export async function updatePackageStationsAction(
 
 export async function updatePackageStationsFormAction(
   formData: FormData,
-): Promise<void> {
+): Promise<AdminActionState | void> {
   const result = await updatePackageStationsAction({
     packageId: String(formData.get("packageId") ?? ""),
     stationCodes: String(formData.get("stationCodes") ?? ""),
   });
   if (result.error) {
-    console.error(result.error);
-    return;
+    return result;
   }
   revalidatePath("/admin/config");
   redirect(withSavedQuery("/admin/config"));
@@ -2396,15 +2395,14 @@ export async function updateAlbumReviewDiscountAction(
 
 export async function updateAlbumReviewDiscountFormAction(
   formData: FormData,
-): Promise<void> {
+): Promise<AdminActionState | void> {
   const submittedPercent =
     formData.get("quickDiscountPercent") ?? formData.get("discountPercent");
   const result = await updateAlbumReviewDiscountAction({
     discountPercent: Number(submittedPercent ?? 0),
   });
   if (result.error) {
-    console.error(result.error);
-    return;
+    return result;
   }
   revalidatePath("/admin/config");
   revalidatePath("/dashboard/new/album");
@@ -2430,13 +2428,12 @@ export async function deletePackageAction(
 
 export async function deletePackageFormAction(
   formData: FormData,
-): Promise<void> {
+): Promise<AdminActionState | void> {
   const result = await deletePackageAction({
     id: String(formData.get("id") ?? ""),
   });
   if (result.error) {
-    console.error(result.error);
-    return;
+    return result;
   }
   revalidatePath("/admin/config");
 }
@@ -2459,13 +2456,12 @@ export async function deleteStationAction(
 
 export async function deleteStationFormAction(
   formData: FormData,
-): Promise<void> {
+): Promise<AdminActionState | void> {
   const result = await deleteStationAction({
     id: String(formData.get("id") ?? ""),
   });
   if (result.error) {
-    console.error(result.error);
-    return;
+    return result;
   }
   revalidatePath("/admin/config");
 }
@@ -2618,7 +2614,7 @@ export async function upsertProfanityTermAction(
 
 export async function upsertProfanityTermFormAction(
   formData: FormData,
-): Promise<void> {
+): Promise<AdminActionState | void> {
   const id = String(formData.get("id") ?? "");
   const result = await upsertProfanityTermAction({
     id: id ? id : undefined,
@@ -2629,8 +2625,7 @@ export async function upsertProfanityTermFormAction(
     isActive: formData.get("isActive") === "on",
   });
   if (result.error) {
-    console.error(result.error);
-    return;
+    return result;
   }
   revalidatePath("/admin/config");
   revalidatePath("/dashboard/new/album");
@@ -2661,13 +2656,12 @@ export async function deleteProfanityTermAction(
 
 export async function deleteProfanityTermFormAction(
   formData: FormData,
-): Promise<void> {
+): Promise<AdminActionState | void> {
   const result = await deleteProfanityTermAction({
     id: String(formData.get("id") ?? ""),
   });
   if (result.error) {
-    console.error(result.error);
-    return;
+    return result;
   }
   revalidatePath("/admin/config");
   revalidatePath("/dashboard/new/album");

@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+
 import React from "react";
 import { Download, FileCheck2, UploadCloud } from "lucide-react";
 
@@ -141,11 +143,11 @@ export default function AdminFilesPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/mv-submissions", {
+      const response = await fetchWithTimeout("/api/admin/mv-submissions", {
         cache: "no-store",
       });
       const payload = (await response.json().catch(() => null)) as SubmissionsPayload | null;
-      if (!response.ok || payload?.error) {
+      if (!response.ok || !Array.isArray(payload?.submissions) || payload.error) {
         throw new Error(payload?.error || "뮤직비디오 접수 목록을 불러오지 못했습니다.");
       }
       const nextItems = payload?.submissions ?? [];
@@ -265,12 +267,13 @@ export default function AdminFilesPage() {
       form.append("sizeBytes", String(file.size));
       form.append("file", file);
 
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `/api/admin/submissions/${selectedSubmission.id}/certificate`,
         {
           method: "POST",
           body: form,
         },
+        300_000,
       );
       const payload = (await response.json().catch(() => null)) as
         | CertificateUploadResponse

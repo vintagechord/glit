@@ -2,7 +2,7 @@
 
 확인일: 2026-09-08. 구현: `src/lib/music-archive/apple.ts`.
 
-Apple은 [공식 API 개요](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/index.html)에서 웹 검색 필드와 ID를 통한 자체 라이브러리·디지털 카탈로그 대응을 설명한다. 이 어댑터는 사실 메타데이터와 공식 스토어 링크만 사용한다. 별도 이용 조건이 있는 앨범 이미지·음원 미리듣기·영상·가사·소개글은 내려받거나 저장·표시하지 않는다. 이는 국내 모든 아티스트가 수록되었다는 보장이 아니다.
+Apple은 [공식 API 개요](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/index.html)에서 웹 검색 필드와 ID를 통한 자체 라이브러리·디지털 카탈로그 대응을 설명한다. 이 어댑터는 사실 메타데이터·공식 스토어 링크와 API가 반환한 `artworkUrl100`/`artworkUrl60`의 공식 썸네일 URL을 사용한다. 2026-09-10 변경부터 이미지 URL을 아카이브에 보존하고 원본 링크와 함께 표시한다. 이미지 파일 자체·음원 미리듣기·영상·가사·소개글은 보관하지 않는다. 이는 국내 모든 아티스트가 수록되었다는 보장이 아니다.
 
 [공식 검색 명세](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/Searching.html)는 `country`, `entity`, `limit`(1–200), 약 20회/분의 호출 한도를 설명한다. 공개 명세에 없는 `offset`을 API로 보내지 않는다. 검색은 한국 storefront의 최대 200개 결과창을 가져오고 애플리케이션에서 나눈다. `pageSize:200`을 사용한 서버 캐시 후 20개씩 표시할 수 있다. 200개면 `limited:true`를 표시해야 하며 `total`은 그 결과창의 개수다. 초성 검색의 전체 카탈로그 지원을 주장하지 않는다.
 
@@ -31,4 +31,8 @@ US 아티스트의 `entity=song` 응답은 다른 primary artist ID인 협업곡
 
 앨범/참여곡 결과가 200개 한도에 닿으면 가져올 수 있는 앨범을 저장한 뒤 `limited` 단계에서 `MusicProviderError('invalid_response', ...)`를 발생시켜 작업을 일부 수집 상태로 유지한다. 전체 수집 완료로 표시하지 않는다. 정상 완료에도 KR/US 조회 범위와 200개 제한을 `scopeNote`에 남긴다.
 
-`tests/fixtures/music-archive-apple/`는 위 소량 응답에서 필요한 사실 필드만 남긴 fixture다. 원본 API의 artwork/preview/copyright 필드는 제외했다. 단위 테스트는 실제 응답의 KR 곡 누락, US 전체 곡, 동명이인, 참여 관계, 재시작, 잘린 결과, 호출 오류와 크기 제한을 검증한다.
+`tests/fixtures/music-archive-apple/`는 위 소량 응답에서 필요한 사실 필드만 남긴 fixture다. 원본 fixture는 당시 artwork/preview/copyright 필드를 제외했다. 후속 `music-archive-enrichment.test.ts`가 썸네일 URL 보존·잘못된 도메인 차단·회원 화면 투영·수정 보호를 검증한다. 단위 테스트는 실제 응답의 KR 곡 누락, US 전체 곡, 동명이인, 참여 관계, 재시작, 잘린 결과, 호출 오류와 크기 제한을 검증한다.
+
+## 2026-09-10 이미지·저작자 갱신
+
+`lookupAppleAlbum`은 저장된 동일 album ID를 다시 조회해 기존 앨범의 이미지를 채운다. 실제 ID `1259083959` 읽기 검증에서 9곡과 `is1-ssl.mzstatic.com` 썸네일 URL을 확인했다. API의 `artistName`은 저작자 필드가 아니므로 작사·작곡·편곡으로 추정하지 않는다. 저작자 정보는 명시적으로 연결한 멜론·지니 앨범 URL의 공개 크레딧, 사용 가능한 MusicBrainz 작품 관계 또는 정확히 연결된 본인 심의 신청의 크레딧에서 가져온다.

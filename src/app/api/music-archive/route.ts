@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     if (["admin", "admin-library"].includes(params.get("action") ?? "")) {
       const { data } = await supabase.rpc("is_admin");
       if (data !== true) throw new ArchiveError("관리자 권한이 필요합니다.", 403, "FORBIDDEN");
-      return archiveJson(params.get("action") === "admin-library" ? await getArchiveAdminDetail(z.uuid().parse(params.get("libraryId"))) : await getArchiveAdmin(params.get("q") ?? "", Number(params.get("page") ?? 0)));
+      return archiveJson(params.get("action") === "admin-library" ? await getArchiveAdminDetail(z.uuid().parse(params.get("libraryId"))) : await getArchiveAdmin(params.get("q") ?? "", Number(params.get("page") ?? 0), Object.fromEntries(["state", "content", "sort", "pageSize"].filter(key => params.has(key)).map(key => [key, params.get(key)]))));
     }
     if (params.get("action") === "search") return archiveJson(await searchArchiveArtists(user.id, params));
     if (params.get("action") === "submissions") return archiveJson(await searchOwnedSubmissions(user.id, params.get("q") ?? "", Number(params.get("page") ?? 0)));

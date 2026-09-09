@@ -1,5 +1,56 @@
 # 심의자료 워커 연결
 
+## 2026-09-10: 기존 웹 서버 자동 처리 추가
+
+전용 워커가 없는 기존 Node 웹 서비스에서도 **DOCX와 멜론·지니 URL의 분석,
+번역 요청, DOCX/ZIP 생성**을 실행한다. `0103_review_document_web_dispatcher.sql`을
+적용하고 웹을 배포하면 별도 서비스 개설이나 플랜 변경 없이 사용할 수 있다.
+`after()`가 저장된 작업을 시작하며, 기존 Render `npm start`에서는 15초 주기
+dispatcher가 브라우저를 닫거나 서버가 재시작된 뒤에도 대기열을 재개한다.
+
+웹 처리기는 전용 워커와 같은 데이터베이스 단일 lease를 사용하지만 전용 워커의
+heartbeat는 기록하지 않는다. 전용 워커가 연결되면 그 워커가 우선한다. DOCX는
+Node에서 표·가사·체크박스와 근거 위치를 읽으며, 압축 크기·CRC·XML·매크로 및
+외부 엔티티를 검증한다. 외부 관계 링크나 삽입 개체는 실행하지 않는다.
+설정 검사는 읽기 전용 RPC로 실제 0103 함수 설치 여부와 DOCX 템플릿을 확인한다.
+
+**기존 Node 배포에서 DOC/HWP/PDF 분석은 여전히 전용 변환기가 필요하다.**
+공개 `/forms`의 DOC/HWP 신청서도 이 제한에 해당한다. Word/한글에서 작성한
+자료를 DOCX로 저장하면 바로 업로드할 수 있으며 화면에도 이 형식 제한을 표시한다.
+이미 분석된 DOC/HWP/PDF 작업의 번역과 문서 생성은 웹에서도 가능하다.
+`OPENAI_API_KEY`가 없으면 외국어 번역을 직접 입력·확인해야 한다.
+`REVIEW_DOCS_WEB_DISABLED=true`는 웹 자동 처리를 끄고 기존 전용 워커만 사용한다.
+
+### 기존 웹 서비스를 Docker로 실행하여 전체 형식을 지원하는 선택 경로
+
+`services/review-docs/Dockerfile.web`은 웹과 전체 변환기를 같은 서비스 이미지에
+설치한다. `scripts/review-docs/start-web.mjs`는 웹과 사전 검사를 통과한 워커를
+함께 시작하고 워커가 종료되면 15초 후 다시 시작한다. 웹 종료/배포 시 양쪽
+프로세스에 종료 신호를 전달하며 10초 후 남은 프로세스를 정리한다.
+
+이 경로는 **최소 2GB 메모리** 환경용이다. 현재 `render.yaml`의 512MB starter에서
+전체 DOC/HWP/PDF/OCR 실행을 보장하지 않으며 무리하게 함께 실행하도록 바꾸지
+않았다. 기존 서비스의 Docker 런타임 전환과 자원 검토는 운영 변경이고 이번 소스
+작업에서는 실행하지 않았다. 새 서비스나 플랜 변경을 자동 수행하는 Blueprint도
+추가하지 않았다.
+
+검증/실행 순서는 다음과 같다. 공개 Supabase 설정만 빌드 인자로 전달하고 서비스
+키·B2 키·번역 키는 빌드 인자에 넣지 않는다. `.dockerignore`는 `.env*`를 제외한다.
+
+```sh
+docker build --platform linux/amd64 -f services/review-docs/Dockerfile.web \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL \
+  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY \
+  -t onside-review-web .
+docker run --rm --memory=2g --pids-limit=256 \
+  --env-file /path/to/review-web.env onside-review-web npm run review-docs:check
+docker run --rm --memory=2g --pids-limit=256 -p 3000:3000 \
+  --env-file /path/to/review-web.env onside-review-web
+```
+
+운영에는 0103 적용과 웹 배포가 필요하다. 운영 heartbeat·실제 고객 자료의 분석과
+다운로드를 확인하지 않았으므로 소스 검증과 운영 복구를 구분한다.
+
 ## 2026-09-08 장애 원인
 
 운영 DB의 `review_document_worker_heartbeat`는 비어 있었고 생성 작업도 없었다.

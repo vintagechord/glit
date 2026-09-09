@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import * as React from "react";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 type Props = {
   initialUrl?: string | null;
+  onBusyChange?: (busy: boolean) => void;
 };
 
 type UploadResponse = {
@@ -30,7 +32,7 @@ const parseObjectKeyFromUrl = (value?: string | null) => {
   }
 };
 
-export function ArtistThumbnailUploader({ initialUrl }: Props) {
+export function ArtistThumbnailUploader({ initialUrl, onBusyChange }: Props) {
   const initialObjectKey = React.useMemo(
     () => parseObjectKeyFromUrl(initialUrl),
     [initialUrl],
@@ -47,8 +49,10 @@ export function ArtistThumbnailUploader({ initialUrl }: Props) {
   const [notice, setNotice] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
+  React.useEffect(() => { onBusyChange?.(isUploading || isDeleting); }, [isUploading, isDeleting, onBusyChange]);
+
   const deleteObjectByKey = React.useCallback(async (key: string) => {
-    const res = await fetch("/api/admin/uploads/free", {
+    const res = await fetchWithTimeout("/api/admin/uploads/free", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ objectKey: key }),
@@ -91,10 +95,10 @@ export function ArtistThumbnailUploader({ initialUrl }: Props) {
       form.append("label", "artist-thumbnail");
       form.append("file", file);
 
-      const res = await fetch("/api/admin/uploads/free", {
+      const res = await fetchWithTimeout("/api/admin/uploads/free", {
         method: "POST",
         body: form,
-      });
+      }, 300_000);
       const payload = (await res.json().catch(() => null)) as
         | UploadResponse
         | null;
@@ -120,12 +124,13 @@ export function ArtistThumbnailUploader({ initialUrl }: Props) {
     setIsDeleting(true);
     setNotice(null);
     try {
-      if (objectKey) {
+      // Persisted artist images remain valid until the surrounding form is saved.
+      if (objectKey && objectKey !== initialObjectKey) {
         await deleteObjectByKey(objectKey);
       }
       setObjectKey(null);
       setThumbnailUrl("");
-      setNotice("삭제했습니다. 저장하면 반영됩니다.");
+      setNotice("삭제를 선택했습니다. 저장하면 반영됩니다.");
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "썸네일 삭제에 실패했습니다.",

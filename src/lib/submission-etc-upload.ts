@@ -1,5 +1,8 @@
 "use client";
 
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { watchUploadProgress } from "@/lib/upload-watchdog";
+
 export type SubmissionEtcUploadResult = {
   path: string;
   originalName: string;
@@ -52,6 +55,7 @@ export const uploadSubmissionEtcFile = async ({
 
   const directUpload = await new Promise<{ objectKey: string }>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    watchUploadProgress(xhr, reject);
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return;
       onProgress?.(Math.round((event.loaded / event.total) * 100));
@@ -77,7 +81,7 @@ export const uploadSubmissionEtcFile = async ({
     xhr.send(formData);
   });
 
-  const completeRes = await fetch("/api/uploads/complete", {
+  const completeRes = await fetchWithTimeout("/api/uploads/complete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
