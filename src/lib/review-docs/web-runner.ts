@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { jobDatabaseError } from "./jobs";
 import { REVIEW_JOB_LIMITS, ReviewJobError, type ReviewJob } from "./jobs-types";
-import { isReviewWebEnabled } from "./web-runtime";
+import { isReviewWebEnabled, reviewWebCapabilities, reviewWebClaimArguments } from "./web-runtime";
 import { cleanupReviewJobs, failReviewJob, processReviewJob } from "./worker";
 import { awaitReviewAbort } from "./abort";
 
@@ -54,11 +53,12 @@ export async function runClaimedWebReviewJob(job: ReviewJob, options: {
 }
 
 /** One durable, globally leased job per wake-up; response polling and startup resume it. */
-export function runWebReviewBatch(): Promise<void> {
+export function runWebReviewBatch(capabilities = reviewWebCapabilities): Promise<void> {
   if (!isReviewWebEnabled()) return Promise.resolve();
   if (state.__reviewWebBatch) return state.__reviewWebBatch;
   state.__reviewWebBatch = (async () => {
-    const { data, error } = await createAdminClient().rpc("claim_review_document_web_job", { p_token: randomUUID() });
+    const formats = await capabilities();
+    const { data, error } = await createAdminClient().rpc("claim_review_document_web_job", reviewWebClaimArguments(formats));
     jobDatabaseError(error);
     const job = data?.[0] as ReviewJob | undefined;
     if (job) await runClaimedWebReviewJob(job);

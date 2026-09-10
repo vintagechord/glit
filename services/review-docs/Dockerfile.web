@@ -1,5 +1,5 @@
-# Optional image for the EXISTING web service; no service or plan changes.
-# Full document conversion requires at least 2GB RAM.
+# Existing Free web service: one Next process, serialized document jobs.
+# Converters run only on demand; no separate paid or resident worker.
 FROM node:22-bookworm-slim AS runtime-base
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-venv antiword libreoffice-writer poppler-utils \
@@ -18,7 +18,7 @@ COPY . .
 # Public browser configuration only. Supply secret service keys at runtime.
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
-ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY REVIEW_DOCS_LOW_MEMORY=true
 RUN npm run build
 
 FROM runtime-base AS runtime
@@ -29,9 +29,11 @@ COPY --from=build /app/src ./src
 COPY --from=build /app/scripts/review-docs ./scripts/review-docs
 COPY --from=build /app/services/review-docs ./services/review-docs
 COPY --from=build /app/templates/review-docs ./templates/review-docs
-ENV NODE_ENV=production
+ENV NODE_ENV=production npm_lifecycle_event=start \
+    REVIEW_DOCS_WEB_CONVERTERS=true REVIEW_DOCS_LOW_MEMORY=true \
+    MALLOC_ARENA_MAX=2 OMP_THREAD_LIMIT=1
 RUN chown -R node:node /app/.next
 USER node
 EXPOSE 3000
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "scripts/review-docs/start-web.mjs"]
+CMD ["node", "--max-old-space-size=192", "node_modules/next/dist/bin/next", "start"]

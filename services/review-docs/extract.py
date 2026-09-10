@@ -264,7 +264,10 @@ def read_ocr(image, fallback_deadline):
     command = ['tesseract', str(image), 'stdout', '-l', 'kor+eng+jpn', '--psm']
     primary = ocr_lines(run_reader(command+['3', 'tsv'], check=True, capture_output=True, text=True, timeout=60).stdout)
     if fallback_deadline is None or has_ocr_track_heading(primary): return primary, None
-    remaining = min(20, fallback_deadline-time.monotonic())
+    # A 0.1-CPU shared web runtime needs more wall time for the same bounded CPU
+    # work. Dedicated workers retain their original 20-second optional retry.
+    retry_seconds = 60 if os.environ.get('REVIEW_DOCS_LOW_MEMORY', '').lower() in ('true', '1') else 20
+    remaining = min(retry_seconds, fallback_deadline-time.monotonic())
     if remaining <= 0: return primary, None
     try:
         candidate = ocr_lines(run_reader(command+['6', 'tsv'], check=True, capture_output=True, text=True, timeout=remaining).stdout)
@@ -275,13 +278,15 @@ def read_ocr(image, fallback_deadline):
 def pdf(path):
     import pdfplumber
     blocks, warnings = [], []
-    # Optional OCR retry shares the existing 90-second Node wall/80-second CPU
-    # budget. Only single-page inputs retry, so no later page loses its budget.
+    # Optional OCR retry stays inside the Node wall/80-second CPU budget. The
+    # shared 0.1-CPU web runtime uses a 240-second Node wall limit. Only single-page
+    # inputs retry, so no later page loses its budget.
     started = time.monotonic()
     try:
         with pdfplumber.open(path, password='') as document:
             if len(document.pages) > MAX_PAGES: raise ExtractError('PAGE_LIMIT', f'{MAX_PAGES}페이지까지 처리할 수 있습니다.')
-            fallback_deadline = started+75 if len(document.pages)==1 else None
+            fallback_seconds = 220 if os.environ.get('REVIEW_DOCS_LOW_MEMORY', '').lower() in ('true', '1') else 75
+            fallback_deadline = started+fallback_seconds if len(document.pages)==1 else None
             for page_no, page in enumerate(document.pages, 1):
                 if len(page.chars) > 0:
                     tables = page.find_tables()
@@ -333,6 +338,8 @@ def main():
     # Dedicated process: hard wall timeout in Node, CPU/address-space/file limits here.
     resource.setrlimit(resource.RLIMIT_CPU, (80, 85))
     resource.setrlimit(resource.RLIMIT_FSIZE, (100*1024*1024, 100*1024*1024))
+    # Language model mappings need virtual address space even when resident RAM
+    # is much smaller. The opt-in Node guard limits actual subtree/cgroup memory.
     if sys.platform.startswith('linux'): resource.setrlimit(resource.RLIMIT_AS, (768*1024*1024, 768*1024*1024))
     resource.setrlimit(resource.RLIMIT_NOFILE, (128,128))
     path = pathlib.Path(sys.argv[1])

@@ -11,7 +11,7 @@
 - `docs/review-docs/implementation-report.md`
 - `next.config.ts`
 - `package.json`
-- `render.review-docs.yaml`
+- `render.review-docs.yaml` (2026-09-10 추가 비용 금지 결정으로 제거)
 - `scripts/create-review-input-fixtures.py`
 - `scripts/health.ts`
 - `scripts/review-docs-render-fixtures.ts`

@@ -6,32 +6,74 @@ import os from "node:os";
 import { z } from "zod";
 import { ReviewExtractionError, validateReviewUpload } from "./upload-validation";
 import { extractDocxBlocks } from "./docx-extract";
+import { assertConverterMemoryAvailable, converterTimeoutSeconds, lowMemoryReviewConversion, watchConverterMemory } from "./converter-memory";
+import { awaitReviewAbort } from "./abort";
 import { emptyReviewData, explicitInstrumental, explicitTitle, normalizeReviewDate, REVIEW_DOC_LIMITS, reviewAlbumSchema, reviewTrackSchema, type ReviewAlbum, type ReviewDocumentData, type ReviewIssue, type ReviewMode, type ReviewSource, type ReviewTrack } from "./model";
 
 export type ReviewUpload = { id: string; name: string; mime: string; buffer: Buffer };
+export type ReviewUploadInput = ReviewUpload | { id: string; name: string; mime: string; size?: number; load: () => Promise<Buffer> };
 export { ReviewExtractionError, validateReviewUpload } from "./upload-validation";
 const extractionBlockSchema = z.object({ text: z.string().max(REVIEW_DOC_LIMITS.sourceCharacters), location: z.string(), kind: z.string(), page: z.number().optional(), confidence: z.number().optional(), bbox: z.array(z.number()).optional(), cells: z.array(z.object({ text: z.string(), column: z.number(), colSpan: z.number().optional(), verticalMerge: z.string().nullable().optional() })).optional() });
 const extractionResultSchema = z.object({ format: z.string(), blocks: z.array(extractionBlockSchema).max(30_000), pageCount: z.number().max(REVIEW_DOC_LIMITS.pages).optional(), warnings: z.array(z.string()).default([]) });
 export type ExtractedBlocks = z.infer<typeof extractionResultSchema>;
-export async function extractFileBlocks(file: ReviewUpload): Promise<ExtractedBlocks> {
+export async function extractFileBlocks(file: ReviewUpload, signal?: AbortSignal): Promise<ExtractedBlocks> {
+  signal?.throwIfAborted();
   const { extension } = validateReviewUpload(file);
   if (extension === "docx") return extractionResultSchema.parse(extractDocxBlocks(file.buffer));
+  await assertConverterMemoryAvailable();
+  signal?.throwIfAborted();
   const directory = await mkdtemp(path.join(os.tmpdir(), "onside-review-"));
   const input = path.join(directory, `source.${extension}`);
-  await writeFile(input, file.buffer, { mode: 0o600 });
   try {
+    await writeFile(input, file.buffer, { mode: 0o600, signal });
+    signal?.throwIfAborted();
     return await new Promise((resolve, reject) => {
-      // This executable belongs to the dedicated image. The web queue only
-      // claims native DOCX/URL jobs; never trace an arbitrary Python env path.
-      const child = spawn(/* turbopackIgnore: true */ process.env.REVIEW_DOCS_PYTHON || "python3", [path.join(process.cwd(), "services/review-docs/extract.py"), input, extension], { stdio: ["ignore", "pipe", "pipe"], env: { NODE_ENV: process.env.NODE_ENV ?? "production", PATH: process.env.PATH, LANG: "C.UTF-8", HOME: directory, PYTHONIOENCODING: "utf-8", PYTHONNOUSERSITE: process.env.REVIEW_DOCS_PYTHON ? "1" : "0" } });
-      const stdout: Buffer[] = []; let size = 0;
-      const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new ReviewExtractionError("CONVERTER_TIMEOUT", "문서 변환이 90초 제한을 초과했습니다. 페이지를 나눠 다시 업로드해주세요.")); }, REVIEW_DOC_LIMITS.conversionSeconds * 1000);
-      child.stdout.on("data", (chunk: Buffer) => { size += chunk.length; if (size > 12 * 1024 * 1024) { child.kill("SIGKILL"); reject(new ReviewExtractionError("EXTRACTION_LIMIT", "추출 데이터 용량 제한을 초과했습니다.")); } else stdout.push(chunk); });
+      // Keep Python in the supervisor's process group. Linux PDEATHSIG in the
+      // reader also terminates OCR/antiword when Python is killed on cancellation.
+      const child = spawn(/* turbopackIgnore: true */ process.env.REVIEW_DOCS_PYTHON || "python3", [path.join(process.cwd(), "services/review-docs/extract.py"), input, extension], {
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          NODE_ENV: process.env.NODE_ENV ?? "production", PATH: process.env.PATH,
+          LANG: "C.UTF-8", HOME: directory, PYTHONIOENCODING: "utf-8",
+          PYTHONNOUSERSITE: process.env.REVIEW_DOCS_PYTHON ? "1" : "0",
+          REVIEW_DOCS_LOW_MEMORY: lowMemoryReviewConversion() ? "true" : "false",
+          OMP_THREAD_LIMIT: process.env.OMP_THREAD_LIMIT || "1",
+          MALLOC_ARENA_MAX: process.env.MALLOC_ARENA_MAX || "2",
+        },
+      });
+      const stdout: Buffer[] = [];
+      let size = 0;
+      let failure: unknown;
+      let stopped = false;
+      const stop = (error: unknown) => {
+        if (stopped) return;
+        stopped = true;
+        failure = error;
+        stdout.length = 0;
+        child.kill("SIGKILL");
+      };
+      const abort = () => stop(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+      const timeoutSeconds = converterTimeoutSeconds();
+      const timer = setTimeout(() => stop(new ReviewExtractionError("CONVERTER_TIMEOUT", `문서 변환이 ${timeoutSeconds}초 제한을 초과했습니다. 페이지를 나눠 다시 업로드해주세요.`)), timeoutSeconds * 1000);
+      const stopWatching = child.pid ? watchConverterMemory(child.pid, stop) : () => {};
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) abort();
+      child.stdout.on("data", (chunk: Buffer) => {
+        if (stopped) return;
+        size += chunk.length;
+        if (size > 12 * 1024 * 1024) stop(new ReviewExtractionError("EXTRACTION_LIMIT", "추출 데이터 용량 제한을 초과했습니다."));
+        else stdout.push(chunk);
+      });
       // Error output may contain source text. Never persist or log it.
       child.stderr.resume();
-      child.on("error", () => { clearTimeout(timer); reject(new ReviewExtractionError("CONVERTER_UNAVAILABLE", "Python 문서 변환기를 실행할 수 없습니다. REVIEW_DOCS_PYTHON과 워커 이미지 설정을 확인해주세요.")); });
+      child.on("error", () => stop(new ReviewExtractionError("CONVERTER_UNAVAILABLE", "Python 문서 변환기를 실행할 수 없습니다. REVIEW_DOCS_PYTHON과 워커 이미지 설정을 확인해주세요.")));
       child.on("close", (code) => {
         clearTimeout(timer);
+        stopWatching();
+        signal?.removeEventListener("abort", abort);
+        // Do not release the extraction slot/remove its temporary directory until
+        // the killed process has actually closed its readers and output streams.
+        if (stopped) return reject(failure);
         try {
           const result = JSON.parse(Buffer.concat(stdout).toString("utf8"));
           if (result.error) return reject(new ReviewExtractionError(String(result.error.code), String(result.error.message)));
@@ -186,16 +228,26 @@ function mergeExactAlbums(data: ReviewDocumentData, incoming: ReviewAlbum) {
   }
   same.tracks.sort((a, b) => a.number - b.number);
 }
-export async function extractFiles(files: ReviewUpload[], mode: ReviewMode, applicationDate: string): Promise<ReviewDocumentData> {
-  if (!files.length || files.length > REVIEW_DOC_LIMITS.files || files.reduce((n,f) => n+f.buffer.length,0) > REVIEW_DOC_LIMITS.totalBytes) throw new ReviewExtractionError("UPLOAD_LIMIT", `파일 ${REVIEW_DOC_LIMITS.files}개, 전체 ${REVIEW_DOC_LIMITS.totalBytes/1024/1024}MB까지 업로드할 수 있습니다.`);
+export async function extractFiles(files: ReviewUploadInput[], mode: ReviewMode, applicationDate: string, signal?: AbortSignal): Promise<ReviewDocumentData> {
+  signal?.throwIfAborted();
+  if (!files.length || files.length > REVIEW_DOC_LIMITS.files || files.reduce((n,f) => n+("buffer" in f ? f.buffer.length : f.size ?? 0),0) > REVIEW_DOC_LIMITS.totalBytes) throw new ReviewExtractionError("UPLOAD_LIMIT", `파일 ${REVIEW_DOC_LIMITS.files}개, 전체 ${REVIEW_DOC_LIMITS.totalBytes/1024/1024}MB까지 업로드할 수 있습니다.`);
   const data = emptyReviewData(mode, applicationDate);
   const hashes = new Set<string>();
-  for (const file of files) {
+  let bytesRead = 0;
+  for (const input of files) {
+    signal?.throwIfAborted();
+    // A lazy source is read only after the previous source has finished parsing.
+    // No accumulated buffer list remains live while Python/OCR is running.
+    const file: ReviewUpload = "buffer" in input ? input : { id: input.id, name: input.name, mime: input.mime, buffer: await awaitReviewAbort(input.load(), signal) };
+    signal?.throwIfAborted();
+    bytesRead += file.buffer.length;
+    if (bytesRead > REVIEW_DOC_LIMITS.totalBytes) throw new ReviewExtractionError("UPLOAD_LIMIT", "전체 파일 크기 제한을 초과했습니다. 자료를 나눠주세요.");
     const { sha256 } = validateReviewUpload(file);
     if (hashes.has(sha256)) { data.issues.push({ id: `duplicate:${file.id}`, code: "DUPLICATE_SOURCE", severity: "warning", sourceId: file.id, message: `${file.name}: 같은 내용의 파일이 있어 중복 분석을 제외했습니다.` }); continue; }
     hashes.add(sha256);
     try {
-      const result = await extractFileBlocks(file);
+      const result = await extractFileBlocks(file, signal);
+      signal?.throwIfAborted();
       const source: ReviewSource = { id: file.id, kind: "file", name: file.name, mimeType: file.mime, sha256, format: result.format, pageCount: result.pageCount, warnings: result.warnings, text: result.blocks.map((b) => `[${b.location}]\n${b.text}`).join("\n\n") };
       if (source.text.length > REVIEW_DOC_LIMITS.sourceCharacters) throw new ReviewExtractionError("TEXT_LIMIT", "원문과 근거의 전체 용량 제한을 초과했습니다. 파일을 나눠주세요.");
       if (data.sources.reduce((n, s) => n + s.text.length, 0) + source.text.length > REVIEW_DOC_LIMITS.sourceCharacters) throw new ReviewExtractionError("TOTAL_TEXT_LIMIT", "작업 전체 원문이 600,000자를 초과했습니다. 파일을 여러 작업으로 나눠주세요.");
@@ -204,6 +256,7 @@ export async function extractFiles(files: ReviewUpload[], mode: ReviewMode, appl
       data.issues.push(...extracted.issues);
       extracted.albums.forEach((a) => mergeExactAlbums(data, a));
     } catch (error) {
+      signal?.throwIfAborted();
       const failure = error instanceof ReviewExtractionError ? error : new ReviewExtractionError("EXTRACTION_FAILED", "파일 추출에 실패했습니다. 원본과 변환기 설정을 확인해주세요.");
       data.sources.push({ id: file.id, kind: "file", name: file.name, mimeType: file.mime, sha256, text: "", warnings: [failure.message] });
       data.issues.push({ id: `source:${file.id}`, code: failure.code, severity: "error", sourceId: file.id, message: `${file.name}: ${failure.message}` });

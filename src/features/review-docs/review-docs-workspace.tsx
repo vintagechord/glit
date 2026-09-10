@@ -60,6 +60,7 @@ export function ReviewDocsWorkspace() {
   const [workerReady, setWorkerReady] = useState<boolean | null>(null);
   const [workerMode, setWorkerMode] = useState<"dedicated" | "web" | "unavailable">("unavailable");
   const [workerError, setWorkerError] = useState("");
+  const [supportedFormats, setSupportedFormats] = useState<string[]>(["docx"]);
   const mounted = useRef(false);
   const historyRequest = useRef<{ controller: AbortController; promise: Promise<void> } | null>(null);
   const detailRequest = useRef<AbortController | null>(null);
@@ -92,13 +93,15 @@ export function ReviewDocsWorkspace() {
     const sequence = loadSequence.current;
     const promise = (async () => {
       try {
-        const result = await api<{ jobs: Job[]; workerReady: boolean; workerMode?: "dedicated" | "web" | "unavailable"; workerError?: string }>("/api/admin/review-docs/jobs", { signal: controller.signal });
+        const result = await api<{ jobs: Job[]; workerReady: boolean; workerMode?: "dedicated" | "web" | "unavailable"; supportedFormats?: string[]; workerError?: string }>("/api/admin/review-docs/jobs", { signal: controller.signal });
         if (controller.signal.aborted) return;
         // A history response started before a save/selection must not replace newer job summaries.
         if (sequence === loadSequence.current) setJobs(result.jobs);
         setWorkerReady(result.workerReady === true); setHistoryError("");
         setWorkerMode(result.workerMode ?? (result.workerReady ? "dedicated" : "unavailable"));
         setWorkerError(result.workerError ?? "");
+        setSupportedFormats((result.supportedFormats ?? (result.workerMode === "web" ? ["docx"] : ["doc", "docx", "hwp", "pdf"]))
+          .filter((format) => ["doc", "docx", "hwp", "pdf"].includes(format)));
       } catch (error) {
         if (controller.signal.aborted) return;
         setWorkerReady(null);
@@ -220,14 +223,14 @@ export function ReviewDocsWorkspace() {
 
   return <div className="mt-7 space-y-6">
     {workerReady === false && <p role="status" className="rounded-[8px] border-2 border-amber-500/60 bg-amber-500/10 p-4 text-sm">{workerError || "문서 처리 작업자가 연결되어 있지 않습니다. 연결 상태를 자동으로 확인하고 있습니다. 기존 자료를 확인·수정할 수 있으며, 새 분석·번역·생성은 연결이 복구되면 진행할 수 있습니다."}</p>}
-    {workerMode === "web" && <p role="status" className="rounded-[8px] border border-emerald-600/40 bg-emerald-600/5 p-4 text-sm">DOCX 파일과 멜론·지니 URL은 바로 분석할 수 있습니다. DOC·HWP·PDF는 DOCX로 저장해서 업로드해주세요.</p>}
+    {workerMode === "web" && <p role="status" className="rounded-[8px] border border-emerald-600/40 bg-emerald-600/5 p-4 text-sm">{supportedFormats.length > 1 ? "DOC · DOCX · HWP · PDF 파일과 멜론·지니 URL을 바로 분석할 수 있습니다." : "DOCX 파일과 멜론·지니 URL은 바로 분석할 수 있습니다. DOC·HWP·PDF는 DOCX로 저장해서 업로드해주세요."}</p>}
     <section className={panelClass} aria-label="자료 입력">
       <div role="tablist" aria-label="생성 방식" className="flex flex-wrap gap-2">{tabs.map((item) => <button key={item.id} type="button" role="tab" id={`tab-${item.id}`} aria-selected={tab === item.id} aria-controls="review-input-panel" onClick={() => setTab(item.id)} className={`${buttonClass} ${tab === item.id ? "border-[#111111] bg-[#f2cf27] text-[#111111]" : ""}`}>{item.label}</button>)}</div>
       <div id="review-input-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="mt-5 space-y-4">
         <p className="text-sm text-muted-foreground">{tab === "mv" ? "아티스트·곡명·가사로 곡별 DOCX를 만듭니다. 한 곡도 DOCX와 ZIP을 각각 다운로드할 수 있습니다." : tab === "urls" ? "멜론·지니 링크로 앨범 정보·트랙·크레딧·가사를 분석합니다. URL별 결과를 확인하고 같은 앨범의 자료를 합칠 수 있습니다." : "한 앨범의 자료를 여러 파일로, 여러 앨범을 한 파일로 업로드할 수 있습니다. 분석 후 원본 연결과 트랙 순서를 확인해주세요."}</p>
         {tab === "urls" ? <Field label="멜론·지니 URL (한 줄에 하나, 최대 8개)" value={urls} onChange={setUrls} multiline /> : <div>
-          <label className="block text-sm font-semibold">기준파일 선택<input type="file" multiple accept={workerMode === "web" ? ".docx" : ".doc,.docx,.hwp,.pdf"} onChange={(event) => setFiles(Array.from(event.target.files ?? []))} className={`${inputClass} file:mr-4 file:rounded file:border-0 file:px-3 file:py-1`} /></label>
-          <p className="mt-2 text-xs text-muted-foreground">{workerMode === "web" ? "DOCX / 최대 8개, 파일당 10MB, 전체 40MB" : "DOC · DOCX · HWP · PDF / 최대 8개, 파일당 10MB, 전체 40MB, PDF 파일당 80쪽"}</p>
+          <label className="block text-sm font-semibold">기준파일 선택<input type="file" multiple accept={supportedFormats.map((format) => `.${format}`).join(",")} onChange={(event) => setFiles(Array.from(event.target.files ?? []))} className={`${inputClass} file:mr-4 file:rounded file:border-0 file:px-3 file:py-1`} /></label>
+          <p className="mt-2 text-xs text-muted-foreground">{supportedFormats.length <= 1 ? "DOCX / 최대 8개, 파일당 10MB, 전체 40MB" : "DOC · DOCX · HWP · PDF / 최대 8개, 파일당 10MB, 전체 40MB, PDF 파일당 80쪽"}</p>
           {files.length > 0 && <ul className="mt-3 space-y-1 text-sm">{files.map((file, index) => <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3"><span className="break-all">{file.name} ({(file.size / 1024 / 1024).toFixed(2)}MB)</span><button type="button" className="shrink-0 text-xs underline" onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}>제외</button></li>)}</ul>}
         </div>}
         <button type="button" className="bauhaus-button px-5 py-3 text-sm disabled:opacity-50" onClick={() => void createJob()} disabled={pending || dirty || workerReady !== true}>{pending ? "처리 중…" : "업로드·분석 시작"}</button>

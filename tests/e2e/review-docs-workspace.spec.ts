@@ -51,6 +51,21 @@ test("web processing enables analysis and clearly limits uploads to DOCX without
   await expect(page.getByRole("button", { name: "업로드·분석 시작" })).toBeEnabled();
 });
 
+test("a converter-capable web process exposes all checked formats and falls back when capability is lost", async ({ page }) => {
+  let formats = ["doc", "docx", "hwp", "pdf"];
+  await page.route(`**${apiPath}`, route => route.fulfill({ json: { jobs: [], workerReady: true, workerMode: "web", supportedFormats: formats } }));
+  await page.clock.install();
+  await page.goto(origin);
+  await expect(page.getByRole("button", { name: "업로드·분석 시작" })).toBeEnabled();
+  await expect(page.getByLabel("기준파일 선택")).toHaveAttribute("accept", ".doc,.docx,.hwp,.pdf");
+  await expect(page.getByRole("status")).toContainText("DOC · DOCX · HWP · PDF 파일과 멜론·지니 URL을 바로 분석할 수 있습니다.");
+  formats = ["docx"];
+  await page.clock.runFor(15_000);
+  await expect(page.getByLabel("기준파일 선택")).toHaveAttribute("accept", ".docx");
+  await expect(page.getByRole("status")).toContainText("DOCX로 저장해서 업로드해주세요.");
+  await expect(page.getByRole("button", { name: "업로드·분석 시작" })).toBeEnabled();
+});
+
 test("an offline worker reconnects automatically without reloading or losing entered URLs", async ({ page }) => {
   let workerReady = false;
   await page.route(`**${apiPath}`, (route) => route.fulfill({ json: { jobs: [], workerReady } }));

@@ -1,134 +1,75 @@
-# 심의자료 워커 연결
+# 추가 요금 없는 심의자료 변환
 
-## 2026-09-10 운영 연결 준비 상태
+## 운영 구성
 
-- 기존 `glit` 웹 서비스는 Oregon / Node / Free이며 `6d1805d`가 배포되었다.
-  0103·0104 마이그레이션도 운영 DB에 적용되었다. 실제 운영의 합성 DOCX가
-  `needs_review`까지 분석되는 것을 확인하고 검증 자료를 모두 정리했다.
-- `onside-review-docs` 환경 그룹의 Supabase·B2 변수 9개를 확인했다.
-  같은 운영 설정으로 전용 이미지의 읽기 전용 사전 검사가 통과했다.
-- Linux amd64 / 1 CPU / 2GB 조건에서 DOCX, 바이너리 DOC, RTF DOC, HWP5,
-  한글 텍스트 PDF와 스캔 PDF의 변환, DOCX·ZIP 생성을 검증했다.
-  단일 페이지 한글 스캔에서 곡명이 누락될 때 제한 시간 안에 단일열 OCR을
-  추가 적용한다. 이미 인식된 곡명이나 표준 한국어 항목을 보호하며, 대체 결과를
-  선택해도 최초 인식 원문과 관리자 확인 항목을 보존한다. 다페이지 PDF는
-  추가 OCR을 실행하지 않아 다음 페이지의 처리 시간을 소비하지 않는다.
-- Render의 전용 워커 생성 설정은 준비되어 있다. 월 US$25 추가 정기요금에
-  대한 사용자 승인을 요청한 상태이며 **아직 서비스는 생성하지 않았다**.
-  실제 전용 워커 heartbeat와 운영 DOC·HWP·PDF 분석 확인은 개설 후 진행한다.
+2026-09-10 사용자가 추가 요금 없이 연결하도록 확정했다. 유료 워커는 개설하지
+않았고 해당 Blueprint도 제거했다. `render.yaml`에는 기존 `glit` 웹 서비스
+한 대의 **Free / Oregon / Docker** 구성만 남긴다. 실제 생성하지 않았던 유료
+맞춤법 서비스 선언도 제거하며, 기존 맞춤법 처리 코드는 유지한다.
 
-## 2026-09-10: 기존 웹 서버 자동 처리 추가
+- 저장소: `vintagechord/glit`, `main`.
+- 기존 서비스: `srv-d5bvt5ggjchc73ccaaug`, `https://glit-b1yn.onrender.com`.
+- Dockerfile: 저장소 루트 `Dockerfile`. 실제 파일인
+  `services/review-docs/Dockerfile.web`에 연결되며 중복 정의하지 않는다.
+- 실행: Next 프로세스 한 개. 별도 상주 tsx 워커나 새 서버·디스크·DB를 만들지 않는다.
+- 변환기는 작업이 있을 때만 실행한다. 기존 15초 dispatcher와 응답 후 처리가
+  동일 DB lease를 사용하여 한 번에 문서 작업 한 건만 실행한다.
+- Supabase·B2·결제 등 기존 웹 환경 설정을 그대로 사용한다. 비밀값은 빌드 인자,
+  로그, 문서에 넣지 않는다. 빌드에는 공개 Supabase URL·anon 키만 사용한다.
 
-전용 워커가 없는 기존 Node 웹 서비스에서도 **DOCX와 멜론·지니 URL의 분석,
-번역 요청, DOCX/ZIP 생성**을 실행한다. `0103_review_document_web_dispatcher.sql`을
-적용하고 웹을 배포하면 별도 서비스 개설이나 플랜 변경 없이 사용할 수 있다.
-`after()`가 저장된 작업을 시작하며, 기존 Render `npm start`에서는 15초 주기
-dispatcher가 브라우저를 닫거나 서버가 재시작된 뒤에도 대기열을 재개한다.
+Render에서 현재 청구액과 예상 청구액은 $0, 빌드 월 추가 지출 한도도 $0로 확인했다.
+새 유료 플랜으로 바꾸거나 서비스를 추가하는 작업은 하지 않는다.
 
-웹 처리기는 전용 워커와 같은 데이터베이스 단일 lease를 사용하지만 전용 워커의
-heartbeat는 기록하지 않는다. 전용 워커가 연결되면 그 워커가 우선한다. DOCX는
-Node에서 표·가사·체크박스와 근거 위치를 읽으며, 압축 크기·CRC·XML·매크로 및
-외부 엔티티를 검증한다. 외부 관계 링크나 삽입 개체는 실행하지 않는다.
-설정 검사는 읽기 전용 RPC로 실제 0103 함수 설치 여부와 DOCX 템플릿을 확인한다.
+## 전체 형식 연결과 중단 복구
 
-**기존 Node 배포에서 DOC/HWP/PDF 분석은 여전히 전용 변환기가 필요하다.**
-공개 `/forms`의 DOC/HWP 신청서도 이 제한에 해당한다. Word/한글에서 작성한
-자료를 DOCX로 저장하면 바로 업로드할 수 있으며 화면에도 이 형식 제한을 표시한다.
-이미 분석된 DOC/HWP/PDF 작업의 번역과 문서 생성은 웹에서도 가능하다.
-`OPENAI_API_KEY`가 없으면 외국어 번역을 직접 입력·확인해야 한다.
-`REVIEW_DOCS_WEB_DISABLED=true`는 웹 자동 처리를 끄고 기존 전용 워커만 사용한다.
+`0105_review_document_web_converters.sql`은 기존 DOCX 전용 RPC를 유지하면서
+확인된 지원 형식 배열을 받는 호출을 추가한다. `REVIEW_DOCS_WEB_CONVERTERS=true`
+및 실제 Python·antiword·PDF·OCR·언어팩 점검을 모두 통과해야 DOC·DOCX·HWP·PDF가
+활성화된다. API의 지원 형식과 화면의 파일 선택·설명, DB 작업 선택 조건이 같다.
 
-### 기존 웹 서비스를 Docker로 실행하여 전체 형식을 지원하는 선택 경로
+기존 Node 환경이나 변환기 점검 실패 시 DOCX·멜론·지니 URL을 계속 처리한다.
+잘못된 전용 워커 heartbeat를 만들지 않는다. 성공한 변환기 점검은 5분,
+실패는 15초 캐시하며 동시에 들어온 점검은 한 번만 실행한다.
 
-`services/review-docs/Dockerfile.web`은 웹과 전체 변환기를 같은 서비스 이미지에
-설치한다. `scripts/review-docs/start-web.mjs`는 웹과 사전 검사를 통과한 워커를
-함께 시작하고 워커가 종료되면 15초 후 다시 시작한다. 웹 종료/배포 시 양쪽
-프로세스에 종료 신호를 전달하며 10초 후 남은 프로세스를 정리한다.
+작업·원본·생성 파일은 기존 DB와 비공개 B2에 저장한다. 서버가 재시작되면
+만료된 lease를 제한된 횟수 안에서 복구한다. 취소·실행 시간 초과 시 변환기를
+종료하고 임시 파일을 정리하며, 취소된 이전 결과가 나중에 저장되지 않도록
+버전과 lease를 함께 확인한다.
 
-이 경로는 **최소 2GB 메모리** 환경용이다. `render.yaml`은 512MB starter를 선언하지만
-실제 Render 웹은 Free로 확인되었다. 두 512MB 환경에서
-전체 DOC/HWP/PDF/OCR 실행을 보장하지 않으며 무리하게 함께 실행하도록 바꾸지
-않았다. 기존 서비스의 Docker 런타임 전환과 자원 검토는 운영 변경이고 이번 소스
-작업에서는 실행하지 않았다. 새 서비스나 플랜 변경을 자동 수행하는 Blueprint도
-추가하지 않았다.
+## 무료 서버의 자원 보호
 
-검증/실행 순서는 다음과 같다. 공개 Supabase 설정만 빌드 인자로 전달하고 서비스
-키·B2 키·번역 키는 빌드 인자에 넣지 않는다. `.dockerignore`는 `.env*`를 제외한다.
+이미지에는 `REVIEW_DOCS_LOW_MEMORY=true`, Next heap 192MB, 캐시 8MB,
+`OMP_THREAD_LIMIT=1`, `MALLOC_ARENA_MAX=2`를 설정한다. 원본 파일은 한 번에
+한 개씩 읽고 분석한다. 변환기와 하위 OCR 프로세스의 메모리 및 컨테이너의
+회수 불가능한 사용량을 감시해 웹 서버의 여유 메모리를 보호한다.
+제한을 넘는 문서는 페이지를 나누거나 DOCX로 저장하도록 오류를 안내한다.
 
-```sh
-docker build --platform linux/amd64 -f services/review-docs/Dockerfile.web \
-  --build-arg NEXT_PUBLIC_SUPABASE_URL \
-  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY \
-  -t onside-review-web .
-docker run --rm --memory=2g --pids-limit=256 \
-  --env-file /path/to/review-web.env onside-review-web npm run review-docs:check
-docker run --rm --memory=2g --pids-limit=256 -p 3000:3000 \
-  --env-file /path/to/review-web.env onside-review-web
-```
+한 페이지 스캔에서 곡명이 누락되면 남은 시간 안에서 단일열 OCR을 추가
+시도한다. 이미 인식된 곡명과 표준 한국어 항목을 보호하고, 최초 OCR 원문도
+비교 근거로 보존한다. 다페이지 문서는 추가 OCR로 뒤 페이지 처리 시간을
+소비하지 않는다. OCR·복잡한 표·다단 문서는 관리자의 원문 확인을 요구한다.
 
-0103 적용과 Node 웹 배포는 완료했다. 위 Docker 웹 통합 경로는 적용하지 않았다.
-전용 변환기의 운영 heartbeat·DOC/HWP/PDF 분석과 다운로드는 개설 후 확인한다.
+무료 서비스는 15분간 요청이 없으면 잠들 수 있으며 첫 접속 시 다시 시작하는
+시간이 필요하다. 이 제한을 피하려고 유료 플랜이나 인위적인 keep-alive 요청을
+추가하지 않는다. 큰 스캔 문서는 서버의 시간·메모리 상한에 맞춰 나눠야 한다.
+[Render 무료 서비스 제한](https://render.com/docs/free)을 따른다.
 
-## 2026-09-08 장애 원인
-
-운영 DB의 `review_document_worker_heartbeat`는 비어 있었고 생성 작업도 없었다.
-웹 시작 명령 `next start`는 별도 워커를 실행하지 않는다. 최초 배포는 추가 비용 없이
-웹·DB만 반영하기로 하여 전용 워커를 만들지 않았다. 따라서 웹 재배포나 DB 재적용만으로는
-문서 생성 기능이 켜지지 않는다. 경고를 숨기거나 heartbeat만 기록해서는 안 된다.
-
-이번 변경은 연결 후 관리자 화면을 자동 복구하고, 실행 환경이 준비되기 전에 워커가
-준비 완료로 표시되는 것을 막는다. 새 DB 마이그레이션은 필요하지 않다.
-
-## 적용할 운영 구성
-
-- 서비스: `onside-review-docs-worker`, Background Worker / Docker, 1대.
-- 사양: `standard` (현재 이름 `1c-2g`), 1 CPU / 2GB RAM.
-- 기본 실행 비용: 월 US$25. 자동 번역 API 및 기존 저장소의 사용량 과금은 별도.
-- 저장소: `vintagechord/glit`, 검증된 변경이 반영된 `main`.
-- Dockerfile: `services/review-docs/Dockerfile`, context: 저장소 루트.
-- 실행 명령: 이미지의 `npm run review-docs:worker`.
-- 배포 전 검사: `npm run review-docs:check` (읽기 전용, 실패하면 배포 중단).
-- 환경 그룹: 기존에 준비한 `onside-review-docs`를 연결한다.
-- 리전: Oregon (`oregon`), 기존 `glit`과 동일.
-- 추가 DB·Redis·디스크는 만들지 않는다. 워커 자동 배포는 꺼 둔다.
-
-2026-09-10 Render 워커 생성 화면에서 월 US$25를 다시 확인했다.
-[Render 가격표](https://render.com/pricing)의 Services & Workers 기준이다.
-[`standard` 호환 이름](https://render.com/docs/compute-plans#legacy-plan-names)은 계속 지원된다.
-새 워커 생성은 이전의 추가 비용 없음 조건을 변경하므로 비용 확인 후 진행한다.
-
-별도 Blueprint 파일은 `render.review-docs.yaml`이다. Render의 New → Blueprint에서
-이 파일을 선택하고 생성 대상이 위 워커 1개인지 확인한다. 기존 웹의 `render.yaml`은
-이번 워커 연결에 사용하지 않는다. Blueprint Auto Sync도 꺼 두어 수동 배포와 일치시킨다.
-
-환경 그룹에는 웹과 같은 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY`, `B2_S3_ENDPOINT`, `B2_REGION`, `B2_BUCKET`, `B2_PREFIX`,
-`B2_KEY_ID`, `B2_APPLICATION_KEY`가 필요하다. 비밀값을 로그·문서·이슈에 복사하지 않는다.
-버킷은 `allPrivate`여야 하며 B2 키의 `listBuckets` 권한으로 확인한다.
-`REVIEW_DOCS_B2_BUCKET`은 별도 비공개 버킷을 사용할 때만 지정한다.
-
-`OPENAI_API_KEY`가 없으면 자동 번역은 사용할 수 없다. 파일 분석과 DOCX/ZIP 생성은
-가능하며, 외국어 가사는 관리자가 번역을 입력·확인한 후 생성할 수 있다.
-
-## 실행 전 검사와 완료 확인
+## 검증과 배포
 
 ```sh
-docker build --platform linux/amd64 -f services/review-docs/Dockerfile -t onside-review-docs-worker .
-docker run --rm --init --memory=2g --pids-limit=128 \
-  --env-file /path/to/review-worker.env onside-review-docs-worker \
-  npm run review-docs:check
+docker build --platform linux/amd64 --build-arg NEXT_PUBLIC_SUPABASE_URL \
+  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY -t onside-review-web:free .
 ```
 
-`--check`는 Python/DOC/HWP/PDF/OCR 의존성·한국어/영어/일본어 언어팩·템플릿,
-DB 테이블 읽기, B2 비공개 설정을 검사한다. 작업 claim, heartbeat 기록, 자료 생성·삭제,
-번역 API 호출은 하지 않는다. 실패 시 고정된 오류 코드와 설정 안내를 출력하고 종료한다.
+검증은 Linux amd64, 512MB, 추가 스왑 없음, 실제 무료 플랜과 같은 0.1 CPU
+조건으로 진행한다. 웹 화면을 읽는 동안 DOC·HWP·텍스트 PDF·스캔 PDF를
+분석하고 생성·오류 복구를 확인한다. 실제 운영 연결과 검증 결과는
+[배포 기록](deployment-report.md)에 별도로 기록한다.
 
-실제 워커가 실행된 후 다음을 모두 확인해야 운영 복구 완료로 기록한다.
+기존 서비스의 Settings → Build → Source에서 같은 저장소와 `main`을 선택해
+Runtime을 Docker로 바꾼다. Compute는 Free를 유지한다. 새 서비스 생성이나
+Blueprint로 다른 서비스를 추가하는 방식은 사용하지 않는다.
 
-1. 사전 검사 통과 후 워커 프로세스가 계속 실행되고 heartbeat가 90초 이내로 갱신된다.
-2. 관리자 화면의 경고가 새로고침 없이 사라지고 업로드·분석 시작이 활성화된다.
-3. 합성 검증 문서의 분석 → 관리자 확인·저장 → 생성 → 개별 DOCX/ZIP 다운로드를 확인한다.
-4. 사용한 검증 작업과 만료 자료는 기존 보관 정책으로 정리하며 고객 작업을 삭제하지 않는다.
-
-현재 코드 배포와 워커 서비스 개설은 별도 상태다. 워커의 실시간 heartbeat와 실제 작업
-완료를 확인하기 전에는 문서 생성 장애가 해결됐다고 기록하지 않는다.
+되돌릴 때는 같은 서비스의 Runtime을 Node, build를 `npm ci && npm run build`,
+start를 `npm run start`로 복구한다. 0105는 기존 RPC와 호환되므로 DB를 되돌릴
+필요가 없다. Node 환경에서는 DOCX와 URL 처리를 계속 사용할 수 있다.

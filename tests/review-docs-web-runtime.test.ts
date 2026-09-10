@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createFileReviewJob, listReviewJobs } from "../src/lib/review-docs/jobs";
-import { assertReviewFormats, reviewProcessor } from "../src/lib/review-docs/web-runtime";
+import { assertReviewFormats, createReviewWebCapabilities, reviewProcessor } from "../src/lib/review-docs/web-runtime";
 import { runClaimedWebReviewJob, runWebReviewBatch } from "../src/lib/review-docs/web-runner";
 import { isReviewDispatcherEnabled, startReviewDispatcher } from "../src/lib/review-docs/dispatcher";
 import type { ReviewJob } from "../src/lib/review-docs/jobs-types";
@@ -12,6 +12,7 @@ process.env.SUPABASE_URL = "https://review-web-test.supabase.co";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
 delete process.env.REVIEW_DOCS_WEB_DISABLED;
+delete process.env.REVIEW_DOCS_WEB_CONVERTERS;
 
 test("web fallback reports a missing migration, then recovers without forging a dedicated heartbeat", async (t) => {
   let now = Date.now(), missing = true, probes = 0;
@@ -113,4 +114,62 @@ test("production dispatcher resumes jobs without a browser and stays off during 
   callback(); await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(calls, 1); assert.equal(unrefed, 2);
   await controller.stop();
+});
+
+
+test("converter opt-in shares its real readiness probe and caches success for five minutes", async () => {
+  let now = 0, checks = 0, release!: () => void;
+  const env: Record<string, string | undefined> = {};
+  const capabilities = createReviewWebCapabilities({ env: () => env, now: () => now,
+    checkConverters: async () => { checks++; await new Promise<void>(resolve => { release = resolve; }); },
+  });
+  assert.deepEqual(await capabilities(), ["docx"]); assert.equal(checks, 0);
+  env.REVIEW_DOCS_WEB_CONVERTERS = "true";
+  const pending = [capabilities(), capabilities(), capabilities()];
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(checks, 1); release();
+  assert.deepEqual(await Promise.all(pending), Array.from({ length: 3 }, () => ["doc", "docx", "hwp", "pdf"]));
+  now = 299_999; assert.deepEqual(await capabilities(), ["doc", "docx", "hwp", "pdf"]); assert.equal(checks, 1);
+  now = 300_001; const renewed = capabilities();
+  await new Promise<void>(resolve => setImmediate(resolve)); assert.equal(checks, 2); release(); await renewed;
+  env.REVIEW_DOCS_WEB_CONVERTERS = "false"; assert.deepEqual(await capabilities(), ["docx"]); assert.equal(checks, 2);
+});
+
+test("missing converter dependencies retain native DOCX and recover after a bounded failure cache", async () => {
+  let now = 0, checks = 0, failed = true;
+  const env = { REVIEW_DOCS_WEB_CONVERTERS: "true", REVIEW_DOCS_PYTHON: "/fixture/python" };
+  const capabilities = createReviewWebCapabilities({ env: () => env, now: () => now,
+    checkConverters: async () => { checks++; if (failed) throw new Error("private converter details"); },
+  });
+  assert.deepEqual(await capabilities(), ["docx"]);
+  now = 14_999; assert.deepEqual(await capabilities(), ["docx"]); assert.equal(checks, 1);
+  failed = false; now = 15_001; assert.deepEqual(await capabilities(), ["doc", "docx", "hwp", "pdf"]); assert.equal(checks, 2);
+  env.REVIEW_DOCS_PYTHON = "/new/python"; failed = true;
+  assert.deepEqual(await capabilities(), ["docx"]); assert.equal(checks, 3);
+});
+
+test("full-format web readiness and claims use the same capability RPC without publishing heartbeat", async (t) => {
+  let now = Date.now(), missing = true;
+  t.mock.method(Date, "now", () => now);
+  const formats = ["doc", "docx", "hwp", "pdf"];
+  const requests: { p_check_only: boolean; p_supported_formats: string[] }[] = [];
+  t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    assert.equal(url.hostname, "review-web-test.supabase.co");
+    assert.ok(url.pathname.endsWith("/claim_review_document_web_job"), "capability checks never write a dedicated heartbeat");
+    const body = JSON.parse(String(init?.body)); requests.push(body);
+    assert.deepEqual(body.p_supported_formats, formats);
+    return missing ? Response.json({ code: "PGRST202", message: "secret" }, { status: 404 }) : Response.json([]);
+  });
+  const unavailable = await reviewProcessor(false, async () => formats);
+  assert.equal(unavailable.workerReady, false); assert.match(unavailable.workerError!, /0105/);
+  missing = false; now += 16_000;
+  const ready = await reviewProcessor(false, async () => formats);
+  assert.equal(ready.workerMode, "web"); assert.deepEqual(ready.supportedFormats, formats);
+  assert.doesNotThrow(() => assertReviewFormats(ready, ["legacy.DOC", "한글.hwp", "scan.pdf", "native.docx"]));
+  const state = globalThis as typeof globalThis & { __reviewWebCleanupAt?: number };
+  const previous = state.__reviewWebCleanupAt; state.__reviewWebCleanupAt = now + 60_000;
+  try { await runWebReviewBatch(async () => formats); }
+  finally { state.__reviewWebCleanupAt = previous; }
+  assert.deepEqual(requests.map(request => request.p_check_only), [true, true, false]);
 });

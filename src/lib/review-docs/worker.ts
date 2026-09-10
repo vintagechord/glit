@@ -62,15 +62,18 @@ export async function processReviewJob(job: ReviewJob, signal?: AbortSignal) {
       if (!extracted) {
         if (job.input_kind === "urls") extracted = remapUrlSources(await extractUrls(inputSources.map((s) => s.url!), job.application_date, { signal }), job);
         else {
-          const files = [];
-          for (const source of inputSources) {
-            if (!source.objectKey) throw new ReviewJobError("원본 파일이 없습니다. 다시 업로드해주세요.", 422, "SOURCE_MISSING");
-            assertReviewObjectKey(source.objectKey, job.created_by, job.id);
-            const buffer = await getReviewObject(source.objectKey, REVIEW_JOB_LIMITS.fileBytes, signal);
-            if (createHash("sha256").update(buffer).digest("hex") !== source.sha256) throw new ReviewJobError("원본 파일 무결성 확인에 실패했습니다. 다시 업로드해주세요.", 422, "SOURCE_INTEGRITY");
-            files.push({ id: source.id, name: source.name, mime: source.mime ?? "application/octet-stream", buffer });
-          }
-          extracted = await extractFiles(files, job.mode, job.application_date);
+          const files = inputSources.map(source => ({
+            id: source.id, name: source.name, mime: source.mime ?? "application/octet-stream", size: source.size,
+            load: async () => {
+              signal?.throwIfAborted();
+              if (!source.objectKey) throw new ReviewJobError("원본 파일이 없습니다. 다시 업로드해주세요.", 422, "SOURCE_MISSING");
+              assertReviewObjectKey(source.objectKey, job.created_by, job.id);
+              const buffer = await getReviewObject(source.objectKey, REVIEW_JOB_LIMITS.fileBytes, signal);
+              if (createHash("sha256").update(buffer).digest("hex") !== source.sha256) throw new ReviewJobError("원본 파일 무결성 확인에 실패했습니다. 다시 업로드해주세요.", 422, "SOURCE_INTEGRITY");
+              return buffer;
+            },
+          }));
+          extracted = await extractFiles(files, job.mode, job.application_date, signal);
         }
         if (!reextract) await updateClaim(job, { extracted_data: extracted }, signal);
       }

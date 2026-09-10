@@ -46,6 +46,15 @@ m.run_reader=run
 selected,alternate=m.read_ocr('qa.png',time.monotonic()+10)
 assert m.ocr_fields(selected)==m.ocr_fields(original) and alternate is None
 assert len(calls)==2 and 0<calls[1][1]<=10
+m.run_reader=run
+m.os.environ.pop('REVIEW_DOCS_LOW_MEMORY',None)
+calls.clear()
+m.read_ocr('qa.png',time.monotonic()+200)
+assert len(calls)==2 and 19< calls[1][1] <=20
+m.os.environ['REVIEW_DOCS_LOW_MEMORY']='true'
+calls.clear()
+m.read_ocr('qa.png',time.monotonic()+200)
+assert len(calls)==2 and 59< calls[1][1] <=60
 calls.clear()
 selected,alternate=m.read_ocr('qa.png',time.monotonic()-1)
 assert len(calls)==1 and alternate is None

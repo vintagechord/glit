@@ -2,12 +2,15 @@
 
 The web application now reads DOCX directly in Node with bounded ZIP/XML validation;
 it also processes URL, translation and generation jobs through the shared durable
-queue (`0103_review_document_web_dispatcher.sql`). The Python converter below remains
-the DOC/HWP/PDF path. `Dockerfile.web` is an optional combined web/converter image
-for an existing service with at least 2GB RAM; it does not change production plans.
+queue (`0103_review_document_web_dispatcher.sql`). `Dockerfile.web` includes the
+DOC/HWP/PDF converters in the existing Free web service, with one Next process and
+no additional resident worker or paid service. `0105_review_document_web_converters.sql`
+enables full-format claims only after the opt-in converter checks succeed.
 See [connection and deployment steps](../../docs/review-docs/worker-connection.md).
 
-`extract.py <private-local-file> <doc|docx|hwp|pdf>` returns a JSON block stream. Node `extractFileBlocks` invokes it with generated filenames in a `0700` temporary directory, writes `0600` input, deletes it in `finally`, limits stdout to 12 MiB and wall time to 90 seconds. CPU is capped at 80 seconds (85 hard); on Linux address space is 768 MiB, file output 100 MiB, descriptors 128. Conversion is serial in the single dedicated worker; the worker supervisor caps and kills the complete process group. The converter receives no database/storage/API credentials and never fetches external resources or executes document macros/field instructions. It is a parser subprocess, not an OS security sandbox; worker/container isolation remains required.
+`extract.py <private-local-file> <doc|docx|hwp|pdf>` returns a JSON block stream. Node `extractFileBlocks` invokes it with generated filenames in a `0700` temporary directory, writes `0600` input, deletes it after subprocess closure, limits stdout to 12 MiB and wall time to 90 seconds (240 seconds with `REVIEW_DOCS_LOW_MEMORY=true`). CPU is capped at 80 seconds (85 hard); on Linux address space is 768 MiB, file output 100 MiB, descriptors 128. Conversion is serial under the shared database lease. Cancellation stops the converter; Linux parent-death signals also terminate its reader/OCR children. The converter receives no database/storage/API credentials and never fetches external resources or executes document macros/field instructions. It is a parser subprocess, not an OS security sandbox; container isolation remains required.
+
+The Free image limits Next's heap to 192 MiB and cache to 8 MiB, uses one OCR thread, and loads one source at a time. Low-memory execution samples the converter subtree's RSS against 224 MiB and preserves 64 MiB of container working-set headroom. Over-limit input returns a recoverable split-file/DOCX instruction. This is periodic protection, not an OS-enforced memory partition. Low-memory single-page OCR can retry for up to 60 seconds within a 220-second OCR deadline; the overall job deadline remains 900 seconds.
 
 Supported engines:
 
@@ -18,7 +21,7 @@ Supported engines:
 
 Conservative structure parsing recognizes Korean/English explicit album/track fields, labeled tables and repeated track rows. Unknown structures are kept as source evidence and require review; missing tracks/credits/dates are never filled by AI. Exact artist+album and track-number+title identities can merge split files; conflicts remain blocking issues. Ambiguous files and albums require admin mapping. This is not a claim of universal arbitrary document interpretation.
 
-Install only on the dedicated worker using `services/review-docs/Dockerfile`, which includes antiword, Poppler, Tesseract Korean/English/Japanese, and the fully pinned Python requirements. `REVIEW_DOCS_PYTHON` points to that venv. No paid OCR service is used.
+The root `Dockerfile` points to `services/review-docs/Dockerfile.web`, which installs antiword, Poppler, Tesseract Korean/English/Japanese, and the pinned Python requirements. `REVIEW_DOCS_PYTHON` points to that venv. The web image enables `REVIEW_DOCS_WEB_CONVERTERS=true`; actual converter checks and the full-format RPC must also pass before uploads are enabled. Native Node deployments retain DOCX and URL processing. The separate `services/review-docs/Dockerfile` remains available for development, but the deployment configuration creates no dedicated worker. No paid OCR service is used.
 
 Before deployment, run `npm run review-docs:worker -- --check` in the worker image with its intended environment. This read-only command checks converter imports, executable readers and OCR languages, all eight DOCX templates, zero-row reads of the four job tables, and the actual B2 bucket's private setting. It never claims jobs, publishes a heartbeat, processes or deletes documents, or calls translation. Missing `OPENAI_API_KEY` produces `TRANSLATION_UNAVAILABLE` as a warning; document generation and manual translation remain available. A configured key is not proof that the provider accepts requests.
 

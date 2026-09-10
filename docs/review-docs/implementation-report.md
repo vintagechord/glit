@@ -190,8 +190,8 @@ ZIP 776,602바이트로 통과했다. 이 최대 곡 수 검사는 구조/자원
 135문서 전 페이지의 육안 검수는 아니다. 최대 크기 스캔 PDF의 처리 성능은 별도
 실데이터 부하 검증이 필요하다.
 
-`render.review-docs.yaml`은 별도 워커 Blueprint의 검토용 파일이다. 기존
-`render.yaml`에는 추가하지 않았다. 신규 유료 서비스 승인 없이 적용하지 않는다.
+당시 검토한 `render.review-docs.yaml`은 2026-09-10 추가 비용 금지 결정에 따라
+제거했다. 현재 `render.yaml`은 기존 Free 웹 서비스 한 대만 선언한다.
 [Render 워커 실행 방식](https://render.com/docs/background-workers)을 따르는 명시적
 프로세스이며, 상태/파일을 Render 로컬 디스크에만 보관하지 않는다.
 
