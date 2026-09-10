@@ -15,6 +15,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from xml.etree import ElementTree as ET
 
@@ -218,12 +219,69 @@ def word_doc(path):
         else: out.append(block(text, f'DOC/문단:{i+1}', kind='paragraph'))
     return dict(format='binary-doc', blocks=out, warnings=['구형 Word DOC 변환 결과입니다. 표·곡 매칭을 원문과 비교해주세요.'])
 
+def ocr_lines(output):
+    lines = {}
+    for row in csv.DictReader(io.StringIO(output), delimiter='\t'):
+        if not row.get('text', '').strip(): continue
+        key = (row['block_num'], row['par_num'], row['line_num'])
+        lines.setdefault(key, []).append(row)
+    if sum(len(row['text']) for words in lines.values() for row in words) > MAX_TEXT:
+        raise ExtractError('TEXT_LIMIT', 'OCR 본문이 허용 길이를 초과했습니다. 자료를 나눠주세요.')
+    return lines
+
+def ocr_fields(lines):
+    labels = {'앨범명':'album', '음반명':'album', '아티스트':'artist', '아티스트명':'artist', '가수':'artist', '가수명':'artist',
+              '곡명':'title', '곡제목':'title', '노래제목':'title', '작사':'lyricist', '작사가':'lyricist', '작곡':'composer', '작곡가':'composer', '편곡':'arranger', '가사':'lyrics', '기획사':'company', '제작사':'company'}
+    fields = {}
+    for words in lines.values():
+        match = re.match(r'^([^:：]{1,30})[:：]\s*(.+)$', ' '.join(word['text'] for word in words))
+        if not match: continue
+        field = labels.get(re.sub(r'\s+', '', match[1]))
+        if field: fields.setdefault(field, set()).add(re.sub(r'\s+', '', match[2]))
+    return fields
+
+def has_ocr_track_heading(lines):
+    # Be at least as conservative as the Node structurer: existing English
+    # labels, numbered headings and MV artist-title lines are also real tracks.
+    for words in lines.values():
+        line = ' '.join(word['text'] for word in words).strip()
+        labeled = re.match(r'^([^:：\t]{1,30})\s*[:：\t]\s*(.*)$', line)
+        if labeled and re.sub(r'[\s:：.\-_/()[\]]', '', labeled[1].lower()) in {'곡명','곡제목','노래제목','title','tracktitle','트랙'}:
+            return True
+        if re.match(r'^(?:트랙\s*)?\d{1,3}[.)]\s+.+$', line) or re.match(r'^.+?\s+-\s+.+$', line):
+            return True
+    return False
+
+def prefer_ocr_fallback(primary, candidate):
+    original, retry = ocr_fields(primary), ocr_fields(candidate)
+    # Never flatten an already recognized song/table or replace a recognized field
+    # with a conflicting value. PSM 6 is only useful when auto layout missed the
+    # track label and a single column recovers several explicit application fields.
+    return (not has_ocr_track_heading(primary) and 'title' in retry and len(retry) >= max(3, len(original)+2)
+            and all(values.issubset(retry.get(field, set())) for field, values in original.items()))
+
+def read_ocr(image, fallback_deadline):
+    command = ['tesseract', str(image), 'stdout', '-l', 'kor+eng+jpn', '--psm']
+    primary = ocr_lines(run_reader(command+['3', 'tsv'], check=True, capture_output=True, text=True, timeout=60).stdout)
+    if fallback_deadline is None or has_ocr_track_heading(primary): return primary, None
+    remaining = min(20, fallback_deadline-time.monotonic())
+    if remaining <= 0: return primary, None
+    try:
+        candidate = ocr_lines(run_reader(command+['6', 'tsv'], check=True, capture_output=True, text=True, timeout=remaining).stdout)
+    except Exception:
+        return primary, None  # A failed optional retry must retain the first pass.
+    return (candidate, primary) if prefer_ocr_fallback(primary, candidate) else (primary, None)
+
 def pdf(path):
     import pdfplumber
     blocks, warnings = [], []
+    # Optional OCR retry shares the existing 90-second Node wall/80-second CPU
+    # budget. Only single-page inputs retry, so no later page loses its budget.
+    started = time.monotonic()
     try:
         with pdfplumber.open(path, password='') as document:
             if len(document.pages) > MAX_PAGES: raise ExtractError('PAGE_LIMIT', f'{MAX_PAGES}페이지까지 처리할 수 있습니다.')
+            fallback_deadline = started+75 if len(document.pages)==1 else None
             for page_no, page in enumerate(document.pages, 1):
                 if len(page.chars) > 0:
                     tables = page.find_tables()
@@ -257,14 +315,13 @@ def pdf(path):
                     with tempfile.TemporaryDirectory(prefix='review-ocr-', dir=path.parent) as tmp:
                         image_prefix = str(pathlib.Path(tmp)/'page')
                         run_reader(['pdftoppm', '-f', str(page_no), '-l', str(page_no), '-scale-to', '3000', '-singlefile', '-png', str(path), image_prefix], check=True, capture_output=True, timeout=30)
-                        result = run_reader(['tesseract', image_prefix+'.png', 'stdout', '-l', 'kor+eng+jpn', '--psm', '3', 'tsv'], check=True, capture_output=True, text=True, timeout=60)
-                        lines = {}
-                        for row in csv.DictReader(io.StringIO(result.stdout), delimiter='\t'):
-                            if not row.get('text','').strip(): continue
-                            key = (row['block_num'],row['par_num'],row['line_num'])
-                            lines.setdefault(key, []).append(row)
-                        for key, words in lines.items():
-                            blocks.append(block(' '.join(w['text'] for w in words), f'페이지:{page_no}/OCR:{"-".join(key)}', kind='ocr', page=page_no, bbox=[int(words[0]['left']),int(words[0]['top'])], confidence=min(float(w['conf']) for w in words)))
+                        lines, original = read_ocr(image_prefix+'.png', fallback_deadline)
+                        for entries, alternative in [(lines, False), (original or {}, True)]:
+                            for key, words in entries.items():
+                                variant = '자동배치원문:' if alternative else '단일열:' if original is not None else ''
+                                blocks.append(block(' '.join(w['text'] for w in words), f'페이지:{page_no}/OCR:{variant}{"-".join(key)}', kind='ocrAlternative' if alternative else 'ocr', page=page_no, bbox=[int(words[0]['left']),int(words[0]['top'])], confidence=min(float(w['conf']) for w in words)))
+                        if original is not None:
+                            warnings.append(f'{page_no}페이지의 곡명 누락을 추가 OCR로 보완했습니다. 최초 인식 원문도 근거에 보존했으며 표·다단 배치와 가사 순서를 확인해주세요.')
                     warnings.append(f'{page_no}페이지에 한글·영어·일본어 OCR을 적용했습니다. 아티스트·곡명·크레딧·가사 확인이 필요합니다.')
             return dict(format='pdf', blocks=blocks, pageCount=len(document.pages), warnings=warnings)
     except ExtractError: raise

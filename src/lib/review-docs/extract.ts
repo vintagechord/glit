@@ -103,6 +103,9 @@ export function structureExtractedFile(source: ReviewSource, result: ExtractedBl
     if (field === "lyrics" && value) track!.lyricStatus = track!.instrumentalConfirmed ? "instrumental" : "provided";
   }
   for (const b of result.blocks) {
+    // Retain the initial OCR pass in source.text for comparison, but do not
+    // append its rejected layout to recovered lyrics or create duplicate tracks.
+    if (b.kind === "ocrAlternative") continue;
     if (b.cells) {
       const values = b.cells.map((c) => c.text.trim());
       const keys = values.map(labelField);

@@ -1,5 +1,22 @@
 # 심의자료 워커 연결
 
+## 2026-09-10 운영 연결 준비 상태
+
+- 기존 `glit` 웹 서비스는 Oregon / Node / Free이며 `6d1805d`가 배포되었다.
+  0103·0104 마이그레이션도 운영 DB에 적용되었다. 실제 운영의 합성 DOCX가
+  `needs_review`까지 분석되는 것을 확인하고 검증 자료를 모두 정리했다.
+- `onside-review-docs` 환경 그룹의 Supabase·B2 변수 9개를 확인했다.
+  같은 운영 설정으로 전용 이미지의 읽기 전용 사전 검사가 통과했다.
+- Linux amd64 / 1 CPU / 2GB 조건에서 DOCX, 바이너리 DOC, RTF DOC, HWP5,
+  한글 텍스트 PDF와 스캔 PDF의 변환, DOCX·ZIP 생성을 검증했다.
+  단일 페이지 한글 스캔에서 곡명이 누락될 때 제한 시간 안에 단일열 OCR을
+  추가 적용한다. 이미 인식된 곡명이나 표준 한국어 항목을 보호하며, 대체 결과를
+  선택해도 최초 인식 원문과 관리자 확인 항목을 보존한다. 다페이지 PDF는
+  추가 OCR을 실행하지 않아 다음 페이지의 처리 시간을 소비하지 않는다.
+- Render의 전용 워커 생성 설정은 준비되어 있다. 월 US$25 추가 정기요금에
+  대한 사용자 승인을 요청한 상태이며 **아직 서비스는 생성하지 않았다**.
+  실제 전용 워커 heartbeat와 운영 DOC·HWP·PDF 분석 확인은 개설 후 진행한다.
+
 ## 2026-09-10: 기존 웹 서버 자동 처리 추가
 
 전용 워커가 없는 기존 Node 웹 서비스에서도 **DOCX와 멜론·지니 URL의 분석,
@@ -28,7 +45,8 @@ Node에서 표·가사·체크박스와 근거 위치를 읽으며, 압축 크�
 함께 시작하고 워커가 종료되면 15초 후 다시 시작한다. 웹 종료/배포 시 양쪽
 프로세스에 종료 신호를 전달하며 10초 후 남은 프로세스를 정리한다.
 
-이 경로는 **최소 2GB 메모리** 환경용이다. 현재 `render.yaml`의 512MB starter에서
+이 경로는 **최소 2GB 메모리** 환경용이다. `render.yaml`은 512MB starter를 선언하지만
+실제 Render 웹은 Free로 확인되었다. 두 512MB 환경에서
 전체 DOC/HWP/PDF/OCR 실행을 보장하지 않으며 무리하게 함께 실행하도록 바꾸지
 않았다. 기존 서비스의 Docker 런타임 전환과 자원 검토는 운영 변경이고 이번 소스
 작업에서는 실행하지 않았다. 새 서비스나 플랜 변경을 자동 수행하는 Blueprint도
@@ -48,8 +66,8 @@ docker run --rm --memory=2g --pids-limit=256 -p 3000:3000 \
   --env-file /path/to/review-web.env onside-review-web
 ```
 
-운영에는 0103 적용과 웹 배포가 필요하다. 운영 heartbeat·실제 고객 자료의 분석과
-다운로드를 확인하지 않았으므로 소스 검증과 운영 복구를 구분한다.
+0103 적용과 Node 웹 배포는 완료했다. 위 Docker 웹 통합 경로는 적용하지 않았다.
+전용 변환기의 운영 heartbeat·DOC/HWP/PDF 분석과 다운로드는 개설 후 확인한다.
 
 ## 2026-09-08 장애 원인
 
@@ -69,11 +87,13 @@ docker run --rm --memory=2g --pids-limit=256 -p 3000:3000 \
 - 저장소: `vintagechord/glit`, 검증된 변경이 반영된 `main`.
 - Dockerfile: `services/review-docs/Dockerfile`, context: 저장소 루트.
 - 실행 명령: 이미지의 `npm run review-docs:worker`.
+- 배포 전 검사: `npm run review-docs:check` (읽기 전용, 실패하면 배포 중단).
 - 환경 그룹: 기존에 준비한 `onside-review-docs`를 연결한다.
-- 리전: 인증 후 기존 `glit`의 리전을 확인해 맞춘다.
+- 리전: Oregon (`oregon`), 기존 `glit`과 동일.
 - 추가 DB·Redis·디스크는 만들지 않는다. 워커 자동 배포는 꺼 둔다.
 
-2026-09-08 확인한 [Render 가격표](https://render.com/pricing)의 Services & Workers 기준이다.
+2026-09-10 Render 워커 생성 화면에서 월 US$25를 다시 확인했다.
+[Render 가격표](https://render.com/pricing)의 Services & Workers 기준이다.
 [`standard` 호환 이름](https://render.com/docs/compute-plans#legacy-plan-names)은 계속 지원된다.
 새 워커 생성은 이전의 추가 비용 없음 조건을 변경하므로 비용 확인 후 진행한다.
 

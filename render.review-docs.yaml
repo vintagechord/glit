@@ -8,8 +8,10 @@ services:
     repo: https://github.com/vintagechord/glit
     branch: main
     runtime: docker
+    region: oregon
     dockerfilePath: ./services/review-docs/Dockerfile
     dockerContext: .
+    preDeployCommand: npm run review-docs:check
     plan: standard
     numInstances: 1
     autoDeployTrigger: off
