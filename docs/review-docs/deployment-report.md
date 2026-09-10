@@ -27,6 +27,24 @@ Render 확인: 활성 서비스 1대, Free/Oregon, 월 현재·예상 청구액 
 - 별도 0.1 CPU / 512MB 생성 검사에서 최대 100곡·135문서 생성도 통과했다.
   이 검사는 웹과 동시 실행한 검사가 아니며 실제 운영 결과와 구분한다.
 
+### 운영 반영
+
+- 코드 `333e162`를 main에 push하고 기존 서비스의 Runtime만 Docker로 변경했다.
+  Render 화면에서 같은 서비스 ID·URL 및 Docker / Free 상태를 확인했다.
+- 중복 Node 빌드를 피하려고 Auto-Deploy를 잠시 Off로 설정한 후 최신 커밋을
+  수동 배포했다. 브라우저 화면 접근 복구 후 On Commit 원복 확인이 남아 있다.
+- 운영 인증 API에서 `workerReady=true`, `workerMode=web`,
+  `supportedFormats=doc/docx/hwp/pdf`를 확인했다. 2026-09-10 13:58 KST 운영 QA:
+  DOC 2곡·HWP 2곡·텍스트 PDF 1곡·스캔 PDF OCR 1곡이 모두 기대값과 일치했다.
+  외국어 번역 구간은 모두 0건이며 유료 번역 제공자를 추가하지 않았다.
+- 검증한 DOC 자료로 9개 DOCX와 ZIP을 생성했다. ZIP CRC·각 DOCX 구조 검사 및
+  개별 다운로드와 ZIP 내부 파일의 동일성까지 통과했다.
+- 자기 QA 작업만 취소·삭제하고 B2 모든 버전 0건, jobs/events/artifacts 0건,
+  QA 계정 404와 profile 0건을 확인했다. 정리 실패 없음, 복구 journal도 제거됐다.
+- 공개 홈·로그인·앨범 신청·MV 신청은 HTTP 200. `/api/health`는 HTTP 200,
+  errorCount 0이다. 별도 이메일·카카오 알림 설정 경고 2건은 이 변환 배포의
+  정상 여부와 구분하며 이번 연결에서 알림 제공자나 유료 키를 추가하지 않았다.
+
 ## 이전 배포 기록
 
 2026-09-07 사용자가 운영 배포를 승인했다. 이후 신규 비용 없이 웹·DB만 배포하도록
