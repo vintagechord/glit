@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Search } from "lucide-react";
 import {
   kindLabels, queryStatusLabels, resultLabels, sourceLabels, statusLabels,
@@ -129,7 +129,7 @@ function ConflictRecords({ detail, onResolve }: { detail: AdminLibraryDetail; on
   </section>;
 }
 
-function LibraryOperationsDetail({ detail, onRetry, onResolve, onSaved }: { detail: AdminLibraryDetail; onRetry: (id: string) => Promise<void>; onResolve: ResolveConflict; onSaved: () => Promise<void> }) {
+function LibraryOperationsDetail({ detail, onRetry, onResolve, onSaved }: { detail: AdminLibraryDetail; onRetry: (id: string) => Promise<void>; onResolve: ResolveConflict; onSaved: (library: ArchiveLibrary) => Promise<void> }) {
   const { library } = detail;
   const [tab, setTab] = useState("albums");
   const tabs = [{ id: "albums", label: "앨범·트랙" }, { id: "sources", label: "출처·연결" }, { id: "tasks", label: "업무 기록" }, { id: "history", label: "변경 이력" }];
@@ -165,18 +165,26 @@ export function AdminLibraryInspector({ initial }: { initial: AdminLibraryIndex 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const requestId = useRef(0);
   const detailRequestId = useRef(0);
-  useEffect(() => { setIndex(initial); setQuery(""); setActiveQuery(""); setPage(0); setFilters({ state: "active", content: "all", sort: "recent", pageSize: "20" }); }, [initial]);
+  const previousInitial = useRef(initial);
+  const directoryScope = useRef({ page: 0, query: "", filters });
   useEffect(() => () => { requestId.current++; detailRequestId.current++; }, []);
 
-  async function search(nextPage: number, q = activeQuery, nextFilters = filters) {
+  const search = useCallback(async (nextPage: number, q = directoryScope.current.query, nextFilters = directoryScope.current.filters) => {
     const request = ++requestId.current;
+    directoryScope.current = { page: nextPage, query: q, filters: nextFilters };
     setLoading(true); setError("");
     try {
       const result = await archiveRequest<AdminLibraryIndex>(`?action=admin&q=${encodeURIComponent(q)}&page=${nextPage}&${new URLSearchParams(nextFilters)}`);
-      if (requestId.current === request) { setIndex(result); setPage(nextPage); setActiveQuery(q); setFilters(nextFilters); }
+      if (requestId.current === request) { setIndex(result); setPage(nextPage); setActiveQuery(q); setFilters(nextFilters); return true; }
     } catch (caught) { if (requestId.current === request) setError(errorMessage(caught)); }
     finally { if (requestId.current === request) setLoading(false); }
-  }
+    return false;
+  }, []);
+  useEffect(() => {
+    if (previousInitial.current === initial) return;
+    previousInitial.current = initial;
+    void search(directoryScope.current.page);
+  }, [initial, search]);
   async function inspect(id: string) {
     const request = ++detailRequestId.current;
     setSelectedId(id); setDetail(null); setError("");
@@ -198,12 +206,16 @@ export function AdminLibraryInspector({ initial }: { initial: AdminLibraryIndex 
     const updated = await archiveRequest<AdminLibraryDetail>(`?action=admin-library&libraryId=${encodeURIComponent(detail.library.id)}`);
     if (detailRequestId.current === request) setDetail(updated);
   }
-  async function reloadDetail() {
-    if (!detail) return;
+  async function reloadDetail(savedLibrary: ArchiveLibrary) {
+    if (!detail || detail.library.id !== savedLibrary.id) return;
     const request = detailRequestId.current;
-    const updated = await archiveRequest<AdminLibraryDetail>(`?action=admin-library&libraryId=${encodeURIComponent(detail.library.id)}`);
+    setDetail(current => current?.library.id === savedLibrary.id ? { ...current, library: savedLibrary } : current);
+    const [updated, directoryLoaded] = await Promise.all([
+      archiveRequest<AdminLibraryDetail>(`?action=admin-library&libraryId=${encodeURIComponent(savedLibrary.id)}`),
+      search(directoryScope.current.page),
+    ]);
     if (detailRequestId.current === request) setDetail(updated);
-    await search(page);
+    if (!directoryLoaded) throw new Error("회원 아카이브 목록을 다시 불러오지 못했습니다.");
   }
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void search(0, query.trim()); }
   const libraries = index.libraries ?? [];

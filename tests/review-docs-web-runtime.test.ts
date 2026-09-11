@@ -158,11 +158,11 @@ test("full-format web readiness and claims use the same capability RPC without p
     assert.equal(url.hostname, "review-web-test.supabase.co");
     assert.ok(url.pathname.endsWith("/claim_review_document_web_job"), "capability checks never write a dedicated heartbeat");
     const body = JSON.parse(String(init?.body)); requests.push(body);
-    assert.deepEqual(body.p_supported_formats, formats);
+    if (body.p_supported_formats) assert.deepEqual(body.p_supported_formats, formats);
     return missing ? Response.json({ code: "PGRST202", message: "secret" }, { status: 404 }) : Response.json([]);
   });
   const unavailable = await reviewProcessor(false, async () => formats);
-  assert.equal(unavailable.workerReady, false); assert.match(unavailable.workerError!, /0105/);
+  assert.equal(unavailable.workerReady, false); assert.match(unavailable.workerError!, /0103/);
   missing = false; now += 16_000;
   const ready = await reviewProcessor(false, async () => formats);
   assert.equal(ready.workerMode, "web"); assert.deepEqual(ready.supportedFormats, formats);
@@ -171,5 +171,46 @@ test("full-format web readiness and claims use the same capability RPC without p
   const previous = state.__reviewWebCleanupAt; state.__reviewWebCleanupAt = now + 60_000;
   try { await runWebReviewBatch(async () => formats); }
   finally { state.__reviewWebCleanupAt = previous; }
-  assert.deepEqual(requests.map(request => request.p_check_only), [true, true, false]);
+  assert.deepEqual(requests.map(request => request.p_check_only), [true, true, true, false]);
+});
+
+test("a missing full-format RPC keeps native analysis available and claims only DOCX/URL jobs", async (t) => {
+  const formats = ["doc", "docx", "hwp", "pdf"];
+  const claims: { p_check_only?: boolean; p_supported_formats?: string[] }[] = [];
+  let fullReady = false;
+  t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    assert.equal(url.hostname, "review-web-test.supabase.co");
+    assert.ok(url.pathname.endsWith("/claim_review_document_web_job"));
+    const body = JSON.parse(String(init?.body)); claims.push(body);
+    if (body.p_supported_formats && !fullReady) return Response.json({ code: "PGRST202", message: "fixture missing converter RPC" }, { status: 404 });
+    return Response.json([]);
+  });
+  const ready = await reviewProcessor(false, async () => formats, true);
+  assert.equal(ready.workerReady, true); assert.equal(ready.workerMode, "web");
+  assert.deepEqual(ready.supportedFormats, ["docx"]);
+  assert.doesNotThrow(() => assertReviewFormats(ready, ["native.docx"]));
+  assert.throws(() => assertReviewFormats(ready, ["scan.pdf"]), /DOCX로 저장/);
+  const state = globalThis as typeof globalThis & { __reviewWebCleanupAt?: number };
+  const previous = state.__reviewWebCleanupAt; state.__reviewWebCleanupAt = Date.now() + 60_000;
+  try { await runWebReviewBatch(async () => formats); }
+  finally { state.__reviewWebCleanupAt = previous; }
+  assert.deepEqual(claims.map(({ p_check_only, p_supported_formats }) => ({ check: !!p_check_only, full: !!p_supported_formats })), [
+    { check: true, full: true }, { check: true, full: false },
+    { check: false, full: true }, { check: false, full: false },
+  ]);
+  fullReady = true;
+  const refreshed = await reviewProcessor(false, async () => formats, true);
+  assert.deepEqual(refreshed.supportedFormats, formats, "manual connection retry bypasses cached partial readiness");
+});
+
+test("database permission failures are not hidden by native RPC fallback", async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    calls++;
+    return Response.json({ code: "42501", message: "private fixture details" }, { status: 403 });
+  });
+  const processor = await reviewProcessor(false, async () => ["doc", "docx", "hwp", "pdf"], true);
+  assert.equal(processor.workerReady, false); assert.equal(calls, 1);
+  assert.match(processor.workerError!, /저장소에 연결할 수 없습니다/);
 });

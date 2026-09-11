@@ -8,7 +8,8 @@ import { collectMusicBrainzStep, MusicProviderError } from "./musicbrainz";
 import { type ArchiveLibrary, type ArchiveSyncJob } from "./model";
 import { getOwnedLibrary } from "./service";
 import { mergeArchiveImports } from "./import";
-import { importOwnedSubmissionCredits } from "./credits";
+import { getOwnedCreditSubmissions, mergeSubmissionCredits } from "./credits";
+import { enrichLinkedDomesticAlbums } from "./domestic-credits";
 
 export async function acquireArchiveProviderPermit(provider: "musicbrainz" | "apple" = "musicbrainz") {
   const { data, error } = await createAdminClient().rpc("reserve_music_archive_provider_slot", { p_provider: provider });
@@ -101,7 +102,15 @@ export async function runArchiveJob(libraryId?: string) {
     // Refetch after the network wait; optimistic commit still protects a concurrent edit.
     const library = await getOwnedLibrary(job.owner_id, job.library_id);
     let merged = mergeArchiveImports(library.data, step.releases, { combineManagedProfiles: library.data.connections.filter(item => item.provider === job.provider && item.confirmed).length > 1 });
-    if (step.releases.length) merged = await importOwnedSubmissionCredits(job.owner_id, merged, library.id);
+    let metadataNotices: string[] = [];
+    if (step.releases.length) {
+      const submissions = await getOwnedCreditSubmissions(job.owner_id);
+      merged = mergeSubmissionCredits(merged, submissions, library.id);
+      const importedIds = merged.releases.filter(release => step.releases.some(item => release.source?.provider === item.provider && release.source.externalId === item.externalId)).map(release => release.id);
+      const enriched = await enrichLinkedDomesticAlbums(merged, importedIds, submissions, library.id, { signal: AbortSignal.timeout(15_000) });
+      merged = enriched.data;
+      metadataNotices = enriched.notices;
+    }
     const connection = merged.connections.find(item => item.provider === job.provider && item.externalArtistId === job.external_artist_id);
     if (connection) { connection.checkedAt = step.checkedAt; connection.status = "automatic"; }
     for (const release of step.releases) {
@@ -113,7 +122,7 @@ export async function runArchiveJob(libraryId?: string) {
     for (const release of step.releases) releaseIds.add(release.externalId);
     const managedReleaseIds = new Set(merged.releases.filter(item => item.source?.provider === job.provider && releaseIds.has(item.source.externalId)).map(item => item.id));
     const counts = { releases: releaseIds.size, tracks: merged.tracks.filter(item => managedReleaseIds.has(item.releaseId)).length, managedTracks: merged.tracks.filter(item => managedReleaseIds.has(item.releaseId) && item.managed && !item.excluded).length, steps: (job.counts.steps ?? 0) + 1, consecutiveErrors: 0 };
-    const { error: commitError } = await admin.rpc("commit_music_archive_step", { p_job: job.id, p_token: token, p_version: library.version, p_data: merged, p_cursor: { providerCursor: step.nextCursor, releaseIds: [...releaseIds], scopeNote: step.scopeNote }, p_counts: counts, p_status: step.status === "completed" ? "completed" : "queued", p_checked_at: step.checkedAt });
+    const { error: commitError } = await admin.rpc("commit_music_archive_step", { p_job: job.id, p_token: token, p_version: library.version, p_data: merged, p_cursor: { providerCursor: step.nextCursor, releaseIds: [...releaseIds], scopeNote: [step.scopeNote, ...metadataNotices].join("\n") }, p_counts: counts, p_status: step.status === "completed" ? "completed" : "queued", p_checked_at: step.checkedAt });
     archiveDatabaseError(commitError);
     return true;
   } catch (error) {

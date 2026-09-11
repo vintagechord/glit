@@ -6,7 +6,7 @@ import { ArchiveError, archiveDatabaseError } from "./http";
 import { applyArchiveCommand, archiveCommandSchema, createArchiveData, validateArchiveData, type ArchiveLibrary } from "./model";
 import { getMusicProviderStatuses, parseMusicProviderUrl } from "./providers";
 import { MusicProviderError, searchMusicBrainzArtists, lookupMusicBrainzRelease } from "./musicbrainz";
-import { lookupAppleArtist, lookupAppleAlbum } from "./apple";
+import { lookupAppleArtist, lookupAppleAlbumMetadata } from "./apple";
 import { searchCatalogArtists, indexCatalogArtists } from "./catalog-search";
 import { agencyGuides } from "./guides";
 import { submissionArchiveColumns, normalizeSubmissionTitles, matchArchiveReviews } from "./reviews";
@@ -264,33 +264,50 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
     const refreshDeadline = AbortSignal.timeout(45_000);
     const notices: string[] = [];
     let checkedAlbums = 0;
+    let attemptedAlbums = 0;
     for (const release of releases.slice(offset, offset + 3)) {
+      if (refreshDeadline.aborted) break;
+      attemptedAlbums++;
+      let checked = false;
       const domesticUrl = linkedDomesticAlbumUrl(updated, release.id, creditSubmissions, library.id);
       if (domesticUrl) {
         try {
           const fetched = await fetchDomesticAlbumCredits(domesticUrl, { signal: refreshDeadline });
           updated = mergeDomesticAlbumCredits(updated, release.id, fetched.album, fetched.provider, new Date().toISOString(), fetched.imageUrl);
-          checkedAlbums++;
+          checked = true;
           if (fetched.partial) notices.push(`${release.title}: 일부 곡의 정보를 조회하지 못했습니다. 가져온 정보는 저장했습니다.`);
         } catch { notices.push(`${release.title}: 음원 사이트 연결 또는 앨범 정보를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.`); }
       }
       const source = release.source;
       const connection = library.data.connections.find(item => item.provider === source?.provider && item.confirmed && item.externalArtistId);
-      if (!source || !connection?.externalArtistId || !["apple", "musicbrainz"].includes(source.provider)) continue;
-      try {
-        const imported = source.provider === "apple"
-          ? await lookupAppleAlbum(source.externalId, connection.externalArtistId, { acquirePermit: () => acquireArchiveProviderPermit("apple") })
-          : await lookupMusicBrainzRelease(source.externalId, connection.externalArtistId, { acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
-        updated = mergeArchiveImports(updated, [imported], { metadataOnly: true });
-        if (!domesticUrl) checkedAlbums++;
-      } catch (error) {
-        if (!(error instanceof MusicProviderError)) throw error;
-        notices.push(`${release.title}: ${error.message}`);
+      const appleLink = release.links.map(link => parseMusicProviderUrl(link.url, "release")).find(link => link?.provider === "apple");
+      const appleId = source?.provider === "apple" ? source.externalId : appleLink?.externalId;
+      if (appleId && !refreshDeadline.aborted) {
+        try {
+          const metadata = await lookupAppleAlbumMetadata(appleId, { signal: refreshDeadline, acquirePermit: () => acquireArchiveProviderPermit("apple") });
+          const target = updated.releases.find(item => item.id === release.id)!;
+          if (metadata.imageUrl && (!target.imageUrl || !target.userEdited)) target.imageUrl = metadata.imageUrl;
+          checked = true;
+        } catch (error) {
+          if (!(error instanceof MusicProviderError)) throw error;
+          notices.push(`${release.title}: ${error.message}`);
+        }
       }
+      if (source?.provider === "musicbrainz" && connection?.externalArtistId && !refreshDeadline.aborted) {
+        try {
+          const imported = await lookupMusicBrainzRelease(source.externalId, connection.externalArtistId, { signal: refreshDeadline, acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
+          updated = mergeArchiveImports(updated, [imported], { metadataOnly: true });
+          checked = true;
+        } catch (error) {
+          if (!(error instanceof MusicProviderError)) throw error;
+          notices.push(`${release.title}: ${error.message}`);
+        }
+      }
+      if (checked) checkedAlbums++;
     }
     updated = mergeSubmissionCredits(updated, creditSubmissions, library.id);
     const saved = await saveArchiveLibrary(owner, library, updated, "refresh_metadata", owner, library.archived_at, { releaseId, offset, notices });
-    const nextOffset = offset + 3 < releases.length ? offset + 3 : null;
+    const nextOffset = offset + attemptedAlbums < releases.length ? offset + attemptedAlbums : null;
     const scopeIds = new Set(releases.map(release => release.id));
     const scopedTracks = updated.tracks.filter(track => scopeIds.has(track.releaseId) && !track.excluded && !track.mergedInto);
     const creditCount = scopedTracks.filter(track => updated.recordings.find(recording => recording.id === track.recordingId)?.workIds.some(id => updated.works.find(work => work.id === id)?.contributors?.length)).length;

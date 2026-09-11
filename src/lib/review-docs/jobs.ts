@@ -33,13 +33,13 @@ export function assertJobLive(job: ReviewJob) {
 function hasRecentWorkerHeartbeat(heartbeat: { updated_at: string } | null) {
   return !!heartbeat && Date.parse(heartbeat.updated_at) > Date.now() - 90_000;
 }
-export async function listReviewJobs(owner: string) {
+export async function listReviewJobs(owner: string, refresh = false) {
   const admin = createAdminClient();
   const { data, error } = await admin.from("review_document_jobs").select("id,mode,input_kind,status,operation,version,result_version,sources,outputs,zip_output,counts,validation,template_version,error_code,error_message,retryable,attempts,extraction_attempts,application_date,created_at,updated_at,expires_at").eq("created_by", owner).order("created_at", { ascending: false }).limit(20);
   jobDatabaseError(error);
   const { data: heartbeat, error: heartbeatError } = await admin.from("review_document_worker_heartbeat").select("updated_at").eq("singleton", true).maybeSingle();
   jobDatabaseError(heartbeatError);
-  return { jobs: data as ReviewJob[], ...await reviewProcessor(hasRecentWorkerHeartbeat(heartbeat)) };
+  return { jobs: data as ReviewJob[], ...await reviewProcessor(hasRecentWorkerHeartbeat(heartbeat), undefined, refresh) };
 }
 async function requireReviewWorker(names: string[] = []) {
   const { data, error } = await createAdminClient().from("review_document_worker_heartbeat").select("updated_at").eq("singleton", true).maybeSingle();

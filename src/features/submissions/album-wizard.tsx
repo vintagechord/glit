@@ -5600,10 +5600,15 @@ export function AlbumWizard({
             {!initialArchiveEntry && <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               {isDownloadedApplicationFlow ? "신청서와 음원 업로드" : "전체 음원 파일 업로드"}
             </p>}
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              업로드가 완료되지 않거나 문제가 생긴 경우 이메일로 음원 파일을 보내주세요.
+              <a href={`mailto:${APP_CONFIG.supportEmail}`} className="ml-1 break-all font-semibold text-foreground underline underline-offset-4">{APP_CONFIG.supportEmail}</a>
+            </p>
             <div className="mt-4 grid gap-2 rounded-2xl border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("upload")}
+                aria-pressed={!emailSubmitConfirmed}
                 disabled={uploadInProgress}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${!emailSubmitConfirmed
                   ? "bg-foreground text-background shadow-sm"
@@ -5615,6 +5620,7 @@ export function AlbumWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
+                aria-pressed={emailSubmitConfirmed}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
                   ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
@@ -5881,10 +5887,6 @@ export function AlbumWizard({
                 <p>
                   {isOneClick ? "WAV 파일을 개별로 첨부하거나, 전체 음원을 ZIP 파일로 묶어 업로드해주세요." : <>업로드가 어려우면 파일 없이 진행한 뒤 {APP_CONFIG.supportEmail}로 보내주세요.</>}
                 </p>
-                <p>
-                  업로드가 완료되지 않거나 문제가 생긴 경우 이메일로 음원 파일을 보내주세요.
-                  <a href={`mailto:${APP_CONFIG.supportEmail}`} className="ml-1 font-semibold underline">{APP_CONFIG.supportEmail}</a>
-                </p>
                 {!isOneClick && <p>실물 앨범을 발표했다면{" "}
                   <button
                     type="button"
@@ -5940,7 +5942,7 @@ export function AlbumWizard({
               type="button"
               onClick={handleStep3Next}
               disabled={isSaving || isAddingAlbum}
-              className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
+              className="min-h-11 rounded-full border border-emerald-800 bg-emerald-700 px-6 py-3 text-xs font-bold tracking-[0.12em] text-white transition hover:-translate-y-0.5 hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-500"
             >
               다음 단계
             </button>

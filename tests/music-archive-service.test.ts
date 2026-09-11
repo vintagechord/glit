@@ -3,6 +3,8 @@ import test from "node:test";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
 import { applyArchiveCommand, createArchiveData, type ArchiveData } from "../src/lib/music-archive/model";
+import { mergeArchiveImports } from "../src/lib/music-archive/import";
+import { normalizeMusicBrainzRelease } from "../src/lib/music-archive/musicbrainz";
 
 const OWNER = "10000000-0000-4000-8000-000000000001";
 const OTHER_OWNER = "10000000-0000-4000-8000-000000000002";
@@ -17,7 +19,7 @@ const OTHER_ATTACHMENT = "50000000-0000-4000-8000-000000000002";
 
 type FixtureRow = Record<string, unknown>;
 type FixtureCall = { method: string; table?: string; name?: string; args?: FixtureRow; input?: unknown; operations?: { method: string; args: unknown[] }[] };
-type FixtureState = { user: { id: string } | null; authError: unknown; isAdmin: boolean; limited: boolean; tables: Record<string, FixtureRow[]>; databaseError: { code: string; message: string } | null };
+type FixtureState = { user: { id: string } | null; authError: unknown; isAdmin: boolean; limited: boolean; allowProviderRequests: boolean; tables: Record<string, FixtureRow[]>; databaseError: { code: string; message: string } | null };
 type Harness = typeof import("../src/lib/music-archive/service") & typeof import("../src/lib/music-archive/evidence") & typeof import("../src/lib/music-archive/http") & {
   state: FixtureState; calls: FixtureCall[];
   apiGET: (request: Request) => Promise<Response>; apiPOST: (request: Request) => Promise<Response>;
@@ -32,16 +34,16 @@ const bundle = build({
   plugins: [{ name: "archive-service-fixtures", setup(plugin) {
     plugin.onResolve({ filter: /^(archive-service-fixture|@\/lib\/supabase\/(?:admin|server)|@\/lib\/b2|@\/lib\/request-rate-limit|next\/server)$/ }, args => ({ path: args.path, namespace: "archive-fixture" }));
     plugin.onResolve({ filter: /(?:^\.\/sync$|^@\/lib\/music-archive\/sync$)/ }, args => ({ path: args.path, namespace: "archive-sync-fixture" }));
-    plugin.onLoad({ filter: /.*/, namespace: "archive-sync-fixture" }, () => ({ loader: "js", contents: `export async function runArchiveBatch(){throw new Error('Unexpected sync execution');} export async function enqueueArchiveSync(){throw new Error('Unexpected sync enqueue');} export async function resumeArchiveSync(){throw new Error('Unexpected sync resume');} export async function acquireArchiveProviderPermit(){throw new Error('Unexpected external request');}` }));
+    plugin.onLoad({ filter: /.*/, namespace: "archive-sync-fixture" }, () => ({ loader: "js", contents: `import {state,calls} from 'archive-service-fixture'; export async function runArchiveBatch(){throw new Error('Unexpected sync execution');} export async function enqueueArchiveSync(){throw new Error('Unexpected sync enqueue');} export async function resumeArchiveSync(){throw new Error('Unexpected sync resume');} export async function acquireArchiveProviderPermit(provider){if(!state.allowProviderRequests)throw new Error('Unexpected external request');calls.push({method:'provider-permit',name:provider});}` }));
     plugin.onLoad({ filter: /.*/, namespace: "archive-fixture" }, ({ path }) => {
       const shared = `import {state,calls,client} from 'archive-service-fixture';`;
       const files: Record<string, string> = {
         "archive-service-fixture": `
-          export const state={user:{id:'${OWNER}'},authError:null,isAdmin:false,limited:false,tables:{},databaseError:null};
+          export const state={user:{id:'${OWNER}'},authError:null,isAdmin:false,limited:false,allowProviderRequests:false,tables:{},databaseError:null};
           export const calls=[];
           function query(table){
             const operations=[]; const q={};
-            for(const method of ['select','eq','is','in','or','order','range','limit','insert','update','delete']) q[method]=(...args)=>{operations.push({method,args});return q;};
+            for(const method of ['select','eq','is','in','not','or','order','range','limit','insert','update','delete']) q[method]=(...args)=>{operations.push({method,args});return q;};
             function run(single=false){
               calls.push({method:'query',table,operations:structuredClone(operations)});
               if(state.databaseError)return {data:null,error:state.databaseError,count:0};
@@ -51,6 +53,7 @@ const bundle = build({
                 if(op.method==='eq')rows=rows.filter(row=>row[key]===value);
                 if(op.method==='is')rows=rows.filter(row=>value===null?row[key]==null:row[key]===value);
                 if(op.method==='in')rows=rows.filter(row=>value.includes(row[key]));
+                if(op.method==='not'&&value==='in'){const excluded=op.args[2].slice(1,-1).split(',');rows=rows.filter(row=>!excluded.includes(row[key]));}
               }
               const count=rows.length;
               for(const op of operations){if(op.method==='range')rows=rows.slice(op.args[0],op.args[1]+1);if(op.method==='limit')rows=rows.slice(0,op.args[0]);}
@@ -415,4 +418,124 @@ test("archive review linking rejects a saved track that is no longer available i
   h.state.tables.submissions = [{ ...submissionRow(), archive_review_context: { ...context, trackIds: ["track-one"] }, album_tracks: [{ id: SUBMISSION_TRACK, track_no: 1 }] }];
   await assert.rejects(() => h.linkArchiveSubmission(OWNER, context, SUBMISSION), status(409));
   assert.equal(mutations(h).length, 0);
+});
+
+test("metadata refresh fills a manual Apple album's artwork without a source or artist connection", async (t) => {
+  const h = await harness();
+  h.state.allowProviderRequests = true;
+  const data = libraryData();
+  data.releases[0].links = [{ provider: "apple", url: "https://music.apple.com/kr/album/123" }];
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, data)];
+  const imageUrl = "https://is1-ssl.mzstatic.com/image/thumb/manual-album/100x100bb.jpg";
+  const requests: URL[] = [];
+  t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    requests.push(url);
+    assert.equal(url.origin, "https://itunes.apple.com");
+    assert.equal(url.pathname, "/lookup");
+    assert.equal(url.searchParams.get("id"), "123");
+    assert.equal(url.searchParams.get("entity"), "album");
+    assert.equal(url.searchParams.get("country"), "KR");
+    assert.ok(init?.signal, "the service passes its deadline to the provider");
+    return Response.json({ resultCount: 1, results: [{
+      wrapperType: "collection", collectionType: "Album", collectionId: 123, artistId: 456,
+      collectionName: "External catalog title", artistName: "Catalog artist", trackCount: 1,
+      releaseDate: "2026-09-01T00:00:00Z", collectionViewUrl: "https://music.apple.com/kr/album/123", artworkUrl100: imageUrl,
+    }] });
+  });
+
+  const result = await h.mutateArchive(OWNER, { action: "refresh-metadata", libraryId: LIBRARY, version: 1, releaseId: "release-one" });
+  const saved = result.library!;
+  assert.equal(requests.length, 1, "artwork requires neither artist lookup nor track discovery");
+  assert.equal(saved.version, 2);
+  assert.equal(saved.data.releases[0].imageUrl, imageUrl);
+  assert.equal(saved.data.releases[0].title, data.releases[0].title, "the manually entered title remains authoritative");
+  assert.equal(saved.data.releases[0].source, undefined);
+  assert.deepEqual(saved.data.connections, []);
+  assert.deepEqual(saved.data.tracks, data.tracks);
+  assert.deepEqual(saved.data.tasks, []);
+  assert.deepEqual(mutations(h).map(call => call.name), ["save_music_archive_library"]);
+  assert.ok(hasFilter(h.calls.find(call => call.table === "submissions")!, "user_id", OWNER));
+  assert.match(String(result.metadataNotice), /앨범 1개/);
+  assert.equal(result.nextOffset, null);
+});
+
+test("metadata refresh obtains Apple artwork and MusicBrainz authors for the same linked release", async (t) => {
+  const h = await harness();
+  h.state.allowProviderRequests = true;
+  const artistId = "60000000-0000-4000-8000-000000000001";
+  const releaseId = "60000000-0000-4000-8000-000000000002";
+  const trackId = "60000000-0000-4000-8000-000000000003";
+  const recordingId = "60000000-0000-4000-8000-000000000004";
+  const workId = "60000000-0000-4000-8000-000000000005";
+  const artistCredit = [{ artist: { id: artistId, name: "Catalog artist" } }];
+  const rawRelease = {
+    id: releaseId, title: "Catalog album", "artist-credit": artistCredit,
+    media: [{ position: 1, "track-count": 1, tracks: [{
+      id: trackId, title: "Catalog track", position: 1, "artist-credit": artistCredit,
+      recording: { id: recordingId, title: "Catalog track" },
+    }] }],
+  };
+  const initial = mergeArchiveImports(createArchiveData("Catalog artist"), [normalizeMusicBrainzRelease(rawRelease, artistId, "2026-09-01T00:00:00Z")]);
+  initial.releases[0].links.push({ provider: "apple", url: "https://music.apple.com/kr/album/123" });
+  initial.connections.push({ provider: "musicbrainz", externalArtistId: artistId, confirmed: true, status: "automatic" });
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, initial)];
+  const imageUrl = "https://is1-ssl.mzstatic.com/image/thumb/linked-album/100x100bb.jpg";
+  const requests: string[] = [];
+  t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    requests.push(url.hostname);
+    assert.ok(init?.signal);
+    if (url.hostname === "itunes.apple.com") {
+      assert.equal(url.pathname, "/lookup");
+      assert.equal(url.searchParams.get("id"), "123");
+      assert.equal(url.searchParams.get("entity"), "album");
+      return Response.json({ resultCount: 1, results: [{
+        wrapperType: "collection", collectionType: "Album", collectionId: 123, artistId: 456,
+        collectionName: "Catalog album", artistName: "Catalog artist", trackCount: 1,
+        releaseDate: "2026-09-01T00:00:00Z", collectionViewUrl: "https://music.apple.com/kr/album/123", artworkUrl100: imageUrl,
+      }] });
+    }
+    assert.equal(url.origin, "https://musicbrainz.org", "every external request must have an explicit fixture");
+    assert.equal(url.pathname, `/ws/2/release/${releaseId}`);
+    assert.match(url.searchParams.get("inc") ?? "", /work-rels/);
+    return Response.json({ ...rawRelease, media: [{ ...rawRelease.media[0], tracks: [{
+      ...rawRelease.media[0].tracks[0], recording: { id: recordingId, title: "Catalog track", relations: [{
+        "target-type": "work", work: { id: workId, title: "Catalog work", relations: [
+          { type: "composer", artist: { name: "Composer A" } }, { type: "composer", artist: { name: "Composer B" } },
+          { type: "lyricist", artist: { name: "Lyricist" } }, { type: "arranger", artist: { name: "Arranger" } },
+        ] },
+      }] },
+    }] }] });
+  });
+  const environmentKeys = ["MUSICBRAINZ_COMMERCIAL_USE_APPROVED", "MUSICBRAINZ_USER_AGENT"] as const;
+  const previousEnvironment = environmentKeys.map(key => process.env[key]);
+  try {
+    process.env.MUSICBRAINZ_COMMERCIAL_USE_APPROVED = "true";
+    process.env.MUSICBRAINZ_USER_AGENT = "ArchiveServiceTest/1.0 (qa@example.invalid)";
+    const result = await h.mutateArchive(OWNER, { action: "refresh-metadata", libraryId: LIBRARY, version: 1, releaseId: initial.releases[0].id });
+    const saved = result.library!;
+    assert.deepEqual(requests.sort(), ["itunes.apple.com", "musicbrainz.org"]);
+    assert.deepEqual(h.calls.filter(call => call.method === "provider-permit").map(call => call.name).sort(), ["apple", "musicbrainz"]);
+    assert.equal(saved.data.releases[0].imageUrl, imageUrl);
+    assert.equal(saved.data.releases[0].source?.provider, "musicbrainz");
+    assert.equal(saved.data.releases.length, 1);
+    assert.equal(saved.data.tracks.length, 1);
+    const recording = saved.data.recordings.find(item => item.id === saved.data.tracks[0].recordingId)!;
+    const work = saved.data.works.find(item => item.id === recording.workIds[0])!;
+    assert.equal(work.source?.externalId, workId);
+    assert.deepEqual(work.contributors, [
+      { name: "Composer A", role: "composition" }, { name: "Composer B", role: "composition" },
+      { name: "Lyricist", role: "lyrics" }, { name: "Arranger", role: "arrangement" },
+    ]);
+    assert.deepEqual(saved.data.tasks, [], "source metadata cannot declare completed legal registration");
+    assert.equal(result.creditCount, 1);
+    assert.match(String(result.metadataNotice), /앨범 1개/, "two sources still describe one refreshed album");
+    assert.deepEqual(mutations(h).map(call => call.name), ["save_music_archive_library"]);
+  } finally {
+    environmentKeys.forEach((key, index) => {
+      if (previousEnvironment[index] === undefined) delete process.env[key];
+      else process.env[key] = previousEnvironment[index];
+    });
+  }
 });

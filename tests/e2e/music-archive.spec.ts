@@ -287,6 +287,56 @@ test("refresh applies album artwork and pre-fills confirmed writers for the corr
   expect(harness.errors).toEqual([]);
 });
 
+test("imported credits shared across works save each writer role once", async ({page}) => {
+  const initial = fixture();
+  initial.data.works = [
+    { id: "work-first", title: "첫 작품", contributors: [{ name: "공동 저작자", role: "lyrics" }, { name: "공동 저작자", role: "composition" }], institutionNumbers: [] },
+    { id: "work-second", title: "두 번째 작품", contributors: [{ name: "공동 저작자", role: "composition" }, { name: "편곡 참여자", role: "arrangement" }], institutionNumbers: [] },
+  ];
+  initial.data.recordings[0].workIds = initial.data.works.map(work => work.id);
+  const harness = await mount(page, [initial]); await openAlbum(page);
+  await page.getByLabel("관리할 음악", {exact:true}).selectOption("original");
+  await tab(page, "저작권 등록");
+  await page.getByRole("button", {name:"등록 정보 입력",exact:true}).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel(/^저작자 \d+$/, {exact:true})).toHaveCount(3);
+  await dialog.getByRole("button", {name:"저장",exact:true}).click();
+  await expect(dialog).toHaveCount(0);
+  expect(harness.libraries[0].data.tasks.map(task => [task.participant, task.role])).toEqual([
+    ["공동 저작자", "작사"], ["공동 저작자", "작곡"], ["편곡 참여자", "편곡"],
+  ]);
+  expect(harness.errors).toEqual([]);
+});
+
+test("linked work credits display once per role within the exact track recording", async ({page}) => {
+  const initial = fixture();
+  initial.data.works = [
+    { id: "work-first", title: "같은 제목", contributors: [{ name: "겹친 저작자", role: "lyrics" }, { name: "겹친 저작자", role: "composition" }], institutionNumbers: [{ agency: "KOMCA", number: "REG-1" }] },
+    { id: "work-second", title: "같은 제목", contributors: [{ name: "겹친 저작자", role: "composition" }, { name: "공동작곡자", role: "composition" }, { name: "편곡 참여자", role: "arrangement" }], institutionNumbers: [{ agency: "KOMCA", number: "REG-1" }, { agency: "KOSCAP", number: "REG-2" }] },
+    { id: "work-legacy", title: "같은 제목", writers: "역할 미분류 저작자 원문", institutionNumbers: [] },
+    { id: "work-clean", title: "같은 제목", contributors: [{ name: "다른 버전 저작자", role: "composition" }], institutionNumbers: [] },
+  ];
+  initial.data.recordings[0].workIds = ["work-first", "work-second", "work-legacy"];
+  initial.data.recordings[1].workIds = ["work-clean"];
+  const harness = await mount(page, [initial]); await openAlbum(page); await tab(page, "저작권 등록");
+  const original = page.getByRole("article", { name: "같은 제목 (Original) 저작자 정보", exact: true });
+  const clean = page.getByRole("article", { name: "같은 제목 (Clean) 저작자 정보", exact: true });
+  await expect(original).toBeVisible();
+  expect((await original.textContent())?.match(/겹친 저작자/g)).toHaveLength(2);
+  await expect(original).toContainText("공동작곡자");
+  await expect(original).toContainText("편곡 참여자");
+  await expect(original).toContainText("역할 미분류 저작자 원문");
+  await expect(original.getByText("KOMCA · REG-1", { exact: true })).toHaveCount(1);
+  await expect(original.getByText("KOSCAP · REG-2", { exact: true })).toHaveCount(1);
+  await expect(original).not.toContainText("다른 버전 저작자");
+  await expect(clean).toContainText("다른 버전 저작자");
+  await expect(clean).not.toContainText("겹친 저작자");
+  await page.getByLabel("관리할 음악", { exact: true }).selectOption("clean");
+  await expect(original).toHaveCount(0);
+  await expect(clean).toBeVisible();
+  expect(harness.errors).toEqual([]);
+});
+
 test("album editing connects a domestic album URL while preserving its imported identity", async ({page}) => {
   const harness = await mount(page, [fixture()]); await openAlbum(page);
   await page.getByRole("button",{name:"수정",exact:true}).click();

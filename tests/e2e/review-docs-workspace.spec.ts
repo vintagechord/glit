@@ -72,7 +72,7 @@ test("an offline worker reconnects automatically without reloading or losing ent
   await page.clock.install();
   await page.goto(origin);
   const start = page.getByRole("button", { name: "업로드·분석 시작" });
-  await expect(page.getByRole("status")).toContainText("문서 처리 작업자가 연결되어 있지 않습니다.");
+  await expect(page.getByRole("status")).toContainText("심의자료 처리 연결을 확인하고 있습니다.");
   await expect(start).toBeDisabled();
   await page.getByRole("tab", { name: "멜론·지니 URL · 음반" }).click();
   const urls = page.getByLabel("멜론·지니 URL (한 줄에 하나, 최대 8개)");
@@ -80,7 +80,7 @@ test("an offline worker reconnects automatically without reloading or losing ent
   workerReady = true;
   await page.clock.runFor(15_000);
   await expect(start).toBeEnabled();
-  await expect(page.getByText("문서 처리 작업자가 연결되어 있지 않습니다.", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("심의자료 처리 연결을 확인하고 있습니다.", { exact: false })).toHaveCount(0);
   await expect(urls).toHaveValue("https://www.melon.com/album/detail.htm?albumId=123456");
 });
 
@@ -100,7 +100,7 @@ test("unknown connectivity disables worker actions, recovers on focus, and prese
   await title.fill("저장 전 관리자 수정");
   failed = true;
   await page.clock.runFor(15_000);
-  await expect(page.getByRole("alert")).toHaveText("작업 저장소에 연결할 수 없습니다.");
+  await expect(page.getByRole("alert")).toContainText("작업 저장소에 연결할 수 없습니다.");
   await expect(page.getByText("문서 처리 작업자가 연결되어 있지 않습니다.", { exact: false })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "누락 번역 요청" })).toBeDisabled();
   await expect(title).toHaveValue("저장 전 관리자 수정");
@@ -114,6 +114,24 @@ test("unknown connectivity disables worker actions, recovers on focus, and prese
   await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: false }); window.dispatchEvent(new Event("focus")); });
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "누락 번역 요청" })).toBeEnabled();
+});
+
+test("manual connection retry restores analysis immediately and retains the selected input", async ({ page }) => {
+  let reads = 0;
+  await page.route(/\/api\/admin\/review-docs\/jobs(?:\?.*)?$/, route => {
+    reads++;
+    const refreshed = new URL(route.request().url()).searchParams.get("refresh") === "1";
+    return route.fulfill({ json: { jobs: [], workerReady: refreshed, workerMode: refreshed ? "web" : "unavailable", supportedFormats: refreshed ? ["docx"] : [] } });
+  });
+  await page.goto(origin);
+  await expect(page.getByRole("button", { name: "업로드·분석 시작" })).toBeDisabled();
+  await page.getByRole("tab", { name: "멜론·지니 URL · 음반" }).click();
+  const urls = page.getByLabel("멜론·지니 URL (한 줄에 하나, 최대 8개)");
+  await urls.fill("https://www.melon.com/album/detail.htm?albumId=123456");
+  await page.getByRole("button", { name: "연결 다시 확인" }).click();
+  await expect(page.getByRole("button", { name: "업로드·분석 시작" })).toBeEnabled();
+  await expect(urls).toHaveValue("https://www.melon.com/album/detail.htm?albumId=123456");
+  expect(reads).toBe(2);
 });
 
 test("history polling never overlaps and a delayed response cannot undo a newly saved job summary", async ({ page }) => {

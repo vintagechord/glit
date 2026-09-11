@@ -21,7 +21,11 @@ export function MemberRecordEditor({ tab, tracks, data, initial, busy, onSave, o
   function writersFor(trackId: string): Participant[] {
     const recordingId = tracks.find(item => item.id === trackId)?.recordingId;
     const workIds = data.recordings.find(item => item.id === recordingId)?.workIds ?? [];
-    const credits = data.works.filter(item => workIds.includes(item.id)).flatMap(item => item.contributors ?? []);
+    const creditsByRole = new Map(data.works
+      .filter(item => workIds.includes(item.id))
+      .flatMap(item => item.contributors ?? [])
+      .map(item => [JSON.stringify([item.name.trim(), item.role]), item]));
+    const credits = [...creditsByRole.values()];
     return credits.length ? credits.map(item => participant(item.name, roleNames[item.role])) : writerRoles.map(role => participant("", role));
   }
   const [selected, setSelected] = useState(firstTrack);

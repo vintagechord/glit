@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { jobDatabaseError } from "./jobs";
 import { REVIEW_JOB_LIMITS, ReviewJobError, type ReviewJob } from "./jobs-types";
-import { isReviewWebEnabled, reviewWebCapabilities, reviewWebClaimArguments } from "./web-runtime";
+import { claimSupportedReviewWebJob, isReviewWebEnabled, reviewWebCapabilities } from "./web-runtime";
 import { cleanupReviewJobs, failReviewJob, processReviewJob } from "./worker";
 import { awaitReviewAbort } from "./abort";
 
@@ -58,7 +58,7 @@ export function runWebReviewBatch(capabilities = reviewWebCapabilities): Promise
   if (state.__reviewWebBatch) return state.__reviewWebBatch;
   state.__reviewWebBatch = (async () => {
     const formats = await capabilities();
-    const { data, error } = await createAdminClient().rpc("claim_review_document_web_job", reviewWebClaimArguments(formats));
+    const { data, error } = await claimSupportedReviewWebJob(formats);
     jobDatabaseError(error);
     const job = data?.[0] as ReviewJob | undefined;
     if (job) await runClaimedWebReviewJob(job);

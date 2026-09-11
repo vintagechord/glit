@@ -65,6 +65,15 @@ test("direct artist URL and MBID lookup uses fixed API origin, no redirect and n
   assert.equal(permits, 2);
 });
 
+test("MusicBrainz body cancellation stays a recoverable provider error", async () => {
+  const response = new Response(new ReadableStream({ start(controller) { controller.error(new DOMException("Aborted after headers", "AbortError")); } }));
+  await assert.rejects(searchMusicBrainzArtists(artist, options(() => response)), (error: unknown) => error instanceof MusicProviderError && error.code === "temporary_error");
+  assert.equal(response.body?.locked, false);
+  let requests = 0;
+  await assert.rejects(searchMusicBrainzArtists(artist, { ...options(() => { requests++; return {}; }), signal: AbortSignal.abort() }), (error: unknown) => error instanceof MusicProviderError && error.code === "temporary_error");
+  assert.equal(requests, 0);
+});
+
 test("resumable steps exhaust multiple release pages then track-artist appearances, one request each", async () => {
   const requests: string[] = [];
   const opts = options((url) => {

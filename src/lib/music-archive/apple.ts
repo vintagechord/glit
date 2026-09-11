@@ -19,7 +19,7 @@ export type AppleStep = {
   status: "collecting" | "completed"; checkedAt: string; scopeNote: string;
 };
 export type AppleOptions = {
-  fetcher?: typeof fetch; now?: () => number;
+  fetcher?: typeof fetch; now?: () => number; signal?: AbortSignal;
   /** Production: one shared DB-backed slot every >=3.1 seconds across workers. */
   acquirePermit?: () => Promise<void>;
 };
@@ -51,10 +51,12 @@ async function localPermit() {
 async function request(path: "search" | "lookup", params: Record<string, string>, options: AppleOptions): Promise<Json[]> {
   const url = new URL(`${base}/${path}`);
   url.search = new URLSearchParams(params).toString();
+  if (options.signal?.aborted) throw new MusicProviderError("temporary_error", "음악 카탈로그 조회 시간이 초과되었습니다. 다시 시도해주세요.");
   await (options.acquirePermit ?? localPermit)();
   let response: Response;
   try {
-    response = await (options.fetcher ?? fetch)(url, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(12_000), headers: { Accept: "application/json", "User-Agent": "OnsideMusicArchive/1.0" } });
+    options.signal?.throwIfAborted();
+    response = await (options.fetcher ?? fetch)(url, { cache: "no-store", redirect: "error", signal: AbortSignal.any([AbortSignal.timeout(12_000), ...(options.signal ? [options.signal] : [])]), headers: { Accept: "application/json", "User-Agent": "OnsideMusicArchive/1.0" } });
   } catch { throw new MusicProviderError("temporary_error", "음악 카탈로그 연결이 일시적으로 중단되었습니다. 중단 지점에서 재시도할 수 있습니다.", 30); }
   if (!response.ok) {
     await response.body?.cancel();
@@ -234,4 +236,13 @@ export async function lookupAppleAlbum(albumId: string, artistId: string, option
   const row = rows.find(row => row.wrapperType === "collection" && identifier(row.collectionId) === albumId);
   if (!row) return invalid("선택한 앨범의 카탈로그 정보를 찾지 못했습니다.");
   return normalizeAppleAlbum(rows, albumMetadata(row), artistId, [], new Date(options.now?.() ?? Date.now()).toISOString());
+}
+
+/** Artwork does not require an artist connection or the album's US track listing. */
+export async function lookupAppleAlbumMetadata(albumId: string, options: AppleOptions = {}): Promise<AppleAlbumMetadata> {
+  requireId(albumId);
+  const rows = await request("lookup", { id: albumId, entity: "album", country: "KR", limit: "1" }, options);
+  const row = rows.find(row => row.wrapperType === "collection" && identifier(row.collectionId) === albumId);
+  if (!row) return invalid("선택한 앨범의 카탈로그 정보를 찾지 못했습니다.");
+  return albumMetadata(row);
 }

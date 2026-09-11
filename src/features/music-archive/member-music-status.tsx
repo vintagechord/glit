@@ -24,6 +24,22 @@ function latestRecords(records: ArchiveTask[]) {
   for (const task of records) latest.set(JSON.stringify([task.trackId, task.kind, task.agency, task.participant || "", task.role || ""]), task);
   return [...latest.values()];
 }
+function trackCopyrightCredits(data: LibraryDetail["library"]["data"], tracks: ArchiveTrack[]) {
+  const recordings = new Map(data.recordings.map(recording => [recording.id, recording]));
+  const worksById = new Map(data.works.map(work => [work.id, work]));
+  return tracks.flatMap(track => {
+    const works = (recordings.get(track.recordingId ?? "")?.workIds ?? []).flatMap(id => {
+      const work = worksById.get(id);
+      return work ? [work] : [];
+    });
+    const contributors = [...new Map(works.flatMap(work => work.contributors ?? [])
+      .map(person => [JSON.stringify([person.name.trim(), person.role]), { ...person, name: person.name.trim() }])).values()];
+    const institutionNumbers = [...new Map(works.flatMap(work => work.institutionNumbers)
+      .map(entry => [JSON.stringify([entry.agency, entry.number]), entry])).values()];
+    const writers = [...new Set(works.filter(work => !work.contributors?.length).map(work => work.writers?.trim()).filter(Boolean))];
+    return contributors.length || institutionNumbers.length || writers.length ? [{ track, contributors, institutionNumbers, writers }] : [];
+  });
+}
 function taskLabel(task: ArchiveTask, tab: MemberMusicTab) {
   if (tab === "review") {
     if (task.result === "eligible") return "적격";
@@ -76,23 +92,30 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
   const [showResult, setShowResult] = useState(false);
   const idsKey = submissionIds.join(",");
   useEffect(() => { if (tab === "review" && reviewOpenRequest > 0 && idsKey) { const handle = setTimeout(() => setShowResult(true), 0); return () => clearTimeout(handle); } }, [tab, reviewOpenRequest, idsKey]);
-  const workIds = new Set(data.recordings.filter((recording) => tracks.some((item) => item.recordingId === recording.id)).flatMap((recording) => recording.workIds));
-  const works = tab === "copyright" ? data.works.filter((work) => workIds.has(work.id) && (work.writers || work.contributors?.length || work.institutionNumbers.length)) : [];
+  const credits = tab === "copyright" ? trackCopyrightCredits(data, tracks) : [];
   const localePrefix = typeof window !== "undefined" && window.location.pathname.startsWith("/en/") ? "/en" : "";
-  const registered = records.some((item) => ["approved", "information_found", "listed"].includes(item.result)) || works.some((work) => work.institutionNumbers.length);
+  const registered = records.some((item) => ["approved", "information_found", "listed"].includes(item.result)) || credits.some(group => group.institutionNumbers.length);
   const finishedReviewIds = new Set(records.filter((item) => item.status === "completed" || ["eligible", "ineligible", "rejected"].includes(item.result)).map((item) => item.trackId));
   const reviewSummary = memberReviewStatus(detail, release.id, track?.id);
   return <section className={`${panelClass} space-y-5`} aria-label={`${labels[tab]} 정보`}>
-    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">{labels[tab]}</h3><Badge>{tab === "review" ? reviewSummary : registered ? (tab === "karaoke" ? "수록 정보 있음" : "등록 정보 있음") : tab === "copyright" && works.length ? "저작자 정보 있음" : records.length ? "확인 필요" : "등록 정보 없음"}</Badge></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">{labels[tab]}</h3><Badge>{tab === "review" ? reviewSummary : registered ? (tab === "karaoke" ? "수록 정보 있음" : "등록 정보 있음") : tab === "copyright" && credits.length ? "저작자 정보 있음" : records.length ? "확인 필요" : "등록 정보 없음"}</Badge></div>
     {tab === "review" ? <>
       {onside.length > 0 ? <div className="flex justify-end"><Button primary onClick={() => setShowResult(true)}>심의 결과 보기</Button></div> : <>
         {records.length > 0 && <div className="space-y-3">{records.map((item) => <Record key={item.id} task={item} tab={tab} trackTitle={!track ? tracks.find((track) => track.id === item.trackId)?.title : undefined} onEdit={() => setEditing({ initial: item })} />)}</div>}
         <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!finishedReviewIds.size && <Link className="inline-flex min-h-11 items-center justify-center rounded-lg border-2 border-foreground bg-foreground px-4 py-2 text-sm font-bold text-background" href={buildArchiveReviewEntryHref({ libraryId: detail.library.id, releaseId: release.id, trackId: track?.id, localePrefix })}>온사이드에 심의 신청</Link>}<Button primary={!!finishedReviewIds.size} disabled={busy || !tracks.length} onClick={() => setEditing({})}>심의 내역 입력</Button></div>
       </>}
     </> : <>
-      {works.length > 0 && <div className="space-y-3">{works.map((work) => <div key={work.id} className="space-y-1 rounded-lg border border-border p-3 text-sm">{!track && <p className="font-bold">{work.title}</p>}{work.contributors?.length ? <div className="space-y-1">{(["lyrics", "composition", "arrangement"] as const).map(role => { const people = work.contributors!.filter(person => person.role === role); return people.length ? <p key={role}><span className="mr-2 font-semibold">{{ lyrics: "작사", composition: "작곡", arrangement: "편곡" }[role]}</span>{people.map(person => person.name).join(", ")}</p> : null; })}</div> : work.writers && <p>{work.writers}</p>}{work.institutionNumbers.map((entry) => <p key={`${entry.agency}-${entry.number}`} className="text-muted-foreground">{entry.agency} · {entry.number}</p>)}</div>)}</div>}
+      {credits.length > 0 && <div className="space-y-3">{credits.map(group => <article key={group.track.id} aria-label={`${group.track.title}${group.track.version ? ` (${group.track.version})` : ""} 저작자 정보`} className="space-y-1 rounded-lg border border-border p-3 text-sm">
+        {!track && <p className="font-bold">{group.track.trackNumber}. {group.track.title}{group.track.version ? ` (${group.track.version})` : ""}</p>}
+        {(["lyrics", "composition", "arrangement"] as const).map(role => {
+          const people = group.contributors.filter(person => person.role === role);
+          return people.length ? <p key={role}><span className="mr-2 font-semibold">{{ lyrics: "작사", composition: "작곡", arrangement: "편곡" }[role]}</span>{people.map(person => person.name).join(", ")}</p> : null;
+        })}
+        {group.writers.map(writers => <p key={writers}>{writers}</p>)}
+        {group.institutionNumbers.map(entry => <p key={JSON.stringify([entry.agency, entry.number])} className="text-muted-foreground">{entry.agency} · {entry.number}</p>)}
+      </article>)}</div>}
       {records.length > 0 && <div className="space-y-3">{records.map((item) => <Record key={item.id} task={item} tab={tab} trackTitle={!track ? tracks.find((track) => track.id === item.trackId)?.title : undefined} onEdit={() => setEditing({ initial: item })} />)}</div>}
-      {!registered && <div className="flex flex-wrap gap-2">{institutions[tab].map((institution) => {
+      {!registered && <div className="flex flex-wrap justify-end gap-2">{institutions[tab].map((institution) => {
         const guide = guides.find((item) => item.id === institution.id && item.visible);
         return <a key={institution.id} href={guide?.applyUrl || guide?.url || institution.fallback} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border-2 border-border px-3 py-2 text-sm font-bold hover:border-foreground">{institution.label}<ExternalLink className="h-3 w-3 shrink-0" aria-hidden /></a>;
       })}</div>}
@@ -105,5 +128,6 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
 }
 
 function Record({ task, tab, trackTitle, onEdit }: { task: ArchiveTask; tab: MemberMusicTab; trackTitle?: string; onEdit: () => void }) {
-  return <article className="rounded-lg border border-border p-3 text-sm"><div className="flex items-start justify-between gap-3"><div className="min-w-0 space-y-1">{trackTitle && <h4 className="break-words font-bold">{trackTitle}</h4>}<p className="font-semibold">{task.agency} · {taskLabel(task, tab)}</p>{(task.participant || task.role) && <p>{[task.participant, task.role].filter(Boolean).join(" · ")}</p>}{tab !== "review" && (task.songNumber || task.referenceNumber) && <p className="text-muted-foreground">{tab === "karaoke" ? "곡번호" : "등록번호"} {task.songNumber || task.referenceNumber}</p>}{task.completedDate && <p className="text-muted-foreground">{task.completedDate}</p>}{task.memo && <p className="whitespace-pre-wrap break-words">{tab === "review" && ["ineligible", "rejected"].includes(task.result) && <span className="font-semibold">부적격 사유: </span>}{task.memo}</p>}</div><button type="button" onClick={onEdit} className="min-h-10 shrink-0 px-2 text-xs font-semibold underline underline-offset-4">수정</button></div></article>;
+  const showMemo = task.memo && (tab !== "review" || ["ineligible", "rejected"].includes(task.result));
+  return <article className="rounded-lg border border-border p-3 text-sm"><div className="flex items-start justify-between gap-3"><div className="min-w-0 space-y-1">{trackTitle && <h4 className="break-words font-bold">{trackTitle}</h4>}<p className="font-semibold">{task.agency} · {taskLabel(task, tab)}</p>{(task.participant || task.role) && <p>{[task.participant, task.role].filter(Boolean).join(" · ")}</p>}{tab !== "review" && (task.songNumber || task.referenceNumber) && <p className="text-muted-foreground">{tab === "karaoke" ? "곡번호" : "등록번호"} {task.songNumber || task.referenceNumber}</p>}{task.completedDate && <p className="text-muted-foreground">{task.completedDate}</p>}{showMemo && <p className="whitespace-pre-wrap break-words">{tab === "review" && <span className="font-semibold">부적격 사유: </span>}{task.memo}</p>}</div><button type="button" onClick={onEdit} className="min-h-10 shrink-0 px-2 text-xs font-semibold underline underline-offset-4">수정</button></div></article>;
 }

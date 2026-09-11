@@ -56,6 +56,7 @@ export function ReviewDocsWorkspace() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [checkingConnection, setCheckingConnection] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [workerReady, setWorkerReady] = useState<boolean | null>(null);
   const [workerMode, setWorkerMode] = useState<"dedicated" | "web" | "unavailable">("unavailable");
@@ -87,13 +88,14 @@ export function ReviewDocsWorkspace() {
     setJobs((current) => [next, ...current.filter((item) => item.id !== next.id)].sort((a, b) => b.created_at.localeCompare(a.created_at)));
     if (replaceDraft || !dirtyRef.current) { setDraft(next.data); markDirty(false); }
   }, [markDirty]);
-  const loadHistory = useCallback(() => {
+  const loadHistory = useCallback((refresh = false) => {
     if (historyRequest.current) return historyRequest.current.promise;
+    setCheckingConnection(true);
     const controller = new AbortController();
     const sequence = loadSequence.current;
     const promise = (async () => {
       try {
-        const result = await api<{ jobs: Job[]; workerReady: boolean; workerMode?: "dedicated" | "web" | "unavailable"; supportedFormats?: string[]; workerError?: string }>("/api/admin/review-docs/jobs", { signal: controller.signal });
+        const result = await api<{ jobs: Job[]; workerReady: boolean; workerMode?: "dedicated" | "web" | "unavailable"; supportedFormats?: string[]; workerError?: string }>(`/api/admin/review-docs/jobs${refresh ? "?refresh=1" : ""}`, { signal: controller.signal });
         if (controller.signal.aborted) return;
         // A history response started before a save/selection must not replace newer job summaries.
         if (sequence === loadSequence.current) setJobs(result.jobs);
@@ -108,7 +110,7 @@ export function ReviewDocsWorkspace() {
         setWorkerMode("unavailable");
         setHistoryError(error instanceof Error ? error.message : "작업 이력과 연결 상태를 불러오지 못했습니다. 잠시 후 다시 확인합니다.");
       } finally {
-        if (!controller.signal.aborted) setHistoryLoading(false);
+        if (!controller.signal.aborted) { setHistoryLoading(false); setCheckingConnection(false); }
         if (historyRequest.current?.controller === controller) historyRequest.current = null;
       }
     })();
@@ -222,7 +224,8 @@ export function ReviewDocsWorkspace() {
   const sourceChecks = (selected: string[], onChange: (ids: string[]) => void) => <div className="flex flex-wrap gap-x-5 gap-y-2">{draft?.sources.map((source) => <Check key={source.id} label={source.name} checked={selected.includes(source.id)} onChange={(checked) => onChange(toggle(selected, source.id, checked))} />)}</div>;
 
   return <div className="mt-7 space-y-6">
-    {workerReady === false && <p role="status" className="rounded-[8px] border-2 border-amber-500/60 bg-amber-500/10 p-4 text-sm">{workerError || "문서 처리 작업자가 연결되어 있지 않습니다. 연결 상태를 자동으로 확인하고 있습니다. 기존 자료를 확인·수정할 수 있으며, 새 분석·번역·생성은 연결이 복구되면 진행할 수 있습니다."}</p>}
+    {historyLoading && <p role="status" className="text-sm text-muted-foreground">심의자료 처리 환경과 지원 파일 형식을 확인하고 있습니다…</p>}
+    {workerReady === false && <div role="status" className="flex flex-col gap-3 rounded-[8px] border-2 border-amber-500/60 bg-amber-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"><p>{workerError || "심의자료 처리 연결을 확인하고 있습니다. 기존 자료를 확인·수정할 수 있으며, 연결이 복구되면 새 분석·문서 생성을 시작할 수 있습니다."}</p><button type="button" className={`${buttonClass} shrink-0`} disabled={checkingConnection} onClick={() => void loadHistory(true)}>{checkingConnection ? "연결 확인 중…" : "연결 다시 확인"}</button></div>}
     {workerMode === "web" && <p role="status" className="rounded-[8px] border border-emerald-600/40 bg-emerald-600/5 p-4 text-sm">{supportedFormats.length > 1 ? "DOC · DOCX · HWP · PDF 파일과 멜론·지니 URL을 바로 분석할 수 있습니다." : "DOCX 파일과 멜론·지니 URL은 바로 분석할 수 있습니다. DOC·HWP·PDF는 DOCX로 저장해서 업로드해주세요."}</p>}
     <section className={panelClass} aria-label="자료 입력">
       <div role="tablist" aria-label="생성 방식" className="flex flex-wrap gap-2">{tabs.map((item) => <button key={item.id} type="button" role="tab" id={`tab-${item.id}`} aria-selected={tab === item.id} aria-controls="review-input-panel" onClick={() => setTab(item.id)} className={`${buttonClass} ${tab === item.id ? "border-[#111111] bg-[#f2cf27] text-[#111111]" : ""}`}>{item.label}</button>)}</div>
@@ -233,12 +236,13 @@ export function ReviewDocsWorkspace() {
           <p className="mt-2 text-xs text-muted-foreground">{supportedFormats.length <= 1 ? "DOCX / 최대 8개, 파일당 10MB, 전체 40MB" : "DOC · DOCX · HWP · PDF / 최대 8개, 파일당 10MB, 전체 40MB, PDF 파일당 80쪽"}</p>
           {files.length > 0 && <ul className="mt-3 space-y-1 text-sm">{files.map((file, index) => <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3"><span className="break-all">{file.name} ({(file.size / 1024 / 1024).toFixed(2)}MB)</span><button type="button" className="shrink-0 text-xs underline" onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}>제외</button></li>)}</ul>}
         </div>}
-        <button type="button" className="bauhaus-button px-5 py-3 text-sm disabled:opacity-50" onClick={() => void createJob()} disabled={pending || dirty || workerReady !== true}>{pending ? "처리 중…" : "업로드·분석 시작"}</button>
+        <button type="button" className="bauhaus-button px-5 py-3 text-sm disabled:opacity-50" onClick={() => void createJob()} disabled={pending || dirty || workerReady !== true} aria-describedby={workerReady !== true ? "review-connection-help" : undefined}>{pending ? "처리 중…" : "업로드·분석 시작"}</button>
+        {workerReady !== true && <p id="review-connection-help" className="text-xs text-muted-foreground">{checkingConnection ? "연결 확인이 끝나면 분석을 시작할 수 있습니다." : "연결 다시 확인을 눌러 처리 환경을 확인해주세요. 입력한 파일과 URL은 유지됩니다."}</p>}
         <details className="text-xs leading-6 text-muted-foreground"><summary className="cursor-pointer font-semibold">처리 범위와 보관 기간</summary><p>최대 8개 앨범·100곡, 번역 요청당 60,000자, 작업당 추가 번역 요청은 최대 3회. 한 관리자당 진행 중 작업은 최대 3개이며, 변환은 한 번에 1개씩 처리합니다. 작업은 최대 15분, 원본·결과는 7일간 비공개 보관합니다. 스캔 PDF는 OCR 설치 상태와 인식 결과를 확인해야 합니다. 변환기나 템플릿이 없으면 해당 원인을 표시합니다.</p></details>
       </div>
     </section>
 
-    {(error || historyError) && <div role="alert" className="rounded-[8px] border-2 border-red-500/60 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">{error || historyError}</div>}
+    {(error || historyError) && <div role="alert" className="rounded-[8px] border-2 border-red-500/60 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><p>{error || historyError}</p>{historyError && <button type="button" className={`${buttonClass} mt-3`} disabled={checkingConnection} onClick={() => void loadHistory(true)}>{checkingConnection ? "연결 확인 중…" : "연결 다시 확인"}</button>}</div>}
     {notice && <p role="status" className="rounded-[8px] border-2 border-emerald-600/50 bg-emerald-500/10 p-4 text-sm">{notice}</p>}
 
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">

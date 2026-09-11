@@ -8,7 +8,7 @@ export const maxDuration = 900;
 export async function GET(request: Request) {
   try {
     const user = await authorizeReviewRequest(request);
-    const { jobs, ...processor } = await listReviewJobs(user.id);
+    const { jobs, ...processor } = await listReviewJobs(user.id, new URL(request.url).searchParams.get("refresh") === "1");
     if (processor.workerMode === "web") after(resumeWebReviewJobs);
     return reviewJson({ jobs: jobs.map(publicReviewJob), limits: REVIEW_JOB_LIMITS, ...processor });
   }

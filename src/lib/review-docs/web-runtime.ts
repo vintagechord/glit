@@ -4,7 +4,7 @@ import { checkReviewConverters, checkReviewTemplates } from "../../../scripts/re
 import { ReviewJobError } from "./jobs-types";
 
 export type ReviewProcessor = { workerReady: boolean; workerMode: "dedicated" | "web" | "unavailable"; supportedFormats: string[]; workerError?: string };
-type Readiness = { key: string; expires: number; promise: Promise<{ ready: boolean; message?: string }> };
+type Readiness = { key: string; expires: number; promise: Promise<{ ready: boolean; formats: string[]; message?: string }> };
 let readiness: Readiness | undefined;
 export const isReviewWebEnabled = () => process.env.REVIEW_DOCS_WEB_DISABLED !== "true";
 const nativeFormats = ["docx"];
@@ -44,32 +44,44 @@ export function reviewWebClaimArguments(formats: string[], checkOnly = false) {
   };
 }
 
-async function webReadiness(formats: string[]) {
+/** Older databases can still process DOCX/URLs when the converter RPC is absent. */
+export async function claimSupportedReviewWebJob(formats: string[], checkOnly = false) {
+  const admin = createAdminClient();
+  const claim = (supported: string[]) => admin.rpc("claim_review_document_web_job", reviewWebClaimArguments(supported, checkOnly))
+    .abortSignal(AbortSignal.timeout(10_000));
+  const result = await claim(formats);
+  if (formats.some((format) => format !== "docx") && result.error && ["PGRST202", "42883"].includes(result.error.code)) {
+    // Use the same native fallback for status checks AND actual claims. Never
+    // claim a DOC/HWP/PDF job unless its converter-aware RPC has been verified.
+    return { ...await claim(nativeFormats), formats: [...nativeFormats] };
+  }
+  return { ...result, formats };
+}
+
+async function webReadiness(formats: string[], refresh = false) {
   const key = formats.join(",");
-  if (readiness?.key === key && readiness.expires > Date.now()) return readiness.promise;
+  if (!refresh && readiness?.key === key && readiness.expires > Date.now()) return readiness.promise;
   const promise = (async () => {
     try {
       await checkReviewTemplates();
       // This RPC mode is read-only: no lease, heartbeat, cleanup or job mutation.
-      const { error } = await createAdminClient().rpc("claim_review_document_web_job", reviewWebClaimArguments(formats, true)).abortSignal(AbortSignal.timeout(10_000));
-      if (error) return { ready: false, message: ["PGRST202", "42883"].includes(error.code)
-        ? formats.length > 1
-          ? "심의자료 전체 형식 처리 설정을 적용해야 합니다. 데이터베이스 마이그레이션 0105를 적용해주세요."
-          : "심의자료 자동 처리 설정을 적용해야 합니다. 데이터베이스 마이그레이션 0103을 적용해주세요."
+      const { error, formats: supportedFormats } = await claimSupportedReviewWebJob(formats, true);
+      if (error) return { ready: false, formats: [], message: ["PGRST202", "42883"].includes(error.code)
+        ? "심의자료 자동 처리 설정을 적용해야 합니다. 데이터베이스 마이그레이션 0103을 적용해주세요."
         : "자동 처리 저장소에 연결할 수 없습니다. 잠시 후 연결 상태를 다시 확인합니다." };
-      return { ready: true };
-    } catch { return { ready: false, message: "자동 처리 환경을 확인할 수 없습니다. 서버의 DOCX 템플릿과 데이터베이스 연결을 확인해주세요." }; }
+      return { ready: true, formats: supportedFormats };
+    } catch { return { ready: false, formats: [], message: "자동 처리 환경을 확인할 수 없습니다. 서버의 DOCX 템플릿과 데이터베이스 연결을 확인해주세요." }; }
   })();
   readiness = { key, expires: Date.now() + 15_000, promise };
   return promise;
 }
 
-export async function reviewProcessor(dedicatedReady: boolean, capabilities = reviewWebCapabilities): Promise<ReviewProcessor> {
+export async function reviewProcessor(dedicatedReady: boolean, capabilities = reviewWebCapabilities, refresh = false): Promise<ReviewProcessor> {
   if (dedicatedReady) return { workerReady: true, workerMode: "dedicated", supportedFormats: [...converterFormats] };
   if (isReviewWebEnabled()) {
     const formats = await capabilities();
-    const state = await webReadiness(formats);
-    if (state.ready) return { workerReady: true, workerMode: "web", supportedFormats: formats };
+    const state = await webReadiness(formats, refresh);
+    if (state.ready) return { workerReady: true, workerMode: "web", supportedFormats: state.formats };
     return { workerReady: false, workerMode: "unavailable", supportedFormats: [], workerError: state.message };
   }
   return { workerReady: false, workerMode: "unavailable", supportedFormats: [], workerError: "문서 처리 연결을 확인하고 있습니다. 연결이 복구되면 자동으로 시작할 수 있습니다." };

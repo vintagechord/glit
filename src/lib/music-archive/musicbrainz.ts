@@ -5,7 +5,7 @@ export class MusicProviderError extends Error {
   constructor(public readonly code: ProviderErrorCode, message: string, public readonly retryAfterSeconds?: number) { super(message); this.name = "MusicProviderError"; }
 }
 export type MusicBrainzOptions = {
-  env?: Record<string, string | undefined>; fetcher?: typeof fetch;
+  env?: Record<string, string | undefined>; fetcher?: typeof fetch; signal?: AbortSignal;
   /** Supply a DB-backed global 1 request/second permit in horizontally scaled workers. */
   acquirePermit?: () => Promise<void>; now?: () => number;
 };
@@ -42,10 +42,12 @@ async function request(path: string, params: Record<string, string>, options: Mu
   // Only code-generated paths, validated MBIDs and encoded query parameters reach the network.
   const url = new URL(`https://musicbrainz.org/ws/2/${path}`);
   url.search = new URLSearchParams({ ...params, fmt: "json" }).toString();
+  if (options.signal?.aborted) throw new MusicProviderError("temporary_error", "MusicBrainz 조회 시간이 초과되었습니다. 다시 시도해주세요.");
   await (options.acquirePermit ?? localPermit)();
   let response: Response;
   try {
-    response = await (options.fetcher ?? fetch)(url, { headers: { Accept: "application/json", "User-Agent": userAgent }, cache: "no-store", redirect: "error", signal: AbortSignal.timeout(12_000) });
+    options.signal?.throwIfAborted();
+    response = await (options.fetcher ?? fetch)(url, { headers: { Accept: "application/json", "User-Agent": userAgent }, cache: "no-store", redirect: "error", signal: AbortSignal.any([AbortSignal.timeout(12_000), ...(options.signal ? [options.signal] : [])]) });
   } catch { throw new MusicProviderError("temporary_error", "MusicBrainz 연결이 일시적으로 중단되었습니다. 저장된 중단 지점에서 재시도할 수 있습니다.", 30); }
   if (!response.ok) {
     if (response.status === 404) throw new MusicProviderError("not_found", "MusicBrainz에 해당 식별자 검색 결과가 없습니다. 미등록 여부를 뜻하지 않습니다.");
@@ -65,13 +67,18 @@ async function request(path: string, params: Record<string, string>, options: Mu
   let raw = "";
   if (reader) {
     const decoder = new TextDecoder(); let bytes = 0;
-    for (;;) {
-      const { value, done } = await reader.read(); if (done) break;
-      bytes += value.byteLength;
-      if (bytes > 8_000_000) { await reader.cancel(); throw new MusicProviderError("invalid_response", "제공처 응답이 안전한 처리 크기를 초과했습니다."); }
-      raw += decoder.decode(value, { stream: true });
-    }
-    raw += decoder.decode();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read(); if (done) break;
+        bytes += value.byteLength;
+        if (bytes > 8_000_000) { await reader.cancel(); throw new MusicProviderError("invalid_response", "제공처 응답이 안전한 처리 크기를 초과했습니다."); }
+        raw += decoder.decode(value, { stream: true });
+      }
+      raw += decoder.decode();
+    } catch (error) {
+      if (error instanceof MusicProviderError) throw error;
+      throw new MusicProviderError("temporary_error", "MusicBrainz 응답 수신이 중단되었습니다. 다시 시도해주세요.", 30);
+    } finally { reader.releaseLock(); }
   }
   try { const parsed: unknown = JSON.parse(raw); if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(); return parsed as Json; }
   catch { throw new MusicProviderError("invalid_response", "MusicBrainz 응답 형식을 확인할 수 없습니다. 수집 완료로 처리하지 않았습니다."); }

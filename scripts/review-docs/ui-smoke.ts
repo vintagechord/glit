@@ -78,7 +78,7 @@ async function main() {
     await page.getByRole("button", { name: "수정 내용 저장" }).click();
     await page.getByRole("status").filter({ hasText: "수정 내용을 저장했습니다" }).waitFor();
     workerReady = false; await page.reload();
-    await page.getByText("문서 처리 작업자가 연결되어 있지 않습니다.", { exact: false }).waitFor();
+    await page.getByText("심의자료 처리 연결을 확인하고 있습니다.", { exact: false }).waitFor();
     assert.equal(await page.getByRole("button", { name: "업로드·분석 시작" }).isDisabled(), true);
     workerReady = true; job = { ...job, status: "needs_review", data: { ...job.data, sources: [{ ...source, text: "" }], issues: [{ id: "source:source1", code: "EXTRACTION_FAILED", severity: "error", sourceId: "source1", message: "파일 분석 실패" }] }, extraction_attempts: 1 };
     await page.reload();

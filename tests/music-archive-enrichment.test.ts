@@ -1,17 +1,46 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { appleArtworkUrl, normalizeAppleAlbum, collectAppleStep, type AppleAlbumMetadata } from "../src/lib/music-archive/apple";
+import { appleArtworkUrl, normalizeAppleAlbum, collectAppleStep, lookupAppleAlbumMetadata, type AppleAlbumMetadata } from "../src/lib/music-archive/apple";
 import { normalizeMusicBrainzRelease } from "../src/lib/music-archive/musicbrainz";
 import { mergeArchiveImports } from "../src/lib/music-archive/import";
 import { mergeSubmissionCredits, type CreditSubmission } from "../src/lib/music-archive/credits";
 import { createArchiveData, applyArchiveCommand } from "../src/lib/music-archive/model";
-import { fetchDomesticAlbumCredits, linkedDomesticAlbumUrl, mergeDomesticAlbumCredits } from "../src/lib/music-archive/domestic-credits";
+import { domesticAlbumArtwork, enrichLinkedDomesticAlbums, fetchDomesticAlbumCredits, linkedDomesticAlbumUrl, mergeDomesticAlbumCredits } from "../src/lib/music-archive/domestic-credits";
 import { memberLibrary } from "../src/lib/music-archive/member-view";
 
 const imageUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music/cover/100x100bb.jpg";
 const date = "2026-09-10T00:00:00Z";
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/music-archive-apple/${name}.json`, import.meta.url), "utf8"));
+
+test("artwork refresh looks up the exact Korean album without an artist connection or US tracks", async () => {
+  const discovery = fixture("vintage-chord-albums");
+  const collection = { ...discovery.results[1], artworkUrl100: imageUrl };
+  const metadata = await lookupAppleAlbumMetadata(String(collection.collectionId), { acquirePermit: async () => {}, fetcher: (async input => {
+    const url = new URL(String(input));
+    assert.equal(url.hostname, "itunes.apple.com");
+    assert.equal(url.searchParams.get("id"), String(collection.collectionId));
+    assert.equal(url.searchParams.get("country"), "KR");
+    assert.equal(url.searchParams.get("entity"), "album");
+    return Response.json({ results: [collection], resultCount: 1 });
+  }) as typeof fetch });
+  assert.equal(metadata.imageUrl, imageUrl);
+  assert.equal(metadata.id, String(collection.collectionId));
+  let requests = 0;
+  await assert.rejects(lookupAppleAlbumMetadata(String(collection.collectionId), { signal: AbortSignal.abort(), acquirePermit: async () => { requests++; }, fetcher: (async () => { requests++; return Response.json({ results: [collection], resultCount: 1 }); }) as typeof fetch }));
+  assert.equal(requests, 0, "an expired refresh must not queue another provider request");
+});
+
+test("domestic thumbnail declarations support alternate tags and reject foreign or unsafe URLs", () => {
+  const url = "https://www.genie.co.kr/detail/albumInfo?axnm=123";
+  assert.equal(domesticAlbumArtwork(`<meta NAME='twitter:image' CONTENT='//image.genie.co.kr/cover.jpg?a=1&#38;b=2'>`, url), "https://image.genie.co.kr/cover.jpg?a=1&b=2");
+  assert.equal(domesticAlbumArtwork(`<meta property=og:image content=https://image.genie.co.kr/cover.jpg>`, url), "https://image.genie.co.kr/cover.jpg");
+  assert.equal(domesticAlbumArtwork(`<link rel="image_src" href="http://image.genie.co.kr/cover.jpg">`, url), "https://image.genie.co.kr/cover.jpg");
+  assert.equal(domesticAlbumArtwork(`<meta property="og:image" content="https://genie.co.kr.evil.test/a.jpg"><meta property="og:image:secure_url" content="https://image.genie.co.kr/correct.jpg">`, url), "https://image.genie.co.kr/correct.jpg");
+  for (const value of ["javascript:alert(1)", "ftp://image.genie.co.kr/a.jpg", "https://user:secret@image.genie.co.kr/a.jpg", "https://127.0.0.1/a.jpg"]) {
+    assert.equal(domesticAlbumArtwork(`<meta property="og:image" content="${value}">`, url), null);
+  }
+});
 
 test("catalog artwork URL survives discovery, resume, import, and member projection; foreign URLs are discarded", async () => {
   assert.equal(appleArtworkUrl(imageUrl), imageUrl);
@@ -99,4 +128,37 @@ test("explicit domestic album refresh imports multiple creators and its thumbnai
   assert.equal(mergeDomesticAlbumCredits(unmatched, "release", fetched.album, fetched.provider, date).works.length, 0);
   const linked = archive(); linked.reviewLinks = [{ id: "link", submissionId: submission.id, releaseId: "release" }];
   assert.equal(linkedDomesticAlbumUrl(linked, "release", [{ ...submission, melon_url: albumUrl }], "library"), albumUrl);
+
+  const automatic = await enrichLinkedDomesticAlbums(input, ["release"], [], "library", { fetcher: (async value => new Response(String(value).includes("song/detail") ? songHtml : albumHtml)) as typeof fetch });
+  assert.equal(automatic.data.works[0].contributors?.length, 3);
+  assert.equal(automatic.data.releases[0].imageUrl, data.releases[0].imageUrl);
+  assert.deepEqual(automatic.notices, []);
+  assert.equal(automatic.data.tasks.length, 0);
+  let requests = 0;
+  await enrichLinkedDomesticAlbums(automatic.data, ["release"], [], "library", { fetcher: (async () => { requests++; throw new Error("Should not refetch complete metadata"); }) as typeof fetch });
+  assert.equal(requests, 0);
+  const outage = await enrichLinkedDomesticAlbums(input, ["release"], [], "library", { fetcher: (async () => new Response("Unavailable", { status: 503 })) as typeof fetch });
+  assert.equal(outage.notices.length, 1);
+  assert.deepEqual(outage.data, input, "a supplementary provider failure must preserve the entire imported catalog");
+  const unmatchedImport = await enrichLinkedDomesticAlbums(input, ["another-release"], [], "library", { fetcher: (async () => { requests++; throw new Error("Unrelated import"); }) as typeof fetch });
+  assert.equal(requests, 0);
+  assert.deepEqual(unmatchedImport.data, input);
+
+  const submissionCredits = mergeSubmissionCredits(input, [submission], "library");
+  submissionCredits.releases[0].imageUrl = imageUrl;
+  const partialAlbum = { ...fetched.album, tracks: fetched.album.tracks.map(track => ({ ...track, lyricist: "", arranger: "" })) };
+  const preserved = mergeDomesticAlbumCredits(submissionCredits, "release", partialAlbum, "melon", date);
+  const knownWork = submissionCredits.works[0];
+  assert.ok(preserved.recordings[0].workIds.includes(knownWork.id), "partial domestic credits must retain known lyricist and arranger");
+  const completedTask = applyArchiveCommand(submissionCredits, { type: "save_tasks", id: "registered", trackIds: ["track"], task: { kind: "copyright_work", agency: "KOMCA", status: "completed", result: "approved", workId: knownWork.id, recordingId: submissionCredits.recordings[0].id } });
+  const allRoles = { ...fetched.album, tracks: fetched.album.tracks.map(track => ({ ...track, lyricist: "새 작사가" })) };
+  const retainedTask = mergeDomesticAlbumCredits(completedTask, "release", allRoles, "melon", date);
+  assert.ok(retainedTask.recordings[0].workIds.includes(knownWork.id), "existing registration must remain attached to its work");
+  assert.deepEqual(retainedTask.tasks, completedTask.tasks);
+  const fullDomestic = mergeDomesticAlbumCredits(input, "release", allRoles, "melon", date);
+  const partialRefresh = mergeDomesticAlbumCredits(fullDomestic, "release", partialAlbum, "melon", date);
+  assert.deepEqual(new Set(partialRefresh.works[0].contributors?.map(person => person.role)), new Set(["lyrics", "composition", "arrangement"]), "an incomplete response must retain earlier credits from the same provider");
+  const withExistingCredits = await enrichLinkedDomesticAlbums(submissionCredits, ["release"], [], "library", { fetcher: (async value => { requests++; return new Response(String(value).includes("song/detail") ? songHtml : albumHtml); }) as typeof fetch });
+  assert.ok(requests > 0, "submission credits alone must not skip available domestic creators");
+  assert.ok(withExistingCredits.data.works.some(work => work.source?.provider === "melon"));
 });

@@ -131,12 +131,12 @@ export function DashboardShell({
       {shouldRenderTabs ? (
         <nav
           aria-label={contextLabel}
-          className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-[1.5fr_1fr_1fr_0.65fr]"
+          className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-[1.5fr_1fr_1fr_0.65fr]"
         >
           {navigationGroups.map((group) => (
-            <div key={group.key} className="min-w-0 rounded-xl border border-border bg-card/60 p-2.5 sm:p-3">
-              <p className="mb-2 px-1 text-[11px] font-bold tracking-wide text-muted-foreground">{group.label}</p>
-              <div className="flex flex-wrap gap-1.5">
+            <div key={group.key} role="group" aria-label={group.label} className="grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-1.5 rounded-xl border border-border bg-card/60 p-2.5 sm:block sm:p-3">
+              <p className="px-1 pt-3 text-[11px] font-bold tracking-wide text-muted-foreground sm:mb-2 sm:pt-0">{group.label}</p>
+              <div className="flex min-w-0 flex-wrap gap-1.5">
                 {group.tabs.map((tab) => {
                   const Icon = tabIcons[tab.key];
                   return (
@@ -144,7 +144,7 @@ export function DashboardShell({
                       key={tab.key}
                       href={tab.href}
                       aria-current={activeTab === tab.key ? "page" : undefined}
-                      className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-bold transition ${
+                      className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                         activeTab === tab.key
                           ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-none"
                           : "border-transparent text-muted-foreground hover:border-border hover:bg-background hover:text-foreground"
