@@ -1,5 +1,22 @@
 # 온사이드 운영 반영 기록
 
+## 2026-10-17 온라인 뮤직비디오 MBC 옵션 종료
+
+`de2ff5b1c3bd05b97ab8e3fffbb1bd0acb171401`를 기존 Render 서비스에 배포했다.
+[Render 기록](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-db952cmq1p3s73cs8j3g)에서
+2026-10-17 01:33:14 KST `Deploy succeeded | Live` 확인, 소요 2분 32초.
+
+- 온라인 MV 신청 화면·서버 허용 목록에서 MBC를 제거했다. TV 방송용 MV·음반 MBC는 유지한다.
+- 기존 임시저장 복원에서 종료 옵션과 요금을 제외하며 다른 입력·선택을 보존한다.
+  과거 온라인 MBC 미결제 건은 카드·무통장·PayPal 시작 전에 옵션 수정을 안내한다.
+- 전체 회귀 758개 통과·6개 환경 의존 제외·실패 0개, 신규/복원 브라우저 3개 통과.
+  production build·TypeScript·diff·ESLint 오류 0개. 기존 경고는 점검 기록에 남겼다.
+- 운영 390/1440px 화면에서 온라인 MBC 제외·Mnet/ETN 유지·TV MBC와 30,000원·가로 넘침
+  없음을 확인했다. 자동 임시저장 등 변경 요청은 모두 모의 처리하여 실제 접수를 생성하지 않았다.
+- `/api/health` HTTP 200·`ok:true`·오류 0건·기존 알림 설정 경고 2건, MV 접수 화면 HTTP 200.
+- 기존 접수·결제 이력, DB 스키마·환경변수·무료 서비스 구성과 타 프로젝트 변경 없음.
+  기존 로컬 이미지 삭제는 커밋에서 제외했다.
+
 ## 2026-10-17 라디오 팝업 시각 정돈
 
 `38eedf4b3606637a34163a557f312f668fcf9e60`를 기존 Render 서비스에 배포했다.

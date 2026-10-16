@@ -193,3 +193,10 @@ DB·결제·업로드 로직, 아트멜론·워터멜론은 변경하지 않았�
 MBC 제외 시 다른 입력을 유지하며 합계가 120,000원에서 90,000원으로 계산되는 것을 확인했다.
 배포용 빌드·TypeScript·diff 검사 통과, ESLint 오류 0개(기존 wizard 이동 경고 4개).
 기존 변환기 추적 경고 3개는 유지된다. 실제 결제·업로드·접수 쓰기는 실행하지 않았다.
+
+운영 반영: `de2ff5b1c3bd05b97ab8e3fffbb1bd0acb171401`,
+[Render 배포](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-db952cmq1p3s73cs8j3g),
+2026-10-17 01:33:14 KST `Live`, 소요 2분 32초. 운영 화면 390/1440px에서 온라인 MBC 제외,
+Mnet·ETN 유지, TV MBC 선택과 30,000원 계산, 가로 넘침·페이지 오류 없음을 확인했다.
+자동 임시저장 생성 등 모든 변경 요청은 브라우저에서 모의 처리했고 문서·정적 자산만 GET했다.
+`/api/health` HTTP 200·`ok:true`·오류 0건·기존 알림 설정 경고 2건, MV 접수 페이지 HTTP 200.
