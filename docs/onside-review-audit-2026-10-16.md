@@ -111,3 +111,32 @@
 [Render 배포](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-db93pnavcj2c73bpl850)
 2026-10-17 00:05:53 KST `Live`. 운영 매거진 서비스 탭에서 두 상품·녹음실 홍보·위치 링크가
 사라지고 일반 서비스 문구가 표시됨을 확인했다. `/api/health` HTTP 200·오류 0건.
+
+## 2026-10-17 라디오 신청 가이드 개선
+
+사용자 피드백에 따라 고정 3단계와 방송국 홈 링크만 보여 주던 팝업을 방송국별 실제 참여 안내로 교체했다.
+
+- 파란 헤더·노란 강조선과 적격 곡 요약으로 맥락을 강조하고, 프로그램 정보와 신청 문구를 분리했다.
+  320~1440px·다크 모드에서 단일 내부 스크롤·고정 상단 닫기·키보드 포커스 순환·복원을 검증했다.
+- 리뷰 ID로 방송국을 유지하여 Arirang 결과에서 첫 방송국으로 잘못 이동하던 연결을 수정했다.
+  적격 곡만 초안에 사용하고 MV 적격은 음원 적격과 구분한다.
+- Arirang의 K-POPPIN’·Radio’n Us 프로그램 소개, 메시지 게시판, 선곡표를 연결했다.
+  영어 초안은 공식 영문 곡명·아티스트명이 있으면 사용하며 국영문 초안을 따로 보존한다.
+- 프로그램 선택은 기본 인사에 반영하되 사용자가 직접 편집한 본문을 덮어쓰지 않는다.
+  팝업을 닫았다 다시 열어도 현재 페이지의 프로그램·언어·작성 문구가 유지된다.
+- KBS 콩·MBC mini·SBS 고릴라·CBS 레인보우의 공식 참여 안내를 제공한다.
+  프로그램별 작성 규칙·최근 선곡 확인을 안내하며 심의 서류를 게시판 공통 필수 자료로 요구하지 않는다.
+- 외부 자동 게시·유료 연동·DB 변경은 없다. 아트멜론·워터멜론은 수정하지 않았다.
+
+공식 출처 확인(2026-10-17):
+[K-POPPIN’ 소개](https://www.arirang.com/radio/125/intro/675),
+[메시지 게시판](https://www.arirang.com/radio/125/board/674),
+[선곡표](https://www.arirang.com/radio/125/tracklist/671),
+[Radio’n Us 소개](https://www.arirang.com/radio/127/intro/799),
+[메시지 게시판](https://www.arirang.com/radio/127/board/771),
+[선곡표](https://www.arirang.com/radio/127/tracklist/770),
+[KBS 콩](https://radio.kbs.co.kr/kong.html), [MBC mini](https://miniwebapp.imbc.com/),
+[SBS 고릴라](https://www.sbs.co.kr/m/radio/gorealra.html), [CBS 레인보우](https://www.cbs.co.kr/event/view/cbsApp).
+
+검증: 전체 회귀 756개 중 750개 통과·6개 환경 의존 제외·실패 0개. 관련 브라우저 시나리오
+31개(팝업 8·반응형 12·초안/자료 6·관리자 결과 연동 5), 변경 파일 ESLint·TypeScript 통과.

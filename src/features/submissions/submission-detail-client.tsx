@@ -27,12 +27,10 @@ import {
   resolveStationTrackResults,
   type TrackReviewResult,
 } from "@/lib/track-results";
-import {
-  resolveRadioBoardLinks,
-  type RadioBoardLink,
-} from "@/lib/radio-board-links";
 import { createClient } from "@/lib/supabase/client";
 import { BroadcastSupportPanel } from "@/features/submissions/broadcast-support-panel";
+import { RadioRequestDialog } from "@/features/submissions/radio-request-dialog";
+import { RadioStationGuideContent } from "@/features/submissions/radio-station-guide";
 import { APP_CONFIG } from "@/lib/config";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { downloadEndpointFile } from "@/lib/browser-download";
@@ -408,38 +406,6 @@ const mvReviewFallbackFilenames: Record<MvReviewAssetPath, string> = {
   "mv-certificate": "onside-mv-certificate.pdf",
 };
 
-const getRadioLinkGuide = (link: RadioBoardLink) => {
-  const label = link.name;
-  if (/신청곡|게시판|청취자/.test(label)) {
-    return {
-      tag: "신청/게시판",
-      detail: "곡명, 아티스트명, 발매일, 심의 적격 방송국을 함께 적어 신청하세요.",
-    };
-  }
-  if (/편성표/.test(label)) {
-    return {
-      tag: "편성 확인",
-      detail: "장르와 시간대가 맞는 프로그램을 먼저 찾을 때 유용합니다.",
-    };
-  }
-  if (/프로그램|프로그램 목록|메뉴/.test(label)) {
-    return {
-      tag: "프로그램 찾기",
-      detail: "프로그램별 선곡 게시판이나 청취자 참여 메뉴를 확인하세요.",
-    };
-  }
-  if (/검색/.test(label)) {
-    return {
-      tag: "검색",
-      detail: "고정 신청 페이지가 없을 때 방송사 신청곡 게시판을 찾는 링크입니다.",
-    };
-  }
-  return {
-    tag: "방송사 홈",
-    detail: "라디오 메뉴에서 프로그램, 편성표, 신청곡 게시판을 순서대로 확인하세요.",
-  };
-};
-
 export function SubmissionDetailClient({
   submissionId,
   initialSubmission,
@@ -479,11 +445,10 @@ export function SubmissionDetailClient({
   );
   const latestRefresh = React.useRef(0);
   const [isRatingDownloading, setIsRatingDownloading] = React.useState(false);
-  const [radioLinksModal, setRadioLinksModal] = React.useState<{
-    stationName?: string;
-    links: RadioBoardLink[];
-  } | null>(null);
+  const radioReturnFocusRef = React.useRef<HTMLButtonElement | null>(null);
+  const [radioLinksModal, setRadioLinksModal] = React.useState<{ reviewId: string; open: boolean } | null>(null);
   const [trackResultModal, setTrackResultModal] = React.useState<{
+    reviewId: string;
     stationName?: string;
     stationCode?: string | null;
     resultNote?: string | null;
@@ -592,6 +557,8 @@ export function SubmissionDetailClient({
           },
         ]
         : stationReviews;
+  const activeRadioReview = renderStationReviews.find(review => review.id === radioLinksModal?.reviewId);
+  const activeRadioStationCode = activeRadioReview?.station && "code" in activeRadioReview.station ? activeRadioReview.station.code : null;
   const openSubmissionDownload = React.useCallback(
     async (assetPath: MvReviewAssetPath) => {
       await downloadEndpointFile(
@@ -1010,9 +977,11 @@ export function SubmissionDetailClient({
                 Boolean(resolvedResultNote) ||
                 Boolean(mvReviewAssets);
 
-              const handleResultClick = () => {
+              const handleResultClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+                radioReturnFocusRef.current = event.currentTarget;
                 if (shouldOpenResultModal) {
                   setTrackResultModal({
+                    reviewId: review.id,
                     stationName: review.station?.name ?? "-",
                     stationCode,
                     resultNote: resolvedResultNote,
@@ -1025,10 +994,7 @@ export function SubmissionDetailClient({
                   return;
                 }
                 if (canOpenRadioLinks) {
-                  openRadioLinks({
-                    name: review.station?.name,
-                    code: stationCode,
-                  });
+                  openRadioLinks(review.id);
                 }
               };
               const stationName = review.station?.name?.trim() || stationCode?.trim() || "방송국";
@@ -1090,15 +1056,8 @@ export function SubmissionDetailClient({
     </div>
   );
 
-  const openRadioLinks = (station?: { name?: string | null; code?: string | null }) => {
-    const links = resolveRadioBoardLinks({
-      stationCode: station?.code,
-      stationName: station?.name,
-    });
-    setRadioLinksModal({ stationName: station?.name ?? undefined, links });
-  };
-
-  const closeRadioLinks = () => setRadioLinksModal(null);
+  const openRadioLinks = (reviewId: string) => setRadioLinksModal({ reviewId, open: true });
+  const closeRadioLinks = React.useCallback(() => setRadioLinksModal(previous => previous ? { ...previous, open: false } : null), []);
 
   React.useEffect(() => {
     setSubmission(initialSubmission);
@@ -1971,19 +1930,12 @@ export function SubmissionDetailClient({
                 <button
                   type="button"
                   onClick={() => {
-                    if (submission.type === "ALBUM" && hasAllExpectedStationResults) {
-                      document.getElementById("broadcast-support")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    } else {
-                      openRadioLinks({
-                        name: trackResultModal.stationName,
-                        code: trackResultModal.stationCode ?? null,
-                      });
-                    }
+                    openRadioLinks(trackResultModal.reviewId);
                     setTrackResultModal(null);
                   }}
                   className={detailActionButtonClass}
                 >
-                  라디오 신청 제안
+                  {localePrefix === "/en" ? "Radio request guide" : "라디오 신청 가이드"}
                 </button>
               ) : (
                 <div />
@@ -2000,95 +1952,27 @@ export function SubmissionDetailClient({
         </div>
       )}
 
-      {radioLinksModal && (
-        <div
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4 py-4"
-          onClick={closeRadioLinks}
+      {radioLinksModal && activeRadioReview && (
+        <RadioRequestDialog
+          open={radioLinksModal.open}
+          stationName={activeRadioReview.station?.name || activeRadioStationCode || (localePrefix === "/en" ? "Broadcaster" : "방송국")}
+          isEnglish={localePrefix === "/en"}
+          onClose={closeRadioLinks}
+          returnFocusTarget={radioReturnFocusRef.current}
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="라디오 신청 제안"
-            className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-5 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <p className={detailKickerClass}>
-              라디오 신청 제안
-            </p>
-            <h3 className="mt-2 text-lg font-semibold text-foreground">
-              {radioLinksModal.stationName
-                ? `${radioLinksModal.stationName} 적격 이후 신청 준비`
-                : "적격 이후 라디오 신청 준비"}
-            </h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              적격은 방송 가능 상태를 의미하며, 실제 선곡과 편성은 방송사 판단에 따릅니다.
-              아래 순서로 프로그램을 확인한 뒤 신청곡/사연 게시판에 등록하는 것을 권장합니다.
-            </p>
-            <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-              <div className={`${detailSubPanelClass} bg-white/80 p-3 dark:bg-white/5`}>
-                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                  1. 프로그램 확인
-                </p>
-                <p className="mt-1 font-semibold text-foreground">
-                  장르와 시간대가 맞는 프로그램을 고릅니다.
-                </p>
-              </div>
-              <div className={`${detailSubPanelClass} bg-white/80 p-3 dark:bg-white/5`}>
-                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                  2. 신청 내용 준비
-                </p>
-                <p className="mt-1 font-semibold text-foreground">
-                  곡명, 아티스트명, 발매일, 적격 방송국을 함께 적습니다.
-                </p>
-              </div>
-              <div className={`${detailSubPanelClass} bg-white/80 p-3 dark:bg-white/5`}>
-                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                  3. 게시판 등록
-                </p>
-                <p className="mt-1 font-semibold text-foreground">
-                  신청곡 또는 청취자 게시판에 남기고 반영 여부를 확인합니다.
-                </p>
-              </div>
+          {submission.type === "ALBUM" ? (
+            <BroadcastSupportPanel submission={submission} stationReviews={[activeRadioReview]} isEnglish={localePrefix === "/en"} embedded />
+          ) : (
+            <div className="space-y-5">
+              <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold leading-relaxed text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+                {localePrefix === "/en"
+                  ? "Music video approval is separate from audio approval. Check the audio track's review result before requesting radio airplay."
+                  : "뮤직비디오 적격은 음원 적격과 별개입니다. 라디오 신청 전 해당 음원의 심의 결과를 확인하세요."}
+              </p>
+              <RadioStationGuideContent stationCode={activeRadioStationCode} stationName={activeRadioReview.station?.name} isEnglish={localePrefix === "/en"} />
             </div>
-            <ul className="mt-4 space-y-2">
-              {radioLinksModal.links.length === 0 ? (
-                <p className="text-sm text-muted-foreground">이 방송국의 공개 신청곡 게시판은 확인되지 않았습니다. 방송국에 참여 경로를 문의해주세요.</p>
-              ) : null}
-              {radioLinksModal.links.map((link) => {
-                const guide = getRadioLinkGuide(link);
-                return (
-                  <li key={link.url}>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`${detailSubPanelClass} flex flex-col gap-2 px-4 py-3 text-sm text-foreground transition hover:-translate-y-0.5 hover:border-foreground sm:flex-row sm:items-center sm:justify-between`}
-                    >
-                      <span className="min-w-0">
-                        <span className="block font-black">{link.name}</span>
-                        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                          {guide.detail}
-                        </span>
-                      </span>
-                      <span className="inline-flex shrink-0 items-center justify-center rounded-[6px] border border-border bg-muted px-2.5 py-1 text-[11px] font-black text-foreground">
-                        {guide.tag} ↗
-                      </span>
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                onClick={closeRadioLinks}
-                className={detailActionButtonClass}
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
+          )}
+        </RadioRequestDialog>
       )}
     </div>
   );

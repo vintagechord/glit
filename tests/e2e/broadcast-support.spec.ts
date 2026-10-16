@@ -23,7 +23,7 @@ for (const width of [390, 1440]) {
     await expect(page.getByLabel("신청할 적격 곡").locator("option")).toHaveCount(1);
     await expect(page.getByLabel("신청할 적격 곡")).toHaveValue("one");
     await expect(page.getByRole("link", { name: /KBS 라디오/ })).toHaveAttribute("href", "https://radio.kbs.co.kr/");
-    await expect(page.getByText("게시판 신청 가이드", { exact: true })).toBeVisible();
+    await expect(page.getByText("내 곡과 맞는 프로그램 찾기", { exact: true })).toBeVisible();
     await page.getByLabel("사연과 신청곡 문구").fill("퇴근길에 함께 듣고 싶은 노래입니다.");
     await page.getByRole("button", { name: "본문 복사", exact: true }).click();
     await expect(page.getByRole("status")).toHaveText("복사했습니다.");
@@ -70,6 +70,27 @@ test("rejected results show guidance without an eligible request", async ({ page
 
 test("English result pages have an English radio guide and draft", async ({ page }) => {
   await mount(page, "english");
-  await expect(page.getByRole("heading", { name: "How to request a song" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Find a program for your song" })).toBeVisible();
   await expect(page.getByLabel("Post title")).toHaveValue(/Song request:/);
+});
+
+test("Arirang program selection prepares an English draft and preserves edited language drafts", async ({ page }) => {
+  await mount(page);
+  await page.getByLabel("적격 방송국", { exact: true }).selectOption("arirang");
+  await expect(page.getByLabel("신청 문구 언어")).toHaveValue("en");
+  await expect(page.getByLabel("게시글 제목")).toHaveValue("Song request: Test Musician – Song Together");
+  const program = page.getByRole("article").filter({ has: page.getByRole("link", { name: /K-POPPIN/ }) });
+  await expect(program.getByRole("link", { name: /메시지 게시판 열기/ })).toHaveAttribute("href", "https://www.arirang.com/radio/125/board/674");
+  await expect(program.getByRole("link", { name: /최근 선곡표/ })).toHaveAttribute("href", "https://www.arirang.com/radio/125/tracklist/671");
+  await program.getByRole("button", { name: "이 프로그램으로 문구 준비" }).click();
+  await expect(page.getByLabel("신청할 프로그램 (선택)")).toHaveValue("K-POPPIN’");
+  await expect(page.getByLabel("사연과 신청곡 문구")).toHaveValue(/Hello, K-POPPIN’!/);
+  await page.getByLabel("사연과 신청곡 문구").fill("My personal story, preserved.");
+  await page.getByLabel("신청 문구 언어").selectOption("ko");
+  await expect(page.getByLabel("게시글 제목")).toHaveValue(/\[신청곡\]/);
+  await page.getByLabel("신청 문구 언어").selectOption("en");
+  await expect(page.getByLabel("사연과 신청곡 문구")).toHaveValue("My personal story, preserved.");
+  await page.getByRole("article").filter({ has: page.getByRole("link", { name: /Radio’n Us/ }) }).getByRole("button", { name: "이 프로그램으로 문구 준비" }).click();
+  await expect(page.getByLabel("신청할 프로그램 (선택)")).toHaveValue("Radio’n Us");
+  await expect(page.getByLabel("사연과 신청곡 문구")).toHaveValue("My personal story, preserved.");
 });

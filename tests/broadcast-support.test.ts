@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildBroadcastCredits, buildBroadcastResultCsv, buildRadioRequest, getBroadcastTracks, type BroadcastSubmission } from "../src/lib/broadcast-support";
 import { resolveRadioBoardLinks } from "../src/lib/radio-board-links";
+import { getRadioStationGuide } from "../src/lib/radio-station-guide";
 
 const submission: BroadcastSubmission = { id: "demo", title: "앨범", artist_name: "뮤지션", album_tracks: [
   { id: "one", track_no: 1, track_title: "첫 곡", composer: "작곡가" },
@@ -46,6 +47,26 @@ test("request draft includes actual artist, song, program and story without clai
   assert.match(draft.body, /저녁 라디오 제작진/);
   assert.match(draft.body, /퇴근길에 듣고 싶어요/);
   assert.doesNotMatch(draft.body, /방송 확정|등록 완료|심의 통과/);
+});
+
+test("English request uses supplied official names and falls back without inventing translations", () => {
+  const input = { ...submission, artist_name_en: "Official Artist" };
+  const track = { ...submission.album_tracks![0], track_title_en: "Official Song" };
+  assert.equal(buildRadioRequest({ submission: input, track, isEnglish: true }).title, "Song request: Official Artist – Official Song");
+  assert.equal(buildRadioRequest({ submission, track: submission.album_tracks![0], isEnglish: true }).title, "Song request: 뮤지션 – 첫 곡");
+});
+
+test("station guide keeps verified participation routes scoped to the approved broadcaster", () => {
+  const arirang = getRadioStationGuide({ stationCode: "ARIRANG" })!;
+  assert.equal(arirang.language, "en");
+  assert.equal(arirang.programs.length, 2);
+  for (const program of arirang.programs) {
+    for (const url of [program.url, program.messageUrl, program.playlistUrl]) assert.equal(new URL(url).hostname, "www.arirang.com");
+    assert.ok(program.messageUrl.startsWith(`${program.url}/board/`));
+    assert.ok(program.playlistUrl.startsWith(`${program.url}/tracklist/`));
+  }
+  assert.equal(getRadioStationGuide({ stationCode: "KISS", stationName: "ARIRANG" }), null);
+  assert.equal(getRadioStationGuide({ stationCode: "MBC" })?.participationLink?.name, "MBC mini");
 });
 
 test("reference pack labels broadcaster-specific decisions and excludes private data", () => {

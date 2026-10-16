@@ -56,8 +56,8 @@ export function buildRadioRequest(input: {
   story?: string;
   isEnglish?: boolean;
 }) {
-  const artist = input.track.performer || broadcastArtist(input.submission);
-  const title = broadcastTrackTitle(input.track);
+  const artist = input.track.performer || (input.isEnglish ? input.submission.artist_name_en : null) || broadcastArtist(input.submission);
+  const title = (input.isEnglish ? input.track.track_title_en : null) || broadcastTrackTitle(input.track);
   const program = input.program?.trim();
   const story = input.story?.trim();
   return input.isEnglish
