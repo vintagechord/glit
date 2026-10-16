@@ -1,5 +1,29 @@
 # 온사이드 운영 반영 기록
 
+## 2026-10-16 결제·접수·심의 결과·라디오 지원 운영 배포
+
+사용자 요청으로 `acedc8d98f35858a4bd1bcf3b9f3668841c7b6bb`
+(`Fix review payments and uploads, clarify results and add radio request tools`)를
+main에 push하고 기존 Render 서비스에 해당 커밋을 수동 배포했다.
+
+- [Render 배포 기록](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-db92pm7f3r2c73ft6f80):
+  2026-10-16 22:58:33 KST `Deploy succeeded | Live`, 소요 시간 2분 57초.
+- 기존 Docker / Free 서비스와 환경설정을 유지했다. DB 마이그레이션·새 서비스·유료 플랜은 없다.
+- 배포 전 전체 회귀 754개 중 748개 통과, 환경 의존 6개 건너뜀, 실패 0개.
+  브라우저 시나리오 19개와 production build·TypeScript 검사도 통과했다.
+- 배포 후 `/api/health`: HTTP 200, `ok:true`, `errorCount:0`.
+  기존 이메일·카카오 알림 설정 경고 2건은 유지된다.
+- 홈·양식·음반·MV 접수·장바구니·영문 음반 접수 HTTP 200. 관리자 비로그인 접근은
+  로그인으로 이동하며 현황·관리자 파일 API는 401이다. 운영 JavaScript 23개가 정상
+  응답하고 업로드 재시도·빈 파일 차단·모바일 카드 안내의 새 코드 반영을 확인했다.
+- 아트멜론·워터멜론은 변경하지 않았다. 기존 로컬 `public/media/mv-ratings/19.png`
+  삭제도 배포 커밋에서 제외했다.
+
+실제 PG 승인·취소, 운영 파일 업로드, 고객 기록 수정과 알림 발송은 이번 배포 검증에서
+실행하지 않았다. 모바일 카드 결제는 가맹점 계약·HashKey 확인 전까지 비활성 상태이며
+모바일 무통장 입금/PC 카드 안내를 제공한다. 상세 범위와 제한은
+[점검 기록](../onside-review-audit-2026-10-16.md)에 남겼다.
+
 ## 2026-09-12 음악 관리·신청 UX 운영 배포
 
 사용자의 운영 배포 요청에 따라 `244dd60d0e1d95f0690b3d6800ea6bf635ca92cd`
