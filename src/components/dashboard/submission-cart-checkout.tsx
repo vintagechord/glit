@@ -33,6 +33,7 @@ import {
   expandSubmissionCartGroupIds,
   getSubmissionCartGroupKey,
 } from "@/lib/submission-cart-group";
+import { getInicisMobileBrowser, getInicisServerDevice, subscribeToInicisDevice, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
 import type { SubmissionCartItem } from "@/lib/submission-cart";
 
 type CartItem = {
@@ -136,6 +137,7 @@ export function SubmissionCartCheckout({
   initialItems: SubmissionCartItem[];
 }) {
   const router = useRouter();
+  const isMobileDevice = React.useSyncExternalStore(subscribeToInicisDevice, getInicisMobileBrowser, getInicisServerDevice);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
@@ -170,6 +172,9 @@ export function SubmissionCartCheckout({
   const didAutoSelectPayableItems = React.useRef(payableIds.length > 0);
   const [selectedMethod, setSelectedMethod] =
     React.useState<PaymentMethod>("CARD");
+  React.useEffect(() => {
+    if (isMobileDevice) setSelectedMethod("BANK");
+  }, [isMobileDevice]);
   const [isOpening, setIsOpening] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [pendingDeleteIds, setPendingDeleteIds] = React.useState<string[] | null>(
@@ -839,7 +844,7 @@ export function SubmissionCartCheckout({
           <button
             type="button"
             onClick={() => setSelectedMethod("CARD")}
-            disabled={isOpening || isDeleting}
+            disabled={isOpening || isDeleting || isMobileDevice}
             aria-pressed={selectedMethod === "CARD"}
             className={`flex min-h-12 items-center gap-3 rounded-[8px] border-2 px-3 py-2 text-left text-xs font-black transition ${
               selectedMethod === "CARD"
@@ -848,7 +853,7 @@ export function SubmissionCartCheckout({
             }`}
           >
             <CreditCard size={17} strokeWidth={2.6} />
-            <span>카드 결제</span>
+            <span>{isMobileDevice ? "카드 결제 · PC에서 이용" : "카드 결제"}</span>
           </button>
           <button
             type="button"
@@ -865,6 +870,7 @@ export function SubmissionCartCheckout({
             <span>무통장 입금</span>
           </button>
         </div>
+        {isMobileDevice ? <p className="mt-3 text-xs leading-5 text-muted-foreground">{INICIS_MOBILE_UNAVAILABLE_MESSAGE}</p> : null}
         <div className="mt-4 space-y-3 text-sm font-semibold text-foreground">
           <div className="flex items-center justify-between gap-3">
             <span>선택</span>

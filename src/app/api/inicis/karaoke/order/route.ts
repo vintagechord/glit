@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { isInicisMobileRequest, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
 
 import { createKaraokePaymentOrder, ensureKaraokeRequestOwner } from "@/lib/payments/karaoke";
 import { getBaseUrl } from "@/lib/url";
@@ -31,6 +32,12 @@ export async function POST(req: NextRequest) {
         status: 429,
         headers: { "Retry-After": String(ipLimit.retryAfterSeconds) },
       },
+    );
+  }
+  if (isInicisMobileRequest(req.headers)) {
+    return NextResponse.json(
+      { error: INICIS_MOBILE_UNAVAILABLE_MESSAGE, code: "MOBILE_CARD_UNAVAILABLE" },
+      { status: 409 },
     );
   }
   try {

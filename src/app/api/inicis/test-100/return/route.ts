@@ -137,6 +137,8 @@ async function handler(req: NextRequest) {
 
   const approval = await requestStdPayApproval({
     authUrl,
+    idcName: pick("idc_name"),
+    expectedOrderId: orderId,
     netCancelUrl: null,
     authToken,
     timestamp: String(timestamp),

@@ -2,6 +2,7 @@
 
 import { CreditCard, Landmark } from "lucide-react";
 import * as React from "react";
+import { getInicisMobileBrowser, getInicisServerDevice, subscribeToInicisDevice, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
 
 import type { InicisPopupContext } from "@/lib/inicis/popup";
 import { PaymentRetryClient } from "./payment-retry-client";
@@ -40,6 +41,7 @@ export function PaymentMethodChoiceClient({
   bankAccount,
   bankHolder,
 }: PaymentMethodChoiceClientProps) {
+  const isMobileDevice = React.useSyncExternalStore(subscribeToInicisDevice, getInicisMobileBrowser, getInicisServerDevice);
   const [selectedMethod, setSelectedMethod] =
     React.useState<PaymentMethod | null>(() =>
       paymentState ? "CARD" : null,
@@ -121,14 +123,14 @@ export function PaymentMethodChoiceClient({
             type="button"
             aria-pressed={selectedMethod === "CARD"}
             onClick={() => void selectPaymentMethod("CARD")}
-            disabled={Boolean(savingMethod)}
+            disabled={Boolean(savingMethod) || isMobileDevice}
             className={methodButtonClass(selectedMethod === "CARD")}
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]">
               <CreditCard size={18} strokeWidth={2.5} />
             </span>
             <span>
-              <span className="block text-sm font-black">카드 결제</span>
+              <span className="block text-sm font-black">{isMobileDevice ? "카드 결제 · PC에서 이용" : "카드 결제"}</span>
               {isSavingCard ? (
                 <span className="mt-2 block text-[11px] font-black">
                   저장 중
@@ -138,6 +140,8 @@ export function PaymentMethodChoiceClient({
           </button>
         </div>
       </div>
+
+      {isMobileDevice ? <p className="text-sm leading-6 text-muted-foreground">{INICIS_MOBILE_UNAVAILABLE_MESSAGE}</p> : null}
 
       {errorMessage ? (
         <div className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-sm font-semibold text-[#d9362c]">

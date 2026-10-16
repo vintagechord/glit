@@ -6,11 +6,7 @@ import {
 } from "@/lib/inicis/api";
 import { claimInicisSubmissionApproval, settleInicisSubmissionApproval } from "@/lib/payments/inicis-approval";
 import { getStdPayConfig } from "@/lib/inicis/config";
-import {
-  getInicisTimestamp,
-  makeAuthSecureSignature,
-  sha256,
-} from "@/lib/inicis/crypto";
+import { isTrustedStdPayUrl, validateStdPayCardReceipt } from "@/lib/inicis/protocol";
 import {
   getStoredInicisCallbackState,
   verifyInicisCallbackState,
@@ -87,20 +83,6 @@ const normalizeAmount = (value: string | number | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : NaN;
 };
 
-const isTrustedInicisUrl = (value: string | null | undefined) => {
-  if (!value) return false;
-  try {
-    const parsed = new URL(value);
-    const host = parsed.hostname.toLowerCase();
-    return (
-      parsed.protocol === "https:" &&
-      (host === "inicis.com" || host.endsWith(".inicis.com"))
-    );
-  } catch {
-    return false;
-  }
-};
-
 const scrubParams = (params: Record<string, string>) =>
   scrubInicisPaymentAudit(params);
 
@@ -123,7 +105,7 @@ const parseParams = async (req: NextRequest): Promise<ParsedReturn> => {
   let params: Record<string, string> = {};
   let keys: string[] = [];
   const query = validateInicisCallbackQuery(req.url);
-  if (!query.ok) throw new InicisCallbackPayloadError(413);
+  if (!query.ok) throw new InicisCallbackPayloadError(query.reason === "too_large" ? 413 : 400);
 
   if (method === "POST" && req.body) {
     const formResult = await readBoundedInicisCallbackForm(req);
@@ -152,6 +134,9 @@ const parseParams = async (req: NextRequest): Promise<ParsedReturn> => {
     }
     // Merge in query params without overriding POSTed values
     query.params.forEach((value, key) => {
+      if (key in params && params[key] !== value) {
+        throw new InicisCallbackPayloadError(400);
+      }
       if (!(key in params)) params[key] = value;
       if (!keys.includes(key)) keys.push(key);
     });
@@ -184,15 +169,12 @@ export async function handleInicisReturn(req: NextRequest) {
     const authToken =
       (
         params.authToken ?? params.auth_token ?? params.authtoken ?? ""
-      ).trim();
+      );
     const authUrlFromReturn =
       (params.authUrl ?? params.auth_url ?? params.authurl ?? "").trim();
     const checkAckUrl = (params.checkAckUrl ?? params.checkAckURL ?? "").trim();
-    const approvalUrl =
-      authUrlFromReturn ||
-      checkAckUrl ||
-      "";
-    // FIX: use authUrl instead of checkAckUrl for approval (2026-01-21)
+    const approvalUrl = authUrlFromReturn;
+    const idcName = params.idc_name ?? "";
     const netCancelUrl = (
       params.netCancelUrl ??
       params.netCancelURL ??
@@ -218,15 +200,7 @@ export async function handleInicisReturn(req: NextRequest) {
     const amountFromReturn = normalizeAmount(
       params.price ?? params.TotPrice ?? params.P_AMT ?? 0,
     );
-    const orderTimestampFromId = (() => {
-      const parts = orderId.split("-");
-      if (parts.length >= 3 && /^\d+$/.test(parts[1])) return parts[1];
-      return null;
-    })();
-    const timestamp = String(
-      params.tstamp ?? params.timestamp ?? orderTimestampFromId ?? getInicisTimestamp(),
-    );
-    // FIX: reuse orderId timestamp for approval signature (2026-01-21)
+    const timestamp = Date.now().toString();
 
     const pick = (k: string) => (typeof params[k] === "string" ? String(params[k]) : "");
 
@@ -299,12 +273,12 @@ export async function handleInicisReturn(req: NextRequest) {
     });
     const buildVerifiedGuestBridgeRedirect = (
       payload: BridgePayload,
-      approvalSignatureVerified: boolean,
+      gatewayReceiptVerified: boolean,
     ) => {
       const response = buildBridgeRedirect(baseUrl, payload);
       if (
         !callbackStateVerified ||
-        !approvalSignatureVerified ||
+        !gatewayReceiptVerified ||
         !submissionId ||
         !orderId ||
         !guestToken
@@ -446,7 +420,7 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    if (!approvalUrl || !isTrustedInicisUrl(approvalUrl)) {
+    if (!approvalUrl || !isTrustedStdPayUrl(approvalUrl, idcName, config.env)) {
       await saveFailure(
         "INVALID_AUTH_URL",
         "승인 URL을 검증할 수 없습니다.",
@@ -462,7 +436,7 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    if (netCancelUrl && !isTrustedInicisUrl(netCancelUrl)) {
+    if (netCancelUrl && !isTrustedStdPayUrl(netCancelUrl, idcName, config.env, true)) {
       await saveFailure(
         "INVALID_NETCANCEL_URL",
         "망취소 URL을 검증할 수 없습니다.",
@@ -478,7 +452,7 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    if (mid && mid !== config.mid) {
+    if (mid !== config.mid) {
       await saveFailure("MID_MISMATCH", "MID 불일치");
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
@@ -510,7 +484,7 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    if (resultCode && !isInicisSuccessCode(resultCode)) {
+    if (resultCode !== "0000") {
       await saveFailure(resultCode, resultMsg || "결제 인증에 실패했습니다.");
       return buildBridgeRedirect(baseUrl, {
         status: "FAIL",
@@ -531,6 +505,14 @@ export async function handleInicisReturn(req: NextRequest) {
         requestId: karaokeRequestId,
         message: resultMsg || "결제 인증이 완료되지 않았습니다.",
         resultCode: resultCode || "AUTH_MISSING",
+      });
+    }
+
+    if (!callbackStateVerified) {
+      return buildBridgeRedirect(baseUrl, {
+        status: "FAIL", orderId, submissionId, requestId: karaokeRequestId,
+        resultCode: "CALLBACK_STATE_INVALID",
+        message: "결제 요청 인증값이 일치하지 않습니다.",
       });
     }
 
@@ -565,6 +547,9 @@ export async function handleInicisReturn(req: NextRequest) {
 
     const approval = await requestStdPayApproval({
       authUrl: approvalUrl,
+      idcName,
+      expectedOrderId: orderId,
+      expectedAmountKrw: paymentAmount,
       netCancelUrl,
       authToken,
       timestamp,
@@ -584,6 +569,9 @@ export async function handleInicisReturn(req: NextRequest) {
       }
       const cancellation = await requestStdPayNetCancel({
         netCancelUrl,
+        idcName,
+        expectedOrderId: orderId,
+        expectedTid: typeof approval.data?.tid === "string" ? approval.data.tid : undefined,
         authToken,
         timestamp,
       });
@@ -635,128 +623,10 @@ export async function handleInicisReturn(req: NextRequest) {
       ),
     });
 
-    // Signature verification for STDPay approval response (secureSignature check).
-    const tstampForSig =
-      authData?.tstamp ??
-      authData?.timestamp ??
-      params.tstamp ??
-      params.timestamp ??
-      timestamp;
-    const moidForSig =
-      (authData?.MOID as string | null | undefined) ??
-      params.MOID ??
-      params.oid ??
-      params.orderId ??
-      orderId;
-    const normalizePrice = (value: string | number | null | undefined) => {
-      if (value == null) return "";
-      const str = String(value).replace(/,/g, "").trim();
-      return str;
-    };
-    const priceSources = [
-      { value: authData?.TotPrice, source: "auth.TotPrice" },
-      { value: authData?.price, source: "auth.price" },
-    ];
-    let totPriceForSig = "";
-    let totPriceSource = "unknown";
-    for (const candidate of priceSources) {
-      const normalized = normalizePrice(candidate.value);
-      if (normalized) {
-        totPriceForSig = normalized;
-        totPriceSource = candidate.source;
-        break;
-      }
-    }
-    const authSignature =
-      (authData?.authSignature as string | null | undefined) ??
-      (authData?.AuthSignature as string | null | undefined) ??
-      null;
-    const mKeyForSig = sha256(config.signKey ?? "");
-    const ourSecureSignature = makeAuthSecureSignature({
-      mid: config.mid,
-      tstamp: tstampForSig ?? "",
-      MOID: moidForSig,
-      TotPrice: totPriceForSig,
-      mKey: mKeyForSig,
-      signKey: config.signKey,
-    });
-    const hasSigInputs =
-      Boolean(authSignature) &&
-      Boolean(totPriceForSig) &&
-      Boolean(moidForSig) &&
-      Boolean(tstampForSig);
-    const localSigMatch =
-      hasSigInputs && authSignature && ourSecureSignature
-        ? authSignature === ourSecureSignature
-        : null;
-    const verifyStatus =
-      localSigMatch === true
-        ? "verified"
-        : hasSigInputs
-          ? "failed"
-          : "unknown";
-    const sigMismatchReason = !hasSigInputs
-      ? !authSignature
-        ? "missing_auth_signature"
-        : !totPriceForSig
-          ? "missing_totprice"
-          : !moidForSig
-            ? "missing_moid"
-            : !tstampForSig
-              ? "missing_tstamp"
-              : "missing_input"
-      : localSigMatch
-        ? null
-        : "sig_mismatch";
-
-    console.info("[INICIS][signature_verify]", {
-      match: localSigMatch === true,
-      reason: sigMismatchReason,
-      midMasked: mask(config.mid),
-      tstamp: tstampForSig ?? null,
-      MOID: moidForSig,
-      TotPrice: totPriceForSig,
-      totPriceSource,
-      authSignaturePresent: Boolean(authSignature),
-      approvalKeys: authData ? Object.keys(authData) : [],
-      secureSignatureMatches: approval.secureSignatureMatches ?? null,
-      verifyStatus,
-    });
-
-    if (hasSigInputs && localSigMatch === false) {
-      const cancellation =
-        approval.ok && isInicisSuccessCode(authResultCode)
-          ? await compensateApprovedGateway("signature_mismatch")
-          : null;
-      await saveFailure("SIGNATURE_MISMATCH", "서명 검증에 실패했습니다.", {
-        returnParams: scrubParams(params),
-        approval: authData,
-        signature: {
-          verifyStatus,
-          sigMismatchReason,
-        },
-        compensation: cancellation ?? approval.netCancellation,
-      }, cancellation?.ok === true || approval.confirmedFailure === true);
-      return buildBridgeRedirect(baseUrl, {
-        status: "FAIL",
-        orderId,
-        submissionId,
-        requestId: karaokeRequestId,
-        message: "결제 서명 검증에 실패했습니다.",
-        resultCode: "SIGNATURE_MISMATCH",
-      });
-    }
-
-    const authSuccess = isInicisSuccessCode(authResultCode);
-    const tid =
-      toStrOrNull(
-        authData?.P_TID ??
-          authData?.tid ??
-          authData?.TID ??
-          authData?.CARD_TID ??
-          tidFromReturn ??
-          null,
-      ) ?? null;
+    const authSuccess = authResultCode === "0000";
+    // Persist only the canonical transaction field validated below. Legacy
+    // aliases must not override a different, otherwise valid receipt TID.
+    const tid = toStrOrNull(authData?.tid);
     const shouldSucceed = approval.ok && authSuccess && Boolean(tid);
 
     if (!authData || !shouldSucceed) {
@@ -810,14 +680,16 @@ export async function handleInicisReturn(req: NextRequest) {
       approvedOrderId,
       expectedAmount: paymentAmount,
       approvedAmount: totPrice,
+    }) ?? validateStdPayCardReceipt(authData, {
+      mid: config.mid, orderId, amountKrw: paymentAmount,
     });
     if (bindingError) {
       const cancellation = await compensateApprovedGateway(bindingError);
       const isOrderError = bindingError.startsWith("ORDER_ID_");
-      const code = isOrderError ? "ORDER_MISMATCH" : "PRICE_MISMATCH";
+      const code = isOrderError ? "ORDER_MISMATCH" : bindingError;
       const message = isOrderError
         ? "승인된 주문번호가 결제 요청과 일치하지 않습니다."
-        : "승인된 결제 금액이 결제 요청과 일치하지 않습니다.";
+        : "승인된 결제 정보가 결제 요청과 일치하지 않습니다.";
       await saveFailure(code, message, {
         returnParams: scrubParams(params),
         approval: authData,
@@ -881,19 +753,6 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    console.info("[INICIS][signature_verify]", {
-      orderId,
-      tid: tid ? mask(tid) : null,
-      resultCode: toCode(authData.resultCode, "0000"),
-      totPrice,
-      mid: mask(config.mid),
-      tstamp: tstampForSig ?? null,
-      moid: moidForSig,
-      secureSignatureMatches: localSigMatch === true,
-      verifyStatus,
-      sigMismatchReason,
-    });
-
     const successPayload = {
       amount_krw: totPrice,
       tid,
@@ -902,17 +761,9 @@ export async function handleInicisReturn(req: NextRequest) {
       raw_response: scrubInicisPaymentAudit({
         returnParams: scrubParams(params),
         approval: authData,
-        signatureVerification: {
-          sigVerified: localSigMatch === true,
-          verifyStatus,
-          sigMismatchReason,
-          inputs: {
-            mid: mask(config.mid),
-            tstamp: tstampForSig ?? null,
-            MOID: moidForSig,
-            TotPrice: totPriceForSig || null,
-            totPriceSource,
-          },
+        receiptVerification: {
+          verified: true,
+          policy: "documented-response-fields",
         },
       }),
     };
@@ -964,7 +815,7 @@ export async function handleInicisReturn(req: NextRequest) {
           resultCode: "PERSIST_FAIL",
           message: "결제 승인 후 저장 처리에 실패했습니다. 고객센터로 문의해주세요.",
         },
-        approval.ok && localSigMatch === true,
+        approval.ok && bindingError === null,
       );
     }
 
@@ -972,10 +823,7 @@ export async function handleInicisReturn(req: NextRequest) {
       orderId,
       status: "APPROVED",
       resultCode: toCode(authData.resultCode, "0000"),
-      secureSignatureMatches: localSigMatch === true,
-      sigVerified: localSigMatch === true,
-      sigMismatchReason,
-      verifyStatus,
+      gatewayReceiptVerified: true,
     });
 
     return buildVerifiedGuestBridgeRedirect(
@@ -990,7 +838,7 @@ export async function handleInicisReturn(req: NextRequest) {
         resultCode: toCode(authData.resultCode, "0000"),
         message: String(authResultMsg ?? "결제가 완료되었습니다."),
       },
-      approval.ok && localSigMatch === true,
+      approval.ok && bindingError === null,
     );
   } catch (error) {
     if (error instanceof InicisCallbackPayloadError) {

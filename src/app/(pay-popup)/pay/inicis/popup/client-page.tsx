@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { getInicisMobileBrowser, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
 
 import { parseInicisContext, type InicisPaymentContext } from "@/lib/inicis/context";
 import {
@@ -232,6 +233,12 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
       return;
     }
 
+    if (getInicisMobileBrowser()) {
+      setError(INICIS_MOBILE_UNAVAILABLE_MESSAGE);
+      setLoadingBarVisible(false);
+      return;
+    }
+
     const fetchInit = async () => {
       try {
         let res: Response;
@@ -426,7 +433,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
             <p className="font-semibold">결제 준비에 실패했습니다.</p>
             <p className="mt-1">{error}</p>
             {submissionId && context !== "karaoke" && context !== "test1000" ? (
-              <a className="mt-3 inline-block underline" href={submissionOrderReturnHref(submissionId)}>주문 내역에서 확인하기</a>
+              <a className="mt-3 inline-block underline" href={error === INICIS_MOBILE_UNAVAILABLE_MESSAGE ? "/mypage/cart" : submissionOrderReturnHref(submissionId)}>{error === INICIS_MOBILE_UNAVAILABLE_MESSAGE ? "장바구니에서 결제 방법 선택" : "주문 내역에서 확인하기"}</a>
             ) : null}
           </div>
         </div>
@@ -451,7 +458,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
         </div>
       ) : null}
 
-      <form id={FORM_ID} method="post" className="hidden">
+      <form id={FORM_ID} method="post" acceptCharset="UTF-8" className="hidden">
         {initData &&
           Object.entries(initData.stdParams ?? {}).map(([k, v]) => (
             <input key={k} type="hidden" name={k} value={v} readOnly aria-hidden />

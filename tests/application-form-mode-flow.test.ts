@@ -5,7 +5,7 @@ import test from "node:test";
 const read = (relativePath: string) =>
   readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
-test("album applications default to online entry while preserving restored file-submission drafts", () => {
+test("unreleased albums offer the application mode while released albums go directly to URL entry", () => {
   const source = read("src/features/submissions/album-wizard.tsx");
   const actions = read("src/features/submissions/actions.ts");
   const oneClickStart = source.indexOf("const oneClickSteps");
@@ -24,7 +24,15 @@ test("album applications default to online entry while preserving restored file-
     /const isDownloadedApplicationFlow =\s*!isOneClick && applicationFormMode === "upload"/,
   );
   assert.doesNotMatch(oneClickSteps, /작성 방식 선택/);
-  assert.match(source, /setApplicationFormMode\("online"\);\s*setStep\(3\)/);
+  const confirmPackage = source.slice(
+    source.indexOf("const handleConfirmPackage"),
+    source.indexOf("const handleCancelPackage"),
+  );
+  assert.match(confirmPackage, /if \(isOneClick\) setApplicationFormMode\("online"\)/);
+  assert.match(confirmPackage, /setStep\(isOneClick \? 3 : 2\)/);
+  // Both the package-confirm dialog and the continue button retain access to
+  // uploaded application forms; neither silently forces online mode.
+  assert.equal(source.match(/setStep\(isOneClick \? 3 : 2\)/g)?.length, 2);
   assert.match(source, /applicationFormMode: applicationFormMode \?\? undefined/);
   const modeSelector = source.slice(
     source.indexOf("const selectApplicationFormMode"),

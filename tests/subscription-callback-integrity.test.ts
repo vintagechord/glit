@@ -184,7 +184,7 @@ test("database scrubber normalizes key case before matching and definitive failu
 test("mobile and PC requests carry order-bound state and reject mutating GET", () => {
   assert.match(stdPay, /period: params\.period \?\? "M2"/);
   assert.match(stdPay, /merchantreserved: params\.callbackState/);
-  assert.match(stdPay, /acceptmethod: "BILLAUTH\(Card\):centerCd\(Y\)"/);
+  assert.match(stdPay, /acceptmethod: billing \? "BILLAUTH\(Card\):centerCd\(Y\)" : "centerCd\(Y\)"/);
   assert.match(
     stdPay,
     /const merchantData = billing\?\.callbackState \?\? params\.merchantData\?\.trim\(\)/,

@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
 
   const approval = await requestStdPayApproval({
     authUrl,
+    idcName: String(form.get("idc_name") ?? ""),
+    expectedOrderId: orderId,
     netCancelUrl,
     authToken,
     timestamp: String(timestamp),

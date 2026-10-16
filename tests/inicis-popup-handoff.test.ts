@@ -84,13 +84,8 @@ test("popup navigation never serializes guest bearer tokens", () => {
   );
   const returnHandler = read("../src/app/api/inicis/return/handler.ts");
 
-  const buildStart = popup.indexOf("const buildPopupUrl");
-  const buildEnd = popup.indexOf("const fetchStdPayInit", buildStart);
-  const buildSource = popup.slice(buildStart, buildEnd);
-  assert.match(buildSource, /createInicisPopupHandoff/);
-  assert.match(buildSource, /\?handoff=/);
-  assert.doesNotMatch(buildSource, /params\.set\(["']guestToken/);
-  assert.doesNotMatch(buildSource, /params\.set\(["']guestTokens/);
+  assert.doesNotMatch(popup, /location\.assign|params\.set\(["']guestToken/);
+  assert.match(popup, /getInicisMobileBrowser\(\)/);
   assert.doesNotMatch(client, /searchParams\.guestToken/);
   assert.doesNotMatch(client, /searchParams\.guestTokens/);
   assert.doesNotMatch(client, /rawParams/);

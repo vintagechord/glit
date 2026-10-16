@@ -19,7 +19,8 @@ import {
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { formatDateTime } from "@/lib/format";
 import { getPackageStationCodes } from "@/lib/station-reviews";
-import { summarizeTrackResults } from "@/lib/track-results";
+import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
+import { getStationReviewTracks, isWbsReview, resolveStationTrackResults, summarizeTrackResults } from "@/lib/track-results";
 import { RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -672,19 +673,11 @@ export default async function AdminSubmissionDetailPage({
       normalized === "NEEDS_FIX"
     );
   };
-  const isStationResultStatus = (status?: string | null) => {
-    const normalized = normalizeStationReviewStatus(status);
-    return (
-      normalized === "APPROVED" ||
-      normalized === "REJECTED" ||
-      normalized === "NEEDS_FIX"
-    );
-  };
   const stationSubmittedCount = reviews.filter((review) =>
     isStationSubmittedStatus(review.status),
   ).length;
   const completedReviewCount = reviews.filter((review) => {
-    return isStationResultStatus(review.status);
+    return getStationReviewDisplayStatus({ ...review, station: Array.isArray(review.station) ? review.station[0] : review.station }, { albumTracks }).isComplete;
   }).length;
   const hasRequiredBasics = Boolean(submission.title && submission.artist_name);
   const hasPaymentComplete = submission.payment_status === "PAID";
@@ -1294,13 +1287,14 @@ export default async function AdminSubmissionDetailPage({
                   const stationInfo = Array.isArray(review.station)
                     ? review.station[0]
                     : review.station;
+                  const stationTracks = getStationReviewTracks(albumTracks, stationInfo, review.track_results);
                   const trackSummary = summarizeTrackResults(
-                    review.track_results,
-                    albumTracks,
+                    resolveStationTrackResults(review.track_results, stationTracks, review.status, stationInfo),
+                    stationTracks,
                   );
                   const baseTracks =
-                    albumTracks.length > 0
-                      ? albumTracks.map((track, index) => ({
+                    stationTracks.length > 0
+                      ? stationTracks.map((track, index) => ({
                           id: track.id ?? null,
                           track_no: track.track_no ?? index + 1,
                           title:
@@ -1341,7 +1335,7 @@ export default async function AdminSubmissionDetailPage({
 
                   return (
                     <StationReviewForm
-                      key={review.id ?? `review-${reviewIndex}`}
+                      key={`${review.id ?? `review-${reviewIndex}`}-${review.updated_at}`}
                       submissionId={submission.id}
                       reviewId={
                         typeof review.id === "string" && uuidPattern.test(review.id)
@@ -1354,6 +1348,7 @@ export default async function AdminSubmissionDetailPage({
                       initialStatus={normalizeStationReviewStatus(review.status)}
                       initialMemo={review.result_note ?? ""}
                       trackResults={trackResults}
+                      maxDecidedTracks={isWbsReview(stationInfo) && stationTracks.length > 3 ? 3 : undefined}
                       statusOptions={stationReviewStatusOptions}
                       action={updateStationReviewFormAction}
                       returnTo={adminSubmissionListHref}

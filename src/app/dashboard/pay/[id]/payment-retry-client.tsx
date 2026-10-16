@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
+import { getInicisMobileBrowser, getInicisServerDevice, subscribeToInicisDevice, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
 
 import {
   cleanupInicisPaymentLayer,
@@ -58,6 +59,7 @@ export function PaymentRetryClient({
   showDetailLink = true,
 }: PaymentRetryClientProps) {
   const router = useRouter();
+  const isMobileDevice = React.useSyncExternalStore(subscribeToInicisDevice, getInicisMobileBrowser, getInicisServerDevice);
   const [isOpening, setIsOpening] = React.useState(false);
   const [notice, setNotice] = React.useState<{
     type: "info" | "error";
@@ -132,6 +134,7 @@ export function PaymentRetryClient({
 
   return (
     <div className="space-y-3">
+      {isMobileDevice ? <p className="text-sm leading-6 text-muted-foreground">{INICIS_MOBILE_UNAVAILABLE_MESSAGE}</p> : null}
       {notice ? (
         <div
           className={`rounded-[8px] border-2 px-4 py-3 text-sm font-semibold ${
@@ -147,10 +150,10 @@ export function PaymentRetryClient({
         <button
           type="button"
           onClick={handleRetryPayment}
-          disabled={disabled || isOpening}
+          disabled={disabled || isOpening || isMobileDevice}
           className="inline-flex items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-5 py-3 text-xs font-black uppercase tracking-normal text-white shadow-[3px_3px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:text-[#06111f] dark:hover:bg-[#ff7a72]"
         >
-          {isOpening ? "결제 준비 중" : "카드 결제하기"}
+          {isOpening ? "결제 준비 중" : isMobileDevice ? "카드 결제 · PC에서 이용" : "카드 결제하기"}
         </button>
         {showDetailLink ? (
           <Link

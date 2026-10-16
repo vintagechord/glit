@@ -6,6 +6,7 @@ import {
   requestStdPayNetCancel,
 } from "@/lib/inicis/api";
 import { readBoundedInicisCallbackForm } from "@/lib/inicis/callback-request";
+import { isTrustedStdPayUrl } from "@/lib/inicis/protocol";
 import { getBillingConfig, getStdPayConfig } from "@/lib/inicis/config";
 import {
   completeClaimedSubscriptionCharge,
@@ -53,19 +54,6 @@ const formExactString = (form: FormData, ...keys: string[]) => {
     if (typeof value === "string" && value) return value;
   }
   return "";
-};
-
-const isTrustedInicisUrl = (value: string) => {
-  try {
-    const parsed = new URL(value);
-    const host = parsed.hostname.toLowerCase();
-    return (
-      parsed.protocol === "https:" &&
-      (host === "inicis.com" || host.endsWith(".inicis.com"))
-    );
-  } catch {
-    return false;
-  }
 };
 
 export async function POST(req: NextRequest) {
@@ -176,11 +164,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const authToken = formString(form, "authToken", "auth_token");
+  const authToken = formExactString(form, "authToken", "auth_token");
   const authUrl = formString(form, "authUrl");
   const netCancelUrl = formString(form, "netCancelUrl");
-  const timestamp = formString(form, "timestamp", "tstamp");
-  if (!authToken || !authUrl || !timestamp || !isTrustedInicisUrl(authUrl)) {
+  const timestamp = Date.now().toString();
+  const idcName = formString(form, "idc_name");
+  if (!authToken || !authUrl || !timestamp || !isTrustedStdPayUrl(authUrl, idcName, getStdPayConfig().env)) {
     await failSubscriptionBillingCallback({
       orderId,
       claimToken,
@@ -198,6 +187,8 @@ export async function POST(req: NextRequest) {
 
   const approval = await requestStdPayApproval({
     authUrl,
+    idcName,
+    expectedOrderId: orderId,
     netCancelUrl: netCancelUrl || null,
     authToken,
     timestamp,
@@ -218,34 +209,21 @@ export async function POST(req: NextRequest) {
 
   if (
     !approval.ok ||
-    !isInicisSuccessCode(authResultCode) ||
-    approval.secureSignatureMatches !== true
+    !isInicisSuccessCode(authResultCode)
   ) {
-    if (approval.ok && isInicisSuccessCode(authResultCode) && netCancelUrl) {
-      await requestStdPayNetCancel({ netCancelUrl, authToken, timestamp });
-    }
-    const code =
-      approval.secureSignatureMatches !== true &&
-      isInicisSuccessCode(authResultCode)
-        ? "SIGNATURE_MISMATCH"
-        : authResultCode;
+    const code = authResultCode;
     await failSubscriptionBillingCallback({
       orderId,
       claimToken,
       resultCode: code,
-      resultMessage:
-        code === "SIGNATURE_MISMATCH"
-          ? "승인 서명 검증에 실패했습니다."
-          : authResultMessage,
+      resultMessage: authResultMessage,
       rawResponse: safeApproval,
     });
     return redirectToResult(
       baseUrl,
       orderId,
       "fail",
-      code === "SIGNATURE_MISMATCH"
-        ? "결제 서명 검증에 실패했습니다."
-        : authResultMessage,
+      authResultMessage,
     );
   }
 
@@ -269,7 +247,7 @@ export async function POST(req: NextRequest) {
 
   if (!billKey || bindingError) {
     if (netCancelUrl) {
-      await requestStdPayNetCancel({ netCancelUrl, authToken, timestamp });
+      await requestStdPayNetCancel({ netCancelUrl, authToken, timestamp, idcName, expectedOrderId: orderId });
     }
     const code = !billKey ? "BILLKEY_MISSING" : bindingError!;
     await failSubscriptionBillingCallback({
@@ -309,7 +287,7 @@ export async function POST(req: NextRequest) {
 
   if (!completed.ok) {
     if (completed.error === "BILLKEY_STORE_FAIL" && netCancelUrl) {
-      await requestStdPayNetCancel({ netCancelUrl, authToken, timestamp });
+      await requestStdPayNetCancel({ netCancelUrl, authToken, timestamp, idcName, expectedOrderId: orderId });
     }
     const uncertain =
       completed.error === "BILLING_OUTCOME_UNKNOWN" ||

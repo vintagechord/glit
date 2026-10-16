@@ -1,7 +1,7 @@
+import { getInicisMobileBrowser, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
 import { type InicisPaymentContext } from "@/lib/inicis/context";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import {
-  createInicisPopupHandoff,
   type InicisPopupHandoffPayload,
 } from "@/lib/inicis/popup-handoff";
 import { rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
@@ -22,7 +22,6 @@ type StdPayInit = {
 
 type OpenPopupOptions = InicisPopupHandoffPayload & {
   popupName?: string;
-  preferRedirectOnMobile?: boolean;
 };
 
 type OpenPopupResult = {
@@ -172,22 +171,6 @@ export const cleanupInicisPaymentLayer = () => {
   document.body.style.removeProperty("position");
 };
 
-const isMobileUa = (ua: string) =>
-  /iphone|ipad|ipod|android|windows phone|mobile/i.test(ua);
-
-const buildPopupUrl = (options: OpenPopupOptions) => {
-  const handoff = createInicisPopupHandoff({
-    context: options.context,
-    submissionId: options.submissionId,
-    submissionIds: options.submissionIds,
-    guestToken: options.guestToken,
-    guestTokensBySubmissionId: options.guestTokensBySubmissionId,
-    orderId: options.orderId,
-    requestId: options.requestId,
-  });
-  return `/pay/inicis/popup?handoff=${encodeURIComponent(handoff)}`;
-};
-
 const fetchStdPayInit = async (
   options: OpenPopupOptions,
 ): Promise<StdPayInit> => {
@@ -298,6 +281,7 @@ const mountStdPayForm = (stdParams: Record<string, string>) => {
   const form = document.createElement("form");
   form.id = FORM_ID;
   form.method = "post";
+  form.acceptCharset = "UTF-8";
   form.style.display = "none";
 
   Object.entries(stdParams).forEach(([name, value]) => {
@@ -319,6 +303,12 @@ export const openInicisCardPopup = async (
     return { ok: false, error: "window is not available" };
   }
 
+  // INIStdPay is the PC protocol. Do not reserve an order or load that SDK
+  // on mobile until an independently configured INIpayMobile flow is ready.
+  if (getInicisMobileBrowser()) {
+    return { ok: false, error: INICIS_MOBILE_UNAVAILABLE_MESSAGE };
+  }
+
   const isSubmission = options.context !== "karaoke" && options.context !== "test1000";
   if (isSubmission && options.submissionId) {
     rememberPaymentReturnLocale(options.submissionId);
@@ -326,19 +316,6 @@ export const openInicisCardPopup = async (
       ...(options.guestToken ? { [options.submissionId]: options.guestToken } : {}),
       ...options.guestTokensBySubmissionId,
     }).map(([submissionId, guestToken]) => ({ submissionId, guestToken })));
-  }
-
-  const { preferRedirectOnMobile = true } = options;
-  if (preferRedirectOnMobile && isMobileUa(window.navigator.userAgent || "")) {
-    try {
-      window.location.assign(buildPopupUrl(options));
-      return { ok: true, redirected: true };
-    } catch {
-      return {
-        ok: false,
-        error: "모바일 결제 정보를 안전하게 전달하지 못했습니다. 다시 시도해주세요.",
-      };
-    }
   }
 
   let initData: StdPayInit | null = null;

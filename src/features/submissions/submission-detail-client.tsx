@@ -6,6 +6,8 @@ import * as React from "react";
 import {
   normalizeStationReviewStatus,
   paymentStatusLabelMap,
+  resultStatusLabelMap,
+  type ResultStatus,
 } from "@/constants/review-status";
 import {
   SubmissionFilesPanel,
@@ -22,6 +24,7 @@ import {
 } from "@/lib/station-logos";
 import {
   summarizeTrackResults,
+  resolveStationTrackResults,
   type TrackReviewResult,
 } from "@/lib/track-results";
 import {
@@ -29,6 +32,7 @@ import {
   type RadioBoardLink,
 } from "@/lib/radio-board-links";
 import { createClient } from "@/lib/supabase/client";
+import { BroadcastSupportPanel } from "@/features/submissions/broadcast-support-panel";
 import { APP_CONFIG } from "@/lib/config";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { downloadEndpointFile } from "@/lib/browser-download";
@@ -214,80 +218,10 @@ const aiUsageLabel = (value?: boolean | null) => {
   return "미입력";
 };
 
-const reviewReceptionMap: Record<string, { label: string; tone: string }> = {
-  NOT_SENT: {
-    label: "접수 대기",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
-  },
-  SENT: {
-    label: "접수완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
-  },
-  RECEIVED: {
-    label: "접수완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
-  },
-  APPROVED: {
-    label: "접수완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
-  },
-  REJECTED: {
-    label: "접수완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
-  },
-  NEEDS_FIX: {
-    label: "접수완료",
-    tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200",
-  },
-};
-
 const approvedDetailResultTone =
   "bg-[#1f7a5a] text-white dark:bg-[#1f7a5a] dark:text-white";
 const rejectedDetailResultTone =
   "bg-[#d9362c] text-white dark:bg-[#d9362c] dark:text-white";
-
-const reviewResultMap: Record<string, { label: string; tone: string }> = {
-  APPROVED: {
-    label: "적격",
-    tone: approvedDetailResultTone,
-  },
-  REJECTED: {
-    label: "부적격",
-    tone: rejectedDetailResultTone,
-  },
-};
-
-const stationResultFallbackMap: Record<string, { label: string; tone: string }> = {
-  APPROVED: {
-    label: "적격",
-    tone: approvedDetailResultTone,
-  },
-  REJECTED: {
-    label: "부적격",
-    tone: rejectedDetailResultTone,
-  },
-  NEEDS_FIX: {
-    label: "수정요청",
-    tone: "bg-[#f6d64a] text-black dark:text-black",
-  },
-};
-
-const getReviewReception = (status: string) => {
-  const normalized = normalizeStationReviewStatus(status);
-  if (normalized === "NOT_SENT") {
-    return reviewReceptionMap.NOT_SENT;
-  }
-  return reviewReceptionMap.SENT ?? {
-    label: "접수",
-    tone: "bg-slate-500/15 text-slate-700 dark:text-slate-200",
-  };
-};
-
-const getReviewResult = (status: string) =>
-  stationResultFallbackMap[status] ?? {
-    label: "대기",
-    tone: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
-  };
 
 type DetailPrimaryAction = "payment-info" | "retry-payment" | "station-review" | null;
 
@@ -543,6 +477,7 @@ export function SubmissionDetailClient({
   const [files, setFiles] = React.useState<SubmissionFile[]>(
     initialFiles ?? [],
   );
+  const latestRefresh = React.useRef(0);
   const [isRatingDownloading, setIsRatingDownloading] = React.useState(false);
   const [radioLinksModal, setRadioLinksModal] = React.useState<{
     stationName?: string;
@@ -554,6 +489,7 @@ export function SubmissionDetailClient({
     resultNote?: string | null;
     resultLabel?: string;
     resultTone?: string;
+    canRequestRadio?: boolean;
     mvReviewAssets?: DetailMvReviewAssetState;
     summary: ReturnType<typeof summarizeTrackResults>;
   } | null>(null);
@@ -706,35 +642,8 @@ export function SubmissionDetailClient({
   };
 
   const buildTrackSummary = React.useCallback(
-    (trackResults?: TrackReviewResult[] | null) => {
-      const base = summarizeTrackResults(trackResults, albumTracks);
-      if (!albumTracks.length) {
-        return base;
-      }
-      const mergedResults = albumTracks.map((track, index) => {
-        const matched =
-          base.results.find(
-            (item) =>
-              (item.track_id && track.id && item.track_id === track.id) ||
-              (typeof item.track_no === "number" &&
-                typeof track.track_no === "number" &&
-                item.track_no === track.track_no),
-          ) ?? null;
-        return {
-          track_id: track.id ?? matched?.track_id ?? null,
-          track_no: track.track_no ?? matched?.track_no ?? index + 1,
-          title:
-            track.track_title ||
-            track.track_title_kr ||
-            track.track_title_en ||
-            matched?.title ||
-            "트랙",
-          status: (matched?.status as string) ?? "PENDING",
-        };
-      });
-      const merged = summarizeTrackResults(mergedResults, albumTracks);
-      return { ...merged, results: mergedResults };
-    },
+    (review: { track_results?: TrackReviewResult[] | null; status: string; station?: { code?: string | null; name?: string | null } | null }) =>
+      summarizeTrackResults(resolveStationTrackResults(review.track_results, albumTracks, review.status, review.station)),
     [albumTracks],
   );
   const paymentStatusLabel =
@@ -781,24 +690,14 @@ export function SubmissionDetailClient({
           : null;
   const stationSummary = renderStationReviews.reduce(
     (acc, review) => {
-      const summary = buildTrackSummary(review.track_results);
+      const summary = buildTrackSummary(review);
       const normalizedStatus = normalizeStationReviewStatus(review.status);
-      const hasDelivery =
-        normalizedStatus === "APPROVED" ||
-        normalizedStatus === "REJECTED" ||
-        normalizedStatus === "NEEDS_FIX" ||
-        summary.counts.approved > 0 ||
-        summary.counts.rejected > 0;
-      const hasSubmission =
-        normalizedStatus === "SENT" || hasDelivery;
-      const isProcessing =
-        normalizedStatus === "SENT";
-      const hasActionNeeded =
-        normalizedStatus === "REJECTED" ||
-        normalizedStatus === "NEEDS_FIX" ||
-        summary.counts.rejected > 0;
-      const hasApproved =
-        normalizedStatus === "APPROVED" || summary.counts.approved > 0;
+      const display = getStationReviewDisplayStatus(review, { albumTracks });
+      const hasDelivery = display.isComplete;
+      const hasSubmission = normalizedStatus === "SENT" || display.key !== "WAITING_SUBMISSION";
+      const isProcessing = hasSubmission && !hasDelivery;
+      const hasActionNeeded = display.needsAttention || summary.counts.rejected > 0;
+      const hasApproved = summary.counts.approved > 0 || display.key === "APPROVED";
 
       acc.total += 1;
       if (hasSubmission) acc.submitted += 1;
@@ -1028,6 +927,14 @@ export function SubmissionDetailClient({
           방송국별 현황
         </p>
       </div>
+      {submission.result_status || submission.result_memo ? (
+        <div className="mt-4 rounded-[8px] border border-border bg-background p-4">
+          <p className="text-sm font-semibold">
+            {resultStatusLabelMap[submission.result_status as ResultStatus] ?? "심의 결과 안내"}
+          </p>
+          {submission.result_memo ? <p className="mt-2 whitespace-pre-wrap text-sm">{submission.result_memo}</p> : null}
+        </div>
+      ) : null}
       {!isMvSubmission ? (
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="bauhaus-status-chip bauhaus-status-chip--info bauhaus-status-chip--compact">
@@ -1044,22 +951,19 @@ export function SubmissionDetailClient({
         {renderStationReviews && renderStationReviews.length > 0 ? (
           <div className="grid gap-3 lg:grid-cols-2">
             {renderStationReviews.map((review) => {
-              const trackInfo = buildTrackSummary(review.track_results);
-              const currentStatus = getStationReviewDisplayStatus(review);
+              const trackInfo = buildTrackSummary(review);
+              const currentStatus = getStationReviewDisplayStatus(review, { albumTracks });
               const note = review.result_note?.trim() || null;
               const hasApprovedTrack = trackInfo.counts.approved > 0;
               const canOpenRadioLinks =
-                hasApprovedTrack || review.status === "APPROVED";
+                !["REJECTED", "NEEDS_FIX"].includes(review.status) &&
+                (hasApprovedTrack || review.status === "APPROVED");
               const stationCode =
                 review.station && "code" in review.station
                   ? review.station.code
                   : null;
               const hasTrackDetails = trackInfo.results.length > 0;
-              const totalTracksForDisplay = hasTrackDetails
-                ? albumTracks.length > 1
-                  ? albumTracks.length
-                  : trackInfo.counts.total
-                : 0;
+              const totalTracksForDisplay = trackInfo.counts.total;
               const pendingGap = Math.max(
                 totalTracksForDisplay -
                   (trackInfo.counts.approved +
@@ -1077,11 +981,7 @@ export function SubmissionDetailClient({
                 hasTrackDetails && totalTracksForDisplay > 1
                   ? buildTrackSummaryText(summaryCounts, " · ")
                   : null;
-              const hasRejectedOutcome =
-                trackInfo.counts.rejected > 0 ||
-                review.status === "REJECTED" ||
-                review.status === "NEEDS_FIX";
-              const resolvedResultNote = hasRejectedOutcome ? note : null;
+              const resolvedResultNote = note;
               const mvReviewAssets =
                 isMvDistribution &&
                 canDownloadMvReviewAssets &&
@@ -1118,6 +1018,7 @@ export function SubmissionDetailClient({
                     resultNote: resolvedResultNote,
                     resultLabel: resultDisplayStatus.label,
                     resultTone: resultDisplayStatus.tone,
+                    canRequestRadio: canOpenRadioLinks,
                     ...(mvReviewAssets ? { mvReviewAssets } : {}),
                     summary: trackInfo,
                   });
@@ -1207,6 +1108,7 @@ export function SubmissionDetailClient({
 
   const fetchLatest = React.useCallback(async () => {
     if (!supabase) return;
+    const refresh = ++latestRefresh.current;
     const { data: submissionDataRaw } = await supabase
       .from("submissions")
       .select(SUBMISSION_ADMIN_DETAIL_SELECT)
@@ -1215,7 +1117,7 @@ export function SubmissionDetailClient({
 
     const submissionData = submissionDataRaw as Submission | null;
 
-    if (submissionData) {
+    if (submissionData && refresh === latestRefresh.current) {
       const nextPackage = Array.isArray(submissionData.package)
         ? submissionData.package[0]
         : submissionData.package;
@@ -1248,32 +1150,17 @@ export function SubmissionDetailClient({
     const stationResult = await runStationFetch(stationSelectWithLogo);
     let stationData = stationResult.data ?? null;
     let stationError = stationResult.error ?? null;
-
-    if (stationError) {
-      const message = stationError.message?.toLowerCase() ?? "";
-      const missingTrackJson = message.includes("track_results_json");
-      const missingLogo = message.includes("logo_url");
-
-      if (missingTrackJson) {
-        const legacy = await runStationFetch(
-          missingLogo ? stationSelectBasicLegacy : stationSelectWithLogoLegacy,
-        );
-        stationData = legacy.data ?? null;
-        stationError = legacy.error ?? null;
-
-        if (stationError && missingLogo) {
-          const fallbackLegacy = await runStationFetch(stationSelectBasicLegacy);
-          stationData = fallbackLegacy.data ?? null;
-          stationError = fallbackLegacy.error ?? null;
-        }
-      } else if (missingLogo || stationError.code === "42703") {
-        const fallback = await runStationFetch(stationSelectBasic);
-        stationData = fallback.data ?? null;
-        stationError = fallback.error ?? null;
-      }
+    for (const select of [
+      stationSelectWithLogoLegacy, stationSelectBasic, stationSelectBasicLegacy,
+      "id, status, result_note, updated_at, station:stations ( id, name, code )",
+    ]) {
+      if (!stationError || !/track_results|logo_url/i.test(stationError.message ?? "")) break;
+      const fallback = await runStationFetch(select);
+      stationData = fallback.data ?? null;
+      stationError = fallback.error ?? null;
     }
 
-    if (stationData) {
+    if (stationData && refresh === latestRefresh.current) {
       const normalizedStations = (Array.isArray(stationData) ? stationData : []).map(
         (review) => {
           const base =
@@ -1296,7 +1183,7 @@ export function SubmissionDetailClient({
       .eq("submission_id", submissionId)
       .order("created_at", { ascending: false });
 
-    if (fileData) {
+    if (fileData && refresh === latestRefresh.current) {
       setFiles(fileData);
     }
   }, [submissionId, supabase]);
@@ -1312,6 +1199,19 @@ export function SubmissionDetailClient({
     }, refreshIntervalMs);
     return () => window.clearInterval(intervalId);
   }, [refreshIntervalMs, router]);
+
+  React.useEffect(() => {
+    if (!enableRealtime || !supabase) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void fetchLatest();
+    };
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [enableRealtime, fetchLatest, supabase]);
 
   React.useEffect(() => {
     if (!enableRealtime || !supabase) return;
@@ -1384,6 +1284,9 @@ export function SubmissionDetailClient({
             <p className="mt-3 text-sm font-semibold">{currentStatusLabel}</p>
           </div>
           {renderStationReviewSection()}
+          {submission.type === "ALBUM" && hasAllExpectedStationResults ? (
+            <div className="mt-6"><BroadcastSupportPanel submission={submission} stationReviews={stationReviews} isEnglish={localePrefix === "/en"} /></div>
+          ) : null}
         </div>
       ) : <>
       {paymentFeedback ? (
@@ -1523,7 +1426,7 @@ export function SubmissionDetailClient({
                 <h2 className="text-2xl font-black text-foreground">
                   {currentStatusLabel}
                 </h2>
-                {!isMvSubmission && isPaymentDone ? (
+                {!isMvSubmission && isPaymentDone && !hasFinalResultDone ? (
                   <span className="rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-2.5 py-1 text-xs font-black text-[#111111]">
                     {currentProcessStageLabel}
                   </span>
@@ -1547,7 +1450,7 @@ export function SubmissionDetailClient({
                   신청서 확인
                 </button>
               </div>
-              {!isMvSubmission && isPaymentDone
+              {!isMvSubmission && isPaymentDone && !hasFinalResultDone
                 ? renderProcessTimeline()
                 : null}
             </div>
@@ -1558,6 +1461,9 @@ export function SubmissionDetailClient({
       {isPaymentDone ? (
         <div className="mt-8">
           {renderStationReviewSection()}
+          {submission.type === "ALBUM" && hasAllExpectedStationResults ? (
+            <div className="mt-6"><BroadcastSupportPanel submission={submission} stationReviews={stationReviews} isEnglish={localePrefix === "/en"} /></div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1928,184 +1834,7 @@ export function SubmissionDetailClient({
           </div>
         </div>
 
-        <div className="hidden">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              방송국별 진행표
-            </p>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="rounded-full border border-black/8 bg-white/88 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1d1d1f] dark:border-white/10 dark:bg-white/8 dark:text-white">
-              전체 {stationSummary.total}곳
-            </span>
-            <span className="rounded-full border border-[#cfe3fb] bg-[#eaf3ff] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#123152] dark:border-[#1d4f7d] dark:bg-[#0b2a46] dark:text-[#8bc3ff]">
-              결과 반영 {stationSummary.delivered}곳
-            </span>
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200">
-              적격 반영 {stationSummary.approved}곳
-            </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 dark:border-white/15 dark:bg-white/8 dark:text-white/80">
-              확인 필요 {stationSummary.actionNeeded}곳
-            </span>
-          </div>
-          <div className="mt-5">
-            {renderStationReviews && renderStationReviews.length > 0 ? (
-              <div className="rounded-2xl border border-border/60 bg-background/70">
-                <div className="overflow-x-auto">
-                  <div className="min-w-0 sm:min-w-[720px]">
-                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(96px,auto)_minmax(112px,auto)] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground sm:grid-cols-[128px_1.1fr_0.95fr_1fr_1fr]">
-                      <span className="justify-self-center text-center sm:hidden">방송국</span>
-                      <span className="hidden justify-self-center text-center sm:block">로고</span>
-                      <span className="hidden text-left sm:block">방송국</span>
-                      <span className="justify-self-center text-center">접수 상태</span>
-                      <span className="justify-self-center text-center">
-                        {isMvDistribution
-                          ? "심의 등급"
-                          : "심의 결과"}
-                      </span>
-                      <span className="hidden justify-self-center text-center sm:block">
-                        Updated
-                      </span>
-                    </div>
-                    <div className="divide-y divide-border/60">
-                      {renderStationReviews.map((review) => {
-                        const reception = getReviewReception(review.status);
-                        const trackInfo = buildTrackSummary(review.track_results);
-                        const note = review.result_note?.trim() || null;
-                        const hasApprovedTrack = trackInfo.counts.approved > 0;
-                        const canOpenRadioLinks =
-                          hasApprovedTrack || review.status === "APPROVED";
-                        const stationCode =
-                          review.station && "code" in review.station
-                            ? review.station.code
-                            : null;
-                        const totalTracksForDisplay =
-                          albumTracks.length > 1
-                            ? albumTracks.length
-                            : trackInfo.counts.total;
-                        const pendingGap = Math.max(
-                          totalTracksForDisplay -
-                          (trackInfo.counts.approved +
-                            trackInfo.counts.rejected +
-                            trackInfo.counts.pending),
-                          0,
-                        );
-                        const pendingCount = trackInfo.counts.pending + pendingGap;
-                        const hasTrackDetails = totalTracksForDisplay > 0;
-                        const summaryCounts = {
-                          approved: trackInfo.counts.approved,
-                          rejected: trackInfo.counts.rejected,
-                          pending: pendingCount,
-                        };
-                        const resultTone =
-                          isMvDistribution && canDownloadMvReviewAssets && submission.mv_desired_rating
-                            ? {
-                              label: mvRatingLabel(submission.mv_desired_rating),
-                              tone: "bg-emerald-500/15 text-emerald-800",
-                            }
-                            : trackInfo.outcome === "APPROVED"
-                              ? reviewResultMap.APPROVED
-                              : trackInfo.outcome === "REJECTED"
-                                ? reviewResultMap.REJECTED
-                                : trackInfo.outcome === "PARTIAL"
-                                  ? {
-                                    label: "부분 적격",
-                                    tone:
-                                      "bg-[#f6d64a] text-black dark:text-black",
-                                  }
-                                  : hasTrackDetails
-                                    ? {
-                                      label: "대기",
-                                      tone:
-                                        "bg-slate-500/10 text-slate-500 dark:text-slate-300",
-                                    }
-                                    : getReviewResult(review.status);
-                        const trackSummaryLine =
-                          totalTracksForDisplay > 1
-                            ? buildTrackSummaryText(summaryCounts, " · ")
-                            : null;
-                        const hasRejectedOutcome =
-                          trackInfo.counts.rejected > 0 ||
-                          review.status === "REJECTED" ||
-                          review.status === "NEEDS_FIX";
-                        const resolvedResultNote = hasRejectedOutcome ? note : null;
-                        const shouldOpenResultModal =
-                          hasTrackDetails || Boolean(resolvedResultNote);
 
-                        const handleResultClick = () => {
-                          if (shouldOpenResultModal) {
-                            setTrackResultModal({
-                              stationName: review.station?.name ?? "-",
-                              stationCode,
-                              resultNote: resolvedResultNote,
-                              summary: trackInfo,
-                            });
-                            return;
-                          }
-                          if (canOpenRadioLinks) {
-                            openRadioLinks({
-                              name: review.station?.name,
-                              code: stationCode,
-                            });
-                          }
-                        };
-
-                        return (
-                          <div
-                            key={review.id}
-                            className="grid grid-cols-[minmax(0,1fr)_minmax(96px,auto)_minmax(112px,auto)] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[128px_1.1fr_0.95fr_1fr_1fr]"
-                          >
-                            <div className="flex min-w-0 items-center justify-start gap-2 sm:justify-center">
-                              <StationLogoWithFallback station={review.station} />
-                              <span className="min-w-0 sm:hidden">
-                                <span className="block truncate font-semibold text-foreground">
-                                  {review.station?.name ?? "-"}
-                                </span>
-                              </span>
-                            </div>
-                            <div className="hidden min-w-0 pl-1 text-left sm:block">
-                              <p className="truncate font-semibold text-foreground">
-                                {review.station?.name ?? "-"}
-                              </p>
-                            </div>
-                            <span
-                              className={`inline-flex min-h-[34px] min-w-[92px] items-center justify-center justify-self-center rounded-full px-3 py-1.5 text-[13px] font-semibold ${reception.tone}`}
-                            >
-                              {reception.label}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={handleResultClick}
-                              className={`inline-flex min-h-[42px] min-w-[112px] flex-col items-center justify-center justify-self-center rounded-full px-3 py-1.5 text-[13px] font-semibold ${resultTone.tone
-                                } ${shouldOpenResultModal
-                                  ? "transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.05] hover:brightness-110 hover:shadow-[0_10px_24px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 active:scale-100"
-                                  : "transition"
-                                }`}
-                            >
-                              <span>{resultTone.label}</span>
-                              {trackSummaryLine ? (
-                                <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                  {trackSummaryLine}
-                                </span>
-                              ) : null}
-                            </button>
-                            <span className="hidden justify-self-center text-center text-xs text-muted-foreground sm:block">
-                              {formatDateTime(review.updated_at)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
-                진행 정보 준비 중
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       </>}
@@ -2184,7 +1913,7 @@ export function SubmissionDetailClient({
             {trackResultModal.resultNote ? (
               <div className="mt-4 rounded-[8px] border-2 border-[#1556a4] bg-[#1556a4]/5 p-4 dark:border-[#8fb7e8] dark:bg-[#0f1d2e]">
                 <p className="text-xs font-black uppercase tracking-normal text-[#1556a4] dark:text-[#b9d8ff]">
-                  부적격 사유
+                  심의 결과 메모
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/80 dark:text-[#d7e7ff]">
                   {trackResultModal.resultNote}
@@ -2238,14 +1967,18 @@ export function SubmissionDetailClient({
               </div>
             ) : null}
             <div className="mt-5 flex items-center justify-between gap-3">
-              {trackResultModal.summary.counts.approved > 0 ? (
+              {trackResultModal.canRequestRadio ? (
                 <button
                   type="button"
                   onClick={() => {
-                    openRadioLinks({
-                      name: trackResultModal.stationName,
-                      code: trackResultModal.stationCode ?? null,
-                    });
+                    if (submission.type === "ALBUM" && hasAllExpectedStationResults) {
+                      document.getElementById("broadcast-support")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    } else {
+                      openRadioLinks({
+                        name: trackResultModal.stationName,
+                        code: trackResultModal.stationCode ?? null,
+                      });
+                    }
                     setTrackResultModal(null);
                   }}
                   className={detailActionButtonClass}
@@ -2318,6 +2051,9 @@ export function SubmissionDetailClient({
               </div>
             </div>
             <ul className="mt-4 space-y-2">
+              {radioLinksModal.links.length === 0 ? (
+                <p className="text-sm text-muted-foreground">이 방송국의 공개 신청곡 게시판은 확인되지 않았습니다. 방송국에 참여 경로를 문의해주세요.</p>
+              ) : null}
               {radioLinksModal.links.map((link) => {
                 const guide = getRadioLinkGuide(link);
                 return (

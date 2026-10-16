@@ -13,7 +13,30 @@ export type AlbumTrackMeta = {
   track_title?: string | null;
   track_title_kr?: string | null;
   track_title_en?: string | null;
+  broadcast_selected?: boolean | null;
 };
+
+export type ReviewStation = { code?: string | null; name?: string | null } | null;
+
+export const isWbsReview = (station?: ReviewStation) =>
+  station?.code?.trim().toUpperCase() === "WBS" || /원음/.test(station?.name ?? "");
+
+export function getStationReviewTracks<T extends AlbumTrackMeta>(
+  albumTracks: T[],
+  station?: ReviewStation,
+  rawTrackResults?: unknown,
+): T[] {
+  if (!isWbsReview(station) || albumTracks.length < 4) return albumTracks;
+  const selected = albumTracks.filter((track) => track.broadcast_selected === true);
+  if (selected.length > 0 && selected.length <= 3) return selected;
+  // An old album without a saved selection can only identify its WBS targets
+  // from three distinct, final decisions tied to the current album's track IDs.
+  const finalIds = new Set(normalizeTrackResults(rawTrackResults)
+    .filter((result) => result.track_id && (result.status === "APPROVED" || result.status === "REJECTED"))
+    .map((result) => result.track_id));
+  const decided = albumTracks.filter((track) => track.id && finalIds.has(track.id));
+  return decided.length === 3 ? decided : albumTracks;
+}
 
 const allowedStatuses = new Set<TrackReviewStatus>([
   "PENDING",
@@ -32,7 +55,7 @@ const pickTrackTitle = (track?: AlbumTrackMeta | null) => {
 };
 
 const toTrackStatus = (value?: string | null): TrackReviewStatus => {
-  const normalized = (value ?? "").toUpperCase();
+  const normalized = (value ?? "").trim().toUpperCase();
   if (allowedStatuses.has(normalized as TrackReviewStatus)) {
     return normalized as TrackReviewStatus;
   }
@@ -87,9 +110,11 @@ export function normalizeTrackResults(
           ? maybeTrack.trackId
           : null;
     const trackNoRaw =
-      (typeof maybeTrack.track_no === "number" && maybeTrack.track_no) ??
-      (typeof maybeTrack.trackNo === "number" && maybeTrack.trackNo) ??
-      null;
+      typeof maybeTrack.track_no === "number"
+        ? maybeTrack.track_no
+        : typeof maybeTrack.trackNo === "number"
+          ? maybeTrack.trackNo
+          : null;
     const trackNo =
       typeof trackNoRaw === "number" && Number.isFinite(trackNoRaw)
         ? trackNoRaw
@@ -109,6 +134,43 @@ export function normalizeTrackResults(
       status: toTrackStatus(
         typeof maybeTrack.status === "string" ? maybeTrack.status : null,
       ),
+    };
+  });
+}
+
+/** Complete the track list before deciding whether a station has finished review. */
+export function resolveStationTrackResults(
+  raw: unknown,
+  albumTracks?: AlbumTrackMeta[] | null,
+  stationStatus?: string | null,
+  station?: ReviewStation,
+): TrackReviewResult[] {
+  const normalized = normalizeTrackResults(raw, albumTracks);
+  const reviewTracks = getStationReviewTracks(albumTracks ?? [], station, raw);
+  // Older reviews only stored a station-level decision. Inherit it only when
+  // there are no per-track decisions; otherwise unreviewed tracks stay pending.
+  const hasDecisions = normalized.some((track) => track.status !== "PENDING");
+  const overall = toTrackStatus(stationStatus);
+  const unknownWbsTargets = isWbsReview(station) && reviewTracks.length > 3;
+  const invalidWbsDecisions = unknownWbsTargets && normalized.filter((track) => track.status !== "PENDING").length > 3;
+  const inheritedStatus = !hasDecisions && !unknownWbsTargets ? overall : "PENDING";
+  if (!albumTracks?.length) {
+    return normalized.map((track) => ({
+      ...track,
+      status: hasDecisions ? track.status : inheritedStatus,
+    }));
+  }
+  return reviewTracks.map((track, index) => {
+    const matched = normalized.find((result) =>
+      result.track_id && track.id
+        ? result.track_id === track.id
+        : typeof result.track_no === "number" && result.track_no === track.track_no,
+    );
+    return {
+      track_id: track.id ?? matched?.track_id ?? null,
+      track_no: track.track_no ?? matched?.track_no ?? index + 1,
+      title: pickTrackTitle(track) ?? matched?.title ?? "트랙",
+      status: invalidWbsDecisions ? "PENDING" : hasDecisions ? matched?.status ?? "PENDING" : inheritedStatus,
     };
   });
 }
@@ -185,7 +247,9 @@ export function summarizeTrackResults(
 
   let outcome: TrackOutcome = null;
   if (counts.total > 0) {
-    if (counts.approved === counts.total) {
+    if (counts.pending > 0) {
+      outcome = "PENDING";
+    } else if (counts.approved === counts.total) {
       outcome = "APPROVED";
     } else if (counts.rejected === counts.total) {
       outcome = "REJECTED";

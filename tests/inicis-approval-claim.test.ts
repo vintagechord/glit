@@ -8,7 +8,7 @@ const ID = "20000000-0000-4000-8000-000000000001";
 const ORDER = "onside-fixture-order";
 const STATE = "30000000-0000-4000-8000-000000000001";
 const fixtureSource = `
-export const state={payment:{status:'REQUESTED',submission_id:'${ID}',amount_krw:49000,raw_response:{closeState:'${STATE}'},submission:{id:'${ID}',guest_token:null}},claim:'fresh',approval:{ok:true,data:{resultCode:'0000',MOID:'${ORDER}',TotPrice:'49000',tid:'fixture-tid',tstamp:'fixture-time',authSignature:'valid-signature'}},cancelOk:true,persistOk:true,throwApproval:false,wait:null,release:null};
+export const state={payment:{status:'REQUESTED',submission_id:'${ID}',amount_krw:49000,raw_response:{closeState:'${STATE}'},submission:{id:'${ID}',guest_token:'fixture-guest'}},claim:'fresh',approval:{ok:true,data:{resultCode:'0000',MOID:'${ORDER}',TotPrice:'49000',tid:'fixture-tid',mid:'fixture-mid',currency:'WON',payMethod:'Card',applNum:'12345678',applDate:'20261016',applTime:'123456'}},cancelOk:true,persistOk:true,throwApproval:false,wait:null,release:null};
 export const calls=[];
 `;
 const handlerBundle = build({
@@ -17,13 +17,13 @@ const handlerBundle = build({
   plugins: [{ name: "approval-fixture", setup(plugin) {
     const files: Record<string, string> = {
       "approval-fixture": fixtureSource,
-      "@/lib/inicis/api": `import {state,calls} from 'approval-fixture';export const isInicisSuccessCode=code=>['00','0000'].includes(String(code));export const requestStdPayApproval=async()=>{calls.push({method:'gateway'});if(state.wait)await state.wait;if(state.throwApproval)throw new Error('network uncertain');return state.approval;};export const requestStdPayNetCancel=async()=>{calls.push({method:'netCancel'});return {ok:state.cancelOk,data:{resultCode:state.cancelOk?'0000':'9999'}};};`,
+      "@/lib/inicis/api": `import {state,calls} from 'approval-fixture';export const isInicisSuccessCode=code=>['00','0000'].includes(String(code));export const requestStdPayApproval=async(args)=>{calls.push({method:'gateway',args});if(state.wait)await state.wait;if(state.throwApproval)throw new Error('network uncertain');return state.approval;};export const requestStdPayNetCancel=async()=>{calls.push({method:'netCancel'});return {ok:state.cancelOk,data:{resultCode:state.cancelOk?'0000':'9999'}};};`,
       "@/lib/inicis/config": `export const getStdPayConfig=()=>({mid:'fixture-mid',signKey:'fixture-sign-key',env:'stg',stdJsUrl:'https://fixture.invalid/sdk.js'});`,
       "@/lib/inicis/crypto": `export const getInicisTimestamp=()=> 'fixture-time';export const makeAuthSecureSignature=()=> 'valid-signature';export const sha256=()=> 'fixture-hash';`,
       "@/lib/payments/submission": `import {state,calls} from 'approval-fixture';export const getPaymentByOrderId=async()=>({payment:structuredClone(state.payment),error:null});export const markPaymentFailure=async(...args)=>{calls.push({method:'preApprovalFailure',args});return {ok:true};};export const markPaymentSuccess=async(...args)=>{calls.push({method:'paid',args});return {ok:state.persistOk,error:state.persistOk?null:'database response lost',submissionId:'${ID}'};};`,
       "@/lib/payments/karaoke": `export const getKaraokePaymentByOrderId=async()=>({payment:null});export const markKaraokePaymentFailure=async()=>({ok:true});export const markKaraokePaymentSuccess=async()=>({ok:true});`,
       "@/lib/supabase/admin": `import {state,calls} from 'approval-fixture';export const createAdminClient=()=>({rpc:async(method,args)=>{calls.push({method,args});if(method==='claim_inicis_submission_approval'){if(state.claim==='invalid')return {data:null,error:{code:'42501'}};const previous=state.claim;state.claim='processing';return {data:[{already_approved:previous==='approved',already_processing:previous==='processing'}],error:null};}return {data:[{final_status:args.p_outcome==='FAILED'?'FAILED':'REVIEW_REQUIRED'}],error:null};}});`,
-      "@/lib/payment-result-grant": `export const createPaymentResultGrant=()=>null;export const setPaymentResultGrantCookie=()=>{};`,
+      "@/lib/payment-result-grant": `import {calls} from 'approval-fixture';export const createPaymentResultGrant=()=>'fixture-grant';export const setPaymentResultGrantCookie=(response)=>{calls.push({method:'grant'});response.cookies.set('payment_result','fixture-grant');};`,
       "@/lib/url": `export const getBaseUrl=()=> 'https://onside.test';`,
     };
     plugin.onResolve({ filter: /^(approval-fixture|@\/lib\/)/ }, args => files[args.path] ? ({ path: args.path, namespace: "approval-fixture" }) : undefined);
@@ -42,9 +42,9 @@ const harness = async () => {
   new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), loaded, loaded.exports);
   return loaded.exports;
 };
-const callback = (state = STATE) => new NextRequest("https://onside.test/api/inicis/return", {
+const callback = (state = STATE, overrides: Record<string, string> = {}) => new NextRequest("https://onside.test/api/inicis/return", {
   method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  body: new URLSearchParams({ orderNumber: ORDER, mid: "fixture-mid", merchantData: state, resultCode: "0000", authToken: "fixture-auth-token", authUrl: "https://stdpay.inicis.com/api/approval", netCancelUrl: "https://stdpay.inicis.com/api/netcancel", price: "49000" }),
+  body: new URLSearchParams({ orderNumber: ORDER, mid: "fixture-mid", merchantData: state, resultCode: "0000", authToken: "fixture-auth-token", idc_name: "stg", authUrl: "https://stgstdpay.inicis.com/api/payAuth", netCancelUrl: "https://stgstdpay.inicis.com/api/netCancel", price: "49000", ...overrides }),
 });
 const silence = (t: TestContext) => {
   t.mock.method(console, "info", () => undefined);
@@ -74,7 +74,7 @@ test("Inicis approval claims before the gateway and rejects invalid, terminal, o
   h.state.release?.();
   const success = await first;
   assert.match(success.headers.get("location") ?? "", /status=SUCCESS/);
-  assert.deepEqual(h.calls.map(call => call.method), ["claim_inicis_submission_approval", "gateway", "claim_inicis_submission_approval", "paid"]);
+  assert.deepEqual(h.calls.map(call => call.method), ["claim_inicis_submission_approval", "gateway", "claim_inicis_submission_approval", "paid", "grant"]);
 });
 
 test("unknown gateway outcomes stay locked while confirmed rejection is safely closed", async (t) => {
@@ -104,7 +104,7 @@ const apiBundle = build({
   bundle: true, platform: "node", format: "cjs", write: false, packages: "external",
   plugins: [{ name: "api-fixture", setup(plugin) {
     plugin.onResolve({ filter: /^\.\/config$/ }, args => args.importer.endsWith("/inicis/api.ts") ? ({ path: "config", namespace: "api-fixture" }) : undefined);
-    plugin.onLoad({ filter: /.*/, namespace: "api-fixture" }, () => ({ loader: "js", contents: `export const getStdPayConfig=()=>({mid:'fixture-mid',signKey:'fixture-key'});export const getBillingConfig=()=>({});` }));
+    plugin.onLoad({ filter: /.*/, namespace: "api-fixture" }, () => ({ loader: "js", contents: `export const getStdPayConfig=()=>({mid:'fixture-mid',signKey:'fixture-key',env:'stg'});export const getBillingConfig=()=>({});` }));
   } }],
 });
 
@@ -114,15 +114,43 @@ test("gateway transport only reports cancellation or rejection after explicit pr
   new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), loaded, loaded.exports);
   for (const scenario of ["empty", "malformed", "declined", "timeout-cancelled", "timeout-uncertain"] as const) {
     t.mock.method(globalThis, "fetch", async (url: RequestInfo | URL) => {
-      if (String(url).endsWith("/cancel")) return scenario === "timeout-cancelled" ? Response.json({ resultCode: "0000" }) : new Response("");
+      if (String(url).endsWith("/netCancel")) return scenario === "timeout-cancelled" ? Response.json({ resultCode: "0000", mid: "fixture-mid", MOID: ORDER, tid: "fixture-tid" }) : new Response("");
       if (scenario.startsWith("timeout")) throw new Error("timeout");
       if (scenario === "empty") return new Response("");
       if (scenario === "malformed") return Response.json({ unexpected: "body" });
       return Response.json({ resultCode: "9999", resultMsg: "Declined" });
     });
-    const response = await loaded.exports.requestStdPayApproval({ authUrl: "https://stdpay.inicis.com/approve", netCancelUrl: "https://stdpay.inicis.com/cancel", authToken: "fixture-token", timestamp: "fixture-time" });
+    const response = await loaded.exports.requestStdPayApproval({ authUrl: "https://stgstdpay.inicis.com/api/payAuth", netCancelUrl: "https://stgstdpay.inicis.com/api/netCancel", idcName: "stg", expectedOrderId: ORDER, authToken: "fixture-token", timestamp: "1792123456789" });
     assert.equal(response.ok, false);
     assert.equal(response.confirmedFailure, scenario === "declined" || scenario === "timeout-cancelled", scenario);
     t.mock.restoreAll();
+  }
+});
+
+
+test("documented successful receipt grants guest access and mismatched receipts never do", async (t) => {
+  silence(t);
+  const token = "\r\nwrapped+/=opaque-token\r\n";
+  const h = await harness();
+  const result = await h.handleInicisReturn(callback(STATE, { authToken: token }));
+  assert.match(result.headers.get("location") ?? "", /status=SUCCESS/);
+  assert.match(result.headers.get("set-cookie") ?? "", /payment_result=fixture-grant/);
+  assert.equal(h.calls.find(call => call.method === "gateway")?.args?.authToken, token);
+  for (const [key, value] of Object.entries({ mid: "otherMID", currency: "USD", payMethod: "VBank", applDate: "20260230", applNum: "", tid: "" })) {
+    const bad = await harness();
+    bad.state.approval.data![key] = value;
+    const rejected = await bad.handleInicisReturn(callback());
+    assert.doesNotMatch(rejected.headers.get("location") ?? "", /status=SUCCESS/, key);
+    assert.equal(rejected.headers.get("set-cookie"), null, key);
+    assert.equal(bad.calls.filter(call => call.method === "paid").length, 0, key);
+  }
+});
+
+test("missing or mismatched IDC cannot dispatch approval", async (t) => {
+  silence(t);
+  for (const idc_name of ["", "fc"]) {
+    const h = await harness();
+    await h.handleInicisReturn(callback(STATE, { idc_name }));
+    assert.equal(h.calls.filter(call => call.method === "gateway").length, 0);
   }
 });

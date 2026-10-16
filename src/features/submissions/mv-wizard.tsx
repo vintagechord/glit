@@ -3,6 +3,12 @@
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 import { watchUploadProgress } from "@/lib/upload-watchdog";
+import {
+  clearMultipartResumeState as clearResumeState,
+  loadMultipartResumeState as loadResumeState,
+  saveMultipartResumeState as saveResumeState,
+  runMultipartWorkers,
+} from "@/lib/multipart-upload-client";
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -1178,6 +1184,10 @@ export function MvWizard({
     }
     let invalidNotice: string | null = null;
     const filtered = selected.filter((file) => {
+      if (file.size === 0) {
+        invalidNotice = "빈 파일은 업로드할 수 없습니다. 파일을 확인해주세요.";
+        return false;
+      }
       if (file.size > uploadMaxBytes) {
         invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
         return false;
@@ -1218,7 +1228,7 @@ export function MvWizard({
         localKey,
       });
     });
-    setNotice({});
+    setNotice(invalidNotice ? { error: invalidNotice } : {});
     setFiles(nextFileEntries);
     setUploads(nextUploads);
     setFileDigest("");
@@ -1397,52 +1407,8 @@ export function MvWizard({
       xhr.send(blob);
     });
 
-  type MultipartResumeState = {
-    grantId: string;
-    uploadId: string;
-    key: string;
-    partSize: number;
-    parts: Record<number, string>;
-    createdAt: number;
-  };
-
   const buildResumeKey = (submissionId: string, file: File) =>
     `mv-multipart:${submissionId}:${file.name}:${file.size}:${file.lastModified}`;
-
-  const loadResumeState = (resumeKey: string): MultipartResumeState | null => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(resumeKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as MultipartResumeState;
-      if (!parsed.grantId || !parsed.uploadId || !parsed.key || !parsed.partSize) {
-        window.localStorage.removeItem(resumeKey);
-        return null;
-      }
-      const age = Date.now() - (parsed.createdAt ?? 0);
-      if (age > 1000 * 60 * 60 * 24) {
-        window.localStorage.removeItem(resumeKey);
-        return null;
-      }
-      return parsed;
-    } catch {
-      return null;
-    }
-  };
-
-  const saveResumeState = (resumeKey: string, state: MultipartResumeState) => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(resumeKey, JSON.stringify(state));
-    } catch {
-      // ignore storage errors
-    }
-  };
-
-  const clearResumeState = (resumeKey: string) => {
-    if (typeof window === "undefined") return;
-    window.localStorage.removeItem(resumeKey);
-  };
 
   const presignMultipartParts = async (params: {
     grantId: string;
@@ -1678,8 +1644,6 @@ export function MvWizard({
 
     const maxRetries = 5;
     const concurrency = getMultipartConcurrency();
-    let cursor = 0;
-
     const uploadPart = async (partNumber: number) => {
       const start = (partNumber - 1) * partSize!;
       const end = Math.min(start + partSize!, totalSize);
@@ -1724,6 +1688,7 @@ export function MvWizard({
           });
           return;
         } catch (error) {
+          urlMap.delete(partNumber);
           if (attempt >= maxRetries) {
             throw error;
           }
@@ -1733,17 +1698,7 @@ export function MvWizard({
       }
     };
 
-    if (partsToUpload.length > 0) {
-      const workers = Array.from({ length: concurrency }, async () => {
-        while (cursor < partsToUpload.length) {
-          const partNumber = partsToUpload[cursor];
-          cursor += 1;
-          await uploadPart(partNumber);
-        }
-      });
-
-      await Promise.all(workers);
-    }
+    await runMultipartWorkers(partsToUpload, concurrency, uploadPart);
 
     const finalParts = partsResult.filter(
       (part): part is { partNumber: number; etag: string } => Boolean(part),
@@ -4720,7 +4675,7 @@ export function MvWizard({
                     />
                     <span className="flex w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
                       {submissionIdRef.current
-                        ? "파일 첨부 (최대 2GB, 드래그 앤 드롭 가능)"
+                        ? `파일 첨부 (최대 ${uploadMaxLabel}, 드래그 앤 드롭 가능)`
                         : isPreparingDraft
                           ? "접수 ID 준비 중... 잠시 후 첨부 가능"
                           : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
@@ -4758,6 +4713,19 @@ export function MvWizard({
                 </div>
                 {uploads.length > 0 ? (
                   <div className="mt-4 space-y-3">
+                    {uploads.some((upload) => upload.status === "error") && (
+                      <button
+                        type="button"
+                        disabled={uploadInProgress}
+                        onClick={() => {
+                          setNotice({});
+                          void uploadFiles().catch(() => undefined);
+                        }}
+                        className="min-h-11 rounded-full border border-foreground px-4 py-2 text-xs font-semibold disabled:opacity-50"
+                      >
+                        실패한 파일 다시 업로드
+                      </button>
+                    )}
                     {uploads.map((upload, index) => (
                       <div
                         key={`${upload.name}-${index}`}
@@ -4783,7 +4751,7 @@ export function MvWizard({
                             )}
                             <button
                               type="button"
-                              disabled={upload.status === "uploading"}
+                              disabled={uploadInProgress}
                               onClick={() => {
                                 const removedUpload = uploads[index];
                                 setFiles((currentFiles) =>

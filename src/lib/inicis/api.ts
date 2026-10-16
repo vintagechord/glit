@@ -1,7 +1,10 @@
 import { getBillingConfig, getStdPayConfig } from "./config";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { readBoundedBodyBytes } from "@/lib/request-body";
+import { isTrustedStdPayUrl, isValidInicisAuthToken, parseInicisJson } from "./protocol";
 import {
   makeAuthRequestSignature,
-  makeAuthSecureSignature,
+  makeSignature,
   makeBillingHashDataV2,
   makeRefundHashDataV2,
   getInicisTimestamp,
@@ -14,20 +17,6 @@ export const isInicisSuccessCode = (code?: string | number | null) => {
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
-const isTrustedInicisUrl = (value: string | null | undefined) => {
-  if (!value) return false;
-  try {
-    const parsed = new URL(value);
-    const host = parsed.hostname.toLowerCase();
-    return (
-      parsed.protocol === "https:" &&
-      (host === "inicis.com" || host.endsWith(".inicis.com"))
-    );
-  } catch {
-    return false;
-  }
-};
-
 const isHttpsUrl = (value: string | null | undefined) => {
   if (!value) return false;
   try {
@@ -37,36 +26,15 @@ const isHttpsUrl = (value: string | null | undefined) => {
   }
 };
 
-const fetchWithTimeout = async (
-  url: string,
-  init: RequestInit,
-  timeoutMs = REQUEST_TIMEOUT_MS,
-) => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      ...init,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-};
-
 const readJsonBody = async (
   response: Response,
 ): Promise<InicisResponseData | null> => {
-  const text = await response.text().catch(() => "");
-  if (!text) return null;
+  const body = await readBoundedBodyBytes(response, 64 * 1024);
+  if (!body.ok) return null;
   try {
-    const parsed = JSON.parse(text) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as InicisResponseData;
-    }
-    return { raw: text.slice(0, 800) };
+    return parseInicisJson(new TextDecoder("utf-8", { fatal: true }).decode(body.bytes));
   } catch {
-    return { raw: text.slice(0, 800) };
+    return null;
   }
 };
 
@@ -76,6 +44,9 @@ type StandardAuthParams = {
   authToken: string;
   timestamp: string;
   skipNetCancel?: boolean;
+  idcName?: string;
+  expectedOrderId?: string;
+  expectedAmountKrw?: number;
 };
 
 type BillingRequest = {
@@ -114,11 +85,12 @@ type InicisNetCancelResult = {
 };
 
 const buildStdAuthFormBody = (authToken: string, timestamp: string) => {
-  const { mid } = getStdPayConfig();
+  const { mid, signKey } = getStdPayConfig();
   return new URLSearchParams({
     mid,
     authToken,
     signature: makeAuthRequestSignature({ authToken, timestamp }),
+    verification: makeSignature({ authToken, signKey, timestamp }),
     timestamp,
     charset: "UTF-8",
     format: "JSON",
@@ -129,16 +101,22 @@ export async function requestStdPayNetCancel({
   netCancelUrl,
   authToken,
   timestamp,
+  idcName,
+  expectedOrderId,
+  expectedTid,
 }: {
   netCancelUrl?: string | null;
   authToken: string;
   timestamp: string;
+  idcName?: string;
+  expectedOrderId?: string;
+  expectedTid?: string;
 }): Promise<InicisNetCancelResult> {
   if (
     !netCancelUrl ||
-    !isTrustedInicisUrl(netCancelUrl) ||
-    !authToken.trim() ||
-    !timestamp.trim()
+    !isTrustedStdPayUrl(netCancelUrl, idcName, getStdPayConfig().env, true) ||
+    !isValidInicisAuthToken(authToken) ||
+    !/^[1-9][0-9]{12}$/.test(timestamp)
   ) {
     return {
       ok: false,
@@ -155,14 +133,18 @@ export async function requestStdPayNetCancel({
       },
       body: buildStdAuthFormBody(authToken, timestamp),
       cache: "no-store",
-    });
+      redirect: "error",
+    }, REQUEST_TIMEOUT_MS);
     const data = await readJsonBody(response);
     const resultCode =
       data?.resultCode ?? data?.resultcode ?? data?.P_STATUS ?? null;
-    const gatewayAccepted =
-      resultCode != null && isInicisSuccessCode(resultCode);
+    const gatewayAccepted = resultCode === "0000";
     return {
-      ok: response.ok && gatewayAccepted,
+      // A status code alone cannot prove that this order was cancelled.
+      ok: response.ok && gatewayAccepted && Boolean(expectedOrderId) &&
+        data?.mid === getStdPayConfig().mid && data?.MOID === expectedOrderId &&
+        typeof data?.tid === "string" && /^[A-Za-z0-9_-]{5,40}$/.test(data.tid) &&
+        (!expectedTid || data.tid === expectedTid),
       data,
     };
   } catch (error) {
@@ -176,8 +158,11 @@ export async function requestStdPayApproval({
   authToken,
   timestamp,
   skipNetCancel = false,
+  idcName,
+  expectedOrderId,
+  expectedAmountKrw,
 }: StandardAuthParams): Promise<InicisApprovalResult> {
-  if (!authToken.trim()) {
+  if (!isValidInicisAuthToken(authToken)) {
     return {
       ok: false,
       data: {
@@ -186,7 +171,7 @@ export async function requestStdPayApproval({
       },
     };
   }
-  if (!timestamp.trim()) {
+  if (!/^[1-9][0-9]{12}$/.test(timestamp)) {
     return {
       ok: false,
       data: {
@@ -195,7 +180,7 @@ export async function requestStdPayApproval({
       },
     };
   }
-  if (!isTrustedInicisUrl(authUrl)) {
+  if (!isTrustedStdPayUrl(authUrl, idcName, getStdPayConfig().env)) {
     return {
       ok: false,
       data: {
@@ -204,7 +189,7 @@ export async function requestStdPayApproval({
       },
     };
   }
-  if (netCancelUrl && !isTrustedInicisUrl(netCancelUrl)) {
+  if (netCancelUrl && !isTrustedStdPayUrl(netCancelUrl, idcName, getStdPayConfig().env, true)) {
     return {
       ok: false,
       data: {
@@ -214,12 +199,17 @@ export async function requestStdPayApproval({
     };
   }
 
-  const { mid, signKey } = getStdPayConfig();
   const formBody = buildStdAuthFormBody(authToken, timestamp);
+  if (expectedAmountKrw !== undefined) {
+    if (!Number.isSafeInteger(expectedAmountKrw) || expectedAmountKrw <= 0) {
+      return { ok: false, data: null, confirmedFailure: false };
+    }
+    formBody.set("price", String(expectedAmountKrw));
+  }
 
   const doNetCancel = async () => {
     if (!netCancelUrl || skipNetCancel) return null;
-    return requestStdPayNetCancel({ netCancelUrl, authToken, timestamp });
+    return requestStdPayNetCancel({ netCancelUrl, authToken, timestamp, idcName, expectedOrderId });
   };
 
   try {
@@ -230,7 +220,8 @@ export async function requestStdPayApproval({
       },
       body: formBody,
       cache: "no-store",
-    });
+      redirect: "error",
+    }, REQUEST_TIMEOUT_MS);
 
     const data =
       (await readJsonBody(res)) ??
@@ -258,22 +249,8 @@ export async function requestStdPayApproval({
       };
     }
 
-    const moid = data.MOID != null ? String(data.MOID) : "";
-    const totPriceRaw = data.TotPrice != null ? data.TotPrice : "";
-    const totPrice = typeof totPriceRaw === "string" ? totPriceRaw.replace(/,/g, "") : totPriceRaw;
     const resultCode = data.resultCode != null ? String(data.resultCode) : "";
-    const authSignature = data.authSignature != null ? String(data.authSignature) : null;
-    const secureSignature = moid
-      ? makeAuthSecureSignature({
-          mid,
-          tstamp: data.tstamp ?? timestamp,
-          MOID: moid,
-          TotPrice: totPrice,
-          signKey,
-        })
-      : null;
-
-    const success = isInicisSuccessCode(resultCode);
+    const success = resultCode === "0000";
 
     if (!success) {
       const netCancellation = await doNetCancel();
@@ -282,21 +259,14 @@ export async function requestStdPayApproval({
         data,
         netCancellation,
         // A missing or malformed result is not proof that no charge occurred.
-        confirmedFailure: netCancellation?.ok === true || Boolean(resultCode && resultCode !== String(res.status) && !data.raw),
+        confirmedFailure: netCancellation?.ok === true || /^\d{4,6}$/.test(resultCode) && resultCode !== String(res.status),
         secureSignatureMatches: false,
       };
     }
 
-    if (authSignature && secureSignature && authSignature !== secureSignature) {
-      const netCancellation = await doNetCancel();
-      return { ok: false, data, netCancellation, confirmedFailure: netCancellation?.ok === true, secureSignatureMatches: false };
-    }
-
-    if (!secureSignature || !authSignature) {
-      return { ok: true, data, secureSignatureMatches: false };
-    }
-
-    return { ok: true, data, secureSignatureMatches: true };
+    // Authenticity is established by the direct allowlisted HTTPS request;
+    // callers must bind the documented receipt fields to their saved order.
+    return { ok: true, data, secureSignatureMatches: false };
   } catch (error) {
     const netCancellation = await doNetCancel();
     return { ok: false, data: null, error, netCancellation, confirmedFailure: netCancellation?.ok === true };
@@ -368,7 +338,8 @@ export async function requestBillingPayment(payload: BillingRequest): Promise<{
       },
       body: JSON.stringify(body),
       cache: "no-store",
-    });
+      redirect: "error",
+    }, REQUEST_TIMEOUT_MS);
 
     const dataResponse = await readJsonBody(res);
     const resultCode =
@@ -448,7 +419,8 @@ export async function requestRefund(payload: RefundRequest): Promise<{
       },
       body: JSON.stringify(body),
       cache: "no-store",
-    });
+      redirect: "error",
+    }, REQUEST_TIMEOUT_MS);
 
     const dataResponse = await readJsonBody(res);
     const resultCode =

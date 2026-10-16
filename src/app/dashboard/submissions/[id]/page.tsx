@@ -451,30 +451,39 @@ export default async function SubmissionDetailPage({
   }
 
   const reviewMap = new Map<string, StationReviewRow>();
+  const reviewByCode = new Map<string, StationReviewRow>();
   (resolvedStationReviews ?? []).forEach((review: StationReviewRow) => {
+    const station = Array.isArray(review.station) ? review.station[0] : review.station;
     const stationId =
       review.station_id ||
-      (Array.isArray(review.station) ? review.station[0]?.id : review.station?.id);
+      station?.id;
     if (!stationId) return;
-    reviewMap.set(stationId, {
+    const normalizedReview = {
       ...review,
-      station: Array.isArray(review.station) ? review.station[0] : review.station ?? null,
-    });
+      station: station ?? null,
+    };
+    // Rows arrive newest first; do not replace a current result with an old row.
+    if (!reviewMap.has(stationId)) reviewMap.set(stationId, normalizedReview);
+    if (station?.code && !reviewByCode.has(station.code)) reviewByCode.set(station.code, normalizedReview);
+    if (!packageStations.some((item) => item.id === stationId || (station?.code && item.code === station.code))) {
+      packageStations.push({ id: stationId, name: station?.name ?? "방송국", code: station?.code ?? null });
+    }
   });
 
   const initialStationReviews = packageStations.map((station) => {
-    const review = station.id ? reviewMap.get(station.id) : null;
+    const review = (station.id ? reviewMap.get(station.id) : null) ??
+      (station.code ? reviewByCode.get(station.code) : null);
     const trackResults = review
       ? normalizeTrackResults(review.track_results, resolvedSubmission.album_tracks)
       : null;
     return {
       id: review?.id ?? `placeholder-${submissionId}-${station.code ?? station.id}`,
-      status: review?.status ?? resolvedSubmission.status ?? "NOT_SENT",
+      status: review?.status ?? "NOT_SENT",
       result_note: review?.result_note ?? null,
       track_results: trackResults,
       updated_at: review?.updated_at ?? resolvedSubmission.updated_at,
       station: {
-        id: station.id || "",
+        id: review?.station_id || station.id || "",
         name: station.name,
         code: station.code,
         logo_url: getStationLogoPath(station),

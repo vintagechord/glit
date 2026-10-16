@@ -487,10 +487,11 @@ function buildSubmissionTemplateData(
   const selectedWbs = Array.isArray(submission.wbs_track_numbers)
     ? submission.wbs_track_numbers as number[]
     : [];
+  const selectedBroadcastTracks = tracks.filter((track) => track.broadcast_selected);
   const wbsTracks = selectedWbs.length
     ? selectedWbs.map((number) => tracks.find((track) => track.track_no === number)).filter((track) => track !== undefined)
-    : integratedSongTracks;
-  if (requireWbsSelection && titleTracks.length > 3 && selectedWbs.length === 0) {
+    : selectedBroadcastTracks.length ? selectedBroadcastTracks : integratedSongTracks;
+  if (requireWbsSelection && ((titleTracks.length > 3 && selectedWbs.length === 0 && selectedBroadcastTracks.length === 0) || selectedWbs.length > 3 || (selectedWbs.length === 0 && selectedBroadcastTracks.length > 3))) {
     throw new ReviewDocsInputError(`${title}: 타이틀곡이 3곡을 초과합니다. WBS 신청곡을 최대 3곡 선택해주세요.`);
   }
   const integratedSongTitles = wbsTracks

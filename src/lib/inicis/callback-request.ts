@@ -29,7 +29,7 @@ const hasValidFields = (entries: Iterable<[string, string]>) => {
 
 export const validateInicisCallbackQuery = (
   url: string,
-): { ok: true; params: URLSearchParams } | { ok: false; reason: "too_large" } => {
+): { ok: true; params: URLSearchParams } | { ok: false; reason: "invalid" | "too_large" } => {
   const parsed = new URL(url);
   if (byteLength(parsed.search) > INICIS_CALLBACK_MAX_QUERY_BYTES) {
     return { ok: false, reason: "too_large" };
@@ -37,6 +37,8 @@ export const validateInicisCallbackQuery = (
   if (!hasValidFields(parsed.searchParams.entries())) {
     return { ok: false, reason: "too_large" };
   }
+  const keys = Array.from(parsed.searchParams.keys());
+  if (new Set(keys).size !== keys.length) return { ok: false, reason: "invalid" };
   return { ok: true, params: parsed.searchParams };
 };
 
@@ -66,19 +68,31 @@ export const readBoundedInicisCallbackForm = async (
       form = await boundedRequest.formData();
     } else {
       const text = new TextDecoder("utf-8", { fatal: true }).decode(body.bytes);
-      const params = new URLSearchParams(text);
       form = new FormData();
-      params.forEach((value, key) => form.append(key, value));
+      for (const field of text.split("&")) {
+        if (!field) continue;
+        const separator = field.indexOf("=");
+        const key = separator < 0 ? field : field.slice(0, separator);
+        const value = separator < 0 ? "" : field.slice(separator + 1);
+        // URLSearchParams replaces malformed UTF-8/percent escapes silently.
+        // Authentication tokens must survive decoding without normalization.
+        form.append(
+          decodeURIComponent(key.replace(/\+/g, " ")),
+          decodeURIComponent(value.replace(/\+/g, " ")),
+        );
+      }
     }
   } catch {
     return { ok: false, reason: "invalid" };
   }
 
   const stringEntries: Array<[string, string]> = [];
+  const seen = new Set<string>();
   for (const [key, value] of form.entries()) {
-    if (typeof value !== "string") {
+    if (typeof value !== "string" || seen.has(key)) {
       return { ok: false, reason: "invalid" };
     }
+    seen.add(key);
     stringEntries.push([key, value]);
   }
   if (!hasValidFields(stringEntries)) {

@@ -76,3 +76,12 @@ test("source genre order determines the single checked genre", async () => {
     assert.ok(request.includes(expected), genre);
   }
 });
+
+test("WBS documents honor the applicant's selected tracks before title-first defaults", async () => {
+  const input = fixture();
+  input.submission.is_oneclick = false;
+  input.tracks = [1, 2, 3, 4].map(number => ({ track_no: number, track_title: `선택곡${number}`, is_title: number === 1, broadcast_selected: number > 1, lyrics: "한글 가사" }));
+  const wbs = texts(await buildReviewDocsZip([input])).find(doc => doc.name.includes("WBS신청서"))!.text;
+  assert.match(wbs, /선택곡2, 선택곡3, 선택곡4/);
+  assert.doesNotMatch(wbs, /선택곡1/);
+});

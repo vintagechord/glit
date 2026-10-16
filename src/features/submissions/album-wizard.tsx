@@ -3,6 +3,12 @@
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 import { watchUploadProgress } from "@/lib/upload-watchdog";
+import {
+  clearMultipartResumeState,
+  loadMultipartResumeState,
+  saveMultipartResumeState,
+  runMultipartWorkers,
+} from "@/lib/multipart-upload-client";
 import * as React from "react";
 import { Info } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -1188,8 +1194,8 @@ export function AlbumWizard({
     if (!packageConfirmTarget) return;
     setSelectedPackage(packageConfirmTarget);
     setPackageConfirmTarget(null);
-    setApplicationFormMode("online");
-    setStep(3);
+    if (isOneClick) setApplicationFormMode("online");
+    setStep(isOneClick ? 3 : 2);
   };
 
   const handleCancelPackage = () => setPackageConfirmTarget(null);
@@ -1600,6 +1606,10 @@ export function AlbumWizard({
     }
     let invalidNotice: string | null = null;
     const filtered = selected.filter((file) => {
+      if (file.size === 0) {
+        invalidNotice = "빈 파일은 업로드할 수 없습니다. 파일을 확인해주세요.";
+        return false;
+      }
       if (file.size > uploadMaxBytes) {
         invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
         return false;
@@ -1644,8 +1654,8 @@ export function AlbumWizard({
         localKey,
       });
     });
-    if (nextUploads.length === uploads.length) return;
-    setNotice({});
+    if (nextUploads.length === uploads.length && !nextUploads.some((upload) => upload.status === "error")) return;
+    setNotice(invalidNotice ? { error: invalidNotice } : {});
     setFiles(nextFileEntries);
     setUploads(nextUploads);
     setFileDigest("");
@@ -1804,57 +1814,8 @@ export function AlbumWizard({
       xhr.send(blob);
     });
 
-  type MultipartResumeState = {
-    grantId: string;
-    uploadId: string;
-    key: string;
-    partSize: number;
-    parts: Record<number, string>;
-    createdAt: number;
-  };
-
   const buildMultipartResumeKey = (submissionId: string, file: File) =>
     `album-multipart:${submissionId}:${file.name}:${file.size}:${file.lastModified}`;
-
-  const loadMultipartResumeState = (
-    resumeKey: string,
-  ): MultipartResumeState | null => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(resumeKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as MultipartResumeState;
-      if (!parsed.grantId || !parsed.uploadId || !parsed.key || !parsed.partSize) {
-        window.localStorage.removeItem(resumeKey);
-        return null;
-      }
-      if (Date.now() - (parsed.createdAt ?? 0) > 24 * 60 * 60 * 1_000) {
-        window.localStorage.removeItem(resumeKey);
-        return null;
-      }
-      return parsed;
-    } catch {
-      window.localStorage.removeItem(resumeKey);
-      return null;
-    }
-  };
-
-  const saveMultipartResumeState = (
-    resumeKey: string,
-    state: MultipartResumeState,
-  ) => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(resumeKey, JSON.stringify(state));
-    } catch {
-      // Upload remains usable when private browsing disables localStorage.
-    }
-  };
-
-  const clearMultipartResumeState = (resumeKey: string) => {
-    if (typeof window === "undefined") return;
-    window.localStorage.removeItem(resumeKey);
-  };
 
   const presignMultipartParts = async (params: {
     grantId: string;
@@ -1993,7 +1954,6 @@ export function AlbumWizard({
       }
     });
 
-    let cursor = 0;
     const uploadPart = async (partNumber: number) => {
       const start = (partNumber - 1) * partSize;
       const end = Math.min(start + partSize, file.size);
@@ -2043,23 +2003,14 @@ export function AlbumWizard({
           });
           return;
         } catch (error) {
+          urlMap.delete(partNumber);
           if (attempt >= 5) throw error;
           await sleep(Math.min(2_000, 400 * 2 ** attempt));
         }
       }
     };
 
-    const workers = Array.from(
-      { length: Math.min(getMultipartConcurrency(), partsToUpload.length) },
-      async () => {
-        while (cursor < partsToUpload.length) {
-          const partNumber = partsToUpload[cursor];
-          cursor += 1;
-          await uploadPart(partNumber);
-        }
-      },
-    );
-    await Promise.all(workers);
+    await runMultipartWorkers(partsToUpload, getMultipartConcurrency(), uploadPart);
 
     const completeResponse = await fetchWithTimeout("/api/uploads/multipart/complete", {
       method: "POST",
@@ -4647,8 +4598,8 @@ export function AlbumWizard({
                 <button
                   type="button"
                   onClick={() => {
-                    setApplicationFormMode("online");
-                    setStep(3);
+                    if (isOneClick) setApplicationFormMode("online");
+                    setStep(isOneClick ? 3 : 2);
                   }}
                   disabled={!selectedPackage}
                   className="rounded-full bg-foreground px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 hover:bg-[#f6d64a] hover:text-black disabled:cursor-not-allowed disabled:bg-muted"
@@ -5733,6 +5684,19 @@ export function AlbumWizard({
                   </label>
                 </div>
                 <div className="mt-4 space-y-3">
+                  {uploads.some((upload) => upload.status === "error") && (
+                    <button
+                      type="button"
+                      disabled={uploadInProgress}
+                      onClick={() => {
+                        setNotice({});
+                        void uploadFiles().catch(() => undefined);
+                      }}
+                      className="min-h-11 rounded-full border border-foreground px-4 py-2 text-xs font-semibold disabled:opacity-50"
+                    >
+                      실패한 파일 다시 업로드
+                    </button>
+                  )}
                   {uploads.map((upload, index) => (
                     <div
                       key={`${upload.name}-${index}`}
@@ -5758,7 +5722,7 @@ export function AlbumWizard({
                           )}
                           <button
                             type="button"
-                            disabled={upload.status === "uploading"}
+                            disabled={uploadInProgress}
                             onClick={() => {
                               const removedUpload = uploads[index];
                               if (!removedUpload) return;

@@ -20,10 +20,12 @@ import {
   stationReviewStatusOptions,
 } from "@/constants/review-status";
 import {
-  areTrackResultsEquivalent,
-  normalizeTrackResults,
-  summarizeTrackResults,
+  resolveStationTrackResults,
+  getStationReviewTracks,
+  isWbsReview,
 } from "@/lib/track-results";
+import { saveStationReview } from "@/lib/admin/station-review-save";
+import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
 import { sendResultEmail, sendSubmissionUpdateEmail } from "@/lib/email";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -154,28 +156,6 @@ const STATION_REVIEW_TRACK_RESULTS_COLUMN = "track_results_json";
 const STATION_REVIEW_TRACK_RESULTS_SELECT = `track_results:${STATION_REVIEW_TRACK_RESULTS_COLUMN}`;
 const LEGACY_TRACK_RESULTS_COLUMN = "track_results";
 const LEGACY_TRACK_RESULTS_SELECT = "track_results";
-
-const isMissingTrackResultsColumn = (error?: { code?: string; message?: string | null }) => {
-  if (!error) return false;
-  const msg = error.message?.toLowerCase() ?? "";
-  return (
-    error.code === "42703" ||
-    msg.includes("track_results_json") ||
-    msg.includes("track_results")
-  );
-};
-
-const shouldRetryWithUserSession = (error?: { code?: string; message?: string | null }) => {
-  if (!error) return false;
-  const msg = error.message?.toLowerCase() ?? "";
-  return (
-    error.code === "42501" ||
-    msg.includes("row level security") ||
-    msg.includes("permission") ||
-    msg.includes("invalid api key") ||
-    msg.includes("jwt")
-  );
-};
 
 const formatSupabaseError = (error?: { code?: string; message?: string | null } | null) => {
   if (!error) return "unknown error";
@@ -1121,503 +1101,70 @@ export async function updateStationReviewAction(
   }
 
   const supabase = createAdminClient();
-
-  const trackResultsInput = Array.isArray(parsed.data.trackResults)
-    ? parsed.data.trackResults
-    : [];
-  const hasTrackResultsInput = trackResultsInput.length > 0;
-  const trackResultsSample = trackResultsInput.slice(0, 2).map((item) => ({
-    track_id: item.trackId ?? null,
-    track_no: item.trackNo ?? null,
-    status: item.status,
-  }));
-  const baseLogContext = {
-    reviewId: parsed.data.reviewId ?? "new",
-    submissionId: parsed.data.submissionId,
-    stationId: parsed.data.stationId ?? "unknown",
-    status: parsed.data.status,
-    trackResultsInput: hasTrackResultsInput,
-    trackResultsCount: trackResultsInput.length,
-    trackResultsSample,
-  };
-
-  const { data: existing } = parsed.data.reviewId
-    ? await supabase
-        .from("station_reviews")
-        .select("id, submission_id, station_id, status")
-        .eq("id", parsed.data.reviewId)
-        .maybeSingle()
-    : { data: null };
-
-  const submissionId = existing?.submission_id ?? parsed.data.submissionId;
-  const stationId = existing?.station_id ?? parsed.data.stationId;
-  const logContext = { ...baseLogContext, stationId: stationId ?? "unknown" };
-
-  console.info("[station_review][save][start]", logContext);
-
-  if (!stationId) {
-    console.error("[station_review][save][error][missing_station]", logContext);
-    return { error: "방송국 ID를 확인할 수 없습니다." };
-  }
-
-  if (hasTrackResultsInput) {
-    const { data: albumTracks, error: albumError } = await supabase
-      .from("album_tracks")
-      .select("id, track_no")
-      .eq("submission_id", submissionId);
-    if (albumError) {
-      console.warn("[station_review][save][track_results][album_tracks_error]", {
-        ...logContext,
-        errorCode: albumError.code,
-        errorMessage: albumError.message,
-      });
-    } else {
-      const knownIds = new Set(
-        (albumTracks ?? [])
-          .map((track) => (typeof track.id === "string" ? track.id : null))
-          .filter((id): id is string => Boolean(id)),
-      );
-      const knownNos = new Set(
-        (albumTracks ?? [])
-          .map((track) =>
-            typeof track.track_no === "number" && Number.isFinite(track.track_no)
-              ? track.track_no
-              : null,
-          )
-          .filter((no): no is number => no !== null),
-      );
-      const unknownIds = trackResultsInput.filter(
-        (item) => item.trackId && !knownIds.has(item.trackId),
-      );
-      const unknownNos = trackResultsInput.filter(
-        (item) =>
-          !item.trackId &&
-          typeof item.trackNo === "number" &&
-          Number.isFinite(item.trackNo) &&
-          !knownNos.has(item.trackNo),
-      );
-      if (unknownIds.length > 0 || unknownNos.length > 0) {
-        console.warn("[station_review][save][track_results][album_tracks_mismatch]", {
-          ...logContext,
-          albumTrackCount: albumTracks?.length ?? 0,
-          unknownTrackIdSample: unknownIds.slice(0, 2).map((item) => item.trackId),
-          unknownTrackNoSample: unknownNos.slice(0, 2).map((item) => item.trackNo),
-        });
-      }
+  const input = parsed.data;
+  if (input.reviewId) {
+    const { data: existing, error } = await supabase.from("station_reviews")
+      .select("id, submission_id, station_id").eq("id", input.reviewId).maybeSingle();
+    if (error || !existing || existing.submission_id !== input.submissionId ||
+        (input.stationId && existing.station_id !== input.stationId)) {
+      return { error: "신청 내역과 방송국 정보를 다시 확인해주세요." };
     }
+    input.stationId = existing.station_id;
   }
+  if (!input.stationId) return { error: "방송국 ID를 확인할 수 없습니다." };
 
-  const statusRequested = parsed.data.status;
-  const trackSummary = hasTrackResultsInput ? summarizeTrackResults(trackResultsInput) : null;
-  const normalizedTrackResults = hasTrackResultsInput ? trackSummary?.results ?? [] : [];
-  const derivedStatus = null;
-
-  const basePayload: Record<string, unknown> = {
-    id: parsed.data.reviewId,
-    submission_id: submissionId,
-    station_id: stationId,
-    status: statusRequested,
-    result_note: parsed.data.resultNote || null,
-    updated_at: new Date().toISOString(),
-  };
-  const baseUpdatePayload: Record<string, unknown> = {
-    submission_id: submissionId,
-    station_id: stationId,
-    status: statusRequested,
-    result_note: parsed.data.resultNote || null,
-    updated_at: basePayload.updated_at,
-  };
-
-  console.info("[station_review][save][base][upsert][start]", {
-    ...logContext,
-    statusRequested,
-    derivedStatus,
+  let trackResults = input.trackResults;
+  if (trackResults?.length || ["APPROVED", "REJECTED"].includes(input.status)) {
+    const { data: albumTracks, error } = await supabase.from("album_tracks")
+      .select("id, track_no, track_title, track_title_kr, track_title_en, broadcast_selected")
+      .eq("submission_id", input.submissionId);
+    if (error) return { error: "접수된 트랙을 확인하지 못했습니다. 다시 시도해주세요." };
+    const { data: station, error: stationError } = await supabase.from("stations")
+      .select("code, name").eq("id", input.stationId).maybeSingle();
+    if (stationError || !station) return { error: "방송국 정보를 확인하지 못했습니다. 다시 시도해주세요." };
+    const knownTracks = getStationReviewTracks(albumTracks ?? [], station);
+    if (isWbsReview(station) && knownTracks.length > 3 && !trackResults?.length) {
+      return { error: "원음방송 심의 대상이 확인되지 않았습니다. 실제 심의한 3곡의 결과를 입력해주세요." };
+    }
+    const seen = new Set<string>();
+    for (const track of trackResults ?? []) {
+      const matched = knownTracks.find((row) => track.trackId
+        ? row.id === track.trackId
+        : track.trackNo !== undefined && row.track_no === track.trackNo);
+      if (!matched || seen.has(matched.id)) {
+        return { error: "트랙 결과가 신청서의 곡 목록과 일치하지 않습니다. 화면을 새로고침해주세요." };
+      }
+      seen.add(matched.id);
+    }
+    if (isWbsReview(station) && (trackResults ?? []).filter((track) => track.status !== "PENDING").length > 3) {
+      return { error: "원음방송은 최대 3곡만 심의할 수 있습니다. 실제 심의 대상 곡의 결과만 입력해주세요." };
+    }
+    // Preserve missing decisions as pending, and support old station-only results.
+    const resolved = resolveStationTrackResults(trackResults, knownTracks, input.status, station);
+    trackResults = resolved.length ? resolved.map((track) => ({
+      trackId: track.track_id ?? undefined,
+      trackNo: track.track_no ?? undefined,
+      title: track.title ?? undefined,
+      status: track.status as "PENDING" | "APPROVED" | "REJECTED",
+    })) : undefined;
+  }
+  const result = await saveStationReview(supabase, {
+    reviewId: input.reviewId,
+    submissionId: input.submissionId,
+    stationId: input.stationId,
+    status: input.status,
+    resultNote: input.resultNote,
+    trackResults,
   });
-
-  const runBaseSave = async (client: SupabaseClient) => {
-    if (parsed.data.reviewId) {
-      const { data, error } = await client
-        .from("station_reviews")
-        .update(baseUpdatePayload)
-        .eq("id", parsed.data.reviewId)
-        .select("id, submission_id, station_id, status, result_note, updated_at");
-      if (!error && (!data || data.length === 0)) {
-        const insertResult = await client
-          .from("station_reviews")
-          .insert(basePayload)
-          .select("id, submission_id, station_id, status, result_note, updated_at");
-        return insertResult;
-      }
-      return { data, error };
-    }
-
-    if (stationId) {
-      const { data, error } = await client
-        .from("station_reviews")
-        .update(baseUpdatePayload)
-        .eq("submission_id", submissionId)
-        .eq("station_id", stationId)
-        .select("id, submission_id, station_id, status, result_note, updated_at");
-      if (!error && (!data || data.length === 0)) {
-        const insertResult = await client
-          .from("station_reviews")
-          .insert(basePayload)
-          .select("id, submission_id, station_id, status, result_note, updated_at");
-        return insertResult;
-      }
-      return { data, error };
-    }
-
-    return {
-      data: null,
-      error: { message: "station_id missing" } as { message: string },
-    };
-  };
-
-  let { data: upserted, error: baseError } = await runBaseSave(supabase);
-
-  if (baseError && shouldRetryWithUserSession(baseError)) {
-    const retryMeta = {
-      errorCode: "code" in baseError ? baseError.code : undefined,
-      errorMessage: baseError.message,
-    };
-    console.warn("[station_review][save][base][upsert][retry-user-session]", {
-      ...logContext,
-      ...retryMeta,
-    });
-    const userClient = await createServerSupabase();
-    const retry = await runBaseSave(userClient as SupabaseClient);
-    upserted = retry.data;
-    baseError = retry.error;
-  }
-
-  if (baseError) {
-    const baseErrorMeta = {
-      errorCode: "code" in baseError ? baseError.code : undefined,
-      errorMessage: baseError.message,
-      errorDetails: "details" in baseError ? baseError.details : undefined,
-      errorHint: "hint" in baseError ? baseError.hint : undefined,
-    };
-    console.error("[station_review][save][base][upsert][error]", {
-      ...logContext,
-      ...baseErrorMeta,
-      errorStack: (baseError as Error)?.stack,
-      error: baseError,
-    });
-    if (process.env.NODE_ENV === "development") {
-      throw new Error(`station_reviews upsert failed: ${baseError.message}`);
-    }
-    return {
-      error: `방송국 상태 업데이트에 실패했습니다. ${formatSupabaseError(baseError)}`,
-    };
-  }
-
-  let warning: string | undefined;
-  let trackUpdateAttempted = false;
-  let trackUpdateSucceeded = false;
-  let updatedRow = upserted?.[0];
-  let trackResultsColumnUsed: "dual" | "track_results_json" | "track_results" | null =
-    null;
-
-  if (hasTrackResultsInput && normalizedTrackResults.length > 0) {
-    trackUpdateAttempted = true;
-    const buildTrackPayload = (columns: string[]) => {
-      const payload: Record<string, unknown> = {
-        updated_at: new Date().toISOString(),
-      };
-      columns.forEach((column) => {
-        payload[column] = normalizedTrackResults;
-      });
-      if (derivedStatus) {
-        payload.status = derivedStatus;
-      }
-      return payload;
-    };
-
-    console.info("[station_review][save][track_results][update][start]", {
-      ...logContext,
-      derivedStatus,
-      trackResultsCount: normalizedTrackResults.length,
-      trackResultsSample: normalizedTrackResults.slice(0, 2),
-    });
-
-    type TrackUpdateRow = {
-      id?: string | null;
-      submission_id?: string | null;
-      station_id?: string | null;
-      status?: string | null;
-      result_note?: string | null;
-      updated_at?: string | null;
-    };
-
-    const updateWithPayload = async (
-      client: SupabaseClient,
-      payload: Record<string, unknown>,
-    ) => {
-      let query = client.from("station_reviews").update(payload);
-      if (parsed.data.reviewId) {
-        query = query.eq("id", parsed.data.reviewId);
-      } else {
-        query = query.eq("submission_id", submissionId).eq("station_id", stationId);
-      }
-      const { data, error } = await query.select(
-        "id, submission_id, station_id, status, result_note, updated_at",
-      );
-      return { data: (data as TrackUpdateRow[] | null) ?? null, error };
-    };
-
-    const buildStringTrackPayload = (columns: string[]) => {
-      const payload: Record<string, unknown> = {
-        updated_at: new Date().toISOString(),
-      };
-      const serialized = JSON.stringify(normalizedTrackResults);
-      columns.forEach((column) => {
-        payload[column] = serialized;
-      });
-      if (derivedStatus) {
-        payload.status = derivedStatus;
-      }
-      return payload;
-    };
-
-    const isTrackResultsTypeError = (error?: { code?: string; message?: string | null }) => {
-      if (!error) return false;
-      const msg = error.message?.toLowerCase() ?? "";
-      return (
-        error.code === "22P02" ||
-        error.code === "42804" ||
-        msg.includes("invalid input syntax for type json") ||
-        (msg.includes("json") && msg.includes("text")) ||
-        msg.includes("cannot cast") ||
-        msg.includes("type json")
-      );
-    };
-
-    let { data: trackUpdated, error: trackError } = await updateWithPayload(
-      supabase,
-      buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN, LEGACY_TRACK_RESULTS_COLUMN]),
-    );
-    trackResultsColumnUsed = "dual";
-
-    if (trackError && shouldRetryWithUserSession(trackError)) {
-      console.warn("[station_review][save][track_results][update][retry-user-session]", {
-        ...logContext,
-        errorCode: trackError.code,
-        errorMessage: trackError.message,
-      });
-      const userClient = await createServerSupabase();
-      ({ data: trackUpdated, error: trackError } = await updateWithPayload(
-        userClient as SupabaseClient,
-        buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN, LEGACY_TRACK_RESULTS_COLUMN]),
-      ));
-      trackResultsColumnUsed = "dual";
-    }
-
-    if (trackError && isMissingTrackResultsColumn(trackError)) {
-      const message = trackError.message?.toLowerCase() ?? "";
-      const missingJson = message.includes("track_results_json");
-      const missingLegacy = message.includes("track_results");
-
-      console.warn("[station_review][save][track_results][update][fallback]", {
-        ...logContext,
-        errorCode: trackError.code,
-        errorMessage: trackError.message,
-      });
-
-      if (missingJson && !missingLegacy) {
-        ({ data: trackUpdated, error: trackError } = await updateWithPayload(
-          supabase,
-          buildTrackPayload([LEGACY_TRACK_RESULTS_COLUMN]),
-        ));
-        trackResultsColumnUsed = LEGACY_TRACK_RESULTS_COLUMN;
-      } else if (missingLegacy && !missingJson) {
-        ({ data: trackUpdated, error: trackError } = await updateWithPayload(
-          supabase,
-          buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN]),
-        ));
-        trackResultsColumnUsed = STATION_REVIEW_TRACK_RESULTS_COLUMN;
-      } else {
-        ({ data: trackUpdated, error: trackError } = await updateWithPayload(
-          supabase,
-          buildTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN]),
-        ));
-        trackResultsColumnUsed = STATION_REVIEW_TRACK_RESULTS_COLUMN;
-        if (trackError && isMissingTrackResultsColumn(trackError)) {
-          ({ data: trackUpdated, error: trackError } = await updateWithPayload(
-            supabase,
-            buildTrackPayload([LEGACY_TRACK_RESULTS_COLUMN]),
-          ));
-          trackResultsColumnUsed = LEGACY_TRACK_RESULTS_COLUMN;
-        }
-      }
-    }
-
-    if (trackError && shouldRetryWithUserSession(trackError)) {
-      console.warn("[station_review][save][track_results][update][retry-user-session:fallback]", {
-        ...logContext,
-        errorCode: trackError.code,
-        errorMessage: trackError.message,
-      });
-      const userClient = await createServerSupabase();
-      ({ data: trackUpdated, error: trackError } = await updateWithPayload(
-        userClient as SupabaseClient,
-        buildTrackPayload(
-          trackResultsColumnUsed === LEGACY_TRACK_RESULTS_COLUMN
-            ? [LEGACY_TRACK_RESULTS_COLUMN]
-            : trackResultsColumnUsed === STATION_REVIEW_TRACK_RESULTS_COLUMN
-              ? [STATION_REVIEW_TRACK_RESULTS_COLUMN]
-              : [STATION_REVIEW_TRACK_RESULTS_COLUMN],
-        ),
-      ));
-    }
-
-    if (trackError && isTrackResultsTypeError(trackError)) {
-      console.warn("[station_review][save][track_results][update][retry-stringify]", {
-        ...logContext,
-        errorCode: trackError.code,
-        errorMessage: trackError.message,
-        columnHint: trackResultsColumnUsed,
-      });
-      const columns =
-        trackResultsColumnUsed === LEGACY_TRACK_RESULTS_COLUMN
-          ? [LEGACY_TRACK_RESULTS_COLUMN]
-          : trackResultsColumnUsed === STATION_REVIEW_TRACK_RESULTS_COLUMN
-            ? [STATION_REVIEW_TRACK_RESULTS_COLUMN]
-            : [STATION_REVIEW_TRACK_RESULTS_COLUMN, LEGACY_TRACK_RESULTS_COLUMN];
-      ({ data: trackUpdated, error: trackError } = await updateWithPayload(
-        supabase,
-        buildStringTrackPayload(columns),
-      ));
-      if (trackError && isMissingTrackResultsColumn(trackError)) {
-        const message = trackError.message?.toLowerCase() ?? "";
-        const missingJson = message.includes("track_results_json");
-        const missingLegacy = message.includes("track_results");
-        if (missingJson && !missingLegacy) {
-          ({ data: trackUpdated, error: trackError } = await updateWithPayload(
-            supabase,
-            buildStringTrackPayload([LEGACY_TRACK_RESULTS_COLUMN]),
-          ));
-          trackResultsColumnUsed = LEGACY_TRACK_RESULTS_COLUMN;
-        } else if (missingLegacy && !missingJson) {
-          ({ data: trackUpdated, error: trackError } = await updateWithPayload(
-            supabase,
-            buildStringTrackPayload([STATION_REVIEW_TRACK_RESULTS_COLUMN]),
-          ));
-          trackResultsColumnUsed = STATION_REVIEW_TRACK_RESULTS_COLUMN;
-        }
-      }
-    }
-
-    if (trackError) {
-      const fallbackMessage = trackError.message ?? "track_results_json update error";
-      warning = isMissingTrackResultsColumn(trackError)
-        ? "TRACK_RESULTS_COLUMN_MISSING: station_reviews.track_results_json 컬럼이 없어 트랙별 적격/부적격 결과를 저장하지 못했습니다. 최신 DB 마이그레이션을 적용하세요."
-        : `TRACK_RESULTS_SAVE_FAILED: ${fallbackMessage}`;
-      console.error("[station_review][save][track_results][update][error]", {
-        ...logContext,
-        errorCode: trackError.code,
-        errorMessage: trackError.message,
-        errorDetails: trackError.details,
-        errorHint: trackError.hint,
-        errorStack: (trackError as Error)?.stack,
-        error: trackError,
-      });
-      if (process.env.NODE_ENV === "development") {
-        throw new Error(`station_reviews track_results_json update failed: ${fallbackMessage}`);
-      }
-      return { error: warning };
-    } else {
-      trackUpdateSucceeded = true;
-      updatedRow = (trackUpdated?.[0] as typeof updatedRow) ?? updatedRow;
-      if (trackResultsColumnUsed === LEGACY_TRACK_RESULTS_COLUMN) {
-        warning =
-          warning ??
-          "TRACK_RESULTS_LEGACY_COLUMN_USED: station_reviews.track_results 컬럼을 사용 중입니다. 최신 DB 마이그레이션을 적용하세요.";
-      }
-    }
-  }
-
-  const refetchSelect =
-    trackUpdateSucceeded && trackResultsColumnUsed === LEGACY_TRACK_RESULTS_COLUMN
-      ? `id, submission_id, station_id, status, result_note, ${LEGACY_TRACK_RESULTS_SELECT}, updated_at`
-      : trackUpdateSucceeded
-        ? `id, submission_id, station_id, status, result_note, ${STATION_REVIEW_TRACK_RESULTS_SELECT}, updated_at`
-        : "id, submission_id, station_id, status, result_note, updated_at";
-
-  const { data: fetchedRowRaw, error: refetchError } = await supabase
-    .from("station_reviews")
-    .select(refetchSelect)
-    .eq("submission_id", submissionId)
-    .eq("station_id", stationId)
-    .maybeSingle();
-
-  const effectiveRow = (fetchedRowRaw ?? updatedRow) as AdminActionState["row"] | null;
-  const expectedStatus = statusRequested;
-  const statusMatches = effectiveRow?.status === expectedStatus;
-  const tracksMatch =
-    !trackUpdateSucceeded ||
-    areTrackResultsEquivalent(effectiveRow?.track_results, normalizedTrackResults);
-
-  if (!statusMatches || !tracksMatch) {
-    const effectiveTrackResults = effectiveRow?.track_results;
-    const effectiveTrackType = Array.isArray(effectiveTrackResults)
-      ? "array"
-      : effectiveTrackResults === null
-        ? "null"
-        : typeof effectiveTrackResults;
-    const normalizedEffectiveSample = normalizeTrackResults(effectiveTrackResults).slice(
-      0,
-      2,
-    );
-    const normalizedInputSample = normalizeTrackResults(normalizedTrackResults).slice(0, 2);
-    console.error("[station_review][save][mismatch]", {
-      ...logContext,
-      savedRow: effectiveRow,
-      expectedStatus,
-      expectedTracksLen: trackUpdateSucceeded ? normalizedTrackResults?.length ?? 0 : 0,
-      trackUpdateAttempted,
-      trackUpdateSucceeded,
-      effectiveTrackType,
-      normalizedEffectiveSample,
-      normalizedInputSample,
-      refetchError,
-    });
-    if (!statusMatches) {
-      return { error: "방송국 상태 저장 결과가 반영되지 않았습니다." };
-    }
-    if (!warning) {
-      return { error: "방송국 상태 저장 결과가 반영되지 않았습니다." };
-    }
-  }
-
-  const statusSyncWarning = await syncSubmissionStatusFromStationStatus(
+  if (result.error || !result.row) return result;
+  const warning = await syncSubmissionStatusFromStationStatus(
     supabase,
-    submissionId,
-    statusRequested,
-    logContext,
+    input.submissionId,
+    result.row.status as StationReviewStatusValue,
+    { submissionId: input.submissionId, stationId: input.stationId },
   );
-  warning = warning ?? statusSyncWarning ?? undefined;
-
-  await insertEvent(
-    submissionId,
-    `방송국 상태 변경: ${expectedStatus}`,
-    "STATION_UPDATE",
-  );
-
-  console.info("[station_review][save][success]", {
-    ...logContext,
-    savedId: effectiveRow?.id,
-    refetched: Boolean(fetchedRowRaw),
-    trackUpdateAttempted,
-    trackUpdateSucceeded,
-    warning,
-  });
-
-  return {
-    message: "방송국 상태가 업데이트되었습니다.",
-    warning,
-    row: effectiveRow ?? undefined,
-  };
+  await insertEvent(input.submissionId, `방송국 상태 변경: ${result.row.status}`, "STATION_UPDATE");
+  return { message: "심의 결과가 저장되었습니다.", row: result.row, warning: result.warning ?? warning ?? undefined };
 }
 
 export async function updateStationReviewFormAction(
@@ -1768,6 +1315,13 @@ export async function updateStationReviewFormAction(
     trackResultsWarnings,
   });
 
+  if (trackResultsWarnings.length > 0) {
+    redirect(buildSubmissionFormRedirect(formData, submissionId, {
+      saved: "station_error",
+      savedError: "트랙 결과 형식이 올바르지 않아 저장하지 않았습니다. 화면을 새로고침 후 다시 시도해주세요.",
+    }));
+  }
+
   const result = await updateStationReviewAction({
     reviewId: reviewId || undefined,
     submissionId,
@@ -1798,7 +1352,9 @@ export async function updateStationReviewFormAction(
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidateUserDashboards(submissionId);
     const stationStatusLabel =
-      stationReviewStatusOptions.find((option) => option.value === status)?.label ?? status;
+      result.row
+        ? getStationReviewDisplayStatus(result.row).label
+        : stationReviewStatusOptions.find((option) => option.value === status)?.label ?? status;
     await sendSubmissionUpdateNotificationById({
       submissionId,
       headline: "방송국 진행 정보가 업데이트되었습니다.",

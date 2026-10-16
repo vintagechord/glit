@@ -58,11 +58,11 @@ test("Inicis grants are issued only after gateway binding, never for known-oid f
   assert.match(returnHandler, /setPaymentResultGrantCookie\(response, grant\)/);
   assert.match(
     returnHandler,
-    /const buildVerifiedGuestBridgeRedirect = \([\s\S]*!callbackStateVerified[\s\S]*!approvalSignatureVerified[\s\S]*return response;/,
+    /const buildVerifiedGuestBridgeRedirect = \([\s\S]*!callbackStateVerified[\s\S]*!gatewayReceiptVerified[\s\S]*return response;/,
   );
   assert.equal(
     returnHandler.match(
-      /approval\.ok && localSigMatch === true/g,
+      /approval\.ok && bindingError === null/g,
     )?.length,
     2,
   );

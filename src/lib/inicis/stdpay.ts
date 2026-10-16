@@ -46,7 +46,21 @@ export const buildStdPayRequest = (
 ) => {
   const config = getStdPayConfig();
   const oid = params.orderId ?? makeOrderId("SUB");
-  const price = Math.max(0, params.amountKrw);
+  const price = params.amountKrw;
+  if (!Number.isSafeInteger(price) || price <= 0 || String(price).length > 12) {
+    throw new Error("결제 금액이 유효하지 않습니다.");
+  }
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(oid)) {
+    throw new Error("결제 주문번호가 유효하지 않습니다.");
+  }
+  const label = (value: string, limit: number) => {
+    let result = "";
+    for (const character of value.replace(/[\u0000-\u001f\u007f]/g, " ")) {
+      if (Buffer.byteLength(result + character, "utf8") > limit) break;
+      result += character;
+    }
+    return result;
+  };
 
   const signature = makeStdPaySignature({
     oid,
@@ -76,8 +90,11 @@ export const buildStdPayRequest = (
     signature,
     verification,
     mKey,
-    goodname: params.productName,
-    buyername: params.buyerName,
+    use_chkfake: "Y",
+    acceptmethod: billing ? "BILLAUTH(Card):centerCd(Y)" : "centerCd(Y)",
+    charset: "UTF-8",
+    goodname: label(params.productName, 40),
+    buyername: label(params.buyerName, 30),
     buyertel: params.buyerTel ?? "",
     buyeremail: params.buyerEmail ?? "",
     returnUrl: params.returnUrl,
@@ -85,8 +102,6 @@ export const buildStdPayRequest = (
     ...(merchantData ? { merchantData } : {}),
     ...(billing
       ? {
-          use_chkfake: "Y",
-          acceptmethod: "BILLAUTH(Card):centerCd(Y)",
           offerPeriod: billing.offerPeriod ?? "M2",
         }
       : {}),

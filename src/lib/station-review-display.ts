@@ -1,9 +1,10 @@
 import { normalizeStationReviewStatus } from "@/constants/review-status";
-import { summarizeTrackResults } from "@/lib/track-results";
+import { getStationReviewTracks, isWbsReview, resolveStationTrackResults, summarizeTrackResults, type AlbumTrackMeta } from "@/lib/track-results";
 
 type StationDisplayInput = {
   status?: string | null;
   track_results?: unknown;
+  station?: { code?: string | null; name?: string | null } | null;
 };
 
 export type StationDisplayStatusKey =
@@ -49,7 +50,7 @@ const statusMap: Record<StationDisplayStatusKey, StationDisplayStatusBase> = {
     key: "NEEDS_FIX",
     label: "보완요청",
     tone: "bg-orange-500 text-white dark:bg-orange-300 dark:text-[#06111f]",
-    isComplete: true,
+    isComplete: false,
     needsAttention: true,
   },
   APPROVED: {
@@ -91,25 +92,42 @@ export function buildStationTrackSummaryText(
 
 export function getStationReviewDisplayStatus(
   review: StationDisplayInput,
-  options: { showPartialTrackBreakdown?: boolean } = {},
+  options: { showPartialTrackBreakdown?: boolean; albumTracks?: AlbumTrackMeta[] | null } = {},
 ) {
-  const summary = summarizeTrackResults(review.track_results);
+  const summary = summarizeTrackResults(resolveStationTrackResults(
+    review.track_results,
+    options.albumTracks,
+    review.status,
+    review.station,
+  ));
   const rawStatus = (review.status ?? "").toUpperCase();
-  const normalizedStatus = normalizeStationReviewStatus(review.status);
+  const normalizedStatus = normalizeStationReviewStatus(rawStatus);
 
   const base = (() => {
     if (normalizedStatus === "NEEDS_FIX") {
       return statusMap.NEEDS_FIX;
     }
-    if (summary.outcome === "REJECTED" || normalizedStatus === "REJECTED") {
+    if (rawStatus === "REJECTED") return statusMap.REJECTED;
+    if (options.albumTracks &&
+        getStationReviewTracks(options.albumTracks, review.station, review.track_results).length > 3 &&
+        isWbsReview(review.station)) {
+      return { ...statusMap.WAITING_RESULT, label: "심의곡 확인 필요", needsAttention: true };
+    }
+    if (summary.outcome === "PENDING" && (summary.counts.approved > 0 || summary.counts.rejected > 0)) {
+      return statusMap.IN_REVIEW;
+    }
+    if (summary.outcome === "REJECTED") {
       return statusMap.REJECTED;
     }
     if (summary.outcome === "PARTIAL") {
       return statusMap.PARTIAL;
     }
-    if (summary.outcome === "APPROVED" || normalizedStatus === "APPROVED") {
+    if (summary.outcome === "APPROVED") {
       return statusMap.APPROVED;
     }
+    // A submission workflow state (RESULT_READY/COMPLETED) is not a station
+    // decision, and must never manufacture an approval for a missing review.
+    if (rawStatus === "APPROVED") return statusMap.APPROVED;
     if (rawStatus === "IN_PROGRESS" || rawStatus === "REVIEWING") {
       return statusMap.IN_REVIEW;
     }
@@ -120,7 +138,7 @@ export function getStationReviewDisplayStatus(
   })();
 
   const summaryText =
-    summary.outcome === "PARTIAL" && options.showPartialTrackBreakdown
+    (summary.counts.approved > 0 || summary.counts.rejected > 0) && options.showPartialTrackBreakdown
       ? buildStationTrackSummaryText(summary.counts, " / ")
       : null;
 
