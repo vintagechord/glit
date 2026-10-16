@@ -190,7 +190,7 @@ const paymentFailureDraftNotice =
 const usesSubmissionCartCheckout = true;
 
 const selectedBadgeClass =
-  "inline-flex items-center rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
+  "inline-flex shrink-0 items-center whitespace-nowrap rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
 
 const isReviewTestPackage = (name?: string | null) =>
   name?.startsWith("[테스트]") ?? false;
@@ -4336,7 +4336,7 @@ export function AlbumWizard({
   }, [albumCheckpoint]);
 
   return (
-    <div ref={wizardRef} className="scroll-mt-36 space-y-8 text-[15px] leading-relaxed sm:scroll-mt-28 sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
+    <div ref={wizardRef} className="scroll-mt-36 min-w-0 space-y-8 text-[15px] leading-relaxed [overflow-wrap:anywhere] [&_input]:min-w-0 [&_select]:min-w-0 sm:scroll-mt-28 sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving || isAddingAlbum}
         label={step <= 5 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
@@ -4662,7 +4662,7 @@ export function AlbumWizard({
           </div>
 
           {step === 3 && isDownloadedApplicationFlow ? (
-            <div className="rounded-[28px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+            <div className="rounded-[28px] border-2 border-[#111111] bg-card p-4 sm:p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
               <div className="flex flex-wrap gap-3">
                 {albumApplicationForms.map((form) => (
                   <a
@@ -4728,7 +4728,7 @@ export function AlbumWizard({
             <>
 
               {step === 3 && (
-                <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
                 {isOneClick && (
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                     기본 정보
@@ -5019,7 +5019,7 @@ export function AlbumWizard({
               )}
 
               {step === 4 && !isOneClick && (
-                <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
                   <div className="flex items-center justify-end">
                     <span className="text-xs text-muted-foreground">
                       총 {tracks.length}곡
@@ -5317,7 +5317,7 @@ export function AlbumWizard({
               )}
 
               {step === 4 && albumDrafts.length > 0 && (
-                <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+                <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                     등록 앨범 목록
                   </p>
@@ -5482,7 +5482,7 @@ export function AlbumWizard({
           </details>}
 
           {uploadDrafts && uploadDrafts.length > 0 && (!isOneClick || uploadDrafts.length > 1) && (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 업로드 앨범
               </p>
@@ -5546,7 +5546,7 @@ export function AlbumWizard({
           <div
             data-preflight-field="files"
             tabIndex={-1}
-            className="rounded-[28px] border border-border/60 bg-card/80 p-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {!initialArchiveEntry && <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
               {isDownloadedApplicationFlow ? "신청서와 음원 업로드" : "전체 음원 파일 업로드"}
@@ -5641,7 +5641,7 @@ export function AlbumWizard({
                       className="hidden"
                       disabled={!currentSubmissionId || isPreparingDraft || uploadInProgress}
                     />
-                    <div className="flex min-h-[120px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
+                    <div className="flex min-h-[120px] flex-col items-center justify-center text-center gap-3 rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
                       <span>
                         {currentSubmissionId
                           ? "파일 첨부 (드래그 앤 드롭 가능)"
@@ -5651,12 +5651,12 @@ export function AlbumWizard({
                       </span>
                       <span className="flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 break-all rounded-full border border-black bg-gradient-to-br from-black to-slate-900 px-3 py-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-white shadow-sm">
                         허용 형식:{" "}
-                        <span className="font-mono text-[12px]">
-                          {isOneClick
+                        <span className="break-normal font-mono text-[12px] tracking-normal">
+                          {(isOneClick
                             ? "WAV/ZIP"
                             : isDownloadedApplicationFlow
                             ? "WAV/MP3/ZIP/HWP/DOC/DOCX"
-                            : "WAV/MP3/ZIP"}
+                            : "WAV/MP3/ZIP").replaceAll("/", " · ")}
                         </span>
                         <span className="text-white/70">·</span>
                         최대 <span className="font-mono text-[12px]">{uploadMaxLabel}</span>
@@ -5702,11 +5702,11 @@ export function AlbumWizard({
                       key={`${upload.name}-${index}`}
                       className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <span className="min-w-0 flex-1 break-all font-semibold text-foreground">
                           {upload.name}
                         </span>
-                        <div className="flex shrink-0 items-center gap-3">
+                        <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
                           {upload.status === "done" ? (
                             <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
                               첨부 완료
@@ -5928,7 +5928,7 @@ export function AlbumWizard({
 
           {isOneClick && !initialArchiveEntry && (
             <section aria-label="접수할 앨범 URL 확인" className="rounded-[20px] border-2 border-[#111111] bg-card p-5 dark:border-[#f2cf27] sm:p-6">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-base font-black">접수할 앨범 URL</h2>
                 <button type="button" onClick={() => setStep(3)} className="min-h-11 rounded-full border border-border px-4 py-2 text-xs font-semibold hover:border-foreground">
                   URL·접수자 정보 수정
@@ -6036,7 +6036,7 @@ export function AlbumWizard({
           </div>
 
           {isGuest && !usesSubmissionCartCheckout ? (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 결제 방식 선택
               </p>
@@ -6080,7 +6080,7 @@ export function AlbumWizard({
           ) : null}
 
           {isGuest && !usesSubmissionCartCheckout && paymentMethod === "BANK" && (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 무통장 입금 안내
               </p>
@@ -6272,8 +6272,8 @@ export function AlbumWizard({
                         사업자등록증 첨부
                       </label>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <label className="flex min-h-[48px] flex-1 cursor-pointer items-center justify-between rounded-2xl border border-dashed border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground transition hover:border-foreground hover:text-foreground">
-                          <span className="truncate">
+                        <label className="flex min-h-[48px] min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 rounded-2xl border border-dashed border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground transition hover:border-foreground hover:text-foreground">
+                          <span className="min-w-0 flex-1 truncate">
                             {taxInvoiceCertificateFile?.name ??
                               "PDF, JPG, PNG 파일 선택"}
                           </span>
@@ -6320,7 +6320,7 @@ export function AlbumWizard({
           )}
 
           {isGuest && !usesSubmissionCartCheckout && paymentMethod === "CARD" && (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6 text-sm text-muted-foreground">
               카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
             </div>
           )}
@@ -6358,7 +6358,7 @@ export function AlbumWizard({
       )}
 
       {step === 7 && (
-        <div className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-center sm:rounded-[32px] sm:p-10">
+        <div className="rounded-[24px] border border-border/60 bg-card/80 p-4 sm:p-6 text-center sm:rounded-[32px] sm:p-10">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
             ✓
           </div>

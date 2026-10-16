@@ -47,13 +47,13 @@ const stageTone: Record<string, string> = {
 };
 
 const outlineControlClass =
-  "inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
+  "inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
 
 const dangerControlClass =
-  "inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
+  "inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
 
 const smallDangerControlClass =
-  "inline-flex h-9 w-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
+  "inline-flex h-11 w-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
 
 const getStageLabel = (item: SubmissionItem) => {
   if (["RESULT_READY", "COMPLETED"].includes(item.status)) {
@@ -83,13 +83,13 @@ function Thumbnail({ name, src }: { name: string; src: string | null }) {
   const initial = (name || "A").trim().charAt(0).toUpperCase() || "A";
   if (!src) {
     return (
-      <div className="flex h-14 w-14 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-lg font-black text-[#111111] shadow-[3px_3px_0_var(--bauhaus-shadow)]">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-lg font-black text-[#111111] shadow-[3px_3px_0_var(--bauhaus-shadow)]">
         {initial}
       </div>
     );
   }
   return (
-    <div className="relative h-14 w-14 overflow-hidden rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] shadow-[3px_3px_0_var(--bauhaus-shadow)]">
+    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] shadow-[3px_3px_0_var(--bauhaus-shadow)]">
       <Image src={src} alt={name} fill sizes="56px" unoptimized className="object-cover" />
     </div>
   );
@@ -113,14 +113,14 @@ function SubmissionManagementRow({
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   return (
     <div
-      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center ${
+      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 @sm:grid-cols-[auto_minmax(0,1fr)_auto] @sm:items-center ${
         selected
           ? "rounded-[8px] bg-[rgba(242,207,39,0.22)] shadow-[2px_2px_0_var(--bauhaus-shadow)]"
           : "rounded-[8px] hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
       }`}
     >
       <label
-        className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] border-2 border-[var(--bauhaus-ink)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
+        className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[6px] border-2 border-[var(--bauhaus-ink)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
           selected
             ? "bg-[var(--foreground)] text-[var(--background)]"
             : "bg-[var(--background)] text-[var(--foreground)]"
@@ -150,16 +150,16 @@ function SubmissionManagementRow({
       <Link
         href={`${localePrefix}/dashboard/submissions/${encodeURIComponent(item.id)}`}
         prefetch={false}
-        className="min-w-0"
+        className="flex min-h-11 min-w-0 flex-col justify-center"
       >
-        <p className="truncate font-semibold text-foreground">
+        <p className="font-semibold leading-6 text-foreground [overflow-wrap:anywhere]">
           {item.title || "제목 미입력"}
         </p>
         <p className="truncate text-xs text-muted-foreground">
           {formatDate(item.created_at)}
         </p>
       </Link>
-      <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 sm:col-start-auto sm:justify-end">
+      <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 @sm:col-start-auto @sm:justify-end">
         <StatusChip label={getStageLabel(item)} />
         <button
           type="button"
@@ -209,12 +209,12 @@ function ArtistCard({
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
 
   return (
-    <div className="overflow-hidden rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--card)] p-4 shadow-[5px_5px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <div className="@container min-w-0 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--card)] p-4 shadow-[5px_5px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5">
+      <div className="grid gap-3 @sm:grid-cols-[minmax(0,1fr)_auto] @sm:items-center">
         <div className="flex min-w-0 items-center gap-3">
           <Thumbnail name={group.artistName} src={group.thumbnail} />
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <p className="truncate text-base font-semibold text-foreground">
+            <p className="text-base font-semibold leading-6 text-foreground [overflow-wrap:anywhere]">
               {group.artistName}
             </p>
             <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-black text-muted-foreground">
@@ -222,7 +222,7 @@ function ArtistCard({
             </span>
           </div>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 @sm:justify-end">
           {group.artistId ? (
             <Link
               href={`${localePrefix}/dashboard/artists/${encodeURIComponent(group.artistId)}`}
@@ -443,7 +443,7 @@ export function ArtistHistoryTabs({
           <button
             type="button"
             onClick={() => setTab("ALBUM")}
-            className={`inline-flex h-9 items-center justify-center rounded-[8px] border-2 px-4 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
+            className={`inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 px-4 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
               tab === "ALBUM"
                 ? "border-[var(--bauhaus-ink)] bg-[var(--foreground)] text-[var(--background)]"
                 : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]"
@@ -454,7 +454,7 @@ export function ArtistHistoryTabs({
           <button
             type="button"
             onClick={() => setTab("MV")}
-            className={`inline-flex h-9 items-center justify-center rounded-[8px] border-2 px-4 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
+            className={`inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 px-4 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
               tab === "MV"
                 ? "border-[var(--bauhaus-ink)] bg-[var(--foreground)] text-[var(--background)]"
                 : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]"

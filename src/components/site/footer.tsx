@@ -323,7 +323,7 @@ export function SiteFooter() {
     <footer className="border-t-2 border-[#111111] bg-[#111111] text-[#f7f5ef] dark:border-[#f2cf27] dark:bg-[#0b0b0b]">
       <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <div className="grid gap-5 border-b-2 border-[#f2cf27] pb-5 md:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-2.5">
+          <div className="min-w-0 space-y-2.5 [overflow-wrap:anywhere]">
             <p className="w-fit bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-[#111111]">
               고객센터
             </p>
@@ -342,7 +342,7 @@ export function SiteFooter() {
               상담시간 {APP_CONFIG.supportHours}
             </p>
           </div>
-          <div className="space-y-2.5">
+          <div className="min-w-0 space-y-2.5 [overflow-wrap:anywhere]">
             <p className="w-fit bg-[#1556a4] px-3 py-1 text-xs font-black uppercase tracking-normal text-white">
               입금 계좌
             </p>
@@ -478,27 +478,27 @@ export function SiteFooter() {
             className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[10px] border-2 border-[#111111] bg-[#fffaf0] shadow-[6px_6px_0_#111111]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b-2 border-[#111111] px-4 py-3 sm:px-6 sm:py-4">
-              <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b-2 border-[#111111] px-4 py-3 sm:px-6 sm:py-4">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span
                   id={modalTitleId}
-                  className="border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-black"
+                  className="min-w-0 break-keep [overflow-wrap:anywhere] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-black"
                 >
                   {modalTitle}
                 </span>
-                <span className="text-xs font-black uppercase tracking-normal text-black/60">
+                <span className="hidden text-xs font-black uppercase tracking-normal text-black/60 sm:inline">
                   {modalTag}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-[8px] border-2 border-[#111111] px-3 py-1 text-xs font-black uppercase tracking-normal text-black transition hover:bg-[#f2cf27]"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] px-3 py-2 text-xs font-black uppercase tracking-normal text-black transition hover:bg-[#f2cf27]"
               >
                 {isEnglishRoute ? "Close" : "닫기"}
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-line px-4 py-4 text-xs leading-relaxed text-black/80 sm:px-6 sm:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-line [overflow-wrap:anywhere] px-4 py-4 text-xs leading-relaxed text-black/80 sm:px-6 sm:py-5">
               {modalContent}
             </div>
           </div>

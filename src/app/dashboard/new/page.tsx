@@ -36,9 +36,9 @@ const submissionCards = [
 export default function NewSubmissionPage() {
   return (
     <div className="page-centered mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-      <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card px-6 py-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:px-8 sm:py-10">
+      <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card px-4 py-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:px-8 sm:py-10">
         <p className="bauhaus-kicker">심의 신청</p>
-        <h1 className="font-display mt-4 text-3xl font-black leading-tight text-foreground sm:text-4xl">
+        <h1 className="font-display mt-4 break-keep text-balance text-2xl font-black leading-tight text-foreground sm:text-4xl">
           무엇을 신청하시나요?
         </h1>
         <div className="mt-4 flex flex-wrap gap-2" aria-label="접수 특징">
@@ -50,18 +50,18 @@ export default function NewSubmissionPage() {
           </span>
         </div>
 
-        <div className="mt-8 grid gap-5 md:grid-cols-3">
+        <div className="mt-6 grid gap-4 lg:grid-cols-3 sm:mt-8 sm:gap-5">
           {submissionCards.map((card) => (
             <ReliableLink
               key={card.href}
               href={card.href}
-              className={`group rounded-[10px] border-2 p-6 transition duration-200 hover:-translate-y-1 hover:shadow-[9px_9px_0_#111111] ${card.tone}`}
+              className={`group min-w-0 rounded-[10px] border-2 p-4 sm:p-6 transition duration-200 hover:-translate-y-1 hover:shadow-[9px_9px_0_#111111] ${card.tone}`}
             >
               <card.icon className="h-7 w-7" aria-hidden="true" />
               <p className="mt-3 text-[11px] font-black uppercase tracking-normal opacity-75">
                 {card.meta}
               </p>
-              <h2 className="mt-4 text-[28px] font-black tracking-normal">
+              <h2 className="mt-4 break-keep text-balance text-2xl font-black leading-snug tracking-normal sm:text-[28px]">
                 {card.title}
               </h2>
               <p className="mt-3 text-sm font-semibold leading-6 opacity-82">{card.description}</p>

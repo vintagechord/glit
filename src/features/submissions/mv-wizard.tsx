@@ -208,7 +208,7 @@ const getLocalUploadKey = (file: File) =>
   `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
 
 const selectedBadgeClass =
-  "inline-flex items-center rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
+  "inline-flex shrink-0 items-center whitespace-nowrap rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
 
 const uploadMaxMb = Number(
   process.env.NEXT_PUBLIC_VIDEO_UPLOAD_MAX_MB ??
@@ -3468,7 +3468,7 @@ export function MvWizard({
   };
 
   return (
-    <div className="space-y-8 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
+    <div className="min-w-0 space-y-8 text-[15px] leading-relaxed [overflow-wrap:anywhere] [&_input]:min-w-0 [&_select]:min-w-0 sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving}
         label={step <= 4 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
@@ -3640,12 +3640,12 @@ export function MvWizard({
                       setTvStations([]);
                     }
                   }}
-                  className={`text-left rounded-[28px] border p-6 transition ${active
+                  className={`text-left rounded-[28px] border p-4 transition sm:p-6 ${active
                     ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
                     : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
                     }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h3 className="text-lg font-semibold">{item.label}</h3>
                     </div>
@@ -3665,7 +3665,7 @@ export function MvWizard({
             <div
               data-preflight-field="reviewOptions"
               tabIndex={-1}
-              className="rounded-[28px] border border-border/60 bg-card/80 p-6 outline-none"
+              className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6 outline-none"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-foreground">방송국 선택</h3>
@@ -3690,7 +3690,7 @@ export function MvWizard({
                         : "border-border/60 bg-background text-foreground hover:border-primary/40"
                         }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
                           <p className="text-sm font-semibold">
                             {details?.title ?? `${stationName} 심의`}
@@ -3701,7 +3701,7 @@ export function MvWizard({
                             </span>
                           ) : null}
                         </div>
-                        <span className="text-xs font-semibold">
+                        <span className="shrink-0 whitespace-nowrap text-xs font-semibold">
                           {formatCurrency(stationPriceMap[code] ?? 0)}원
                         </span>
                       </div>
@@ -3717,7 +3717,7 @@ export function MvWizard({
             <div
               data-preflight-field="reviewOptions"
               tabIndex={-1}
-              className="rounded-[28px] border border-border/60 bg-card/80 p-6 outline-none"
+              className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6 outline-none"
             >
               <h3 className="font-semibold text-foreground">옵션 선택</h3>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -3729,7 +3729,7 @@ export function MvWizard({
                     : "border-border/60 bg-background text-foreground hover:border-primary/40"
                     }`}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-semibold">일반 뮤직비디오 심의</p>
@@ -3745,7 +3745,7 @@ export function MvWizard({
                         </span>
                       ) : null}
                     </div>
-                    <span className="text-xs font-semibold">
+                    <span className="shrink-0 whitespace-nowrap text-xs font-semibold">
                       {formatCurrency(baseOnlinePrice)}원
                     </span>
                   </div>
@@ -3770,7 +3770,7 @@ export function MvWizard({
                         : "border-border/60 bg-background text-foreground hover:border-primary/40"
                         }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
                           <p className="text-sm font-semibold">
                             {details?.title ?? `${stationName} 입고 옵션`}
@@ -3786,7 +3786,7 @@ export function MvWizard({
                             </span>
                           ) : null}
                         </div>
-                        <span className="text-right text-xs font-semibold">
+                        <span className="shrink-0 whitespace-nowrap text-right text-xs font-semibold">
                           {formatCurrency(stationPriceMap[code] ?? 0)}원
                         </span>
                       </div>
@@ -3864,7 +3864,7 @@ export function MvWizard({
           </h2>
 
           {isDownloadedApplicationFlow ? (
-            <div className="rounded-[28px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+            <div className="rounded-[28px] border-2 border-[#111111] bg-card p-4 sm:p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
               <div className="flex flex-wrap gap-3">
                 {mvApplicationForms.map((form) => (
                   <a
@@ -3922,7 +3922,7 @@ export function MvWizard({
             </div>
           ) : (
             <>
-              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   뮤직비디오 기본 정보
                 </p>
@@ -4067,7 +4067,7 @@ export function MvWizard({
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   제작 정보
                 </p>
@@ -4101,7 +4101,7 @@ export function MvWizard({
                         >
                           ?
                         </button>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-72 rounded-2xl border border-border/70 bg-background px-4 py-3 text-[11px] font-medium leading-5 text-foreground shadow-[0_18px_40px_rgba(0,0,0,0.14)] group-hover:block group-focus-within:block">
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-60 max-w-[calc(100vw-5rem)] rounded-2xl border border-border/70 bg-background px-4 py-3 text-[11px] font-medium leading-5 text-foreground shadow-[0_18px_40px_rgba(0,0,0,0.14)] group-hover:block group-focus-within:block">
                           공개되는 뮤직비디오 좌측 하단에 들어갈 소속사/기획사/로고 등과 동일한 명칭을 기입해주세요. 대소문자 및 한/영 표기 모두 동일해야합니다.
                         </div>
                       </div>
@@ -4208,7 +4208,7 @@ export function MvWizard({
                 />
               </div>
 
-              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   곡 정보
                 </p>
@@ -4314,7 +4314,7 @@ export function MvWizard({
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   줄거리 / 작품내용 *
                 </p>
@@ -4334,7 +4334,7 @@ export function MvWizard({
                 </p>
               </div>
 
-              <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+              <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                     가사 *
@@ -4447,7 +4447,7 @@ export function MvWizard({
               </div>
 
               {isGuest && (
-                <div className="rounded-[28px] border border-border/60 bg-background/80 p-6">
+                <div className="rounded-[28px] border border-border/60 bg-background/80 p-4 sm:p-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                     신청자 정보
                   </p>
@@ -4573,7 +4573,7 @@ export function MvWizard({
           <div
             data-preflight-field="files"
             tabIndex={-1}
-            className="rounded-[28px] border border-border/60 bg-card/80 p-6 outline-none"
+            className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6 outline-none"
           >
             <p className="mt-1 text-xs font-semibold text-foreground">
               {isDownloadedApplicationFlow
@@ -4731,11 +4731,11 @@ export function MvWizard({
                         key={`${upload.name}-${index}`}
                         className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <span className="min-w-0 flex-1 break-all font-semibold text-foreground">
                             {upload.name}
                           </span>
-                          <div className="flex shrink-0 items-center gap-3">
+                          <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
                             {upload.status === "done" ? (
                               <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
                                 첨부 완료
@@ -4903,7 +4903,7 @@ export function MvWizard({
           />
 
           {isGuest && !usesSubmissionCartCheckout ? (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 결제 방식 선택
               </p>
@@ -4945,7 +4945,7 @@ export function MvWizard({
           ) : null}
 
           {isGuest && !usesSubmissionCartCheckout && paymentMethod === "BANK" ? (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 무통장 입금 안내
               </p>
@@ -5137,8 +5137,8 @@ export function MvWizard({
                         사업자등록증 첨부
                       </label>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <label className="flex min-h-[48px] flex-1 cursor-pointer items-center justify-between rounded-2xl border border-dashed border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground transition hover:border-foreground hover:text-foreground">
-                          <span className="truncate">
+                        <label className="flex min-h-[48px] min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 rounded-2xl border border-dashed border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground transition hover:border-foreground hover:text-foreground">
+                          <span className="min-w-0 flex-1 truncate">
                             {taxInvoiceCertificateFile?.name ??
                               "PDF, JPG, PNG 파일 선택"}
                           </span>
@@ -5183,7 +5183,7 @@ export function MvWizard({
               </div>
             </div>
           ) : isGuest && !usesSubmissionCartCheckout ? (
-            <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 text-sm text-muted-foreground">
+            <div className="rounded-[28px] border border-border/60 bg-card/80 p-4 sm:p-6 text-sm text-muted-foreground">
               카드 결제 선택 시 이니시스 결제 모듈이 열립니다. 팝업이 차단된 경우 팝업 해제 후 다시 시도해주세요.
             </div>
           ) : null}
@@ -5228,7 +5228,7 @@ export function MvWizard({
       )}
 
       {step === 6 && (
-        <div className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-center sm:rounded-[32px] sm:p-10">
+        <div className="rounded-[24px] border border-border/60 bg-card/80 p-4 sm:p-6 text-center sm:rounded-[32px] sm:p-10">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
             ✓
           </div>

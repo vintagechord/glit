@@ -16,8 +16,8 @@ import {
 } from "@/lib/broadcast-support";
 import { resolveRadioBoardLinks } from "@/lib/radio-board-links";
 
-const controlClass = "w-full min-w-0 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground";
-const buttonClass = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border-2 border-foreground bg-background px-4 py-2 text-sm font-bold transition hover:bg-muted disabled:opacity-50";
+const controlClass = "w-full min-w-0 rounded-lg border border-border bg-background px-3 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground sm:text-sm";
+const buttonClass = "inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 rounded-lg border-2 border-foreground bg-background px-3 py-2 text-center text-sm font-bold transition hover:bg-muted disabled:opacity-50 [&>svg]:shrink-0";
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -76,10 +76,10 @@ function RequestDraft({ submission, track, review, isEnglish, savedDraft, onDraf
         <textarea ref={bodyRef} id={`${id}-body`} value={body} onChange={event => onDraftChange({ ...draft, body: event.target.value })} rows={7} maxLength={5000} className={`${controlClass} resize-y`} aria-describedby={`${id}-tip`} />
         <p id={`${id}-tip`} className="mt-2 text-xs leading-relaxed text-muted-foreground">{isEnglish ? "Add your own story or why you want to hear this song." : "이 곡을 함께 듣고 싶은 이유나 자신의 이야기를 덧붙여주세요."}</p>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         <button type="button" className={buttonClass} disabled={!title.trim()} onClick={() => void copy("title")}><Copy size={15} aria-hidden />{isEnglish ? "Copy title" : "제목 복사"}</button>
         <button type="button" className={buttonClass} disabled={!body.trim()} onClick={() => void copy("body")}><Copy size={15} aria-hidden />{isEnglish ? "Copy request" : "본문 복사"}</button>
-        <button type="button" className={buttonClass} onClick={() => saveBlob(new Blob([`${program ? `${program}\n\n` : ""}${title}\n\n${body}`], { type: "text/plain;charset=utf-8" }), "onside-radio-request.txt")}><Download size={15} aria-hidden />{isEnglish ? "Save draft" : "초안 저장"}</button>
+        <button type="button" className={`${buttonClass} col-span-2`} onClick={() => saveBlob(new Blob([`${program ? `${program}\n\n` : ""}${title}\n\n${body}`], { type: "text/plain;charset=utf-8" }), "onside-radio-request.txt")}><Download size={15} aria-hidden />{isEnglish ? "Save draft" : "초안 저장"}</button>
       </div>
       <p role="status" className="min-h-5 text-xs text-muted-foreground">{message}</p>
       {links.length > 0 ? links.map(link => (
@@ -131,10 +131,10 @@ export function BroadcastSupportPanel({ submission, stationReviews, isEnglish = 
   }
 
   return (
-    <section id="broadcast-support" aria-labelledby={`${id}-heading`} className="rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[6px_6px_0_#111111] sm:p-6 dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]" data-testid="broadcast-support">
-      <div className="flex items-center gap-3">
-        <Radio size={24} aria-hidden />
-        <h2 id={`${id}-heading`} className="text-lg font-black">{isEnglish ? "Get your music on the radio" : "내 음악, 라디오에 신청하기"}</h2>
+    <section id="broadcast-support" aria-labelledby={`${id}-heading`} className="min-w-0 rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[6px_6px_0_#111111] [overflow-wrap:anywhere] sm:p-6 dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]" data-testid="broadcast-support">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 sm:gap-3">
+        <Radio size={24} className="mt-0.5" aria-hidden />
+        <h2 id={`${id}-heading`} className="text-base font-black leading-snug sm:text-lg">{isEnglish ? "Get your music on the radio" : "내 음악, 라디오에 신청하기"}</h2>
         <span className="shrink-0 rounded-full bg-[#f2cf27] px-2.5 py-1 text-xs font-bold text-[#111111]">{isEnglish ? "Free" : "무료"}</span>
       </div>
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{isEnglish ? "Prepare a request for an approved track and post it on a broadcaster's listener board. Airplay is decided by each program." : "적격 곡의 신청 문구를 준비해 방송국 게시판에 직접 올려보세요. 실제 선곡은 각 프로그램에서 결정합니다."}</p>
@@ -142,13 +142,13 @@ export function BroadcastSupportPanel({ submission, stationReviews, isEnglish = 
         <div className="min-w-0 space-y-4">
           {selected && selectedTrack ? <>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div>
+              <div className="min-w-0">
                 <label htmlFor={`${id}-station`} className="mb-1.5 block text-sm font-semibold">{isEnglish ? "Approved broadcaster" : "적격 방송국"}</label>
                 <select id={`${id}-station`} className={controlClass} value={selected.review.id} onChange={event => { setStationId(event.target.value); setTrackKey(""); }}>
                   {eligible.map(item => <option key={item.review.id} value={item.review.id}>{item.review.station?.name || item.review.station?.code || "방송국"}</option>)}
                 </select>
               </div>
-              <div>
+              <div className="min-w-0">
                 <label htmlFor={`${id}-track`} className="mb-1.5 block text-sm font-semibold">{isEnglish ? "Approved track" : "신청할 적격 곡"}</label>
                 <select id={`${id}-track`} className={controlClass} value={selectedTrack.key} onChange={event => setTrackKey(event.target.value)}>
                   {selected.tracks.map(item => <option key={item.key} value={item.key}>{broadcastTrackTitle(item.track)}</option>)}
@@ -167,15 +167,15 @@ export function BroadcastSupportPanel({ submission, stationReviews, isEnglish = 
         </aside>
       </div>
       <details className="mt-6 border-t border-border pt-4">
-        <summary className="cursor-pointer text-sm font-bold">{isEnglish ? "Preparation checklist & reference pack" : "준비 체크리스트 · 방송 참고자료"}</summary>
+        <summary className="min-h-11 cursor-pointer py-2 text-sm font-bold">{isEnglish ? "Preparation checklist & reference pack" : "준비 체크리스트 · 방송 참고자료"}</summary>
         <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          <fieldset className="space-y-3">
+          <fieldset className="min-w-0 space-y-1">
             <legend className="mb-3 text-xs text-muted-foreground">{isEnglish ? "Check while this page is open" : "현재 화면에서 준비 상태를 체크하세요"}</legend>
-            {checks.map(label => <label key={label} className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#1f7a5a]" /><span>{label}</span></label>)}
+            {checks.map(label => <label key={label} className="flex min-h-11 cursor-pointer items-start gap-2 py-2 text-sm"><input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#1f7a5a]" /><span className="min-w-0">{label}</span></label>)}
           </fieldset>
-          <div>
+          <div className="min-w-0">
             <p className="mb-3 text-xs leading-relaxed text-muted-foreground">{isEnglish ? "Download credits, a station-by-station result table, and the request guide. Audio/video files and certificates are not included." : "곡 정보·크레딧, 방송국별 결과표, 신청 가이드를 묶어 내려받습니다. 원본 음원·영상·증명서는 포함되지 않습니다."}</p>
-            <button type="button" onClick={() => void downloadPack()} disabled={busy} className={buttonClass}><Download size={16} aria-hidden />{busy ? (isEnglish ? "Preparing…" : "자료 준비 중…") : (isEnglish ? "Download reference ZIP" : "참고자료 ZIP 다운로드")}</button>
+            <button type="button" onClick={() => void downloadPack()} disabled={busy} className={`${buttonClass} w-full sm:w-auto`}><Download size={16} aria-hidden />{busy ? (isEnglish ? "Preparing…" : "자료 준비 중…") : (isEnglish ? "Download reference ZIP" : "참고자료 ZIP 다운로드")}</button>
             <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><Check size={13} aria-hidden />{isEnglish ? "No additional payment" : "추가 결제 없이 사용"}</p>
             {error && <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
           </div>

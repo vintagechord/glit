@@ -26,8 +26,8 @@ const filters = [
   { id: "closed", label: "실패·취소", statuses: ["FAILED", "CANCELED", "REFUNDED"] },
 ] as const;
 type FilterId = typeof filters[number]["id"];
-const panelClass = "rounded-[10px] border-2 border-[var(--bauhaus-ink)] bg-card p-4 shadow-[4px_4px_0_var(--bauhaus-shadow)] sm:p-5";
-const buttonClass = "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background px-3 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-50";
+const panelClass = "min-w-0 rounded-[10px] border-2 border-[var(--bauhaus-ink)] bg-card p-4 shadow-[4px_4px_0_var(--bauhaus-shadow)] sm:p-5";
+const buttonClass = "inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background px-3 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-50";
 const orderTone = (status: SubmissionOrderStatus) => status === "PAID"
   ? "border-emerald-600 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
   : ["FAILED", "CANCELED", "REFUNDED"].includes(status)
@@ -139,15 +139,15 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
       : guestTokens[item.submissionId] ? `${prefix}/track/${encodeURIComponent(guestTokens[item.submissionId])}` : null;
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="max-w-xl text-sm leading-6 text-muted-foreground">카드 결제와 무통장 입금이 확인된 주문은 완료에 표시됩니다. 입금 확인 전에는 대기에서 확인하세요.</p>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <Link href={cartHref} className={buttonClass}><ShoppingCart size={15} aria-hidden />장바구니</Link>
           <button type="button" className={buttonClass} onClick={() => void loadOrders()} disabled={loading || Boolean(returningId)}><RefreshCw size={15} className={loading ? "animate-spin" : ""} aria-hidden />새로고침</button>
         </div>
       </div>
-      <nav aria-label="주문 상태" className="flex flex-wrap gap-2">
+      <nav aria-label="주문 상태" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {filters.map((entry) => <button key={entry.id} type="button" onClick={() => setFilter(entry.id)} aria-pressed={filter === entry.id}
           className={cn(buttonClass, filter === entry.id && "bg-[var(--bauhaus-yellow)] text-[#111111]")}>{entry.label}</button>)}
       </nav>
@@ -162,7 +162,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
         <div className="space-y-4">
           {visibleOrders.map((order) => <article key={order.id} id={`order-${order.id}`} aria-label={`주문 ${order.id}`} tabIndex={-1}
             className={`${panelClass} ${focusedOrder?.id === order.id ? "ring-2 ring-[#1556a4] ring-offset-2 ring-offset-background" : ""}`}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-black text-muted-foreground">주문 번호</p>
                 <p className="mt-1 break-all font-mono text-xs font-semibold">{order.id}</p>
@@ -175,31 +175,31 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
                 const detailHref = getDetailHref(item);
                 return <li key={item.id} className="grid gap-2 p-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="break-words text-sm font-black">{displayItemTitle(item)}</p>
-                    <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">{item.artistName || (item.isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")} · {item.packageName || "패키지 미지정"}</p>
+                    <p className="text-sm [overflow-wrap:anywhere] font-black">{displayItemTitle(item)}</p>
+                    <p className="mt-1 text-xs [overflow-wrap:anywhere] leading-5 text-muted-foreground">{item.artistName || (item.isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")} · {item.packageName || "패키지 미지정"}</p>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
-                    <span className="text-xs font-semibold">{displayAmount(item.amountKrw, item.amount, order.currency)}</span>
+                    <span className="min-w-0 text-xs font-semibold tabular-nums [overflow-wrap:anywhere]">{displayAmount(item.amountKrw, item.amount, order.currency)}</span>
                     {detailHref && <Link href={detailHref} className={buttonClass}><ArrowUpRight size={14} aria-hidden />{order.status === "PAID" ? "심의 내역 보기" : "신청서 확인"}</Link>}
                   </div>
                 </li>;
               })}
             </ul>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <div><p className="text-xs text-muted-foreground">주문 금액</p><p className="mt-1 text-xl font-black">{displayAmount(order.amountKrw, order.amount, order.currency)}</p></div>
-              {order.canReturnToCart && <button type="button" disabled={Boolean(returningId)} onClick={() => setReturnOrder(order)} className={cn(buttonClass, "bg-foreground text-background")}><ArrowLeft size={15} aria-hidden />{returningId === order.id ? "변경 중" : "장바구니로 돌리기"}</button>}
+              <div><p className="text-xs text-muted-foreground">주문 금액</p><p className="mt-1 text-xl font-black tabular-nums [overflow-wrap:anywhere]">{displayAmount(order.amountKrw, order.amount, order.currency)}</p></div>
+              {order.canReturnToCart && <button type="button" disabled={Boolean(returningId)} onClick={() => setReturnOrder(order)} className={cn(buttonClass, "w-full bg-foreground text-background sm:w-auto")}><ArrowLeft size={15} aria-hidden />{returningId === order.id ? "변경 중" : "장바구니로 돌리기"}</button>}
             </div>
             {order.status === "BANK_PENDING" && <div className="mt-4 rounded-[8px] border-2 border-[#1556a4]/40 bg-[#1556a4]/5 p-4">
               <p className="flex items-center gap-2 text-xs font-black"><Landmark size={15} aria-hidden />입금 계좌</p>
               <dl className="mt-3 grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs leading-6">
                 <dt className="text-muted-foreground">은행</dt><dd>{APP_CONFIG.bankName}</dd>
                 <dt className="text-muted-foreground">계좌</dt><dd className="break-all font-semibold">{APP_CONFIG.bankAccount}</dd>
-                <dt className="text-muted-foreground">예금주</dt><dd className="break-words">{APP_CONFIG.bankHolder}</dd>
+                <dt className="text-muted-foreground">예금주</dt><dd className="[overflow-wrap:anywhere]">{APP_CONFIG.bankHolder}</dd>
                 <dt className="text-muted-foreground">입금액</dt><dd className="font-black">{displayAmount(order.amountKrw, order.amount, order.currency)}</dd>
               </dl>
               <p className="mt-3 text-xs leading-5 text-muted-foreground">이미 입금했다면 입금 확인을 기다려주세요.</p>
             </div>}
-            {order.note && <p className="mt-3 whitespace-pre-wrap break-words text-xs leading-6 text-muted-foreground">{order.note}</p>}
+            {order.note && <p className="mt-3 whitespace-pre-wrap [overflow-wrap:anywhere] text-xs leading-6 text-muted-foreground">{order.note}</p>}
             {order.returnedAt && <p className="mt-3 text-xs leading-5 text-muted-foreground">장바구니로 돌린 주문입니다. 기존 주문 이력은 보관됩니다.</p>}
           </article>)}
         </div>

@@ -115,7 +115,7 @@ export function CenteredDialogHost() {
         </p>
         <p
           id={`centered-dialog-message-${active.id}`}
-          className="mt-3 whitespace-pre-line break-keep break-words text-sm font-semibold leading-6"
+          className="mt-3 whitespace-pre-line break-keep [overflow-wrap:anywhere] text-sm font-semibold leading-6"
         >
           {active.message}
         </p>
@@ -124,7 +124,7 @@ export function CenteredDialogHost() {
             <button
               type="button"
               onClick={() => finish(false)}
-              className="inline-flex h-10 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-4 text-xs font-black text-[#111111] transition hover:-translate-y-0.5"
+              className="inline-flex min-h-11 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-4 text-xs font-black text-[#111111] transition hover:-translate-y-0.5"
             >
               취소
             </button>
@@ -133,7 +133,7 @@ export function CenteredDialogHost() {
             ref={primaryButtonRef}
             type="button"
             onClick={() => finish(true)}
-            className="inline-flex h-10 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-4 text-xs font-black text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 dark:text-[#06111f]"
+            className="inline-flex min-h-11 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-4 text-xs font-black text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 dark:text-[#06111f]"
           >
             {isConfirm ? "확인" : "닫기"}
           </button>

@@ -839,7 +839,7 @@ export function ChatbotWidget() {
     <button
       type="button"
       onClick={() => setOpen(false)}
-      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] text-muted-foreground transition hover:bg-muted hover:text-foreground"
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] text-muted-foreground transition hover:bg-muted hover:text-foreground"
       aria-label="채팅 닫기"
     >
       <X className="h-4 w-4" aria-hidden="true" />
@@ -1073,7 +1073,7 @@ export function ChatbotWidget() {
         <button
           type="button"
           onClick={goBackFromThread}
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] text-foreground transition hover:bg-muted"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] text-foreground transition hover:bg-muted"
           aria-label="대화 목록으로 돌아가기"
         >
           <ChevronLeft className="h-5 w-5" aria-hidden="true" />
@@ -1092,7 +1092,7 @@ export function ChatbotWidget() {
           <button
             type="button"
             onClick={() => setMenuOpen((current) => !current)}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] text-foreground transition hover:bg-muted"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] text-foreground transition hover:bg-muted"
             aria-label="채팅 설정"
             aria-expanded={menuOpen}
             aria-haspopup="menu"
@@ -1219,7 +1219,7 @@ export function ChatbotWidget() {
             onChange={(event) => setDrafts(current => ({ ...current, [activeToken ?? "new"]: event.target.value }))}
             rows={2}
             placeholder="메시지를 입력하세요."
-            className="max-h-28 min-h-12 flex-1 resize-none rounded-[8px] border-2 border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-[#1556a4]"
+            className="max-h-28 min-h-12 min-w-0 flex-1 resize-none rounded-[8px] border-2 border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-[#1556a4]"
           />
           <button
             type="submit"
@@ -1242,7 +1242,7 @@ export function ChatbotWidget() {
     <>
       {open ? (
         <div
-          className="fixed bottom-4 right-3 z-50 flex h-[min(720px,calc(100dvh-var(--site-header-height,76px)-20px))] w-[min(430px,calc(100vw-24px))] flex-col overflow-hidden rounded-[22px] border-2 border-[#111111] bg-card shadow-[7px_7px_0_#111111] dark:border-[#f2cf27] dark:shadow-[7px_7px_0_#f2cf27] sm:bottom-6 sm:right-6"
+          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-3 z-50 flex h-[min(720px,calc(100dvh-var(--site-header-height,76px)-3rem-env(safe-area-inset-bottom)))] w-[min(430px,calc(100vw-24px))] flex-col overflow-hidden rounded-[22px] border-2 border-[#111111] bg-card shadow-[7px_7px_0_#111111] dark:border-[#f2cf27] dark:shadow-[7px_7px_0_#f2cf27] sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:right-6"
           role="dialog"
           aria-label="온사이드 실시간 채팅"
         >
@@ -1263,7 +1263,7 @@ export function ChatbotWidget() {
         <button
           type="button"
           onClick={toggleOpen}
-          className="fixed bottom-5 right-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#111111] bg-[#111111] p-0 text-sm font-black text-white shadow-[5px_5px_0_rgba(17,17,17,0.28)] transition hover:-translate-y-0.5 hover:bg-white hover:text-[#111111] dark:border-white dark:bg-white dark:text-[#111111] dark:shadow-[5px_5px_0_rgba(255,255,255,0.22)] dark:hover:bg-[#111111] dark:hover:text-white sm:bottom-6 sm:right-6 sm:w-auto sm:gap-2 sm:rounded-[12px] sm:px-4 sm:py-3"
+          className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#111111] bg-[#111111] p-0 text-sm font-black text-white shadow-[5px_5px_0_rgba(17,17,17,0.28)] transition hover:-translate-y-0.5 hover:bg-white hover:text-[#111111] dark:border-white dark:bg-white dark:text-[#111111] dark:shadow-[5px_5px_0_rgba(255,255,255,0.22)] dark:hover:bg-[#111111] dark:hover:text-white sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:right-6 sm:w-auto sm:gap-2 sm:rounded-[12px] sm:px-4 sm:py-3"
           aria-label="실시간 채팅 열기"
         >
           {totalUnread > 0 ? (

@@ -23,7 +23,7 @@ type PaymentMethodChoiceClientProps = {
 };
 
 const methodButtonClass = (active: boolean) =>
-  `flex min-h-[72px] w-full items-center gap-3 rounded-[8px] border-2 p-4 text-left shadow-[4px_4px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
+  `flex min-h-[72px] min-w-0 w-full items-center gap-3 rounded-[8px] border-2 p-4 text-left shadow-[4px_4px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 ${
     active
       ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]"
       : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]"
@@ -94,7 +94,7 @@ export function PaymentMethodChoiceClient({
   const isSavingCard = savingMethod === "CARD";
 
   return (
-    <div className="mt-6 space-y-4">
+    <div className="mt-6 min-w-0 space-y-4">
       <div className="rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] p-4">
         <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
           결제 방식 선택
@@ -110,7 +110,7 @@ export function PaymentMethodChoiceClient({
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]">
               <Landmark size={18} strokeWidth={2.5} />
             </span>
-            <span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">
               <span className="block text-sm font-black">무통장 입금</span>
               {isSavingBank ? (
                 <span className="mt-2 block text-[11px] font-black">
@@ -129,7 +129,7 @@ export function PaymentMethodChoiceClient({
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]">
               <CreditCard size={18} strokeWidth={2.5} />
             </span>
-            <span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">
               <span className="block text-sm font-black">{isMobileDevice ? "카드 결제 · PC에서 이용" : "카드 결제"}</span>
               {isSavingCard ? (
                 <span className="mt-2 block text-[11px] font-black">
@@ -154,30 +154,30 @@ export function PaymentMethodChoiceClient({
           <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
             입금 계좌
           </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                 입금 금액
               </p>
-              <p className="mt-1 font-black">{amountLabel}원</p>
+              <p className="mt-1 font-black tabular-nums [overflow-wrap:anywhere]">{amountLabel}원</p>
             </div>
             <div>
               <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                 은행
               </p>
-              <p className="mt-1 font-semibold">{bankName}</p>
+              <p className="mt-1 font-semibold [overflow-wrap:anywhere]">{bankName}</p>
             </div>
             <div>
               <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                 계좌번호
               </p>
-              <p className="mt-1 font-semibold">{bankAccount}</p>
+              <p className="mt-1 font-semibold [overflow-wrap:anywhere]">{bankAccount}</p>
             </div>
             <div>
               <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                 예금주
               </p>
-              <p className="mt-1 font-semibold">{bankHolder}</p>
+              <p className="mt-1 font-semibold [overflow-wrap:anywhere]">{bankHolder}</p>
             </div>
           </div>
           <p className="mt-4 text-xs font-semibold leading-5 text-muted-foreground">

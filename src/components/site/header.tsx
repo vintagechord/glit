@@ -24,14 +24,14 @@ import { SiteLogo } from "./site-logo";
 const navLinks = [
   { label: "심의 신청", mobileLabel: "신청", href: "/dashboard/new", match: "prefix" as const },
   { label: "결과 조회", mobileLabel: "조회", href: "/track", match: "prefix" as const },
-  { label: "내 음악 관리", mobileLabel: "내 음악 관리", href: "/mypage/music", match: "prefix" as const },
+  { label: "내 음악 관리", mobileLabel: "내 음악", href: "/mypage/music", match: "prefix" as const },
   { label: "이용가이드", mobileLabel: "가이드", href: "/guide", match: "prefix" as const },
 ];
 
 const englishNavLinks = [
   { label: "Apply", mobileLabel: "Apply", href: "/en/dashboard/new", match: "prefix" as const },
   { label: "Results", mobileLabel: "Results", href: "/en/track", match: "prefix" as const },
-  { label: "My Music", mobileLabel: "My Music", href: "/en/mypage/music", match: "prefix" as const },
+  { label: "My Music", mobileLabel: "Music", href: "/en/mypage/music", match: "prefix" as const },
   { label: "Guide", mobileLabel: "Guide", href: "/en/guide", match: "prefix" as const },
 ];
 
@@ -42,13 +42,13 @@ type AuthState = "authenticated" | "unauthenticated";
 const navLinkClass =
   "inline-flex h-11 items-center rounded-[8px] border-2 border-transparent px-4 text-[14px] font-black tracking-normal transition";
 const mobileNavLinkClass =
-  "inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-transparent px-2 py-2 text-center text-[12px] font-black leading-tight tracking-normal transition";
+  "inline-flex min-h-11 min-w-0 items-center justify-center rounded-[8px] border-2 border-transparent px-1.5 py-2 text-center text-[12px] font-black leading-tight tracking-normal transition";
 const subtleButtonClass =
-  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-0 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:w-auto sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
+  "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-0 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:w-auto sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 const primaryButtonClass =
-  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-0 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-white dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:w-auto sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
+  "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-0 text-[12px] font-black tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-white dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:w-auto sm:px-4 sm:text-[14px] sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 const cartButtonClass =
-  "relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:w-11 sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
+  "relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[4px_4px_0_#f2cf27] sm:h-11 sm:w-11 sm:shadow-[3px_3px_0_#111111] sm:hover:shadow-[5px_5px_0_#111111] dark:sm:shadow-[3px_3px_0_#f2cf27] dark:sm:hover:shadow-[5px_5px_0_#f2cf27]";
 
 const englishRoutePrefixes = [
   "/dashboard",
@@ -315,7 +315,7 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
+        <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
           <a
             href={languageHref}
             data-no-localize="true"
@@ -396,7 +396,7 @@ export function SiteHeader() {
 
       <nav
         aria-label={isEnglishRoute ? "Mobile navigation" : "모바일 주요 메뉴"}
-        className="border-t-2 border-[#111111] px-3 py-2.5 lg:hidden dark:border-[#f2cf27]"
+        className="border-t-2 border-[#111111] px-3 py-1.5 lg:hidden dark:border-[#f2cf27]"
       >
         <div className="mx-auto grid w-full max-w-6xl grid-cols-4 gap-1.5 sm:gap-2">
           {activeNavLinks.map((link) => {

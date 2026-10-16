@@ -47,7 +47,7 @@ export function SubmissionProgress({
                 }`}
                 aria-hidden="true"
               />
-              <span className={`mt-2 block break-keep text-[10px] leading-4 sm:text-xs ${current ? "font-black text-foreground" : "text-muted-foreground"}`}>
+              <span className={`sr-only break-keep text-[10px] sm:not-sr-only sm:mt-2 sm:block leading-4 sm:text-xs ${current ? "font-black text-foreground" : "text-muted-foreground"}`}>
                 {label}<span className="sr-only">{current ? " (현재 단계)" : ""}</span>
               </span>
             </li>

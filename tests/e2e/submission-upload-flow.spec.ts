@@ -174,3 +174,81 @@ for (const kind of ["album", "mv"] as const) test(`${kind} multipart refreshes a
   expect(results.errors).toEqual([]);
   expect(results.unexpected).toEqual([]);
 });
+
+for (const width of [320, 360, 390, 768]) {
+  for (const kind of ["album", "mv"] as const) {
+    test(`${kind} mobile intake keeps long file names and upload actions within ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      const results = await mockSubmissionServices(page);
+      const files = await openFileSubmission(page, kind);
+      const mediaName = `${"very-long-master-file-name_".repeat(5)}.${kind === "album" ? "wav" : "mp4"}`;
+      await files.locator('input[type="file"]').setInputFiles([
+        { name: mediaName, mimeType: kind === "album" ? "audio/wav" : "video/mp4", buffer: Buffer.from("responsive media fixture") },
+        { name: "application.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: Buffer.from("responsive application fixture") },
+      ]);
+      await expect(files.getByText("첨부 완료", { exact: true })).toHaveCount(2);
+      await expect(files.getByText(mediaName, { exact: true })).toBeVisible();
+      const controls = await files.getByRole("button").evaluateAll((elements) => elements.map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, height: rect.height };
+      }));
+      for (const rect of controls) {
+        expect(rect.left).toBeGreaterThanOrEqual(0);
+        expect(rect.right).toBeLessThanOrEqual(width);
+        expect(rect.height).toBeGreaterThanOrEqual(44);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      if (width === 320) await files.screenshot({ path: testInfo.outputPath(`${kind}-upload-320.png`) });
+      await page.getByRole("button", { name: "다음 단계", exact: true }).click();
+      await expect(page.getByRole("button", { name: "장바구니에 담기", exact: true })).toBeEnabled();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      expect(results.errors).toEqual([]);
+      expect(results.unexpected).toEqual([]);
+    });
+  }
+}
+
+for (const width of [320, 390]) {
+  test(`album track editing and reordering stay usable without horizontal scrolling at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const results = await mockSubmissionServices(page);
+    await page.goto("/dashboard/new/album");
+    await page.getByRole("button", { name: /발매 전이에요/ }).click();
+    await page.getByRole("button", { name: "신청서 작성으로 계속", exact: true }).click();
+    await page.getByRole("radio", { name: /온라인 작성/ }).click();
+    await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();
+    for (const [field, value] of Object.entries({ title: "모바일 입력 확인", artistName: "테스트 아티스트", artistNameKr: "테스트", artistNameEn: "Test", releaseDate: "2026-10-16", distributor: "테스트", productionCompany: "테스트", previousRelease: "신인", applicantName: "테스트", applicantEmail: "ui@example.invalid", applicantPhone: "01012345678" })) {
+      await page.locator(`[data-preflight-field="${field}"]`).fill(value);
+    }
+    await page.locator('[data-preflight-field="genre"]').selectOption({ index: 1 });
+    await page.locator('[data-preflight-field="artistType"]').selectOption("SOLO");
+    await page.locator('[data-preflight-field="artistGender"]').selectOption({ index: 1 });
+    await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+    await page.getByRole("button", { name: "저장하고 다음 단계", exact: true }).click();
+    const table = page.getByRole("region", { name: "트랙 표 입력" });
+    await expect(table).toBeVisible();
+    await page.getByLabel("1번 트랙 곡명", { exact: true }).fill("첫 번째 곡");
+    await page.getByLabel("1번 트랙 작곡", { exact: true }).fill("공통 작곡가");
+    await page.getByRole("button", { name: "같은 참여진으로 추가", exact: true }).click();
+    await expect(page.getByLabel("2번 트랙 작곡", { exact: true })).toHaveValue("공통 작곡가");
+    await page.getByLabel("2번 트랙 곡명", { exact: true }).fill("두 번째 곡");
+    await page.getByRole("button", { name: "2번 트랙 위로 이동", exact: true }).click();
+    await expect(page.getByLabel("1번 트랙 곡명", { exact: true })).toHaveValue("두 번째 곡");
+    expect(await table.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const bounds = await table.locator("input,button").evaluateAll((elements) => elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, height: rect.height };
+    }));
+    for (const rect of bounds) {
+      expect(rect.left).toBeGreaterThanOrEqual(0);
+      expect(rect.right).toBeLessThanOrEqual(width);
+      expect(rect.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    if (width === 320) await table.screenshot({ path: testInfo.outputPath("track-editor-320.png") });
+    await page.getByRole("button", { name: "2번 트랙 삭제", exact: true }).click();
+    await expect(page.getByLabel("2번 트랙 곡명", { exact: true })).toHaveCount(0);
+    expect(results.errors).toEqual([]);
+    expect(results.unexpected).toEqual([]);
+  });
+}

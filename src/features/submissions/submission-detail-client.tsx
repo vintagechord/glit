@@ -134,15 +134,15 @@ type StationReview = {
 };
 
 const detailPanelClass =
-  "rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]";
+  "min-w-0 rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[6px_6px_0_#111111] sm:p-6 dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]";
 const detailSubPanelClass =
   "rounded-[8px] border-2 border-border bg-background";
 const detailKickerClass =
   "text-xs font-black uppercase tracking-normal text-muted-foreground";
 const detailActionButtonClass =
-  "inline-flex items-center justify-center gap-1 rounded-[8px] border-2 border-[#111111] bg-white px-4 py-2 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]";
+  "inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-1 rounded-[8px] border-2 border-[#111111] bg-white px-4 py-2 text-center text-xs font-black uppercase tracking-normal text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]";
 const detailToggleButtonClass =
-  "inline-flex items-center justify-center gap-1 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-xs font-black uppercase tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27]";
+  "inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-1 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-center text-xs font-black uppercase tracking-normal text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27]";
 
 const buildTrackSummaryText = (
   counts: { approved: number; rejected: number; pending: number },
@@ -167,7 +167,7 @@ function StationLogoWithFallback({
   }, [initialSrc]);
 
   return (
-    <div className="flex min-h-[52px] w-[136px] shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white p-1.5 dark:border-[#f2cf27]" title={stationName}>
+    <div className="flex min-h-[52px] w-[104px] max-w-full shrink-0 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white p-1.5 sm:w-[136px] dark:border-[#f2cf27]" title={stationName}>
       {src ? (
         <Image
           src={src}
@@ -1036,7 +1036,7 @@ export function SubmissionDetailClient({
               return (
                 <div
                   key={review.id}
-                  className="rounded-[8px] border-2 border-[#111111] bg-background p-3 text-sm shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
+                  className="min-w-0 rounded-[8px] border-2 border-[#111111] bg-background p-3 text-sm shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div
@@ -1061,7 +1061,7 @@ export function SubmissionDetailClient({
                       type="button"
                       onClick={handleResultClick}
                       aria-label={[stationName, resultDisplayStatus.label, trackSummaryLine].filter(Boolean).join(" · ")}
-                      className={`inline-flex min-h-[42px] w-full flex-col items-center justify-center rounded-[6px] border-2 border-[#111111] px-3 py-1.5 text-[13px] font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] sm:w-auto sm:min-w-[112px] ${
+                      className={`inline-flex min-h-11 w-full flex-col items-center justify-center rounded-[6px] border-2 border-[#111111] px-3 py-1.5 text-[13px] font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] sm:w-auto sm:min-w-[112px] sm:shrink-0 ${
                         resultDisplayStatus.tone
                       } ${
                         shouldOpenResultModal
@@ -1275,7 +1275,7 @@ export function SubmissionDetailClient({
   };
 
   return (
-    <div className={resultsOnly ? "mx-auto w-full max-w-6xl p-4 sm:p-6" : "mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10"}>
+    <div className={`mx-auto min-w-0 w-full max-w-6xl [overflow-wrap:anywhere] ${resultsOnly ? "p-4 sm:p-6" : "px-4 py-8 sm:px-6 sm:py-10"}`}>
       {resultsOnly ? (
         <div className="space-y-5">
           <div>
@@ -1848,7 +1848,7 @@ export function SubmissionDetailClient({
             role="dialog"
             aria-modal="true"
             aria-label={trackResultModal.mvReviewAssets ? "심의 결과" : "트랙별 결과"}
-            className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-5 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-6"
+            className="max-h-[calc(100dvh-2rem)] min-w-0 w-full max-w-lg overflow-y-auto overscroll-contain rounded-[10px] border-2 border-[#111111] bg-background p-4 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <p className={detailKickerClass}>
@@ -1872,7 +1872,7 @@ export function SubmissionDetailClient({
               </p>
             ) : null}
             {trackResultModal.summary.results.length > 0 ? (
-              <div className="mt-4 max-h-80 space-y-2 overflow-auto">
+              <div className="mt-4 space-y-2 sm:max-h-80 sm:overflow-y-auto">
                 {trackResultModal.summary.results.map((track, index) => {
                   const status =
                     track.status === "APPROVED"
@@ -1892,16 +1892,16 @@ export function SubmissionDetailClient({
                   return (
                     <div
                       key={`${track.track_id ?? index}-${track.track_no ?? index}`}
-                      className={`${detailSubPanelClass} flex items-center justify-between px-3 py-2 text-sm`}
+                      className={`${detailSubPanelClass} flex items-start justify-between gap-3 px-3 py-2 text-sm`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate font-semibold text-foreground">
+                        <p className="font-semibold leading-relaxed text-foreground">
                           {track.track_no ? `${track.track_no}. ` : ""}
                           {trackLabel}
                         </p>
                       </div>
                       <span
-                        className={`inline-flex items-center justify-center rounded-[6px] border-2 border-[#111111] px-3 py-1 text-xs font-black dark:border-[#f2cf27] ${status.tone}`}
+                        className={`inline-flex shrink-0 items-center justify-center rounded-[6px] border-2 border-[#111111] px-3 py-1 text-xs font-black dark:border-[#f2cf27] ${status.tone}`}
                       >
                         {status.label}
                       </span>
@@ -1966,7 +1966,7 @@ export function SubmissionDetailClient({
                 </div>
               </div>
             ) : null}
-            <div className="mt-5 flex items-center justify-between gap-3">
+            <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
               {trackResultModal.canRequestRadio ? (
                 <button
                   type="button"

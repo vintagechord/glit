@@ -8,8 +8,8 @@ const readSource = (relativePath: string) =>
 test("mobile header keeps account actions compact and accessible", () => {
   const source = readSource("src/components/site/header.tsx");
 
-  assert.match(source, /const subtleButtonClass =\s*\n\s*"[^"]*w-10/);
-  assert.match(source, /const primaryButtonClass =\s*\n\s*"[^"]*w-10/);
+  assert.match(source, /const subtleButtonClass =\s*\n\s*"[^"]*h-11 w-11/);
+  assert.match(source, /const primaryButtonClass =\s*\n\s*"[^"]*h-11 w-11/);
   assert.match(source, /aria-label=\{isEnglishRoute \? "Login" : "로그인"\}/);
   assert.match(source, /<LogIn className="h-4 w-4 sm:hidden"/);
   assert.match(source, /<UserPlus className="h-4 w-4 sm:hidden"/);
@@ -64,7 +64,7 @@ test("dashboard navigation, cart and order details stay compact on narrow screen
   assert.match(shell, /label: "심의내역"/);
   assert.match(shell, /label: "주문내역"/);
   assert.match(shell, /aria-current=\{activeTab === tab\.key \? "page"/);
-  assert.match(cart, /grid-cols-\[36px_minmax\(0,1fr\)\]/);
+  assert.match(cart, /grid-cols-\[44px_minmax\(0,1fr\)\]/);
   assert.match(orders, /<dl className="[^"]*grid-cols-\[52px_minmax\(0,1fr\)\]/);
   assert.doesNotMatch(
     cart,

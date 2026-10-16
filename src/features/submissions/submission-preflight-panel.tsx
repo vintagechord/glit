@@ -68,7 +68,7 @@ const IssueRow = ({
   return (
     <li
       data-preflight-issue={issue.id}
-      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[16px] border-2 p-3 sm:p-4 ${
+      className={`grid grid-cols-1 items-start sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center gap-3 rounded-[16px] border-2 p-3 sm:p-4 ${
         isBlocking
           ? "border-[#d9362c]/45 bg-[#d9362c]/7"
           : "border-[#e7b900]/60 bg-[#f2cf27]/10"
@@ -81,7 +81,7 @@ const IssueRow = ({
             isBlocking ? "text-[#d9362c]" : "text-[#9a7600]"
           }`}
         />
-        <div className="min-w-0">
+        <div className="min-w-0 [overflow-wrap:anywhere]">
           <p className="text-sm font-black text-foreground">{issue.title}</p>
           <p className="mt-0.5 text-xs font-semibold leading-5 text-muted-foreground">
             {issue.message}
@@ -92,7 +92,7 @@ const IssueRow = ({
       <button
         type="button"
         onClick={handleClick}
-        className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border-2 border-[#111111] bg-background px-3 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 hover:bg-[#111111] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
+        className="inline-flex min-h-11 shrink-0 items-center justify-center justify-self-end gap-1 rounded-full border-2 border-[#111111] bg-background px-3 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 hover:bg-[#111111] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
         aria-label={`${issue.title} ${getIssueButtonLabel(issue)}`}
       >
         {getIssueButtonLabel(issue)}

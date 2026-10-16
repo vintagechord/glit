@@ -322,6 +322,8 @@ const exactTranslations: Record<string, string> = {
   "트랙 빠른 입력": "Quick Track Entry",
   "곡별 값은 표에서 비교하고, 가사와 타이틀 설정은 상세 편집에서 입력합니다.":
     "Compare track details in the table, then add lyrics and title-track settings in Details.",
+  "곡별 정보를 입력하고, 가사와 타이틀 설정은 상세 편집에서 입력합니다.":
+    "Enter track details, then add lyrics and title-track settings in Details.",
   "빈 참여진 채우기": "Fill Blank Credits",
   "트랙 표 입력": "Track Table Entry",
   "트랙별 곡명, 가수명, 작곡, 작사, 편곡 빠른 입력":

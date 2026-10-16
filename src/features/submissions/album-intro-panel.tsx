@@ -10,10 +10,10 @@ export function AlbumIntroPanel({
   const [isOpen, setIsOpen] = React.useState(false);
 
   return (
-    <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">
+    <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="max-w-3xl">
-          <h1 className="font-display text-3xl font-black leading-tight text-foreground sm:text-4xl">
+        <div className="min-w-0 max-w-3xl">
+          <h1 className="font-display break-keep text-balance text-2xl font-black leading-tight text-foreground sm:text-3xl">
             음반 심의 접수
           </h1>
           <p className="mt-3 text-sm font-semibold leading-6 text-muted-foreground">

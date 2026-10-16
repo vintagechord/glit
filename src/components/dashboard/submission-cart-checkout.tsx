@@ -654,7 +654,7 @@ export function SubmissionCartCheckout({
 
   if (items.length === 0) {
     return (
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-5">
         {notice ? (
           <NoticeDialog
             type={notice.type}
@@ -665,20 +665,22 @@ export function SubmissionCartCheckout({
         <div className="rounded-[8px] border-2 border-dashed border-[var(--bauhaus-ink)] bg-[var(--background)] px-5 py-8 text-sm font-semibold text-muted-foreground">
           장바구니가 비어 있습니다.
         </div>
-        <Link href={ordersHref} className="inline-flex min-h-10 items-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-4 py-2 text-xs font-black text-[var(--background)]">주문내역 보기</Link>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <Link href={ordersHref} className="inline-flex min-h-11 items-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-4 py-2 text-xs font-black text-[var(--background)]">주문내역 보기</Link>
         <Link
           href={newSubmissionHref}
-          className="inline-flex h-10 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-4 text-xs font-black tracking-normal text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5"
+          className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-4 text-xs font-black tracking-normal text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5"
         >
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           새 신청서 작성
         </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       {notice ? (
         <NoticeDialog
           type={notice.type}
@@ -701,19 +703,19 @@ export function SubmissionCartCheckout({
           }}
         />
       ) : null}
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 py-2 text-xs font-black text-foreground shadow-[2px_2px_0_var(--bauhaus-shadow)]">
             <ShoppingCart size={16} strokeWidth={2.5} />
             <span>{items.length}건</span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link href={ordersHref} className="inline-flex h-9 items-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)]">주문내역 보기</Link>
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+            <Link href={ordersHref} className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)]">주문내역 보기</Link>
             <button
               type="button"
               onClick={toggleAll}
               disabled={payableIds.length === 0 || isDeleting || isOpening}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
             >
               <Check size={14} strokeWidth={2.8} aria-hidden="true" />
               {isAllSelected ? "전체 해제" : "전체 선택"}
@@ -722,7 +724,7 @@ export function SubmissionCartCheckout({
               type="button"
               onClick={() => void handleDeleteItems(Array.from(selectedIds))}
               disabled={selectedIds.size === 0 || isDeleting || isOpening}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70 disabled:hover:translate-y-0 dark:text-[#06111f]"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70 disabled:hover:translate-y-0 dark:text-[#06111f]"
             >
               <Trash2 size={14} strokeWidth={2.8} />
               {isDeleting ? "삭제 중" : "선택 삭제"}
@@ -748,7 +750,7 @@ export function SubmissionCartCheckout({
               <div
                 id={`cart-item-${item.id}`}
                 key={item.id}
-                className={`grid grid-cols-[36px_minmax(0,1fr)] gap-3 rounded-[8px] border-2 px-3 py-4 transition sm:px-4 md:grid-cols-[36px_minmax(0,1fr)_auto_auto] md:items-center ${
+                className={`grid min-w-0 grid-cols-[44px_minmax(0,1fr)] gap-3 rounded-[8px] border-2 px-3 py-4 transition sm:px-4 md:grid-cols-[44px_minmax(0,1fr)_auto] md:items-center xl:grid-cols-[44px_minmax(0,1fr)_auto_auto] ${
                   selected
                     ? "border-[var(--bauhaus-ink)] bg-[#fff4bd] shadow-[4px_4px_0_var(--bauhaus-shadow)] dark:bg-[#f2cf27]/18"
                     : "border-border bg-[var(--card)] hover:border-[var(--bauhaus-ink)]"
@@ -762,7 +764,7 @@ export function SubmissionCartCheckout({
                   disabled={disabled || isDeleting || isOpening}
                   aria-pressed={selected}
                   aria-label={selectionLabel}
-                  className={`flex h-9 w-9 items-center justify-center rounded-[6px] border-2 ${
+                  className={`flex h-11 w-11 items-center justify-center rounded-[6px] border-2 ${
                     selected
                       ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-ink)] text-[var(--background)]"
                       : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-transparent"
@@ -788,23 +790,23 @@ export function SubmissionCartCheckout({
                       </span>
                     ) : null}
                   </span>
-                  <span className="mt-2 block truncate text-sm font-black text-foreground">
+                  <span className="mt-2 block text-sm font-black leading-6 [overflow-wrap:anywhere] text-foreground">
                     {getDisplayTitle(item)}
                   </span>
                   <span
-                    className="mt-1 block truncate text-xs font-semibold leading-5 text-muted-foreground"
+                    className="mt-1 block text-xs font-semibold leading-5 [overflow-wrap:anywhere] text-muted-foreground"
                     title={`최근 수정 ${formatDateTime(item.updatedAt)}`}
                   >
                     {item.packageName ?? "패키지 미지정"}
                   </span>
                 </button>
-                <span className="col-start-2 text-left text-base font-black text-foreground md:col-start-auto md:min-w-[112px] md:text-right">
+                <span className="col-start-2 min-w-0 text-left text-base font-black tabular-nums text-foreground [overflow-wrap:anywhere] md:col-start-3 md:min-w-[112px] md:text-right">
                   {amount > 0 ? `${formatCurrency(amount)}원` : "금액 확인 필요"}
                 </span>
-                <div className="col-start-2 flex flex-wrap items-center justify-start gap-2 md:col-start-auto md:justify-end">
+                <div className="col-span-2 col-start-1 grid min-w-0 grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center md:col-start-2 xl:col-span-1 xl:col-start-4 xl:justify-end">
                   <Link
                     href={getDetailHref(item)}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
+                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
                     aria-label={`${getDisplayTitle(item)} 확인`}
                   >
                     <Eye size={14} strokeWidth={2.8} />
@@ -813,7 +815,7 @@ export function SubmissionCartCheckout({
                     <Link
                       href={getEditHref(item)}
                       onClick={() => prepareEditStorage(item)}
-                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-3 text-[11px] font-black text-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
+                      className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--foreground)] px-3 text-[11px] font-black text-[var(--background)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
                       aria-label={`${getDisplayTitle(item)} 수정`}
                     >
                       <Pencil size={14} strokeWidth={2.8} />
@@ -823,7 +825,7 @@ export function SubmissionCartCheckout({
                     type="button"
                     onClick={() => void handleDeleteItems([item.id])}
                     disabled={isDeleting || isOpening}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-red)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:hover:text-[#06111f]"
+                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-red)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:hover:text-[#06111f]"
                     aria-label={`${getDisplayTitle(item)} 삭제`}
                   >
                     <Trash2 size={14} strokeWidth={2.8} />
@@ -836,7 +838,7 @@ export function SubmissionCartCheckout({
         </div>
       </div>
 
-      <aside className="h-fit rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--card)] p-5 shadow-[6px_6px_0_var(--bauhaus-shadow)] lg:sticky lg:top-24">
+      <aside className="h-fit min-w-0 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--card)] p-4 shadow-[6px_6px_0_var(--bauhaus-shadow)] sm:p-5 xl:sticky xl:top-24">
         <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
           결제
         </p>
@@ -846,13 +848,13 @@ export function SubmissionCartCheckout({
             onClick={() => setSelectedMethod("CARD")}
             disabled={isOpening || isDeleting || isMobileDevice}
             aria-pressed={selectedMethod === "CARD"}
-            className={`flex min-h-12 items-center gap-3 rounded-[8px] border-2 px-3 py-2 text-left text-xs font-black transition ${
+            className={`flex min-h-12 min-w-0 items-center gap-3 rounded-[8px] border-2 px-3 py-2 text-left text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
               selectedMethod === "CARD"
                 ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]"
                 : "border-border bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--bauhaus-ink)]"
             }`}
           >
-            <CreditCard size={17} strokeWidth={2.6} />
+            <CreditCard className="shrink-0" size={17} strokeWidth={2.6} />
             <span>{isMobileDevice ? "카드 결제 · PC에서 이용" : "카드 결제"}</span>
           </button>
           <button
@@ -860,13 +862,13 @@ export function SubmissionCartCheckout({
             onClick={() => setSelectedMethod("BANK")}
             disabled={isOpening || isDeleting}
             aria-pressed={selectedMethod === "BANK"}
-            className={`flex min-h-12 items-center gap-3 rounded-[8px] border-2 px-3 py-2 text-left text-xs font-black transition ${
+            className={`flex min-h-12 min-w-0 items-center gap-3 rounded-[8px] border-2 px-3 py-2 text-left text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
               selectedMethod === "BANK"
                 ? "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]"
                 : "border-border bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--bauhaus-ink)]"
             }`}
           >
-            <Landmark size={17} strokeWidth={2.6} />
+            <Landmark className="shrink-0" size={17} strokeWidth={2.6} />
             <span>무통장 입금</span>
           </button>
         </div>
@@ -876,9 +878,9 @@ export function SubmissionCartCheckout({
             <span>선택</span>
             <span>{selectedItems.length}건</span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-t-2 border-border pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t-2 border-border pt-3">
             <span>결제 금액</span>
-            <span className="text-xl font-black">
+            <span className="min-w-0 text-xl font-black tabular-nums [overflow-wrap:anywhere]">
               {formatCurrency(selectedTotal)}원
             </span>
           </div>

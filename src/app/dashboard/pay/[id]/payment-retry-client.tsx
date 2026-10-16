@@ -133,7 +133,7 @@ export function PaymentRetryClient({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3">
       {isMobileDevice ? <p className="text-sm leading-6 text-muted-foreground">{INICIS_MOBILE_UNAVAILABLE_MESSAGE}</p> : null}
       {notice ? (
         <div
@@ -146,19 +146,19 @@ export function PaymentRetryClient({
           {notice.message}
         </div>
       ) : null}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <button
           type="button"
           onClick={handleRetryPayment}
           disabled={disabled || isOpening || isMobileDevice}
-          className="inline-flex items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-5 py-3 text-xs font-black uppercase tracking-normal text-white shadow-[3px_3px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:text-[#06111f] dark:hover:bg-[#ff7a72]"
+          className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-5 py-3 text-xs font-black uppercase tracking-normal text-white shadow-[3px_3px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:text-[#06111f] dark:hover:bg-[#ff7a72]"
         >
           {isOpening ? "결제 준비 중" : isMobileDevice ? "카드 결제 · PC에서 이용" : "카드 결제하기"}
         </button>
         {showDetailLink ? (
           <Link
             href={detailHref}
-            className="rounded-[8px] border-2 border-border px-5 py-3 text-xs font-black uppercase tracking-normal text-foreground transition hover:border-foreground"
+            className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-border px-5 py-3 text-xs font-black uppercase tracking-normal text-foreground transition hover:border-foreground"
           >
             접수 상세 보기
           </Link>

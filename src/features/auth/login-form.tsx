@@ -101,13 +101,13 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
       <div className="grid grid-cols-2 gap-2">
         <Link
           href={forgotPasswordHref}
-          className="inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-border px-3 py-2 text-xs font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
+          className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-border px-3 py-2 text-xs font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
         >
           비밀번호 찾기
         </Link>
         <Link
           href={signupHref}
-          className="inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5"
+          className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5"
         >
           회원가입
         </Link>
@@ -116,11 +116,11 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
         <TrackLookupModalTrigger
           label="비회원 조회"
           modalTitle="비회원 접수 조회"
-          className="inline-flex items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
+          className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         />
         <Link
           href={trackHref}
-          className="inline-flex items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
+          className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         >
           코드 찾기
         </Link>

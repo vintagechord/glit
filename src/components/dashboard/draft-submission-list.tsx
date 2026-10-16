@@ -25,17 +25,17 @@ type DraftGroupType = "ALBUM" | "MV";
 type FilterType = "ALL" | DraftGroupType;
 
 const filterButtonClass = (active: boolean) =>
-  `inline-flex h-8 items-center justify-center rounded-[8px] border-2 px-3 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
+  `inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 px-3 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
     active
       ? "border-[var(--bauhaus-ink)] bg-[var(--foreground)] text-[var(--background)]"
       : "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]"
   }`;
 
 const outlineControlClass =
-  "inline-flex h-8 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
+  "inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
 
 const dangerControlClass =
-  "inline-flex h-8 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
+  "inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
 
 const chipClass =
   "inline-flex min-h-7 items-center justify-center rounded-[6px] border-2 px-2.5 py-1 text-[11px] font-black leading-none tracking-normal shadow-[1.5px_1.5px_0_var(--bauhaus-shadow)]";
@@ -296,7 +296,7 @@ export function DraftSubmissionList({
         </div>
         <Link
           href={`${localePrefix}/dashboard/new`}
-          className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-4 text-xs font-black tracking-normal text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5"
+          className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-4 text-xs font-black tracking-normal text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5"
         >
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           새 신청서 작성
@@ -308,7 +308,7 @@ export function DraftSubmissionList({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           <button
             type="button"
             onClick={() => setFilter("ALL")}
@@ -331,7 +331,7 @@ export function DraftSubmissionList({
             MV {items.filter((item) => getDraftGroupType(item.type) === "MV").length}
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleToggleVisibleAll}
@@ -372,18 +372,20 @@ export function DraftSubmissionList({
             return (
               <div
                 key={item.id}
-                className="grid gap-3 rounded-[8px] border-2 border-border bg-[var(--card)] px-4 py-3 transition hover:border-[var(--bauhaus-ink)] md:grid-cols-[24px_1fr_auto] md:items-center"
+                className="grid min-w-0 grid-cols-[44px_minmax(0,1fr)] gap-3 rounded-[8px] border-2 border-border bg-[var(--card)] px-3 py-3 transition hover:border-[var(--bauhaus-ink)] sm:px-4 md:grid-cols-[44px_minmax(0,1fr)_auto] md:items-center"
               >
+                <label className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-[8px] border border-border bg-background focus-within:ring-2 focus-within:ring-ring">
                 <input
                   type="checkbox"
                   checked={selectedIds.has(item.id)}
                   onChange={() => handleToggleItem(item.id)}
                   aria-label={`${buildDisplayTitle(item)} 선택`}
-                  className="mt-1 h-4 w-4 rounded border-border accent-[var(--bauhaus-ink)] md:mt-0"
+                  className="h-5 w-5 rounded border-border accent-[var(--bauhaus-ink)]"
                 />
+                </label>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-sm font-semibold text-foreground">
+                    <p className="text-sm font-semibold leading-6 text-foreground [overflow-wrap:anywhere]">
                       {buildDisplayTitle(item)}
                     </p>
                     <span className={`${chipClass} border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]`}>
@@ -398,7 +400,7 @@ export function DraftSubmissionList({
                     {formatShortDate(item.updatedAt)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 md:justify-end">
+                <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 md:col-start-auto md:justify-end">
                   <button
                     type="button"
                     onClick={() => {
@@ -408,7 +410,7 @@ export function DraftSubmissionList({
                       }
                       handleResume(item, Date.now());
                     }}
-                    className={`inline-flex h-8 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] px-3 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
+                    className={`inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] px-3 text-[11px] font-black tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 ${
                       shouldOpenPayment
                         ? "bg-[var(--bauhaus-red)] text-white hover:bg-[#b92d25] dark:text-[#06111f] dark:hover:bg-[#ff7a72]"
                         : "bg-[var(--foreground)] text-[var(--background)] hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"

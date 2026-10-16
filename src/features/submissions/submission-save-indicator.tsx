@@ -96,7 +96,7 @@ export function SubmissionSaveIndicator({
           aria-modal="true"
           aria-labelledby="submission-recovery-title"
           className={cn(
-            "w-full max-w-md rounded-[24px] border-2 border-[#111111] bg-[#fff7cf] p-5 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#2a2512] dark:text-white dark:shadow-none",
+            "max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto rounded-[24px] border-2 border-[#111111] bg-[#fff7cf] p-5 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#2a2512] dark:text-white dark:shadow-none",
             className,
           )}
         >

@@ -28,10 +28,10 @@ export default async function MvSubmissionPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
-      <section className="rounded-[10px] border-2 border-[#111111] bg-card p-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">
+      <section className="rounded-[10px] border-2 border-[#111111] bg-card p-4 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-black text-foreground">
+            <h1 className="font-display break-keep text-balance text-2xl font-black sm:text-3xl text-foreground">
               뮤직비디오 심의 접수
             </h1>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -40,7 +40,7 @@ export default async function MvSubmissionPage() {
               </span>
             </div>
           </div>
-          <details className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 sm:w-auto sm:min-w-72">
+          <details className="min-w-0 w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 sm:w-auto sm:min-w-72">
             <summary className="cursor-pointer text-sm font-black text-foreground">
               영상 규격 확인
             </summary>

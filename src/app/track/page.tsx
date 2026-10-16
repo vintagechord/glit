@@ -36,9 +36,9 @@ export async function TrackPageView({
   const isGuestMode = modeRaw === "guest";
 
   return (
-    <div className="page-centered mx-auto w-full max-w-4xl px-6 py-12">
+    <div className="page-centered mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
       <div>
-        <h1 className="font-display text-3xl font-black text-foreground">
+        <h1 className="font-display break-keep text-balance text-2xl font-black sm:text-3xl text-foreground">
           {isGuestMode ? "비회원 진행/결과 조회" : "조회 방식을 선택하세요"}
         </h1>
         {isGuestMode ? (

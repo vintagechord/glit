@@ -56,7 +56,7 @@ export function TrackLookupModalTrigger({
             className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-5 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 {modalTitle ? (
                   <p id={titleId} className="text-sm font-black text-foreground">
@@ -67,7 +67,7 @@ export function TrackLookupModalTrigger({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-[8px] border-2 border-border px-2 py-1 text-xs font-black text-muted-foreground transition hover:text-foreground"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[8px] border-2 border-border px-3 py-2 text-xs font-black text-muted-foreground transition hover:text-foreground"
               >
                 닫기
               </button>
