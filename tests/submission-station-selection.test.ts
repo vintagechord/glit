@@ -72,6 +72,41 @@ test("MV station selection may be resolved from canonical IDs", () => {
   );
 });
 
+test("online MV submissions reject retired MBC selections from codes and saved IDs", () => {
+  assert.deepEqual(
+    resolveCanonicalMvStationSelection({
+      mvType: "MV_DISTRIBUTION",
+      requestedCodes: ["MBC", "MNET"],
+      stations,
+    }),
+    { ok: false, reason: "INVALID_CODE" },
+  );
+  assert.deepEqual(
+    resolveCanonicalMvStationSelection({
+      mvType: "MV_DISTRIBUTION",
+      requestedIds: ["station-mbc", "station-etn"],
+      stations,
+    }),
+    { ok: false, reason: "STATION_NOT_FOUND" },
+  );
+});
+
+test("broadcast MV submissions still accept MBC by its saved station ID", () => {
+  assert.deepEqual(
+    resolveCanonicalMvStationSelection({
+      mvType: "MV_BROADCAST",
+      requestedIds: ["station-mbc"],
+      stations,
+    }),
+    {
+      ok: true,
+      stationIds: ["station-mbc"],
+      stationCodes: ["MBC"],
+      stationAmountKrw: 30_000,
+    },
+  );
+});
+
 test("MV station IDs cannot add reviews beyond the priced code selection", () => {
   assert.deepEqual(
     resolveCanonicalMvStationSelection({

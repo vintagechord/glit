@@ -12,6 +12,7 @@ import {
 import { buildUrl, getBaseUrl } from "@/lib/url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateReleasedAlbumPaymentFiles } from "@/lib/submission-payment-files";
+import { validateMvPaymentStations } from "@/lib/submission-payment-stations";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { orderGuestTokensSchema } from "@/lib/submission-orders-http";
@@ -208,6 +209,10 @@ export async function POST(req: NextRequest) {
   const mediaError = await validateReleasedAlbumPaymentFiles(admin, submissionIds);
   if (mediaError) {
     return NextResponse.json({ error: mediaError }, { status: 409 });
+  }
+  const stationError = await validateMvPaymentStations(admin, submissionIds);
+  if (stationError) {
+    return NextResponse.json({ error: stationError }, { status: 409 });
   }
 
   const totalAmountKrw = submissions.reduce(

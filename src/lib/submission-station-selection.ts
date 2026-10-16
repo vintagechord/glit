@@ -11,6 +11,8 @@ export type CanonicalAlbumStationSelection =
 
 export const MV_BASE_ONLINE_PRICE_KRW = 30_000;
 
+export const MV_ONLINE_OPTION_CODES: readonly string[] = ["MNET", "ETN"];
+
 export const MV_STATION_PRICE_KRW: Readonly<Record<string, number>> = {
   KBS: 50_000,
   MBC: 30_000,
@@ -21,7 +23,7 @@ export const MV_STATION_PRICE_KRW: Readonly<Record<string, number>> = {
 
 const mvStationCodesByType: Readonly<Record<MvSubmissionType, ReadonlySet<string>>> = {
   MV_BROADCAST: new Set(["KBS", "MBC", "SBS", "ETN"]),
-  MV_DISTRIBUTION: new Set(["MBC", "MNET", "ETN"]),
+  MV_DISTRIBUTION: new Set(MV_ONLINE_OPTION_CODES),
 };
 
 export type CanonicalMvStationSelection =

@@ -2,6 +2,7 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateReleasedAlbumPaymentFiles } from "@/lib/submission-payment-files";
+import { validateMvPaymentStations } from "@/lib/submission-payment-stations";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 
@@ -531,6 +532,8 @@ export const createPayPalOrderForSubmission = async ({
 
   const mediaError = await validateReleasedAlbumPaymentFiles(createAdminClient(), [submission.id]);
   if (mediaError) return { error: mediaError };
+  const stationError = await validateMvPaymentStations(createAdminClient(), [submission.id]);
+  if (stationError) return { error: stationError };
 
   // The return URL is shared with PayPal and may be retained in third-party
   // logs. Use an order-bound, single-purpose nonce instead of the guest's

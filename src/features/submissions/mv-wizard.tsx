@@ -42,6 +42,7 @@ import {
   type SubmissionPreflightTarget,
 } from "@/lib/submission-preflight";
 import { getSubmissionCheckpointStorageKey } from "@/lib/submission-checkpoint";
+import { MV_ONLINE_OPTION_CODES } from "@/lib/submission-station-selection";
 import {
   areSubmissionUploadMetadataEqual,
   mergeSubmissionUploadMetadata,
@@ -244,7 +245,8 @@ const stationPriceMap: Record<string, number> = {
   MNET: 30000,
 };
 const tvStationCodes = ["KBS", "MBC", "SBS", "ETN"];
-const onlineOptionCodes = ["MBC", "MNET", "ETN"];
+const filterOnlineOptions = (codes: readonly string[]) =>
+  codes.filter((code) => MV_ONLINE_OPTION_CODES.includes(code));
 const tvStationDetails: Record<string, { title: string; note: string }> = {
   KBS: {
     title: "KBS 뮤직비디오 심의",
@@ -264,10 +266,6 @@ const tvStationDetails: Record<string, { title: string; note: string }> = {
   },
 };
 const onlineOptionDetails: Record<string, { title: string; note: string }> = {
-  MBC: {
-    title: "MBC 뮤직비디오 심의",
-    note: "MBC M 방송 아티스트에 한해 심의 가능합니다.",
-  },
   MNET: {
     title: "Mnet 뮤직비디오 심의",
     note: "방송 일정이 있는 경우에만 문의해주세요.",
@@ -277,21 +275,12 @@ const onlineOptionDetails: Record<string, { title: string; note: string }> = {
     note: "온라인 심의 완료된 영상에 한하여 ETN 방송 '입고'만 가능합니다.",
   },
 };
-const conditionalOnlineOptions = new Set(["MBC", "MNET", "ETN"]);
+const conditionalOnlineOptions = new Set(MV_ONLINE_OPTION_CODES);
 
 const onlineOptionConfirmDetails: Record<
   string,
   { title: string; lines: string[] }
 > = {
-  MBC: {
-    title: "MBC 뮤직비디오 심의 안내",
-    lines: [
-      "2020.06.25부터 MBC M (<쇼챔피언>, <주간아이돌> 등) 방송되는 아티스트 뮤직비디오에 한해 심의 가능.",
-      "심의 영상은 온라인용으로 사용 가능합니다.",
-      "심의 완료 후 등급분류 + MBC 로고 삽입본 사용 가능.",
-      "파일 용량 2GB 미만.",
-    ],
-  },
   MNET: {
     title: "Mnet 뮤직비디오 심의 안내",
     lines: [
@@ -704,7 +693,7 @@ export function MvWizard({
           guestToken: payload.guestToken ?? null,
           mvType: payload.mvType,
           tvStations: payload.tvStations ?? [],
-          onlineOptions: payload.onlineOptions ?? [],
+          onlineOptions: filterOnlineOptions(payload.onlineOptions ?? []),
           onlineBaseSelected: payload.onlineBaseSelected ?? true,
           emailSubmitConfirmed: payload.emailSubmitConfirmed ?? false,
           applicationFormMode: payload.applicationFormMode,
@@ -1026,9 +1015,6 @@ export function MvWizard({
         "프레임: 29.97fps 권장",
         "편집 완료된 최종본만 접수",
       );
-      if (onlineOptions.includes("MBC")) {
-        chips.push("MBC: 파일 용량 2GB 미만");
-      }
       if (onlineOptions.includes("MNET")) {
         chips.push("Mnet: WMV 또는 MPG", "Mnet: 파일 용량 1GB 미만");
       }
@@ -1761,6 +1747,7 @@ export function MvWizard({
   };
 
   const toggleOnlineOption = (code: string) => {
+    if (!MV_ONLINE_OPTION_CODES.includes(code)) return;
     if (onlineOptions.includes(code)) {
       setOnlineOptions((prev) => prev.filter((item) => item !== code));
       return;
@@ -1776,6 +1763,7 @@ export function MvWizard({
   const handleConfirmOnlineOption = () => {
     if (!confirmModal) return;
     const nextCode = confirmModal.code;
+    if (!MV_ONLINE_OPTION_CODES.includes(nextCode)) return;
     setOnlineOptions((prev) =>
       prev.includes(nextCode) ? prev : [...prev, nextCode],
     );
@@ -2092,9 +2080,11 @@ export function MvWizard({
     } else {
       setTvStations([]);
       setOnlineOptions(
-        Array.isArray(selection?.onlineOptions)
-          ? selection!.onlineOptions
-          : draftStationCodes,
+        filterOnlineOptions(
+          Array.isArray(selection?.onlineOptions)
+            ? selection!.onlineOptions
+            : draftStationCodes,
+        ),
       );
       const baseSelected =
         typeof selection?.onlineBaseSelected === "boolean"
@@ -2780,7 +2770,11 @@ export function MvWizard({
       setNotice({});
     }
     const executeSave = async () => {
-      const source = options.snapshot ?? buildMvCheckpointSnapshot();
+      const snapshot = options.snapshot ?? buildMvCheckpointSnapshot();
+      const source = {
+        ...snapshot,
+        onlineOptions: filterOnlineOptions(snapshot.onlineOptions),
+      };
       const sourceSelectedCodes =
         source.mvType === "MV_BROADCAST"
           ? source.tvStations
@@ -3261,7 +3255,7 @@ export function MvWizard({
       setApplicationFormMode(snapshot.applicationFormMode);
       setMvType(snapshot.mvType);
       setTvStations([...snapshot.tvStations]);
-      setOnlineOptions([...snapshot.onlineOptions]);
+      setOnlineOptions(filterOnlineOptions(snapshot.onlineOptions));
       setOnlineBaseSelected(snapshot.onlineBaseSelected);
       setTitle(snapshot.title);
       setArtistName(snapshot.artistName);
@@ -3753,7 +3747,7 @@ export function MvWizard({
                     필증과 등급분류 파일이 제공되며, Melon, 지니, 유튜브 등 온라인 유통이 가능합니다.
                   </p>
                 </button>
-                {onlineOptionCodes.map((code, index) => {
+                {MV_ONLINE_OPTION_CODES.map((code, index) => {
                   const active = onlineOptions.includes(code);
                   const stationName = stationMap.get(code)?.name ?? code;
                   const details = onlineOptionDetails[code];
