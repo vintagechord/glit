@@ -68,6 +68,16 @@ test("rejected results show guidance without an eligible request", async ({ page
   await expect(page.getByRole("button", { name: "본문 복사" })).toHaveCount(0);
 });
 
+test("legacy approval without track metadata still provides official participation guidance", async ({ page }) => {
+  await mount(page, "missing-tracks");
+  await expect(page.getByText(/개별 곡 정보가 없어 자동 초안을 만들 수 없습니다/)).toBeVisible();
+  await expect(page.getByRole("link", { name: /K-POPPIN/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Radio’n Us/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /메시지 게시판 열기/ })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "본문 복사" })).toHaveCount(0);
+  await expect(page.getByLabel("신청할 적격 곡")).toHaveCount(0);
+});
+
 test("English result pages have an English radio guide and draft", async ({ page }) => {
   await mount(page, "english");
   await expect(page.getByRole("heading", { name: "Find a program for your song" })).toBeVisible();

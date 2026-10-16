@@ -17,6 +17,7 @@ import {
 } from "@/lib/broadcast-support";
 import { getRadioStationGuide } from "@/lib/radio-station-guide";
 import { RadioStationGuideContent } from "./radio-station-guide";
+import { normalizeStationReviewStatus } from "@/constants/review-status";
 
 const controlClass = "min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-3 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground sm:text-sm";
 const buttonClass = "inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 rounded-lg border-2 border-foreground bg-background px-3 py-2 text-center text-sm font-bold transition hover:bg-muted disabled:opacity-50 [&>svg]:shrink-0";
@@ -108,6 +109,7 @@ export function BroadcastSupportPanel({ submission, stationReviews, isEnglish = 
   const draftRef = useRef<HTMLDivElement>(null);
   const selected = eligible.find(item => item.review.id === stationId) || eligible[0];
   const selectedTrack = selected?.tracks.find(item => item.key === trackKey) || selected?.tracks[0];
+  const guideOnlyReview = !submission.album_tracks?.length && stationReviews.length === 1 && normalizeStationReviewStatus(stationReviews[0].status) === "APPROVED" ? stationReviews[0] : null;
   const stationGuide = getRadioStationGuide({ stationCode: selected?.review.station?.code, stationName: selected?.review.station?.name });
   const draftEnglish = draftLanguage ? draftLanguage === "en" : isEnglish || stationGuide?.language === "en";
   const draftKey = `${submission.id}:${selected?.review.id}:${selectedTrack?.key}:${draftEnglish}`;
@@ -186,7 +188,13 @@ export function BroadcastSupportPanel({ submission, stationReviews, isEnglish = 
                 <div className="mt-2 border-t border-border pt-4 text-sm leading-6"><p className="font-bold">{isEnglish ? "3. Post on the program’s board" : "3. 프로그램 게시판에서 직접 등록"}</p><p className="mt-1 text-muted-foreground">{isEnglish ? "Paste your title and request, check the board rules and personal information, then submit. Check your post and the playlist afterward." : "제목과 본문을 붙여넣고 공지·개인정보를 확인한 뒤 등록하세요. 이후 자신의 게시글과 선곡표를 확인하면 됩니다."}</p></div>
               </div>
             </div>
-          </> : <p className="rounded-lg bg-muted p-4 text-sm leading-relaxed">{isEnglish ? "No approved track is available for a song request yet. Check the review results and any requested corrections above." : "현재 신청곡으로 안내할 적격 곡이 없습니다. 위 심의 결과와 보완 사유를 먼저 확인해주세요."}</p>}
+          </> : guideOnlyReview ? (
+            <div className="space-y-5">
+              <p className="rounded-xl border border-border bg-muted/50 p-4 text-sm leading-6">{isEnglish ? "This broadcaster’s approval is recorded, but individual track information is missing, so we cannot fill in a draft. Use the program guides below and enter the exact song and artist names yourself." : "방송국 적격 결과는 확인됐지만 개별 곡 정보가 없어 자동 초안을 만들 수 없습니다. 아래 참여 경로를 이용하고 신청할 곡명과 아티스트명을 직접 적어주세요."}</p>
+              <RadioStationGuideContent stationCode={guideOnlyReview.station?.code} stationName={guideOnlyReview.station?.name} isEnglish={isEnglish} />
+              <div className="rounded-xl border border-border bg-background p-4 text-sm leading-6"><h3 className="font-black">{isEnglish ? "What to write" : "신청글에는 이렇게 적어주세요"}</h3><p className="mt-2 text-muted-foreground">{isEnglish ? "Include the exact artist and song names, then add two or three sentences about when you want to hear the song or a personal story connected to it. Add release details or review documents only if the program asks for them." : "정확한 아티스트명과 곡명을 적고, 언제 듣고 싶은지 또는 곡과 연결되는 나의 이야기를 2~3문장 덧붙여보세요. 발매 정보·심의 서류는 프로그램에서 요청할 때만 추가하면 됩니다."}</p><p className="mt-3 text-xs text-muted-foreground">{isEnglish ? "Approval and a listener request do not guarantee airplay. Each program selects its music." : "심의 적격과 신청곡 등록이 방송을 보장하지는 않습니다. 실제 선곡은 프로그램에서 결정합니다."}</p></div>
+            </div>
+          ) : <p className="rounded-lg bg-muted p-4 text-sm leading-relaxed">{isEnglish ? "No approved track is available for a song request yet. Check the review results and any requested corrections above." : "현재 신청곡으로 안내할 적격 곡이 없습니다. 위 심의 결과와 보완 사유를 먼저 확인해주세요."}</p>}
       </div>
       <details className="mt-6 border-t border-border pt-4">
         <summary className="min-h-11 cursor-pointer py-2 text-sm font-bold">{isEnglish ? "Preparation checklist & reference pack" : "준비 체크리스트 · 방송 참고자료"}</summary>
