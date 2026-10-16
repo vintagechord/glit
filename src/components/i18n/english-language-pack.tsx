@@ -872,8 +872,6 @@ const exactTranslations: Record<string, string> = {
     "Use Onside credits for the services you need.",
   "결제 완료 음반심의 1건 = 1크레딧":
     "1 paid album review = 1 credit",
-  "적립 크레딧은 매거진 발행, 녹음실 이용권 등으로 사용 가능합니다.":
-    "Earned credits can be used for magazine publication, studio passes, and more.",
   "총 적립": "Total Earned",
   "결제 완료 및 지급 크레딧": "Paid and Issued Credits",
   "지금 교환 가능한 잔여 크레딧": "Credits Currently Available",
@@ -883,8 +881,6 @@ const exactTranslations: Record<string, string> = {
   "서비스 이용 요청에 사용": "Used for service requests",
   "앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 워터멜론 매거진 발행 요청과 온사이드 연계 서비스 이용에 사용할 수 있습니다.":
     "Each completed album review payment issues 1 credit. Credits can be used for Watermelon magazine requests and Onside partner services.",
-  "앨범심의 결제 완료 건마다 크레딧 1개가 발급됩니다. 크레딧은 매거진 발행, 녹음실 이용권 등 관리자가 등록한 온사이드 연계 서비스에 사용할 수 있습니다.":
-    "Each completed album review payment issues 1 credit. Credits can be used for magazine publication, studio vouchers, and other Onside partner services registered by admins.",
   "매거진 바로가기": "Open Magazine",
   "매거진 발행 요청": "Magazine Publication Request",
   "매거진 발행 요청하기": "Request Magazine Publication",
@@ -921,8 +917,6 @@ const exactTranslations: Record<string, string> = {
     "1 credit is issued for each completed album review payment.",
   "크레딧으로 워터멜론 매거진 발행 요청과 온사이드 연계 다양한 서비스를 이용할 수 있습니다.":
     "Use credits for Watermelon magazine requests and various Onside partner services.",
-  "크레딧으로 워터멜론 매거진 발행 요청, 녹음실 이용권, 관리자가 추가하는 온사이드 연계 서비스를 이용할 수 있습니다.":
-    "Use credits for Watermelon magazine requests, studio vouchers, and Onside partner services added by admins.",
   "크레딧 이용권이 발행되었습니다. 쿠폰코드는 보유 크레딧 페이지에서도 확인할 수 있습니다.":
     "Your credit voucher has been issued. You can also find the coupon code on the Available Credits page.",
   "크레딧 이용권이 발행되었습니다. 쿠폰코드를 확인해주세요.":
@@ -931,13 +925,7 @@ const exactTranslations: Record<string, string> = {
   "서비스 이용 요청 접수": "Service Request Received",
   "서비스 이용 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.":
     "Your service request has been received. Instructions will appear after admin approval.",
-  "녹음실 사용 신청 완료": "Studio Use Request Submitted",
-  "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.":
-    "Your studio reservation request has been submitted. Guidance will be shown after admin approval.",
-  "적어주신 연락처로 녹음실 사용 안내를 드립니다.":
-    "Studio use guidance will be sent to the contact details you entered.",
-  "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.\n적어주신 연락처로 녹음실 사용 안내를 드립니다.":
-    "Your studio booking request has been received. Instructions will appear after admin approval.\nWe will contact you using the contact details you provided.",
+  "서비스 이용 요청 완료": "Service Request Submitted",
   "크레딧 사용 완료": "Credit Use Complete",
   "요청 내역": "Request History",
   "매거진 · 서비스": "Magazine · Services",
@@ -955,8 +943,8 @@ const exactTranslations: Record<string, string> = {
   "서비스 보기": "View Services",
   "크레딧 사용해서 신청": "Request with Credits",
   "서비스 이용권 신청": "Service Voucher Requests",
-  "녹음실 등 연계 서비스 신청":
-    "Request linked services such as studios",
+  "온사이드 연계 서비스 신청": "Request Onside Partner Services",
+  "크레딧으로 신청 가능한 온사이드 연계 서비스입니다.": "Onside partner services you can request with credits.",
   "서비스별 차감": "Varies by service",
   "요청 접수": "Request Received",
   "요청접수": "Request Received",
@@ -981,7 +969,6 @@ const exactTranslations: Record<string, string> = {
     "There are no magazine publication or service requests submitted with credits yet.",
   "발행 페이지 보기": "View Published Page",
   "관리자 메모": "Admin Memo",
-  "녹음실 위치 보기": "View Studio Location",
   "희망 날짜": "Preferred Date",
   "희망 시간": "Preferred Time",
   "요청사항": "Request Notes",
@@ -996,10 +983,7 @@ const exactTranslations: Record<string, string> = {
   "워터멜론 매거진": "Watermelon Magazine",
   "1크레딧으로 발행 요청": "Request publication with 1 credit",
   "서비스 이용권": "Service Vouchers",
-  "녹음실 등 관리자 등록 서비스": "Admin-registered services such as studios",
   "크레딧으로 이용 가능한 서비스": "Services Available with Credits",
-  "관리자가 등록한 녹음실 이용권과 온사이드 연계 서비스를 크레딧으로 교환할 수 있습니다. 새 서비스가 추가되면 이 탭에 자동으로 노출됩니다.":
-    "Redeem credits for admin-registered studio vouchers and Onside partner services. New services appear in this tab automatically.",
   "사용 가능": "Available",
   "로그인 필요": "Login Required",
   "로그인이 필요합니다.": "Login Required.",
@@ -1007,7 +991,6 @@ const exactTranslations: Record<string, string> = {
   "태진 등록 요청": "Request TJ Registration",
   "금영 등록 요청": "Request KY Registration",
   "로그인 후 이용": "Log In to Use",
-  "녹음실 살펴보기": "View Studio",
   "크레딧으로 이용권 발행": "Issue Voucher with Credits",
   "크레딧 부족": "Not Enough Credits",
   "현재 교환 가능한 서비스 이용권이 없습니다. 관리자 등록 후 이 탭에 서비스가 표시됩니다.":
@@ -1020,6 +1003,8 @@ const exactTranslations: Record<string, string> = {
   "등록된 서비스": "Registered Services",
   "새 서비스 등록": "Add New Service",
   "서비스명": "Service Name",
+  "서비스 이름을 입력하세요": "Enter the service name",
+  "서비스 제공 장소 또는 방식": "Service location or delivery method",
   "사용자에게 보이는 서비스 설명": "Service description shown to users",
   "보유 크레딧에서 발행 내역 보기": "View Issued Vouchers in Available Credits",
   "계정정보": "Account Info",

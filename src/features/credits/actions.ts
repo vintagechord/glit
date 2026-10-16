@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { isRetiredCreditReward } from "@/lib/credits";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -219,6 +220,20 @@ export async function createStudioReservationFormAction(
     redirect(`/login?next=${encodeURIComponent(redirectPath)}`);
   }
 
+  const { data: reward, error: rewardError } = await supabase
+    .from("credit_rewards")
+    .select("id, title, is_active")
+    .eq("id", parsed.data.rewardId)
+    .maybeSingle();
+
+  if (rewardError || !reward?.is_active || isRetiredCreditReward(reward)) {
+    redirect(
+      withQuery(redirectPath, {
+        error: normalizeStudioRpcError("REWARD_NOT_FOUND"),
+      }),
+    );
+  }
+
   const { error } = await supabase.rpc("redeem_studio_reward", {
     p_reward_id: parsed.data.rewardId,
     p_preferred_date: parsed.data.preferredDate,
@@ -265,6 +280,10 @@ export async function upsertCreditRewardFormAction(
 
   if (!parsed.success) {
     redirect(withQuery("/admin/credits", { error: "invalid_reward" }));
+  }
+
+  if (parsed.data.isActive && isRetiredCreditReward(parsed.data)) {
+    redirect(withQuery("/admin/credits", { error: "retired_reward" }));
   }
 
   const admin = createAdminClient();

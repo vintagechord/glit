@@ -28,7 +28,9 @@ test("credit action labels have exact English translations", () => {
     ["전체 요청 보기", "View All Requests"],
     ["요청 내역이 없습니다.", "No request history yet."],
     ["1크레딧으로 발행 요청", "Request publication with 1 credit"],
-    ["녹음실 등 관리자 등록 서비스", "Admin-registered services such as studios"],
+    ["온사이드 연계 서비스 신청", "Request Onside Partner Services"],
+    ["서비스 이용 요청 완료", "Service Request Submitted"],
+    ["크레딧으로 신청 가능한 온사이드 연계 서비스입니다.", "Onside partner services you can request with credits."],
   ] as const;
 
   for (const [korean, english] of expectedTranslations) {

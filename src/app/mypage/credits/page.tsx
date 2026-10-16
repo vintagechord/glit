@@ -23,7 +23,6 @@ import {
   type CreditActionNoticeState,
 } from "@/features/credits/credit-action-notice";
 import {
-  getCreditRewardStudioUrl,
   getUserCreditSummary,
   stripCreditApprovalMessageDatePrefix,
   type CreditRewardRedemption,
@@ -207,7 +206,7 @@ const noticeText = (
   if (studioRequestedFlag) {
     return {
       type: "success" as const,
-      title: "예약 요청 완료",
+      title: "서비스 이용 요청 완료",
       text: "승인 결과는 이 화면과 입력한 연락처로 안내됩니다.",
       actionHref: `${localePrefix}/mypage/credits#credit-requests`,
       actionLabel: "내역 보기",
@@ -294,7 +293,6 @@ function StudioReservationCard({
   const approvedMessage = stripCreditApprovalMessageDatePrefix(
     reservation.approved_message,
   );
-  const studioUrl = getCreditRewardStudioUrl(reservation.reward_title);
   const statusLabel = getStudioRequestStatusLabel(reservation, redemption);
   const activeStepIndex = getStudioRequestStepIndex(reservation, redemption);
   const isUsed = statusLabel === studioStatusLabels.USED;
@@ -352,17 +350,6 @@ function StudioReservationCard({
         <p className="mt-3 text-xs font-semibold text-muted-foreground">
           {formatDate(redemption.used_at)}
         </p>
-      ) : null}
-      {studioUrl ? (
-        <a
-          href={studioUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-4 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 hover:bg-[#f2cf27]"
-        >
-          위치
-          <ExternalLink className="h-4 w-4" aria-hidden="true" />
-        </a>
       ) : null}
     </div>
   );
@@ -766,7 +753,7 @@ export async function MyPageCreditsPageView({
               <span className="mt-6">
                 <span className="block text-xl font-black">서비스 이용 요청</span>
                 <span className="mt-1 block text-sm font-semibold text-white/75">
-                  녹음실 등 연계 서비스 신청
+                  온사이드 연계 서비스 신청
                 </span>
                 <span className="mt-4 inline-flex items-center gap-2 text-sm font-black">
                   신청하기

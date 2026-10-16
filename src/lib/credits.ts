@@ -67,25 +67,23 @@ export type StudioReservationRequest = {
   updated_at?: string | null;
 };
 
-export const VINTAGE_HOUSE_STUDIO_URL = "https://naver.me/GjyIilET";
-
-const vintageHouseStudioRewardTitles = new Set([
+// Retired rewards stay in the database to preserve past requests and balances.
+const retiredStudioRewardIds = new Set([
+  "81ec9266-8b9c-4790-8c1a-5ab3cc458035",
+  "35cd46ec-8329-49c9-9806-dc19a3574752",
+]);
+const retiredStudioRewardTitles = new Set([
   "빈티지하우스 메인 녹음실 1시간 권",
   "빈티지하우스 셀프 녹음실 1시간 권",
 ]);
 
-export function isStudioCreditRewardTitle(
-  rewardTitle: string | null | undefined,
+export function isRetiredCreditReward(
+  reward: { id?: string; title: string },
 ) {
-  return Boolean(rewardTitle && vintageHouseStudioRewardTitles.has(rewardTitle));
-}
-
-export function getCreditRewardStudioUrl(rewardTitle: string | null | undefined) {
-  if (!isStudioCreditRewardTitle(rewardTitle)) {
-    return null;
-  }
-
-  return VINTAGE_HOUSE_STUDIO_URL;
+  return (
+    retiredStudioRewardIds.has((reward.id ?? "").toLowerCase()) ||
+    retiredStudioRewardTitles.has(reward.title.trim())
+  );
 }
 
 const approvalMessageDatePrefixPattern =
@@ -175,5 +173,7 @@ export async function listActiveCreditRewards(client: SupabaseClient) {
     throw new Error(`Failed to load credit rewards: ${error.message}`);
   }
 
-  return (data ?? []) as CreditReward[];
+  return ((data ?? []) as CreditReward[]).filter(
+    (reward) => !isRetiredCreditReward(reward),
+  );
 }

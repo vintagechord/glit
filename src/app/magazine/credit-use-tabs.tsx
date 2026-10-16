@@ -29,7 +29,7 @@ const tabs: Array<{
   {
     key: "services",
     title: "서비스 이용 요청",
-    description: "녹음실 등 연계 서비스 신청",
+    description: "온사이드 연계 서비스 신청",
     meta: "서비스별 차감",
     icon: Gift,
   },

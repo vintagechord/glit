@@ -20,7 +20,6 @@ import {
   type CreditActionNoticeState,
 } from "@/features/credits/credit-action-notice";
 import {
-  getCreditRewardStudioUrl,
   getUserCreditSummary,
   listActiveCreditRewards,
   type CreditReward,
@@ -85,9 +84,9 @@ const noticeText = (
   if (firstParam(studioRequested)) {
     return {
       type: "success" as const,
-      title: "녹음실 사용 신청 완료",
+      title: "서비스 이용 요청 완료",
       text:
-        "녹음실 예약 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.\n적어주신 연락처로 녹음실 사용 안내를 드립니다.",
+        "서비스 이용 요청이 접수되었습니다. 관리자 승인 후 안내 문구가 표시됩니다.",
       actionHref: `${localePrefix}/mypage/credits#credit-requests`,
       actionLabel: "요청 내역 보기",
       clearQueryParams: ["studioRequested"],
@@ -128,7 +127,6 @@ function CreditServiceRewardCard({
   localePrefix: "" | "/en";
 }) {
   const canRedeem = isAuthenticated && availableCredits >= reward.credits_required;
-  const studioUrl = getCreditRewardStudioUrl(reward.title);
 
   return (
     <article className="flex min-h-[238px] flex-col justify-between rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[5px_5px_0_#111111] dark:border-white/70 dark:shadow-[5px_5px_0_#1556a4]">
@@ -159,18 +157,6 @@ function CreditServiceRewardCard({
       </div>
 
       <div className="mt-5 space-y-2">
-        {studioUrl ? (
-          <a
-            href={studioUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-4 py-3 text-sm font-black text-foreground transition hover:-translate-y-0.5 hover:border-[#1556a4] hover:bg-[#eaf2fb] dark:hover:bg-[#102033]"
-          >
-            녹음실 살펴보기
-            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-          </a>
-        ) : null}
-
         {!isAuthenticated ? (
           <Link
             href={`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/magazine?tab=services#credit-use`)}`}
@@ -219,7 +205,7 @@ function CreditServiceRewardsPanel({
           서비스 이용 요청
         </h2>
         <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
-          녹음실 예약 등 현재 신청 가능한 서비스입니다.
+          크레딧으로 신청 가능한 온사이드 연계 서비스입니다.
         </p>
       </div>
 

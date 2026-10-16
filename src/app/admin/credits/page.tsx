@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { upsertCreditRewardFormAction } from "@/features/credits/actions";
-import type { CreditReward } from "@/lib/credits";
+import { isRetiredCreditReward, type CreditReward } from "@/lib/credits";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -34,7 +34,7 @@ function RewardForm({
             name="title"
             required
             defaultValue={reward?.title ?? ""}
-            placeholder="예: 빈티지하우스 메인 녹음실 1시간"
+            placeholder="서비스 이름을 입력하세요"
             className={fieldClass}
           />
         </label>
@@ -75,7 +75,7 @@ function RewardForm({
           <input
             name="serviceLocation"
             defaultValue={reward?.service_location ?? ""}
-            placeholder="예: 빈티지하우스 메인 녹음실"
+            placeholder="서비스 제공 장소 또는 방식"
             className={fieldClass}
           />
         </label>
@@ -126,7 +126,9 @@ export default async function AdminCreditsPage({
     )
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: false });
-  const rewards = (rewardsResult.data ?? []) as CreditReward[];
+  const rewards = ((rewardsResult.data ?? []) as CreditReward[]).filter(
+    (reward) => !isRetiredCreditReward(reward),
+  );
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -145,7 +147,9 @@ export default async function AdminCreditsPage({
 
       {errorFlag ? (
         <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
-          저장하지 못했습니다. 입력값을 확인해주세요.
+          {errorFlag === "retired_reward"
+            ? "운영이 종료된 서비스는 다시 노출할 수 없습니다."
+            : "저장하지 못했습니다. 입력값을 확인해주세요."}
         </div>
       ) : null}
 
