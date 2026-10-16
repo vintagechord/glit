@@ -87,6 +87,7 @@ import { SubmissionPreflightPanel } from "./submission-preflight-panel";
 import { SubmissionProgress } from "./submission-progress";
 import { SubmissionSaveIndicator } from "./submission-save-indicator";
 import { useSubmissionCheckpoint } from "./use-submission-checkpoint";
+import { useSubmissionStepScroll } from "./use-submission-step-scroll";
 import { safeRandomUUID } from "@/lib/uuid";
 
 declare global {
@@ -405,18 +406,7 @@ export function AlbumWizard({
     userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
   const isFromDraftsTab = !initialArchiveEntry && searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(initialArchiveEntry ? 5 : 1);
-  const wizardRef = React.useRef<HTMLDivElement | null>(null);
-  const previousStepRef = React.useRef(step);
-  React.useEffect(() => {
-    if (previousStepRef.current === step) return;
-    previousStepRef.current = step;
-    wizardRef.current?.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-      block: "start",
-    });
-  }, [step]);
+  const { stepContentRef, skipNextStepScroll } = useSubmissionStepScroll(step);
   const [isOneClick, setIsOneClick] = React.useState(Boolean(initialArchiveEntry));
   const [releaseStatusSelected, setReleaseStatusSelected] = React.useState(Boolean(initialArchiveEntry));
   const [applicationFormMode, setApplicationFormMode] =
@@ -4110,7 +4100,9 @@ export function AlbumWizard({
       if (typeof target.trackIndex === "number") {
         setActiveTrackIndex(target.trackIndex);
       }
-      setStep(initialArchiveEntry && target.step < 5 ? 5 : target.step);
+      const nextStep = initialArchiveEntry && target.step < 5 ? 5 : target.step;
+      skipNextStepScroll(nextStep);
+      setStep(nextStep);
       window.setTimeout(() => {
         const element = Array.from(
           document.querySelectorAll<HTMLElement>("[data-preflight-field]"),
@@ -4121,11 +4113,16 @@ export function AlbumWizard({
               candidate.dataset.trackIndex === undefined ||
               candidate.dataset.trackIndex === String(target.trackIndex)),
         );
-        element?.scrollIntoView({ behavior: "smooth", block: "center" });
+        element?.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "instant"
+            : "smooth",
+          block: "center",
+        });
         element?.focus({ preventScroll: true });
       }, 80);
     },
-    [initialArchiveEntry],
+    [initialArchiveEntry, skipNextStepScroll],
   );
 
   const albumCheckpointSnapshot: AlbumCheckpointSnapshot = {
@@ -4336,7 +4333,7 @@ export function AlbumWizard({
   }, [albumCheckpoint]);
 
   return (
-    <div ref={wizardRef} className="scroll-mt-36 min-w-0 space-y-8 text-[15px] leading-relaxed [overflow-wrap:anywhere] [&_input]:min-w-0 [&_select]:min-w-0 sm:scroll-mt-28 sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
+    <div className="min-w-0 space-y-8 text-[15px] leading-relaxed [overflow-wrap:anywhere] [&_input]:min-w-0 [&_select]:min-w-0 sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving || isAddingAlbum}
         label={step <= 5 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
@@ -4398,7 +4395,7 @@ export function AlbumWizard({
       />
 
       {step === 1 && (
-        <div className="space-y-6">
+        <div ref={stepContentRef} data-submission-step={step} tabIndex={-1} className="scroll-mt-[calc(var(--site-header-height,112px)+1rem)] space-y-6 outline-none">
           <section aria-labelledby="album-release-question" className="rounded-[20px] border-2 border-[#111111] bg-card p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:p-6">
             <h2 id="album-release-question" className="font-display text-2xl font-black text-foreground">
               음반이 이미 발매되었나요?
@@ -4614,9 +4611,11 @@ export function AlbumWizard({
 
       {step === 2 && !isOneClick && (
         <div
+          ref={stepContentRef}
+          data-submission-step={step}
           data-preflight-field="applicationFormMode"
           tabIndex={-1}
-          className="space-y-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="scroll-mt-[calc(var(--site-header-height,112px)+1rem)] space-y-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ApplicationFormModeTabs
             mode={applicationFormMode}
@@ -4644,7 +4643,7 @@ export function AlbumWizard({
       )}
 
       {(step === 3 || step === 4) && (
-        <div className="space-y-8">
+        <div ref={stepContentRef} data-submission-step={step} tabIndex={-1} className="scroll-mt-[calc(var(--site-header-height,112px)+1rem)] space-y-8 outline-none">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-2xl text-foreground">
               {step === 3
@@ -5439,7 +5438,7 @@ export function AlbumWizard({
       )}
 
       {step === 5 && (
-        <div className="space-y-8">
+        <div ref={stepContentRef} data-submission-step={step} tabIndex={-1} className="scroll-mt-[calc(var(--site-header-height,112px)+1rem)] space-y-8 outline-none">
           {isDraggingOver && (
             <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
           )}
@@ -5915,7 +5914,7 @@ export function AlbumWizard({
       )}
 
       {step === 6 && (
-        <div className="space-y-8">
+        <div ref={stepContentRef} data-submission-step={step} tabIndex={-1} className="scroll-mt-[calc(var(--site-header-height,112px)+1rem)] space-y-8 outline-none">
           <SubmissionPreflightPanel
             result={albumPreflight}
             onNavigate={handlePreflightNavigate}
@@ -6358,7 +6357,7 @@ export function AlbumWizard({
       )}
 
       {step === 7 && (
-        <div className="rounded-[24px] border border-border/60 bg-card/80 p-4 sm:p-6 text-center sm:rounded-[32px] sm:p-10">
+        <div ref={stepContentRef} data-submission-step={step} tabIndex={-1} className="scroll-mt-[calc(var(--site-header-height,112px)+1rem)] outline-none rounded-[24px] border border-border/60 bg-card/80 p-4 sm:p-6 text-center sm:rounded-[32px] sm:p-10">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
             ✓
           </div>

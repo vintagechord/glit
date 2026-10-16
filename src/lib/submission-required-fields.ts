@@ -5,6 +5,7 @@ import {
   isVideoUploadFile,
 } from "@/lib/submission-files";
 import { getReleasedAlbumUrlError } from "@/lib/released-album-url";
+import { normalizeMvDesiredRating } from "@/lib/mv-request-options";
 
 type SubmissionFileInput = {
   originalName?: string | null;
@@ -112,6 +113,8 @@ export const validateAlbumSubmittedFields = (input: {
 export const validateMvSubmittedFields = (input: {
   isAdminReviewer: boolean;
   externalApplicationForm: boolean;
+  mvType?: "MV_DISTRIBUTION" | "MV_BROADCAST";
+  desiredRating?: string | null;
   aiUsed?: boolean | null;
   title?: string | null;
   artistName?: string | null;
@@ -131,6 +134,13 @@ export const validateMvSubmittedFields = (input: {
   storyline?: string | null;
   lyrics?: string | null;
 }) => {
+  if (
+    input.mvType === "MV_DISTRIBUTION" &&
+    hasText(input.desiredRating) &&
+    !normalizeMvDesiredRating(input.desiredRating)
+  ) {
+    return "희망등급을 전체관람가, 12세이상관람가, 15세이상관람가, 청소년관람불가 중에서 선택해주세요.";
+  }
   if (input.isAdminReviewer) return null;
   if (typeof input.aiUsed !== "boolean") {
     return "AI 활용 여부를 선택해주세요.";
@@ -145,7 +155,6 @@ export const validateMvSubmittedFields = (input: {
     [input.releaseDate, "영상 공개일자를 입력해주세요."],
     [input.director, "감독 정보를 입력해주세요."],
     [input.leadActor, "주연 정보를 입력해주세요."],
-    [input.productionCompany, "뮤직비디오 제작사를 입력해주세요."],
     [input.agency, "소속사를 입력해주세요."],
     [input.albumTitle, "앨범명을 입력해주세요."],
     [input.distributionCompany, "유통사를 입력해주세요."],

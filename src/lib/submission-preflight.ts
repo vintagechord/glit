@@ -820,12 +820,6 @@ export const buildMvSubmissionPreflight = (
       { value: input.releaseDate, id: "mv.release-date", title: "영상 공개일자", field: "releaseDate" },
       { value: input.director, id: "mv.director", title: "감독", field: "director" },
       { value: input.leadActor, id: "mv.lead-actor", title: "주연", field: "leadActor" },
-      {
-        value: input.productionCompany,
-        id: "mv.production-company",
-        title: "뮤직비디오 제작사",
-        field: "productionCompany",
-      },
       { value: input.agency, id: "mv.agency", title: "소속사", field: "agency" },
       { value: input.albumTitle, id: "mv.album-title", title: "앨범명", field: "albumTitle" },
       {

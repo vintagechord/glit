@@ -21,6 +21,11 @@ const ratingLabelMap = Object.fromEntries(
   ratingOptions.map((option) => [option.value, option.label]),
 );
 
+// This legacy column holds both applicants' free-text wishes and result codes.
+// Only a stored official result code may preselect an administrator's result.
+const getInitialResultRating = (value?: string | null) =>
+  ratingOptions.some((option) => option.value === value) ? value ?? "" : "";
+
 export function MvRatingControl({
   submissionId,
   initialRating,
@@ -31,8 +36,8 @@ export function MvRatingControl({
   isResultNotified?: boolean;
 }) {
   const router = useRouter();
-  const [rating, setRating] = React.useState(initialRating ?? "");
-  const [savedRating, setSavedRating] = React.useState(initialRating ?? "");
+  const [rating, setRating] = React.useState(() => getInitialResultRating(initialRating));
+  const [savedRating, setSavedRating] = React.useState(() => getInitialResultRating(initialRating));
   const [resultNotified, setResultNotified] = React.useState(isResultNotified);
   const [loading, setLoading] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -42,9 +47,12 @@ export function MvRatingControl({
   } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const hasChanges = rating !== savedRating;
+  const requestedRating = initialRating?.trim() && !getInitialResultRating(initialRating)
+    ? initialRating.trim()
+    : "";
 
   React.useEffect(() => {
-    const nextRating = initialRating ?? "";
+    const nextRating = getInitialResultRating(initialRating);
     setRating(nextRating);
     setSavedRating(nextRating);
     setResultNotified(isResultNotified);
@@ -97,6 +105,16 @@ export function MvRatingControl({
           message={savePopup.message}
         />
       ) : null}
+      {requestedRating ? (
+        <div className="rounded-2xl border border-border/60 px-4 py-3 text-xs text-muted-foreground">
+          <p>
+            신청 희망등급: <span className="font-semibold text-foreground">{requestedRating}</span>
+          </p>
+          <p className="mt-1 leading-5">
+            희망등급은 심의 결과가 아닙니다. 확정된 결과 등급을 아래에서 선택해주세요.
+          </p>
+        </div>
+      ) : null}
       <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-muted-foreground">
         결과 등급:{" "}
         <span className="font-semibold text-foreground">
@@ -136,7 +154,7 @@ export function MvRatingControl({
         <button
           type="button"
           onClick={handleSave}
-          disabled={loading || (!hasChanges && resultNotified)}
+          disabled={loading || !rating || (!hasChanges && resultNotified)}
           className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "저장 중..." : "등급 저장"}

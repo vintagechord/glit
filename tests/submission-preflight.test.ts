@@ -320,7 +320,6 @@ const validMvInput = (
   releaseDate: "2026-08-15",
   director: "감독",
   leadActor: "주연",
-  productionCompany: "제작사",
   agency: "소속사",
   albumTitle: "테스트 앨범",
   distributionCompany: "유통사",
@@ -346,6 +345,13 @@ test("a complete online MV passes preflight", () => {
 
   assert.equal(result.canSubmit, true);
   assert.deepEqual(result.blockingIssues, []);
+});
+
+test("MV preflight requires the agency but no longer requires a production company", () => {
+  const complete = buildMvSubmissionPreflight(validMvInput({ productionCompany: "" }));
+  assert.equal(complete.canSubmit, true);
+  const missingAgency = buildMvSubmissionPreflight(validMvInput({ productionCompany: "", agency: "" }));
+  assert.deepEqual(missingAgency.blockingIssues.map((item) => item.id), ["mv.agency"]);
 });
 
 test("MV purpose options are checked for both broadcast and distribution flows", () => {

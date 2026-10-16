@@ -44,6 +44,10 @@ import {
 import { getSubmissionCheckpointStorageKey } from "@/lib/submission-checkpoint";
 import { MV_ONLINE_OPTION_CODES } from "@/lib/submission-station-selection";
 import {
+  MV_DESIRED_RATING_OPTIONS,
+  normalizeMvDesiredRating,
+} from "@/lib/mv-request-options";
+import {
   areSubmissionUploadMetadataEqual,
   mergeSubmissionUploadMetadata,
 } from "@/lib/submission-upload-metadata";
@@ -66,6 +70,7 @@ import { SubmissionPreflightPanel } from "./submission-preflight-panel";
 import { SubmissionProgress } from "./submission-progress";
 import { SubmissionSaveIndicator } from "./submission-save-indicator";
 import { useSubmissionCheckpoint } from "./use-submission-checkpoint";
+import { useSubmissionStepScroll } from "./use-submission-step-scroll";
 
 declare global {
   interface Window {
@@ -175,7 +180,6 @@ type MvValidationField =
   | "releaseDate"
   | "director"
   | "leadActor"
-  | "productionCompany"
   | "agency"
   | "albumTitle"
   | "distributionCompany"
@@ -199,6 +203,34 @@ const steps = [
   "최종 점검",
   "접수 완료",
 ];
+
+function MvCreditConsistencyNotice() {
+  return (
+    <aside
+      role="note"
+      data-testid="mv-credit-consistency-notice"
+      className="rounded-2xl border border-primary/25 bg-primary/5 p-4 sm:p-5"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
+          필수 안내
+        </span>
+        <h3 className="text-sm font-semibold text-foreground">
+          일반심의(영상물등급위원회) · 영상과 신청서 표기 일치
+        </h3>
+      </div>
+      <p className="mt-3 text-sm leading-6 text-foreground">
+        영상에 크레딧이나 텍스트가 등장하는 경우, 뮤직비디오 제목·소속사명·주연·감독명 등 모든 표기가 제출하는 신청서와 일치해야 합니다.
+      </p>
+      <p className="mt-2 text-sm font-semibold leading-6 text-foreground">
+        철자, 특수문자, 띄어쓰기, 대소문자까지 모두 동일해야 접수가 가능합니다.
+      </p>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">
+        영상과 신청서를 대조하여 다른 표기가 있으면 제출 전에 수정해주세요.
+      </p>
+    </aside>
+  );
+}
 
 const deferredPaymentNotice = "신청서를 장바구니에 담았습니다.";
 const paymentFailureStorageNotice = "신청서는 장바구니에 보관됩니다.";
@@ -395,6 +427,7 @@ export function MvWizard({
     userEmail?.trim().toLowerCase() === adminReviewEmail.trim().toLowerCase();
   const isFromDraftsTab = searchParams?.get("from") === "drafts";
   const [step, setStep] = React.useState(1);
+  const { stepContentRef, skipNextStepScroll } = useSubmissionStepScroll(step);
   const [applicationFormMode, setApplicationFormMode] =
     React.useState<ApplicationFormMode | null>(null);
   const requestedType = searchParams?.get("type");
@@ -630,7 +663,12 @@ export function MvWizard({
           const element = document.querySelector<HTMLElement>(
             `[data-mv-field="${field}"]`,
           );
-          element?.scrollIntoView({ behavior: "smooth", block: "center" });
+          element?.scrollIntoView({
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+              ? "instant"
+              : "smooth",
+            block: "center",
+          });
           element?.focus({ preventScroll: true });
         });
       }
@@ -1068,7 +1106,6 @@ export function MvWizard({
         releaseDate,
         director,
         leadActor,
-        productionCompany,
         agency,
         albumTitle,
         distributionCompany,
@@ -1109,7 +1146,6 @@ export function MvWizard({
       lyrics,
       mvType,
       onlineBaseSelected,
-      productionCompany,
       priceChangeAcknowledged,
       releaseDate,
       songTitleEn,
@@ -1131,6 +1167,7 @@ export function MvWizard({
   const navigateFromPreflight = React.useCallback(
     (target: SubmissionPreflightTarget) => {
       setNotice({});
+      skipNextStepScroll(target.step);
       setStep(target.step);
       if (typeof window === "undefined") return;
       window.requestAnimationFrame(() => {
@@ -1143,7 +1180,7 @@ export function MvWizard({
         });
       });
     },
-    [],
+    [skipNextStepScroll],
   );
 
   const stepLabels = <SubmissionProgress steps={steps} currentStep={step} />;
@@ -1987,7 +2024,9 @@ export function MvWizard({
     setDistributionCompany(String(draft.mv_distribution_company ?? ""));
     setUsage(String(draft.mv_usage ?? ""));
     setDesiredRating(
-      draftType === "MV_DISTRIBUTION" ? String(draft.mv_desired_rating ?? "") : "",
+      draftType === "MV_DISTRIBUTION"
+        ? normalizeMvDesiredRating(String(draft.mv_desired_rating ?? ""))
+        : "",
     );
     setMemo(String(draft.mv_memo ?? ""));
     setSongTitleKr(String(draft.mv_song_title_kr ?? ""));
@@ -2585,12 +2624,6 @@ export function MvWizard({
     if (!leadActor.trim()) {
       return markInvalidField("leadActor", "주연 정보를 입력해주세요.");
     }
-    if (!productionCompany.trim()) {
-      return markInvalidField(
-        "productionCompany",
-        "뮤직비디오 제작사를 입력해주세요.",
-      );
-    }
     if (!agency.trim()) {
       return markInvalidField("agency", "소속사를 입력해주세요.");
     }
@@ -2861,7 +2894,6 @@ export function MvWizard({
           director: source.director.trim() || undefined,
           leadActor: source.leadActor.trim() || undefined,
           storyline: source.storyline.trim() || undefined,
-          productionCompany: source.productionCompany.trim() || undefined,
           agency: source.agency.trim() || undefined,
           albumTitle: source.albumTitle.trim() || undefined,
           distributionCompany: source.distributionCompany.trim() || undefined,
@@ -2885,7 +2917,6 @@ export function MvWizard({
           genre: source.genre || undefined,
           mvType: source.mvType,
           runtime: source.runtime || undefined,
-          format: source.format || undefined,
           mvBaseSelected:
             source.mvType === "MV_DISTRIBUTION"
               ? source.onlineBaseSelected
@@ -3030,7 +3061,6 @@ export function MvWizard({
         director: director.trim() || undefined,
         leadActor: leadActor.trim() || undefined,
         storyline: storyline.trim() || undefined,
-        productionCompany: productionCompany.trim() || undefined,
         agency: agency.trim() || undefined,
         albumTitle: albumTitle.trim() || undefined,
         distributionCompany: distributionCompany.trim() || undefined,
@@ -3052,7 +3082,6 @@ export function MvWizard({
         genre: genre || undefined,
         mvType,
         runtime: runtime || undefined,
-        format: format || undefined,
         mvBaseSelected:
           mvType === "MV_DISTRIBUTION" ? onlineBaseSelected : false,
         aiUsed: aiUsed ?? undefined,
@@ -3270,7 +3299,7 @@ export function MvWizard({
       setUsage(snapshot.usage);
       setDesiredRating(
         snapshot.mvType === "MV_DISTRIBUTION"
-          ? snapshot.desiredRating
+          ? normalizeMvDesiredRating(snapshot.desiredRating)
           : "",
       );
       setMemo(snapshot.memo);
@@ -3597,9 +3626,11 @@ export function MvWizard({
 
       {step === 1 && (
         <div
-          data-preflight-field="mvPurpose"
+          ref={stepContentRef}
+          data-submission-step={step}
           tabIndex={-1}
-          className="space-y-6 outline-none"
+          data-preflight-field="mvPurpose"
+          className="space-y-6 scroll-mt-[calc(var(--site-header-height,112px)+1rem)] outline-none"
         >
           <h2 className="font-display text-2xl text-foreground">심의 목적 선택</h2>
 
@@ -3820,7 +3851,12 @@ export function MvWizard({
       )}
 
       {step === 2 && (
-        <div className="space-y-6">
+        <div
+          ref={stepContentRef}
+          data-submission-step={step}
+          tabIndex={-1}
+          className="space-y-6 scroll-mt-[calc(var(--site-header-height,112px)+1rem)] outline-none"
+        >
           <div
             data-preflight-field="applicationFormMode"
             tabIndex={-1}
@@ -3852,10 +3888,18 @@ export function MvWizard({
       )}
 
       {step === 3 && (
-        <div className="space-y-8">
+        <div
+          ref={stepContentRef}
+          data-submission-step={step}
+          tabIndex={-1}
+          className="space-y-8 scroll-mt-[calc(var(--site-header-height,112px)+1rem)] outline-none"
+        >
           <h2 className="font-display text-2xl text-foreground">
             {isDownloadedApplicationFlow ? "신청서 양식" : "신청서 작성"}
           </h2>
+          {mvType === "MV_DISTRIBUTION" && onlineBaseSelected && (
+            <MvCreditConsistencyNotice />
+          )}
 
           {isDownloadedApplicationFlow ? (
             <div className="rounded-[28px] border-2 border-[#111111] bg-card p-4 sm:p-6 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
@@ -4017,17 +4061,6 @@ export function MvWizard({
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      파일 포맷
-                    </label>
-                    <input
-                      placeholder="예: MP4 (H.264)"
-                      value={format}
-                      onChange={(event) => setFormat(event.target.value)}
-                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       감독 *
                     </label>
                     <input
@@ -4067,40 +4100,15 @@ export function MvWizard({
                 </p>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      뮤직비디오 제작사 *
+                    <label
+                      htmlFor="mv-agency"
+                      className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+                    >
+                      소속사 *
                     </label>
                     <input
-                      data-mv-field="productionCompany"
-                      data-preflight-field="productionCompany"
-                      aria-invalid={invalidField === "productionCompany"}
-                      value={productionCompany}
-                      onChange={(event) => {
-                        setProductionCompany(event.target.value);
-                        clearInvalidField("productionCompany");
-                      }}
-                      className={requiredFieldClass("productionCompany")}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        소속사 *
-                      </label>
-                      <div className="group relative">
-                        <button
-                          type="button"
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-primary bg-primary text-sm font-black text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.22)] transition hover:-translate-y-0.5 hover:bg-[#0077ed] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-[#2997ff] dark:text-[#00101f]"
-                          aria-label="소속사 표기 안내"
-                        >
-                          ?
-                        </button>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-60 max-w-[calc(100vw-5rem)] rounded-2xl border border-border/70 bg-background px-4 py-3 text-[11px] font-medium leading-5 text-foreground shadow-[0_18px_40px_rgba(0,0,0,0.14)] group-hover:block group-focus-within:block">
-                          공개되는 뮤직비디오 좌측 하단에 들어갈 소속사/기획사/로고 등과 동일한 명칭을 기입해주세요. 대소문자 및 한/영 표기 모두 동일해야합니다.
-                        </div>
-                      </div>
-                    </div>
-                    <input
+                      id="mv-agency"
+                      aria-describedby="mv-agency-help"
                       data-mv-field="agency"
                       data-preflight-field="agency"
                       aria-invalid={invalidField === "agency"}
@@ -4111,6 +4119,9 @@ export function MvWizard({
                       }}
                       className={requiredFieldClass("agency")}
                     />
+                    <p id="mv-agency-help" className="text-xs leading-5 text-muted-foreground">
+                      영상에 표시된 소속사·기획사명과 동일하게 입력해주세요.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -4163,14 +4174,29 @@ export function MvWizard({
                   </div>
                   {mvType === "MV_DISTRIBUTION" ? (
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label
+                        htmlFor="mv-desired-rating"
+                        className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+                      >
                         희망등급 (선택)
                       </label>
-                      <input
+                      <select
+                        id="mv-desired-rating"
+                        aria-describedby="mv-desired-rating-help"
                         value={desiredRating}
                         onChange={(event) => setDesiredRating(event.target.value)}
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
+                        className="w-full min-w-0 rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      >
+                        <option value="">선택하지 않음</option>
+                        {MV_DESIRED_RATING_OPTIONS.map((rating) => (
+                          <option key={rating.value} value={rating.value}>
+                            {rating.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p id="mv-desired-rating-help" className="text-xs leading-5 text-muted-foreground">
+                        최종 등급은 심의 결과에 따라 결정됩니다.
+                      </p>
                     </div>
                   ) : null}
                   <div className="space-y-2 md:col-span-2">
@@ -4561,8 +4587,16 @@ export function MvWizard({
       )}
 
       {step === 4 && (
-        <div className="space-y-8">
+        <div
+          ref={stepContentRef}
+          data-submission-step={step}
+          tabIndex={-1}
+          className="space-y-8 scroll-mt-[calc(var(--site-header-height,112px)+1rem)] outline-none"
+        >
           <h2 className="font-display text-2xl text-foreground">파일 첨부</h2>
+          {mvType === "MV_DISTRIBUTION" && onlineBaseSelected && (
+            <MvCreditConsistencyNotice />
+          )}
 
           <div
             data-preflight-field="files"
@@ -4838,7 +4872,16 @@ export function MvWizard({
       )}
 
       {step === 5 && (
-        <div className="space-y-8">
+        <div
+          ref={stepContentRef}
+          data-submission-step={step}
+          tabIndex={-1}
+          className="space-y-8 scroll-mt-[calc(var(--site-header-height,112px)+1rem)] outline-none"
+        >
+          <h2 className="font-display text-2xl text-foreground">최종 점검</h2>
+          {mvType === "MV_DISTRIBUTION" && onlineBaseSelected && (
+            <MvCreditConsistencyNotice />
+          )}
           <div className="rounded-[22px] border-2 border-[#111111] bg-card p-4 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -5222,7 +5265,12 @@ export function MvWizard({
       )}
 
       {step === 6 && (
-        <div className="rounded-[24px] border border-border/60 bg-card/80 p-4 sm:p-6 text-center sm:rounded-[32px] sm:p-10">
+        <div
+          ref={stepContentRef}
+          data-submission-step={step}
+          tabIndex={-1}
+          className="rounded-[24px] border border-border/60 bg-card/80 p-4 text-center sm:rounded-[32px] sm:p-10 scroll-mt-[calc(var(--site-header-height,112px)+1rem)] outline-none"
+        >
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
             ✓
           </div>

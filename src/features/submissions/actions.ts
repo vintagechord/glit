@@ -20,6 +20,7 @@ import { APP_CONFIG } from "@/lib/config";
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
 import { canEditSubmission } from "@/lib/submission-edit-access";
 import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
+import { normalizeMvDesiredRating } from "@/lib/mv-request-options";
 import { archiveReviewContextSchema, getArchiveReviewEntry, storedArchiveReviewContextSchema } from "@/lib/music-archive/review-entry";
 import { linkArchiveSubmission } from "@/lib/music-archive/service";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -1892,6 +1893,8 @@ export async function saveMvSubmissionAction(
     const requiredFieldsError = validateMvSubmittedFields({
       isAdminReviewer,
       externalApplicationForm: usesExternalApplicationForm,
+      mvType: parsed.data.mvType,
+      desiredRating: parsed.data.desiredRating,
       aiUsed: parsed.data.aiUsed,
       title: titleValue,
       artistName: artistNameValue,
@@ -1899,7 +1902,6 @@ export async function saveMvSubmissionAction(
       releaseDate: parsed.data.releaseDate,
       director: parsed.data.director,
       leadActor: parsed.data.leadActor,
-      productionCompany: parsed.data.productionCompany,
       agency: parsed.data.agency,
       albumTitle: parsed.data.albumTitle,
       distributionCompany: parsed.data.distributionCompany,
@@ -1935,11 +1937,16 @@ export async function saveMvSubmissionAction(
     release_date: parsed.data.releaseDate || null,
     genre: parsed.data.genre?.trim() || null,
     mv_runtime: parsed.data.runtime?.trim() || null,
-    mv_format: parsed.data.format?.trim() || null,
+    // Retired inputs are omitted by new clients; preserve any historical value.
+    ...(parsed.data.format !== undefined
+      ? { mv_format: parsed.data.format.trim() || null }
+      : {}),
     mv_director: parsed.data.director?.trim() || null,
     mv_lead_actor: parsed.data.leadActor?.trim() || null,
     mv_storyline: parsed.data.storyline?.trim() || null,
-    mv_production_company: parsed.data.productionCompany?.trim() || null,
+    ...(parsed.data.productionCompany !== undefined
+      ? { mv_production_company: parsed.data.productionCompany.trim() || null }
+      : {}),
     mv_agency: parsed.data.agency?.trim() || null,
     mv_album_title: parsed.data.albumTitle?.trim() || null,
     mv_production_date: parsed.data.productionDate || null,
@@ -1948,7 +1955,9 @@ export async function saveMvSubmissionAction(
     mv_usage: parsed.data.usage?.trim() || null,
     mv_desired_rating:
       parsed.data.mvType === "MV_DISTRIBUTION"
-        ? parsed.data.desiredRating?.trim() || null
+        ? normalizeMvDesiredRating(parsed.data.desiredRating) ||
+          parsed.data.desiredRating?.trim() ||
+          null
         : null,
     mv_memo: parsed.data.memo?.trim() || null,
     mv_song_title: songTitleValue,

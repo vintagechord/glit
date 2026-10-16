@@ -207,7 +207,6 @@ const validMv = {
   releaseDate: "2026-08-15",
   director: "Director",
   leadActor: "Actor",
-  productionCompany: "Production",
   agency: "Agency",
   albumTitle: "Album",
   distributionCompany: "Distributor",
@@ -229,7 +228,6 @@ test("normal MV submission enforces every wizard-required field", () => {
     "releaseDate",
     "director",
     "leadActor",
-    "productionCompany",
     "agency",
     "albumTitle",
     "distributionCompany",
@@ -247,6 +245,31 @@ test("normal MV submission enforces every wizard-required field", () => {
     );
   }
   assert.ok(validateMvSubmittedFields({ ...validMv, aiUsed: undefined }));
+});
+
+test("MV no longer requires a production company while the agency stays required", () => {
+  assert.equal(validateMvSubmittedFields({ ...validMv, productionCompany: "" }), null);
+  assert.equal(
+    validateMvSubmittedFields({ ...validMv, productionCompany: "", agency: "" }),
+    "소속사를 입력해주세요.",
+  );
+});
+
+test("online MV submissions accept only supported optional desired ratings", () => {
+  const input = { ...validMv, mvType: "MV_DISTRIBUTION" as const };
+  for (const desiredRating of [undefined, "", "전체관람가", "12", "15세 이상 관람가", "19세", "청소년관람불가"]) {
+    assert.equal(validateMvSubmittedFields({ ...input, desiredRating }), null);
+  }
+  for (const desiredRating of ["7세", "12 또는 15세", "등급 없음", "제한상영가"]) {
+    assert.match(
+      validateMvSubmittedFields({ ...input, desiredRating }) ?? "",
+      /희망등급.*선택해주세요/,
+    );
+  }
+  assert.equal(
+    validateMvSubmittedFields({ ...input, mvType: "MV_BROADCAST", desiredRating: "구버전 메모" }),
+    null,
+  );
 });
 
 test("downloaded MV forms still require AI declaration", () => {
