@@ -14,9 +14,10 @@ test.beforeAll(async () => {
         import {createRoot} from 'react-dom/client';
         import {SubmissionDetailClient} from './src/features/submissions/submission-detail-client';
         const mode=new URLSearchParams(location.search).get('mode');
+        const hasNoTrackDetails=mode==='mv'||mode==='legacy';
         const tracks=[{id:'one',track_no:1,track_title:'KBS에서 적격인 곡'},{id:'two',track_no:2,track_title:'Arirang에서 적격인 곡'}];
-        const submission={id:'fixture',title:'두 방송국의 다른 심의 결과',artist_name:'테스트 아티스트',type:mode==='mv'?'MV_BROADCAST':'ALBUM',status:mode==='partial'?'IN_REVIEW':'COMPLETED',payment_status:'PAID',amount_krw:10000,created_at:'2026-10-17T00:00:00Z',updated_at:'2026-10-17T00:00:00Z',package:{name:'방송국 2곳',station_count:2,price_krw:10000},album_tracks:mode==='mv'?[]:tracks};
-        const reviews=[{id:'kbs-review',status:'APPROVED',result_note:null,track_results:[{track_id:'one',status:'APPROVED'},{track_id:'two',status:'REJECTED'}],updated_at:submission.updated_at,station:{id:'kbs-station',name:'KBS',code:'KBS'}},{id:'arirang-review',status:mode==='rejected'?'REJECTED':mode==='partial'?'SENT':'APPROVED',result_note:null,track_results:mode==='mv'?null:[{track_id:'one',status:mode==='partial'?'PENDING':'REJECTED'},{track_id:'two',status:mode==='rejected'?'REJECTED':'APPROVED'}],updated_at:submission.updated_at,station:{id:'arirang-station',name:'Arirang',code:'ARIRANG'}}];
+        const submission={id:'fixture',title:'두 방송국의 다른 심의 결과',artist_name:'테스트 아티스트',type:mode==='mv'?'MV_BROADCAST':'ALBUM',status:mode==='partial'?'IN_REVIEW':'COMPLETED',payment_status:'PAID',amount_krw:10000,created_at:'2026-10-17T00:00:00Z',updated_at:'2026-10-17T00:00:00Z',package:{name:'방송국 2곳',station_count:2,price_krw:10000},album_tracks:hasNoTrackDetails?[]:tracks};
+        const reviews=[{id:'kbs-review',status:'APPROVED',result_note:null,track_results:[{track_id:'one',status:'APPROVED'},{track_id:'two',status:'REJECTED'}],updated_at:submission.updated_at,station:{id:'kbs-station',name:'KBS',code:'KBS'}},{id:'arirang-review',status:mode==='rejected'?'REJECTED':mode==='partial'?'SENT':'APPROVED',result_note:null,track_results:hasNoTrackDetails?null:[{track_id:'one',status:mode==='partial'?'PENDING':'REJECTED'},{track_id:'two',status:mode==='rejected'?'REJECTED':'APPROVED'}],updated_at:submission.updated_at,station:{id:'arirang-station',name:'Arirang',code:'ARIRANG'}}];
         createRoot(document.getElementById('root')).render(<SubmissionDetailClient submissionId="fixture" initialSubmission={submission} initialStationReviews={reviews} initialFiles={[]} enableRealtime={false} resultsOnly/>);
       ` },
       bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
@@ -87,6 +88,38 @@ for (const width of [320, 390, 768, 1440]) {
     await expect(trigger).toBeFocused();
     expect(await page.evaluate(() => document.body.style.position)).toBe("");
     expect(errors).toEqual([]);
+  });
+}
+
+for (const width of [390, 1440]) {
+  test(`legacy album approval keeps official request boards usable without track details at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 800 });
+    await mount(page, "legacy");
+    await page.getByRole("button", { name: /Arirang · 적격/ }).click();
+    const dialog = page.getByRole("dialog", { name: /Arirang.*라디오 신청 가이드/ });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("신청할 적격 곡")).toHaveCount(0);
+    await expect(dialog.getByLabel("게시글 제목")).toHaveCount(0);
+
+    const programs = dialog.getByRole("article");
+    await expect(programs).toHaveCount(2);
+    const boards = programs.getByRole("link", { name: /메시지 게시판 열기/ });
+    await expect(boards).toHaveCount(2);
+    await expect(boards.nth(0)).toHaveAttribute("href", "https://www.arirang.com/radio/125/board/674");
+    await expect(boards.nth(1)).toHaveAttribute("href", "https://www.arirang.com/radio/127/board/771");
+    await expect(boards.first()).toBeInViewport();
+
+    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(await dialog.getByTestId("radio-guide-scroll").evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const first = (await programs.nth(0).boundingBox())!;
+    const second = (await programs.nth(1).boundingBox())!;
+    if (width === 1440) {
+      expect(Math.abs(first.y - second.y)).toBeLessThan(2);
+      expect(second.x).toBeGreaterThanOrEqual(first.x + first.width);
+    } else {
+      expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`arirang-legacy-radio-dialog-${width}.png`) });
   });
 }
 

@@ -19,8 +19,9 @@ import { getRadioStationGuide } from "@/lib/radio-station-guide";
 import { RadioStationGuideContent } from "./radio-station-guide";
 import { normalizeStationReviewStatus } from "@/constants/review-status";
 
-const controlClass = "min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-3 py-2.5 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground sm:text-sm";
-const buttonClass = "inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 rounded-lg border-2 border-foreground bg-background px-3 py-2 text-center text-sm font-bold transition hover:bg-muted disabled:opacity-50 [&>svg]:shrink-0";
+const controlClass = "min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-base leading-6 text-slate-900 transition placeholder:text-slate-400 focus-visible:border-[#1556a4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4]/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus-visible:border-blue-400 dark:focus-visible:ring-blue-400/20 sm:text-sm";
+const buttonClass = "inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-center text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-950 [&>svg]:shrink-0";
+const primaryButtonClass = "inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 rounded-xl border border-[#1556a4] bg-[#1556a4] px-3.5 py-2 text-center text-sm font-semibold text-white transition hover:border-[#104581] hover:bg-[#104581] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 disabled:opacity-50 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-slate-950 [&>svg]:shrink-0";
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -64,7 +65,7 @@ function RequestDraft({ submission, track, isEnglish, draftEnglish, savedDraft, 
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
         <label htmlFor={`${id}-program`} className="mb-1.5 block text-sm font-semibold">{isEnglish ? "Program (optional)" : "신청할 프로그램 (선택)"}</label>
         <input id={`${id}-program`} value={program} onChange={event => {
@@ -84,7 +85,7 @@ function RequestDraft({ submission, track, isEnglish, draftEnglish, savedDraft, 
       </div>
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         <button type="button" className={buttonClass} disabled={!title.trim()} onClick={() => void copy("title")}><Copy size={15} aria-hidden />{isEnglish ? "Copy title" : "제목 복사"}</button>
-        <button type="button" className={buttonClass} disabled={!body.trim()} onClick={() => void copy("body")}><Copy size={15} aria-hidden />{isEnglish ? "Copy request" : "본문 복사"}</button>
+        <button type="button" className={primaryButtonClass} disabled={!body.trim()} onClick={() => void copy("body")}><Copy size={15} aria-hidden />{isEnglish ? "Copy request" : "본문 복사"}</button>
         <button type="button" className={`${buttonClass} col-span-2`} onClick={() => saveBlob(new Blob([`${program ? `${program}\n\n` : ""}${title}\n\n${body}`], { type: "text/plain;charset=utf-8" }), "onside-radio-request.txt")}><Download size={15} aria-hidden />{isEnglish ? "Save draft" : "초안 저장"}</button>
       </div>
       <p role="status" className="min-h-5 text-xs text-muted-foreground">{message}</p>
@@ -147,11 +148,11 @@ export function BroadcastSupportPanel({ submission, stationReviews, isEnglish = 
   }
 
   return (
-    <section id={embedded ? undefined : "broadcast-support"} aria-labelledby={`${id}-heading`} className={embedded ? "min-w-0 [overflow-wrap:anywhere]" : "min-w-0 rounded-xl border-2 border-[#111111] bg-card p-4 shadow-[6px_6px_0_#111111] [overflow-wrap:anywhere] sm:p-6 dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]"} data-testid="broadcast-support">
+    <section id={embedded ? undefined : "broadcast-support"} aria-labelledby={`${id}-heading`} className={embedded ? "min-w-0 [overflow-wrap:anywhere]" : "min-w-0 rounded-[1rem] border border-slate-200 bg-white p-4 [overflow-wrap:anywhere] sm:p-6 dark:border-slate-800 dark:bg-slate-950"} data-testid="broadcast-support">
       <div className={embedded ? "sr-only" : "grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 sm:gap-3"}>
-        <Radio size={24} className="mt-0.5" aria-hidden />
-        <h2 id={`${id}-heading`} className="text-base font-black leading-snug sm:text-lg">{isEnglish ? "Get your music on the radio" : "내 음악, 라디오에 신청하기"}</h2>
-        <span className="shrink-0 rounded-full bg-[#f2cf27] px-2.5 py-1 text-xs font-bold text-[#111111]">{isEnglish ? "Free" : "무료"}</span>
+        <Radio size={21} className="mt-0.5 text-slate-500 dark:text-slate-400" aria-hidden />
+        <h2 id={`${id}-heading`} className="text-base font-semibold leading-snug tracking-tight sm:text-lg">{isEnglish ? "Get your music on the radio" : "내 음악, 라디오에 신청하기"}</h2>
+        <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">{isEnglish ? "Free" : "무료"}</span>
       </div>
       {!embedded && <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{isEnglish ? "Prepare a request for an approved track and post it on a broadcaster's listener board. Airplay is decided by each program." : "적격 곡의 신청 문구를 준비해 방송국 게시판에 직접 올려보세요. 실제 선곡은 각 프로그램에서 결정합니다."}</p>}
       <div className={embedded ? "" : "mt-5"}>
@@ -170,34 +171,38 @@ export function BroadcastSupportPanel({ submission, stationReviews, isEnglish = 
                 </select>
               </div>
             </div>
-            <div className="mt-4 flex min-w-0 items-start gap-2 rounded-xl border border-emerald-600/20 bg-emerald-600/5 p-3 text-sm">
-              <Check size={18} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden />
-              <div className="min-w-0"><p className="font-bold">{broadcastTrackTitle(selectedTrack.track)}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{selectedTrack.track.performer || broadcastArtist(submission)} · {selected.review.station?.name || selected.review.station?.code} {isEnglish ? "approved" : "적격"}</p></div>
+            <div className="mt-3 flex min-w-0 items-start gap-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">
+              <Check size={14} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-400" aria-hidden />
+              <p className="min-w-0">{selectedTrack.track.performer || broadcastArtist(submission)} · {selected.review.station?.name || selected.review.station?.code} {isEnglish ? "approved" : "적격"}</p>
             </div>
             {embedded && <p className="mt-2 text-xs leading-5 text-muted-foreground">{isEnglish ? "Free request preparation. Approval does not guarantee airplay; each program selects its music." : "신청 준비는 무료입니다. 심의 적격과 별개로 실제 선곡은 각 프로그램에서 결정합니다."}</p>}
-            <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="mt-7 grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <RadioStationGuideContent stationCode={selected.review.station?.code} stationName={selected.review.station?.name} isEnglish={isEnglish} selectedProgram={drafts[draftKey]?.program} onSelectProgram={selectProgram} />
-              <div ref={draftRef} className="min-w-0 scroll-mt-4 rounded-xl border border-border bg-background p-4 sm:p-5">
-                <div className="mb-4 flex items-center gap-2"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#f2cf27] text-xs font-black text-[#111111]">2</span><h3 className="font-black">{isEnglish ? "Prepare your request" : "신청 문구 준비하기"}</h3></div>
-                <div className="mb-5 rounded-lg bg-muted/60 p-3 text-sm leading-6">
-                  <p className="font-bold">{isEnglish ? "Artist + song title + your story" : "아티스트명 + 곡명 + 함께 듣고 싶은 이유"}</p>
+              <div ref={draftRef} className="min-w-0 scroll-mt-4 rounded-[1rem] border border-slate-200 bg-slate-50/70 p-4 sm:p-5 dark:border-slate-800 dark:bg-slate-900/40">
+                <div className="mb-4 flex items-center gap-2.5"><span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">2</span><h3 className="text-base font-semibold tracking-tight">{isEnglish ? "Prepare your request" : "신청 문구 준비하기"}</h3></div>
+                <div className="mb-5 text-sm leading-6">
+                  <p className="font-medium text-slate-700 dark:text-slate-200">{isEnglish ? "Artist + song title + your story" : "아티스트명 + 곡명 + 함께 듣고 싶은 이유"}</p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">{isEnglish ? "Add release details or review documents only if the program asks for them. This is a listener request, not a music-delivery or artist booking form." : "발매 정보나 심의 서류는 프로그램에서 요청할 때만 추가하세요. 청취자 신청곡 참여이며, 음원 납품·출연 섭외 접수와는 다릅니다."}</p>
                 </div>
                 <div className="mb-4"><label htmlFor={`${id}-language`} className="mb-1.5 block text-sm font-semibold">{isEnglish ? "Draft language" : "신청 문구 언어"}</label><select id={`${id}-language`} value={draftEnglish ? "en" : "ko"} onChange={event => setDraftLanguage(event.target.value as "en" | "ko")} className={controlClass}><option value="ko">한국어</option><option value="en">English</option></select>{stationGuide?.language === "en" && <p className="mt-2 text-xs leading-5 text-muted-foreground">{isEnglish ? "An English template is provided for Arirang. Use your official English artist and track names where available." : "Arirang 참여를 돕기 위해 영문 초안을 제공합니다. 곡명·아티스트명은 등록된 공식 영문명이 있으면 사용합니다."}</p>}</div>
                 <RequestDraft key={draftKey} submission={submission} track={selectedTrack.track} isEnglish={isEnglish} draftEnglish={draftEnglish} savedDraft={drafts[draftKey]} onDraftChange={draft => setDrafts(previous => ({ ...previous, [draftKey]: draft }))} />
-                <div className="mt-2 border-t border-border pt-4 text-sm leading-6"><p className="font-bold">{isEnglish ? "3. Post on the program’s board" : "3. 프로그램 게시판에서 직접 등록"}</p><p className="mt-1 text-muted-foreground">{isEnglish ? "Paste your title and request, check the board rules and personal information, then submit. Check your post and the playlist afterward." : "제목과 본문을 붙여넣고 공지·개인정보를 확인한 뒤 등록하세요. 이후 자신의 게시글과 선곡표를 확인하면 됩니다."}</p></div>
+                <div className="mt-2 border-t border-slate-200 pt-4 text-sm leading-6 dark:border-slate-800"><p className="font-semibold">{isEnglish ? "3. Post on the program’s board" : "3. 프로그램 게시판에서 직접 등록"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{isEnglish ? "Paste your title and request, check the board rules and personal information, then submit. Check your post and the playlist afterward." : "제목과 본문을 붙여넣고 공지·개인정보를 확인한 뒤 등록하세요. 이후 자신의 게시글과 선곡표를 확인하면 됩니다."}</p></div>
               </div>
             </div>
           </> : guideOnlyReview ? (
-            <div className="space-y-5">
-              <p className="rounded-xl border border-border bg-muted/50 p-4 text-sm leading-6">{isEnglish ? "This broadcaster’s approval is recorded, but individual track information is missing, so we cannot fill in a draft. Use the program guides below and enter the exact song and artist names yourself." : "방송국 적격 결과는 확인됐지만 개별 곡 정보가 없어 자동 초안을 만들 수 없습니다. 아래 참여 경로를 이용하고 신청할 곡명과 아티스트명을 직접 적어주세요."}</p>
+            <div className="space-y-7">
               <RadioStationGuideContent stationCode={guideOnlyReview.station?.code} stationName={guideOnlyReview.station?.name} isEnglish={isEnglish} />
-              <div className="rounded-xl border border-border bg-background p-4 text-sm leading-6"><h3 className="font-black">{isEnglish ? "What to write" : "신청글에는 이렇게 적어주세요"}</h3><p className="mt-2 text-muted-foreground">{isEnglish ? "Include the exact artist and song names, then add two or three sentences about when you want to hear the song or a personal story connected to it. Add release details or review documents only if the program asks for them." : "정확한 아티스트명과 곡명을 적고, 언제 듣고 싶은지 또는 곡과 연결되는 나의 이야기를 2~3문장 덧붙여보세요. 발매 정보·심의 서류는 프로그램에서 요청할 때만 추가하면 됩니다."}</p><p className="mt-3 text-xs text-muted-foreground">{isEnglish ? "Approval and a listener request do not guarantee airplay. Each program selects its music." : "심의 적격과 신청곡 등록이 방송을 보장하지는 않습니다. 실제 선곡은 프로그램에서 결정합니다."}</p></div>
+              <div className="border-t border-slate-200 pt-5 text-sm leading-6 dark:border-slate-800">
+                <h3 className="font-semibold">{isEnglish ? "What to write" : "신청글에는 이렇게 적어주세요"}</h3>
+                <p className="mt-2 text-muted-foreground">{isEnglish ? "Include the exact artist and song names, then add two or three sentences about when you want to hear the song or a personal story connected to it. Add release details or review documents only if the program asks for them." : "정확한 아티스트명과 곡명을 적고, 언제 듣고 싶은지 또는 곡과 연결되는 나의 이야기를 2~3문장 덧붙여보세요. 발매 정보·심의 서류는 프로그램에서 요청할 때만 추가하면 됩니다."}</p>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">{isEnglish ? "This broadcaster’s approval is recorded, but individual track information is missing, so we cannot fill in a draft. Use the program guides above and enter the exact song and artist names yourself." : "방송국 적격 결과는 확인됐지만 개별 곡 정보가 없어 자동 초안을 만들 수 없습니다. 위 참여 경로를 이용하고 신청할 곡명과 아티스트명을 직접 적어주세요."}</p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">{isEnglish ? "Approval and a listener request do not guarantee airplay. Each program selects its music." : "심의 적격과 신청곡 등록이 방송을 보장하지는 않습니다. 실제 선곡은 프로그램에서 결정합니다."}</p>
+              </div>
             </div>
-          ) : <p className="rounded-lg bg-muted p-4 text-sm leading-relaxed">{isEnglish ? "No approved track is available for a song request yet. Check the review results and any requested corrections above." : "현재 신청곡으로 안내할 적격 곡이 없습니다. 위 심의 결과와 보완 사유를 먼저 확인해주세요."}</p>}
+          ) : <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">{isEnglish ? "No approved track is available for a song request yet. Check the review results and any requested corrections above." : "현재 신청곡으로 안내할 적격 곡이 없습니다. 위 심의 결과와 보완 사유를 먼저 확인해주세요."}</p>}
       </div>
-      <details className="mt-6 border-t border-border pt-4">
-        <summary className="min-h-11 cursor-pointer py-2 text-sm font-bold">{isEnglish ? "Preparation checklist & reference pack" : "준비 체크리스트 · 방송 참고자료"}</summary>
+      <details className="mt-7 border-t border-slate-200 pt-3 dark:border-slate-800">
+        <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-slate-600 marker:text-slate-400 dark:text-slate-300">{isEnglish ? "Preparation checklist & reference pack" : "준비 체크리스트 · 방송 참고자료"}</summary>
         <div className="mt-4 grid gap-5 sm:grid-cols-2">
           <fieldset className="min-w-0 space-y-1">
             <legend className="mb-3 text-xs text-muted-foreground">{isEnglish ? "Check while this page is open" : "현재 화면에서 준비 상태를 체크하세요"}</legend>

@@ -49,7 +49,7 @@ export function RadioRequestDialog({ open, stationName, isEnglish = false, onClo
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-description`}
       aria-modal="true"
-      className="fixed inset-0 m-auto max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] min-w-0 max-w-5xl overflow-hidden rounded-2xl border-2 border-[#111111] bg-card p-0 text-foreground shadow-2xl backdrop:bg-[#071425]/75 backdrop:backdrop-blur-sm sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] dark:border-[#f2cf27]"
+      className="fixed inset-0 m-auto max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] min-w-0 max-w-5xl overflow-hidden rounded-[1rem] border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl shadow-slate-950/20 backdrop:bg-slate-950/50 backdrop:backdrop-blur-sm sm:max-h-[calc(100dvh-4rem)] sm:w-[calc(100%-3rem)] sm:rounded-[1.5rem] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
       onCancel={event => { event.preventDefault(); onClose(); }}
       onClick={event => { if (event.target === event.currentTarget) onClose(); }}
       onKeyDown={event => {
@@ -74,23 +74,22 @@ export function RadioRequestDialog({ open, stationName, isEnglish = false, onClo
         }
       }}
     >
-      <div className="flex max-h-[calc(100dvh-1rem-4px)] min-w-0 flex-col sm:max-h-[calc(100dvh-3rem-4px)]">
-        <header className="shrink-0 border-b-4 border-[#f2cf27] bg-[#1556a4] p-4 text-white sm:p-6 dark:bg-[#102a49]">
-          <div className="flex items-start gap-3">
+      <div className="flex max-h-[calc(100dvh-1rem-2px)] min-w-0 flex-col sm:max-h-[calc(100dvh-4rem-2px)]">
+        <header className="shrink-0 border-b border-slate-100 bg-white px-5 py-5 sm:px-8 sm:py-6 dark:border-slate-800 dark:bg-slate-950">
+          <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1">
-              <p className="mb-2 flex items-center gap-2 text-xs font-bold text-[#ffe97c]"><Radio size={16} aria-hidden />{isEnglish ? "YOUR NEXT STEP" : "심의 이후, 다음 단계"}</p>
-              <h2 id={`${id}-title`} className="text-xl font-black leading-snug [overflow-wrap:anywhere] sm:text-2xl">
-                <span className="block">{stationName}</span>
-                <span className="block">{isEnglish ? "Radio request guide" : "라디오 신청 가이드"}</span>
+              <h2 id={`${id}-title`} className="[overflow-wrap:anywhere]">
+                <span className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-[#1556a4] dark:text-blue-300"><Radio size={15} className="shrink-0" aria-hidden />{stationName}</span>
+                <span className="block text-xl font-semibold leading-tight tracking-tight sm:text-[26px]">{isEnglish ? "Radio request guide" : "라디오 신청 가이드"}</span>
               </h2>
+              <p id={`${id}-description`} className="mt-2 text-xs leading-5 text-slate-500 sm:text-sm dark:text-slate-400">{isEnglish ? "Find a program. Prepare your story. Share your music." : "어울리는 프로그램을 찾고, 내 음악의 이야기를 전해보세요."}</p>
             </div>
-            <button ref={closeRef} type="button" onClick={onClose} aria-label={isEnglish ? "Close radio request guide" : "라디오 신청 가이드 닫기"} className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-white/40 bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2cf27] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1556a4]">
-              <X size={22} aria-hidden />
+            <button ref={closeRef} type="button" onClick={onClose} aria-label={isEnglish ? "Close radio request guide" : "라디오 신청 가이드 닫기"} className="-mr-2 -mt-1 flex size-11 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-slate-950">
+              <X size={20} strokeWidth={1.75} aria-hidden />
             </button>
           </div>
-          <p id={`${id}-description`} className="mt-3 max-w-2xl text-sm leading-relaxed text-white/90">{isEnglish ? "Find the program's participation route, prepare your request, and post it on the broadcaster's site." : "프로그램의 참여 경로를 확인하고 신청 문구를 준비해 방송국 게시판에 직접 올려보세요."}</p>
         </header>
-        <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain p-4 [overflow-wrap:anywhere] sm:p-6" data-testid="radio-guide-scroll">
+        <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain px-5 py-6 [overflow-wrap:anywhere] sm:px-8 sm:py-7" data-testid="radio-guide-scroll">
           {children}
         </div>
       </div>
