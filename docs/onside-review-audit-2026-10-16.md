@@ -230,3 +230,10 @@ Mnet·ETN 유지, TV MBC 선택과 30,000원 계산, 가로 넘침·페이지 �
 관리자 결과 변경 등 모든 브라우저 변경 요청은 모의 처리했다. 배포용 빌드·TypeScript·
 diff 검사 통과, ESLint 오류 0개이며 기존 wizard 이동 경고 8개·변환기 추적 경고 3개 유지.
 DB 스키마·결제·서비스 설정과 아트멜론·워터멜론 변경 없음. 기존 로컬 이미지 삭제는 제외했다.
+
+운영 반영: `3e9b7ec8c2c709f27aa30047d2b61b4d54cad96f`,
+[Render 배포](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-db959f6i0phs73cc8iv0),
+2026-10-17 01:48:05 KST `Live`, 소요 2분 17초. 실제 운영 번들에서 신청 항목·등급 저장/복원·
+필수 안내·단계 이동 브라우저 7개를 390/1440px로 재검증했다. 모든 API/서버 액션과 변경 요청은
+모의 처리하여 실제 고객 데이터는 생성·수정하지 않았다. `/api/health` HTTP 200·`ok:true`·
+오류 0건·기존 알림 설정 경고 2건 확인.
