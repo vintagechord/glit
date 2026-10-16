@@ -106,3 +106,8 @@
 - 기존 상품 행과 이용 이력은 삭제하지 않았다. DB 스키마·환경변수와 타 서비스는 변경하지 않았다.
 - 관련 회귀 테스트 27개, 변경 파일 ESLint, 운영 빌드·TypeScript 통과.
   비활성화 전 데이터가 반환되어도 두 상품만 제외하고 다른 서비스는 보존하는 실행 검사도 통과했다.
+
+운영 반영: `fea8055b9085903903c9c6c1103ea4913e2cef79`,
+[Render 배포](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-db93pnavcj2c73bpl850)
+2026-10-17 00:05:53 KST `Live`. 운영 매거진 서비스 탭에서 두 상품·녹음실 홍보·위치 링크가
+사라지고 일반 서비스 문구가 표시됨을 확인했다. `/api/health` HTTP 200·오류 0건.
