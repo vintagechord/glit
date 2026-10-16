@@ -167,3 +167,9 @@
 배열·가로 넘침·고정 닫기 버튼을 확인했다. 변경 파일 ESLint·diff 검사와 배포용 빌드·
 TypeScript 통과. 기존 변환기 파일 추적 경고 3개는 유지된다.
 DB·결제·업로드 로직, 아트멜론·워터멜론은 변경하지 않았다.
+
+운영 반영: `38eedf4b3606637a34163a557f312f668fcf9e60`,
+[Render 배포](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-db94qpbbc2fs73bn4sag),
+2026-10-17 01:16:54 KST `Live`, 소요 2분 25초. 실제 로그인된 Arirang 적격 결과에서
+밝은 팝업·두 프로그램 카드·공식 게시판과 선곡표·접힌 부가 안내를 확인했다.
+`/api/health` HTTP 200·`ok:true`·오류 0건·기존 알림 설정 경고 2건이며 홈·로그인도 정상이다.
