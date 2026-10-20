@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 import { ArrowRight, CreditCard } from "lucide-react";
+import { ReviewResultControl } from "@/components/review-result-control";
 import { normalizeStationReviewStatus } from "@/constants/review-status";
 import { formatDate } from "@/lib/format";
 import {
@@ -835,7 +836,7 @@ export function HomeReviewPanel({
   const rowsPerPage = Math.max(1, Math.floor(stationRowsPerPage));
   const latestStationUpdatedAt = getLatestStationUpdatedAt(activeStations);
   const stationGridRowsPerPage = Math.max(1, Math.ceil(rowsPerPage / 2));
-  const stationCardHeight = compact ? 100 : 86;
+  const stationCardHeight = compact ? 112 : 86;
   const stationCardGap = compact ? 8 : 10;
   const listPadding = compact ? 8 : 12;
   const listViewportHeight =
@@ -873,11 +874,8 @@ export function HomeReviewPanel({
     ? "grid grid-cols-1 gap-2 sm:grid-cols-2"
     : "grid grid-cols-1 gap-2.5 sm:grid-cols-2";
   const stationCardClass = compact
-    ? "flex min-h-[100px] flex-col items-center justify-center gap-2 rounded-xl border border-border/50 bg-background/85 px-2.5 py-2 text-xs shadow-sm"
-    : "flex min-h-[86px] items-center justify-between gap-3 rounded-xl border border-border/50 bg-background/85 px-3 py-2.5 text-sm shadow-sm";
-  const stationStatusActionClass = compact
-    ? "min-h-[34px] min-w-[90px] px-2"
-    : "min-h-[38px] min-w-[104px] px-3";
+    ? "flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-xl border border-border/50 bg-background/85 px-2.5 py-2 text-xs shadow-sm"
+    : "flex min-h-[112px] flex-col items-center justify-center gap-3 rounded-xl border border-border/50 bg-background/85 px-3 py-2.5 text-sm shadow-sm md:min-h-[86px] md:flex-row md:justify-between";
   const stationInfoClass = compact
     ? "flex min-w-0 flex-col items-center gap-1 text-center"
     : "flex min-w-0 flex-1 items-center gap-3";
@@ -1311,42 +1309,26 @@ export function HomeReviewPanel({
                               compact={compact}
                             />
                           </div>
-                          {canOpenResultModal ? (
-                            <button
-                              type="button"
-                              onPointerDown={(event) => event.stopPropagation()}
-                              onClick={() =>
-                                setTrackResultModal(
-                                  buildResultModalState(
-                                    station,
-                                    summary,
-                                    displayStatus,
-                                    activeSubmission,
-                                  ),
-                                )
-                              }
-                              className={`bauhaus-status-chip bauhaus-status-chip--compact ${stationStatusActionClass} shrink-0 flex-col transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${displayStatus.tone}`}
-                              aria-label={`${stationName} ${displayStatus.label} 결과 보기`}
-                            >
-                              <span>{displayStatus.label}</span>
-                              {displayStatus.summaryText ? (
-                                <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                  {displayStatus.summaryText}
-                                </span>
-                              ) : null}
-                            </button>
-                          ) : (
-                            <span
-                              className={`bauhaus-status-chip bauhaus-status-chip--compact ${stationStatusActionClass} shrink-0 flex-col ${displayStatus.tone}`}
-                            >
-                              <span>{displayStatus.label}</span>
-                              {displayStatus.summaryText ? (
-                                <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                                  {displayStatus.summaryText}
-                                </span>
-                              ) : null}
-                            </span>
-                          )}
+                          <ReviewResultControl
+                            label={displayStatus.label}
+                            tone={displayStatus.tone}
+                            summary={displayStatus.summaryText}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={
+                              canOpenResultModal
+                                ? () =>
+                                    setTrackResultModal(
+                                      buildResultModalState(
+                                        station,
+                                        summary,
+                                        displayStatus,
+                                        activeSubmission,
+                                      ),
+                                    )
+                                : undefined
+                            }
+                            aria-label={`${stationName} ${displayStatus.label} 결과 보기`}
+                          />
                         </div>
                       );
                     })}

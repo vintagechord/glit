@@ -25,6 +25,66 @@ test("legacy station-wide approval can prepare all selected tracks", () => {
   assert.deepEqual(getBroadcastTracks(submission, { id: "r", status: "APPROVED" }).map(row => row.status), ["APPROVED", "APPROVED"]);
 });
 
+test("legacy named result snapshots restore songs and individual decisions without album metadata", () => {
+  const legacySubmission = { ...submission, album_tracks: [] };
+  const review = { id: "r", status: "APPROVED", station: { code: "KBS" }, track_results: JSON.stringify([
+    { track_id: "one", track_no: 1, title: "첫 곡", status: "APPROVED" },
+    { track_id: "two", track_no: 2, title: "둘째 곡", status: "REJECTED" },
+    { track_no: 3, title: "아직 심의 중인 곡", status: "PENDING" },
+  ]) };
+  const rows = getBroadcastTracks(legacySubmission, review);
+  assert.deepEqual(rows.map(row => [row.track.track_title, row.status]), [
+    ["첫 곡", "APPROVED"], ["둘째 곡", "REJECTED"], ["아직 심의 중인 곡", "PENDING"],
+  ]);
+  assert.equal(rows[0].track.id, "one");
+  assert.equal(buildRadioRequest({ submission: legacySubmission, track: rows[0].track }).title, "[신청곡] 뮤지션 - 첫 곡");
+  const csv = buildBroadcastResultCsv(legacySubmission, [review]);
+  assert.match(csv, /"첫 곡","뮤지션","적격"/);
+  assert.match(csv, /"둘째 곡","뮤지션","부적격"/);
+});
+
+test("legacy fallback never invents song names or decisions from workflow and album metadata", () => {
+  const legacySubmission = { ...submission, album_tracks: null };
+  for (const status of ["APPROVED", "COMPLETED", "RESULT_READY"]) {
+    assert.deepEqual(getBroadcastTracks(legacySubmission, { id: "r", status }), []);
+    const rows = getBroadcastTracks(legacySubmission, { id: "r", status, track_results: [
+      { track_id: "one", status: "APPROVED" },
+      { title: "  ", status: "APPROVED" },
+      { title: "결정 없는 곡" },
+    ] });
+    assert.deepEqual(rows.map(row => [row.track.track_title, row.status]), [["결정 없는 곡", "PENDING"]]);
+  }
+});
+
+test("legacy snapshot approvals remain blocked by station rejection or correction requests", () => {
+  for (const status of ["REJECTED", "NEEDS_FIX", " rejected ", " needs_fix "]) {
+    const rows = getBroadcastTracks({ ...submission, album_tracks: [] }, {
+      id: "r", status, track_results: [{ title: "첫 곡", status: "APPROVED" }],
+    });
+    assert.equal(rows.length, 1);
+    assert.notEqual(rows[0].status, "APPROVED");
+  }
+});
+
+test("legacy fallback does not reintroduce snapshot songs absent from available album metadata", () => {
+  const rows = getBroadcastTracks({ ...submission, album_tracks: [submission.album_tracks![0]] }, {
+    id: "r", status: "APPROVED", track_results: [
+      { track_id: "one", title: "첫 곡", status: "APPROVED" },
+      { track_id: "old-track", title: "오래된 곡", status: "APPROVED" },
+    ],
+  });
+  assert.deepEqual(rows.map(row => row.track.id), ["one"]);
+});
+
+test("legacy WBS snapshots require explicit decisions and reject more than three decided songs", () => {
+  const legacySubmission = { ...submission, album_tracks: [] };
+  const review = { id: "wbs", status: "APPROVED", station: { code: "WBS" } };
+  const snapshots = [1, 2, 3, 4].map(number => ({ track_no: number, title: `저장된 곡 ${number}`, status: "APPROVED" }));
+  assert.equal(getBroadcastTracks(legacySubmission, { ...review, track_results: snapshots.slice(0, 3) }).filter(row => row.status === "APPROVED").length, 3);
+  assert.ok(getBroadcastTracks(legacySubmission, { ...review, track_results: snapshots }).every(row => row.status === "PENDING"));
+  assert.ok(getBroadcastTracks(legacySubmission, { ...review, track_results: snapshots.map(row => ({ ...row, status: "PENDING" })) }).every(row => row.status === "PENDING"));
+});
+
 test("only WBS uses the three-track selection; other stations keep all reviewed songs", () => {
   const album = { ...submission, album_tracks: [1, 2, 3, 4].map(track_no => ({ id: `track-${track_no}`, track_no, broadcast_selected: track_no < 4 })) };
   assert.equal(getBroadcastTracks(album, { id: "wbs", status: "APPROVED", station: { code: "WBS" } }).length, 3);

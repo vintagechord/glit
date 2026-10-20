@@ -4,6 +4,11 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 import {
+  ReviewResultControl,
+  approvedReviewResultTone as approvedDetailResultTone,
+  rejectedReviewResultTone as rejectedDetailResultTone,
+} from "@/components/review-result-control";
+import {
   normalizeStationReviewStatus,
   paymentStatusLabelMap,
   resultStatusLabelMap,
@@ -216,11 +221,6 @@ const aiUsageLabel = (value?: boolean | null) => {
   if (value === false) return "AI 사용 안 함";
   return "미입력";
 };
-
-const approvedDetailResultTone =
-  "bg-[#1f7a5a] text-white dark:bg-[#1f7a5a] dark:text-white";
-const rejectedDetailResultTone =
-  "bg-[#d9362c] text-white dark:bg-[#d9362c] dark:text-white";
 
 type DetailPrimaryAction = "payment-info" | "retry-payment" | "station-review" | null;
 
@@ -1026,25 +1026,13 @@ export function SubmissionDetailClient({
                         </p>
                       </div>
                     </div>
-                    <button
-                      type="button"
+                    <ReviewResultControl
+                      label={resultDisplayStatus.label}
+                      tone={resultDisplayStatus.tone}
+                      summary={trackSummaryLine}
                       onClick={handleResultClick}
                       aria-label={[stationName, resultDisplayStatus.label, trackSummaryLine].filter(Boolean).join(" · ")}
-                      className={`inline-flex min-h-11 w-full flex-col items-center justify-center rounded-[6px] border-2 border-[#111111] px-3 py-1.5 text-[13px] font-black shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] sm:w-auto sm:min-w-[112px] sm:shrink-0 ${
-                        resultDisplayStatus.tone
-                      } ${
-                        shouldOpenResultModal
-                          ? "transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0"
-                          : "transition"
-                      }`}
-                    >
-                      <span>{resultDisplayStatus.label}</span>
-                      {trackSummaryLine ? (
-                        <span className="mt-0.5 text-[11px] font-normal leading-tight text-current/80">
-                          {trackSummaryLine}
-                        </span>
-                      ) : null}
-                    </button>
+                    />
                   </div>
                 </div>
               );
@@ -1919,7 +1907,7 @@ export function SubmissionDetailClient({
           returnFocusTarget={radioReturnFocusRef.current}
         >
           {submission.type === "ALBUM" ? (
-            <BroadcastSupportPanel submission={submission} stationReviews={[activeRadioReview]} isEnglish={localePrefix === "/en"} embedded />
+            <BroadcastSupportPanel key={`${submission.id}:${activeRadioReview.id}`} submission={submission} stationReviews={[activeRadioReview]} isEnglish={localePrefix === "/en"} embedded />
           ) : (
             <div className="space-y-5">
               <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold leading-relaxed text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">

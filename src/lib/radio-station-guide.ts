@@ -44,6 +44,20 @@ const arirangPrograms: RadioProgramGuide[] = [
   },
 ];
 
+// Program, request-board and playlist links verified on the official MBC site.
+const mbcPrograms: RadioProgramGuide[] = [
+  {
+    name: "김이나의 별이 빛나는 밤에",
+    description: {
+      ko: "‘사연과 신청곡’에서 음악과 이야기를 나눕니다. 최근 선곡표를 보고 내 곡과 연결되는 사연을 준비해보세요.",
+      en: "A listener-story and song-request program. Check the recent playlist and prepare a story connected to your music.",
+    },
+    url: "https://m.imbc.com/radio/1000672100000100000",
+    messageUrl: "https://m.imbc.com/imbbs/imbbslist/1000672100000100000?bid=pstarnight212&menu=mn-basic&pos=radio",
+    playlistUrl: "https://m.imbc.com/Radio/Music/1000672100000100000?objid=RASFM210",
+  },
+];
+
 const participationLinks: Record<string, NonNullable<RadioStationGuide["participationLink"]>> = {
   "https://radio.kbs.co.kr/": {
     name: "KBS 콩",
@@ -111,8 +125,8 @@ export function getRadioStationGuide(input: {
       ko: "등록 후에는 자신의 게시글과 프로그램의 선곡표를 확인하세요. 선곡표 공개 여부와 반영 시점은 프로그램마다 다릅니다.",
       en: "After posting, check your message and the program’s playlist. Playlist availability and update times vary by program.",
     },
-    programs: [],
+    programs: directory.url === "https://m.imbc.com/RadioMain" ? mbcPrograms : [],
     participationLink: participationLinks[directory.url],
-    verifiedAt: participationLinks[directory.url] ? "2026-10-17" : "2026-10-16",
+    verifiedAt: directory.url === "https://m.imbc.com/RadioMain" ? "2026-10-20" : participationLinks[directory.url] ? "2026-10-17" : "2026-10-16",
   };
 }

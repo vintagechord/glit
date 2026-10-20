@@ -64,7 +64,7 @@ for (const width of [320, 360, 390, 768]) {
         }
       } else {
         await expect(page.getByTestId("broadcast-support")).toBeVisible();
-        await page.getByText("준비 체크리스트 · 방송 참고자료", { exact: true }).click();
+        await page.getByText("심의 기록 · 방송 참고자료", { exact: true }).click();
         if (mode === "full") {
           await page.getByRole("button", { name: "작성 신청서 열기" }).click();
           await page.getByRole("button", { name: "첨부 파일 열기" }).click();

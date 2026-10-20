@@ -61,9 +61,9 @@ for (const width of [320, 390, 768, 1440]) {
     if (width === 320) await page.locator("html").evaluate(element => element.classList.add("dark"));
     const { trigger, dialog } = await openArirang(page);
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByLabel("적격 방송국", { exact: true })).toHaveValue("arirang-review");
+    await expect(dialog.getByTestId("radio-song-context")).toContainText("Arirang · 적격 곡");
     await expect(dialog.getByLabel("신청할 적격 곡").locator("option")).toHaveText(["Arirang에서 적격인 곡"]);
-    await expect(dialog.getByRole("link").filter({ hasText: /Arirang/ }).first()).toHaveAttribute("href", /arirang\.com/);
+    await expect(dialog.getByRole("link")).toHaveCount(0);
     const close = dialog.getByRole("button", { name: "라디오 신청 가이드 닫기" });
     await expect(close).toBeFocused();
     expect((await close.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -101,13 +101,14 @@ for (const width of [390, 1440]) {
     await expect(dialog.getByLabel("신청할 적격 곡")).toHaveCount(0);
     await expect(dialog.getByLabel("게시글 제목")).toHaveCount(0);
 
+    await expect(dialog.getByRole("button", { name: "이 곡으로 프로그램 고르기" })).toBeDisabled();
+    await dialog.getByLabel("신청할 곡명 (필수)").fill("신청자의 직접 입력한 노래");
+    await dialog.getByLabel("아티스트명 (필수)").fill("신청자 아티스트");
+    await dialog.getByRole("button", { name: "이 곡으로 프로그램 고르기" }).click();
     const programs = dialog.getByRole("article");
     await expect(programs).toHaveCount(2);
-    const boards = programs.getByRole("link", { name: /메시지 게시판 열기/ });
-    await expect(boards).toHaveCount(2);
-    await expect(boards.nth(0)).toHaveAttribute("href", "https://www.arirang.com/radio/125/board/674");
-    await expect(boards.nth(1)).toHaveAttribute("href", "https://www.arirang.com/radio/127/board/771");
-    await expect(boards.first()).toBeInViewport();
+    await expect(programs.nth(0).getByRole("link", { name: /프로그램 소개/ })).toHaveAttribute("href", "https://www.arirang.com/radio/125");
+    await expect(programs.nth(1).getByRole("link", { name: /프로그램 소개/ })).toHaveAttribute("href", "https://www.arirang.com/radio/127");
 
     expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await dialog.getByTestId("radio-guide-scroll").evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -133,15 +134,17 @@ test("an approved track has its own guide while another track is still waiting",
 test("closing and reopening the guide preserves the selected language and edited request", async ({ page }) => {
   await mount(page);
   let { dialog } = await openArirang(page);
+  await dialog.getByRole("button", { name: "이 곡으로 프로그램 고르기" }).click();
+  await dialog.getByRole("button", { name: "Radio’n Us 선택", exact: true }).click();
+  await dialog.getByRole("button", { name: "이 프로그램으로 초안 만들기" }).click();
   await dialog.getByLabel("신청 문구 언어").selectOption("ko");
-  await dialog.getByLabel("신청할 프로그램 (선택)").fill("Radio’n Us");
   await dialog.getByLabel("게시글 제목").fill("퇴근길에 함께 듣고 싶은 곡");
   await dialog.getByLabel("사연과 신청곡 문구").fill("오랜 친구와 함께 듣고 싶은 노래입니다. 이 사연을 다시 작성하지 않도록 남겨주세요.");
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   ({ dialog } = await openArirang(page));
   await expect(dialog.getByLabel("신청 문구 언어")).toHaveValue("ko");
-  await expect(dialog.getByLabel("신청할 프로그램 (선택)")).toHaveValue("Radio’n Us");
+  await expect(dialog.getByTestId("radio-song-context")).toContainText("Radio’n Us");
   await expect(dialog.getByLabel("게시글 제목")).toHaveValue("퇴근길에 함께 듣고 싶은 곡");
   await expect(dialog.getByLabel("사연과 신청곡 문구")).toHaveValue("오랜 친구와 함께 듣고 싶은 노래입니다. 이 사연을 다시 작성하지 않도록 남겨주세요.");
 });

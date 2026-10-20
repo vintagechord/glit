@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { ReviewResultControl } from "@/components/review-result-control";
 
 import { formatDate, formatDateTime, formatShortDate } from "@/lib/format";
 import {
@@ -328,32 +329,22 @@ export function SubmissionStatusList({
                           {station.station?.name ?? "-"}
                         </span>
                         <div className="flex flex-col items-center justify-center gap-1 justify-self-center">
-                          {canOpenTracks ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setTrackResultModal({
-                                  stationName: station.station?.name ?? "-",
-                                  summary,
-                                  resultNote: station.result_note?.trim() || null,
-                                })
-                              }
-                              className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] min-w-[100px] transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-0 ${currentStatus.tone}`}
-                            >
-                              {currentStatus.label}
-                            </button>
-                          ) : (
-                            <span
-                              className={`bauhaus-status-chip bauhaus-status-chip--compact min-h-[34px] min-w-[100px] ${currentStatus.tone}`}
-                            >
-                              {currentStatus.label}
-                            </span>
-                          )}
-                          {currentStatus.summaryText ? (
-                            <span className="text-[11px] leading-tight text-muted-foreground text-center">
-                              {currentStatus.summaryText}
-                            </span>
-                          ) : null}
+                          <ReviewResultControl
+                            label={currentStatus.label}
+                            tone={currentStatus.tone}
+                            summary={currentStatus.summaryText}
+                            aria-label={`${station.station?.name ?? "방송국"} ${currentStatus.label} 결과 보기`}
+                            onClick={
+                              canOpenTracks
+                                ? () =>
+                                    setTrackResultModal({
+                                      stationName: station.station?.name ?? "-",
+                                      summary,
+                                      resultNote: station.result_note?.trim() || null,
+                                    })
+                                : undefined
+                            }
+                          />
                         </div>
                         <span
                           className="hidden text-right text-xs text-muted-foreground sm:block"

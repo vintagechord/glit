@@ -1,7 +1,8 @@
 import { normalizeStationReviewStatus } from "@/constants/review-status";
-import { getStationReviewTracks, resolveStationTrackResults, type AlbumTrackMeta } from "@/lib/track-results";
+import { getStationReviewTracks, isWbsReview, normalizeTrackResults, resolveStationTrackResults, type AlbumTrackMeta } from "@/lib/track-results";
 
 export type BroadcastTrack = AlbumTrackMeta & {
+  is_title?: boolean | null;
   performer?: string | null;
   composer?: string | null;
   lyricist?: string | null;
@@ -39,13 +40,36 @@ export function broadcastArtist(submission: BroadcastSubmission) {
 
 /** Only decisions for the selected broadcaster can make a track eligible. */
 export function getBroadcastTracks(submission: BroadcastSubmission, review: BroadcastReview) {
-  const tracks = getStationReviewTracks(submission.album_tracks ?? [], review.station, review.track_results);
+  const albumTracks = submission.album_tracks ?? [];
+  const stationStatus = normalizeStationReviewStatus(review.status.trim().toUpperCase());
+  const blocked = ["REJECTED", "NEEDS_FIX"].includes(stationStatus);
+  if (!albumTracks.length) {
+    // Older submissions can retain the reviewed song names only in the result
+    // snapshot. Restore those names, but require their own recorded decisions.
+    const results = normalizeTrackResults(review.track_results);
+    const invalidWbsDecisions = isWbsReview(review.station) &&
+      results.filter((result) => result.status === "APPROVED" || result.status === "REJECTED").length > 3;
+    return results.flatMap((result, index) => {
+      const title = result.title?.trim();
+      if (!title) return [];
+      const track: BroadcastTrack = {
+        id: result.track_id,
+        track_no: result.track_no,
+        track_title: title,
+      };
+      return [{
+        track,
+        key: result.track_id || `legacy-track-${result.track_no ?? index + 1}-${index}`,
+        status: blocked ? stationStatus : invalidWbsDecisions ? "PENDING" : result.status ?? "PENDING",
+      }];
+    });
+  }
+  const tracks = getStationReviewTracks(albumTracks, review.station, review.track_results);
   const results = resolveStationTrackResults(review.track_results, tracks, review.status, review.station);
-  const blocked = ["REJECTED", "NEEDS_FIX"].includes(normalizeStationReviewStatus(review.status));
   return tracks.map((track, index) => ({
     track,
     key: track.id || `track-${track.track_no ?? index + 1}`,
-    status: blocked ? normalizeStationReviewStatus(review.status) : results[index]?.status ?? "PENDING",
+    status: blocked ? stationStatus : results[index]?.status ?? "PENDING",
   }));
 }
 
