@@ -73,7 +73,7 @@ function StatusChip({ label }: { label: string }) {
     stageTone[label] ??
     "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]";
   return (
-    <span className={`inline-flex min-h-7 items-center justify-center rounded-[6px] border-2 px-2.5 py-1 text-[11px] font-black leading-none tracking-normal shadow-[1.5px_1.5px_0_var(--bauhaus-shadow)] ${tone}`}>
+    <span className={`inline-flex h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-[8px] border-2 px-3 text-[11px] font-black leading-none tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] ${tone}`}>
       {label}
     </span>
   );
@@ -111,6 +111,7 @@ function SubmissionManagementRow({
   const pathname = usePathname();
   const localePrefix =
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
+  const [prefetchDetail, setPrefetchDetail] = React.useState(false);
   return (
     <div
       className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 @sm:grid-cols-[auto_minmax(0,1fr)_auto] @sm:items-center ${
@@ -149,7 +150,9 @@ function SubmissionManagementRow({
       </label>
       <Link
         href={`${localePrefix}/dashboard/submissions/${encodeURIComponent(item.id)}`}
-        prefetch={false}
+        prefetch={prefetchDetail ? true : false}
+        onMouseEnter={() => setPrefetchDetail(true)}
+        onFocus={() => setPrefetchDetail(true)}
         className="flex min-h-11 min-w-0 flex-col justify-center"
       >
         <p className="font-semibold leading-6 text-foreground [overflow-wrap:anywhere]">

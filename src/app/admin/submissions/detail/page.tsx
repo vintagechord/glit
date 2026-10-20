@@ -489,36 +489,64 @@ export default async function AdminSubmissionDetailPage({
     submission.payment_status && paymentStatusLabelMap[submission.payment_status]
       ? paymentStatusLabelMap[submission.payment_status]
       : submission.payment_status ?? "미결제";
-  const memberProfile =
-    submission.user_id && !submission.guest_name
-      ? (
-          await supabase
-            .from("profiles")
-            .select("name, company, phone, email")
-            .eq("user_id", submission.user_id)
-            .maybeSingle()
-        ).data ?? null
-      : null;
+  const stationSelectWithTracks =
+    "id, status, result_note, track_results:track_results_json, updated_at, station_id, station:stations ( id, name, code )";
+  const stationSelectLegacyTracks =
+    "id, status, result_note, track_results, updated_at, station_id, station:stations ( id, name, code )";
+  const stationSelectNoTracks =
+    "id, status, result_note, updated_at, station_id, station:stations ( id, name, code )";
 
-  let memberEmail: string | null = memberProfile?.email ?? null;
-  if (!memberEmail && submission.user_id && !submission.guest_name) {
-    const { data: userData } = await supabase.auth.admin.getUserById(
-      submission.user_id,
-    );
-    memberEmail = userData?.user?.email ?? null;
-  }
+  const expectedCodes = submission.type === "ALBUM"
+    ? getPackageStationCodes(packageInfo?.station_count, packageInfo?.name)
+    : [];
+  // These sections depend only on the authorized submission, not on one another.
+  const [member, paymentDocumentResult, stationResult, expectedStationResult, eventResult, fileResult] = await Promise.all([
+    (async () => {
+      if (!submission.user_id || submission.guest_name) return { profile: null, email: null };
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name, company, phone, email")
+        .eq("user_id", submission.user_id)
+        .maybeSingle();
+      let email: string | null = profile?.email ?? null;
+      if (!email) {
+        const { data } = await supabase.auth.admin.getUserById(submission.user_id);
+        email = data.user?.email ?? null;
+      }
+      return { profile, email };
+    })(),
+    supabase
+      .from("submissions")
+      .select("payment_document_type, cash_receipt_purpose, cash_receipt_phone, cash_receipt_business_number, tax_invoice_business_number")
+      .eq("id", submission.id)
+      .maybeSingle(),
+    supabase
+      .from("station_reviews")
+      .select(stationSelectWithTracks)
+      .eq("submission_id", submissionId)
+      .order("station_id", { ascending: true }),
+    expectedCodes.length
+      ? supabase.from("stations").select("id, name, code").in("code", expectedCodes)
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from("submission_events")
+      .select("id, event_type, message, created_at")
+      .eq("submission_id", submissionId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("submission_files")
+      .select("id, kind, file_path, original_name, mime, size, created_at")
+      .eq("submission_id", submissionId)
+      .order("created_at", { ascending: false }),
+  ]);
+  const memberProfile = member.profile;
+  const memberEmail = member.email;
 
   const applicantEmail = submission.applicant_email ?? submission.guest_email ?? null;
   const albumTracks = submission.album_tracks ?? [];
   const isOneclick = submission.is_oneclick === true;
   const releasedAlbumUrl = parseReleasedAlbumUrl(submission.melon_url);
-  const { data: paymentDocumentRaw, error: paymentDocumentError } = await supabase
-    .from("submissions")
-    .select(
-      "payment_document_type, cash_receipt_purpose, cash_receipt_phone, cash_receipt_business_number, tax_invoice_business_number",
-    )
-    .eq("id", submission.id)
-    .maybeSingle();
+  const { data: paymentDocumentRaw, error: paymentDocumentError } = paymentDocumentResult;
   const paymentDocument = paymentDocumentError
     ? null
     : (paymentDocumentRaw as PaymentDocumentRow | null);
@@ -540,19 +568,6 @@ export default async function AdminSubmissionDetailPage({
         : paymentDocument?.payment_document_type === "TAX_INVOICE"
           ? paymentDocument.tax_invoice_business_number ?? "-"
           : "-";
-
-  const stationSelectWithTracks =
-    "id, status, result_note, track_results:track_results_json, updated_at, station_id, station:stations ( id, name, code )";
-  const stationSelectLegacyTracks =
-    "id, status, result_note, track_results, updated_at, station_id, station:stations ( id, name, code )";
-  const stationSelectNoTracks =
-    "id, status, result_note, updated_at, station_id, station:stations ( id, name, code )";
-
-  const stationResult = await supabase
-    .from("station_reviews")
-    .select(stationSelectWithTracks)
-    .eq("submission_id", submissionId)
-    .order("station_id", { ascending: true });
 
   let stationReviews =
     (stationResult.data as
@@ -593,10 +608,8 @@ export default async function AdminSubmissionDetailPage({
   if (submission.type === "ALBUM") {
     // Missing rows are displayed as unsent and created by the explicit save action.
     // Merely viewing an admin page must not create or reset review records.
-    const expectedCodes = getPackageStationCodes(packageInfo?.station_count, packageInfo?.name);
     if (expectedCodes.length > 0) {
-      const { data: expectedStations } = await supabase.from("stations")
-        .select("id, name, code").in("code", expectedCodes);
+      const expectedStations = expectedStationResult.data;
       const existingStationIds = new Set((stationReviews ?? []).map(review => review.station_id));
       stationReviews = [...(stationReviews ?? []), ...(expectedStations ?? [])
         .filter(station => !existingStationIds.has(station.id))
@@ -650,17 +663,8 @@ export default async function AdminSubmissionDetailPage({
     }));
   }
 
-  const { data: events } = await supabase
-    .from("submission_events")
-    .select("id, event_type, message, created_at")
-    .eq("submission_id", submissionId)
-    .order("created_at", { ascending: false });
-
-  const { data: submissionFiles } = await supabase
-    .from("submission_files")
-    .select("id, kind, file_path, original_name, mime, size, created_at")
-    .eq("submission_id", submissionId)
-    .order("created_at", { ascending: false });
+  const events = eventResult.data;
+  const submissionFiles = fileResult.data;
 
   const files = submissionFiles ?? [];
   const reviews = stationReviews ?? [];

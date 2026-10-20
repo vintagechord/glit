@@ -20,26 +20,24 @@ export default async function AdminSubmissionDetailById({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }> | { id: string };
-  searchParams?:
-    | Promise<AdminSubmissionDetailByIdSearchParams>
-    | AdminSubmissionDetailByIdSearchParams;
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<AdminSubmissionDetailByIdSearchParams>;
 }) {
   const resolvedParams = await Promise.resolve(params);
-  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const resolvedSearchParams: AdminSubmissionDetailByIdSearchParams = (await searchParams) ?? {};
   const saved = firstParam(resolvedSearchParams.saved);
   const savedError = firstParam(resolvedSearchParams.savedError);
   const savedWarning = firstParam(resolvedSearchParams.savedWarning);
   const returnTo = firstParam(resolvedSearchParams.returnTo);
 
   return await AdminSubmissionDetailPage({
-    params: resolvedParams,
-    searchParams: {
+    params: Promise.resolve(resolvedParams),
+    searchParams: Promise.resolve({
       id: resolvedParams.id,
       saved,
       savedError,
       savedWarning,
       returnTo,
-    },
+    }),
   });
 }

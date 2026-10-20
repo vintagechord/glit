@@ -126,13 +126,8 @@ test("package, one-click mode, snapshot price, and amount must match", () => {
   );
 });
 
-test("member provisional discount lookup mirrors the authoritative base shape", () => {
-  assert.match(
-    submissionActions,
-    /hasRecentBaseAlbumForDiscount[\s\S]*\.eq\("type", "ALBUM"\)[\s\S]*\.eq\("is_oneclick", isOneClick\)[\s\S]*\.eq\("album_base_price_krw", basePriceKrw\)[\s\S]*\.eq\("album_price_tier", "FULL"\)/,
-  );
-  assert.match(
-    submissionActions,
-    /query\.is\("user_id", null\)\.eq\("guest_token", guestToken\)/,
-  );
+test("new submissions always save a full-price snapshot and skip legacy eligibility queries", () => {
+  assert.match(submissionActions, /serverBasePriceKrw = getAlbumReviewPriceKrw\(selectedPackage.price_krw\)/);
+  assert.match(submissionActions, /amountKrw = serverBasePriceKrw;\s*albumPriceTier = "FULL"/);
+  assert.doesNotMatch(submissionActions, /hasRecentBaseAlbumForDiscount|getAdditionalAlbumPriceKrw/);
 });

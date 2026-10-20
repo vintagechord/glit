@@ -2,6 +2,7 @@ import { Clock3, Mail, Phone } from "lucide-react";
 
 import { APP_CONFIG } from "@/lib/config";
 import { SupportInquiryModal } from "@/features/support/support-inquiry-modal";
+import { ArtmelonOnboarding } from "@/features/support/artmelon-onboarding";
 
 export const metadata = {
   title: "고객센터",
@@ -45,6 +46,7 @@ export default function SupportPage() {
           <span>{APP_CONFIG.supportHours}</span>
         </div>
       </div>
+      <ArtmelonOnboarding />
     </div>
   );
 }

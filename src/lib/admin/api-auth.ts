@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { cache } from "react";
 
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -13,7 +14,9 @@ type AdminApiAuthResult =
       error: string;
     };
 
-export async function requireAdminForApi(): Promise<AdminApiAuthResult> {
+// React memoization is scoped to one render/request, so the admin layout and
+// page share verification without ever reusing another user's authorization.
+export const requireAdminForApi = cache(async (): Promise<AdminApiAuthResult> => {
   const supabase = await createServerSupabase();
   const {
     data: { user },
@@ -41,4 +44,4 @@ export async function requireAdminForApi(): Promise<AdminApiAuthResult> {
   }
 
   return { ok: true, user };
-}
+});

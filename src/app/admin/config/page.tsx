@@ -2,7 +2,6 @@ import {
   deletePackageFormAction,
   deleteProfanityTermFormAction,
   deleteStationFormAction,
-  updateAlbumReviewDiscountFormAction,
   updatePackageStationsFormAction,
   upsertProfanityTermFormAction,
   upsertPackageFormAction,
@@ -10,12 +9,6 @@ import {
 } from "@/features/admin/actions";
 import { MvRatingAssetsManager } from "@/components/admin/mv-rating-assets-manager";
 import { AdminSaveToast } from "@/components/admin/save-toast";
-import { getAlbumReviewDiscountPercent } from "@/lib/album-discount-server";
-import {
-  getAlbumReviewDiscountPercentForPackage,
-  getDiscountedAlbumPrice,
-} from "@/lib/album-pricing";
-import { formatCurrency } from "@/lib/format";
 import { AdminActionForm } from "@/components/admin/action-form";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -94,7 +87,6 @@ export default async function AdminConfigPage({
     ? resolvedSearchParams?.saved[0]
     : resolvedSearchParams?.saved;
   const supabase = await createServerSupabase();
-  const albumDiscountPercent = await getAlbumReviewDiscountPercent(supabase);
   const { data: packages } = await supabase
     .from("packages")
     .select(
@@ -111,17 +103,6 @@ export default async function AdminConfigPage({
     .from("profanity_terms")
     .select("id, term, language, is_active, created_at")
     .order("created_at", { ascending: false });
-  const samplePackage = packages?.find((pkg) => !pkg.name?.startsWith("[테스트]"));
-  const sampleOriginalPrice = samplePackage?.price_krw ?? 0;
-  const sampleDiscountPercent = getAlbumReviewDiscountPercentForPackage(
-    albumDiscountPercent,
-    samplePackage?.station_count ?? null,
-  );
-  const sampleDiscountedPrice = getDiscountedAlbumPrice(
-    sampleOriginalPrice,
-    albumDiscountPercent,
-    samplePackage?.station_count ?? null,
-  );
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -131,92 +112,11 @@ export default async function AdminConfigPage({
       </h1>
 
       <div className="mt-8 space-y-8">
-        <section className="space-y-4 rounded-[32px] border border-border/60 bg-card/80 p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">
-                음반 심의 일괄 할인
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                모든 음반 패키지에 같은 할인율을 적용합니다.
-              </p>
-              <details className="mt-2 text-xs text-muted-foreground">
-                <summary className="cursor-pointer font-semibold text-foreground">
-                  적용 범위
-                </summary>
-                <p className="mt-2 max-w-2xl leading-5">
-                  패키지 원가는 유지되며 사용자 표시 금액과 실제 카드·입금 요청
-                  금액에 할인이 적용됩니다.
-                </p>
-              </details>
-            </div>
-            <span className="rounded-full border border-[#1556a4]/30 bg-[#1556a4]/10 px-3 py-1 text-xs font-black text-[#1556a4] dark:border-[#3f8ad8]/40 dark:bg-[#3f8ad8]/15 dark:text-[#8bc3ff]">
-              전체 패키지 {albumDiscountPercent}%
-            </span>
-          </div>
-
-          <AdminActionForm
-            action={updateAlbumReviewDiscountFormAction}
-            className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]"
-          >
-            <label className="grid gap-1">
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                할인율(%)
-              </span>
-              <input
-                name="discountPercent"
-                type="number"
-                min={0}
-                max={100}
-                step={1}
-                defaultValue={albumDiscountPercent}
-                className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm font-semibold text-foreground"
-              />
-            </label>
-            <button
-              type="submit"
-              className="self-end rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background"
-            >
-              할인율 저장
-            </button>
-            <button
-              type="submit"
-              name="quickDiscountPercent"
-              value="50"
-              className="self-end rounded-full border border-[#1556a4]/40 bg-[#1556a4]/10 px-4 py-2 text-xs font-black text-[#1556a4]"
-            >
-              50% 적용
-            </button>
-            <button
-              type="submit"
-              name="quickDiscountPercent"
-              value="0"
-              className="self-end rounded-full border border-border/70 px-4 py-2 text-xs font-semibold text-foreground"
-            >
-              할인 해제
-            </button>
-          </AdminActionForm>
-
-          {sampleOriginalPrice > 0 ? (
-            <div className="rounded-2xl border border-border/60 bg-background/70 p-4 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                사용자 노출 예시
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <span className="text-muted-foreground line-through">
-                  {formatCurrency(sampleOriginalPrice)}원
-                </span>
-                <span className="text-lg font-black text-foreground">
-                  {formatCurrency(sampleDiscountedPrice)}원
-                </span>
-                {sampleDiscountPercent > 0 ? (
-                  <span className="rounded-full bg-[#f2cf27] px-3 py-1 text-xs font-black text-[#111111]">
-                    {sampleDiscountPercent}% 할인
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
+        <section className="rounded-[24px] border border-border/60 bg-card/80 p-6">
+          <h2 className="text-lg font-semibold text-foreground">음반 심의 가격</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            모든 앨범에 아래 패키지의 정상 가격이 적용됩니다. 여러 앨범을 함께 신청해도 앨범별 가격은 동일합니다.
+          </p>
         </section>
 
         <section className="space-y-4 rounded-[32px] border border-border/60 bg-card/80 p-6">

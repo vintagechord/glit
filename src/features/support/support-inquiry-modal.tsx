@@ -1,11 +1,16 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { Loader2, MessageSquareText, SendHorizontal, X } from "lucide-react";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 type SupportInquiryModalProps = {
   className?: string;
+  triggerLabel?: string;
+  dialogTitle?: string;
+  initialTitle?: string;
+  initialBody?: string;
 };
 
 type InquiryResponse = {
@@ -16,10 +21,17 @@ type InquiryResponse = {
 const fieldClass =
   "w-full rounded-[8px] border-2 border-border bg-background px-3 py-2 text-sm font-semibold text-foreground outline-none transition focus:border-[#1556a4]";
 
-export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
+export function SupportInquiryModal({
+  className,
+  triggerLabel = "1:1 문의",
+  dialogTitle = "1:1 문의",
+  initialTitle = "",
+  initialBody = "",
+}: SupportInquiryModalProps) {
+  const isEnglish = usePathname().startsWith("/en");
   const [open, setOpen] = React.useState(false);
-  const [title, setTitle] = React.useState("");
-  const [body, setBody] = React.useState("");
+  const [title, setTitle] = React.useState(initialTitle);
+  const [body, setBody] = React.useState(initialBody);
   const [contact, setContact] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
@@ -46,8 +58,8 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
   }, [open]);
 
   const resetForm = () => {
-    setTitle("");
-    setBody("");
+    setTitle(initialTitle);
+    setBody(initialBody);
     setContact("");
     setError(null);
     setSubmitted(false);
@@ -103,7 +115,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
         className={className}
       >
         <MessageSquareText className="h-4 w-4" aria-hidden="true" />
-        1:1 문의
+        {triggerLabel}
       </button>
 
       {open ? (
@@ -124,7 +136,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                   Support
                 </p>
                 <h2 id={titleId} className="mt-1 text-lg font-black">
-                  1:1 문의
+                  {dialogTitle}
                 </h2>
               </div>
               <button
@@ -159,7 +171,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
             ) : (
               <form onSubmit={submitInquiry} className="space-y-4 px-5 py-5">
                 <label className="grid gap-1 text-xs font-black text-muted-foreground">
-                  제목
+                  {isEnglish ? "Title" : "제목"}
                   <input
                     value={title}
                     disabled={sending}
@@ -171,7 +183,7 @@ export function SupportInquiryModal({ className }: SupportInquiryModalProps) {
                   />
                 </label>
                 <label className="grid gap-1 text-xs font-black text-muted-foreground">
-                  내용
+                  {isEnglish ? "Message" : "내용"}
                   <textarea
                     value={body}
                     disabled={sending}

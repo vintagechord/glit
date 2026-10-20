@@ -60,19 +60,15 @@ test("draft reads round-trip authoring choices and expand only verified bundles"
   assert.match(route, /return NextResponse\.json\(\{ ok: true, deletedIds \}\)/);
 });
 
-test("album group binding checks the exact base owner before atomic save", () => {
+test("full-price album saves detach legacy discount bundles while preserving client batch recovery", () => {
   const actions = read("src/features/submissions/actions.ts");
+  const album = read("src/features/submissions/album-wizard.tsx");
 
-  assert.match(actions, /albumDraftGroupGuestToken/);
-  assert.match(
-    actions,
-    /\.eq\("id", albumDraftGroupId\)[\s\S]*\.eq\("album_price_tier", "FULL"\)[\s\S]*\.eq\("payment_status", "UNPAID"\)/,
-  );
-  assert.match(
-    actions,
-    /\.eq\([\s\S]*"guest_token",[\s\S]*parsed\.data\.albumDraftGroupGuestToken/,
-  );
-  assert.match(actions, /album_draft_group_id: albumDraftGroupId/);
+  assert.match(actions, /album_draft_group_id: null/);
+  assert.doesNotMatch(actions, /album_draft_group_id: albumDraftGroupId/);
+  assert.doesNotMatch(album, /albumDraftGroupId,/);
+  assert.match(album, /storedIds = submissionIds\.length > 0 \? submissionIds : fallbackIds/);
+  assert.match(album, /guestTokensBySubmissionId/);
 });
 
 test("unselected form mode remains null during draft autosave", () => {

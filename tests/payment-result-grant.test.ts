@@ -124,10 +124,13 @@ test("PayPal callback and guest detail use the server-only result grant", () => 
     detailPage,
     /readPaymentResultGrant[\s\S]*\.is\("user_id", null\)[\s\S]*\.eq\("guest_token", paymentResultGrant\.guestToken\)/,
   );
-  assert.match(
-    detailPage,
-    /ensureAlbumStationReviews\(\s*admin,/,
-  );
+  assert.doesNotMatch(detailPage, /ensureAlbumStationReviews/);
+  assert.match(detailPage, /loadSubmissionDetailRelations\(\s*hasGuestPaymentResultGrant \? admin : supabase/);
+  // Browser RLS cannot read a guest record authorized only by the HttpOnly
+  // result grant. Refresh through the server without exposing its bearer token.
+  assert.match(detailPage, /enableRealtime=\{!hasGuestPaymentResultGrant\}/);
+  assert.match(detailPage, /refreshIntervalMs=\{hasGuestPaymentResultGrant \? 10000 : undefined\}/);
+  assert.doesNotMatch(detailPage, /guestToken=\{/);
   assert.match(
     proxy,
     /isSubmissionDetailRoute && hasPaymentResultGrant/,

@@ -13,6 +13,7 @@ import { buildUrl, getBaseUrl } from "@/lib/url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateReleasedAlbumPaymentFiles } from "@/lib/submission-payment-files";
 import { validateMvPaymentStations } from "@/lib/submission-payment-stations";
+import { validateAlbumPaymentPricing } from "@/lib/submission-payment-pricing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { orderGuestTokensSchema } from "@/lib/submission-orders-http";
@@ -175,6 +176,10 @@ export async function POST(req: NextRequest) {
         .map((item) => item.album_draft_group_id as string),
     ),
   );
+  const pricingError = await validateAlbumPaymentPricing(admin, submissionIds);
+  if (pricingError) {
+    return NextResponse.json({ error: pricingError }, { status: 409 });
+  }
   if (albumDraftGroupIds.length > 0) {
     const { data: activeGroupRows, error: groupError } = await admin
       .from("submissions")

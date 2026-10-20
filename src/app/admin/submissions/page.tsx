@@ -183,9 +183,9 @@ const toDateInputValue = (value: string) =>
 export default async function AdminSubmissionsPage({
   searchParams,
 }: {
-  searchParams?: Promise<AdminSubmissionsSearchParamsInput> | AdminSubmissionsSearchParamsInput;
+  searchParams?: Promise<AdminSubmissionsSearchParamsInput>;
 }) {
-  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const resolvedSearchParams: AdminSubmissionsSearchParamsInput = (await searchParams) ?? {};
   const requestedType = toSingle(resolvedSearchParams.type);
   const activeType = isSubmissionTypeFilter(requestedType)
     ? requestedType

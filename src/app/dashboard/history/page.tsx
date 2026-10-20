@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import {
   DashboardShell,
@@ -6,6 +7,7 @@ import {
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
 import { ArtistHistoryTabs } from "@/components/dashboard/artist-history";
+import { ReviewPageLoading } from "@/components/dashboard/review-page-loading";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 
@@ -53,12 +55,12 @@ const isMissingUserDeletedAt = (error?: { code?: string; message?: string }) =>
         error.message?.toLowerCase().includes("user_deleted_at")),
   );
 
-export async function HistoryPageView(config?: ShellConfig) {
+async function HistoryContent({ loginPath }: { loginPath: string }) {
   const supabase = await createServerSupabase();
   const user = await getServerSessionUser(supabase);
 
   if (!user) {
-    redirect(config?.loginPath ?? "/login");
+    redirect(loginPath);
   }
 
   const runSelect = (select: string, includeUserVisibility = true) => {
@@ -153,6 +155,10 @@ export async function HistoryPageView(config?: ShellConfig) {
   const albumGroups = groupByArtist(["ALBUM"]);
   const mvGroups = groupByArtist(["MV_BROADCAST", "MV_DISTRIBUTION"]);
 
+  return <ArtistHistoryTabs albumGroups={albumGroups} mvGroups={mvGroups} />;
+}
+
+export function HistoryPageView(config?: ShellConfig) {
   return (
     <DashboardShell
       title="나의 심의 내역"
@@ -160,7 +166,9 @@ export async function HistoryPageView(config?: ShellConfig) {
       tabs={config?.tabs ?? statusDashboardTabs}
       contextLabel={config?.contextLabel ?? "진행상황"}
     >
-      <ArtistHistoryTabs albumGroups={albumGroups} mvGroups={mvGroups} />
+      <Suspense fallback={<ReviewPageLoading english={config?.loginPath?.startsWith("/en/")} />}>
+        <HistoryContent loginPath={config?.loginPath ?? "/login"} />
+      </Suspense>
     </DashboardShell>
   );
 }

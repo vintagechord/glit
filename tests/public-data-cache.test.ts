@@ -95,22 +95,22 @@ test("public catalog queries run together and dynamic requests share only public
   };
   const firstRequest = cache.request(output.exports.getPublicAlbumCatalog);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(new Set(fixture.requests), new Set(["packages", "site_settings", "profanity_terms"]));
-  assert.equal(releases.length, 3, "all public reads start before any one resolves");
+  assert.deepEqual(new Set(fixture.requests), new Set(["packages", "profanity_terms"]));
+  assert.equal(releases.length, 2, "all public reads start before any one resolves");
   releases.forEach((release) => release());
   const first = await firstRequest;
   assert.equal(first.packages.length, 1);
   assert.equal(first.packages[0].stations.length, 3);
-  assert.equal(first.albumDiscountPercent, 30);
+  assert.equal(first.albumDiscountPercent, 0);
   assert.deepEqual(await cache.request(output.exports.getPublicAlbumCatalog), first);
-  assert.equal(fixture.requests.length, 3, "warm dynamic render issues no additional public queries");
-  assert.equal(cache.entries.size, 3);
+  assert.equal(fixture.requests.length, 2, "warm dynamic render issues no additional public queries");
+  assert.equal(cache.entries.size, 2);
   assert.ok(fixture.clients.every(({ key }) => key === "fixture-anon"));
   assert.ok(fixture.clients.every(({ options }) => !JSON.stringify(options).includes("cookies")));
   cache.invalidate(tags.PUBLIC_ALBUM_DISCOUNT_CACHE_TAG);
   fixture.query = async () => ({ data: { value: 50 } });
-  assert.equal((await cache.request(output.exports.getPublicAlbumCatalog)).albumDiscountPercent, 50);
-  assert.deepEqual(fixture.requests, ["packages", "site_settings", "profanity_terms", "site_settings"]);
+  assert.equal((await cache.request(output.exports.getPublicAlbumCatalog)).albumDiscountPercent, 0);
+  assert.deepEqual(fixture.requests, ["packages", "profanity_terms"]);
 });
 
 test("failed catalog loads and schema fallbacks do not poison later requests", async () => {
@@ -128,9 +128,9 @@ test("failed catalog loads and schema fallbacks do not poison later requests", a
     fixture.query = async (table) => ({ data: table === "packages" ? [packageRow]
       : table === "site_settings" ? { value: 20 } : [{ term: "recovered", language: "EN" }] });
     const recovered = await cache.request(output.exports.getPublicAlbumCatalog);
-    assert.equal(recovered.albumDiscountPercent, 20);
+    assert.equal(recovered.albumDiscountPercent, 0);
     assert.equal(recovered.profanityTerms.length, 1);
-    assert.equal(cache.entries.size, 3);
+    assert.equal(cache.entries.size, 2);
   } finally { console.warn = warn; }
 });
 
@@ -190,7 +190,7 @@ test("all direct admin catalog mutations invalidate their public cache after suc
   };
   const actionBundle = { exports: {} as Record<string, (payload: unknown) => Promise<{ error?: string }>> };
   new Function("module", "exports", ...Object.keys(context), code.code)(actionBundle, actionBundle.exports, ...Object.values(context));
-  const payload = { id: "fixture", imageUrl: "/fixture.svg", stationCodes: "", discountPercent: 30, term: "fixture" };
+  const payload = { id: "fixture", imageUrl: "/fixture.svg", stationCodes: "", discountPercent: 0, term: "fixture" };
   const consoleError = console.error; console.error = () => {};
   try {
     for (const [name, tag] of Object.entries(actionTags)) {
@@ -206,5 +206,12 @@ test("all direct admin catalog mutations invalidate their public cache after suc
       assert.deepEqual(events, ["authorize"]);
       authorized = true;
     }
+    events.length = 0;
+    error = null;
+    const rejectedCampaign = await actionBundle.exports.updateAlbumReviewDiscountAction({
+      discountPercent: 30,
+    });
+    assert.ok(rejectedCampaign.error);
+    assert.deepEqual(events, ["authorize"], "retired campaign cannot be re-enabled by a stale admin form");
   } finally { console.error = consoleError; }
 });

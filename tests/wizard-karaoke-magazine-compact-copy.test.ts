@@ -107,7 +107,7 @@ test("selected album package badge does not shift the comparison rows", () => {
   assert.match(packageCards, /aria-pressed=\{isActive\}/);
 
   const finalPriceIndex = packageCards.indexOf(
-    "{formatCurrency(discountedDisplayPrice)}원",
+    "{formatCurrency(displayPrice)}원",
   );
   const selectedBadgeIndex = packageCards.indexOf(
     'className="mt-auto flex w-full justify-end pt-3"',

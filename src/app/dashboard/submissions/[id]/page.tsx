@@ -8,7 +8,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { getStationLogoPath } from "@/lib/station-logos";
-import { ensureAlbumStationReviews, getPackageStations } from "@/lib/station-reviews";
+import { getPackageStations } from "@/lib/station-reviews";
+import { loadSubmissionDetailRelations, type DetailStationReview } from "@/lib/submissions/detail-relations";
 import { normalizeTrackResults } from "@/lib/track-results";
 import {
   PAYMENT_RESULT_GRANT_COOKIE,
@@ -243,21 +244,6 @@ export default async function SubmissionDetailPage({
     }
   }
 
-  const fallbackPackage =
-    adminSubmission?.package_id && !adminSubmission.package
-      ? await (async () => {
-          const { data, error } = await admin
-            .from("packages")
-            .select("id, name, station_count, price_krw")
-            .eq("id", adminSubmission.package_id)
-            .maybeSingle();
-          if (error) {
-            console.error("[Dashboard SubmissionDetail] package fallback error", error);
-          }
-          return data ?? null;
-        })()
-      : null;
-
   if (!adminSubmission) {
     return (
       <div className="mx-auto w-full max-w-3xl px-6 py-12">
@@ -329,6 +315,21 @@ export default async function SubmissionDetailPage({
     );
   }
 
+  const fallbackPackage =
+    adminSubmission?.package_id && !adminSubmission.package
+      ? await (async () => {
+          const { data, error } = await admin
+            .from("packages")
+            .select("id, name, station_count, price_krw")
+            .eq("id", adminSubmission.package_id)
+            .maybeSingle();
+          if (error) {
+            console.error("[Dashboard SubmissionDetail] package fallback error", error);
+          }
+          return data ?? null;
+        })()
+      : null;
+
   const userSubmission = memberResult.submission;
 
   const resolvedSubmission = {
@@ -340,15 +341,6 @@ export default async function SubmissionDetailPage({
   const packageInfo = Array.isArray(resolvedSubmission.package)
     ? resolvedSubmission.package[0]
     : resolvedSubmission.package;
-
-  if (resolvedSubmission.type === "ALBUM") {
-    await ensureAlbumStationReviews(
-      admin,
-      resolvedSubmission.id,
-      packageInfo?.station_count ?? null,
-      packageInfo?.name ?? null,
-    );
-  }
 
   const initialSubmission = {
     ...resolvedSubmission,
@@ -368,23 +360,15 @@ export default async function SubmissionDetailPage({
     ? { id: packageId, name: fallbackPackage?.name ?? null, station_count: fallbackPackage?.station_count ?? null }
     : null;
 
-  let packageStations: Array<{ id: string; code: string | null; name: string | null }> = [];
-  if (packageId) {
-    const { data: pkgStations, error: pkgStationError } = await admin
-      .from("package_stations")
-      .select("package_id, station:stations ( id, code, name )")
-      .eq("package_id", packageId);
-    if (pkgStationError) {
-      console.error("[Dashboard SubmissionDetail] package_stations error", pkgStationError);
-    }
-    packageStations =
-      pkgStations?.map((row) => {
-        const station = Array.isArray(row.station) ? row.station[0] : row.station;
-        return station
-          ? { id: station.id, code: station.code ?? null, name: station.name ?? null }
-          : null;
-      }).filter(Boolean) as Array<{ id: string; code: string | null; name: string | null }>;
+  const related = await loadSubmissionDetailRelations(
+    hasGuestPaymentResultGrant ? admin : supabase,
+    submissionId,
+    packageId,
+  );
+  for (const [name, result] of Object.entries(related)) {
+    if (result.error) console.error(`[Dashboard SubmissionDetail] ${name} load failed`, result.error);
   }
+  let packageStations = related.packageStations.data;
 
   if (!packageStations.length) {
     const pkg = Array.isArray(resolvedSubmission.package)
@@ -399,60 +383,11 @@ export default async function SubmissionDetailPage({
     }));
   }
 
-  type StationReviewRow = {
-    id: string;
-    submission_id: string;
-    station_id: string | null;
-    status: string;
-    result_note: string | null;
-    track_results?: unknown;
-    updated_at: string;
-    station?:
-      | { id?: string | null; name?: string | null; code?: string | null }
-      | Array<{ id?: string | null; name?: string | null; code?: string | null }>
-      | null;
-  };
+  const resolvedStationReviews = related.reviews.data;
 
-  const { data: stationReviewsData, error: stationReviewsError } = await admin
-    .from("station_reviews")
-    .select(
-      "id, submission_id, station_id, status, result_note, track_results:track_results_json, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )",
-    )
-    .eq("submission_id", submissionId)
-    .order("updated_at", { ascending: false });
-  let resolvedStationReviews = (stationReviewsData ?? null) as StationReviewRow[] | null;
-  if (stationReviewsError) {
-    console.error("[Dashboard SubmissionDetail] station_reviews join error", stationReviewsError);
-    const missingTrackColumn =
-      stationReviewsError.code === "42703" ||
-      stationReviewsError.message?.toLowerCase().includes("track_results_json") ||
-      stationReviewsError.message?.toLowerCase().includes("track_results");
-    if (missingTrackColumn) {
-      const legacy = await admin
-        .from("station_reviews")
-        .select(
-          "id, submission_id, station_id, status, result_note, track_results, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )",
-        )
-        .eq("submission_id", submissionId)
-        .order("updated_at", { ascending: false });
-      if (legacy.error) {
-        const fallback = await admin
-          .from("station_reviews")
-          .select(
-            "id, submission_id, station_id, status, result_note, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )",
-          )
-          .eq("submission_id", submissionId)
-          .order("updated_at", { ascending: false });
-        resolvedStationReviews = (fallback.data ?? null) as StationReviewRow[] | null;
-      } else {
-        resolvedStationReviews = (legacy.data ?? null) as StationReviewRow[] | null;
-      }
-    }
-  }
-
-  const reviewMap = new Map<string, StationReviewRow>();
-  const reviewByCode = new Map<string, StationReviewRow>();
-  (resolvedStationReviews ?? []).forEach((review: StationReviewRow) => {
+  const reviewMap = new Map<string, DetailStationReview>();
+  const reviewByCode = new Map<string, DetailStationReview>();
+  (resolvedStationReviews ?? []).forEach((review: DetailStationReview) => {
     const station = Array.isArray(review.station) ? review.station[0] : review.station;
     const stationId =
       review.station_id ||
@@ -496,7 +431,10 @@ export default async function SubmissionDetailPage({
       submissionId={submissionId}
       initialSubmission={initialSubmission as unknown as SubmissionDetailClientProps["initialSubmission"]}
       initialStationReviews={initialStationReviews}
-      initialFiles={[]}
+      initialFiles={related.files.data ?? []}
+      initialDataComplete={!related.files.error && !related.reviews.error}
+      enableRealtime={!hasGuestPaymentResultGrant}
+      refreshIntervalMs={hasGuestPaymentResultGrant ? 10000 : undefined}
       paymentState={paymentState}
       resultsOnly={resolvedSearchParams.view === "archive-result"}
     />

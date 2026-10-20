@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateReleasedAlbumPaymentFiles } from "@/lib/submission-payment-files";
 import { validateMvPaymentStations } from "@/lib/submission-payment-stations";
+import { validateAlbumPaymentPricing } from "@/lib/submission-payment-pricing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
 import { getInicisMode, getStdPayConfig } from "@/lib/inicis/config";
@@ -300,6 +301,8 @@ export const createSubmissionPaymentOrder = async (
     ),
   );
   const admin = createAdminClient();
+  const pricingError = await validateAlbumPaymentPricing(admin, submissionIds);
+  if (pricingError) return { error: pricingError };
   if (albumDraftGroupIds.length > 0) {
     const { data: activeGroupRows, error: groupError } = await admin
       .from("submissions")

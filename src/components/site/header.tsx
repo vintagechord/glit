@@ -25,14 +25,12 @@ const navLinks = [
   { label: "심의 신청", mobileLabel: "신청", href: "/dashboard/new", match: "prefix" as const },
   { label: "결과 조회", mobileLabel: "조회", href: "/track", match: "prefix" as const },
   { label: "내 음악 관리", mobileLabel: "내 음악", href: "/mypage/music", match: "prefix" as const },
-  { label: "이용가이드", mobileLabel: "가이드", href: "/guide", match: "prefix" as const },
 ];
 
 const englishNavLinks = [
   { label: "Apply", mobileLabel: "Apply", href: "/en/dashboard/new", match: "prefix" as const },
   { label: "Results", mobileLabel: "Results", href: "/en/track", match: "prefix" as const },
   { label: "My Music", mobileLabel: "Music", href: "/en/mypage/music", match: "prefix" as const },
-  { label: "Guide", mobileLabel: "Guide", href: "/en/guide", match: "prefix" as const },
 ];
 
 const authStorageKey = "onside:header-auth-state";
@@ -398,7 +396,7 @@ export function SiteHeader() {
         aria-label={isEnglishRoute ? "Mobile navigation" : "모바일 주요 메뉴"}
         className="border-t-2 border-[#111111] px-3 py-1.5 lg:hidden dark:border-[#f2cf27]"
       >
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-4 gap-1.5 sm:gap-2">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-3 gap-1.5 sm:gap-2">
           {activeNavLinks.map((link) => {
             const activeLink = isActivePath(pathname, link.href, link.match);
             return (

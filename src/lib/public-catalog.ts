@@ -6,12 +6,7 @@ import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 import { getSupabaseEnv } from "@/lib/supabase/env";
 import {
-  ALBUM_REVIEW_DISCOUNT_SETTING_KEY,
-  normalizeAlbumDiscountPercent,
-} from "@/lib/album-pricing";
-import {
   PUBLIC_CATALOG_CACHE_TAG,
-  PUBLIC_ALBUM_DISCOUNT_CACHE_TAG,
   PUBLIC_PROFANITY_TERMS_CACHE_TAG,
 } from "@/lib/public-cache-tags";
 import { isDynamicServerUsageError } from "@/lib/next/dynamic-server-usage";
@@ -177,24 +172,6 @@ async function getAlbumPackages() {
   }
 }
 
-const loadAlbumDiscountPercent = unstable_cache(
-  async () => {
-    const { data, error } = await createPublicCatalogClient()
-      .from("site_settings")
-      .select("value")
-      .eq("key", ALBUM_REVIEW_DISCOUNT_SETTING_KEY)
-      .maybeSingle();
-    if (error) throw error;
-    const value = data?.value;
-    const discountPercent = value && typeof value === "object" && "discountPercent" in value
-      ? value.discountPercent
-      : value;
-    return normalizeAlbumDiscountPercent(discountPercent);
-  },
-  ["public-album-discount-v1"],
-  { revalidate: 60, tags: [PUBLIC_ALBUM_DISCOUNT_CACHE_TAG] },
-);
-
 const loadProfanityTerms = unstable_cache(
   async () => {
     const { data, error } = await createPublicCatalogClient()
@@ -220,12 +197,11 @@ async function withUncachedFallback<T>(query: Promise<T>, fallback: T): Promise<
 }
 
 // Display data only. Submission and payment actions continue to load current
-// prices and discounts directly from the database before accepting payment.
+// package prices directly from the database before accepting payment.
 export async function getPublicAlbumCatalog() {
-  const [packages, albumDiscountPercent, profanityTerms] = await Promise.all([
+  const [packages, profanityTerms] = await Promise.all([
     getAlbumPackages(),
-    withUncachedFallback(loadAlbumDiscountPercent(), 0),
     withUncachedFallback(loadProfanityTerms(), []),
   ]);
-  return { packages, albumDiscountPercent, profanityTerms };
+  return { packages, albumDiscountPercent: 0, profanityTerms };
 }

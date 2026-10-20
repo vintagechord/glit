@@ -7,9 +7,9 @@ type SearchParams = {
 export default async function AdminArtistDetailRedirect({
   searchParams,
 }: {
-  searchParams?: Promise<SearchParams> | SearchParams;
+  searchParams?: Promise<SearchParams>;
 }) {
-  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const resolvedSearchParams: SearchParams = (await searchParams) ?? {};
   const searchId = Array.isArray(resolvedSearchParams.id)
     ? resolvedSearchParams.id?.[0] ?? ""
     : resolvedSearchParams.id ?? "";

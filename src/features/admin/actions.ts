@@ -1930,6 +1930,10 @@ export async function updateAlbumReviewDiscountAction(
     return { error: "음반 할인율은 0~100 사이 숫자로 입력해주세요." };
   }
 
+  if (parsed.data.discountPercent !== 0) {
+    return { error: "음반 심의는 정상 가격으로 운영됩니다. 할인율을 적용할 수 없습니다." };
+  }
+
   const supabase = await createServerSupabase();
   const { error } = await supabase.from("site_settings").upsert({
     key: ALBUM_REVIEW_DISCOUNT_SETTING_KEY,

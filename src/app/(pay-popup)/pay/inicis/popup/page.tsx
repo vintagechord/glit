@@ -14,9 +14,7 @@ export const metadata = {
 };
 
 type Props = {
-  searchParams:
-    | Record<string, string | string[] | undefined>
-    | Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function InicisPopupPage({ searchParams }: Props) {

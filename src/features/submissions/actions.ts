@@ -4,12 +4,8 @@ import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { z } from "zod";
 
-import { getAlbumReviewDiscountPercent } from "@/lib/album-discount-server";
-import { getDiscountedAlbumPrice } from "@/lib/album-pricing";
-import {
-  type AlbumPriceTier,
-  getAdditionalAlbumPriceKrw,
-} from "@/lib/album-payment-discount";
+import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
+import type { AlbumPriceTier } from "@/lib/album-payment-discount";
 import { B2ConfigError, getB2Config } from "@/lib/b2";
 import {
   sendSubmissionBankRequestEmail,
@@ -80,49 +76,6 @@ type EditableSubmissionRow = {
   album_price_tier: string | null;
   is_oneclick: boolean | null;
   archive_review_context?: unknown;
-};
-
-const albumAdditionalDiscountWindowMs = 30 * 60 * 1000;
-
-const hasRecentBaseAlbumForDiscount = async ({
-  db,
-  packageId,
-  submissionId,
-  userId,
-  guestToken,
-  basePriceKrw,
-  isOneClick,
-}: {
-  db: ReturnType<typeof createAdminClient>;
-  packageId: string;
-  submissionId: string;
-  userId?: string | null;
-  guestToken?: string | null;
-  basePriceKrw: number;
-  isOneClick: boolean;
-}) => {
-  if (!userId && !guestToken) return false;
-  const cutoff = new Date(Date.now() - albumAdditionalDiscountWindowMs).toISOString();
-  let query = db
-    .from("submissions")
-    .select("id")
-    .eq("type", "ALBUM")
-    .eq("package_id", packageId)
-    .eq("is_oneclick", isOneClick)
-    .eq("amount_krw", basePriceKrw)
-    .eq("album_base_price_krw", basePriceKrw)
-    .eq("album_price_tier", "FULL")
-    .neq("id", submissionId)
-    .gte("created_at", cutoff)
-    .in("status", ["WAITING_PAYMENT", "IN_PROGRESS", "COMPLETED", "SUBMITTED"])
-    .limit(1);
-
-  query = userId
-    ? query.eq("user_id", userId)
-    : query.is("user_id", null).eq("guest_token", guestToken);
-  const { data, error } = await query.maybeSingle();
-  if (error) return false;
-  return Boolean(data?.id);
 };
 
 const stripColumn = <T extends Record<string, unknown>>(
@@ -993,38 +946,6 @@ export async function saveAlbumSubmissionAction(
   const wasPreviouslySubmitted = ["SUBMITTED", "WAITING_PAYMENT"].includes(
     existingSubmission.status ?? "",
   );
-  const albumDraftGroupId =
-    parsed.data.albumDraftGroupId ?? parsed.data.submissionId;
-  if (albumDraftGroupId !== parsed.data.submissionId) {
-    let groupBaseQuery = adminDb
-      .from("submissions")
-      .select("id, album_draft_group_id")
-      .eq("id", albumDraftGroupId)
-      .eq("type", "ALBUM")
-      .eq("album_price_tier", "FULL")
-      .in("status", ["DRAFT", "PRE_REVIEW", "SUBMITTED", "WAITING_PAYMENT"])
-      .eq("payment_status", "UNPAID");
-    if (user?.id) {
-      groupBaseQuery = groupBaseQuery.eq("user_id", user.id);
-    } else {
-      groupBaseQuery = groupBaseQuery
-        .is("user_id", null)
-        .eq(
-          "guest_token",
-          parsed.data.albumDraftGroupGuestToken ?? "__missing__",
-        );
-    }
-    const { data: groupBase, error: groupBaseError } =
-      await groupBaseQuery.maybeSingle();
-    if (
-      groupBaseError ||
-      !groupBase ||
-      (groupBase.album_draft_group_id &&
-        groupBase.album_draft_group_id !== albumDraftGroupId)
-    ) {
-      return { error: "추가 앨범 묶음 소유권을 확인할 수 없습니다." };
-    }
-  }
   let expectedParentVersion = {
     updatedAt: existingSubmission.updated_at,
     userId: existingSubmission.user_id,
@@ -1077,7 +998,6 @@ export async function saveAlbumSubmissionAction(
     });
     if (submittedFilesError) return { error: submittedFilesError };
   }
-  const albumDiscountPercent = await getAlbumReviewDiscountPercent(adminDb);
 
   const hasPackage = Boolean(parsed.data.packageId);
   let amountKrw = parsed.data.amountKrw ?? 0;
@@ -1155,69 +1075,11 @@ export async function saveAlbumSubmissionAction(
 
     // Both release states use the selected package price. The URL collection
     // service is included, and payment still uses a server-written snapshot.
-    const serverOriginalBasePriceKrw = Math.max(
-      0,
-      Math.round(Number(selectedPackage.price_krw)),
-    );
-    serverBasePriceKrw = getDiscountedAlbumPrice(
-      serverOriginalBasePriceKrw,
-      albumDiscountPercent,
-      packageStationCount,
-    );
-
-    if (isSubmitted) {
-      const requestedAmount = Math.max(
-        0,
-        Math.round(Number(parsed.data.amountKrw ?? 0)),
-      );
-      const additionalPriceKrw = getAdditionalAlbumPriceKrw(serverBasePriceKrw);
-      const requestedAdditionalDiscount =
-        additionalPriceKrw > 0 && requestedAmount === additionalPriceKrw;
-      const preservesExistingAdditionalTier =
-        existingSubmission?.album_price_tier === "ADDITIONAL" &&
-        existingSubmission.package_id === parsed.data.packageId &&
-        existingSubmission.is_oneclick === isOneClick &&
-        Math.round(Number(existingSubmission.amount_krw ?? 0)) ===
-          additionalPriceKrw &&
-        Math.round(Number(existingSubmission.album_base_price_krw ?? 0)) ===
-          serverBasePriceKrw;
-      // Guest submissions intentionally receive a different token per form.
-      // Preserve the requested tier here so a guest can build one cart with a
-      // full-price base and an additional album. The atomic payment RPC binds
-      // that pair and rejects a discounted item paid on its own. Signed-in
-      // users keep the recent-owner eligibility check for provisional saves.
-      const hasRecentBaseAlbum =
-        isGuest ||
-        (additionalPriceKrw > 0 &&
-          (await hasRecentBaseAlbumForDiscount({
-            db: adminDb,
-            packageId: parsed.data.packageId,
-            submissionId: parsed.data.submissionId,
-            userId: user?.id ?? null,
-            guestToken: parsed.data.guestToken ?? null,
-            basePriceKrw: serverBasePriceKrw,
-            isOneClick,
-          })));
-      const canUseAdditionalDiscount =
-        requestedAdditionalDiscount &&
-        (preservesExistingAdditionalTier || hasRecentBaseAlbum);
-      amountKrw = canUseAdditionalDiscount
-        ? additionalPriceKrw
-        : serverBasePriceKrw;
-      albumPriceTier = canUseAdditionalDiscount ? "ADDITIONAL" : "FULL";
-    } else {
-      const additionalPriceKrw = getAdditionalAlbumPriceKrw(serverBasePriceKrw);
-      const requestedAmount = Math.max(
-        0,
-        Math.round(Number(parsed.data.amountKrw ?? 0)),
-      );
-      const isAdditionalDraft =
-        additionalPriceKrw > 0 &&
-        additionalPriceKrw !== serverBasePriceKrw &&
-        requestedAmount === additionalPriceKrw;
-      amountKrw = isAdditionalDraft ? additionalPriceKrw : serverBasePriceKrw;
-      albumPriceTier = isAdditionalDraft ? "ADDITIONAL" : "FULL";
-    }
+    serverBasePriceKrw = getAlbumReviewPriceKrw(selectedPackage.price_krw);
+    // Ignore old client campaign percentages, additional-album tiers and
+    // submitted amounts. All editable drafts receive the current full price.
+    amountKrw = serverBasePriceKrw;
+    albumPriceTier = "FULL";
   }
 
   if (isSubmitted && amountKrw <= 0) {
@@ -1370,7 +1232,10 @@ export async function saveAlbumSubmissionAction(
       serverBasePriceKrw > 0 ? serverBasePriceKrw : null,
     album_price_tier: albumPriceTier,
     album_discount_base_submission_id: null,
-    album_draft_group_id: albumDraftGroupId,
+    // Legacy database bundles require discounted ADDITIONAL siblings. Standard
+    // price albums are independent; the editor retains explicit batch IDs for
+    // autosave/recovery and checkout can still select all albums together.
+    album_draft_group_id: null,
     guest_name: isGuest ? guestNameValue || null : null,
     guest_company: isGuest ? albumMetadata?.guestCompany?.trim() || null : null,
     guest_email: isGuest ? guestEmailValue || null : null,

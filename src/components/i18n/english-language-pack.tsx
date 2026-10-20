@@ -575,10 +575,18 @@ const exactTranslations: Record<string, string> = {
   "심의 신청부터": "From Submission",
   "결과 확인까지": "to Result Check",
   "TEST - TEST 심의": "TEST - TEST Review",
-  "리뉴얼 기념 음반심의 30% 할인": "Renewal Special: 30% Off Album Review",
-  "리뉴얼 기념 AlbumReview 30% Discount": "Renewal Special: 30% Off Album Review",
-  "할인 금액으로 바로 접수하세요.": "Submit now at the discounted price.",
-  "Discount 금액으로 바로 Submission하세요.": "Submit now at the discounted price.",
+  "심의 그 다음까지, 온사이드": "Beyond review, with Onside",
+  "온사이드와 함께하는 심의 그 다음": "Your next steps with Onside",
+  "내 음악을 위한 방송 신청 가이드": "Broadcast guidance for your music",
+  "심의 완료 후, 내 곡과 심의 결과에 맞춘 방송국별 신청 방법을 안내합니다.":
+    "After review, follow broadcaster submission steps tailored to your songs and results.",
+  "쌓이는 음악, 남아 있는 심의 기록": "Your music grows. Your records stay.",
+  "온사이드에서 진행한 모든 심의와 결과를 내 계정에서 계속 보관하고 확인하세요.":
+    "Keep every Onside review and result together in your account, ready to revisit.",
+  "CD·LP·굿즈 판매는 아트멜론으로": "Sell CDs, vinyl and merch with Artmelon",
+  "실물 판매를 지원하지 않는 유통사를 이용해도, 심의 회원을 위한 입점 연계로 다음 단계를 준비하세요.":
+    "Even if your distributor does not handle physical sales, get Artmelon onboarding support as an Onside review member.",
+  "앨범당 심의 비용": "Review price per album",
   "나의 모든 음반·뮤직비디오 심의를 관리하고, 진행 현황을 실시간으로 확인하세요.":
     "Manage all of your album and music video reviews, and check progress in real time.",
   "이전 온사이드도 페이지도 접속가능": "Previous Onside Site Still Available",
@@ -1552,14 +1560,10 @@ const exactTranslations: Record<string, string> = {
     "Yes. Gugak FM focuses on Korean traditional music and FEBC focuses on CCM, so genre fit and any additional cost are checked first.",
   "가능합니다. Gugak FM은 국악, FEBC은 CCM 중심이라 장르 적합성과 추가 비용을 먼저 확인합니다.":
     "Yes. Gugak FM focuses on Korean traditional music and FEBC focuses on CCM, so genre fit and any additional cost are checked first.",
-  "2장 이상의 앨범은 할인혜택이 있나요?":
-    "Is there a discount for two or more albums?",
-  "동일 접수에서 여러 앨범을 진행하면 2번째 앨범부터 기준 금액의 50%로 접수됩니다. 최종 확인 화면에서 총액을 확인하세요.":
-    "When multiple albums are submitted in the same request, the second album and onward are charged at 50% of the base amount. Check the total on the final confirmation screen.",
-  "동일 접수에서 여러 앨범을 진행하면 2번째 앨범부터 현재 적용가격의 50%로 접수됩니다. 최종 확인 화면에서 총액을 확인하세요.":
-    "When multiple albums are submitted in the same request, the second album and onward are charged at 50% of the currently applied price. Check the total on the final confirmation screen.",
-  "동일 Submission에서 여러 앨범을 진행하면 2번째 앨범부터 기준 금액의 50%로 Submission됩니다. 최종 확인 화면에서 총액을 확인하세요.":
-    "When multiple albums are submitted in the same request, the second album and onward are charged at 50% of the base amount. Check the total on the final confirmation screen.",
+  "여러 앨범의 심의 비용은 어떻게 계산되나요?":
+    "How is the review price calculated for multiple albums?",
+  "모든 앨범에 선택한 방송국 패키지의 정상 가격이 각각 적용됩니다. 여러 앨범을 함께 작성하고 결제할 수 있으며, 최종 확인 화면에서 앨범 수와 총액을 확인하세요.":
+    "Each album is charged the standard price of its broadcaster package. You can prepare and pay for multiple albums together; check the album count and total on the final confirmation screen.",
   "Review Result는 어떻게 확인하나요?": "How do I check review results?",
   "심의 결과는 어떻게 확인하나요?": "How do I check review results?",
   "접수 후 발급되는 조회 코드로 확인합니다. 로그인 접수는 마이페이지에 저장되며, 결과 파일 안내도 함께 표시됩니다.":

@@ -25,11 +25,7 @@ import {
   moveAlbumTrackRowKey,
   removeAlbumTrackRowKey,
 } from "@/lib/album-track-table";
-import {
-  getAlbumReviewDiscountPercentForPackage,
-  getDiscountedAlbumPrice,
-  normalizeAlbumDiscountPercent,
-} from "@/lib/album-pricing";
+import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
 import { orderAlbumDraftRowsForResume } from "@/lib/album-draft-order";
 import { showCenteredAlert, showCenteredConfirm } from "@/lib/centered-dialog";
 import { getReleasedAlbumUrlError } from "@/lib/released-album-url";
@@ -382,7 +378,6 @@ export function AlbumWizard({
   userEmail,
   profanityTerms = [],
   profanityFilterV2Enabled = false,
-  albumDiscountPercent = 0,
   initialArchiveEntry: archiveEntrySeed,
   initialApplicant,
 }: {
@@ -629,45 +624,9 @@ export function AlbumWizard({
   const broadcastCount = tracks.filter((track) => track.broadcastSelected)
     .length;
   const requiresBroadcastSelection = tracks.length >= 4;
-  const normalizedAlbumDiscountPercent =
-    normalizeAlbumDiscountPercent(albumDiscountPercent);
-  const originalBasePriceKrw = selectedPackage?.priceKrw ?? 0;
-  const basePriceKrw = getDiscountedAlbumPrice(
-    originalBasePriceKrw,
-    normalizedAlbumDiscountPercent,
-    selectedPackage?.stationCount ?? null,
-  );
-  const selectedAlbumDiscountPercent = getAlbumReviewDiscountPercentForPackage(
-    normalizedAlbumDiscountPercent,
-    selectedPackage?.stationCount ?? null,
-  );
-  const hasAlbumEventDiscount = selectedAlbumDiscountPercent > 0;
-  const additionalPriceKrw = Math.round(basePriceKrw * 0.5);
-  const groupPriceTiers = editingIndex !== null && baseDraftSnapshot
-    ? [baseDraftSnapshot.draft.priceTier, ...albumDrafts.map((draft) => draft.priceTier)]
-    : [currentAlbumPriceTier, ...albumDrafts.map((draft) => draft.priceTier)];
-  const additionalAlbumCount = groupPriceTiers.filter(
-    (tier) => tier === "ADDITIONAL",
-  ).length;
-  const totalAlbumCount = groupPriceTiers.length;
-  const fullPriceAlbumCount = Math.max(0, totalAlbumCount - additionalAlbumCount);
-  const additionalAlbumTotalKrw = additionalAlbumCount * additionalPriceKrw;
-  const originalTotalPriceKrw = totalAlbumCount * originalBasePriceKrw;
-  const totalPriceKrw =
-    fullPriceAlbumCount * basePriceKrw + additionalAlbumTotalKrw;
-  const albumEventDiscountTotalKrw = hasAlbumEventDiscount
-    ? totalAlbumCount * Math.max(0, originalBasePriceKrw - basePriceKrw)
-    : 0;
-  const additionalAlbumDiscountTotalKrw = additionalAlbumCount * Math.max(
-    0,
-    basePriceKrw - additionalPriceKrw,
-  );
-  const hasAdditionalAlbumDiscount = additionalAlbumDiscountTotalKrw > 0;
-  const totalDisplayDiscountKrw = Math.max(
-    0,
-    originalTotalPriceKrw - totalPriceKrw,
-  );
-  const hasPaymentSummaryDiscount = totalDisplayDiscountKrw > 0;
+  const basePriceKrw = getAlbumReviewPriceKrw(selectedPackage?.priceKrw ?? 0);
+  const totalAlbumCount = albumDrafts.length + 1;
+  const totalPriceKrw = getAlbumReviewPriceKrw(basePriceKrw, totalAlbumCount);
   const selectionLocked = albumDrafts.length > 0;
   const selectedPackageSummary = selectedPackage
     ? {
@@ -1110,8 +1069,8 @@ export function AlbumWizard({
       submissionId: json.submissionId,
       guestToken: json.guestToken ?? requestedGuestToken ?? "",
       sourceStatus: "DRAFT",
-      priceTier: "ADDITIONAL" as const,
-      amountKrw: additionalPriceKrw,
+      priceTier: "FULL" as const,
+      amountKrw: basePriceKrw,
       title: "",
       artistName: "",
       artistNameKr: "",
@@ -1130,7 +1089,7 @@ export function AlbumWizard({
       files: [],
       emailSubmitConfirmed: false,
     } satisfies AlbumDraft;
-  }, [additionalPriceKrw, albumDrafts, currentSubmissionId, isGuest]);
+  }, [basePriceKrw, albumDrafts, currentSubmissionId, isGuest]);
 
   const shouldShowGuestLookup = isGuest || completionTokens.length > 0;
   const completionCodesToShow = shouldShowGuestLookup
@@ -2388,10 +2347,7 @@ export function AlbumWizard({
     submissionId,
     guestToken: currentGuestTokenRef.current,
     priceTier: currentAlbumPriceTier,
-    amountKrw:
-      currentAlbumPriceTier === "ADDITIONAL"
-        ? additionalPriceKrw
-        : basePriceKrw,
+    amountKrw: basePriceKrw,
     title: title.trim(),
     artistName: artistName.trim(),
     artistNameKr: artistNameKr.trim(),
@@ -2470,7 +2426,7 @@ export function AlbumWizard({
       draftRows,
       storedSubmissionIds,
     );
-    const mappedDrafts = sorted.map((row, index) => {
+    const mappedDrafts = sorted.map((row) => {
       const files = mapDraftFiles(
         Array.isArray(row.files) ? (row.files as Array<Record<string, unknown>>) : [],
       );
@@ -2485,11 +2441,7 @@ export function AlbumWizard({
         submissionId: String(row.id),
         guestToken: guestTokenValue,
         sourceStatus: String(row.status ?? "DRAFT"),
-        priceTier:
-          String(row.album_price_tier ?? "") === "ADDITIONAL" ||
-          (!row.album_price_tier && index > 0)
-            ? "ADDITIONAL"
-            : "FULL",
+        priceTier: "FULL" as const,
         amountKrw: Number(row.amount_krw ?? 0),
         title: String(row.title ?? ""),
         artistName: String(row.artist_name ?? ""),
@@ -2816,10 +2768,7 @@ export function AlbumWizard({
       submissionId: requireSubmissionId(),
       guestToken: currentGuestTokenRef.current,
       priceTier: currentAlbumPriceTier,
-      amountKrw:
-        currentAlbumPriceTier === "ADDITIONAL"
-          ? additionalPriceKrw
-          : basePriceKrw,
+      amountKrw: basePriceKrw,
       title: title.trim(),
       artistName: artistName.trim(),
       artistNameKr: artistNameKr.trim(),
@@ -3224,12 +3173,6 @@ export function AlbumWizard({
         ? "PRE_REVIEW"
         : "DRAFT");
     const submissionIds: string[] = [];
-    const albumDraftGroupId =
-      drafts.find((draft) => draft.priceTier === "FULL")?.submissionId ??
-      drafts[0]?.submissionId;
-    const albumDraftGroupGuestToken = drafts.find(
-      (draft) => draft.submissionId === albumDraftGroupId,
-    )?.guestToken;
 
     try {
       for (let index = 0; index < drafts.length; index += 1) {
@@ -3240,10 +3183,6 @@ export function AlbumWizard({
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
           archiveReview: initialArchiveEntry?.context,
-          albumDraftGroupId,
-          albumDraftGroupGuestToken: isGuest
-            ? albumDraftGroupGuestToken
-            : undefined,
           packageId: sourceSnapshot.selectedPackageId ?? undefined,
           amountKrw: albumPrice,
           title: titleValue || undefined,
@@ -3877,20 +3816,12 @@ export function AlbumWizard({
       const guestTokensBySubmissionId: Record<string, string> = {};
       let emailNotice: string | undefined;
       const submissionPaymentMethod = deferPayment ? "BANK" : paymentMethod;
-      const albumDraftGroupId =
-        draftsForSubmit.find((draft) => draft.priceTier === "FULL")
-          ?.submissionId ?? draftsForSubmit[0]?.submissionId;
-      const albumDraftGroupGuestToken = draftsForSubmit.find(
-        (draft) => draft.submissionId === albumDraftGroupId,
-      )?.guestToken;
 
       for (let index = 0; index < draftsForSubmit.length; index += 1) {
         const draft = draftsForSubmit[index];
         const albumPrice =
           basePriceKrw > 0
-            ? draft.priceTier === "ADDITIONAL"
-              ? additionalPriceKrw
-              : basePriceKrw
+            ? basePriceKrw
             : Math.max(0, Math.round(draft.amountKrw));
         const titleValue = draft.title.trim();
         const artistValue = draft.artistName.trim();
@@ -3908,10 +3839,6 @@ export function AlbumWizard({
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
           archiveReview: initialArchiveEntry?.context,
-          albumDraftGroupId,
-          albumDraftGroupGuestToken: isGuest
-            ? albumDraftGroupGuestToken
-            : undefined,
           packageId: selectedPackage?.id,
           amountKrw: albumPrice,
           title: titleValue || undefined,
@@ -4136,10 +4063,7 @@ export function AlbumWizard({
       submissionId: currentSubmissionId ?? "",
       guestToken: currentGuestTokenRef.current,
       priceTier: currentAlbumPriceTier,
-      amountKrw:
-        currentAlbumPriceTier === "ADDITIONAL"
-          ? additionalPriceKrw
-          : basePriceKrw,
+      amountKrw: basePriceKrw,
       title,
       artistName,
       artistNameKr,
@@ -4465,19 +4389,7 @@ export function AlbumWizard({
                     selectionLocked && selectedPackage?.id !== pkg.id;
                   const tone =
                     packageToneClasses[index % packageToneClasses.length];
-                  const displayPrice = pkg.priceKrw;
-                  const packageDiscountPercent = getAlbumReviewDiscountPercentForPackage(
-                    normalizedAlbumDiscountPercent,
-                    pkg.stationCount,
-                  );
-                  const discountedDisplayPrice = getDiscountedAlbumPrice(
-                    displayPrice,
-                    normalizedAlbumDiscountPercent,
-                    pkg.stationCount,
-                  );
-                  const hasDisplayDiscount =
-                    packageDiscountPercent > 0 &&
-                    discountedDisplayPrice < displayPrice;
+                  const displayPrice = getAlbumReviewPriceKrw(pkg.priceKrw);
                   const guidance = packageGuidance[pkg.stationCount];
                   const conditionalGuidance = guidance?.conditional ?? [];
                   const includedStationsLabel = `포함 방송국 ${pkg.stations.length}개`;
@@ -4513,18 +4425,8 @@ export function AlbumWizard({
                             </h3>
                           </div>
                           <div className="flex min-w-[78px] shrink-0 flex-col items-end gap-1.5 text-right">
-                            {hasDisplayDiscount ? (
-                              <span className="rounded-[6px] border border-[#111111]/20 bg-white/70 px-2 py-0.5 text-[10px] font-black text-[#111111]">
-                                {packageDiscountPercent}% 할인
-                              </span>
-                            ) : null}
-                            {hasDisplayDiscount ? (
-                              <span className="text-xs font-semibold opacity-60 line-through">
-                                {formatCurrency(displayPrice)}원
-                              </span>
-                            ) : null}
                             <span className="text-sm font-black sm:text-base xl:text-sm">
-                              {formatCurrency(discountedDisplayPrice)}원
+                              {formatCurrency(displayPrice)}원
                             </span>
                           </div>
                         </div>
@@ -5446,7 +5348,7 @@ export function AlbumWizard({
             <h2 className="text-xl font-black">{initialArchiveEntry.context.trackId ? initialArchiveEntry.tracks[0]?.title : initialArchiveEntry.title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{initialArchiveEntry.artistName}{initialArchiveEntry.context.trackId ? ` · ${initialArchiveEntry.title}` : ` · ${initialArchiveEntry.tracks.length}곡`}</p>
             {initialArchiveEntry.context.trackId ? <p className="mt-3 text-sm font-semibold">선택한 곡만 심의합니다.</p> : <details className="mt-3 text-sm"><summary className="cursor-pointer">신청 음원 보기</summary><ol className="mt-2 space-y-1">{initialArchiveEntry.tracks.map(track => <li key={track.id}>{track.trackNumber}. {track.title}</li>)}</ol></details>}
-            <div className="mt-5"><label className="text-sm font-bold" htmlFor="archive-review-package">심의 방송국</label><select id="archive-review-package" data-preflight-field="package" value={selectedPackage?.id ?? ""} onChange={event => setSelectedPackage(packages.find(pkg => pkg.id === event.target.value) ?? null)} className="mt-2 min-h-11 w-full rounded-lg border border-border bg-background px-3">{packages.map(pkg => <option key={pkg.id} value={pkg.id}>{getPackageDisplayName(pkg)} · {formatCurrency(getDiscountedAlbumPrice(pkg.priceKrw, normalizedAlbumDiscountPercent, pkg.stationCount))}원</option>)}</select></div>
+            <div className="mt-5"><label className="text-sm font-bold" htmlFor="archive-review-package">심의 방송국</label><select id="archive-review-package" data-preflight-field="package" value={selectedPackage?.id ?? ""} onChange={event => setSelectedPackage(packages.find(pkg => pkg.id === event.target.value) ?? null)} className="mt-2 min-h-11 w-full rounded-lg border border-border bg-background px-3">{packages.map(pkg => <option key={pkg.id} value={pkg.id}>{getPackageDisplayName(pkg)} · {formatCurrency(getAlbumReviewPriceKrw(pkg.priceKrw))}원</option>)}</select></div>
             <div className="mt-5" data-preflight-field="aiUsed"><AiUsageSelector value={aiUsed} onChange={setAiUsed} context="album" /></div>
             <details open={!initialApplicant?.name || !initialApplicant?.email || !initialApplicant?.phone} className="mt-5"><summary className="cursor-pointer text-sm font-bold">접수자 정보</summary><div className="mt-3 grid gap-3 sm:grid-cols-3">
               <label className="text-sm">이름<input data-preflight-field="applicantName" autoComplete="name" value={applicantName} onChange={event => setApplicantName(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-border bg-background px-3" /></label>
@@ -5977,39 +5879,11 @@ export function AlbumWizard({
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 결제 금액
               </p>
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-muted-foreground">정상가</span>
-                  <span
-                    className={
-                      hasPaymentSummaryDiscount
-                        ? "font-semibold text-muted-foreground line-through"
-                        : "font-black text-foreground"
-                    }
-                  >
-                    {formatCurrency(originalTotalPriceKrw)}원
-                  </span>
-                </div>
-                {hasPaymentSummaryDiscount ? (
-                  <>
-                    {albumEventDiscountTotalKrw > 0 ? (
-                      <div className="flex items-center justify-between gap-4 text-[#1556a4] dark:text-[#8bc3ff]">
-                        <span>오픈 기념 할인</span>
-                        <span className="font-black">
-                          -{formatCurrency(albumEventDiscountTotalKrw)}원
-                        </span>
-                      </div>
-                    ) : null}
-                    {hasAdditionalAlbumDiscount ? (
-                      <div className="flex items-center justify-between gap-4 text-[#1556a4] dark:text-[#8bc3ff]">
-                        <span>2번째 앨범부터 50% 할인</span>
-                        <span className="font-black">
-                          -{formatCurrency(additionalAlbumDiscountTotalKrw)}원
-                        </span>
-                      </div>
-                    ) : null}
-                  </>
-                ) : null}
+              <div className="mt-4 flex items-center justify-between gap-4 text-sm">
+                <span className="text-muted-foreground">앨범당 심의 비용</span>
+                <span className="font-semibold text-foreground">
+                  {formatCurrency(basePriceKrw)}원 × {totalAlbumCount}
+                </span>
               </div>
               <div className="mt-5 rounded-[18px] border-2 border-[#111111] bg-background px-4 py-4 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:flex sm:items-end sm:justify-between sm:gap-4">
                 <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
@@ -6069,9 +5943,7 @@ export function AlbumWizard({
                   </p>
                   <p className="mt-2 text-sm font-semibold">카드 결제</p>
                   <p className="mt-2 text-xs opacity-80">
-                    {additionalAlbumCount > 0
-                      ? "추가 앨범 할인 금액까지 합산해 카드 결제합니다."
-                      : "카드 결제로 진행할 수 있습니다."}
+                    카드 결제로 진행할 수 있습니다.
                   </p>
                 </button>
               </div>

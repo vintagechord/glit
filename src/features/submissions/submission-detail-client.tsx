@@ -32,7 +32,8 @@ import { BroadcastSupportPanel } from "@/features/submissions/broadcast-support-
 import { RadioRequestDialog } from "@/features/submissions/radio-request-dialog";
 import { RadioStationGuideContent } from "@/features/submissions/radio-station-guide";
 import { APP_CONFIG } from "@/lib/config";
-import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
+import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
+import { loadSubmissionDetailRelations, preservePendingStationReviews } from "@/lib/submissions/detail-relations";
 import { downloadEndpointFile } from "@/lib/browser-download";
 import { addGuestSubmissionCartEntries, rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
 
@@ -412,6 +413,7 @@ export function SubmissionDetailClient({
   initialFiles,
   initialStationReviews,
   enableRealtime = true,
+  initialDataComplete = false,
   guestToken,
   paymentState,
   refreshIntervalMs,
@@ -422,6 +424,7 @@ export function SubmissionDetailClient({
   initialFiles: SubmissionFile[];
   initialStationReviews: StationReview[];
   enableRealtime?: boolean;
+  initialDataComplete?: boolean;
   guestToken?: string;
   paymentState?: string;
   refreshIntervalMs?: number;
@@ -1068,15 +1071,18 @@ export function SubmissionDetailClient({
   const fetchLatest = React.useCallback(async () => {
     if (!supabase) return;
     const refresh = ++latestRefresh.current;
-    const { data: submissionDataRaw } = await supabase
-      .from("submissions")
-      .select(SUBMISSION_ADMIN_DETAIL_SELECT)
-      .eq("id", submissionId)
-      .maybeSingle();
+    const [submissionResult, related] = await Promise.all([
+      supabase
+        .from("submissions")
+        .select(SUBMISSION_USER_DETAIL_SELECT)
+        .eq("id", submissionId)
+        .maybeSingle(),
+      loadSubmissionDetailRelations(supabase, submissionId),
+    ]);
+    if (refresh !== latestRefresh.current) return;
 
-    const submissionData = submissionDataRaw as Submission | null;
-
-    if (submissionData && refresh === latestRefresh.current) {
+    const submissionData = submissionResult.data as Submission | null;
+    if (submissionData) {
       const nextPackage = Array.isArray(submissionData.package)
         ? submissionData.package[0]
         : submissionData.package;
@@ -1090,66 +1096,18 @@ export function SubmissionDetailClient({
       });
     }
 
-    const stationSelectWithLogo =
-      "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code, logo_url )";
-    const stationSelectWithLogoLegacy =
-      "id, status, result_note, track_results, updated_at, station:stations ( id, name, code, logo_url )";
-    const stationSelectBasic =
-      "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code )";
-    const stationSelectBasicLegacy =
-      "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
-
-    const runStationFetch = (select: string) =>
-      supabase
-        .from("station_reviews")
-        .select(select)
-        .eq("submission_id", submissionId)
-        .order("updated_at", { ascending: false });
-
-    const stationResult = await runStationFetch(stationSelectWithLogo);
-    let stationData = stationResult.data ?? null;
-    let stationError = stationResult.error ?? null;
-    for (const select of [
-      stationSelectWithLogoLegacy, stationSelectBasic, stationSelectBasicLegacy,
-      "id, status, result_note, updated_at, station:stations ( id, name, code )",
-    ]) {
-      if (!stationError || !/track_results|logo_url/i.test(stationError.message ?? "")) break;
-      const fallback = await runStationFetch(select);
-      stationData = fallback.data ?? null;
-      stationError = fallback.error ?? null;
+    if (related.reviews.data) {
+      const reviews = related.reviews.data as StationReview[];
+      setStationReviews((previous) => preservePendingStationReviews(previous, reviews));
     }
-
-    if (stationData && refresh === latestRefresh.current) {
-      const normalizedStations = (Array.isArray(stationData) ? stationData : []).map(
-        (review) => {
-          const base =
-            review && typeof review === "object"
-              ? (review as {
-                station?: StationReview["station"] | StationReview["station"][];
-                [key: string]: unknown;
-              })
-              : {};
-          const station = Array.isArray(base.station) ? base.station[0] : base.station;
-          return { ...base, station };
-        },
-      );
-      setStationReviews(normalizedStations as StationReview[]);
-    }
-
-    const { data: fileData } = await supabase
-      .from("submission_files")
-      .select("id, kind, file_path, original_name, mime, size, created_at")
-      .eq("submission_id", submissionId)
-      .order("created_at", { ascending: false });
-
-    if (fileData && refresh === latestRefresh.current) {
-      setFiles(fileData);
-    }
+    if (related.files.data) setFiles(related.files.data);
   }, [submissionId, supabase]);
 
   React.useEffect(() => {
-    void fetchLatest();
-  }, [fetchLatest]);
+    // The server already supplies the form, review results, and file metadata.
+    // Retry an incomplete response without duplicating a successful initial load.
+    if (!initialDataComplete) void fetchLatest();
+  }, [fetchLatest, initialDataComplete]);
 
   React.useEffect(() => {
     if (!refreshIntervalMs || refreshIntervalMs <= 0) return;

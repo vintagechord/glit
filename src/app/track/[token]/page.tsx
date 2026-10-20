@@ -19,7 +19,7 @@ export default async function TrackDetailPage({
   params,
   searchParams,
 }: {
-  params: { token: string } | Promise<{ token: string }>;
+  params: Promise<{ token: string }>;
   searchParams?: Promise<{ payment?: string | string[] | undefined }>;
 }) {
   const resolvedParams = await params;
