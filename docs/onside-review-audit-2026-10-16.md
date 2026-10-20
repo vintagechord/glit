@@ -267,3 +267,12 @@ DB 스키마와 이미 발급된 주문은 변경하지 않았다.
 운영 DB 관련 정보 조회를 읽기 전용으로 확인했다. Webpack 프로덕션 빌드와 TypeScript 통과,
 ESLint 오류 0개. 로컬 Turbopack은 실행 환경의 포트 생성 제한으로 Webpack 빌드를 사용했다.
 실제 방송국 글 등록·결제·상담 전송은 실행하지 않았다.
+
+운영 반영: `14192efda0ac3647ecac6b003490648ec407edd8`,
+[Render 배포](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-dbbhv07avr4c73dulkn0),
+2026-10-20 17:02 KST `Deploy succeeded | Live`, 소요 2분 15초.
+운영 Turbopack 빌드도 통과했다. 한국어·영어 × 390/1280px의 운영 브라우저 4개 테스트에서
+헤더·홈 장점·입점 상담·영문 라벨·모바일 배치를 확인했고 페이지 오류와 쓰기 요청은 없었다.
+실제 로컬 빌드 메뉴 전환 테스트 2개도 통과했다. 운영 `/api/health` HTTP 200·`ok:true`,
+`/healthz`·`/support` HTTP 200, 할인율 0%·할인 배너 비활성 상태를 재확인했다.
+기존 Render Free의 절전 후 최초 접속 지연은 호스팅 정책에 따라 남아 있다.
