@@ -31,6 +31,10 @@ import {
 } from "@/lib/credits";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import {
+  loadUserMagazineRequests,
+  type UserMagazineRequest,
+} from "./magazine-history";
 
 export const metadata = {
   title: "마이페이지 - 나의 크레딧",
@@ -43,18 +47,6 @@ type CreditSourceSubmission = {
   title: string | null;
   artist_name: string | null;
   release_date: string | null;
-  created_at: string | null;
-};
-
-type UserMagazineRequest = {
-  id: string;
-  credits_spent: number;
-  target_channel: string | null;
-  status: string | null;
-  album_title: string | null;
-  artist_name: string | null;
-  published_url: string | null;
-  admin_memo: string | null;
   created_at: string | null;
 };
 
@@ -507,7 +499,7 @@ export async function MyPageCreditsPageView({
     summary,
     creditSourcesCountResult,
     redemptionsResult,
-    magazineRequestsResult,
+    magazineRequests,
     studioReservationsResult,
   ] =
     await Promise.all([
@@ -526,14 +518,7 @@ export async function MyPageCreditsPageView({
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(50),
-      admin
-        .from("magazine_requests")
-        .select(
-          "id, credits_spent, target_channel, status, album_title, artist_name, published_url, admin_memo, created_at",
-        )
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(30),
+      loadUserMagazineRequests(admin, user.id),
       admin
         .from("studio_reservation_requests")
         .select(
@@ -570,8 +555,6 @@ export async function MyPageCreditsPageView({
     );
   const creditSources =
     ((submissionsResult.data ?? []) as CreditSourceSubmission[]) ?? [];
-  const magazineRequests =
-    ((magazineRequestsResult.data ?? []) as UserMagazineRequest[]) ?? [];
   const studioReservations =
     ((studioReservationsResult.data ?? []) as StudioReservationRequest[]) ?? [];
   const redemptionMap = new Map(

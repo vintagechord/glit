@@ -9,9 +9,11 @@ credits; their recorded charge remains available in request history.
 
 Apply `supabase/migrations/20261020092015_magazine_three_credit_requests.sql` to
 the Onside project (`rwysjsmxtpuqekeltwxi`) as part of the application release.
-The application reads `magazine_requests.credits_spent`, so the migration must
-finish before the new application begins serving requests. Release the matching
-UI promptly so the displayed 3-credit price agrees with the database.
+The application detects whether `magazine_requests.credits_spent` is available.
+Before the migration, existing balances and history remain readable at their
+legacy 1-credit charge, while new magazine requests are disabled in both the UI
+and server action. Other services remain available. Applying the complete atomic
+migration enables new 3-credit magazine requests on the next page load.
 
 The transaction:
 
@@ -23,7 +25,9 @@ The transaction:
 - Limits spending RPC execution to authenticated/service-role callers; each RPC
   still requires an authenticated user identity.
 
-Do not multiply existing magazine usage by 3 or edit old migration files.
+Do not multiply existing magazine usage by 3 or edit old migration files. The
+compatibility fallback applies only to the exact missing-column error; other
+database errors continue to fail rather than exposing an incorrect balance.
 
 After applying the migration, check the following without creating real requests:
 

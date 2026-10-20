@@ -6,7 +6,7 @@ import Link from "next/link";
 import { CheckCircle2, ImageUp, Info, SendHorizontal } from "lucide-react";
 
 import { createMagazineRequestAction } from "./actions";
-import { MAGAZINE_REQUEST_CREDIT_COST } from "@/lib/credits";
+import { MAGAZINE_REQUEST_CREDIT_COST, MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE } from "@/lib/credits";
 
 const channelOptions = [
   {
@@ -31,10 +31,12 @@ export function MagazineRequestForm({
   isAuthenticated,
   requesterPhone,
   availableCredits,
+  magazineRequestsReady = true,
 }: {
   isAuthenticated: boolean;
   requesterPhone?: string | null;
   availableCredits: number;
+  magazineRequestsReady?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -52,7 +54,7 @@ export function MagazineRequestForm({
   const successConfirmButtonRef = React.useRef<HTMLButtonElement>(null);
 
   const hasAvailableCredits = availableCredits >= MAGAZINE_REQUEST_CREDIT_COST;
-  const canSubmit = isAuthenticated && hasAvailableCredits;
+  const canSubmit = isAuthenticated && hasAvailableCredits && magazineRequestsReady;
 
   React.useEffect(() => {
     if (notice?.type !== "success") return;
@@ -109,6 +111,12 @@ export function MagazineRequestForm({
             {notice.text}
           </div>
         ) : null}
+
+        {isAuthenticated && !magazineRequestsReady && (
+          <p role="status" className="mt-5 rounded-[8px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+            {MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE}
+          </p>
+        )}
 
         {!isAuthenticated ? (
           <div className="mt-5 rounded-[8px] border-2 border-[#111111] bg-background p-5">
@@ -294,6 +302,8 @@ export function MagazineRequestForm({
             <SendHorizontal className="h-4 w-4" aria-hidden="true" />
             {!isAuthenticated
               ? "발행 요청"
+              : !magazineRequestsReady
+                ? "발행 요청 준비 중"
               : !hasAvailableCredits
                 ? `${MAGAZINE_REQUEST_CREDIT_COST}크레딧 필요`
               : isPending

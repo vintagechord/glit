@@ -50,6 +50,7 @@ const emptyCreditSummary: CreditSummary = {
   rewardUsed: 0,
   used: 0,
   available: 0,
+  magazineRequestsReady: false,
 };
 
 const firstParam = (value?: string | string[]) =>
@@ -371,6 +372,7 @@ export async function MagazinePageView({
                   isAuthenticated={Boolean(user)}
                   requesterPhone={profile?.phone}
                   availableCredits={creditSummary.available}
+                  magazineRequestsReady={creditSummary.magazineRequestsReady}
                 />
               </div>
             }

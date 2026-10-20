@@ -11,10 +11,11 @@ import * as credits from "../src/lib/credits";
 
 const userId = "22222222-2222-4222-8222-222222222222";
 type Row = Record<string, unknown>;
+type DatabaseError = string | { code?: string; message: string };
 
 function database(
   rows: Record<string, Row[]>,
-  errors: Record<string, string> = {},
+  errors: Record<string, DatabaseError> = {},
   responseLimit = 1000,
 ) {
   const reads: Array<{ table: string; columns: string }> = [];
@@ -25,14 +26,19 @@ function database(
       let includeCount = false;
       let firstRow = 0;
       let lastRow = responseLimit - 1;
-      const result = () => ({
-        data: countOnly ? null : filtered.slice(firstRow, Math.min(lastRow + 1, firstRow + responseLimit)),
-        count: includeCount ? filtered.length : null,
-        error: errors[table] ? { message: errors[table] } : null,
-      });
+      let selectedColumns = "";
+      const result = () => {
+        const error = errors[`${table}.${selectedColumns}`] ?? errors[table];
+        return {
+          data: countOnly ? null : filtered.slice(firstRow, Math.min(lastRow + 1, firstRow + responseLimit)),
+          count: includeCount ? filtered.length : null,
+          error: typeof error === "string" ? { message: error } : error ?? null,
+        };
+      };
       const query = {
         select(columns: string, options?: { head?: boolean; count?: string }) {
           reads.push({ table, columns });
+          selectedColumns = columns;
           countOnly = Boolean(options?.head);
           includeCount = options?.count === "exact";
           return query;
@@ -96,6 +102,7 @@ test("credit balances sum historical and current magazine charges, excluding can
     rewardUsed: 2,
     used: 6,
     available: 6,
+    magazineRequestsReady: true,
   });
   assert.deepEqual(reads.find((read) => read.table === "magazine_requests"), {
     table: "magazine_requests",
@@ -116,7 +123,61 @@ test("magazine charges are not truncated by the API row limit", async () => {
   const summary = await credits.getUserCreditSummary(client, userId);
   assert.equal(summary.magazineUsed, 3301);
   assert.equal(summary.available, 699);
+  assert.equal(summary.magazineRequestsReady, true);
   assert.equal(reads.filter((read) => read.table === "magazine_requests").length, 6);
+});
+
+const missingChargeErrors = [
+  { code: "42703", message: "column magazine_requests.credits_spent does not exist" },
+  { code: "42703", message: 'column "credits_spent" does not exist' },
+  { code: "PGRST204", message: "Could not find the 'credits_spent' column of 'magazine_requests' in the schema cache" },
+];
+
+test("only missing magazine charge columns use legacy counts and mark requests unavailable", async () => {
+  for (const error of missingChargeErrors) {
+    const { client, reads } = database({
+      magazine_requests: [
+        ...Array.from({ length: 1101 }, () => ({ user_id: userId, status: "PUBLISHED" })),
+        { user_id: userId, status: "CANCELED" },
+        { user_id: "another-user", status: "PUBLISHED" },
+      ],
+      credit_grants: [{ user_id: userId, amount: 1200 }],
+    }, { "magazine_requests.credits_spent": error }, 200);
+    const summary = await credits.getUserCreditSummary(client, userId);
+    assert.equal(summary.magazineUsed, 1101);
+    assert.equal(summary.available, 99);
+    assert.equal(summary.magazineRequestsReady, false);
+    assert.deepEqual(reads.filter((read) => read.table === "magazine_requests").map((read) => read.columns), [
+      "credits_spent", "id",
+    ]);
+  }
+});
+
+test("unrelated schema and permission errors must not trigger a legacy fallback", async () => {
+  for (const error of [
+    { code: "42703", message: "column magazine_requests.status does not exist" },
+    { code: "42703", message: "column credit_reward_redemptions.credits_spent does not exist" },
+    { code: "PGRST204", message: "Could not find the 'id' column of 'magazine_requests' in the schema cache" },
+    { code: "PGRST204", message: "Could not find the 'credits_spent' column of 'credit_reward_redemptions' in the schema cache" },
+    { code: "42501", message: "permission denied for table magazine_requests" },
+    { code: "PGRST301", message: "JWT expired" },
+    { message: missingChargeErrors[0].message },
+  ]) {
+    const { client, reads } = database({}, { magazine_requests: error });
+    assert.equal(credits.isMagazineCreditColumnMissing(error), false);
+    await assert.rejects(credits.getUserCreditSummary(client, userId), (failure: unknown) => (
+      failure instanceof Error && failure.message.endsWith(error.message)
+    ));
+    assert.equal(reads.filter((read) => read.table === "magazine_requests").length, 1);
+  }
+});
+
+test("a failed legacy count still propagates its database error", async () => {
+  const { client } = database({}, {
+    "magazine_requests.credits_spent": missingChargeErrors[0],
+    "magazine_requests.id": { code: "42501", message: "legacy count denied" },
+  });
+  await assert.rejects(credits.getUserCreditSummary(client, userId), /legacy count denied/);
 });
 
 test("a failed charge lookup cannot silently expose an unspent balance", async () => {
@@ -154,14 +215,14 @@ type RequestAction = (
   payload: FormData | Record<string, unknown>,
 ) => Promise<{ error?: string; message?: string; requestId?: string }>;
 
-function requestFixture(balance: number, rpcError?: string) {
+function requestFixture(balance: number, rpcError?: string, missingChargeColumn = false) {
   const rpcCalls: Array<{ name: string; params: Record<string, unknown> }> = [];
   const uploads: string[] = [];
   const paths: string[] = [];
   const { client } = database({
     profiles: [{ user_id: userId, name: "Member", phone: "01012345678" }],
     credit_grants: [{ user_id: userId, amount: balance }],
-  });
+  }, missingChargeColumn ? { "magazine_requests.credits_spent": missingChargeErrors[0] } : {});
   const admin = Object.assign(client, {
     storage: {
       from() {
@@ -214,6 +275,18 @@ test("0, 1 and 2 credits cannot submit or upload artwork through the server acti
   }
 });
 
+test("an unmigrated database blocks magazine uploads and RPC calls even with enough legacy credits", async () => {
+  const fixture = requestFixture(100, undefined, true);
+  const payload = new FormData();
+  payload.set("targetChannel", "MEDIA");
+  payload.set("artworkFile", new File(["image"], "cover.png", { type: "image/png" }));
+  const result = await fixture.action(payload);
+  assert.equal(result.error, credits.MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE);
+  assert.equal(result.requestId, undefined);
+  assert.deepEqual(fixture.uploads, []);
+  assert.deepEqual(fixture.rpcCalls, []);
+});
+
 test("3 credits allows the server action and forged client prices never reach the RPC", async () => {
   const fixture = requestFixture(3);
   const result = await fixture.action({
@@ -240,24 +313,35 @@ test("the action reports the same 3-credit rule if a concurrent request exhausts
 
 test("the rendered magazine form requires 3 credits and keeps guests from submitting", () => {
   const { MagazineRequestForm } = loadModule<{
-    MagazineRequestForm: React.ComponentType<{ isAuthenticated: boolean; availableCredits: number }>;
+    MagazineRequestForm: React.ComponentType<{
+      isAuthenticated: boolean;
+      availableCredits: number;
+      magazineRequestsReady: boolean;
+    }>;
   }>("../src/features/magazine/magazine-request-form.tsx", {
     "@/lib/credits": credits,
     "./actions": { createMagazineRequestAction() { throw new Error("Unexpected request"); } },
     "next/navigation": { useRouter: () => ({}), usePathname: () => "/magazine" },
   });
-  for (const [isAuthenticated, availableCredits, disabled] of [
-    [true, 0, true],
-    [true, 1, true],
-    [true, 2, true],
-    [true, 3, false],
-    [false, 3, true],
+  for (const [isAuthenticated, availableCredits, magazineRequestsReady, disabled] of [
+    [true, 0, true, true],
+    [true, 1, true, true],
+    [true, 2, true, true],
+    [true, 3, true, false],
+    [false, 3, true, true],
+    [true, 3, false, true],
   ] as const) {
-    const html = renderToStaticMarkup(React.createElement(MagazineRequestForm, { isAuthenticated, availableCredits }));
+    const html = renderToStaticMarkup(React.createElement(MagazineRequestForm, {
+      isAuthenticated, availableCredits, magazineRequestsReady,
+    }));
     const submit = html.match(/<button type="submit"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
     assert.ok(submit, "submit control must exist");
     assert.equal(submit.includes('disabled=""'), disabled);
     assert.ok(html.includes("3크레딧 사용"));
     if (isAuthenticated && availableCredits < 3) assert.ok(submit.includes("3크레딧 필요"));
+    if (!magazineRequestsReady) {
+      assert.ok(submit.includes("발행 요청 준비 중"));
+      assert.ok(html.includes(credits.MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE));
+    }
   }
 });

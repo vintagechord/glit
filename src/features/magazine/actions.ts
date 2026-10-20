@@ -10,6 +10,7 @@ import {
   getUserCreditSummary,
   MAGAZINE_CREDIT_INSUFFICIENT_MESSAGE,
   MAGAZINE_REQUEST_CREDIT_COST,
+  MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE,
 } from "@/lib/credits";
 
 export type MagazineRequestActionState = {
@@ -291,6 +292,9 @@ export async function createMagazineRequestAction(
   }
 
   const creditSummary = await getUserCreditSummary(admin, user.id);
+  if (creditSummary.magazineRequestsReady === false) {
+    return { error: MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE };
+  }
   if (creditSummary.available < MAGAZINE_REQUEST_CREDIT_COST) {
     return { error: MAGAZINE_CREDIT_INSUFFICIENT_MESSAGE };
   }

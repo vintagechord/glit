@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const MAGAZINE_REQUEST_CREDIT_COST = 3;
 export const MAGAZINE_CREDIT_INSUFFICIENT_MESSAGE =
   `매거진 발행 요청에는 ${MAGAZINE_REQUEST_CREDIT_COST}크레딧이 필요합니다. 나의 크레딧에서 잔액을 확인해주세요.`;
+export const MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE =
+  "매거진 발행 요청을 준비하고 있습니다. 잠시 후 다시 이용해주세요.";
 
 export type CreditSummary = {
   earned: number;
@@ -11,6 +13,7 @@ export type CreditSummary = {
   rewardUsed: number;
   used: number;
   available: number;
+  magazineRequestsReady: boolean;
 };
 
 export type CreditReward = {
@@ -101,6 +104,17 @@ export function stripCreditApprovalMessageDatePrefix(
 
 const countOrZero = (count?: number | null) => count ?? 0;
 
+export function isMagazineCreditColumnMissing(
+  error: { code?: string; message?: string } | null | undefined,
+) {
+  const message = error?.message ?? "";
+  if (error?.code === "42703") {
+    return /^column\s+(?:(?:"?public"?\.)?"?magazine_requests"?\.)?"?credits_spent"?\s+does not exist\.?$/i.test(message);
+  }
+  return error?.code === "PGRST204" &&
+    /^Could not find the ['"]credits_spent['"] column of ['"]magazine_requests['"] in the schema cache\.?$/i.test(message);
+}
+
 async function loadMagazineCreditUsage(client: SupabaseClient, userId: string) {
   const rows: Array<{ credits_spent: number }> = [];
   const pageSize = 500;
@@ -112,13 +126,30 @@ async function loadMagazineCreditUsage(client: SupabaseClient, userId: string) {
       .neq("status", "CANCELED")
       .order("id")
       .range(rows.length, rows.length + pageSize - 1);
-    if (error) return { data: null, error };
+    if (isMagazineCreditColumnMissing(error)) {
+      // The old schema charged one credit per non-canceled request. Keep its
+      // history readable, but explicitly prevent new requests until migration.
+      const legacy = await client
+        .from("magazine_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .neq("status", "CANCELED");
+      return {
+        data: null,
+        error: legacy.error,
+        legacyCount: legacy.count,
+        magazineRequestsReady: false,
+      };
+    }
+    if (error) {
+      return { data: null, error, legacyCount: null, magazineRequestsReady: false };
+    }
     const page = (data ?? []) as Array<{ credits_spent: number }>;
     rows.push(...page);
     // Use the exact count rather than a presumed API row limit. This keeps
     // balances correct even when an account's history spans several pages.
     if (page.length === 0 || rows.length >= (count ?? rows.length)) {
-      return { data: rows, error: null };
+      return { data: rows, error: null, legacyCount: null, magazineRequestsReady: true };
     }
   }
 }
@@ -167,7 +198,7 @@ export async function getUserCreditSummary(
   const adminGranted = (
     (grantResult.data ?? []) as Array<{ amount?: number | null }>
   ).reduce((total, row) => total + (row.amount ?? 0), 0);
-  const magazineUsed = (
+  const magazineUsed = magazineResult.legacyCount ?? (
     (magazineResult.data ?? []) as Array<{ credits_spent: number }>
   ).reduce((total, row) => total + row.credits_spent, 0);
   const used = magazineUsed + rewardUsed;
@@ -180,6 +211,7 @@ export async function getUserCreditSummary(
     rewardUsed,
     used,
     available: Math.max(totalEarned - used, 0),
+    magazineRequestsReady: magazineResult.magazineRequestsReady,
   };
 }
 

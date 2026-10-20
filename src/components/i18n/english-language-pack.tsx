@@ -897,6 +897,9 @@ const exactTranslations: Record<string, string> = {
   "매거진 바로가기": "Open Magazine",
   "매거진 발행 요청": "Magazine Publication Request",
   "매거진 발행 요청하기": "Request Magazine Publication",
+  "매거진 발행 요청을 준비하고 있습니다. 잠시 후 다시 이용해주세요.":
+    "Magazine publication requests will be available soon. Please try again later.",
+  "발행 요청 준비 중": "Publication requests coming soon",
   "아티스트·앨범 콘텐츠 발행": "Publish Artist and Album Content",
   "발행 요청하기": "Request Publication",
   "발행 요청": "Request Publication",
