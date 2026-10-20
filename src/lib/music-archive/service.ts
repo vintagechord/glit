@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { consumeRateLimit } from "@/lib/request-rate-limit";
 import { ArchiveError, archiveDatabaseError } from "./http";
 import { applyArchiveCommand, archiveCommandSchema, createArchiveData, validateArchiveData, type ArchiveLibrary } from "./model";
-import { getMusicProviderStatuses, parseMusicProviderUrl } from "./providers";
+import { getMusicProviderStatuses, parseMusicProviderUrl, type ArtistCandidate } from "./providers";
 import { MusicProviderError, searchMusicBrainzArtists, lookupMusicBrainzRelease } from "./musicbrainz";
 import { lookupAppleArtist, lookupAppleAlbumMetadata } from "./apple";
 import { searchCatalogArtists, indexCatalogArtists } from "./catalog-search";
@@ -326,6 +326,7 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
     return { library: await saveArchiveLibrary(owner, library, updated, "batch_edit", owner, library.archived_at, { commands }) };
   }
   let command: z.infer<typeof archiveCommandSchema>;
+  let verifiedArtist: ArtistCandidate | undefined;
   if (body.action === "connect") {
     const link = parseMusicProviderUrl(z.string().parse(body.url), "artist");
     if (!link || (body.provider && link.provider !== body.provider)) throw new ArchiveError("지원하는 서비스의 아티스트 URL을 입력해주세요.", 422);
@@ -337,13 +338,18 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
     if (!parsed || parsed.provider !== command.connection.provider || (command.connection.externalArtistId && parsed.externalId !== command.connection.externalArtistId)) throw new ArchiveError("아티스트 URL과 식별자를 확인해주세요.", 422);
     if (parsed.provider === "apple") {
       // Revalidate the chosen ID; never silently map an unrelated domestic provider ID by name.
-      const candidate = await lookupAppleArtist(parsed.externalId, { acquirePermit: () => acquireArchiveProviderPermit("apple") });
-      await indexCatalogArtists([candidate], new Date().toISOString());
+      verifiedArtist = await lookupAppleArtist(parsed.externalId, { includeArtwork: true, acquirePermit: () => acquireArchiveProviderPermit("apple") });
+      await indexCatalogArtists([verifiedArtist], new Date().toISOString());
     }
     command.connection.url = parsed.url; command.connection.externalArtistId = parsed.externalId;
   }
   await validateCommandAccess(owner, library, command);
   const updated = applyArchiveCommand(library.data, command);
+  // A verified selected profile may fill an empty representative image only.
+  // Member-entered artist names, images and other corrections remain untouched.
+  if (command.type === "set_connection" && command.connection.confirmed && verifiedArtist?.imageUrl && !updated.artist.imageUrl) {
+    updated.artist.imageUrl = verifiedArtist.imageUrl;
+  }
   const result = await saveArchiveLibrary(owner, library, updated, command.type, owner, library.archived_at, { command });
   if (command.type === "remove_connection" || (command.type === "set_connection" && !command.connection.confirmed)) {
     const provider = command.type === "remove_connection" ? command.provider : command.connection.provider;

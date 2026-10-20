@@ -870,6 +870,11 @@ const exactTranslations: Record<string, string> = {
   "크레딧 사용": "Use Credits",
   "음반 1건 = +1": "1 Album = +1 Credit",
   "1크레딧": "1 Credit",
+  "3크레딧": "3 Credits",
+  "3크레딧 사용": "Uses 3 credits",
+  "3크레딧 필요": "3 credits required",
+  "매거진 발행 요청에는 3크레딧이 필요합니다. 나의 크레딧에서 잔액을 확인해주세요.":
+    "Magazine publication requests require 3 credits. Check your balance in My Credits.",
   "음반심의 결제 완료 건으로 발급되는 온사이드 크레딧을 확인하고 사용하세요.":
     "Check and use Onside credits issued from completed album review payments.",
   "음반심의 결제 완료 건으로 적립된 크레딧을 매거진 발행이나 서비스 이용권으로 사용할 수 있습니다.":
@@ -901,8 +906,8 @@ const exactTranslations: Record<string, string> = {
   "신청 방식": "Request Method",
   "로그인 후 보유 크레딧으로 매거진 등록을 신청할 수 있습니다.":
     "Log in to request a magazine listing with your available credits.",
-  "음반심의 접수건 연결 없이 보유 크레딧 1개로 매거진 등록을 신청할 수 있습니다.":
-    "You can request a magazine listing with 1 available credit, without linking an album review submission.",
+  "음반심의 접수건 연결 없이 보유 크레딧 3개로 매거진 등록을 신청할 수 있습니다.":
+    "You can request a magazine listing with 3 available credits, without linking an album review submission.",
   "현재 사용 가능 크레딧은": "Currently available credits:",
   "앨범명 / 콘텐츠명": "Album / Content Title",
   "매거진에 표시할 제목": "Title to display in the magazine",
@@ -989,7 +994,7 @@ const exactTranslations: Record<string, string> = {
     "Manage credit vouchers, magazine requests, and service voucher requests.",
   "사용처 선택": "Choose How to Use Credits",
   "워터멜론 매거진": "Watermelon Magazine",
-  "1크레딧으로 발행 요청": "Request publication with 1 credit",
+  "3크레딧으로 발행 요청": "Request publication with 3 credits",
   "서비스 이용권": "Service Vouchers",
   "크레딧으로 이용 가능한 서비스": "Services Available with Credits",
   "사용 가능": "Available",

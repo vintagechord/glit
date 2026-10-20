@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export const MAGAZINE_REQUEST_CREDIT_COST = 3;
+export const MAGAZINE_CREDIT_INSUFFICIENT_MESSAGE =
+  `매거진 발행 요청에는 ${MAGAZINE_REQUEST_CREDIT_COST}크레딧이 필요합니다. 나의 크레딧에서 잔액을 확인해주세요.`;
+
 export type CreditSummary = {
   earned: number;
   adminGranted: number;
@@ -97,6 +101,28 @@ export function stripCreditApprovalMessageDatePrefix(
 
 const countOrZero = (count?: number | null) => count ?? 0;
 
+async function loadMagazineCreditUsage(client: SupabaseClient, userId: string) {
+  const rows: Array<{ credits_spent: number }> = [];
+  const pageSize = 500;
+  while (true) {
+    const { data, count, error } = await client
+      .from("magazine_requests")
+      .select("credits_spent", { count: "exact" })
+      .eq("user_id", userId)
+      .neq("status", "CANCELED")
+      .order("id")
+      .range(rows.length, rows.length + pageSize - 1);
+    if (error) return { data: null, error };
+    const page = (data ?? []) as Array<{ credits_spent: number }>;
+    rows.push(...page);
+    // Use the exact count rather than a presumed API row limit. This keeps
+    // balances correct even when an account's history spans several pages.
+    if (page.length === 0 || rows.length >= (count ?? rows.length)) {
+      return { data: rows, error: null };
+    }
+  }
+}
+
 export async function getUserCreditSummary(
   client: SupabaseClient,
   userId: string,
@@ -109,11 +135,7 @@ export async function getUserCreditSummary(
         .eq("user_id", userId)
         .eq("type", "ALBUM")
         .eq("payment_status", "PAID"),
-      client
-        .from("magazine_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .neq("status", "CANCELED"),
+      loadMagazineCreditUsage(client, userId),
       client
         .from("credit_reward_redemptions")
         .select("credits_spent")
@@ -145,7 +167,9 @@ export async function getUserCreditSummary(
   const adminGranted = (
     (grantResult.data ?? []) as Array<{ amount?: number | null }>
   ).reduce((total, row) => total + (row.amount ?? 0), 0);
-  const magazineUsed = countOrZero(magazineResult.count);
+  const magazineUsed = (
+    (magazineResult.data ?? []) as Array<{ credits_spent: number }>
+  ).reduce((total, row) => total + row.credits_spent, 0);
   const used = magazineUsed + rewardUsed;
   const totalEarned = earned + adminGranted;
 

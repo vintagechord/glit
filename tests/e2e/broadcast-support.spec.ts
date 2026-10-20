@@ -50,6 +50,14 @@ for (const english of [false, true]) for (const width of [320, 390, 1280]) {
     await next(page, 2, english);
     const writingHelp = page.locator("summary").filter({ hasText: english ? "Add my story or listening link" : "내 이야기·음원 링크 더하기" });
     await writingHelp.click();
+    const helpBox = (await page.getByTestId("radio-writing-help").boundingBox())!;
+    const editorBox = (await page.getByTestId("radio-draft-editor").boundingBox())!;
+    expect(Math.abs(helpBox.x - editorBox.x)).toBeLessThan(2);
+    expect(Math.abs(helpBox.width - editorBox.width)).toBeLessThan(2);
+    expect(editorBox.y).toBeGreaterThanOrEqual(helpBox.y + helpBox.height);
+    expect(helpBox.height).toBeLessThan(110);
+    const composeActions = (await page.getByTestId("radio-navigation-actions").boundingBox())!;
+    expect(composeActions.y).toBeGreaterThanOrEqual(editorBox.y + editorBox.height);
     await page.screenshot({ path: testInfo.outputPath(`request-compose-${width}-${english ? "en" : "ko"}.png`), fullPage: true });
     await writingHelp.click();
     await expect(page.getByLabel(english ? "Post title" : "게시글 제목")).toHaveValue(english ? "Song request: Test Musician – Song Together" : "[신청곡] 테스트 뮤지션 - 함께 듣는 노래");
@@ -67,6 +75,17 @@ for (const english of [false, true]) for (const width of [320, 390, 1280]) {
     await page.screenshot({ path: testInfo.outputPath(`request-story-${width}-${english ? "en" : "ko"}.png`), fullPage: true });
     await next(page, 3, english);
     await expect(page.getByRole("link", { name: english ? /Find 나의 저녁 라디오 on the official site/ : /공식 사이트에서 나의 저녁 라디오 찾기/ })).toHaveAttribute("href", "https://radio.kbs.co.kr/");
+    const handoffBox = (await page.getByTestId("radio-official-handoff").boundingBox())!;
+    const previewBox = (await page.getByTestId("radio-prepared-request").boundingBox())!;
+    const recordBox = (await page.getByTestId("radio-posting-record").boundingBox())!;
+    for (const box of [previewBox, recordBox]) {
+      expect(Math.abs(box.x - handoffBox.x)).toBeLessThan(2);
+      expect(Math.abs(box.width - handoffBox.width)).toBeLessThan(2);
+    }
+    expect(recordBox.y).toBeGreaterThanOrEqual(previewBox.y + previewBox.height);
+    const postingActions = (await page.getByTestId("radio-navigation-actions").boundingBox())!;
+    expect(postingActions.y).toBeGreaterThanOrEqual(recordBox.y + recordBox.height);
+    await page.screenshot({ path: testInfo.outputPath(`request-handoff-closed-${width}-${english ? "en" : "ko"}.png`), fullPage: true });
     await page.getByLabel(english ? "I posted the request on the broadcaster’s site" : "방송국에서 직접 신청글을 등록했어요").check();
     await page.getByText(english ? "Copy my prepared title and request" : "준비한 제목·본문 다시 복사하기", { exact: true }).click();
     await expect(page.getByLabel(english ? "Your story and song request" : "사연과 신청곡 문구")).toHaveValue("이 곡과 함께 하루를 마무리하고 싶어요.");

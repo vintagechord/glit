@@ -23,7 +23,7 @@ export type ServiceLink = z.infer<typeof serviceLinkSchema>;
 const links = z.array(serviceLinkSchema).max(20).default([]);
 export const sourceReferenceSchema = z.object({ provider: providerSchema, externalId: id, checkedAt: timestamp }).strict();
 export type ArchiveSourceReference = z.infer<typeof sourceReferenceSchema>;
-export const archiveArtistSchema = z.object({ id, name: short.min(1), disambiguation: short.optional(), note: optionalText, links }).strict();
+export const archiveArtistSchema = z.object({ id, name: short.min(1), disambiguation: short.optional(), note: optionalText, imageUrl: safeWebUrlSchema.optional(), links }).strict();
 export const releaseInputSchema = z.object({
   id, title: short.min(1), type: z.enum(["album", "ep", "single", "other"]).default("album"),
   releaseDate: z.string().regex(/^\d{4}(-\d{2})?(-\d{2})?$/).optional(),

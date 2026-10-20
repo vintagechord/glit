@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useId, useState, Children, isValidElement, cloneElement, type ReactNode, type ButtonHTMLAttributes } from "react";
 import Image from "next/image";
-import { X, ExternalLink, Disc3 } from "lucide-react";
+import { X, ExternalLink, Disc3, UserRound } from "lucide-react";
 
 export const inputClass = "min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground";
 export const panelClass = "min-w-0 rounded-xl border-2 border-border bg-card p-4 sm:p-5";
@@ -16,17 +16,29 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 export function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) {
   return <div role={error ? "alert" : "note"} className={`rounded-lg border p-3 text-sm leading-6 ${error ? "border-red-300 bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-100" : "border-border bg-background text-foreground"}`}>{children}</div>;
 }
-export function Badge({ children, attention = false }: { children: ReactNode; attention?: boolean }) {
-  return <span className={`inline-flex max-w-full items-center rounded-md px-2 py-1 text-xs font-semibold ${attention ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100" : "bg-muted text-muted-foreground"}`}>{children}</span>;
+export type BadgeTone = "neutral" | "success" | "warning" | "progress" | "danger";
+const badgeTones: Record<BadgeTone, string> = {
+  neutral: "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200",
+  success: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-200",
+  warning: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200",
+  progress: "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200",
+  danger: "border-red-300 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200",
+};
+export function Badge({ children, attention = false, tone }: { children: ReactNode; attention?: boolean; tone?: BadgeTone }) {
+  const color = tone ?? (attention ? "warning" : "neutral");
+  return <span data-status-tone={color} className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold leading-5 [word-break:keep-all] ${badgeTones[color]}`}>{children}</span>;
 }
 export function External({ href, children }: { href: string; children: ReactNode }) {
   if (!/^https:\/\//i.test(href)) return <span>{children}</span>;
   return <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 max-w-full items-center gap-1 text-sm font-semibold text-foreground underline underline-offset-4">{children}<ExternalLink className="h-3 w-3 shrink-0" aria-hidden /></a>;
 }
-export function Cover({ small = false, src, title }: { small?: boolean; src?: string | null; title?: string }) {
-  const [failedSource, setFailedSource] = useState<string | null>(null);
-  const imageUrl = src && src !== failedSource && /^https:\/\//i.test(src) ? src : null;
-  return <div aria-label={imageUrl ? undefined : "기본 앨범 이미지"} className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 border-border bg-background text-foreground ${small ? "h-14 w-14" : "h-24 w-24 sm:h-32 sm:w-32"}`}>{imageUrl ? <Image src={imageUrl} alt={title ? `${title} 앨범 커버` : "앨범 커버"} width={small ? 56 : 128} height={small ? 56 : 128} unoptimized className="h-full w-full object-cover" onError={() => setFailedSource(imageUrl)} /> : <Disc3 className={small ? "h-8 w-8" : "h-14 w-14"} aria-hidden />}</div>;
+export function Cover({ small = false, src, title, kind = "album", fallbackSources = [] }: { small?: boolean; src?: string | null; title?: string; kind?: "album" | "artist"; fallbackSources?: (string | null | undefined)[] }) {
+  const [failedSources, setFailedSources] = useState<string[]>([]);
+  const candidates = [...new Set([src, ...fallbackSources])].filter((value): value is string => Boolean(value && /^https:\/\//i.test(value))).slice(0, 4);
+  const imageUrl = candidates.find(value => !failedSources.includes(value));
+  const label = kind === "artist" ? "아티스트 이미지" : "앨범 커버";
+  const Placeholder = kind === "artist" ? UserRound : Disc3;
+  return <div aria-label={imageUrl ? undefined : kind === "artist" ? "기본 아티스트 이미지" : "기본 앨범 이미지"} className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 border-border bg-background text-foreground ${small ? "h-14 w-14" : "h-24 w-24 sm:h-32 sm:w-32"}`}>{imageUrl ? <Image src={imageUrl} alt={title ? `${title} ${label}` : label} width={small ? 56 : 128} height={small ? 56 : 128} unoptimized className="h-full w-full object-cover" onError={() => setFailedSources(previous => [...previous, imageUrl])} /> : <Placeholder className={small ? "h-8 w-8" : "h-14 w-14"} aria-hidden />}</div>;
 }
 export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);

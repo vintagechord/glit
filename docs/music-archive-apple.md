@@ -17,9 +17,9 @@ Apple은 [공식 API 개요](https://developer.apple.com/library/archive/documen
 | 1259084205 | Vintage Chord | 빈티지코드 | R&B/소울 | 7개, `The Moon and the Stars` 등 |
 | 1112117967 | Vintagechord | 빈티지코드 | 힙합/랩 | 2개, `KozyTape pt.6`, `오브제텐` |
 
-한국 아티스트 링크의 한글 경로 이름을 표시하고 API 영문명·장르도 구분 정보로 유지한다. 이미지나 대표앨범을 검색 응답에 없는데 만들어 넣지 않는다.
+한국 아티스트 링크의 한글 경로 이름을 표시하고 API 영문명·장르도 구분 정보로 유지한다. 아티스트 검색 응답에 이미지가 없으므로, 현재 페이지의 최대 20개 artist ID를 한 번의 공식 `lookup?entity=album` 요청으로 조회한다. 반환된 아티스트 ID와 앨범의 primary artist ID가 모두 후보와 일치하는 경우에만 대표앨범 제목과 실제 앨범커버 URL을 표시한다. 아티스트 인물사진으로 추정하지 않는다. 보강 결과는 검색 캐시와 공개 아티스트 인덱스에 보관하며, 이미지 조회 오류·시간초과는 기존 검색 결과를 유지한다.
 
-동일한 앨범 ID 1259083959 조회는 `country=KR&entity=song`에서 앨범 1개/곡 0개를 반환했다(`trackCount:9`). `country=US`에서는 같은 앨범 및 9곡을 반환했다. 1886162774도 KR 곡 0개, US 7곡이었다. 그래서 수집은 KR 앨범 목록과 같은 ID의 US 곡 목록을 결합한다. KR 앨범명·아티스트 표기를 보존하고, US 곡의 ID·이름·순서·길이를 사용한다. 조회 국가를 아티스트 국적이나 발매 국가로 저장하지 않는다. 국가별 목록 차이·US 미제공 앨범·트랙 수 불일치는 완료로 처리하지 않는다.
+동일한 앨범 ID 1259083959 조회는 `country=KR&entity=song`에서 앨범 1개/곡 0개를 반환했다(`trackCount:9`). `country=US`에서는 같은 앨범 및 9곡을 반환했다. 1886162774도 KR 곡 0개, US 7곡이었다. 그래서 수집은 KR 앨범 목록과 같은 ID의 US 곡 목록을 결합한다. KR 앨범명·아티스트 표기를 보존하고, US 곡의 ID·이름·순서·길이를 사용한다. US 조회가 없거나 동일 부모 자료만 반환하고 곡이 없는 경우에 한해 같은 ID의 KR 곡 목록을 추가 조회한다. 다른 ID, 잘린 결과, 요청 제한·접근 오류는 이 fallback으로 우회하지 않는다. 조회 국가를 아티스트 국적이나 발매 국가로 저장하지 않으며, 양쪽 국가에 없는 자료·트랙 수 불일치는 완료로 처리하지 않는다.
 
 US 아티스트의 `entity=song` 응답은 다른 primary artist ID인 협업곡도 포함했다. 해당 응답의 정확한 track ID 관계 또는 트랙의 직접 artist ID만 관리 대상 판단에 사용한다. 참여 앨범의 무관한 곡을 이름 부분 일치로 관리 대상에 넣지 않는다. Apple song ID를 recording ID/ISRC로 만들지 않는다.
 
@@ -27,7 +27,7 @@ US 아티스트의 `entity=song` 응답은 다른 primary artist ID인 협업곡
 
 ## 중단·재시작 계약
 
-`AppleCursor`는 `albums → artist_songs → tracks → done` 순서로 진행하며 단계당 API 요청은 최대 1회다. 앨범별 결과와 다음 cursor를 원자적으로 저장해야 한다. cursor에는 최대 200개 앨범의 선택된 메타데이터만 남긴다. 실패 시 입력 cursor를 바꾸지 않는다. 앨범의 전체 `trackCount`와 곡 수가 맞아야 가져온다.
+`AppleCursor`는 `albums → artist_songs → tracks → done` 순서로 진행하며 정상 단계당 API 요청은 1회다. US에 곡이 없는 `artist_songs`·`tracks` 단계만 같은 ID의 KR fallback 1회를 추가할 수 있다. 앨범별 결과와 다음 cursor를 원자적으로 저장해야 한다. cursor에는 최대 200개 앨범의 선택된 메타데이터만 남긴다. 실패 시 입력 cursor를 바꾸지 않는다. 앨범의 전체 `trackCount`와 곡 수가 맞아야 가져온다.
 
 앨범/참여곡 결과가 200개 한도에 닿으면 가져올 수 있는 앨범을 저장한 뒤 `limited` 단계에서 `MusicProviderError('invalid_response', ...)`를 발생시켜 작업을 일부 수집 상태로 유지한다. 전체 수집 완료로 표시하지 않는다. 정상 완료에도 KR/US 조회 범위와 200개 제한을 `scopeNote`에 남긴다.
 
@@ -36,3 +36,7 @@ US 아티스트의 `entity=song` 응답은 다른 primary artist ID인 협업곡
 ## 2026-09-10 이미지·저작자 갱신
 
 `lookupAppleAlbum`은 저장된 동일 album ID를 다시 조회해 기존 앨범의 이미지를 채운다. 실제 ID `1259083959` 읽기 검증에서 9곡과 `is1-ssl.mzstatic.com` 썸네일 URL을 확인했다. API의 `artistName`은 저작자 필드가 아니므로 작사·작곡·편곡으로 추정하지 않는다. 저작자 정보는 명시적으로 연결한 멜론·지니 앨범 URL의 공개 크레딧, 사용 가능한 MusicBrainz 작품 관계 또는 정확히 연결된 본인 심의 신청의 크레딧에서 가져온다.
+
+## 2026-10-20 아티스트 이미지·연결 보완
+
+Apple 아티스트 URL과 검색 후보는 연결을 확정할 때 서버가 같은 artist ID를 다시 확인한다. 이 요청에서 검증한 대표앨범 이미지가 있으면 비어 있는 `artist.imageUrl`만 채운다. 기존 이미지, 회원이 정한 아티스트명과 수동 입력은 유지한다. 회원 응답에도 이미지 필드를 전달하며, 기존 아카이브의 발매작 커버는 화면에서 별도 fallback으로 사용할 수 있다. 이 필드 추가는 기존 JSONB 문서 저장 방식을 사용하므로 DB 마이그레이션이 필요하지 않다.

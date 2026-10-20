@@ -7,7 +7,8 @@ import type { ArchiveCommand, ArchiveRelease, ArchiveTask, ArchiveTrack } from "
 import type { AgencyGuide } from "@/lib/music-archive/guides";
 import { buildArchiveReviewEntryHref } from "@/lib/music-archive/review-entry-url";
 import type { LibraryDetail } from "./types";
-import { Badge, Button, External, Modal, panelClass } from "./ui";
+import { Button, External, Modal, panelClass } from "./ui";
+import { MusicStatusBadge } from "./music-status-badge";
 import { OnsideResultPopup } from "./onside-result-popup";
 import { MemberRecordEditor } from "./member-record-editor";
 
@@ -98,7 +99,7 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
   const finishedReviewIds = new Set(records.filter((item) => item.status === "completed" || ["eligible", "ineligible", "rejected"].includes(item.result)).map((item) => item.trackId));
   const reviewSummary = memberReviewStatus(detail, release.id, track?.id);
   return <section className={`${panelClass} space-y-5`} aria-label={`${labels[tab]} 정보`}>
-    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">{labels[tab]}</h3><Badge>{tab === "review" ? reviewSummary : registered ? (tab === "karaoke" ? "수록 정보 있음" : "등록 정보 있음") : tab === "copyright" && credits.length ? "저작자 정보 있음" : records.length ? "확인 필요" : "등록 정보 없음"}</Badge></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">{labels[tab]}</h3><MusicStatusBadge status={tab === "review" ? reviewSummary : registered ? (tab === "karaoke" ? "수록 정보 있음" : "등록 정보 있음") : tab === "copyright" && credits.length ? "저작자 정보 있음" : records.length ? "확인 필요" : "등록 정보 없음"} /></div>
     {tab === "review" ? <>
       {onside.length > 0 ? <div className="flex justify-end"><Button primary onClick={() => setShowResult(true)}>심의 결과 보기</Button></div> : <>
         {records.length > 0 && <div className="space-y-3">{records.map((item) => <Record key={item.id} task={item} tab={tab} trackTitle={!track ? tracks.find((track) => track.id === item.trackId)?.title : undefined} onEdit={() => setEditing({ initial: item })} />)}</div>}
@@ -129,5 +130,5 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
 
 function Record({ task, tab, trackTitle, onEdit }: { task: ArchiveTask; tab: MemberMusicTab; trackTitle?: string; onEdit: () => void }) {
   const showMemo = task.memo && (tab !== "review" || ["ineligible", "rejected"].includes(task.result));
-  return <article className="rounded-lg border border-border p-3 text-sm"><div className="flex items-start justify-between gap-3"><div className="min-w-0 space-y-1">{trackTitle && <h4 className="break-words font-bold">{trackTitle}</h4>}<p className="font-semibold">{task.agency} · {taskLabel(task, tab)}</p>{(task.participant || task.role) && <p>{[task.participant, task.role].filter(Boolean).join(" · ")}</p>}{tab !== "review" && (task.songNumber || task.referenceNumber) && <p className="text-muted-foreground">{tab === "karaoke" ? "곡번호" : "등록번호"} {task.songNumber || task.referenceNumber}</p>}{task.completedDate && <p className="text-muted-foreground">{task.completedDate}</p>}{showMemo && <p className="whitespace-pre-wrap break-words">{tab === "review" && <span className="font-semibold">부적격 사유: </span>}{task.memo}</p>}</div><button type="button" onClick={onEdit} className="min-h-10 shrink-0 px-2 text-xs font-semibold underline underline-offset-4">수정</button></div></article>;
+  return <article className="rounded-lg border border-border p-3 text-sm"><div className="flex items-start justify-between gap-3"><div className="min-w-0 space-y-1">{trackTitle && <h4 className="break-words font-bold">{trackTitle}</h4>}<p className="flex flex-wrap items-center gap-2 font-semibold"><span>{task.agency} · </span><MusicStatusBadge status={taskLabel(task, tab)} /></p>{(task.participant || task.role) && <p>{[task.participant, task.role].filter(Boolean).join(" · ")}</p>}{tab !== "review" && (task.songNumber || task.referenceNumber) && <p className="text-muted-foreground">{tab === "karaoke" ? "곡번호" : "등록번호"} {task.songNumber || task.referenceNumber}</p>}{task.completedDate && <p className="text-muted-foreground">{task.completedDate}</p>}{showMemo && <p className="whitespace-pre-wrap break-words">{tab === "review" && <span className="font-semibold">부적격 사유: </span>}{task.memo}</p>}</div><button type="button" onClick={onEdit} className="min-h-10 shrink-0 px-2 text-xs font-semibold underline underline-offset-4">수정</button></div></article>;
 }

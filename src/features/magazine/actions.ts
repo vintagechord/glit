@@ -6,7 +6,11 @@ import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { getUserCreditSummary } from "@/lib/credits";
+import {
+  getUserCreditSummary,
+  MAGAZINE_CREDIT_INSUFFICIENT_MESSAGE,
+  MAGAZINE_REQUEST_CREDIT_COST,
+} from "@/lib/credits";
 
 export type MagazineRequestActionState = {
   error?: string;
@@ -221,7 +225,7 @@ const normalizeMagazineRpcError = (message?: string | null) => {
     return "로그인 후 매거진 등록을 신청할 수 있습니다.";
   }
   if (raw.includes("INSUFFICIENT_CREDITS")) {
-    return "사용 가능한 크레딧이 없습니다. 나의 크레딧에서 적립/사용 내역을 확인해주세요.";
+    return MAGAZINE_CREDIT_INSUFFICIENT_MESSAGE;
   }
   if (raw.includes("INVALID_SUBMISSION")) {
     return "연결할 수 없는 음반심의 접수입니다.";
@@ -287,11 +291,8 @@ export async function createMagazineRequestAction(
   }
 
   const creditSummary = await getUserCreditSummary(admin, user.id);
-  if (creditSummary.available < 1) {
-    return {
-      error:
-        "사용 가능한 크레딧이 없습니다. 나의 크레딧에서 적립/사용 내역을 확인해주세요.",
-    };
+  if (creditSummary.available < MAGAZINE_REQUEST_CREDIT_COST) {
+    return { error: MAGAZINE_CREDIT_INSUFFICIENT_MESSAGE };
   }
 
   const uploadedArtwork = artworkFile

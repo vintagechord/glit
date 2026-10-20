@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Gift, Newspaper, type LucideIcon } from "lucide-react";
+import { MAGAZINE_REQUEST_CREDIT_COST } from "@/lib/credits";
 
 export type CreditUseTab = "magazine" | "services";
 
@@ -23,7 +24,7 @@ const tabs: Array<{
     key: "magazine",
     title: "워터멜론 매거진",
     description: "아티스트/앨범 소개 콘텐츠 발행 요청",
-    meta: "1크레딧",
+    meta: `${MAGAZINE_REQUEST_CREDIT_COST}크레딧`,
     icon: Newspaper,
   },
   {

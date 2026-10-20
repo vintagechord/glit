@@ -38,7 +38,7 @@ function requireId(value: string) {
 const base = "https://itunes.apple.com";
 const limit = 200;
 const maxBytes = 8_000_000;
-export const APPLE_ARCHIVE_SCOPE = "조회 범위는 Apple 한국 카탈로그의 아티스트 앨범 목록과 동일 ID의 미국 카탈로그 트랙 정보입니다. API는 조회당 최대 200개이며 국내 모든 발매·참여곡, 삭제·비공개 자료의 전곡 여부는 보장하지 않습니다.";
+export const APPLE_ARCHIVE_SCOPE = "조회 범위는 Apple 한국 카탈로그의 아티스트 앨범 목록과 동일 ID의 미국 카탈로그 트랙 정보입니다. 미국 조회에 곡이 없으면 같은 ID의 한국 카탈로그를 확인합니다. API는 조회당 최대 200개이며 국내 모든 발매·참여곡, 삭제·비공개 자료의 전곡 여부는 보장하지 않습니다.";
 let permitTail = Promise.resolve(); let lastRequestAt = 0;
 async function localPermit() {
   const next = permitTail.then(async () => {
@@ -123,9 +123,36 @@ function responseArtist(rows: Json[], artistId: string) {
   if (artists.length !== 1 || identifier(artists[0].artistId) !== artistId) invalid("음악 카탈로그 응답의 아티스트 ID가 일치하지 않습니다.");
   return candidate(artists[0]);
 }
-export async function lookupAppleArtist(artistId: string, options: AppleOptions = {}): Promise<AppleArtistCandidate> {
+export async function lookupAppleArtist(artistId: string, options: AppleOptions & { includeArtwork?: boolean } = {}): Promise<AppleArtistCandidate> {
   requireId(artistId);
-  return responseArtist(await request("lookup", { id: artistId, country: "KR" }, options), artistId);
+  const rows = await request("lookup", { id: artistId, country: "KR", ...(options.includeArtwork ? { entity: "album", limit: "3", sort: "recent" } : {}) }, options);
+  const artist = responseArtist(rows, artistId);
+  return options.includeArtwork ? artistWithAlbumPreview(artist, rows) : artist;
+}
+
+/** A representative album cover, not an inferred artist portrait or identity match. */
+function artistWithAlbumPreview<T extends ArtistCandidate>(artist: T, rows: Json[]): T {
+  for (const row of rows) {
+    if (row.wrapperType !== "collection" || identifier(row.artistId) !== artist.externalId) continue;
+    try {
+      const album = albumMetadata(row);
+      if (album.imageUrl) return { ...artist, imageUrl: album.imageUrl, representativeRelease: album.title };
+    } catch { /* A malformed preview must not hide a valid artist search result. */ }
+  }
+  return artist;
+}
+
+/** One bounded public lookup per visible page; never one request per candidate. */
+export async function enrichAppleArtistCandidates(items: ArtistCandidate[], options: AppleOptions = {}): Promise<ArtistCandidate[]> {
+  const apple = items.filter(item => item.provider === "apple");
+  if (!apple.length) return items;
+  if (apple.length > 20) throw new MusicProviderError("invalid_input", "아티스트 미리보기는 한 번에 20개까지 조회할 수 있습니다.");
+  apple.forEach(item => requireId(item.externalId));
+  const ids = [...new Set(apple.map(item => item.externalId))];
+  const rows = await request("lookup", { id: ids.join(","), entity: "album", country: "KR", limit: "3", sort: "recent" }, options);
+  const returned = new Set(rows.filter(row => row.wrapperType === "artist").map(row => candidate(row).externalId));
+  if ([...returned].some(id => !ids.includes(id))) invalid("음악 카탈로그 미리보기의 아티스트 ID가 일치하지 않습니다.");
+  return items.map(item => item.provider === "apple" && returned.has(item.externalId) ? artistWithAlbumPreview(item, rows) : item);
 }
 /** offset is pagination within a <=200 result window; it is NOT an undocumented API offset. */
 export async function searchAppleArtists(query: string, options: AppleOptions & { offset?: number; pageSize?: number } = {}) {
@@ -193,7 +220,24 @@ function cursorFor(artistId: string, input?: AppleCursor | null): AppleCursor {
   if (new Set(albums.map((album) => album.id)).size !== albums.length || input.pending.some((id) => !albums.some((album) => album.id === id)) || (input.phase === "albums" && (albums.length || input.pending.length || input.linkedTrackIds.length)) || (["limited", "done"].includes(input.phase) && input.pending.length)) throw new MusicProviderError("invalid_input", "음악 카탈로그의 저장된 앨범 목록과 중단 지점이 일치하지 않습니다.");
   return { ...input, pending: [...input.pending], albums, linkedTrackIds: [...input.linkedTrackIds] };
 }
-/** Each step performs at most one public API read. Persist metadata and cursor atomically. */
+
+/** Retry only a missing storefront result, never an identity mismatch or a rate-limit failure. */
+async function storefrontSongs(id: string, kind: "artist" | "album", options: AppleOptions): Promise<Json[]> {
+  const lookup = (country: "US" | "KR") => request("lookup", { id, entity: "song", country, limit: String(limit) }, options);
+  let rows: Json[];
+  try {
+    rows = await lookup("US");
+  } catch (error) {
+    if (!(error instanceof MusicProviderError) || error.code !== "not_found") throw error;
+    return lookup("KR");
+  }
+  const parentOnly = rows.length === 1 && (kind === "artist"
+    ? rows[0].wrapperType === "artist" && identifier(rows[0].artistId) === id
+    : rows[0].wrapperType === "collection" && identifier(rows[0].collectionId) === id);
+  return !rows.length || parentOnly ? lookup("KR") : rows;
+}
+
+/** Normally one public read, with one same-ID KR fallback for missing US songs. */
 export async function collectAppleStep(artistId: string, cursor?: AppleCursor | null, options: AppleOptions = {}): Promise<AppleStep> {
   requireId(artistId); const state = cursorFor(artistId, cursor);
   if (state.phase === "limited") throw new MusicProviderError("invalid_response", "현재 API의 200개 조회 한도에 도달했습니다. 불러온 자료는 보존했으며 전체 수집 완료로 표시하지 않았습니다.");
@@ -208,7 +252,7 @@ export async function collectAppleStep(artistId: string, cursor?: AppleCursor | 
     state.limited = rows.length >= limit;
     state.phase = albums.length ? "artist_songs" : "done";
   } else if (state.phase === "artist_songs") {
-    const rows = await request("lookup", { id: artistId, entity: "song", country: "US", limit: String(limit) }, options);
+    const rows = await storefrontSongs(artistId, "artist", options);
     responseArtist(rows, artistId);
     const songs = rows.filter((row) => row.wrapperType === "track" && row.kind === "song");
     if (rows.length !== songs.length + 1 || songs.some((row) => !identifier(row.trackId) || !identifier(row.collectionId))) invalid("음악 카탈로그의 참여곡 식별자를 확인할 수 없습니다.");
@@ -220,7 +264,7 @@ export async function collectAppleStep(artistId: string, cursor?: AppleCursor | 
     const albumId = state.pending[0];
     const metadata = state.albums.find((album) => album.id === albumId);
     if (!metadata) return invalid("음악 카탈로그 앨범의 저장된 식별 정보를 찾지 못했습니다.");
-    const rows = await request("lookup", { id: albumId, entity: "song", country: "US", limit: String(limit) }, options);
+    const rows = await storefrontSongs(albumId, "album", options);
     releases.push(normalizeAppleAlbum(rows, metadata, artistId, state.linkedTrackIds, checkedAt));
     state.pending.shift();
     if (!state.pending.length) state.phase = state.limited ? "limited" : "done";
@@ -232,7 +276,7 @@ export async function collectAppleStep(artistId: string, cursor?: AppleCursor | 
 /** Re-fetch an existing album by its exact catalog ID, including artwork. */
 export async function lookupAppleAlbum(albumId: string, artistId: string, options: AppleOptions = {}): Promise<AppleImportedRelease> {
   requireId(albumId); requireId(artistId);
-  const rows = await request("lookup", { id: albumId, entity: "song", country: "US", limit: String(limit) }, options);
+  const rows = await storefrontSongs(albumId, "album", options);
   const row = rows.find(row => row.wrapperType === "collection" && identifier(row.collectionId) === albumId);
   if (!row) return invalid("선택한 앨범의 카탈로그 정보를 찾지 못했습니다.");
   return normalizeAppleAlbum(rows, albumMetadata(row), artistId, [], new Date(options.now?.() ?? Date.now()).toISOString());

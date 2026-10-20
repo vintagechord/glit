@@ -16,7 +16,7 @@ export const radioPrimaryClass =
   `${radioActionClass} border-blue-700 bg-blue-700 text-white hover:border-blue-800 hover:bg-blue-800 dark:border-blue-500 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700`;
 export const radioNoteClass = "text-xs leading-5 text-slate-600 dark:text-slate-300";
 export const radioCardClass =
-  "min-w-0 rounded-2xl border border-slate-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/60 sm:p-5";
+  "min-w-0 rounded-2xl border border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/60 sm:p-4";
 
 /** User-saved links are navigation only, never trusted as official board URLs. */
 export function radioExternalUrl(value?: string) {
@@ -186,7 +186,7 @@ export function RadioDraftEditor({
             </span>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+        <div className="grid grid-cols-2 gap-2 border-t border-slate-200 pt-4 sm:flex sm:justify-end dark:border-slate-700">
           <button type="button" className={radioButtonClass} disabled={!draft.title.trim() || !draft.body.trim()} onClick={() => void copy("all")}>
             <Copy size={15} aria-hidden />{isEnglish ? "Copy all" : "전체 복사"}
           </button>
@@ -212,8 +212,8 @@ export function RadioDraftEditor({
         )}
         <p role="status" className={radioNoteClass}>
           {(message.snapshot === snapshot && message.text) || (isEnglish
-            ? "Copy each field separately for boards with a title and body. Copy all combines both fields; your clipboard keeps only the latest copied text."
-            : "제목·본문 입력칸이 나뉜 게시판에서는 각각 복사하세요. 전체 복사는 두 문구를 합치며, 클립보드에는 마지막에 복사한 내용만 남습니다.")}
+            ? "Copy title and request separately, or use Copy all for both."
+            : "게시판 입력칸에 맞춰 제목·본문을 각각 복사하거나, 전체 복사를 이용하세요.")}
         </p>
       </div>
     </section>

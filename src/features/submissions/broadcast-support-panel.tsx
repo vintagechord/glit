@@ -50,13 +50,15 @@ export function BroadcastSupportPanel({ submission, stationReviews, isEnglish = 
     finally { setBusy(false); }
   }
 
-  return <section id={embedded ? undefined : "broadcast-support"} aria-labelledby={`${id}-heading`} className={embedded ? "min-w-0 [overflow-wrap:anywhere]" : "min-w-0 rounded-2xl border border-slate-200 bg-white p-4 [overflow-wrap:anywhere] sm:p-6 dark:border-slate-800 dark:bg-slate-950"} data-testid="broadcast-support" data-no-translate>
+  return <section id={embedded ? undefined : "broadcast-support"} aria-labelledby={`${id}-heading`} className={embedded ? "min-w-0 [overflow-wrap:anywhere]" : "min-w-0 rounded-2xl border border-slate-200 bg-white p-3 [overflow-wrap:anywhere] sm:p-5 dark:border-slate-800 dark:bg-slate-950"} data-testid="broadcast-support" data-no-translate>
     <h2 id={`${id}-heading`} className={embedded ? "sr-only" : "mb-4 flex items-center gap-2 text-lg font-bold text-slate-950 sm:text-xl dark:text-white"}><Radio size={20} className="shrink-0 text-blue-700 dark:text-blue-300" aria-hidden />{isEnglish ? "Get your music on the radio" : "내 음악, 라디오에 신청하기"}</h2>
     {candidates.length ? <RadioRequestWizard submission={submission} candidates={candidates} isEnglish={isEnglish} /> : <p className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:bg-slate-900 dark:text-slate-300">{isEnglish ? "No approved track is available for a song request yet. Check the review results and any requested corrections above." : "현재 신청곡으로 안내할 적격 곡이 없습니다. 위 심의 결과와 보완 사유를 먼저 확인해주세요."}</p>}
     <details className="mt-6 border-t border-slate-200 pt-2 dark:border-slate-800">
       <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{isEnglish ? "Review records & reference pack" : "심의 기록 · 방송 참고자료"}</summary>
-      <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{isEnglish ? "Download registered song credits, station review results and a request guide. Manually entered song names and request drafts are not included. Original audio/video and certificates are not included." : "등록된 곡 정보·크레딧, 방송국별 결과표, 신청 가이드를 내려받습니다. 직접 입력한 곡명과 신청 초안, 원본 음원·영상·증명서는 포함되지 않습니다."}</p>
-      <button type="button" onClick={() => void downloadPack()} disabled={busy} className={`${radioButtonClass} mt-3 w-full sm:w-auto`}><Download size={16} aria-hidden />{busy ? (isEnglish ? "Preparing…" : "자료 준비 중…") : (isEnglish ? "Download reference ZIP" : "참고자료 ZIP 다운로드")}</button>
+      <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="min-w-0 text-xs leading-5 text-slate-500 dark:text-slate-400">{isEnglish ? "Registered credits, review results and a request guide. Excludes manually entered song names, drafts, original media and certificates." : "등록된 곡·크레딧, 심의 결과, 신청 가이드를 담았습니다. 직접 입력한 곡명·초안, 원본 파일·증명서는 제외됩니다."}</p>
+        <button type="button" onClick={() => void downloadPack()} disabled={busy} className={`${radioButtonClass} w-full shrink-0 sm:w-auto`}><Download size={16} aria-hidden />{busy ? (isEnglish ? "Preparing…" : "자료 준비 중…") : (isEnglish ? "Download reference ZIP" : "참고자료 ZIP 다운로드")}</button>
+      </div>
       {error && <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
     </details>
   </section>;

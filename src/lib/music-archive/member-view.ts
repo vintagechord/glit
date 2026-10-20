@@ -18,7 +18,7 @@ export function memberLibrary(value: unknown) {
     ...keep(library, ["id", "version", "archived_at", "updated_at", "summary"]),
     data: {
       schemaVersion: data.schemaVersion,
-      artist: keep(artist, ["id", "name", "disambiguation", "note", "links"]),
+      artist: keep(artist, ["id", "name", "disambiguation", "note", "imageUrl", "links"]),
       releases: rows(data.releases).map(row => keep(row, ["id", "title", "type", "releaseDate", "participation", "version", "artistName", "barcode", "imageUrl", "links", "excluded", "mergedInto", "userEdited"])),
       tracks: rows(data.tracks).map(row => keep(row, ["id", "releaseId", "title", "discNumber", "trackNumber", "recordingId", "version", "artistName", "managed", "links", "excluded", "mergedInto", "userEdited"])),
       recordings: rows(data.recordings).map(row => keep(row, ["id", "title", "version", "isrc", "workIds", "userEdited"])),

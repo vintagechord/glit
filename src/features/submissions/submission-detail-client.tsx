@@ -1375,12 +1375,25 @@ export function SubmissionDetailClient({
       {/* 관리자용 등급/필증 편집 UI는 관리자 페이지에서만 제공 */}
       {/* 사용자 노출 방지를 위해 숨김: 신청 내역 TXT 다운로드 */}
 
-      <div className="mt-8 flex flex-col gap-6">
+      <div
+        className={`mt-8 grid min-w-0 gap-4 ${!isReceptionInfoOpen && !isSubmissionFormOpen && !isAttachmentsOpen ? "lg:grid-cols-3" : ""}`}
+        data-testid="submission-record-panels"
+      >
         <div className="order-2">
           <div className={detailPanelClass}>
-            <p className={detailKickerClass}>
-              접수 정보
-            </p>
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <p className={detailKickerClass}>접수 정보</p>
+              <button
+                type="button"
+                onClick={() => setIsReceptionInfoOpen((prev) => !prev)}
+                aria-label={isReceptionInfoOpen ? "접수 정보 닫기" : "접수 정보 열기"}
+                aria-expanded={isReceptionInfoOpen}
+                className={`${detailToggleButtonClass} shrink-0`}
+              >
+                <span aria-hidden>{isReceptionInfoOpen ? "▲" : "▼"}</span>
+                <span>{isReceptionInfoOpen ? "접기" : "펼치기"}</span>
+              </button>
+            </div>
             {isReceptionInfoOpen ? (
               <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
                 {isMvSubmission ? (
@@ -1451,23 +1464,22 @@ export function SubmissionDetailClient({
                 </div>
               </div>
             ) : null}
-            <div className="mt-4 flex justify-center">
-              <button
-                type="button"
-                onClick={() => setIsReceptionInfoOpen((prev) => !prev)}
-                aria-label={isReceptionInfoOpen ? "접수 정보 닫기" : "접수 정보 열기"}
-                className={detailToggleButtonClass}
-              >
-                <span>{isReceptionInfoOpen ? "▲" : "▼"}</span>
-                <span>{isReceptionInfoOpen ? "접기" : "펼치기"}</span>
-              </button>
-            </div>
           </div>
         </div>
         <div id="submission-form-section" className={`order-4 ${detailPanelClass}`}>
-          <p className={detailKickerClass}>
-            작성 신청서
-          </p>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <p className={detailKickerClass}>작성 신청서</p>
+            <button
+              type="button"
+              onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
+              aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
+              aria-expanded={isSubmissionFormOpen}
+              className={`${detailToggleButtonClass} shrink-0`}
+            >
+              <span aria-hidden>{isSubmissionFormOpen ? "▲" : "▼"}</span>
+              <span>{isSubmissionFormOpen ? "접기" : "펼치기"}</span>
+            </button>
+          </div>
           {isSubmissionFormOpen ? (
             <>
               <div className="mt-4 grid gap-4 text-base text-foreground md:grid-cols-2">
@@ -1699,23 +1711,22 @@ export function SubmissionDetailClient({
               ) : null}
             </>
           ) : null}
-          <div className="mt-4 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setIsSubmissionFormOpen((prev) => !prev)}
-              aria-label={isSubmissionFormOpen ? "작성 신청서 닫기" : "작성 신청서 열기"}
-              className={detailToggleButtonClass}
-            >
-              <span>{isSubmissionFormOpen ? "▲" : "▼"}</span>
-              <span>{isSubmissionFormOpen ? "접기" : "펼치기"}</span>
-            </button>
-          </div>
         </div>
 
         <div className={`order-5 ${detailPanelClass}`}>
-          <p className={detailKickerClass}>
-            첨부 파일
-          </p>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <p className={detailKickerClass}>첨부 파일</p>
+            <button
+              type="button"
+              onClick={() => setIsAttachmentsOpen((prev) => !prev)}
+              aria-label={isAttachmentsOpen ? "첨부 파일 닫기" : "첨부 파일 열기"}
+              aria-expanded={isAttachmentsOpen}
+              className={`${detailToggleButtonClass} shrink-0`}
+            >
+              <span aria-hidden>{isAttachmentsOpen ? "▲" : "▼"}</span>
+              <span>{isAttachmentsOpen ? "접기" : "펼치기"}</span>
+            </button>
+          </div>
           {isAttachmentsOpen ? (
             <div className="mt-4">
               <SubmissionFilesPanel
@@ -1726,17 +1737,6 @@ export function SubmissionDetailClient({
               />
             </div>
           ) : null}
-          <div className="mt-4 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setIsAttachmentsOpen((prev) => !prev)}
-              aria-label={isAttachmentsOpen ? "첨부 파일 닫기" : "첨부 파일 열기"}
-              className={detailToggleButtonClass}
-            >
-              <span>{isAttachmentsOpen ? "▲" : "▼"}</span>
-              <span>{isAttachmentsOpen ? "접기" : "펼치기"}</span>
-            </button>
-          </div>
         </div>
 
 

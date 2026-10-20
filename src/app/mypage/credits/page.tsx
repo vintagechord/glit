@@ -24,6 +24,7 @@ import {
 } from "@/features/credits/credit-action-notice";
 import {
   getUserCreditSummary,
+  MAGAZINE_REQUEST_CREDIT_COST,
   stripCreditApprovalMessageDatePrefix,
   type CreditRewardRedemption,
   type StudioReservationRequest,
@@ -47,6 +48,7 @@ type CreditSourceSubmission = {
 
 type UserMagazineRequest = {
   id: string;
+  credits_spent: number;
   target_channel: string | null;
   status: string | null;
   album_title: string | null;
@@ -258,7 +260,7 @@ function MagazineRequestCard({ request }: { request: UserMagazineRequest }) {
         {channelLabels[request.target_channel ?? ""] ??
           request.target_channel ??
           "-"}{" "}
-        · {formatDate(request.created_at)}
+        · {formatDate(request.created_at)} · {`${request.credits_spent}크레딧`}
       </p>
       {request.published_url ? (
         <a
@@ -527,7 +529,7 @@ export async function MyPageCreditsPageView({
       admin
         .from("magazine_requests")
         .select(
-          "id, target_channel, status, album_title, artist_name, published_url, admin_memo, created_at",
+          "id, credits_spent, target_channel, status, album_title, artist_name, published_url, admin_memo, created_at",
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
@@ -719,7 +721,7 @@ export async function MyPageCreditsPageView({
                   <Newspaper className="h-6 w-6" aria-hidden="true" />
                 </span>
                 <span className="rounded-[6px] border border-[#111111]/25 px-2 py-1 text-[11px] font-black">
-                  1크레딧
+                  {`${MAGAZINE_REQUEST_CREDIT_COST}크레딧`}
                 </span>
               </span>
               <span className="mt-6">

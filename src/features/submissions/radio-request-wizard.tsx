@@ -195,15 +195,14 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
         </>}
         {step === 3 && <>
           <p className="rounded-xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 dark:bg-blue-950 dark:text-blue-200">{stationName} <span className="mx-1 text-blue-400">/</span> {program}</p>
-          <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-            <details className={`${radioCardClass} bg-slate-50/70 dark:bg-slate-900/50`}>
+          <div className="min-w-0 space-y-4">
+            <details className={`${radioCardClass} group bg-slate-50/70 dark:bg-slate-900/50`} data-testid="radio-writing-help">
               <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 text-sm font-bold text-blue-700 dark:text-blue-300">
-                <span>{isEnglish ? "Add my story or listening link" : "내 이야기·음원 링크 더하기"}<span className={`mt-1 block font-normal ${radioNoteClass}`}>{isEnglish ? "Optional writing help" : "선택사항 · 신청글 작성 도움"}</span></span>
-                <ChevronDown size={18} className="shrink-0" aria-hidden />
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">{isEnglish ? "Add my story or listening link" : "내 이야기·음원 링크 더하기"}<span className={`font-normal ${radioNoteClass}`}>{isEnglish ? "Optional" : "선택사항"}</span></span>
+                <ChevronDown size={18} className="shrink-0 transition group-open:rotate-180" aria-hidden />
               </summary>
-              <div className="mt-4 space-y-5 border-t border-slate-200 pt-4 dark:border-slate-700">
-              <div><label htmlFor={`${id}-language`} className="mb-2 block text-sm font-semibold">{isEnglish ? "Draft language" : "신청 문구 언어"}</label><select id={`${id}-language`} className={radioControlClass} value={language} onChange={event => updateSelection({ language: event.target.value as "ko" | "en" })}><option value="ko">한국어</option><option value="en">English</option></select></div>
-              <div>
+              <div className="mt-4 grid min-w-0 gap-5 border-t border-slate-200 pt-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] dark:border-slate-700">
+              <div className="min-w-0">
                 <label htmlFor={`${id}-story`} className="block text-sm font-semibold">{isEnglish ? "Add your song’s story (optional)" : "내 곡만의 이야기를 더해보세요 (선택)"}</label>
                 <p className={`mt-1 ${radioNoteClass}`}>{isEnglish ? `Why should ${program} listeners hear “${trackName}”? Two or three sentences are enough.` : `${program} 청취자들과 ‘${trackName}’을 함께 듣고 싶은 이유를 2~3문장으로 적어주세요.`}</p>
                 <div className="my-3 flex flex-wrap gap-1.5">{storyPrompts.map((prompt, index) => <button key={prompt} type="button" aria-pressed={draft.prompt === index} onClick={() => updateDraft(current => ({ ...current, prompt: index }))} className={`${radioButtonClass} px-2 text-xs ${draft.prompt === index ? "border-blue-600 bg-blue-50 text-blue-800 dark:border-blue-400 dark:bg-blue-950 dark:text-blue-200" : ""}`}>{isEnglish ? ["Inspiration", "Listening moment", "Song mood"][index] : ["만든 이야기", "듣기 좋은 순간", "곡의 분위기"][index]}</button>)}</div>
@@ -211,11 +210,14 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
                 {draft.story.trim() && <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">{isEnglish ? "Not yet added to your final request." : "아직 최종 신청글에 반영되지 않았어요."}</p>}
                 <button type="button" disabled={!draft.story.trim() || draft.body.length + draft.story.trim().length + 2 > 5000} className={`${radioButtonClass} mt-2 w-full`} onClick={() => updateDraft(current => ({ ...current, body: `${current.body.trimEnd()}\n\n${current.story.trim()}`, story: "", bodyCopied: false }))}>{isEnglish ? "Add my story to the request" : "신청 문구에 이야기 추가"}<ArrowRight size={15} aria-hidden /></button>
               </div>
-              <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
+              <div className="min-w-0 space-y-5 border-t border-slate-200 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 dark:border-slate-700">
+                <div><label htmlFor={`${id}-language`} className="mb-2 block text-sm font-semibold">{isEnglish ? "Draft language" : "신청 문구 언어"}</label><select id={`${id}-language`} className={radioControlClass} value={language} onChange={event => updateSelection({ language: event.target.value as "ko" | "en" })}><option value="ko">한국어</option><option value="en">English</option></select></div>
+                <div>
                 <label htmlFor={`${id}-listening`} className="mb-2 block text-sm font-semibold">{isEnglish ? "Public listening link (optional)" : "공개 음원 링크 (선택)"}</label>
                 <input id={`${id}-listening`} type="url" inputMode="url" className={radioControlClass} value={draft.listeningUrl ?? ""} maxLength={2000} placeholder="https://" aria-invalid={Boolean(draft.listeningUrl && !listeningUrl)} onChange={event => { const listeningUrl = event.target.value; updateDraft(current => ({ ...current, listeningUrl })); }} />
                 <p className={`mt-1 ${radioNoteClass}`}>{draft.listeningUrl && !listeningUrl ? (isEnglish ? "Enter a valid https:// link." : "https://로 시작하는 올바른 링크를 입력해주세요.") : (isEnglish ? "Use a public streaming link and follow the board’s link policy." : "공개 스트리밍 링크를 사용하고 게시판의 링크 첨부 규칙을 확인해주세요.")}</p>
                 <button type="button" className={`${radioButtonClass} mt-2 w-full`} disabled={!listeningUrl || draft.body.includes(listeningUrl) || draft.body.length + listeningUrl.length + 20 > 5000} onClick={() => updateDraft(current => ({ ...current, body: `${current.body.trimEnd()}\n\n${language === "en" ? "Listen" : "음원 듣기"}: ${listeningUrl}`, bodyCopied: false }))}>{isEnglish ? "Add link to request" : "신청글에 링크 추가"}</button>
+                </div>
               </div>
               </div>
             </details>
@@ -223,39 +225,50 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
           </div>
         </>}
         {step === 4 && <>
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-            <div className={`${radioCardClass} space-y-4`}>
-              <div><p className="text-[11px] font-bold text-blue-700 dark:text-blue-300">{stationName}</p><h4 className="mt-1 text-lg font-bold">{program}</h4><p className={`mt-1 ${radioNoteClass}`}>{artistName} · {trackName}</p></div>
-              <ol className="space-y-3">
+          <div className="min-w-0 space-y-4">
+            <div className={`${radioCardClass} grid gap-5 lg:grid-cols-2`} data-testid="radio-official-handoff">
+              <div className="min-w-0 space-y-4">
+                <div><p className="text-[11px] font-bold text-blue-700 dark:text-blue-300">{stationName}</p><h4 className="mt-1 text-lg font-bold">{program}</h4><p className={`mt-1 ${radioNoteClass}`}>{artistName} · {trackName}</p></div>
+                {guide ? <>
+                  <a href={selectedProgram?.messageUrl ?? guide.directoryUrl} target="_blank" rel="noopener noreferrer" className={`${radioPrimaryClass} w-full`}>{selectedProgram ? (isEnglish ? `Open ${program} request board` : `${program} 신청 게시판 열기`) : (isEnglish ? `Find ${program} on the official site` : `공식 사이트에서 ${program} 찾기`)}<ExternalLink size={16} aria-hidden /><span className="sr-only">{isEnglish ? " (new tab)" : " (새 창)"}</span></a>
+                  {!selectedProgram && <p className={radioNoteClass}>{isEnglish ? "Find your program’s board in the official directory." : "공식 프로그램 목록에서 입력한 프로그램의 게시판을 찾아주세요."}</p>}
+                </> : <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{isEnglish ? "No official board link has been verified. Use the route you confirmed with this broadcaster." : "확인된 공식 게시판 링크가 없습니다. 방송국에 직접 확인한 경로를 이용해주세요."}</p>}
+              </div>
+              <ol className="space-y-3 border-t border-slate-200 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 dark:border-slate-700">
                 {(isEnglish ? ["Open the official site and sign in.", selectedProgram ? "Read the board notice and start a new post." : "Find this program’s listener / song-request board.", "Paste your title and body, check the details, then submit."] : ["공식 사이트를 열고 방송국 계정으로 로그인", selectedProgram ? "게시판 공지를 확인하고 글쓰기 선택" : "프로그램의 ‘사연과 신청곡’ 또는 참여 게시판 찾기", "제목·본문 붙여넣기 → 내용 확인 → 직접 등록"]).map((text, index) => <li key={text} className="flex gap-2.5 text-sm leading-6"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-200">{index + 1}</span><span>{text}</span></li>)}
               </ol>
-              {guide ? <>
-                <a href={selectedProgram?.messageUrl ?? guide.directoryUrl} target="_blank" rel="noopener noreferrer" className={`${radioPrimaryClass} w-full`}>{selectedProgram ? (isEnglish ? `Open ${program} request board` : `${program} 신청 게시판 열기`) : (isEnglish ? `Find ${program} on the official site` : `공식 사이트에서 ${program} 찾기`)}<ExternalLink size={16} aria-hidden /><span className="sr-only">{isEnglish ? " (new tab)" : " (새 창)"}</span></a>
-                {!selectedProgram && <p className={radioNoteClass}>{isEnglish ? "This opens the official program directory. Find the board for the program you entered." : "공식 프로그램 목록이 열립니다. 직접 입력한 프로그램의 게시판을 찾아주세요."}</p>}
-              </> : <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{isEnglish ? "No official board link has been verified. Use the route you confirmed with this broadcaster." : "확인된 공식 게시판 링크가 없습니다. 방송국에 직접 확인한 경로를 이용해주세요."}</p>}
-              <details className="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><FileText size={16} aria-hidden />{isEnglish ? "Copy my prepared title and request" : "준비한 제목·본문 다시 복사하기"}</span><ChevronDown size={16} className="shrink-0" aria-hidden /></summary><div className="pt-4"><RadioDraftEditor key={draftKey} draft={draft} updateDraft={updateDraft} isEnglish={isEnglish} onDownload={downloadRequest} readOnly /></div></details>
             </div>
-            <div className={`${radioCardClass} space-y-4 ${currentProgress.posted ? "border-emerald-300 dark:border-emerald-800" : ""}`}>
+            <details className={`${radioCardClass} group`} data-testid="radio-prepared-request">
+              <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><FileText size={16} className="shrink-0 text-blue-700 dark:text-blue-300" aria-hidden />{isEnglish ? "Copy my prepared title and request" : "준비한 제목·본문 다시 복사하기"}</span><ChevronDown size={16} className="shrink-0 transition group-open:rotate-180" aria-hidden /></summary>
+              <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700"><RadioDraftEditor key={draftKey} draft={draft} updateDraft={updateDraft} isEnglish={isEnglish} onDownload={downloadRequest} readOnly /></div>
+            </details>
+            <div className={`${radioCardClass} space-y-4 ${currentProgress.posted ? "border-emerald-300 dark:border-emerald-800" : ""}`} data-testid="radio-posting-record">
               <div className="flex items-start gap-2.5"><CheckCircle2 size={22} className={currentProgress.posted ? "shrink-0 text-emerald-600" : "shrink-0 text-slate-400"} aria-hidden /><div><h4 className="text-base font-bold">{currentProgress.posted ? (isEnglish ? "Marked as posted" : "신청 완료로 표시했어요") : (isEnglish ? "My posting checklist" : "나의 신청 체크리스트")}</h4><p className={`mt-1 ${radioNoteClass}`}>{isEnglish ? "Your own record, separate from broadcaster confirmation." : "방송국 접수 확인과 별도로, 내가 직접 남기는 기록이에요."}</p>{currentProgress.posted && postedAt && <p className={`mt-1 ${radioNoteClass}`}>{isEnglish ? "Marked on " : "직접 표시한 시각: "}{postedAt}</p>}</div></div>
-              <fieldset className="space-y-1"><legend className="sr-only">{isEnglish ? "Posting checks" : "신청 확인 항목"}</legend>{([
+              <div className="grid min-w-0 gap-5 lg:grid-cols-2">
+              <fieldset className="min-w-0 space-y-1"><legend className="sr-only">{isEnglish ? "Posting checks" : "신청 확인 항목"}</legend>{([
                 ["rules", isEnglish ? "I read the program’s posting rules" : "프로그램 게시판 공지를 확인했어요"],
                 ["privacy", isEnglish ? "I checked my text and personal information" : "신청 문구와 개인정보를 확인했어요"],
                 ["posted", isEnglish ? "I posted the request on the broadcaster’s site" : "방송국에서 직접 신청글을 등록했어요"],
                 ["playlist", isEnglish ? "I checked my post and the program playlist" : "내 게시글과 프로그램 선곡표를 확인했어요"],
               ] as const).map(([key, label]) => <label key={key} className="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-lg px-2 py-2 text-sm leading-6 hover:bg-slate-50 dark:hover:bg-slate-900"><input type="checkbox" checked={Boolean(currentProgress[key])} onChange={event => updateProgress({ [key]: event.target.checked, ...(key === "posted" ? { postedAt: event.target.checked ? new Date().toISOString() : undefined } : {}) })} className="mt-1 size-4 shrink-0 accent-blue-700" /><span>{label}</span></label>)}</fieldset>
-              <div className="border-t border-slate-200 pt-4 dark:border-slate-700"><label htmlFor={`${id}-post-url`} className="mb-2 block text-sm font-semibold">{isEnglish ? "My posted message link (optional)" : "내 신청 게시글 주소 (선택)"}</label><input id={`${id}-post-url`} type="url" inputMode="url" className={radioControlClass} value={currentProgress.postUrl ?? ""} maxLength={2000} placeholder="https://" aria-invalid={Boolean(currentProgress.postUrl && !postUrl)} onChange={event => updateProgress({ postUrl: event.target.value })} />
+              <div className="min-w-0 space-y-4 border-t border-slate-200 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 dark:border-slate-700">
+              <div><label htmlFor={`${id}-post-url`} className="mb-2 block text-sm font-semibold">{isEnglish ? "My posted message link (optional)" : "내 신청 게시글 주소 (선택)"}</label><input id={`${id}-post-url`} type="url" inputMode="url" className={radioControlClass} value={currentProgress.postUrl ?? ""} maxLength={2000} placeholder="https://" aria-invalid={Boolean(currentProgress.postUrl && !postUrl)} onChange={event => updateProgress({ postUrl: event.target.value })} />
                 {currentProgress.postUrl && !postUrl && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{isEnglish ? "Enter a valid https:// link." : "https://로 시작하는 올바른 링크를 입력해주세요."}</p>}
                 {postUrl && <a href={postUrl} target="_blank" rel="noopener noreferrer" className={`${radioButtonClass} mt-2`}>{isEnglish ? "Open my post" : "내 게시글 열기"}<ArrowUpRight size={15} aria-hidden /></a>}
               </div>
               <div><label htmlFor={`${id}-memo`} className="mb-2 block text-sm font-semibold">{isEnglish ? "Follow-up note (optional)" : "다음 확인을 위한 메모 (선택)"}</label><textarea id={`${id}-memo`} className={`${radioControlClass} resize-y`} rows={2} maxLength={1000} value={currentProgress.memo ?? ""} placeholder={isEnglish ? "Date posted, reply, playlist to check…" : "신청 날짜, 답변, 확인할 선곡표 등"} onChange={event => updateProgress({ memo: event.target.value })} /></div>
+              </div>
+              </div>
+              <div className="grid gap-2 border-t border-slate-200 pt-4 sm:flex sm:[&>*]:flex-1 dark:border-slate-700">
               {selectedProgram && <a href={selectedProgram.playlistUrl} target="_blank" rel="noopener noreferrer" className={`${radioButtonClass} w-full`}><ListMusic size={15} aria-hidden />{isEnglish ? `${program} playlist` : `${program} 선곡표 확인`}<ArrowUpRight size={15} aria-hidden /></a>}
               {!selectedProgram && guide?.participationLink && <a href={guide.participationLink.url} target="_blank" rel="noopener noreferrer" className={`${radioButtonClass} w-full`}>{isEnglish ? `Live participation: ${guide.participationLink.name}` : `${guide.participationLink.name} 실시간 참여 안내`}<ArrowUpRight size={15} aria-hidden /></a>}
               <button type="button" onClick={downloadRequest} className={`${radioButtonClass} w-full`}><FileText size={15} aria-hidden />{isEnglish ? "Save request & notes as TXT" : "신청글과 기록 TXT 저장"}</button>
+              </div>
             </div>
           </div>
         </>}
       </div>
-      <div className="sticky bottom-0 z-10 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-[0_-4px_20px_-8px_rgba(15,23,42,0.15)] backdrop-blur sm:bottom-2 dark:border-slate-700 dark:bg-slate-950/95">
+      <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900" data-testid="radio-navigation-actions">
         {step > 1 && <button type="button" className={radioButtonClass} onClick={() => workspace.setStep(step - 1)}><ArrowLeft size={15} aria-hidden />{isEnglish ? "Previous" : "이전"}</button>}
         {step < 4 && <button type="button" className={`${radioPrimaryClass} flex-1`} disabled={!canContinue} onClick={continueToNextStep}>{isEnglish ? ["Choose a program", "Prepare request", "Posting guide"][step - 1] : ["이 곡으로 프로그램 고르기", "이 프로그램으로 초안 만들기", "신청 방법 보기"][step - 1]}<ArrowRight size={15} aria-hidden /></button>}
         {step === 4 && <button type="button" className={`${radioButtonClass} flex-1`} onClick={() => workspace.setStep(1)}>{isEnglish ? "Prepare another request" : "다른 신청 준비하기"}<ArrowRight size={15} aria-hidden /></button>}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { collectAppleStep, lookupAppleArtist, normalizeAppleAlbum, searchAppleArtists, type AppleAlbumMetadata, type AppleCursor, type AppleOptions } from "../src/lib/music-archive/apple";
+import { collectAppleStep, enrichAppleArtistCandidates, lookupAppleArtist, normalizeAppleAlbum, searchAppleArtists, type AppleAlbumMetadata, type AppleCursor, type AppleOptions } from "../src/lib/music-archive/apple";
 import { MusicProviderError } from "../src/lib/music-archive/musicbrainz";
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/music-archive-apple/${name}.json`, import.meta.url), "utf8"));
@@ -49,6 +49,57 @@ test("artist lookup verifies exact identity and rejects input before making any 
   assert.equal(calls, 1);
   await assert.rejects(() => lookupAppleArtist("1112117967", options(() => ({ resultCount: 1, results: [fixture("vintage-chord-albums").results[0]] }))), providerError("invalid_response"));
   await assert.rejects(() => lookupAppleArtist(artist, options(() => ({ resultCount: 0, results: [] }))), providerError("not_found"));
+});
+
+test("artist previews use one bounded batch and only covers belonging to the exact primary artist", async () => {
+  const first = fixture("vintage-chord-albums").results[0];
+  const second = fixture("vintagechord-albums").results[0];
+  const artists = (await searchAppleArtists("빈티지코드", options(() => ({ resultCount: 2, results: [first, second] })))).items;
+  const sameArtist = { ...fixture("moon-tracks-us").results[0], artworkUrl100: "https://is1-ssl.mzstatic.com/image/own.jpg" };
+  const wrongArtist = { ...sameArtist, artistId: 999, collectionId: 999, collectionViewUrl: "https://music.apple.com/kr/album/999", artworkUrl100: "https://is1-ssl.mzstatic.com/image/wrong.jpg" };
+  const result = await enrichAppleArtistCandidates(artists, options(url => {
+    assert.equal(url.searchParams.get("id"), "1259084205,1112117967");
+    assert.equal(url.searchParams.get("limit"), "3");
+    return { resultCount: 4, results: [first, wrongArtist, sameArtist, second] };
+  }));
+  assert.equal(result[0].imageUrl, sameArtist.artworkUrl100);
+  assert.equal(result[0].representativeRelease, sameArtist.collectionName);
+  assert.equal(result[1].imageUrl, null, "same display name is not evidence of album ownership");
+  assert.equal(artists[0].imageUrl, null, "the public search input is not mutated");
+  assert.equal((await enrichAppleArtistCandidates(artists, options(() => ({ resultCount: 0, results: [] }))))[0].imageUrl, null);
+});
+
+test("US-missing album tracks fall back to the same KR album ID while preserving full-track validation", async () => {
+  const cursor: AppleCursor = { provider: "apple", version: 1, artistId: artist, phase: "tracks", pending: [metadata.id], albums: [metadata], linkedTrackIds: [], limited: false };
+  const countries: string[] = [];
+  const result = await collectAppleStep(artist, cursor, options(url => {
+    assert.equal(url.searchParams.get("id"), metadata.id);
+    countries.push(url.searchParams.get("country")!);
+    return url.searchParams.get("country") === "US"
+      ? { resultCount: 0, results: [] } : fixture("moon-tracks-us");
+  }));
+  assert.deepEqual(countries, ["US", "KR"]);
+  assert.equal(result.status, "completed");
+  assert.equal(result.releases[0].tracks.length, 9);
+  assert.equal(cursor.pending.length, 1);
+  await assert.rejects(() => collectAppleStep(artist, cursor, options(url =>
+    url.searchParams.get("country") === "US" ? { resultCount: 0, results: [] } : fixture("moon-tracks")
+  )), providerError("invalid_response"));
+});
+
+test("missing US artist-song membership can use exact KR membership without guessing names", async () => {
+  const cursor: AppleCursor = { provider: "apple", version: 1, artistId: artist, phase: "artist_songs", pending: [metadata.id], albums: [metadata], linkedTrackIds: [], limited: false };
+  const result = await collectAppleStep(artist, cursor, options(url =>
+    url.searchParams.get("country") === "US" ? { resultCount: 0, results: [] } : fixture("vintage-chord-songs-us")
+  ));
+  assert.equal(result.nextCursor?.phase, "tracks");
+  assert.ok(result.nextCursor?.linkedTrackIds.length);
+  let reads = 0;
+  await assert.rejects(() => collectAppleStep(artist, cursor, options(() => {
+    reads++;
+    return { resultCount: 1, results: [fixture("vintagechord-albums").results[0]] };
+  })), providerError("invalid_response"));
+  assert.equal(reads, 1, "a different artist must fail closed without another storefront lookup");
 });
 
 test("actual KR album-only response cannot report nine missing songs as a completed album", () => {

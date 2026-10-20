@@ -120,6 +120,9 @@ async function harness() {
 function artist(id: number, name = `김아티스트 ${id}`, slug = name): Row {
   return { wrapperType: "artist", artistType: "Artist", artistId: id, artistName: name, primaryGenreName: "K-Pop", artistLinkUrl: `https://music.apple.com/kr/artist/${encodeURIComponent(slug)}/${id}` };
 }
+function album(id: number, artistId: number): Row {
+  return { wrapperType: "collection", collectionType: "Album", collectionId: id, artistId, artistName: `Artist ${artistId}`, collectionName: `Album ${id}`, collectionViewUrl: `https://music.apple.com/kr/album/${id}`, trackCount: 1, releaseDate: "2026-10-01T00:00:00Z", artworkUrl100: `https://is1-ssl.mzstatic.com/image/thumb/${id}/100x100bb.jpg` };
+}
 function library(): Row {
   return { id: LIBRARY, owner_id: OWNER, version: 1, data: createArchiveData("Member private working name"), archived_at: null, created_at: "2026-09-08T00:00:00Z", updated_at: "2026-09-08T00:00:00Z" };
 }
@@ -130,7 +133,7 @@ const operation = (call: Call, name: string) => call.operations?.some(op => op.m
 const post = (body: unknown) => new Request("https://onside.test/api/music-archive", { method: "POST", headers: { origin: "https://onside.test", "content-type": "application/json" }, body: JSON.stringify(body) });
 const connect = { action: "connect", libraryId: LIBRARY, version: 1, provider: "apple", url: "https://music.apple.com/kr/artist/100" };
 
-test("cached artist search serves disjoint 20-result pages across normalized queries and members with one provider call", async () => {
+test("cached artist search serves disjoint pages with one search and one batched preview per page", async () => {
   const h = await harness();
   h.state.appleSearchRows = Array.from({ length: 45 }, (_, i) => artist(100 + i));
   const response = await h.apiGET(new Request(`https://onside.test/api/music-archive?action=search&${search("김 아티스트")}`));
@@ -144,8 +147,8 @@ test("cached artist search serves disjoint 20-result pages across normalized que
   assert.deepEqual([first.nextOffset, second.nextOffset, third.nextOffset], [20, 40, null]);
   assert.deepEqual([first.total, second.total, third.total], [45, 45, 45]);
   assert.deepEqual([...first.items, ...second.items, ...third.items].map(item => item.externalId), Array.from({ length: 45 }, (_, i) => String(100 + i)));
-  assert.equal(fetches(h).length, 1);
-  assert.equal(permits(h).length, 1);
+  assert.equal(fetches(h).length, 4);
+  assert.equal(permits(h).length, 4);
   const url = new URL(fetches(h)[0].url!);
   assert.equal(url.searchParams.get("limit"), "200");
   assert.equal(url.searchParams.get("country"), "KR");
@@ -167,8 +170,56 @@ test("expired catalog cache is refreshed and an empty official response is cache
   assert.equal(refreshed.queryStatus, "no_results");
   assert.deepEqual(cachedEmpty.items, []);
   assert.equal(cachedEmpty.nextOffset, null);
-  assert.equal(fetches(h).length, 2);
+  assert.equal(fetches(h).length, 3);
   assert.equal(h.state.tables.music_archive_search_cache.length, 1);
+});
+
+test("candidate artwork is exact artist-ID album metadata, cached and preserved when connecting", async () => {
+  const h = await harness();
+  h.state.appleSearchRows = [artist(100, "같은 이름"), artist(200, "같은 이름")];
+  h.state.appleLookupRows = [artist(100), album(101, 100), artist(200), album(201, 200), album(999, 999)];
+  const found = await h.searchArchiveArtists(OWNER, search("같은 이름"));
+  assert.deepEqual(found.items.map(item => item.representativeRelease), ["Album 101", "Album 201"]);
+  assert.ok(found.items[0].imageUrl?.includes("/101/"));
+  const preview = new URL(fetches(h)[1].url!);
+  assert.equal(preview.searchParams.get("id"), "100,200");
+  assert.equal(preview.searchParams.get("entity"), "album");
+  await h.searchArchiveArtists(OTHER_OWNER, search("같은-이름"));
+  assert.equal(fetches(h).length, 2, "the next member reuses public preview data without extra lookups");
+  h.state.tables.music_archive_libraries = [library()];
+  h.state.appleLookupRows = [artist(100), album(101, 100)];
+  const connected = await (await h.apiPOST(post(connect))).json() as { library: ArchiveLibrary };
+  assert.equal(connected.library.data.artist.name, "Member private working name");
+  assert.equal(connected.library.data.artist.imageUrl, found.items[0].imageUrl);
+  assert.equal(connected.library.data.connections[0].externalArtistId, "100");
+});
+
+test("a failed thumbnail lookup preserves usable candidates and can recover from the public search cache", async () => {
+  const h = await harness();
+  h.state.appleSearchRows = [artist(100)];
+  h.state.appleLookupRows = [artist(999), album(999, 999)];
+  const first = await h.searchArchiveArtists(OWNER, search("김아티스트"));
+  assert.equal(first.queryStatus, "success");
+  assert.deepEqual(first.items.map(item => item.externalId), ["100"]);
+  assert.equal(first.items[0].imageUrl, null);
+  h.state.appleLookupRows = [artist(100), album(101, 100)];
+  const recovered = await h.searchArchiveArtists(OTHER_OWNER, search("김 아티스트"));
+  assert.ok(recovered.items[0].imageUrl?.includes("/101/"));
+  assert.equal(fetches(h).filter(call => new URL(call.url!).pathname === "/search").length, 1);
+  assert.equal(fetches(h).length, 3);
+});
+
+test("a connected catalog preview cannot replace a member's artist image", async () => {
+  const h = await harness();
+  const row = library();
+  (row.data as ArchiveLibrary["data"]).artist.imageUrl = "https://images.example.org/my-artist.jpg";
+  h.state.tables.music_archive_libraries = [row];
+  h.state.appleLookupRows = [artist(100), album(101, 100)];
+  const response = await h.apiPOST(post(connect));
+  assert.equal(response.status, 202);
+  const body = await response.json() as { library: ArchiveLibrary };
+  assert.equal(body.library.data.artist.imageUrl, "https://images.example.org/my-artist.jpg");
+  assert.equal(body.library.data.artist.name, "Member private working name");
 });
 
 test("initial search reads only the public index, matches alternate Korean names and caps suggestions at 20", async () => {

@@ -56,7 +56,7 @@ async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
       await route.fulfill({json:memberArchiveResponse({library:next,...(body.action === "connect" && body.provider === "apple" && harness.jobs.length ? {...(harness.jobsArrayResponse ? {jobs:[harness.jobs[0]]} : {job:harness.jobs[0]}),runLibraryId:next.id} : {})})}); return;
     }
     if (url.pathname.startsWith("/mypage/music/results/")) { await route.fulfill({contentType:"text/html",body:"<!doctype html><h1>온사이드 심의 결과</h1><p>KBS 적격</p>"}); return; }
-    if (url.hostname === "is1-ssl.mzstatic.com") { await route.fulfill({contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBl8AAAAASUVORK5CYII=","base64")}); return; }
+    if (url.hostname === "is1-ssl.mzstatic.com") { if (url.pathname.includes("/missing/")) { await route.fulfill({status:404,body:"missing image"}); return; } await route.fulfill({contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBl8AAAAASUVORK5CYII=","base64")}); return; }
     if (url.protocol === "https:") { await route.fulfill({contentType:"text/html",body:"<!doctype html><title>공식 링크 모의 페이지</title>"}); return; }
     await route.fulfill({status:404,body:"Unexpected request blocked by the UI test."});
   });
@@ -203,12 +203,56 @@ test("album cards share review status including partial and payment pending with
   harness.onsideReviews=[{submissionId:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",releaseId:"album",trackIds:["original"],status:"COMPLETED"}];
   await page.getByRole("button",{name:/테스트 뮤지션/}).click();
   await expect(page.getByRole("button",{name:/발매 후 첫 앨범/})).toContainText("일부 심의 완료");
+  const badge=page.getByRole("button",{name:/발매 후 첫 앨범/}).locator("[data-status-tone]");
+  await expect(badge).toHaveAttribute("data-status-tone","warning");
+  const partialColor=await badge.evaluate(element=>getComputedStyle(element).color);
   harness.onsideReviews=[{...harness.onsideReviews[0],trackIds:[],status:"WAITING_PAYMENT"}]; await page.reload();
   await expect(page.getByRole("button",{name:/발매 후 첫 앨범/})).toContainText("접수·결제 진행 중");
+  await expect(badge).toHaveAttribute("data-status-tone","progress");
+  expect(await badge.evaluate(element=>getComputedStyle(element).color)).not.toBe(partialColor);
+  harness.onsideReviews=[{...harness.onsideReviews[0],status:"COMPLETED"}]; await page.reload();
+  await expect(badge).toHaveText("심의 완료");
+  await expect(badge).toHaveAttribute("data-status-tone","success");
   harness.onsideReviews=[]; await page.reload();
   await expect(page.getByRole("button",{name:/발매 후 첫 앨범/})).toContainText("심의 정보 없음");
+  await expect(badge).toHaveAttribute("data-status-tone","neutral");
   await page.evaluate(() => document.documentElement.classList.add("dark"));
   await page.screenshot({path:testInfo.outputPath("simple-albums-dark.png"),fullPage:true,animations:"disabled"});
+  expect(harness.errors).toEqual([]);
+});
+
+for (const width of [320,1280]) test(`artist artwork falls back to a linked album and recovers after metadata refresh at ${width}px`,async({page},testInfo)=>{
+  await page.setViewportSize({width,height:900});
+  const initial=fixture();
+  initial.data.artist.imageUrl="https://is1-ssl.mzstatic.com/missing/artist.jpg";
+  initial.data.releases[0].imageUrl="https://is1-ssl.mzstatic.com/image/thumb/test/album.jpg";
+  const harness=await mount(page,[initial]);
+  const portrait=page.getByRole("button",{name:/테스트 뮤지션/}).getByRole("img");
+  await expect(portrait).toHaveAttribute("src",initial.data.releases[0].imageUrl);
+  await page.getByRole("button",{name:/테스트 뮤지션/}).click();
+  await expect(page.getByRole("img",{name:"테스트 뮤지션 아티스트 이미지"})).toHaveAttribute("src",initial.data.releases[0].imageUrl);
+  harness.libraries[0].data.releases[0].imageUrl="https://is1-ssl.mzstatic.com/missing/album.jpg";
+  await page.reload();
+  const album=page.getByRole("button",{name:/발매 후 첫 앨범/});
+  await expect(album.getByLabel("기본 앨범 이미지")).toBeVisible();
+  await album.click();
+  await page.getByRole("button",{name:"앨범 정보 다시 가져오기",exact:true}).click();
+  await expect(page.getByRole("img",{name:"발매 후 첫 앨범 앨범 커버"})).toHaveAttribute("src","https://is1-ssl.mzstatic.com/image/thumb/test/100x100bb.jpg");
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  await page.screenshot({path:testInfo.outputPath(`music-artwork-${width}.png`),fullPage:true});
+  expect(harness.errors).toEqual([]);
+});
+
+test("Apple Music artist links connect using the exact selected identity",async({page})=>{
+  const harness=await mount(page);
+  await page.getByRole("button",{name:"아티스트 추가",exact:true}).click();
+  await page.getByRole("button",{name:"아티스트 링크",exact:true}).click();
+  await page.getByLabel("아티스트 링크",{exact:true}).fill(`https://music.apple.com/kr/artist/same-name/${candidateTwo}`);
+  await page.getByLabel("관리할 아티스트 이름",{exact:true}).fill("동명 아티스트");
+  await page.getByRole("button",{name:"아티스트 링크 추가",exact:true}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(harness.libraries[0].data.connections[0].externalArtistId).toBe(candidateTwo);
+  expect(harness.writes.map(item=>item.action)).toEqual(["create","connect"]);
   expect(harness.errors).toEqual([]);
 });
 

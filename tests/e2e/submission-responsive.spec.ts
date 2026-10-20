@@ -48,7 +48,7 @@ async function expectContained(page: Page, width: number) {
   expect(overflowing).toEqual([]);
 }
 
-for (const width of [320, 360, 390, 768]) {
+for (const width of [320, 360, 390, 768, 1280]) {
   for (const mode of ["results", "full", "admin"]) {
     test(`${mode} keeps long content and controls within ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 900 });
@@ -66,8 +66,32 @@ for (const width of [320, 360, 390, 768]) {
         await expect(page.getByTestId("broadcast-support")).toBeVisible();
         await page.getByText("심의 기록 · 방송 참고자료", { exact: true }).click();
         if (mode === "full") {
+          const records = page.getByTestId("submission-record-panels");
+          for (const name of ["접수 정보", "작성 신청서", "첨부 파일"]) {
+            const toggle = records.getByRole("button", { name: `${name} 열기`, exact: true });
+            await expect(toggle).toHaveAttribute("aria-expanded", "false");
+            const row = toggle.locator("..");
+            const heading = row.locator("p");
+            const buttonBox = (await toggle.boundingBox())!;
+            const headingBox = (await heading.boundingBox())!;
+            expect(buttonBox.x).toBeGreaterThan(headingBox.x + headingBox.width);
+            expect(Math.abs(buttonBox.y + buttonBox.height / 2 - headingBox.y - headingBox.height / 2)).toBeLessThan(2);
+            expect(buttonBox.height).toBeGreaterThanOrEqual(44);
+          }
+          if (width >= 1024) {
+            const panels = await records.locator(":scope > div").all();
+            const panelBoxes = await Promise.all(panels.map(panel => panel.boundingBox()));
+            const top = panelBoxes[0]!.y;
+            for (const box of panelBoxes) expect(Math.abs(box!.y - top)).toBeLessThan(2);
+            expect((await records.boundingBox())!.height).toBeLessThan(120);
+          }
+          await records.screenshot({ path: testInfo.outputPath(`record-panels-closed-${width}.png`) });
           await page.getByRole("button", { name: "작성 신청서 열기" }).click();
           await page.getByRole("button", { name: "첨부 파일 열기" }).click();
+          await expect(page.getByRole("button", { name: "작성 신청서 닫기" })).toHaveAttribute("aria-expanded", "true");
+          await expect(page.getByRole("button", { name: "첨부 파일 닫기" })).toHaveAttribute("aria-expanded", "true");
+          const expandedFormBox = (await page.locator("#submission-form-section").boundingBox())!;
+          expect(Math.abs(expandedFormBox.width - (await records.boundingBox())!.width)).toBeLessThan(2);
         }
         await expectContained(page, width);
         await page.getByRole("button", { name: /KBS · 적격/ }).click();

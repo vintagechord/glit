@@ -6,6 +6,7 @@ import Link from "next/link";
 import { CheckCircle2, ImageUp, Info, SendHorizontal } from "lucide-react";
 
 import { createMagazineRequestAction } from "./actions";
+import { MAGAZINE_REQUEST_CREDIT_COST } from "@/lib/credits";
 
 const channelOptions = [
   {
@@ -50,7 +51,7 @@ export function MagazineRequestForm({
   const successTitleId = React.useId();
   const successConfirmButtonRef = React.useRef<HTMLButtonElement>(null);
 
-  const hasAvailableCredits = availableCredits > 0;
+  const hasAvailableCredits = availableCredits >= MAGAZINE_REQUEST_CREDIT_COST;
   const canSubmit = isAuthenticated && hasAvailableCredits;
 
   React.useEffect(() => {
@@ -97,7 +98,7 @@ export function MagazineRequestForm({
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-[8px] border-2 border-[#111111] bg-[#d9362c] px-3 py-1 text-[11px] font-black text-white shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[3px_3px_0_#f2cf27]">
             <Info className="h-3.5 w-3.5" aria-hidden="true" />
-            1크레딧 사용
+            {`${MAGAZINE_REQUEST_CREDIT_COST}크레딧 사용`}
           </span>
         </div>
 
@@ -294,7 +295,7 @@ export function MagazineRequestForm({
             {!isAuthenticated
               ? "발행 요청"
               : !hasAvailableCredits
-                ? "사용 가능한 크레딧 없음"
+                ? `${MAGAZINE_REQUEST_CREDIT_COST}크레딧 필요`
               : isPending
                 ? "요청 접수 중..."
                 : "발행 요청"}

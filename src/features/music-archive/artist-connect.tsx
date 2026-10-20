@@ -1,22 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import Image from "next/image";
-import { Check, LoaderCircle, Music2, Search } from "lucide-react";
+import { Check, LoaderCircle, Search } from "lucide-react";
 import { parseMusicProviderUrl, type ArtistCandidate, type MusicProviderLink, type ProviderSupport } from "@/lib/music-archive/providers";
 import { archiveRequest, isDomesticMusicProvider } from "./types";
-import { Button, Field, Notice, inputClass } from "./ui";
+import { Button, Cover, Field, Notice, inputClass } from "./ui";
 
 type SearchResult = { items: ArtistCandidate[]; nextOffset?: number | null; total?: number; queryStatus?: string; message?: string; scopeNote?: string };
 type Mode = "search" | "url" | "manual";
 const searchFailure = "검색 결과를 불러오지 못했습니다. 잠시 후 다시 검색하거나 아티스트 링크로 추가해 주세요.";
 
 function ArtistPortrait({ candidate }: { candidate: ArtistCandidate }) {
-  const [failed, setFailed] = useState(false);
-  const imageUrl: string | null = candidate.imageUrl;
-  return <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-background">
-    {imageUrl && !failed ? <Image src={imageUrl} alt="" width={56} height={56} unoptimized className="h-full w-full object-cover" onError={() => setFailed(true)} /> : <Music2 className="h-6 w-6 text-muted-foreground" aria-hidden />}
-  </span>;
+  return <Cover small kind="artist" src={candidate.imageUrl} title={candidate.name} />;
 }
 
 export function ArtistConnect({ existingName, onChoose, onLink, busy }: {
@@ -138,12 +133,12 @@ export function ArtistConnect({ existingName, onChoose, onLink, busy }: {
     </>}
     {activeMode === "url" && <form className="space-y-4" onSubmit={(event) => {
       event.preventDefault(); const parsed = parseMusicProviderUrl(url, "artist");
-      if (!parsed || !isDomesticMusicProvider(parsed.provider)) { setError("멜론·지니뮤직·벅스의 아티스트 페이지 주소를 입력해 주세요."); return; }
+      if (!parsed || (!isDomesticMusicProvider(parsed.provider) && parsed.provider !== "apple")) { setError("멜론·지니뮤직·벅스 또는 Apple Music의 아티스트 페이지 주소를 입력해 주세요."); return; }
       void act(() => onLink(manualName, parsed));
     }}>
-      <Field label="아티스트 링크" hint="멜론·지니뮤직·벅스의 아티스트 페이지 주소를 붙여넣어 주세요."><input className={inputClass} type="url" value={url} onChange={(event) => setUrl(event.target.value)} required disabled={busy} maxLength={2048} placeholder="https://www.melon.com/artist/…" /></Field>
+      <Field label="아티스트 링크" hint="멜론·지니뮤직·벅스 또는 Apple Music의 아티스트 페이지 주소를 붙여넣어 주세요."><input className={inputClass} type="url" value={url} onChange={(event) => setUrl(event.target.value)} required disabled={busy} maxLength={2048} placeholder="https://www.melon.com/artist/…" /></Field>
       <Field label="관리할 아티스트 이름"><input className={inputClass} value={manualName} onChange={(event) => setManualName(event.target.value)} required disabled={busy} maxLength={200} /></Field>
-      <p className="text-sm text-muted-foreground">링크를 저장한 뒤 ‘앨범 찾아보기’에서 발매작을 추가할 수 있습니다.</p>
+      <p className="text-sm text-muted-foreground">확인한 아티스트의 앨범을 불러옵니다. 연결한 뒤 새 발매작도 다시 확인할 수 있습니다.</p>
       <Button primary type="submit" disabled={busy}>{busy ? "링크 저장 중…" : "아티스트 링크 추가"}</Button>
     </form>}
     {activeMode === "manual" && <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void act(() => onChoose(manualName)); }}>
