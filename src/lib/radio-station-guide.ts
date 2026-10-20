@@ -25,8 +25,8 @@ const arirangPrograms: RadioProgramGuide[] = [
   {
     name: "K-POPPIN’",
     description: {
-      ko: "K-pop과 아티스트, K-content를 소개하는 프로그램. 곡의 분위기와 함께 듣고 싶은 이유를 짧게 담아보세요.",
-      en: "A program featuring K-pop, artists and K-content. Add a short note about the song and why you want to hear it.",
+      ko: "K-pop과 아티스트, K-content를 영어로 소개하는 프로그램. Send Message 게시판과 Tracklist를 제공합니다.",
+      en: "An English-language program featuring K-pop, artists and K-content, with a Send Message board and Tracklist.",
     },
     url: "https://www.arirang.com/radio/125",
     messageUrl: "https://www.arirang.com/radio/125/board/674",
@@ -35,8 +35,8 @@ const arirangPrograms: RadioProgramGuide[] = [
   {
     name: "Radio’n Us",
     description: {
-      ko: "다양한 장르의 K-pop과 K-culture, 일상 이야기를 나누는 프로그램. 곡과 연결되는 자신의 이야기를 담아보세요.",
-      en: "A program sharing K-pop across genres, K-culture and everyday stories. Try sharing a personal story connected to your song.",
+      ko: "다양한 장르의 K-pop과 K-culture, 일상 이야기를 영어로 나누는 프로그램. Send Message 게시판과 Tracklist를 제공합니다.",
+      en: "An English-language program sharing K-pop across genres, K-culture and everyday stories, with a Send Message board and Tracklist.",
     },
     url: "https://www.arirang.com/radio/127",
     messageUrl: "https://www.arirang.com/radio/127/board/771",
@@ -44,19 +44,66 @@ const arirangPrograms: RadioProgramGuide[] = [
   },
 ];
 
-// Program, request-board and playlist links verified on the official MBC site.
+// Rechecked 2026-10-20 against the program's official navigation.
 const mbcPrograms: RadioProgramGuide[] = [
   {
     name: "김이나의 별이 빛나는 밤에",
     description: {
-      ko: "‘사연과 신청곡’에서 음악과 이야기를 나눕니다. 최근 선곡표를 보고 내 곡과 연결되는 사연을 준비해보세요.",
-      en: "A listener-story and song-request program. Check the recent playlist and prepare a story connected to your music.",
+      ko: "MBC FM4U에서 청취자의 사연과 음악을 나누는 프로그램. ‘사연과 신청곡’ 게시판과 날짜별 선곡표를 제공합니다.",
+      en: "An MBC FM4U program sharing listener stories and music, with a song-request board and daily playlists.",
     },
     url: "https://m.imbc.com/radio/1000672100000100000",
     messageUrl: "https://m.imbc.com/imbbs/imbbslist/1000672100000100000?bid=pstarnight212&menu=mn-basic&pos=radio",
     playlistUrl: "https://m.imbc.com/Radio/Music/1000672100000100000?objid=RASFM210",
   },
 ];
+
+// Official menu data checked 2026-10-20:
+// https://static.apis.sbs.co.kr/program-api/1.0/menu/dindinmusichigh
+// The menu marks the show as on air and supplies these exact board/playlist URLs.
+const sbsPrograms: RadioProgramGuide[] = [
+  {
+    name: "딘딘의 뮤직하이",
+    description: {
+      ko: "밤 시간대의 SBS 파워FM 음악 프로그램. 매일코너의 ‘사연과 신청곡’ 게시판과 ‘라디오 선곡표’에서 참여 경로와 방송된 곡을 확인할 수 있습니다.",
+      en: "A late-night SBS Power FM music program. Its daily listener-story and song-request board accepts participation, and Radio Playlist lists broadcast tracks.",
+    },
+    url: "https://programs.sbs.co.kr/radio/dindinmusichigh",
+    messageUrl: "https://programs.sbs.co.kr/radio/dindinmusichigh/boards/66355",
+    playlistUrl: "https://programs.sbs.co.kr/radio/dindinmusichigh/songlist/66346",
+  },
+];
+
+// Home, request-board and playlist navigation checked on the official CBS site
+// on 2026-10-20. Use the current program names listed there after the June change.
+const cbsPrograms: RadioProgramGuide[] = [
+  {
+    name: "김윤주의 그대와 여는 아침",
+    description: {
+      ko: "가요와 팝을 함께 소개하는 CBS 음악FM 아침 프로그램. ‘사연과 신청곡’은 작성자 본인과 관리자만 글을 볼 수 있는 게시판입니다.",
+      en: "A CBS Music FM morning program featuring Korean pop and international pop. Posts on its song-request board are visible only to their author and administrators.",
+    },
+    url: "https://www.cbs.co.kr/program/home/cbs_P000218",
+    messageUrl: "https://www.cbs.co.kr/board/list/cbs_P000218_request",
+    playlistUrl: "https://www.cbs.co.kr/program/playlist/cbs_P000218",
+  },
+  {
+    name: "이수영의 12시에 만납시다",
+    description: {
+      ko: "청취자의 일상과 사연, 신청곡을 나누는 CBS 음악FM 낮 프로그램. 공식 ‘사연과 신청곡’ 게시판과 날짜별 선곡표를 제공합니다.",
+      en: "A CBS Music FM daytime program sharing everyday stories and song requests, with an official request board and daily playlists.",
+    },
+    url: "https://www.cbs.co.kr/program/home/cbs_P000004",
+    messageUrl: "https://www.cbs.co.kr/board/list/cbs_P000004_request",
+    playlistUrl: "https://www.cbs.co.kr/program/playlist/cbs_P000004",
+  },
+];
+
+const verifiedProgramsByDirectory: Record<string, RadioProgramGuide[]> = {
+  "https://m.imbc.com/RadioMain": mbcPrograms,
+  "https://radio.sbs.co.kr/": sbsPrograms,
+  "https://www.cbs.co.kr/radio": cbsPrograms,
+};
 
 const participationLinks: Record<string, NonNullable<RadioStationGuide["participationLink"]>> = {
   "https://radio.kbs.co.kr/": {
@@ -125,8 +172,8 @@ export function getRadioStationGuide(input: {
       ko: "등록 후에는 자신의 게시글과 프로그램의 선곡표를 확인하세요. 선곡표 공개 여부와 반영 시점은 프로그램마다 다릅니다.",
       en: "After posting, check your message and the program’s playlist. Playlist availability and update times vary by program.",
     },
-    programs: directory.url === "https://m.imbc.com/RadioMain" ? mbcPrograms : [],
+    programs: verifiedProgramsByDirectory[directory.url] ?? [],
     participationLink: participationLinks[directory.url],
-    verifiedAt: directory.url === "https://m.imbc.com/RadioMain" ? "2026-10-20" : participationLinks[directory.url] ? "2026-10-17" : "2026-10-16",
+    verifiedAt: verifiedProgramsByDirectory[directory.url] ? "2026-10-20" : participationLinks[directory.url] ? "2026-10-17" : "2026-10-16",
   };
 }

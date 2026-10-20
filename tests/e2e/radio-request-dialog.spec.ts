@@ -61,7 +61,8 @@ for (const width of [320, 390, 768, 1440]) {
     if (width === 320) await page.locator("html").evaluate(element => element.classList.add("dark"));
     const { trigger, dialog } = await openArirang(page);
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByTestId("radio-song-context")).toContainText("Arirang · 적격 곡");
+    await expect(dialog.getByTestId("radio-song-context")).toContainText("Arirang");
+    await expect(dialog.getByTestId("radio-song-context")).toContainText("적격 곡");
     await expect(dialog.getByLabel("신청할 적격 곡").locator("option")).toHaveText(["Arirang에서 적격인 곡"]);
     await expect(dialog.getByRole("link")).toHaveCount(0);
     const close = dialog.getByRole("button", { name: "라디오 신청 가이드 닫기" });
@@ -137,6 +138,7 @@ test("closing and reopening the guide preserves the selected language and edited
   await dialog.getByRole("button", { name: "이 곡으로 프로그램 고르기" }).click();
   await dialog.getByRole("button", { name: "Radio’n Us 선택", exact: true }).click();
   await dialog.getByRole("button", { name: "이 프로그램으로 초안 만들기" }).click();
+  await dialog.locator("summary").filter({ hasText: "내 이야기·음원 링크 더하기" }).click();
   await dialog.getByLabel("신청 문구 언어").selectOption("ko");
   await dialog.getByLabel("게시글 제목").fill("퇴근길에 함께 듣고 싶은 곡");
   await dialog.getByLabel("사연과 신청곡 문구").fill("오랜 친구와 함께 듣고 싶은 노래입니다. 이 사연을 다시 작성하지 않도록 남겨주세요.");
@@ -144,7 +146,7 @@ test("closing and reopening the guide preserves the selected language and edited
   await expect(dialog).toHaveCount(0);
   ({ dialog } = await openArirang(page));
   await expect(dialog.getByLabel("신청 문구 언어")).toHaveValue("ko");
-  await expect(dialog.getByTestId("radio-song-context")).toContainText("Radio’n Us");
+  await expect(dialog.getByTestId("radio-step-3")).toContainText("Radio’n Us");
   await expect(dialog.getByLabel("게시글 제목")).toHaveValue("퇴근길에 함께 듣고 싶은 곡");
   await expect(dialog.getByLabel("사연과 신청곡 문구")).toHaveValue("오랜 친구와 함께 듣고 싶은 노래입니다. 이 사연을 다시 작성하지 않도록 남겨주세요.");
 });
@@ -164,4 +166,31 @@ test("video approval shows a separate audio review requirement without generatin
   await expect(dialog.getByText("뮤직비디오 적격은 음원 적격과 별개입니다. 라디오 신청 전 해당 음원의 심의 결과를 확인하세요.")).toBeVisible();
   await expect(dialog.getByLabel("신청할 적격 곡")).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "본문 복사" })).toHaveCount(0);
+});
+
+test("the station dialog shares its draft with the main panel without background focus stealing", async ({ page }) => {
+  await mount(page);
+  const mainPanel = page.locator("#broadcast-support");
+  await expect(mainPanel.getByLabel("적격 방송국", { exact: true })).toHaveValue("kbs-review");
+  const { dialog } = await openArirang(page);
+  await dialog.getByRole("button", { name: "이 곡으로 프로그램 고르기" }).click();
+  await dialog.getByRole("button", { name: "Radio’n Us 선택", exact: true }).click();
+  await dialog.getByRole("button", { name: "이 프로그램으로 초안 만들기" }).click();
+  const body = dialog.getByLabel("사연과 신청곡 문구");
+  await body.fill("Arirang 창에서 쓰기 시작한 내 이야기");
+  await expect(body).toBeFocused();
+  expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(mainPanel.getByTestId("radio-song-context")).toContainText("Arirang");
+  await expect(mainPanel.getByLabel("사연과 신청곡 문구")).toHaveValue("Arirang 창에서 쓰기 시작한 내 이야기");
+  await mainPanel.getByLabel("사연과 신청곡 문구").fill("본문에서 이어서 쓴 같은 이야기");
+  const reopened = (await openArirang(page)).dialog;
+  await expect(reopened.getByLabel("사연과 신청곡 문구")).toHaveValue("본문에서 이어서 쓴 같은 이야기");
+  await reopened.getByRole("button", { name: "1단계: 내 곡 확인", exact: true }).click();
+  await expect(reopened.getByLabel("신청할 적격 곡").locator("option")).toHaveText(["Arirang에서 적격인 곡"]);
+  await page.keyboard.press("Escape");
+  await mainPanel.getByLabel("적격 방송국", { exact: true }).selectOption("kbs-review");
+  await page.keyboard.press("Tab");
+  await expect(mainPanel.getByLabel("적격 방송국", { exact: true })).toHaveValue("kbs-review");
+  await expect(mainPanel.getByLabel("신청할 적격 곡").locator("option")).toHaveText(["KBS에서 적격인 곡"]);
 });

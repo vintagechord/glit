@@ -51,7 +51,7 @@ export function BroadcastSupportPanel({ submission, stationReviews, isEnglish = 
   }
 
   return <section id={embedded ? undefined : "broadcast-support"} aria-labelledby={`${id}-heading`} className={embedded ? "min-w-0 [overflow-wrap:anywhere]" : "min-w-0 rounded-2xl border border-slate-200 bg-white p-4 [overflow-wrap:anywhere] sm:p-6 dark:border-slate-800 dark:bg-slate-950"} data-testid="broadcast-support" data-no-translate>
-    <h2 id={`${id}-heading`} className={embedded ? "sr-only" : "mb-4 flex items-center gap-2 text-base font-semibold sm:text-lg"}><Radio size={20} className="shrink-0 text-[#1556a4] dark:text-blue-300" aria-hidden />{isEnglish ? "Get your music on the radio" : "내 음악, 라디오에 신청하기"}</h2>
+    <h2 id={`${id}-heading`} className={embedded ? "sr-only" : "mb-4 flex items-center gap-2 text-lg font-bold text-slate-950 sm:text-xl dark:text-white"}><Radio size={20} className="shrink-0 text-blue-700 dark:text-blue-300" aria-hidden />{isEnglish ? "Get your music on the radio" : "내 음악, 라디오에 신청하기"}</h2>
     {candidates.length ? <RadioRequestWizard submission={submission} candidates={candidates} isEnglish={isEnglish} /> : <p className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:bg-slate-900 dark:text-slate-300">{isEnglish ? "No approved track is available for a song request yet. Check the review results and any requested corrections above." : "현재 신청곡으로 안내할 적격 곡이 없습니다. 위 심의 결과와 보완 사유를 먼저 확인해주세요."}</p>}
     <details className="mt-6 border-t border-slate-200 pt-2 dark:border-slate-800">
       <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-slate-600 dark:text-slate-300">{isEnglish ? "Review records & reference pack" : "심의 기록 · 방송 참고자료"}</summary>

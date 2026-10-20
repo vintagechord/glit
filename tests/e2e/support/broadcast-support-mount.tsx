@@ -14,7 +14,7 @@ export function BroadcastSupportFixture() {
       { id: "kbs", status: mode === "rejected" ? "REJECTED" : "APPROVED", station: { name: "KBS", code: "KBS" }, track_results: [{ track_id: "one", status: mode === "rejected" ? "REJECTED" : "APPROVED" }, { track_id: "two", status: "REJECTED" }] },
       { id: "mbc", status: mode === "rejected" ? "REJECTED" : "APPROVED", station: { name: "MBC", code: "MBC" }, track_results: [{ track_id: "one", status: "REJECTED" }, { track_id: "two", status: mode === "rejected" ? "REJECTED" : "APPROVED" }] },
       { id: "kiss", status: mode === "rejected" ? "REJECTED" : "APPROVED", station: { name: "KISS", code: "KISS" } },
-      { id: "arirang", status: mode === "rejected" ? "REJECTED" : "APPROVED", station: { name: "Arirang 방송", code: "ARIRANG" } },
+      { id: "arirang", status: mode === "rejected" ? "REJECTED" : "APPROVED", station: { name: "Arirang 방송", code: "ARIRANG" }, track_results: mode === "revoked-track" ? [{ track_id: "one", status: "REJECTED" }, { track_id: "two", status: "APPROVED" }] : undefined },
     ]}
   /></main>;
 }

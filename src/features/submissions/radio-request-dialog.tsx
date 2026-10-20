@@ -75,21 +75,21 @@ export function RadioRequestDialog({ open, stationName, isEnglish = false, onClo
       }}
     >
       <div className="flex max-h-[calc(100dvh-1rem-2px)] min-w-0 flex-col sm:max-h-[calc(100dvh-4rem-2px)]">
-        <header className="shrink-0 border-b border-slate-100 bg-white px-5 py-5 sm:px-8 sm:py-6 dark:border-slate-800 dark:bg-slate-950">
+        <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-7 sm:py-4 dark:border-slate-800 dark:bg-slate-950">
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1">
               <h2 id={`${id}-title`} className="[overflow-wrap:anywhere]">
-                <span className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-[#1556a4] dark:text-blue-300"><Radio size={15} className="shrink-0" aria-hidden />{stationName}</span>
-                <span className="block text-xl font-semibold leading-tight tracking-tight sm:text-[26px]">{isEnglish ? "Radio request guide" : "라디오 신청 가이드"}</span>
+                <span className="mb-1 flex items-center gap-2 text-[11px] font-semibold text-[#1556a4] dark:text-blue-300"><Radio size={14} className="shrink-0" aria-hidden />{stationName}</span>
+                <span className="block text-lg font-bold leading-tight tracking-tight sm:text-xl">{isEnglish ? "Radio request guide" : "라디오 신청 가이드"}</span>
               </h2>
-              <p id={`${id}-description`} className="mt-2 text-xs leading-5 text-slate-500 sm:text-sm dark:text-slate-400">{isEnglish ? "Find a program. Prepare your story. Share your music." : "어울리는 프로그램을 찾고, 내 음악의 이야기를 전해보세요."}</p>
+              <p id={`${id}-description`} className="sr-only">{isEnglish ? "Choose your song and program, prepare the request, and post it on the official site." : "곡과 프로그램 선택부터 신청글 준비, 공식 게시판 등록까지 안내합니다."}</p>
             </div>
             <button ref={closeRef} type="button" onClick={onClose} aria-label={isEnglish ? "Close radio request guide" : "라디오 신청 가이드 닫기"} className="-mr-2 -mt-1 flex size-11 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-slate-950">
               <X size={20} strokeWidth={1.75} aria-hidden />
             </button>
           </div>
         </header>
-        <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain px-5 py-6 [overflow-wrap:anywhere] sm:px-8 sm:py-7" data-testid="radio-guide-scroll">
+        <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain px-3 py-4 [overflow-wrap:anywhere] sm:px-7 sm:py-6" data-testid="radio-guide-scroll">
           {children}
         </div>
       </div>
