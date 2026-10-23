@@ -141,7 +141,7 @@ export function TrackLookupForm({
 
       <div className="rounded-[8px] border-2 border-border bg-background/70 p-4">
         <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-          조회 코드 찾기
+          조회 코드를 이메일로 받기
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
           조회 코드를 잊은 경우 접수자 이름과 이메일을 확인한 뒤 등록된 이메일로 조회 코드를 보내드립니다.
@@ -181,7 +181,7 @@ export function TrackLookupForm({
             disabled={lookupBusy}
             className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-xs font-black uppercase tracking-normal text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white disabled:cursor-not-allowed disabled:opacity-60 dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
           >
-            {lookupBusy ? "조회 중..." : "조회 코드 찾기"}
+            {lookupBusy ? "조회 중..." : "조회 코드를 이메일로 받기"}
           </button>
         </form>
         {lookupError ? (

@@ -726,7 +726,7 @@ export const markPaymentSuccess = async (
           artist: notificationSubmission.artist_name ?? null,
           kind,
           headline: "결제가 완료되었습니다.",
-          summary: "결제 확인이 완료되어 심의가 시작됩니다.",
+          summary: "결제를 확인했습니다. 제출 자료를 확인한 뒤 방송사·기관 접수를 진행합니다. 미제출 자료가 있으면 신청 내역의 안내에 따라 제출해주세요.",
           link,
           subject: "[onside] 결제 완료 안내",
         });
@@ -738,7 +738,7 @@ export const markPaymentSuccess = async (
           notificationSubmission.guest_phone ??
           memberPhone,
         title: "결제가 완료되었습니다.",
-        message: `${notificationSubmission.title ?? "제목 미입력"} 결제가 완료되어 심의가 시작됩니다.`,
+        message: `${notificationSubmission.title ?? "제목 미입력"} 결제를 확인했습니다. 자료 확인 후 방송사·기관 접수를 진행합니다.`,
         link,
       });
     }

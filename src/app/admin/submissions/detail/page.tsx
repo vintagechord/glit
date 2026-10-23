@@ -17,6 +17,7 @@ import {
   updateSubmissionResultFormAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
+import { SubmissionSupplements } from "@/features/submissions/submission-supplements";
 import { formatDateTime } from "@/lib/format";
 import { getPackageStationCodes } from "@/lib/station-reviews";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
@@ -858,6 +859,7 @@ export default async function AdminSubmissionDetailPage({
         </div>
       </div>
 
+      {submission.payment_status === "PAID" ? <SubmissionSupplements submissionId={submission.id} admin /> : null}
       {!isMvSubmission && isOneclick ? (
         <div className="mt-6 rounded-2xl border border-[#1556a4]/30 bg-[#1556a4]/5 p-5 text-sm">
           <p className="font-semibold text-foreground">발매된 음반 · URL 접수</p>

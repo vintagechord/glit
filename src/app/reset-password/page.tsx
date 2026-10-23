@@ -8,6 +8,9 @@ import { createClient } from "@/lib/supabase/client";
 import { mapAuthError } from "@/features/auth/errors";
 import { passwordUpdateSchema } from "@/features/auth/validation";
 import { verifyRecoverySession, type RecoveryResult } from "@/features/auth/recovery";
+import { getAuthPageHref, getAuthReturnPath } from "@/features/auth/navigation";
+import { PasswordInput } from "@/features/auth/password-input";
+import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "@/features/auth/policy";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +27,7 @@ function ResetPasswordContent() {
   const pathname = usePathname();
   const localePrefix = pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const searchParams = useSearchParams();
+  const nextPath = getAuthReturnPath(searchParams.get("next"), Boolean(localePrefix));
   const [status, setStatus] = useState<Status>({ state: "verifying" });
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -77,7 +81,7 @@ function ResetPasswordContent() {
 
     setSuccess("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.");
     setStatus({ state: "success", message: "비밀번호가 변경되었습니다." });
-    setTimeout(() => router.push(`${localePrefix}/login`), 1500);
+    setTimeout(() => router.push(getAuthPageHref("login", nextPath, Boolean(localePrefix))), 1500);
   };
 
   const heading =
@@ -96,14 +100,14 @@ function ResetPasswordContent() {
           <p className="bauhaus-kicker mx-auto">비밀번호 재설정</p>
           <h1 className="font-display text-2xl font-black text-foreground">{heading}</h1>
           {status.state !== "error" && status.state !== "success" ? (
-            <p className="text-sm font-semibold text-muted-foreground">8자 이상 입력</p>
+            <p id="reset-password-help" className="text-sm font-semibold text-muted-foreground">{localePrefix ? `Use ${PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters.` : `${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자 입력`}</p>
           ) : null}
         </div>
 
         {status.state === "error" && (
           <div role="alert" className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-sm font-semibold text-[#d9362c]">
             <p>{status.message}</p>
-            <Link href={`${localePrefix}/forgot-password`} className="mt-3 inline-flex min-h-10 items-center underline underline-offset-4">
+            <Link href={getAuthPageHref("forgot-password", nextPath, Boolean(localePrefix))} className="mt-3 inline-flex min-h-10 items-center underline underline-offset-4">
               새 재설정 링크 요청하기
             </Link>
           </div>
@@ -122,15 +126,17 @@ function ResetPasswordContent() {
             >
               새 비밀번호
             </label>
-            <input
+            <PasswordInput
+              label={localePrefix ? "New password" : "새 비밀번호"}
+              english={Boolean(localePrefix)}
               id="new-password"
-              type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="new-password"
               required
-              minLength={8}
-              maxLength={128}
+              minLength={PASSWORD_MIN_LENGTH}
+              maxLength={PASSWORD_MAX_LENGTH}
+              aria-describedby="reset-password-help"
               disabled={status.state !== "ready"}
               className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />
@@ -142,15 +148,17 @@ function ResetPasswordContent() {
             >
               새 비밀번호 확인
             </label>
-            <input
+            <PasswordInput
+              label={localePrefix ? "Confirm new password" : "새 비밀번호 확인"}
+              english={Boolean(localePrefix)}
               id="confirm-new-password"
-              type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               autoComplete="new-password"
               required
-              minLength={8}
-              maxLength={128}
+              minLength={PASSWORD_MIN_LENGTH}
+              maxLength={PASSWORD_MAX_LENGTH}
+              aria-describedby="reset-password-help"
               disabled={status.state !== "ready"}
               className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
             />

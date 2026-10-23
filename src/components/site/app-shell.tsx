@@ -6,6 +6,7 @@ import * as React from "react";
 
 import { SiteFooter } from "@/components/site/footer";
 import { SiteHeader } from "@/components/site/header";
+import { ReliableLink } from "@/components/site/reliable-link";
 
 const EnglishLanguagePack = dynamic(
   () =>
@@ -29,7 +30,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isArchiveResultRoute = /^\/mypage\/music\/results\/[0-9a-f-]+$/i.test(basePath);
   const isAdminRoute = basePath.startsWith("/admin");
   const isAuthRoute = ["/login", "/signup", "/forgot-password", "/reset-password"].includes(basePath);
-  const shouldLoadChatbot = !isPaymentPopupRoute && !isArchiveResultRoute && !isAdminRoute && !isAuthRoute;
+  const isSubmissionFlow = /^\/(?:dashboard|mypage)\/(?:new|pay|cart)(?:\/|$)/.test(basePath) || basePath.startsWith("/apply");
+  const shouldLoadChatbot = !isPaymentPopupRoute && !isArchiveResultRoute && !isAdminRoute && !isAuthRoute && !isSubmissionFlow;
 
   React.useEffect(() => {
     if (!shouldLoadChatbot || loadChatbot) return;
@@ -84,6 +86,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main id="main-content" className="flex-1">
         {children}
       </main>
+      {isSubmissionFlow ? (
+        <div className="mx-auto w-full max-w-6xl px-4 py-6 text-sm sm:px-6">
+          <ReliableLink href="/support" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline underline-offset-4">
+            신청·결제 도움말 및 문의 (새 창)
+          </ReliableLink>
+        </div>
+      ) : null}
       <SiteFooter />
       {shouldLoadChatbot && loadChatbot ? <ChatbotWidget /> : null}
     </div>

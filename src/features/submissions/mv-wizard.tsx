@@ -67,6 +67,8 @@ import {
 import { AiUsageSelector } from "./ai-usage-selector";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
 import { SubmissionPreflightPanel } from "./submission-preflight-panel";
+import { EmailMaterialsNotice } from "./email-materials-notice";
+import { getSelectedBroadcastSpecs, kbsMvPurposeNote, type BroadcastSpecFields } from "@/lib/mv-submission-specs";
 import { SubmissionProgress } from "./submission-progress";
 import { SubmissionSaveIndicator } from "./submission-save-indicator";
 import { useSubmissionCheckpoint } from "./use-submission-checkpoint";
@@ -282,15 +284,15 @@ const filterOnlineOptions = (codes: readonly string[]) =>
 const tvStationDetails: Record<string, { title: string; note: string }> = {
   KBS: {
     title: "KBS 뮤직비디오 심의",
-    note: "KBS는 1분 30초 편집본 제출이 필요합니다.",
+    note: kbsMvPurposeNote,
   },
   MBC: {
     title: "MBC 뮤직비디오 심의",
-    note: "심의 완료 후 MBC 방송 송출이 가능합니다.",
+    note: "MBC 제출용 영상 심의입니다. 심의 통과가 방송 편성을 보장하지 않습니다.",
   },
   SBS: {
     title: "SBS 뮤직비디오 심의",
-    note: "심의 완료 후 SBS 방송 송출이 가능합니다.",
+    note: "SBS 제출용 영상 심의입니다. 심의 통과가 방송 편성을 보장하지 않습니다.",
   },
   ETN: {
     title: "ETN 뮤직비디오 입고",
@@ -337,58 +339,6 @@ const mvOptionToneClasses = [
   "border-[#111111] bg-[#1556a4] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[6px_6px_0_#f2cf27]",
   "border-[#111111] bg-[#d9362c] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
   "border-[#111111] bg-white text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[6px_6px_0_#f2cf27]",
-];
-
-type BroadcastSpecFields = {
-  format?: string[];
-  codec?: string[];
-  resolution?: string;
-  fps?: string;
-  maxSize?: string;
-  duration?: string;
-  note?: string;
-};
-
-type BroadcastSpec = {
-  id: string;
-  title: string;
-  summaryBadges: string[];
-  fields: BroadcastSpecFields;
-};
-
-const broadcastSpecs: BroadcastSpec[] = [
-  {
-    id: "KBS",
-    title: "KBS",
-    summaryBadges: ["MOV", "≤1.5GB", "30초 편집본", "ProRes LT/422"],
-    fields: {
-      format: ["MOV"],
-      codec: ["Apple ProRes (ProRes LT / 422)"],
-      maxSize: "1.5GB 이하",
-      duration: "30초 편집본 제출",
-    },
-  },
-  {
-    id: "MBC",
-    title: "MBC",
-    summaryBadges: ["MOV", "1920×1080", "29.97fps", "≤4GB"],
-    fields: {
-      format: ["MOV"],
-      resolution: "1920×1080",
-      fps: "29.97fps",
-      maxSize: "4GB 이하",
-    },
-  },
-  {
-    id: "SBS",
-    title: "SBS",
-    summaryBadges: ["MOV/MP4/WMV", "1920×1080", "29.97fps"],
-    fields: {
-      format: ["MOV", "MP4", "WMV"],
-      resolution: "1920×1080",
-      fps: "29.97fps",
-    },
-  },
 ];
 
 const broadcastFieldLabels: Array<{
@@ -3418,10 +3368,12 @@ export function MvWizard({
   }, [mvCheckpoint]);
 
   const renderBroadcastSpecs = () => {
-    if (broadcastSpecs.length === 0) return null;
+    const selectedSpecs = getSelectedBroadcastSpecs(selectedCodes);
     return (
       <div className="broadcast-specs mt-3 space-y-3">
-        {broadcastSpecs.map((spec) => {
+        <p className="text-sm text-muted-foreground">선택한 방송사의 제출 규격을 확인해주세요. 파일 첨부 성공은 코덱·길이·해상도 검증을 뜻하지 않습니다.</p>
+        {selectedSpecs.length === 0 && <p className="text-sm text-muted-foreground">선택한 제출처의 영상 규격은 담당자에게 확인해주세요.</p>}
+        {selectedSpecs.map((spec) => {
           const isOpen = openBroadcastSpec === spec.id;
           const panelId = `broadcast-spec-${spec.id}`;
           return (
@@ -3457,6 +3409,7 @@ export function MvWizard({
                   {isOpen ? "닫기" : "열기"}
                 </span>
               </button>
+              {spec.source && <p className="px-4 pb-3 text-sm text-muted-foreground">온사이드 접수 경로의 적용 규격은 담당자 확인이 필요합니다. <a href={spec.source.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">{spec.source.label}</a></p>}
               {isOpen ? (
                 <div
                   id={panelId}
@@ -3935,7 +3888,7 @@ export function MvWizard({
                 />
               </div>
               {notice.error && (
-                <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                <div role="alert" className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
                   {notice.error}
                 </div>
               )}
@@ -3966,13 +3919,15 @@ export function MvWizard({
                 </p>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-title" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       뮤직비디오 제목 *
                     </label>
                     <input
+                      id="mv-title"
                       data-mv-field="title"
                       data-preflight-field="title"
                       aria-invalid={invalidField === "title"}
+                      aria-describedby={invalidField === "title" ? "mv-basic-error" : undefined}
                       value={title}
                       onChange={(event) => {
                         setTitle(event.target.value);
@@ -3982,13 +3937,15 @@ export function MvWizard({
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-artistName" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       아티스트명 (한글/영문) *
                     </label>
                     <input
+                      id="mv-artistName"
                       data-mv-field="artistName"
                       data-preflight-field="artistName"
                       aria-invalid={invalidField === "artistName"}
+                      aria-describedby={invalidField === "artistName" ? "mv-basic-error" : undefined}
                       value={artistName}
                       onChange={(event) => {
                         setArtistName(event.target.value);
@@ -4002,13 +3959,15 @@ export function MvWizard({
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-artistNameOfficial" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       아티스트명 공식 표기 *
                     </label>
                     <input
+                      id="mv-artistNameOfficial"
                       data-mv-field="artistNameOfficial"
                       data-preflight-field="artistNameOfficial"
                       aria-invalid={invalidField === "artistNameOfficial"}
+                      aria-describedby={invalidField === "artistNameOfficial" ? "mv-basic-error" : undefined}
                       value={artistNameOfficial}
                       onChange={(event) => {
                         setArtistNameOfficial(event.target.value);
@@ -4022,13 +3981,15 @@ export function MvWizard({
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-releaseDate" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       영상 공개일자 *
                     </label>
                     <input
+                      id="mv-releaseDate"
                       data-mv-field="releaseDate"
                       data-preflight-field="releaseDate"
                       aria-invalid={invalidField === "releaseDate"}
+                      aria-describedby={invalidField === "releaseDate" ? "mv-basic-error" : undefined}
                       type="date"
                       value={releaseDate}
                       onChange={(event) => {
@@ -4060,13 +4021,15 @@ export function MvWizard({
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-director" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       감독 *
                     </label>
                     <input
+                      id="mv-director"
                       data-mv-field="director"
                       data-preflight-field="director"
                       aria-invalid={invalidField === "director"}
+                      aria-describedby={invalidField === "director" ? "mv-basic-error" : undefined}
                       value={director}
                       onChange={(event) => {
                         setDirector(event.target.value);
@@ -4076,13 +4039,15 @@ export function MvWizard({
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-leadActor" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       주연 *
                     </label>
                     <input
+                      id="mv-leadActor"
                       data-mv-field="leadActor"
                       data-preflight-field="leadActor"
                       aria-invalid={invalidField === "leadActor"}
+                      aria-describedby={invalidField === "leadActor" ? "mv-basic-error" : undefined}
                       value={leadActor}
                       onChange={(event) => {
                         setLeadActor(event.target.value);
@@ -4108,10 +4073,10 @@ export function MvWizard({
                     </label>
                     <input
                       id="mv-agency"
-                      aria-describedby="mv-agency-help"
                       data-mv-field="agency"
                       data-preflight-field="agency"
                       aria-invalid={invalidField === "agency"}
+                      aria-describedby={`mv-agency-help${invalidField === "agency" ? " mv-basic-error" : ""}`}
                       value={agency}
                       onChange={(event) => {
                         setAgency(event.target.value);
@@ -4124,13 +4089,15 @@ export function MvWizard({
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-albumTitle" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       앨범명 *
                     </label>
                     <input
+                      id="mv-albumTitle"
                       data-mv-field="albumTitle"
                       data-preflight-field="albumTitle"
                       aria-invalid={invalidField === "albumTitle"}
+                      aria-describedby={invalidField === "albumTitle" ? "mv-basic-error" : undefined}
                       value={albumTitle}
                       onChange={(event) => {
                         setAlbumTitle(event.target.value);
@@ -4140,13 +4107,15 @@ export function MvWizard({
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-distributionCompany" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       유통사 *
                     </label>
                     <input
+                      id="mv-distributionCompany"
                       data-mv-field="distributionCompany"
                       data-preflight-field="distributionCompany"
                       aria-invalid={invalidField === "distributionCompany"}
+                      aria-describedby={invalidField === "distributionCompany" ? "mv-basic-error" : undefined}
                       value={distributionCompany}
                       onChange={(event) => {
                         setDistributionCompany(event.target.value);
@@ -4156,13 +4125,15 @@ export function MvWizard({
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-usage" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       용도 *
                     </label>
                     <input
+                      id="mv-usage"
                       data-mv-field="usage"
                       data-preflight-field="usage"
                       aria-invalid={invalidField === "usage"}
+                      aria-describedby={invalidField === "usage" ? "mv-basic-error" : undefined}
                       placeholder="예: 음악사이트 기재"
                       value={usage}
                       onChange={(event) => {
@@ -4234,13 +4205,15 @@ export function MvWizard({
                 </p>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-songTitleKr" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       곡명 (한글) *
                     </label>
                     <input
+                      id="mv-songTitleKr"
                       data-mv-field="songTitleKr"
                       data-preflight-field="songTitleKr"
                       aria-invalid={invalidField === "songTitleKr"}
+                      aria-describedby={invalidField === "songTitleKr" ? "mv-basic-error" : undefined}
                       value={songTitleKr}
                       onChange={(event) => {
                         setSongTitleKr(event.target.value);
@@ -4250,13 +4223,15 @@ export function MvWizard({
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-songTitleEn" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       곡명 (영문) *
                     </label>
                     <input
+                      id="mv-songTitleEn"
                       data-mv-field="songTitleEn"
                       data-preflight-field="songTitleEn"
                       aria-invalid={invalidField === "songTitleEn"}
+                      aria-describedby={invalidField === "songTitleEn" ? "mv-basic-error" : undefined}
                       value={songTitleEn}
                       onChange={(event) => {
                         setSongTitleEn(event.target.value);
@@ -4266,13 +4241,15 @@ export function MvWizard({
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-songTitleOfficial" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       곡 정보 공식 표기 *
                     </label>
                     <input
+                      id="mv-songTitleOfficial"
                       data-mv-field="songTitleOfficial"
                       data-preflight-field="songTitleOfficial"
                       aria-invalid={invalidField === "songTitleOfficial"}
+                      aria-describedby={invalidField === "songTitleOfficial" ? "mv-basic-error" : undefined}
                       value={songTitleOfficial}
                       onChange={(event) => {
                         setSongTitleOfficial(event.target.value);
@@ -4286,13 +4263,15 @@ export function MvWizard({
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-composer" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       작곡자 *
                     </label>
                     <input
+                      id="mv-composer"
                       data-mv-field="composer"
                       data-preflight-field="composer"
                       aria-invalid={invalidField === "composer"}
+                      aria-describedby={invalidField === "composer" ? "mv-basic-error" : undefined}
                       value={composer}
                       onChange={(event) => {
                         setComposer(event.target.value);
@@ -4342,6 +4321,7 @@ export function MvWizard({
                   data-mv-field="storyline"
                   data-preflight-field="storyline"
                   aria-invalid={invalidField === "storyline"}
+                      aria-describedby={invalidField === "storyline" ? "mv-basic-error" : undefined}
                   value={storyline}
                   onChange={(event) => {
                     setStoryline(event.target.value);
@@ -4423,6 +4403,7 @@ export function MvWizard({
                     data-mv-field="lyrics"
                     data-preflight-field="lyrics"
                     aria-invalid={invalidField === "lyrics"}
+                      aria-describedby={invalidField === "lyrics" ? "mv-basic-error" : undefined}
                     ref={lyricsTextareaRef}
                     value={lyrics}
                     onChange={(event) => {
@@ -4476,13 +4457,15 @@ export function MvWizard({
                   </p>
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="mv-guestName" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         담당자명 *
                       </label>
                       <input
-                        data-mv-field="guestName"
+                        id="mv-guestName"
+                      data-mv-field="guestName"
                         data-preflight-field="guestName"
                         aria-invalid={invalidField === "guestName"}
+                      aria-describedby={invalidField === "guestName" ? "mv-basic-error" : undefined}
                         value={guestName}
                         onChange={(event) => {
                           setGuestName(event.target.value);
@@ -4503,13 +4486,15 @@ export function MvWizard({
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="mv-guestEmail" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         이메일 *
                       </label>
                       <input
-                        data-mv-field="guestEmail"
+                        id="mv-guestEmail"
+                      data-mv-field="guestEmail"
                         data-preflight-field="guestEmail"
                         aria-invalid={invalidField === "guestEmail"}
+                      aria-describedby={invalidField === "guestEmail" ? "mv-basic-error" : undefined}
                         type="email"
                         value={guestEmail}
                         onChange={(event) => {
@@ -4521,13 +4506,15 @@ export function MvWizard({
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="mv-guestPhone" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         연락처 *
                       </label>
                       <input
-                        data-mv-field="guestPhone"
+                        id="mv-guestPhone"
+                      data-mv-field="guestPhone"
                         data-preflight-field="guestPhone"
                         aria-invalid={invalidField === "guestPhone"}
+                      aria-describedby={invalidField === "guestPhone" ? "mv-basic-error" : undefined}
                         value={guestPhone}
                         onChange={(event) => {
                           setGuestPhone(event.target.value);
@@ -4542,7 +4529,7 @@ export function MvWizard({
               )}
 
               {notice.error && (
-                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                <div id="mv-basic-error" role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
                   {notice.error}
                 </div>
               )}
@@ -4605,8 +4592,8 @@ export function MvWizard({
           >
             <p className="mt-1 text-xs font-semibold text-foreground">
               {isDownloadedApplicationFlow
-                ? "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V + HWP/DOC/DOCX"
-                : "허용 형식: MP4/MOV/WMV/MPG/MPEG/M4V"}
+                ? "사이트 업로드 형식: MP4/MOV/WMV/MPG/MPEG/M4V + HWP/DOC/DOCX"
+                : "사이트 업로드 형식: MP4/MOV/WMV/MPG/MPEG/M4V"}
             </p>
             {mvType === "MV_BROADCAST" ? (
               renderBroadcastSpecs()
@@ -4626,6 +4613,7 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("upload")}
+                aria-pressed={!emailSubmitConfirmed}
                 disabled={uploadInProgress}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${!emailSubmitConfirmed
                   ? "bg-foreground text-background shadow-sm"
@@ -4637,6 +4625,7 @@ export function MvWizard({
               <button
                 type="button"
                 onClick={() => selectUploadDeliveryMode("email")}
+                aria-pressed={emailSubmitConfirmed}
                 className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${emailSubmitConfirmed
                   ? "bg-[#1556a4] text-white shadow-sm dark:bg-[#3f8ad8] dark:text-[#06111f]"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
@@ -4652,30 +4641,21 @@ export function MvWizard({
                   >
                     {emailSubmitConfirmed ? "✓" : ""}
                   </span>
-                  파일 없이 진행
+                  파일은 이메일로 나중에 제출
                 </span>
               </button>
             </div>
             {emailSubmitConfirmed ? (
-              <div className="mt-4 rounded-2xl border-2 border-primary/25 bg-primary/8 px-4 py-5 text-sm text-foreground shadow-[4px_4px_0_rgba(0,113,227,0.18)] dark:border-[#2997ff]/35 dark:bg-[#2997ff]/12">
-                <p className="text-xs font-semibold text-muted-foreground">
-                  아래 이메일 주소로 영상 파일을 보내주세요.
-                </p>
-                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 text-base font-black text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
-                  {APP_CONFIG.supportEmail}
-                </p>
-                <div className="mt-3 rounded-xl border border-border/60 bg-background/80 px-3 py-3 text-xs leading-5 text-muted-foreground">
-                  <p className="font-semibold text-foreground">메일 제목 예시</p>
-                  <p className="mt-1 break-all">
-                    [MV심의 파일] {artistName.trim() || "아티스트명"} / {title.trim() || "곡명"} / {mvType === "MV_BROADCAST" ? "TV송출용" : "온라인용"}
-                  </p>
-                </div>
-              </div>
+              <EmailMaterialsNotice
+                submissionId={submissionIdRef.current}
+                subject={`[MV심의 파일] ${artistName.trim() || "아티스트명"} / ${title.trim() || "곡명"} / ${mvType === "MV_BROADCAST" ? "방송사용" : "온라인용"}`}
+                materials={isDownloadedApplicationFlow ? "작성한 신청서와 영상 파일" : "영상 파일"}
+              />
             ) : (
               <>
                 <div className="mt-4">
                   <label
-                    className={`relative block ${uploadInProgress ? "cursor-wait opacity-70" : ""}`}
+                    className={`relative block rounded-2xl focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${uploadInProgress ? "cursor-wait opacity-70" : ""}`}
                     onDragOver={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -4691,6 +4671,7 @@ export function MvWizard({
                     <span className="sr-only">파일 첨부</span>
                     <input
                       type="file"
+                      aria-label="파일 첨부"
                       multiple
                       accept={
                         isDownloadedApplicationFlow
@@ -4698,12 +4679,12 @@ export function MvWizard({
                           : ".mp4,.mov,.wmv,.mpg,.mpeg,.m4v,video/*"
                       }
                       onChange={onFileChange}
-                      className="hidden"
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                       disabled={uploadInProgress}
                     />
                     <span className="flex w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
                       {submissionIdRef.current
-                        ? `파일 첨부 (최대 ${uploadMaxLabel}, 드래그 앤 드롭 가능)`
+                        ? `파일 첨부 (사이트 전송 한도 ${uploadMaxLabel}, 드래그 앤 드롭 가능)`
                         : isPreparingDraft
                           ? "접수 ID 준비 중... 잠시 후 첨부 가능"
                           : draftError || "접수 ID 준비 중... 다시 시도해주세요."}
@@ -4716,7 +4697,7 @@ export function MvWizard({
                           event.stopPropagation();
                           void createDraft({ force: true });
                         }}
-                        className="mt-3 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-[12px] font-semibold tracking-[0.16em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+                        className="relative z-10 mt-3 inline-flex h-11 items-center justify-center rounded-full bg-primary px-4 text-[12px] font-semibold tracking-[0.16em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
                       >
                         다시 시도
                       </button>
@@ -4727,17 +4708,13 @@ export function MvWizard({
                   </label>
                 </div>
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                  <p>
-                    영상 파일 첨부가 정상적으로 완료되지 않는 경우, 파일 없이 다음 단계로 진행하거나 이메일로 파일을 전송해주세요.
-                  </p>
+
                   {isDownloadedApplicationFlow ? (
                     <p>
                       다운로드한 신청서를 작성한 경우 신청서도 영상과 함께 첨부해주세요.
                     </p>
                   ) : null}
-                  <p className="pt-1 text-sm font-black text-foreground sm:text-base">
-                    {APP_CONFIG.supportEmail}
-                  </p>
+
                 </div>
                 {uploads.length > 0 ? (
                   <div className="mt-4 space-y-3">
@@ -4764,19 +4741,21 @@ export function MvWizard({
                             {upload.name}
                           </span>
                           <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-                            {upload.status === "done" ? (
-                              <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
-                                첨부 완료
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">
-                                {upload.status === "uploading"
-                                  ? `업로드 중 · ${upload.progress}%`
-                                  : upload.status === "error"
-                                    ? "실패"
-                                    : "대기"}
-                              </span>
-                            )}
+                            <span role="status" aria-atomic="true">
+                              {upload.status === "done" ? (
+                                  <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
+                                    첨부 완료
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    {upload.status === "uploading"
+                                      ? `업로드 중 · ${upload.progress}%`
+                                      : upload.status === "error"
+                                        ? "실패"
+                                        : "대기"}
+                                  </span>
+                                )}
+                            </span>
                             <button
                               type="button"
                               disabled={uploadInProgress}
@@ -4826,7 +4805,7 @@ export function MvWizard({
           </div>
 
           {notice.error && (
-            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+            <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
               {notice.error}
             </div>
           )}
@@ -5174,7 +5153,7 @@ export function MvWizard({
                         사업자등록증 첨부
                       </label>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <label className="flex min-h-[48px] min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 rounded-2xl border border-dashed border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground transition hover:border-foreground hover:text-foreground">
+                        <label className="flex min-h-[48px] min-w-0 flex-1 cursor-pointer focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 items-center justify-between gap-3 rounded-2xl border border-dashed border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground transition hover:border-foreground hover:text-foreground">
                           <span className="min-w-0 flex-1 truncate">
                             {taxInvoiceCertificateFile?.name ??
                               "PDF, JPG, PNG 파일 선택"}
@@ -5226,7 +5205,7 @@ export function MvWizard({
           ) : null}
 
           {notice.error && (
-            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+            <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
               {notice.error}
             </div>
           )}

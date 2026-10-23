@@ -8,6 +8,8 @@ import { useFormStatus } from "react-dom";
 import { TrackLookupModalTrigger } from "@/features/track/track-lookup-modal";
 
 import { loginAction, type ActionState } from "./actions";
+import { getAuthPageHref, getAuthReturnPath } from "./navigation";
+import { PasswordInput } from "./password-input";
 
 const initialState: ActionState = {};
 
@@ -16,12 +18,10 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
   const [emailValue, setEmailValue] = useState("");
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
-  const signupHref = isEnglishRoute ? "/en/signup" : "/signup";
-  const forgotPasswordHref = isEnglishRoute
-    ? "/en/forgot-password"
-    : "/forgot-password";
+  const effectiveNextPath = getAuthReturnPath(nextPath, isEnglishRoute);
+  const signupHref = getAuthPageHref("signup", effectiveNextPath, isEnglishRoute);
+  const forgotPasswordHref = getAuthPageHref("forgot-password", effectiveNextPath, isEnglishRoute);
   const trackHref = isEnglishRoute ? "/en/track" : "/track";
-  const effectiveNextPath = nextPath ?? (isEnglishRoute ? "/en/mypage" : null);
 
   const SubmitButton = () => {
     const { pending } = useFormStatus();
@@ -46,6 +46,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
   return (
     <div className="space-y-5">
       <form action={formAction} className="space-y-5">
+        <input type="hidden" name="locale" value={isEnglishRoute ? "en" : "ko"} />
         {effectiveNextPath ? (
           <input type="hidden" name="next" value={effectiveNextPath} />
         ) : null}
@@ -62,6 +63,8 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
             type="email"
             autoComplete="email"
             required
+            aria-invalid={Boolean(state.fieldErrors?.email)}
+            aria-describedby={state.fieldErrors?.email ? "login-email-error" : undefined}
             value={emailValue}
             onChange={(event) => {
               setEmailValue(event.target.value);
@@ -69,7 +72,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
             className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.email && (
-            <p className="text-xs text-red-500">{state.fieldErrors.email}</p>
+            <p id="login-email-error" className="text-xs text-red-500">{state.fieldErrors.email}</p>
           )}
         </div>
         <div className="space-y-2">
@@ -79,16 +82,19 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
           >
             비밀번호
           </label>
-          <input
+          <PasswordInput
+            label={isEnglishRoute ? "Password" : "비밀번호"}
+            english={isEnglishRoute}
             id="login-password"
             name="password"
-            type="password"
             autoComplete="current-password"
             required
+            aria-invalid={Boolean(state.fieldErrors?.password)}
+            aria-describedby={state.fieldErrors?.password ? "login-password-error" : undefined}
             className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.password && (
-            <p className="text-xs text-red-500">{state.fieldErrors.password}</p>
+            <p id="login-password-error" className="text-xs text-red-500">{state.fieldErrors.password}</p>
           )}
         </div>
         {state.error && (
@@ -122,7 +128,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
           href={trackHref}
           className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         >
-          코드 찾기
+          조회 코드를 이메일로 받기
         </Link>
       </div>
     </div>

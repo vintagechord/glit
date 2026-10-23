@@ -1,0 +1,90 @@
+{
+  "dateKst": "2026-10-24",
+  "baseCommit": "3811f942233e5dd4890cc2c7efa5ba50a9503b3f",
+  "environment": {
+    "repository": "vintagechord/glit",
+    "localApp": "http://127.0.0.1:3001",
+    "browser": "installed Google Chrome via Playwright channel=chrome",
+    "databaseTest": "disposable PostgreSQL 17, Docker network=none"
+  },
+  "liveStorage": {
+    "test": "isolated B2 browser multipart fixture",
+    "sizeBytes": 17825792,
+    "partCount": 2,
+    "applicationDbLinked": false,
+    "headSizeMatches": true,
+    "browserCorsAndEtag": true,
+    "downloadHashMatches": true,
+    "fixtureVersionDeleted": true
+  },
+  "liveStorageConfiguration": {
+    "publicRead": false,
+    "corsAllowsProductionOrigin": true,
+    "corsMethods": [
+      "HEAD",
+      "GET",
+      "PUT"
+    ],
+    "corsExposesETag": true,
+    "lifecycleReadResult": "NoSuchLifecycleConfiguration"
+  },
+  "productionWrites": {
+    "schemaApplied": false,
+    "appDeployed": false,
+    "realPayment": false,
+    "realEmailOrKakao": false,
+    "broadcastSubmission": false
+  },
+  "limitations": [
+    "17 MiB storage-only fixture; no application database linkage or admin download through the app",
+    "Near-4GB transfer not executed",
+    "Container signatures do not validate codec, duration, document internals, or broadcast compliance",
+    "Actual Render plan, region, deployed SHA and target DB migration history not accessible",
+    "Native Safari, physical mobile and browser-native 200% zoom not executed"
+  ],
+  "finalValidation": {
+    "recordedAtKst": "2026-10-24 06:29",
+    "unit": {
+      "total": 840,
+      "passed": 834,
+      "failed": 0,
+      "skipped": 6,
+      "durationMs": 9148.906666
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 9
+    },
+    "typecheck": "PASS",
+    "webpackBuild": {
+      "status": "PASS",
+      "staticPages": 85
+    },
+    "defaultTurbopackBuild": "BLOCKED: environment EPERM while creating PostCSS child process/listening socket",
+    "isolatedPostgresSuites": {
+      "submissionSupplements": "PASS",
+      "paymentOrdersAndConcurrency": "PASS",
+      "certificateHistory": "PASS"
+    },
+    "browser": {
+      "uniqueScenarios": 72,
+      "auth": 17,
+      "submission": 10,
+      "support": 2,
+      "supplements": 7,
+      "public": 9,
+      "cartAndOrders": 17,
+      "stationResults": 5,
+      "mobilePaymentGuidance": 2,
+      "mvRating": 3,
+      "externalWrites": "mocked or blocked",
+      "combinedSingleRun": false
+    },
+    "diffWhitespace": "PASS"
+  },
+  "migrationsPending": [
+    "20261023210008_submission_supplements.sql",
+    "20261023212202_payment_pre_review.sql",
+    "20261023212253_certificate_result_history.sql"
+  ]
+}

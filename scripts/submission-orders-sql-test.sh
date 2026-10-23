@@ -22,6 +22,7 @@ awk '/^create or replace function public.assert_album_price_snapshots\(/ { copyi
 order_psql < "$order_sql_root/supabase/migrations/0096_reopen_submission_bank_payment.sql"
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/0097_submission_orders.sql"
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/0098_inicis_approval_claim.sql"
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261023212202_payment_pre_review.sql"
 order_psql < "$order_sql_root/tests/sql/submission-orders.sql"
 
 # Two real database connections compete for the same external approval claim.

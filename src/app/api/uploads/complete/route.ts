@@ -23,6 +23,7 @@ import {
   shouldStageSubmissionUpload,
 } from "@/lib/submission-upload-access";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { UploadSignatureMismatchError, verifyUploadedObjectSignature } from "@/lib/upload-content-verification";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -193,6 +194,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const signature = await verifyUploadedObjectSignature(normalizedKey, normalizedFilename);
     const admin = createAdminClient();
     const expires = Number(process.env.B2_ACCESS_URL_EXPIRES_SECONDS ?? "86400");
     const accessUrl = await presignGetUrl(normalizedKey, expires).catch(() => null);
@@ -241,7 +243,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      verified: true,
+      verified: signature === "matched",
+      verification: { size: true, signature, codec: "not_checked", contents: "not_checked" },
       etag: head.ETag,
       contentLength,
       attachmentId: null,
@@ -291,11 +294,12 @@ export async function POST(request: Request) {
       {
         error:
           uploadConflictMessage ??
+          (error instanceof UploadSignatureMismatchError ? error.message : null) ??
           (isConfig
             ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
             : "업로드 확인 중 오류가 발생했습니다. 다시 시도해주세요."),
       },
-      { status: uploadConflictMessage ? 409 : isConfig ? 503 : 500 },
+      { status: uploadConflictMessage ? 409 : error instanceof UploadSignatureMismatchError ? 400 : isConfig ? 503 : 500 },
     );
   }
 }

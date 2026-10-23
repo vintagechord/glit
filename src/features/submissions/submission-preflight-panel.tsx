@@ -26,7 +26,7 @@ type SubmissionPreflightPanelProps = {
 };
 
 const getIssueButtonLabel = (issue: SubmissionPreflightIssue) =>
-  issue.acknowledgementKey === "cart-price-change" ? "변경 확인" : "수정";
+  issue.acknowledgementKey === "cart-price-change" ? "변경 확인" : issue.id === "materials.email-pending" ? "제출 안내" : "수정";
 
 const PriceChangeSummary = ({ issue }: { issue: SubmissionPreflightIssue }) => {
   const previous = issue.meta?.previousAmountKrw;
@@ -135,6 +135,7 @@ export function SubmissionPreflightPanel({
           </h2>
         </div>
         <span
+          role="status"
           className={`inline-flex items-center gap-1 rounded-full border-2 px-3 py-1 text-xs font-black ${
             hasBlockingIssues
               ? "border-[#d9362c] bg-[#d9362c] text-white"
@@ -143,16 +144,18 @@ export function SubmissionPreflightPanel({
                 : "border-emerald-700 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
           }`}
         >
-          {!hasBlockingIssues ? (
+          {!hasBlockingIssues && !hasWarnings ? (
             <Check aria-hidden="true" className="h-3.5 w-3.5" />
           ) : (
             <CircleAlert aria-hidden="true" className="h-3.5 w-3.5" />
           )}
           {hasBlockingIssues
             ? `확인 필요 ${result.blockingIssues.length}`
+            : result.awaitingMaterials
+              ? "자료 제출 대기"
             : hasWarnings
               ? `확인 권장 ${result.warnings.length}`
-              : "확인 완료"}
+              : "입력·첨부 확인"}
         </span>
       </div>
 
@@ -193,7 +196,7 @@ export function SubmissionPreflightPanel({
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-white">
             <Check aria-hidden="true" className="h-4 w-4" />
           </span>
-          신청 정보를 모두 확인했습니다.
+          <p>필수 입력과 파일 첨부 상태를 확인했습니다.<br />자료 내용과 제출 규격은 관리자가 확인합니다.</p>
         </div>
       )}
 

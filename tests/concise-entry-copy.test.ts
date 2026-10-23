@@ -5,17 +5,17 @@ import test from "node:test";
 const readSource = (relativePath: string) =>
   readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
-test("the home hero uses the review-record message", () => {
+test("the home hero explains the three review purposes", () => {
   const homePage = readSource("src/app/page.tsx");
   const translations = readSource(
     "src/components/i18n/english-language-pack.tsx",
   );
 
-  assert.match(homePage, /내 작품의 심의 기록을 한곳에서 관리하세요/);
+  assert.match(homePage, /음원 방송 심의, MV 온라인 유통용 심의, MV 방송사 심의를 목적에 맞게 선택하세요\./);
   assert.doesNotMatch(homePage, /신청 · 결제 · 결과를 한곳에서/);
   assert.match(
     translations,
-    /"내 작품의 심의 기록을 한곳에서 관리하세요":/,
+    /"음원 방송 심의, MV 온라인 유통용 심의, MV 방송사 심의를 목적에 맞게 선택하세요\.":/,
   );
 });
 
@@ -60,10 +60,10 @@ test("application mode step makes the two submission methods mutually exclusive"
 });
 
 test("the legacy form page presents one concise explanation and an accessible link", () => {
-  const source = readSource("src/app/forms/page.tsx");
+  const source = readSource("src/features/support/forms-page-view.tsx");
 
-  assert.match(source, /오픈 후 1년간 함께 운영/);
-  assert.match(source, /접수 후 심의 절차는 동일합니다/);
+  assert.doesNotMatch(source, /오픈 후 1년간 함께 운영/);
+  assert.match(source, /해당 사이트의 접수번호와 제출 안내를 따라 진행/);
   assert.match(source, /aria-label="예전 온사이드 사이트 열기 \(새 창\)"/);
   assert.match(source, /rel="noopener noreferrer"/);
   assert.doesNotMatch(source, /필독/);
@@ -86,7 +86,7 @@ test("lookup and auth pages remove repeated headers while retaining required con
   assert.doesNotMatch(trackDetail, /최신 진행 상황을 자동으로 갱신합니다/);
   assert.match(trackDetail, /refreshIntervalMs=\{10000\}/);
   assert.match(trackForm, /htmlFor="guest-track-token"/);
-  assert.match(trackForm, /조회 코드 찾기/);
+  assert.match(trackForm, /조회 코드를 이메일로 받기/);
 
   assert.doesNotMatch(loginPage, /bauhaus-kicker mx-auto/);
   assert.match(loginPage, /<h1[^>]*>로그인<\/h1>/);
@@ -118,7 +118,7 @@ test("remaining public labels have exact English translations", () => {
     "선택하고 계속",
     "예전 사이트 열기",
     "예전 온사이드 사이트 열기 (새 창)",
-    "구버전과 신버전은 오픈 후 1년간 함께 운영되며, 접수 후 심의 절차는 동일합니다.",
+    "기존 사이트에서 접수한 신청은 해당 사이트의 접수번호와 제출 안내를 따라 진행해주세요.",
     "조회 방식을 선택하세요",
     "비회원 진행/결과 조회",
     "재설정 링크 받기",

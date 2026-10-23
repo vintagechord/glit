@@ -5,20 +5,28 @@ import { usePathname, useRouter } from "next/navigation";
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { privacyContent, termsContent } from "@/components/site/footer";
+import { privacyContent, termsContent, refundContent, termsContentEn, privacyContentEn, refundContentEn } from "@/components/site/footer";
+import { useModalFocus } from "@/lib/use-modal-focus";
+import { getAuthPageHref, getAuthReturnPath } from "./navigation";
+import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "./policy";
+import { PasswordInput } from "./password-input";
 
 import { signupAction, type ActionState } from "./actions";
 
 const initialState: ActionState = {};
 
-export function SignupForm() {
+export function SignupForm({ nextPath }: { nextPath?: string | null }) {
   const [state, formAction] = useActionState(signupAction, initialState);
   const router = useRouter();
   const pathname = usePathname();
   const localePrefix =
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
+  const english = Boolean(localePrefix);
+  const effectiveNextPath = getAuthReturnPath(nextPath, english);
+  const loginHref = getAuthPageHref("login", effectiveNextPath, english);
+  const successHref = getAuthPageHref("login", effectiveNextPath, english, true);
   const didRedirect = useRef(false);
-  const [activeModal, setActiveModal] = useState<"terms" | "privacy" | null>(null);
+  const [activeModal, setActiveModal] = useState<"terms" | "privacy" | "refund" | null>(null);
   const [agreements, setAgreements] = useState({
     age: false,
     terms: false,
@@ -39,10 +47,10 @@ export function SignupForm() {
     if (!state.message || didRedirect.current) return;
     didRedirect.current = true;
     const timer = window.setTimeout(() => {
-      router.push(`${localePrefix}/login?signup=success`);
+      router.push(successHref);
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [localePrefix, state.message, router]);
+  }, [successHref, state.message, router]);
 
   useEffect(() => {
     const order = [
@@ -81,24 +89,18 @@ export function SignupForm() {
     agreements.privacy &&
     agreements.refund;
 
-  useEffect(() => {
-    if (!activeModal) return;
-
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setActiveModal(null);
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [activeModal]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(Boolean(activeModal), dialogRef, closeModal);
+  const modalTitle = activeModal === "terms"
+    ? (english ? "Terms of Use" : "이용약관")
+    : activeModal === "privacy"
+      ? (english ? "Privacy Policy" : "개인정보처리방침")
+      : (english ? "Refund / Cancellation Policy" : "결제·환불 정책");
+  const modalContent = activeModal === "terms"
+    ? (english ? termsContentEn : termsContent)
+    : activeModal === "privacy"
+      ? (english ? privacyContentEn : privacyContent)
+      : (english ? refundContentEn : refundContent);
 
   const SubmitButton = () => {
     const { pending } = useFormStatus();
@@ -116,13 +118,14 @@ export function SignupForm() {
 
   return (
     <form action={formAction} className="space-y-4">
+      <input type="hidden" name="next" value={effectiveNextPath ?? ""} />
       <div className="space-y-2">
         <label
           htmlFor="signup-email"
           className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
         >
           <span>이메일</span>
-          <span className="text-rose-500">*</span>
+          <span aria-hidden="true" className="text-rose-500">*</span>
         </label>
         <input
           id="signup-email"
@@ -130,11 +133,16 @@ export function SignupForm() {
           type="email"
           autoComplete="email"
           required
+          aria-invalid={Boolean(state.fieldErrors?.email)}
+          aria-describedby="signup-email-note signup-email-error"
           ref={emailRef}
           className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
         />
+        <p id="signup-email-note" className="text-xs leading-5 text-muted-foreground">
+          {english ? "Signup does not verify email ownership. Enter an email address where you can receive updates." : "가입 시 별도 이메일 소유 확인을 진행하지 않습니다. 안내를 받을 수 있는 이메일을 입력해주세요."}
+        </p>
         {state.fieldErrors?.email && (
-          <p className="text-xs text-red-500">{state.fieldErrors.email}</p>
+          <p id="signup-email-error" className="text-xs text-red-500">{state.fieldErrors.email}</p>
         )}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -144,19 +152,24 @@ export function SignupForm() {
             className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
           >
             <span>비밀번호</span>
-            <span className="text-rose-500">*</span>
+            <span aria-hidden="true" className="text-rose-500">*</span>
           </label>
-          <input
+          <PasswordInput
+            label={english ? "Password" : "비밀번호"}
+            english={english}
             id="signup-password"
             name="password"
-            type="password"
             autoComplete="new-password"
+            minLength={PASSWORD_MIN_LENGTH}
+            maxLength={PASSWORD_MAX_LENGTH}
+            aria-invalid={Boolean(state.fieldErrors?.password)}
+            aria-describedby="signup-password-help signup-password-error"
             required
             ref={passwordRef}
             className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.password && (
-            <p className="text-xs text-red-500">{state.fieldErrors.password}</p>
+            <p id="signup-password-error" className="text-xs text-red-500">{state.fieldErrors.password}</p>
           )}
         </div>
         <div className="space-y-2">
@@ -165,23 +178,31 @@ export function SignupForm() {
             className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
           >
             <span>비밀번호 확인</span>
-            <span className="text-rose-500">*</span>
+            <span aria-hidden="true" className="text-rose-500">*</span>
           </label>
-          <input
+          <PasswordInput
+            label={english ? "Confirm password" : "비밀번호 확인"}
+            english={english}
             id="signup-confirm-password"
             name="confirmPassword"
-            type="password"
             autoComplete="new-password"
+            minLength={PASSWORD_MIN_LENGTH}
+            maxLength={PASSWORD_MAX_LENGTH}
+            aria-invalid={Boolean(state.fieldErrors?.confirmPassword)}
+            aria-describedby="signup-password-help signup-confirm-password-error"
             required
             ref={confirmRef}
             className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
           />
           {state.fieldErrors?.confirmPassword && (
-            <p className="text-xs text-red-500">{state.fieldErrors.confirmPassword}</p>
+            <p id="signup-confirm-password-error" className="text-xs text-red-500">{state.fieldErrors.confirmPassword}</p>
           )}
         </div>
       </div>
 
+      <p id="signup-password-help" className="text-xs text-muted-foreground">
+        {english ? `Use ${PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters.` : `비밀번호는 ${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자로 입력해주세요.`}
+      </p>
       <fieldset className="space-y-2 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3 text-sm text-foreground">
         <legend className="sr-only">약관 동의</legend>
         <label className="flex cursor-pointer items-center gap-2 rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111]">
@@ -210,6 +231,8 @@ export function SignupForm() {
             type="checkbox"
             required
             ref={agreeAgeRef}
+            aria-invalid={Boolean(state.fieldErrors?.agreeAge)}
+            aria-describedby={state.fieldErrors?.agreeAge ? "signup-agreements-error" : undefined}
             checked={agreements.age}
             onChange={(event) =>
               setAgreements((current) => ({ ...current, age: event.target.checked }))
@@ -227,6 +250,8 @@ export function SignupForm() {
             type="checkbox"
             required
             ref={agreeTermsRef}
+            aria-invalid={Boolean(state.fieldErrors?.agreeTerms)}
+            aria-describedby={state.fieldErrors?.agreeTerms ? "signup-agreements-error" : undefined}
             checked={agreements.terms}
             onChange={(event) =>
               setAgreements((current) => ({ ...current, terms: event.target.checked }))
@@ -238,6 +263,7 @@ export function SignupForm() {
           </label>
           <button
             type="button"
+            aria-label={english ? "View terms of use" : "이용약관 보기"}
             onClick={() => setActiveModal("terms")}
             className="ml-auto rounded-[6px] border border-border px-2 py-1 font-black text-muted-foreground transition hover:border-foreground hover:text-foreground"
           >
@@ -251,6 +277,8 @@ export function SignupForm() {
             type="checkbox"
             required
             ref={agreePrivacyRef}
+            aria-invalid={Boolean(state.fieldErrors?.agreePrivacy)}
+            aria-describedby={state.fieldErrors?.agreePrivacy ? "signup-agreements-error" : undefined}
             checked={agreements.privacy}
             onChange={(event) =>
               setAgreements((current) => ({ ...current, privacy: event.target.checked }))
@@ -262,6 +290,7 @@ export function SignupForm() {
           </label>
           <button
             type="button"
+            aria-label={english ? "View privacy policy" : "개인정보 처리 보기"}
             onClick={() => setActiveModal("privacy")}
             className="ml-auto rounded-[6px] border border-border px-2 py-1 font-black text-muted-foreground transition hover:border-foreground hover:text-foreground"
           >
@@ -275,6 +304,8 @@ export function SignupForm() {
             type="checkbox"
             required
             ref={agreeRefundRef}
+            aria-invalid={Boolean(state.fieldErrors?.agreeRefund)}
+            aria-describedby={state.fieldErrors?.agreeRefund ? "signup-agreements-error" : undefined}
             checked={agreements.refund}
             onChange={(event) =>
               setAgreements((current) => ({ ...current, refund: event.target.checked }))
@@ -284,6 +315,14 @@ export function SignupForm() {
           <label htmlFor="agreeRefund" className="text-foreground">
             결제·환불 정책 <span className="text-muted-foreground">(필수)</span>
           </label>
+          <button
+            type="button"
+            aria-label={english ? "View refund policy" : "결제·환불 정책 보기"}
+            onClick={() => setActiveModal("refund")}
+            className="ml-auto rounded-[6px] border border-border px-2 py-1 font-black text-muted-foreground transition hover:border-foreground hover:text-foreground"
+          >
+            보기
+          </button>
         </div>
         <div className="flex min-h-9 items-center gap-2 text-xs">
           <input
@@ -304,13 +343,13 @@ export function SignupForm() {
           state.fieldErrors?.agreeTerms ||
           state.fieldErrors?.agreePrivacy ||
           state.fieldErrors?.agreeRefund) && (
-          <p className="text-xs text-red-500">
+          <p id="signup-agreements-error" className="text-xs text-red-500">
             필수 약관과 정책에 동의해야 가입이 가능합니다.
           </p>
         )}
       </fieldset>
       {state.error && (
-        <p className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
+        <p role="alert" className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
           {state.error}
         </p>
       )}
@@ -326,7 +365,7 @@ export function SignupForm() {
       <p className="text-center text-xs text-muted-foreground">
         이미 계정이 있나요?{" "}
         <Link
-          href={`${localePrefix}/login`}
+          href={loginHref}
           className="font-semibold text-foreground"
         >
           로그인
@@ -338,6 +377,8 @@ export function SignupForm() {
           onClick={closeModal}
         >
           <div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby={currentModalTitleId}
@@ -347,10 +388,10 @@ export function SignupForm() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                  {activeModal === "terms" ? "Terms" : "Privacy"}
+                  {activeModal === "terms" ? "Terms" : activeModal === "privacy" ? "Privacy" : "Refund"}
                 </p>
                 <h2 id={currentModalTitleId} className="mt-2 text-xl font-semibold">
-                  {activeModal === "terms" ? "이용약관" : "개인정보처리방침"}
+                  {modalTitle}
                 </h2>
               </div>
               <button
@@ -362,7 +403,7 @@ export function SignupForm() {
               </button>
             </div>
             <pre className="mt-4 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-              {activeModal === "terms" ? termsContent : privacyContent}
+              {modalContent}
             </pre>
           </div>
         </div>

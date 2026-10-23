@@ -65,30 +65,21 @@ const loadStdPayConfig = (mode: InicisMode): StdPayEnvConfig => {
   let stdJsHost = "";
   try {
     const parsedStdJsUrl = new URL(stdJsUrl);
-    if (parsedStdJsUrl.protocol !== "https:") {
+    if (
+      parsedStdJsUrl.protocol !== "https:" ||
+      parsedStdJsUrl.username || parsedStdJsUrl.password || parsedStdJsUrl.port
+    ) {
       throw new Error("STDPay JS URL must use HTTPS.");
     }
     stdJsHost = parsedStdJsUrl.hostname.toLowerCase();
   } catch {
     throw new Error("[Inicis] STDPay JS URL is invalid or not HTTPS.");
   }
-  const isProdJs = stdJsHost === "stdpay.inicis.com";
-  const isStgJs = stdJsHost === "stgstdpay.inicis.com";
-  if (mode === "stg" && isProdJs) {
+  if (mode === "stg" && stdJsHost !== "stgstdpay.inicis.com") {
     throw new Error("[Inicis] STDPay config mismatch: stg mode requires stgstdpay.inicis.com JS URL.");
   }
-  if (mode === "prod" && isStgJs) {
+  if (mode === "prod" && stdJsHost !== "stdpay.inicis.com") {
     throw new Error("[Inicis] STDPay config mismatch: prod mode requires stdpay.inicis.com JS URL.");
-  }
-
-  if (process.env.NODE_ENV !== "production") {
-    const masked = mid.length <= 4 ? `${mid.slice(0, 2)}**` : `${mid.slice(0, 2)}***${mid.slice(-2)}`;
-    console.info("[Inicis][STDPay][config]", {
-      env: mode,
-      mid: masked,
-      signKeyLen: signKey.length,
-      stdJsUrl,
-    });
   }
 
   return { env: mode, mid, signKey, stdJsUrl };

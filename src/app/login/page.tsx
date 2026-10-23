@@ -12,12 +12,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const nextRaw = Array.isArray(resolvedSearchParams.next)
     ? resolvedSearchParams.next[0]
     : resolvedSearchParams.next;
-  const nextPath =
-    typeof nextRaw === "string" &&
-    nextRaw.startsWith("/") &&
-    !nextRaw.startsWith("//")
-      ? nextRaw
-      : null;
+  const nextPath = nextRaw;
   const signupRaw = Array.isArray(resolvedSearchParams.signup)
     ? resolvedSearchParams.signup[0]
     : resolvedSearchParams.signup;

@@ -16,7 +16,7 @@ import { APP_CONFIG } from "@/lib/config";
 const services = [
   { label: "온라인 접수", detail: "음반 · MV", icon: FileCheck2 },
   { label: "실시간 현황", detail: "접수부터 결과까지", icon: Radio },
-  { label: "온라인 결제", detail: "카드 · 모바일", icon: CreditCard },
+  { label: "온라인 결제", detail: "PC 카드 · 무통장 입금", icon: CreditCard },
   { label: "제작 지원", detail: "CD · 가사집 · DVD", icon: Disc3 },
 ];
 

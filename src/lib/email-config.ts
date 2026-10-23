@@ -107,6 +107,26 @@ export function getEmailSenderConfiguration({ from, supportEmail }: {
   };
 }
 
+/** The sender and readiness probe must agree on whether mail can be attempted. */
+export function getEmailDeliveryConfiguration({
+  apiKey = process.env.RESEND_API_KEY,
+  from = process.env.RESEND_FROM,
+  supportEmail,
+}: { apiKey?: string; from?: string; supportEmail?: string | null } = {}) {
+  const sender = getEmailSenderConfiguration({ from, supportEmail });
+  const normalizedKey = apiKey?.trim() || "";
+  return {
+    ok: Boolean(normalizedKey) && sender.ok,
+    apiKey: normalizedKey,
+    from: sender.ok ? sender.from : "",
+    replyTo: sender.ok ? sender.replyTo : undefined,
+    sender,
+    diagnostic: !normalizedKey
+      ? "RESEND_API_KEY is required for transactional email."
+      : !sender.ok ? sender.diagnostic : undefined,
+  };
+}
+
 // Keep only documented, fixed provider codes. Provider messages can contain
 // recipient addresses, message bodies, or recovery credentials.
 // Reference: https://resend.com/docs/api-reference/errors

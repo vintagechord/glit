@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import * as React from "react";
+import { useModalFocus } from "@/lib/use-modal-focus";
 import { usePathname } from "next/navigation";
 
 import { APP_CONFIG } from "@/lib/config";
@@ -74,7 +75,7 @@ const partnershipContent = `제휴안내
 아래의 이메일로 제휴 문의 바랍니다.
 ${APP_CONFIG.supportEmail}`;
 
-const refundContent = `환불/취소 규정
+export const refundContent = `환불/취소 규정
 심의 대행 서비스는 결제 확인 후 자료 검수와 방송국/기관 접수 준비가 시작됩니다.
 
 1. 접수 전 취소
@@ -108,7 +109,7 @@ const filePolicyContent = `파일 보관/삭제 정책
 
 파일 삭제 또는 보관 기간 문의는 ${APP_CONFIG.supportEmail}로 접수해주세요.`;
 
-const termsContentEn = `Onside Review Service Terms of Use
+export const termsContentEn = `Onside Review Service Terms of Use
 
 Article 1. Purpose
 These terms define the conditions for using Onside review services, including album and music video review applications, file submission, payment, progress tracking, and result delivery, as well as the rights and obligations of the company and users.
@@ -139,7 +140,7 @@ const privacyOfficerNameEn =
     ? "Jung Junyoung"
     : APP_CONFIG.privacyOfficer;
 
-const privacyContentEn = `Onside Privacy Policy
+export const privacyContentEn = `Onside Privacy Policy
 
 Onside collects and uses personal information only as needed to provide album and music video review application, file submission, payment, progress tracking, and result delivery services.
 
@@ -182,7 +183,7 @@ How to Submit
 Please send partnership inquiries by email.
 ${APP_CONFIG.supportEmail}`;
 
-const refundContentEn = `Refund / Cancellation Policy
+export const refundContentEn = `Refund / Cancellation Policy
 
 For review agency services, material checking and broadcaster or organization submission preparation begin after payment confirmation.
 
@@ -296,24 +297,8 @@ export function SiteFooter() {
   const modalContent = isEnglishRoute ? modalContentEn : modalContentKo;
   const modalTitleId = React.useId();
 
-  React.useEffect(() => {
-    if (!activeModal) return;
-
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setActiveModal(null);
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [activeModal]);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  useModalFocus(Boolean(activeModal), dialogRef, closeModal);
 
   React.useEffect(() => {
     setActiveModal(null);
@@ -472,6 +457,8 @@ export function SiteFooter() {
           onClick={closeModal}
         >
           <div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby={modalTitleId}

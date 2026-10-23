@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useModalFocus } from "@/lib/use-modal-focus";
 
 import { TrackLookupForm } from "@/features/track/track-lookup-form";
 
@@ -16,24 +17,8 @@ export function TrackLookupModalTrigger({
   const [open, setOpen] = React.useState(false);
   const titleId = React.useId();
 
-  React.useEffect(() => {
-    if (!open) return;
-
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  useModalFocus(open, dialogRef, () => setOpen(false));
 
   return (
     <>
@@ -50,9 +35,12 @@ export function TrackLookupModalTrigger({
           onClick={() => setOpen(false)}
         >
           <div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby={modalTitle ? titleId : undefined}
+            aria-label={modalTitle ? undefined : "비회원 접수 조회"}
             className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-[10px] border-2 border-[#111111] bg-background p-5 shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >

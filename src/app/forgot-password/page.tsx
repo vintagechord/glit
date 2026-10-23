@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { Suspense, useActionState, useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useFormStatus } from "react-dom";
+import { getAuthPageHref, getAuthReturnPath } from "@/features/auth/navigation";
 
 import {
   resetPasswordAction,
@@ -35,7 +36,7 @@ function SubmitButton({ retrySeconds }: { retrySeconds: number }) {
   );
 }
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
   const [email, setEmail] = useState("");
   const [retrySeconds, setRetrySeconds] = useState(0);
   const [retryAt, setRetryAt] = useState(0);
@@ -51,6 +52,8 @@ export default function ForgotPasswordPage() {
   );
   const pathname = usePathname();
   const localePrefix = pathname.startsWith("/en/") ? "/en" : "";
+  const searchParams = useSearchParams();
+  const nextPath = getAuthReturnPath(searchParams.get("next"), Boolean(localePrefix));
 
   useEffect(() => {
     if (!retryAt) return;
@@ -75,6 +78,8 @@ export default function ForgotPasswordPage() {
         </div>
 
         <form action={formAction} className="mt-8 space-y-5">
+          <input type="hidden" name="locale" value={localePrefix ? "en" : "ko"} />
+          <input type="hidden" name="next" value={nextPath ?? ""} />
           <div className="space-y-2">
             <label
               htmlFor="reset-email"
@@ -120,7 +125,7 @@ export default function ForgotPasswordPage() {
         <div className="mt-6 flex justify-center">
           <div className="flex flex-wrap justify-center gap-2">
             <Link
-              href={`${localePrefix}/login`}
+              href={getAuthPageHref("login", nextPath, Boolean(localePrefix))}
               className="inline-flex items-center rounded-[8px] border-2 border-border px-4 py-2 text-sm font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
             >
               로그인
@@ -136,4 +141,8 @@ export default function ForgotPasswordPage() {
       </div>
     </div>
   );
+}
+
+export default function ForgotPasswordPage() {
+  return <Suspense><ForgotPasswordContent /></Suspense>;
 }

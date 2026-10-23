@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useModalFocus } from "@/lib/use-modal-focus";
 import { usePathname } from "next/navigation";
 import { Loader2, MessageSquareText, SendHorizontal, X } from "lucide-react";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
@@ -38,24 +39,8 @@ export function SupportInquiryModal({
   const [error, setError] = React.useState<string | null>(null);
   const titleId = React.useId();
 
-  React.useEffect(() => {
-    if (!open) return;
-
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  useModalFocus(open, dialogRef, () => setOpen(false));
 
   const resetForm = () => {
     setTitle(initialTitle);
@@ -124,6 +109,8 @@ export function SupportInquiryModal({
           onClick={closeModal}
         >
           <div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}

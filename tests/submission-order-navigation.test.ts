@@ -2,13 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
-import { confirmLinkedOrderPayment } from "../src/lib/admin/order-payment";
+import { confirmLinkedOrderPayment, statusAfterPaymentConfirmation } from "../src/lib/admin/order-payment";
 
 const ID = "20000000-0000-4000-8000-000000000001";
 const OTHER = "20000000-0000-4000-8000-000000000002";
 const STATE = "30000000-0000-4000-8000-000000000001";
 const ORDER = "fixture-order";
 const CLOSE = `https://onside.test/api/inicis/close?oid=${ORDER}&state=${STATE}`;
+
+test("deposit confirmation queues material review and never regresses review or result stages", () => {
+  for (const status of ["DRAFT", "SUBMITTED", "WAITING_PAYMENT"] as const) {
+    assert.equal(statusAfterPaymentConfirmation(status), "PRE_REVIEW");
+  }
+  for (const status of ["PRE_REVIEW", "IN_PROGRESS", "RESULT_READY", "COMPLETED"] as const) {
+    assert.equal(statusAfterPaymentConfirmation(status), status);
+  }
+});
 
 const browserBundle = build({
   stdin: { contents: `export * from './src/lib/inicis/popup'; export * from './src/lib/inicis/popup-recovery'; export * from './src/lib/guest-submission-cart';`, resolveDir: process.cwd(), loader: "ts" },

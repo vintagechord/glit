@@ -26,9 +26,9 @@ import {
   removeAlbumTrackRowKey,
 } from "@/lib/album-track-table";
 import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
+import { getAlbumPackageLabel } from "@/lib/album-package-label";
 import { orderAlbumDraftRowsForResume } from "@/lib/album-draft-order";
 import { showCenteredAlert, showCenteredConfirm } from "@/lib/centered-dialog";
-import { getReleasedAlbumUrlError } from "@/lib/released-album-url";
 import type { ArchiveReviewEntry } from "@/lib/music-archive/review-entry-url";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
@@ -80,6 +80,7 @@ import { AiUsageSelector } from "./ai-usage-selector";
 import { AlbumTrackTableEditor } from "./album-track-table-editor";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
 import { SubmissionPreflightPanel } from "./submission-preflight-panel";
+import { EmailMaterialsNotice } from "./email-materials-notice";
 import { SubmissionProgress } from "./submission-progress";
 import { SubmissionSaveIndicator } from "./submission-save-indicator";
 import { useSubmissionCheckpoint } from "./use-submission-checkpoint";
@@ -191,7 +192,7 @@ const selectedBadgeClass =
 
 const isReviewTestPackage = (name?: string | null) =>
   name?.startsWith("[테스트]") ?? false;
-const formatPackageName = (count: number) => `${count}개 패키지`;
+const formatPackageName = (count: number) => getAlbumPackageLabel(null, count);
 const getPackageDisplayName = (
   pkg: { name?: string | null; stationCount: number },
 ) =>
@@ -490,6 +491,7 @@ export function AlbumWizard({
   const draftErrorRef = React.useRef<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [notice, setNotice] = React.useState<SubmissionActionState>({});
+  const [showBasicErrors, setShowBasicErrors] = React.useState(false);
   const [resumeChecked, setResumeChecked] = React.useState(false);
   const [resumePrompt, setResumePrompt] = React.useState<{
     drafts: Array<Record<string, unknown>>;
@@ -1131,12 +1133,14 @@ export function AlbumWizard({
         { value: "", label: "선택" },
         { value: "MALE", label: "남성" },
         { value: "FEMALE", label: "여성" },
+        { value: "별도 안내", label: "별도 안내" },
         { value: "MIXED", label: "혼성" },
       ]
       : [
         { value: "", label: "선택" },
         { value: "MALE", label: "남성" },
         { value: "FEMALE", label: "여성" },
+        { value: "별도 안내", label: "별도 안내" },
       ];
 
   const handleConfirmPackage = () => {
@@ -2864,78 +2868,36 @@ export function AlbumWizard({
     }));
   };
 
+  const basicInfoIssues = albumPreflight.blockingIssues.filter((item) => item.target.step === 3);
+  const basicFieldError = (field: string) => showBasicErrors
+    ? basicInfoIssues.find((item) => item.target.field === field)?.message
+    : undefined;
+  const basicFieldProps = (field: string) => ({
+    id: `album-${field}`,
+    name: field,
+    required: true,
+    "aria-required": true as const,
+    "aria-invalid": Boolean(basicFieldError(field)),
+    "aria-describedby": [
+      ["artistNameKr", "artistNameEn", "distributor", "previousRelease", "artistGender"].includes(field) ? `album-${field}-hint` : "",
+      basicFieldError(field) ? `album-${field}-error` : "",
+    ].filter(Boolean).join(" ") || undefined,
+  });
+  const renderBasicFieldError = (field: string) => basicFieldError(field) ? (
+    <p id={`album-${field}-error`} className="text-sm text-red-700 dark:text-red-300">{basicFieldError(field)}</p>
+  ) : null;
+
   const validateBasicInfoStep = () => {
     if (!selectedPackage) {
       setNotice({ error: "패키지를 선택해주세요." });
       return false;
     }
-
-    if (isAdminReviewer) {
-      return true;
-    }
-
-    if (!applicantName.trim() || !applicantEmail.trim() || !applicantPhone.trim()) {
-      setNotice({ error: "접수자 정보(이름/이메일/연락처)를 입력해주세요." });
+    if (isAdminReviewer) return true;
+    setShowBasicErrors(true);
+    if (basicInfoIssues.length > 0) {
+      setNotice({ error: "필수 입력 항목을 확인해주세요." });
+      handlePreflightNavigate(basicInfoIssues[0].target);
       return false;
-    }
-
-    if (aiUsed === null) {
-      setNotice({ error: "AI 활용 여부를 선택해주세요." });
-      return false;
-    }
-
-    if (isOneClick) {
-      const urlError = getReleasedAlbumUrlError(melonUrl);
-      if (urlError) {
-        setNotice({ error: urlError });
-        return false;
-      }
-    } else {
-      if (
-        !title.trim() ||
-        !artistName.trim() ||
-        !artistNameKr.trim() ||
-        !artistNameEn.trim()
-      ) {
-        setNotice({
-          error: "앨범 제목 및 아티스트 정보를 모두 입력해주세요.",
-        });
-        return false;
-      }
-
-      if (!releaseDate) {
-        setNotice({ error: "발매일을 입력해주세요." });
-        return false;
-      }
-
-      if (!genreValue) {
-        setNotice({ error: "장르를 선택해주세요." });
-        return false;
-      }
-      if (genreSelection === "기타" && !genreCustom.trim()) {
-        setNotice({ error: "기타 장르를 입력해주세요." });
-        return false;
-      }
-
-      if (!distributor.trim() || !productionCompany.trim()) {
-        setNotice({ error: "유통사/제작사를 입력해주세요." });
-        return false;
-      }
-
-      if (!previousRelease.trim()) {
-        setNotice({ error: "이전 발매곡을 입력해주세요." });
-        return false;
-      }
-
-      if (!artistType || !artistGender) {
-        setNotice({ error: "그룹/솔로 및 성별 정보를 선택해주세요." });
-        return false;
-      }
-
-      if (artistType === "GROUP" && !artistMembers.trim()) {
-        setNotice({ error: "그룹 팀원 전체 이름을 입력해주세요." });
-        return false;
-      }
     }
     return true;
   };
@@ -4024,6 +3986,7 @@ export function AlbumWizard({
   const handlePreflightNavigate = React.useCallback(
     (target: SubmissionPreflightTarget) => {
       setNotice({});
+      if (target.step === 3) setShowBasicErrors(true);
       if (typeof target.trackIndex === "number") {
         setActiveTrackIndex(target.trackIndex);
       }
@@ -4595,7 +4558,7 @@ export function AlbumWizard({
                 />
               </div>
               {notice.error && (
-                <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                <div role="alert" className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
                   {notice.error}
                 </div>
               )}
@@ -4635,69 +4598,92 @@ export function AlbumWizard({
                     기본 정보
                   </p>
                 )}
+                {showBasicErrors && basicInfoIssues.length > 0 && (
+                  <div role="alert" className="mb-5 rounded-xl border border-red-500/40 bg-red-500/5 p-4">
+                    <p className="font-semibold">입력 내용을 확인해주세요.</p>
+                    <ul className="mt-2 space-y-1">
+                      {basicInfoIssues.map((item) => (
+                        <li key={item.id}><button type="button" onClick={() => handlePreflightNavigate(item.target)} className="min-h-11 text-left text-sm underline underline-offset-4">{item.title}: {item.message}</button></li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {!isOneClick ? (
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-title" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         앨범 제목 *
                       </label>
                       <input
+                        {...basicFieldProps("title")}
                         data-preflight-field="title"
                         value={title}
                         onChange={(event) => setTitle(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("title")}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-artistName" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         아티스트명 공식 표기 *
                       </label>
                       <input
+                        {...basicFieldProps("artistName")}
                         data-preflight-field="artistName"
                         value={artistName}
                         onChange={(event) => setArtistName(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("artistName")}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-artistNameKr" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         아티스트 한글명 *
                       </label>
                       <input
+                        {...basicFieldProps("artistNameKr")}
                         data-preflight-field="artistNameKr"
                         value={artistNameKr}
                         onChange={(event) => setArtistNameKr(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("artistNameKr")}
+                      <p id="album-artistNameKr-hint" className="text-sm text-muted-foreground">한글 활동명이 없으면 공식 활동명을 입력하고 별도 표기가 없음을 적어주세요.</p>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-artistNameEn" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         아티스트 영문명 *
                       </label>
                       <input
+                        {...basicFieldProps("artistNameEn")}
                         data-preflight-field="artistNameEn"
                         value={artistNameEn}
                         onChange={(event) => setArtistNameEn(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("artistNameEn")}
+                      <p id="album-artistNameEn-hint" className="text-sm text-muted-foreground">공식 영문 표기가 없으면 그 사실을 적어주세요. 임의 표기를 만들지 않아도 됩니다.</p>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-releaseDate" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         발매일 *
                       </label>
                       <input
+                        {...basicFieldProps("releaseDate")}
                         data-preflight-field="releaseDate"
                         type="date"
                         value={releaseDate}
                         onChange={(event) => setReleaseDate(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("releaseDate")}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-genre" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         장르 *
                       </label>
                       <select
+                        {...basicFieldProps("genre")}
                         data-preflight-field="genre"
                         value={genreSelection}
                         onChange={(event) => setGenreSelection(event.target.value)}
@@ -4710,13 +4696,19 @@ export function AlbumWizard({
                           </option>
                         ))}
                       </select>
+                      {renderBasicFieldError("genre")}
                     </div>
                     {genreSelection === "기타" && (
                       <div className="space-y-2 md:col-span-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        <label htmlFor="album-genre-custom" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                           기타 장르 입력 *
                         </label>
                         <input
+                          id="album-genre-custom"
+                          aria-label="기타 장르 입력"
+                          aria-required="true"
+                          aria-invalid={Boolean(basicFieldError("genre"))}
+                          aria-describedby={basicFieldError("genre") ? "album-genre-error" : undefined}
                           data-preflight-field="genre"
                           value={genreCustom}
                           onChange={(event) => setGenreCustom(event.target.value)}
@@ -4725,44 +4717,53 @@ export function AlbumWizard({
                       </div>
                     )}
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-distributor" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         유통사 *
                       </label>
                       <input
+                        {...basicFieldProps("distributor")}
                         data-preflight-field="distributor"
                         value={distributor}
                         onChange={(event) => setDistributor(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("distributor")}
+                      <p id="album-distributor-hint" className="text-sm text-muted-foreground">아직 정해지지 않았다면 “미정”으로 입력해주세요.</p>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-productionCompany" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         제작사 *
                       </label>
                       <input
+                        {...basicFieldProps("productionCompany")}
                         data-preflight-field="productionCompany"
                         value={productionCompany}
                         onChange={(event) => setProductionCompany(event.target.value)}
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("productionCompany")}
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-previousRelease" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         이전 발매곡 *
                       </label>
                       <textarea
+                        {...basicFieldProps("previousRelease")}
                         data-preflight-field="previousRelease"
                         value={previousRelease}
                         onChange={(event) => setPreviousRelease(event.target.value)}
                         placeholder="가장 최근 발매한 1곡을 적어주세요. 신인인 경우 신인이라고 표기해주세요."
                         className="h-20 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("previousRelease")}
+                      <p id="album-previousRelease-hint" className="text-sm text-muted-foreground">이전 발매곡이 없다면 “신인” 또는 “없음”으로 입력해주세요.</p>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-artistType" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         그룹/솔로 *
                       </label>
                       <select
+                        {...basicFieldProps("artistType")}
                         data-preflight-field="artistType"
                         value={artistType}
                         onChange={(event) => setArtistType(event.target.value)}
@@ -4772,12 +4773,14 @@ export function AlbumWizard({
                         <option value="GROUP">그룹</option>
                         <option value="SOLO">솔로</option>
                       </select>
+                      {renderBasicFieldError("artistType")}
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <label htmlFor="album-artistGender" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         성별 *
                       </label>
                       <select
+                        {...basicFieldProps("artistGender")}
                         data-preflight-field="artistGender"
                         value={artistGender}
                         onChange={(event) => setArtistGender(event.target.value)}
@@ -4789,19 +4792,23 @@ export function AlbumWizard({
                           </option>
                         ))}
                       </select>
+                      {renderBasicFieldError("artistGender")}
+                      <p id="album-artistGender-hint" className="text-sm text-muted-foreground">혼성 그룹은 “혼성”을 선택하세요. 선택지로 설명하기 어렵다면 “별도 안내”를 선택해 접수 시 알려주세요.</p>
                     </div>
                     {artistType === "GROUP" && (
                       <div className="space-y-2 md:col-span-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        <label htmlFor="album-artistMembers" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                           팀원 전체 이름 *
                         </label>
                         <input
+                          {...basicFieldProps("artistMembers")}
                           data-preflight-field="artistMembers"
                           value={artistMembers}
                           onChange={(event) => setArtistMembers(event.target.value)}
                           placeholder="그룹인 경우 팀원 전체의 이름을 적어주세요."
                           className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                         />
+                        {renderBasicFieldError("artistMembers")}
                       </div>
                     )}
                   </div>
@@ -4879,20 +4886,21 @@ export function AlbumWizard({
                         접수자 *
                       </label>
                       <input
-                        id="album-applicantName"
+                        {...basicFieldProps("applicantName")}
                         data-preflight-field="applicantName"
                         value={applicantName}
                         onChange={(event) => setApplicantName(event.target.value)}
                         required
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("applicantName")}
                     </div>
                     <div className="space-y-2">
                       <label htmlFor="album-applicantEmail" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         이메일 *
                       </label>
                       <input
-                        id="album-applicantEmail"
+                        {...basicFieldProps("applicantEmail")}
                         data-preflight-field="applicantEmail"
                         type="email"
                         value={applicantEmail}
@@ -4900,19 +4908,21 @@ export function AlbumWizard({
                         required
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("applicantEmail")}
                     </div>
                     <div className="space-y-2">
                       <label htmlFor="album-applicantPhone" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         연락처 *
                       </label>
                       <input
-                        id="album-applicantPhone"
+                        {...basicFieldProps("applicantPhone")}
                         data-preflight-field="applicantPhone"
                         value={applicantPhone}
                         onChange={(event) => setApplicantPhone(event.target.value)}
                         required
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      {renderBasicFieldError("applicantPhone")}
                     </div>
                   </div>
                 </div>
@@ -5453,8 +5463,7 @@ export function AlbumWizard({
               {isDownloadedApplicationFlow ? "신청서와 음원 업로드" : "전체 음원 파일 업로드"}
             </p>}
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              업로드가 완료되지 않거나 문제가 생긴 경우 이메일로 음원 파일을 보내주세요.
-              <a href={`mailto:${APP_CONFIG.supportEmail}`} className="ml-1 break-all font-semibold text-foreground underline underline-offset-4">{APP_CONFIG.supportEmail}</a>
+              파일을 업로드하거나 이메일로 나중에 제출하는 방식을 선택해주세요.
             </p>
             <div className="mt-4 grid gap-2 rounded-2xl border border-border/70 bg-background/70 p-1 sm:grid-cols-2">
               <button
@@ -5488,30 +5497,21 @@ export function AlbumWizard({
                   >
                     {emailSubmitConfirmed ? "✓" : ""}
                   </span>
-                  파일 없이 진행
+                  파일은 이메일로 나중에 제출
                 </span>
               </button>
             </div>
             {emailSubmitConfirmed ? (
-              <div className="mt-4 rounded-2xl border-2 border-primary/25 bg-primary/8 px-4 py-5 text-sm text-foreground shadow-[4px_4px_0_rgba(0,113,227,0.18)] dark:border-[#2997ff]/35 dark:bg-[#2997ff]/12">
-                <p className="text-xs font-semibold text-muted-foreground">
-                  파일 첨부 대신 아래 이메일 주소로 음원 파일을 보내주세요.
-                </p>
-                <p className="mt-3 break-all rounded-xl border border-primary/20 bg-background/90 px-3 py-2 font-semibold text-primary dark:border-[#2997ff]/30 dark:text-[#8bc3ff]">
-                  {APP_CONFIG.supportEmail}
-                </p>
-                <div className="mt-3 rounded-xl border border-border/60 bg-background/80 px-3 py-3 text-xs leading-5 text-muted-foreground">
-                  <p className="font-semibold text-foreground">메일 제목 예시</p>
-                  <p className="mt-1 break-all">
-                    [음반심의 파일] {artistName.trim() || "아티스트명"} / {title.trim() || "앨범명"} / {applicantName.trim() || "신청자명"}
-                  </p>
-                </div>
-              </div>
+              <EmailMaterialsNotice
+                submissionId={currentSubmissionId}
+                subject={`[음반심의 파일] ${artistName.trim() || "아티스트명"} / ${title.trim() || "앨범명"}`}
+                materials={isDownloadedApplicationFlow ? "작성한 신청서와 전체 음원 파일" : "전체 음원 파일"}
+              />
             ) : (
               <>
                 <div className="mt-4">
                   <label
-                    className={`relative block ${uploadInProgress ? "cursor-wait opacity-70" : ""}`}
+                    className={`relative block rounded-2xl focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${uploadInProgress ? "cursor-wait opacity-70" : ""}`}
                     onDragOver={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -5530,6 +5530,7 @@ export function AlbumWizard({
                     <span className="sr-only">파일 첨부</span>
                     <input
                       type="file"
+                      aria-label="파일 첨부"
                       multiple
                       accept={
                         isOneClick
@@ -5539,7 +5540,7 @@ export function AlbumWizard({
                           : ".wav,.mp3,.zip,audio/wav,audio/mpeg,application/zip"
                       }
                       onChange={onFileChange}
-                      className="hidden"
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                       disabled={!currentSubmissionId || isPreparingDraft || uploadInProgress}
                     />
                     <div className="flex min-h-[120px] flex-col items-center justify-center text-center gap-3 rounded-2xl border border-dashed border-border/70 bg-background/60 px-4 py-6 text-sm font-semibold text-foreground transition hover:border-foreground">
@@ -5573,7 +5574,7 @@ export function AlbumWizard({
                             event.stopPropagation();
                             void createDraft({ force: true });
                           }}
-                          className="inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-[12px] font-semibold tracking-[0.16em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+                          className="relative z-10 inline-flex h-11 items-center justify-center rounded-full bg-primary px-4 text-[12px] font-semibold tracking-[0.16em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
                         >
                           다시 시도
                         </button>
@@ -5608,19 +5609,21 @@ export function AlbumWizard({
                           {upload.name}
                         </span>
                         <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-                          {upload.status === "done" ? (
-                            <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
-                              첨부 완료
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">
-                              {upload.status === "uploading"
-                                ? `업로드 중 · ${upload.progress}%`
-                                : upload.status === "error"
-                                  ? "실패"
-                                  : "대기"}
-                            </span>
-                          )}
+                          <span role="status" aria-atomic="true">
+                            {upload.status === "done" ? (
+                              <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
+                                첨부 완료
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {upload.status === "uploading"
+                                  ? `업로드 중 · ${upload.progress}%`
+                                  : upload.status === "error"
+                                    ? "실패"
+                                    : "대기"}
+                              </span>
+                            )}
+                          </span>
                           <button
                             type="button"
                             disabled={uploadInProgress}
@@ -5670,15 +5673,7 @@ export function AlbumWizard({
                       <p className="mt-2 text-[11px] text-muted-foreground">
                           파일 첨부 없이 다음 단계로 진행하려면 이메일 제출을 선택하세요.
                         </p>
-                      <div className="mt-3 flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => selectUploadDeliveryMode("email")}
-                          className="rounded-full border border-border/70 bg-background px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
-                        >
-                          파일 없이 진행
-                        </button>
-                      </div>
+
                     </div>
                   )}
                 </div>
@@ -5750,7 +5745,7 @@ export function AlbumWizard({
               </summary>
               <div className="mt-3 space-y-2 leading-5">
                 <p>
-                  {isOneClick ? "WAV 파일을 개별로 첨부하거나, 전체 음원을 ZIP 파일로 묶어 업로드해주세요." : <>업로드가 어려우면 파일 없이 진행한 뒤 {APP_CONFIG.supportEmail}로 보내주세요.</>}
+                  {"음원 파일을 개별로 첨부하거나, 전체 음원을 ZIP 파일로 묶어 업로드해주세요."}
                 </p>
                 {!isOneClick && <p>실물 앨범을 발표했다면{" "}
                   <button
@@ -5766,7 +5761,7 @@ export function AlbumWizard({
           </div>
 
           {notice.error && (
-            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+            <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
               {notice.error}
             </div>
           )}
@@ -6143,7 +6138,7 @@ export function AlbumWizard({
                         사업자등록증 첨부
                       </label>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <label className="flex min-h-[48px] min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 rounded-2xl border border-dashed border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground transition hover:border-foreground hover:text-foreground">
+                        <label className="flex min-h-[48px] min-w-0 flex-1 cursor-pointer focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 items-center justify-between gap-3 rounded-2xl border border-dashed border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground transition hover:border-foreground hover:text-foreground">
                           <span className="min-w-0 flex-1 truncate">
                             {taxInvoiceCertificateFile?.name ??
                               "PDF, JPG, PNG 파일 선택"}

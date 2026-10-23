@@ -11,6 +11,8 @@ process.env.B2_S3_ENDPOINT = "https://s3.fixture.invalid";
 process.env.B2_REGION = "fixture-region"; process.env.B2_BUCKET = "fixture-bucket";
 process.env.B2_KEY_ID = "fixture-key"; process.env.B2_APPLICATION_KEY = "fixture-private-key";
 process.env.INICIS_ENV = "prod"; process.env.INICIS_MID_PROD = "fixture-mid"; process.env.INICIS_SIGN_KEY_PROD = "fixture-sign";
+process.env.RESEND_API_KEY = "fixture-email-key";
+process.env.RESEND_FROM = "notify@example.invalid";
 
 test("configured but disconnected database fails readiness without exposing deployment secrets; liveness survives", async () => {
   const readiness = await buildRuntimeHealthPayload(async () => [{ name: "supabase auth connectivity", ok: false, severity: "error", detail: "private-token https://private.fixture.invalid" }]);
