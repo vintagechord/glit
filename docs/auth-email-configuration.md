@@ -23,7 +23,7 @@
 
 1. `iamonside@daum.net`의 **Daum 메일 → 설정 → IMAP/POP3 설정 → POP3 설정**에서 **POP3/SMTP 사용함**을 선택하고 **저장하기**를 누른다. [Daum 공식 설정 안내](https://cs.daum.net/faq/service/43/category/9234/detail/34503)
 2. **Daum 마이페이지 → 계정 보안**에서 2단계 인증을 확인하고 온사이드용 **앱 비밀번호**를 발급한다. [최신 Daum 공식 안내](https://cs.daum.net/faq/service/43/category/9234/detail/35945)는 2025년 1월 2일부터 2단계 인증·앱 비밀번호가 필요하며, **2025년 12월 1일 서비스 분리 후 앱 비밀번호 발급·관리 주체가 카카오계정에서 Daum 회원정보로 변경됐다**고 명시한다. 이전 카카오계정 경로가 남은 오래된 안내 대신 이 경로를 확인한다.
-3. SMTP 로그인 사용자 이름은 **전체 메일주소 `iamonside@daum.net`**을 사용한다. [Daum 아웃룩 설정 안내](https://cs.daum.net/faq/service/43/category/9234/detail/38593)도 로그온 정보에 본인의 메일주소를 입력하도록 안내한다. 일반 웹 로그인 비밀번호 대신 위 앱 비밀번호를 Supabase의 `SMTP_PASS`에 직접 저장한다. 비밀번호를 채팅에 보내거나 저장소에 기록하지 않는다.
+3. SMTP 로그인 사용자 이름은 **해당 계정의 POP3 설정 화면에 표시된 접속 아이디 `iamonside`**를 사용한다. 일부 [Daum 아웃룩 설정 안내](https://cs.daum.net/faq/service/43/category/9234/detail/38593)는 전체 메일주소를 안내하지만, 현재 계정 화면의 접속 아이디를 우선 확인한다. 중계 함수는 발신 메일주소와 일치하는 전체 주소 또는 그 주소의 아이디 부분만 허용한다. 일반 웹 로그인 비밀번호 대신 위 앱 비밀번호를 Supabase의 `SMTP_PASS`에 직접 저장한다. 비밀번호를 채팅에 보내거나 저장소에 기록하지 않는다.
 
 ### 2. Supabase의 함수 비밀값 설정
 
@@ -32,7 +32,7 @@
 ```dotenv
 SMTP_HOST=smtp.daum.net
 SMTP_PORT=465
-SMTP_USER=iamonside@daum.net
+SMTP_USER=iamonside
 SMTP_PASS=<Daum app password>
 SMTP_FROM=온사이드 <iamonside@daum.net>
 EMAIL_RELAY_SECRET=<32 random bytes encoded as 64 hexadecimal characters>

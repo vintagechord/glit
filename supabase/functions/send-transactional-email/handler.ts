@@ -91,10 +91,14 @@ function smtpConfiguration(env: Env, parse: Dependencies["parseAddress"]) {
   // envelope still belongs to the single parsed, authenticated mailbox.
   const sender = from && from.length <= 998 && !controls.test(from) ? parse(from) : [];
   const fromAddress = sender.length === 1 && !sender[0].group ? mailbox(sender[0].address, parse) : null;
-  const user = mailbox(env("SMTP_USER"), parse);
+  const rawUser = env("SMTP_USER");
+  const user = rawUser && rawUser.length <= 320 && !controls.test(rawUser) ? rawUser.trim() : null;
   const pass = env("SMTP_PASS");
+  // Daum's account settings can specify a bare login ID. It must still own the
+  // fixed sender: accept only that mailbox or its exact local part.
   if (!["smtp.daum.net", "smtp.hanmail.net"].includes(host) || port !== "465" || !from || !fromAddress || !user ||
-      !/@(?:daum|hanmail)\.net$/i.test(fromAddress) || fromAddress.toLowerCase() !== user.toLowerCase() ||
+      !/@(?:daum|hanmail)\.net$/i.test(fromAddress) ||
+      (user.toLowerCase() !== fromAddress.toLowerCase() && user.toLowerCase() !== fromAddress.split("@")[0].toLowerCase()) ||
       !pass || !pass.trim() || controls.test(pass) || pass.length > 1024) {
     throw new RelayFailure(503, "configuration");
   }
@@ -104,7 +108,7 @@ function smtpConfiguration(env: Env, parse: Dependencies["parseAddress"]) {
     connectionTimeout: 10_000, greetingTimeout: 5_000, socketTimeout: 10_000, dnsTimeout: 5_000,
     logger: false, debug: false, disableFileAccess: true, disableUrlAccess: true,
   };
-  return { from, options };
+  return { from, senderDomain: fromAddress.split("@")[1], options };
 }
 
 async function readPayload(request: Request, signal: AbortSignal): Promise<unknown> {
@@ -180,10 +184,10 @@ export function createEmailRelayHandler(dependencies: Dependencies) {
       });
       const work = async () => {
         controller.signal.throwIfAborted();
-        const { from, options } = smtpConfiguration(dependencies.env, dependencies.parseAddress);
+        const { from, senderDomain, options } = smtpConfiguration(dependencies.env, dependencies.parseAddress);
         const payload = await readPayload(request, controller.signal);
         const id = randomUUID();
-        const mail = validatedMessage(payload, from, `<${id}@${options.auth.user.split("@")[1]}>`, dependencies.parseAddress);
+        const mail = validatedMessage(payload, from, `<${id}@${senderDomain}>`, dependencies.parseAddress);
         controller.signal.throwIfAborted();
         transport = dependencies.createTransport(options);
         const info = await transport.sendMail(mail);

@@ -80,12 +80,31 @@ test("relay sends exactly one recipient through fixed authenticated Daum TLS and
   assert.doesNotMatch(JSON.stringify(json), /member@example|myonside|fixture-app-password/);
 });
 
+test("bare Daum login IDs preserve their value while Message-ID uses the validated sender domain", async () => {
+  for (const domain of ["daum.net", "hanmail.net"]) {
+    const api = fixture();
+    api.env.SMTP_USER = " iamonside ";
+    api.env.SMTP_FROM = `온사이드 <iamonside@${domain}>`;
+    const response = await api.handler(request());
+    assert.equal(response.status, 200);
+    const json = await response.json();
+    assert.equal(api.calls.options[0].auth.user, "iamonside");
+    assert.equal(api.calls.mail[0].from, api.env.SMTP_FROM);
+    assert.equal(api.calls.mail[0].messageId, `<${json.messageId.slice(5)}@${domain}>`);
+    assert.equal(api.calls.mail.length, 1);
+    assert.equal(api.calls.closed, 1);
+  }
+});
+
 test("arbitrary SMTP hosts, cleartext ports, spoofed senders and invalid credentials fail closed", async () => {
   for (const changes of [
     { SMTP_HOST: "127.0.0.1" }, { SMTP_HOST: "smtp.daum.net.attacker.invalid" },
     { SMTP_PORT: "587" }, { SMTP_PORT: "25" }, { SMTP_FROM: "other@daum.net" },
     { SMTP_FROM: "spoof@example.invalid", SMTP_USER: "spoof@example.invalid" },
-    { SMTP_PASS: "" }, { SMTP_USER: "myonside" },
+    { SMTP_PASS: "" }, { SMTP_USER: "other" }, { SMTP_USER: "myonside@hanmail.net" },
+    { SMTP_USER: "myonside\n" }, { SMTP_USER: "myonside\u0000" }, { SMTP_USER: "myonside,other" },
+    { SMTP_USER: "온사이드 <myonside@daum.net>" },
+    { SMTP_FROM: "spoof@example.invalid", SMTP_USER: "spoof" },
   ]) {
     const api = fixture(); Object.assign(api.env, changes);
     assert.equal((await api.handler(request())).status, 503);
