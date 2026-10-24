@@ -96,6 +96,20 @@ test("bare Daum login IDs preserve their value while Message-ID uses the validat
   }
 });
 
+test("outbox request IDs correlate the acknowledgement and MIME message while invalid IDs cannot send", async () => {
+  const requestId = "12345678-1234-4123-8123-123456789abc";
+  const api = fixture();
+  const response = await api.handler(request({ ...body, requestId }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, messageId: `smtp-${requestId}` });
+  assert.equal(api.calls.mail[0].messageId, `<${requestId}@daum.net>`);
+  for (const value of ["", "not-a-uuid", "12345678-1234-1123-8123-123456789abc", `${requestId}\r\nBcc: other@example.invalid`]) {
+    const invalid = fixture();
+    assert.equal((await invalid.handler(request({ ...body, requestId: value }))).status, 400);
+    assert.equal(invalid.calls.mail.length, 0);
+  }
+});
+
 test("arbitrary SMTP hosts, cleartext ports, spoofed senders and invalid credentials fail closed", async () => {
   for (const changes of [
     { SMTP_HOST: "127.0.0.1" }, { SMTP_HOST: "smtp.daum.net.attacker.invalid" },
@@ -160,15 +174,17 @@ test("relay bounds both declared and streamed body sizes in bytes and cancels ov
   assert.equal(cancelled, true); assert.equal(api.calls.options.length, 0);
 });
 
-test("SMTP failures expose only generic classifications and never retry", async () => {
-  for (const [error, status, reason] of [
-    [Object.assign(Error("private SMTP response secret@example.invalid"), { code: "EAUTH" }), 503, "configuration"],
-    [Object.assign(Error("private SMTP response"), { responseCode: 421 }), 429, "rate_limit"],
-    [Object.assign(Error("private SMTP response"), { responseCode: 550 }), 502, "delivery"],
+test("SMTP failures expose safe retry dispositions and never retry inside the relay", async () => {
+  for (const [error, status, reason, disposition] of [
+    [Object.assign(Error("private SMTP response secret@example.invalid"), { code: "EAUTH" }), 503, "configuration", undefined],
+    [Object.assign(Error("private SMTP response"), { responseCode: 421 }), 429, "rate_limit", "retry"],
+    [Object.assign(Error("private SMTP response"), { responseCode: 550 }), 502, "delivery", "failed"],
+    [Object.assign(Error("private SMTP response"), { command: "CONN" }), 502, "delivery", "retry"],
+    [Object.assign(Error("private SMTP response"), { code: "ETIMEDOUT", command: "DATA" }), 502, "delivery", "uncertain"],
   ] as const) {
     const api = fixture({ error });
     const response = await api.handler(request());
-    assert.equal(response.status, status); assert.deepEqual(await response.json(), { ok: false, reason });
+    assert.equal(response.status, status); assert.deepEqual(await response.json(), { ok: false, reason, ...(disposition ? { disposition } : {}) });
     assert.equal(api.calls.mail.length, 1); assert.equal(api.calls.closed, 1);
   }
   for (const result of [{ accepted: [] }, { accepted: ["wrong@example.invalid"] }, { accepted: [body.to], rejected: [body.to] }]) {

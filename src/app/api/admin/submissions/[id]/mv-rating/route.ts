@@ -57,11 +57,8 @@ export async function PATCH(
   }
 
   const expectedResult = parsed.data.rating === "REJECT" ? "REJECTED" : "APPROVED";
-  if (submission.mv_desired_rating === parsed.data.rating && submission.result_status === expectedResult && submission.status === "RESULT_READY") {
-    return NextResponse.json({ ok: true, rating: parsed.data.rating, resultStatus: expectedResult, unchanged: true });
-  }
   const completion = await completeMvReviewFlow(admin, submissionId, {
-    rating: parsed.data.rating, resultStatus: expectedResult,
+    actorUserId: user.id, rating: parsed.data.rating, resultStatus: expectedResult,
   });
 
   console.info("[admin][mv-rating] update", {
@@ -83,6 +80,10 @@ export async function PATCH(
     );
   }
 
+  if (!completion.changed) {
+    return NextResponse.json({ ok: true, rating: parsed.data.rating, resultStatus: expectedResult, unchanged: true });
+  }
+
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${submissionId}`);
   revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
@@ -91,7 +92,7 @@ export async function PATCH(
   revalidatePath("/track");
 
   const notification = await sendSubmissionUpdateNotificationById({
-    submissionId, headline: "뮤직비디오 심의 등급이 업데이트되었습니다.",
+    submissionId, changeKey: completion.changeKey, markResultNotified: true, headline: "뮤직비디오 심의 등급이 업데이트되었습니다.",
     summary: "신청 내역에서 확정된 심의 등급을 확인해주세요.", subject: "[onside] 뮤직비디오 심의 등급 안내",
   });
   return NextResponse.json({

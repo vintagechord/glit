@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createTransport } from "nodemailer";
 import { APP_CONFIG } from "@/lib/config";
-import { classifyEmailProviderFailure, getEmailDeliveryConfiguration, isEmailRecipient } from "@/lib/email-config";
+import { classifyEmailProviderFailure, getEmailDeliveryConfiguration, isEmailRecipient, type EmailProvider } from "@/lib/email-config";
+import { enqueueAndSendEmail, type EmailOutboxStatus } from "@/lib/email-outbox";
 
 export type EmailSendResult = {
   /** The provider accepted the request; this does not assert inbox delivery. */
@@ -11,17 +12,37 @@ export type EmailSendResult = {
   reason?: "configuration" | "rate_limit" | "delivery";
   retryAfterSeconds?: number;
   messageId?: string;
+  queued?: boolean;
+  outboxId?: string;
+  status?: EmailOutboxStatus;
 };
 
-type Message = { to: string; subject: string; html: string; operation: string; idempotencyKey?: string; includeMessageId?: boolean };
+export type EmailMessage = { to: string; subject: string; html: string; operation: string; idempotencyKey?: string; includeMessageId?: boolean; expiresAt?: string; requestId?: string; submissionId?: string; markResultNotified?: boolean };
+export type EmailAttemptResult = EmailSendResult & { outcome: "accepted" | "retry" | "uncertain" | "failed"; errorCode?: string };
 const TIMEOUT_MS = 10_000;
 const RELAY_TIMEOUT_MS = 25_000;
 const failure = (reason: EmailSendResult["reason"] = "delivery", skipped = false): EmailSendResult => ({
   ok: false, skipped, reason, message: "이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.",
 });
 const safeMessageId = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : undefined;
+const acceptedAttempt = (messageId: string): EmailAttemptResult => ({ ok: true, outcome: "accepted", messageId });
+const failedAttempt = (outcome: "retry" | "uncertain" | "failed", reason: NonNullable<EmailSendResult["reason"]>, errorCode: string, retryAfterSeconds?: number): EmailAttemptResult => ({ ...failure(reason), outcome, errorCode, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) });
 
-async function httpFailure(response: Response, operation: string, provider: "resend" | "gmail"): Promise<EmailSendResult> {
+type TestDispatcher = (message: EmailMessage, deliver: () => Promise<EmailSendResult>) => Promise<EmailSendResult>;
+let testDispatcher: TestDispatcher | undefined;
+/** Explicit provider-test DI only; production always persists before delivery. */
+export function setEmailOutboxTestDispatcher(dispatcher?: TestDispatcher) {
+  if (process.env.NODE_ENV !== "test") throw new Error("Email test injection requires NODE_ENV=test");
+  testDispatcher = dispatcher;
+}
+function legacyAttempt(result: EmailAttemptResult, includeMessageId?: boolean): EmailSendResult {
+  const { outcome: _outcome, errorCode: _errorCode, ...publicResult } = result;
+  void _outcome; void _errorCode;
+  if (!includeMessageId) delete publicResult.messageId;
+  return publicResult;
+}
+
+async function httpFailure(response: Response, operation: string, provider: "resend" | "gmail", beforeSend = false): Promise<EmailAttemptResult> {
   const body = await response.json().catch(() => null);
   const gmailQuotaExceeded = provider === "gmail" && response.status === 403 && Array.isArray(body?.error?.errors)
     && body.error.errors.some((error: { reason?: unknown } | null) =>
@@ -32,29 +53,41 @@ async function httpFailure(response: Response, operation: string, provider: "res
   // Provider messages may contain addresses, OAuth credentials or recovery URLs.
   console.error(`[Email] ${operation} rejected`, { status: response.status, reason, diagnostic });
   const retryAfter = Number(response.headers.get("retry-after"));
-  return {
-    ...failure(reason),
-    ...(reason === "rate_limit" ? { retryAfterSeconds: Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(3600, Math.ceil(retryAfter)) : 60 } : {}),
-  };
+  const outcome = reason === "configuration" ? "failed" : reason === "rate_limit" || provider === "resend" || beforeSend ? "retry" : "uncertain";
+  return failedAttempt(outcome, reason, `http_${response.status}`, reason === "rate_limit" ? Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(3600, Math.ceil(retryAfter)) : 60 : undefined);
 }
 
-/** A single attempt via the explicitly selected provider. Never retry uncertain sends. */
-export async function sendTransactionalEmail(message: Message): Promise<EmailSendResult> {
+/** Every production send enters durable storage before any provider request. */
+export async function sendTransactionalEmail(message: EmailMessage): Promise<EmailSendResult> {
   const config = getEmailDeliveryConfiguration({ supportEmail: APP_CONFIG.supportEmail });
   if (config.mode === "manual") return {
     ok: false, skipped: true, reason: "configuration",
     message: "현재 이메일 자동 발송을 제공하지 않습니다. 신청 내역에서 진행 상황과 결과를 확인해주세요.",
   };
-  if (!config.ok || !isEmailRecipient(message.to) || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(message.subject)) {
+  if (config.mode !== "transactional" || config.provider === "invalid" || !isEmailRecipient(message.to) || !message.subject.trim() || message.subject.length > 998 || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(message.subject) || !message.html.trim() || message.operation.length > 80 ||
+      Buffer.byteLength(JSON.stringify({ to: message.to, subject: message.subject, html: message.html, replyTo: config.replyTo, requestId: "00000000-0000-4000-8000-000000000000" }), "utf8") > 128 * 1024) {
     return failure("configuration", true);
   }
-  const mail = { from: config.from, to: message.to, subject: message.subject, html: message.html, ...(config.replyTo ? { replyTo: config.replyTo } : {}) };
+  if (process.env.NODE_ENV === "test" && testDispatcher) {
+    return testDispatcher(message, async () => legacyAttempt(await sendEmailAttempt(message), message.includeMessageId));
+  }
+  return enqueueAndSendEmail(message, config.provider as EmailProvider, config.replyTo, sendEmailAttempt);
+}
+
+/** One physical attempt; only the outbox decides whether another attempt is safe. */
+export async function sendEmailAttempt(message: EmailMessage, expectedProvider?: EmailProvider, replyToOverride?: string | null): Promise<EmailAttemptResult> {
+  const config = getEmailDeliveryConfiguration({ supportEmail: APP_CONFIG.supportEmail });
+  if (!config.ok || (expectedProvider && config.provider !== expectedProvider)) return failedAttempt("failed", "configuration", "provider_unavailable");
+  const replyTo = replyToOverride === undefined ? config.replyTo : replyToOverride;
+  const mail = { from: config.from, to: message.to, subject: message.subject, html: message.html, ...(replyTo ? { replyTo } : {}) };
+  let submissionStarted = false;
   try {
     if (config.provider === "supabase-smtp" && config.relay) {
+      submissionStarted = true;
       const response = await fetch(config.relay.url, {
         method: "POST", redirect: "error", signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
         headers: { Authorization: `Bearer ${config.relay.secret}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ to: message.to, subject: message.subject, html: message.html, ...(config.replyTo ? { replyTo: config.replyTo } : {}) }),
+        body: JSON.stringify({ to: message.to, subject: message.subject, html: message.html, ...(replyTo ? { replyTo } : {}), ...(message.requestId ? { requestId: message.requestId } : {}) }),
       });
       const result = await response.json().catch(() => null);
       // A successful HTTP response alone does not establish SMTP acceptance.
@@ -62,13 +95,16 @@ export async function sendTransactionalEmail(message: Message): Promise<EmailSen
       if (
         response.ok && result?.ok === true && typeof result.messageId === "string" &&
         /^smtp-[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(result.messageId)
-      ) return { ok: true, ...(message.includeMessageId ? { messageId: result.messageId } : {}) };
+      ) return acceptedAttempt(result.messageId);
 
       const reason = result?.ok === false && ["configuration", "rate_limit", "delivery"].includes(result.reason)
         ? result.reason as NonNullable<EmailSendResult["reason"]>
         : response.ok ? "delivery" : classifyEmailProviderFailure(response.status).reason;
       console.error(`[Email] ${message.operation} relay rejected`, { status: response.status, reason });
-      return { ...failure(reason), ...(reason === "rate_limit" ? { retryAfterSeconds: 60 } : {}) };
+      const outcome = result?.ok === false && ["retry", "failed", "uncertain"].includes(result.disposition)
+        ? result.disposition as "retry" | "failed" | "uncertain"
+        : reason === "configuration" ? "failed" : reason === "rate_limit" ? "retry" : "uncertain";
+      return failedAttempt(outcome, reason, response.ok ? "invalid_provider_ack" : `relay_http_${response.status}`, reason === "rate_limit" ? 60 : undefined);
     }
 
     if (config.provider === "smtp" && config.smtp && config.sender.ok) {
@@ -81,12 +117,13 @@ export async function sendTransactionalEmail(message: Message): Promise<EmailSen
         disableFileAccess: true, disableUrlAccess: true,
         logger: false, debug: false,
       });
-      const id = randomUUID();
+      const id = message.requestId ?? randomUUID();
       try {
+        submissionStarted = true;
         const result = await transport.sendMail({ ...mail, messageId: `<${id}@${config.sender.senderDomain}>` });
-        if (!result.accepted?.length || result.rejected?.length) return failure();
+        if (!result.accepted?.length || result.rejected?.length) return failedAttempt("failed", "delivery", "smtp_recipient_rejected");
         // SMTP has no provider idempotency API. This ID correlates the MIME message only.
-        return { ok: true, ...(message.includeMessageId ? { messageId: `smtp-${id}` } : {}) };
+        return acceptedAttempt(`smtp-${id}`);
       } finally {
         transport.close();
       }
@@ -99,13 +136,14 @@ export async function sendTransactionalEmail(message: Message): Promise<EmailSen
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ client_id: gmail.clientId, client_secret: gmail.clientSecret, refresh_token: gmail.refreshToken, grant_type: "refresh_token" }),
       });
-      if (!tokenResponse.ok) return httpFailure(tokenResponse, message.operation, "gmail");
+      if (!tokenResponse.ok) return httpFailure(tokenResponse, message.operation, "gmail", true);
       const token = await tokenResponse.json().catch(() => null);
-      if (typeof token?.access_token !== "string" || !token.access_token || /\s/.test(token.access_token)) return failure("configuration");
+      if (typeof token?.access_token !== "string" || !token.access_token || /\s/.test(token.access_token)) return failedAttempt("failed", "configuration", "invalid_oauth_ack");
       // Stream transport only builds MIME in memory; it never opens an SMTP connection.
       const builder = createTransport({ streamTransport: true, buffer: true, newline: "windows", disableFileAccess: true, disableUrlAccess: true });
       const mime = await builder.sendMail(mail);
-      if (!Buffer.isBuffer(mime.message)) return failure("configuration");
+      if (!Buffer.isBuffer(mime.message)) return failedAttempt("failed", "configuration", "invalid_mime");
+      submissionStarted = true;
       const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
         method: "POST", signal: AbortSignal.timeout(TIMEOUT_MS),
         headers: { Authorization: `Bearer ${token.access_token}`, "Content-Type": "application/json" },
@@ -114,23 +152,31 @@ export async function sendTransactionalEmail(message: Message): Promise<EmailSen
       if (!response.ok) return httpFailure(response, message.operation, "gmail");
       const accepted = await response.json().catch(() => null);
       const messageId = safeMessageId(accepted?.id);
-      return { ok: true, ...(message.includeMessageId && messageId ? { messageId } : {}) };
+      return messageId ? acceptedAttempt(messageId) : failedAttempt("uncertain", "delivery", "invalid_provider_ack");
     }
 
-    if (config.provider !== "resend") return failure("configuration", true);
+    if (config.provider !== "resend") return failedAttempt("failed", "configuration", "unknown_provider");
+    submissionStarted = true;
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST", signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json", ...(message.idempotencyKey ? { "Idempotency-Key": message.idempotencyKey } : {}) },
-      body: JSON.stringify({ from: config.from, to: message.to, subject: message.subject, html: message.html, ...(config.replyTo ? { reply_to: config.replyTo } : {}) }),
+      body: JSON.stringify({ from: config.from, to: message.to, subject: message.subject, html: message.html, ...(replyTo ? { reply_to: replyTo } : {}) }),
     });
     if (!response.ok) return httpFailure(response, message.operation, "resend");
     const accepted = await response.json().catch(() => null);
     const messageId = safeMessageId(accepted?.id);
-    return { ok: true, ...(message.includeMessageId && messageId ? { messageId } : {}) };
+    return messageId ? acceptedAttempt(messageId) : failedAttempt("uncertain", "delivery", "invalid_provider_ack");
   } catch (error) {
     // SMTP errors can include entire server replies. Keep only a fixed category.
-    const reason = error && typeof error === "object" && "code" in error && error.code === "EAUTH" ? "configuration" : "delivery";
+    const smtp = error && typeof error === "object" ? error as { code?: string; responseCode?: number; command?: string } : {};
+    const reason = smtp.code === "EAUTH" ? "configuration" : "delivery";
     console.error(`[Email] ${message.operation} failed`, { reason });
-    return failure(reason);
+    if (reason === "configuration") return failedAttempt("failed", reason, "smtp_auth_rejected");
+    if (smtp.responseCode && smtp.responseCode >= 400 && smtp.responseCode < 500) return failedAttempt("retry", "rate_limit", "smtp_temporary_rejection", 60);
+    if (smtp.responseCode && smtp.responseCode >= 500) return failedAttempt("failed", "delivery", "smtp_permanent_rejection");
+    if (!submissionStarted || smtp.command === "CONN" || smtp.code === "EDNS") return failedAttempt("retry", reason, "connection_unavailable");
+    // Resend deduplicates retries with the outbox's stable provider key.
+    if (config.provider === "resend" && message.idempotencyKey?.startsWith("outbox-")) return failedAttempt("retry", reason, "provider_unreachable");
+    return failedAttempt("uncertain", reason, "acceptance_unknown");
   }
 }

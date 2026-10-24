@@ -662,13 +662,8 @@ export const markPaymentSuccess = async (
     approved.primary_submission_id,
     approved.submission_ids,
   );
-  if (approved.already_approved) {
-    return {
-      ok: true,
-      error: null,
-      submissionId: approved.primary_submission_id,
-    };
-  }
+  // Repeated payment callbacks may repair an earlier enqueue failure. The
+  // stable outbox key below prevents sending an already accepted email again.
 
   for (const targetSubmissionId of submissionIds) {
     const { submission: notificationSubmission } = await findSubmissionById(
@@ -683,8 +678,7 @@ export const markPaymentSuccess = async (
         if (userError) {
           console.warn("[Email][payment] member lookup failed", {
             submissionId: notificationSubmission.id,
-            userId: notificationSubmission.user_id,
-            error: userError,
+            category: "member_lookup_failed",
           });
         } else {
           memberEmail = userData?.user?.email ?? null;
@@ -703,7 +697,7 @@ export const markPaymentSuccess = async (
       const kind = notificationSubmission.type?.startsWith("MV") ? "MV" : "ALBUM";
       const baseUrl = getBaseUrl();
       const link =
-        notificationSubmission.guest_token &&
+        !notificationSubmission.user_id && notificationSubmission.guest_token &&
         notificationSubmission.guest_token.length >= 8
           ? buildUrl(
               `/track/${encodeURIComponent(notificationSubmission.guest_token)}`,
@@ -714,13 +708,12 @@ export const markPaymentSuccess = async (
               baseUrl,
             );
       const recipientEmails = collectNotificationEmails(
-        notificationSubmission.applicant_email,
-        notificationSubmission.guest_email,
-        memberEmail,
+        notificationSubmission.user_id ? memberEmail :
+          notificationSubmission.guest_email || notificationSubmission.applicant_email,
       );
 
       for (const recipientEmail of recipientEmails) {
-        await sendSubmissionUpdateEmail({
+        const emailResult = await sendSubmissionUpdateEmail({
           email: recipientEmail,
           title: notificationSubmission.title ?? "제목 미입력",
           artist: notificationSubmission.artist_name ?? null,
@@ -729,10 +722,14 @@ export const markPaymentSuccess = async (
           summary: "결제를 확인했습니다. 제출 자료를 확인한 뒤 방송사·기관 접수를 진행합니다. 미제출 자료가 있으면 신청 내역의 안내에 따라 제출해주세요.",
           link,
           subject: "[onside] 결제 완료 안내",
+          idempotencyKey: `payment-approved:${orderId}:${targetSubmissionId}:${recipientEmail}`,
+          submissionId: notificationSubmission.id,
+          guestToken: notificationSubmission.user_id ? undefined : notificationSubmission.guest_token ?? undefined,
         });
+        if (!emailResult.ok) console.warn("[Email][payment] notification pending", { submissionId: targetSubmissionId, queued: emailResult.queued === true, status: emailResult.status ?? "failed" });
       }
 
-      await sendKakaoOfficialNotification({
+      if (!approved.already_approved) await sendKakaoOfficialNotification({
         phone:
           notificationSubmission.applicant_phone ??
           notificationSubmission.guest_phone ??

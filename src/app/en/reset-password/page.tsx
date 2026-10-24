@@ -1,1 +1,1 @@
-export { default } from "@/app/reset-password/page";
+export { default, metadata, dynamic } from "@/app/reset-password/page";

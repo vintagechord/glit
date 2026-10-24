@@ -17,7 +17,7 @@ export function createCancellableSmtpTransport(options: RelaySmtpOptions): Relay
       const fail = () => {
         if (returned) return;
         returned = true;
-        callback(new Error("SMTP connection failed"));
+        callback(Object.assign(new Error("SMTP connection failed"), { code: "ECONNECTION", command: "CONN" }));
       };
       socket = connect({ host: options.host, port: options.port, ...options.tls }, () => {
         if (closed || !socket) { fail(); return; }

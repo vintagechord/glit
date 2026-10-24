@@ -15,6 +15,8 @@ import {
   deleteTrackForSubmissionAction,
   saveSubmissionAdminFormAction,
   updateSubmissionResultFormAction,
+  notifySubmissionResultFormAction,
+  notifySubmissionProgressFormAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { SubmissionSupplements } from "@/features/submissions/submission-supplements";
@@ -256,6 +258,8 @@ export default async function AdminSubmissionDetailPage({
     switch (savedFlag) {
       case "track":
         return "트랙이 추가되었습니다.";
+      case "track_unchanged":
+        return "이미 삭제된 트랙입니다. 변경된 내용이 없습니다.";
       case "track_deleted":
         return "트랙을 삭제했습니다.";
       case "station":
@@ -269,6 +273,11 @@ export default async function AdminSubmissionDetailPage({
       case "result":
       case "result_warning":
         return "심의 결과가 저장되었습니다.";
+      case "notification":
+      case "notification_warning":
+        return "안내 이메일 재발송을 요청했습니다.";
+      case "notification_error":
+        return "안내 이메일 재발송을 요청하지 못했습니다.";
       case "error":
         return "저장 중 오류가 발생했습니다. 다시 시도해주세요.";
       default:
@@ -276,11 +285,12 @@ export default async function AdminSubmissionDetailPage({
     }
   })();
   const isSaveError =
-    savedFlag === "error" || savedFlag === "station_error" || Boolean(savedErrorParam);
+    savedFlag === "error" || savedFlag === "station_error" || savedFlag === "notification_error" || Boolean(savedErrorParam);
   const isSaveWarning =
     savedFlag === "station_warning" ||
     savedFlag === "status_warning" ||
     savedFlag === "result_warning" ||
+    savedFlag === "notification_warning" ||
     Boolean(savedWarningParam);
   const errorMessage =
     typeof savedErrorParam === "string" && savedErrorParam.length > 0
@@ -1164,6 +1174,28 @@ export default async function AdminSubmissionDetailPage({
               <SubmissionFilesPanel submissionId={submission.id} files={files} />
             </div>
           </div>
+
+          {submission.status !== "DRAFT" && (
+            <form action={notifySubmissionProgressFormAction} className="mt-4 flex flex-wrap items-center gap-3">
+              <input type="hidden" name="submissionId" value={submission.id} />
+              <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
+              <ConfirmSubmitButton message="현재 진행상황 안내 이메일을 다시 보내시겠습니까? 이전 메일이 접수되었다면 중복 수신될 수 있습니다. 발송 내역을 먼저 확인해주세요." className="rounded-full border border-border px-4 py-2 text-sm font-semibold">
+                현재 진행상황 안내 다시 보내기
+              </ConfirmSubmitButton>
+              <Link href="/admin/emails" className="text-sm underline">이메일 발송 내역 확인</Link>
+            </form>
+          )}
+
+          {["RESULT_READY", "COMPLETED"].includes(submission.status ?? "") && (
+            <form action={notifySubmissionResultFormAction} className="mt-4 flex flex-wrap items-center gap-3">
+              <input type="hidden" name="submissionId" value={submission.id} />
+              <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
+              <ConfirmSubmitButton message="현재 결과 안내 이메일을 다시 보내시겠습니까? 이미 발송된 경우 중복 수신될 수 있습니다." className="rounded-full border border-border px-4 py-2 text-sm font-semibold">
+                결과 안내 이메일 다시 보내기
+              </ConfirmSubmitButton>
+              <Link href="/admin/emails" className="text-sm underline">이메일 발송 내역 확인</Link>
+            </form>
+          )}
 
           {isMvSubmission ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">

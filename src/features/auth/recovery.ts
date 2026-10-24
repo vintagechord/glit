@@ -1,59 +1,11 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { isAuthConnectionError, mapAuthError } from "./errors";
+export type RecoveryCredential = { token: string; signature: string };
 
-type RecoveryAuth = Pick<SupabaseClient["auth"], "getSession" | "exchangeCodeForSession" | "verifyOtp" | "setSession">;
-export type RecoveryResult = { ok: true } | { ok: false; message: string };
-const expired = "세션을 확인할 수 없습니다. 링크가 만료되었거나 이미 사용되었습니다. 새 링크를 요청해주세요.";
-
-/** Handle each credential type exactly once; never reinterpret a PKCE code as an OTP. */
-export async function verifyRecoverySession(auth: RecoveryAuth, url: URL): Promise<RecoveryResult> {
-  const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
-  if (url.searchParams.has("error") || hash.has("error")) return { ok: false, message: expired };
-  const hasTokenHash = url.searchParams.has("token_hash") || url.searchParams.has("token");
-  const tokenHash = (url.searchParams.has("token_hash")
-    ? url.searchParams.get("token_hash")
-    : url.searchParams.get("token"))?.trim();
-  const code = url.searchParams.get("code")?.trim();
-  const accessToken = hash.get("access_token");
-  const refreshToken = hash.get("refresh_token");
-  if (
-    (hasTokenHash && !tokenHash) ||
-    (url.searchParams.has("code") && !code) ||
-    (hash.has("access_token") && !accessToken) ||
-    (hash.has("refresh_token") && !refreshToken)
-  ) {
-    return { ok: false, message: expired };
-  }
-  try {
-    if (tokenHash) {
-      const { data, error } = await auth.verifyOtp({ type: "recovery", token_hash: tokenHash });
-      if (error) throw error;
-      return data.session ? { ok: true } : { ok: false, message: expired };
-    }
-    if (code) {
-      const flowId = url.searchParams.get("sb_flow_id");
-      const { data, error } = await auth.exchangeCodeForSession(
-        code,
-        flowId !== null ? { flowId } : undefined,
-      );
-      if (error) throw error;
-      return data.session ? { ok: true } : { ok: false, message: expired };
-    }
-    if (accessToken || refreshToken) {
-      if (!accessToken || !refreshToken) return { ok: false, message: expired };
-      const { data, error } = await auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-      if (error) throw error;
-      return data.session ? { ok: true } : { ok: false, message: expired };
-    }
-    // A successful previous visit may already have exchanged and removed the link.
-    const { data, error } = await auth.getSession();
-    if (error) throw error;
-    return data.session ? { ok: true } : { ok: false, message: "유효한 비밀번호 재설정 링크가 아닙니다. 메일의 링크를 다시 클릭해주세요." };
-  } catch (error) {
-    if (isAuthConnectionError(error)) return { ok: false, message: mapAuthError(error, "update") };
-    const message = error instanceof Error ? error.message : "";
-    return { ok: false, message: /PKCE|code verifier|flow state/i.test(message)
-      ? "메일을 요청한 동일한 브라우저에서 링크를 열어주세요. 링크가 만료되었다면 새 링크를 요청해주세요."
-      : expired };
-  }
+/** Read credentials only. Legacy URL/session exchanges must never run on page load. */
+export function readRecoveryCredential(url: URL): RecoveryCredential | null {
+  if (["token_hash", "token", "type", "signature", "code", "error"].some(key => url.searchParams.has(key))) return null;
+  const hash = new URLSearchParams(url.hash.slice(1));
+  const token = hash.get("token_hash") ?? "";
+  const signature = hash.get("signature") ?? "";
+  if (hash.has("error") || hash.get("type") !== "recovery" || !/^[a-zA-Z0-9_-]{16,512}$/.test(token) || !/^[a-f0-9]{64}$/.test(signature)) return null;
+  return { token, signature };
 }

@@ -28,8 +28,8 @@ test("supplement API authorization and B2 reconciliation preserve original locks
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls,db} from 'supplement-fixture';";
         const files: Record<string, string> = {
-          "supplement-fixture": `export const calls=[]; export const state={user:null,isAdmin:false,rows:{},grant:null,headSize:16,bytes:new TextEncoder().encode('RIFF1234WAVEdata'),notice:{notificationId:'fixture-notice',leaseToken:'fixture-lease',state:'OPEN',outcome:{}},emailResult:{ok:true,messageId:'email-id'},kakaoResult:{ok:false,skipped:true}};
-            export const db={from(table){const filters=[];const chain={select(){return chain},eq(k,v){filters.push(r=>r[k]===v);return chain},is(k,v){filters.push(r=>r[k]===v);return chain},async maybeSingle(){return {data:(state.rows[table]||[]).find(r=>filters.every(f=>f(r)))||null,error:null}},async single(){return chain.maybeSingle()}};return chain},async rpc(name,args){calls.push({name,args});return {data:args.p_action==='notify_claim'?state.notice:{ok:true},error:null}}};`,
+          "supplement-fixture": `export const calls=[]; export const state={user:null,isAdmin:false,memberEmail:'owner@example.invalid',memberError:false,failMutation:false,failFinish:false,rows:{},grant:null,headSize:16,bytes:new TextEncoder().encode('RIFF1234WAVEdata'),notice:{notificationId:'fixture-notice',leaseToken:'fixture-lease',state:'OPEN',outcome:{}},emailResult:{ok:true,messageId:'email-id'},kakaoResult:{ok:false,skipped:true}};
+            export const db={auth:{admin:{getUserById:async()=>({data:{user:{email:state.memberEmail}},error:state.memberError?{message:'lookup failed'}:null})}},from(table){const filters=[];const chain={select(){return chain},eq(k,v){filters.push(r=>r[k]===v);return chain},is(k,v){filters.push(r=>r[k]===v);return chain},async maybeSingle(){return {data:(state.rows[table]||[]).find(r=>filters.every(f=>f(r)))||null,error:null}},async single(){return chain.maybeSingle()}};return chain},async rpc(name,args){calls.push({name,args});return {data:args.p_action==='notify_claim'?state.notice:args.p_action==='request'?{requestId:'request-a'}:{ok:true},error:(state.failMutation&&args.p_action!=='notify_claim')||(state.failFinish&&args.p_action==='notify_finish')?{message:'write failed'}:null}}};`,
           "@/lib/supabase/server": `${shared} export async function createServerSupabase(){return {auth:{getUser:async()=>({data:{user:state.user}})},rpc:async()=>({data:state.isAdmin})}}`,
           "@/lib/supabase/admin": `${shared} export function createAdminClient(){return db}`,
           "@/lib/b2": `${shared} export const getB2Config=()=>({prefix:'configured/',bucket:'fixture',client:{send:async()=>({ContentLength:state.bytes.length,Body:{transformToByteArray:async()=>state.bytes}})}}); export const headObject=async()=>({ContentLength:state.headSize}); export const presignGetUrl=async key=>{calls.push({name:'download',key});return 'https://signed.fixture.invalid'}; export const presignUploadPart=async()=>{calls.push({name:'presign'});return 'https://part.fixture.invalid'}; export const completeMultipartUpload=async()=>{calls.push({name:'complete'})}; export const abortMultipartUpload=async()=>{}; export const createMultipartUpload=async()=> 'fixture-upload'; export const sanitizeFileName=s=>s;`,
@@ -41,13 +41,13 @@ test("supplement API authorization and B2 reconciliation preserve original locks
       });
     } }],
   });
-  type State = { user: { id: string } | null; isAdmin: boolean; rows: Record<string, Record<string, unknown>[]>; grant: Record<string, unknown>; headSize: number; bytes: Uint8Array; notice: Record<string, unknown> };
+  type State = { user: { id: string } | null; isAdmin: boolean; memberEmail: string; memberError: boolean; failMutation: boolean; failFinish: boolean; emailResult: Record<string, unknown>; rows: Record<string, Record<string, unknown>[]>; grant: Record<string, unknown>; headSize: number; bytes: Uint8Array; notice: Record<string, unknown> };
   type Context = Awaited<ReturnType<typeof import("../src/lib/submission-supplements/server").getSupplementContext>>;
-  const bundled = { exports: {} as { state: State; calls: { name: string; args?: { p_action?: string }; key?: string }[]; getSupplementContext: typeof import("../src/lib/submission-supplements/server").getSupplementContext; performSupplementAction: typeof import("../src/lib/submission-supplements/server").performSupplementAction } };
+  const bundled = { exports: {} as { state: State; calls: { name: string; args?: { p_action?: string; email?: string }; key?: string }[]; getSupplementContext: typeof import("../src/lib/submission-supplements/server").getSupplementContext; performSupplementAction: typeof import("../src/lib/submission-supplements/server").performSupplementAction } };
   new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), bundled, bundled.exports);
   const api = bundled.exports, state = api.state;
   state.rows = {
-    submissions: [{ id: "submission-a", user_id: "user-a", guest_token: null, payment_status: "PAID", type: "ALBUM", applicant_email: "fixture@example.invalid", applicant_phone: "01000000000" }, { id: "guest-submission", user_id: null, guest_token: "fixture-token", payment_status: "PAID", type: "ALBUM" }],
+    submissions: [{ id: "submission-a", user_id: "user-a", guest_token: null, payment_status: "PAID", type: "ALBUM", applicant_email: "fixture@example.invalid", applicant_phone: "01000000000" }, { id: "guest-submission", user_id: null, guest_token: "fixture-token", payment_status: "PAID", type: "ALBUM", guest_email: "guest@example.invalid", applicant_email: "stale@example.invalid" }],
     submission_supplement_requests: [{ id: "request-a", submission_id: "submission-a", status: "OPEN" }, { id: "request-b", submission_id: "another-submission", status: "OPEN" }],
     submission_supplement_revisions: [{ id: "revision-a", request_id: "request-a", status: "DRAFT" }, { id: "revision-b", request_id: "request-b", status: "DRAFT" }],
     submission_supplement_files: [{ id: "file-a", revision_id: "revision-a", grant_id: "grant-a", original_name: "fixture.wav", size_bytes: 16, object_key: "supplements/fixture", status: "PENDING" }, { id: "file-b", revision_id: "revision-b", status: "VERIFIED", object_key: "private-other" }],
@@ -87,6 +87,40 @@ test("supplement API authorization and B2 reconciliation preserve original locks
   await api.performSupplementAction(admin, { action: "notify", requestId: "request-a" });
   assert.equal(api.calls.filter((call) => ["email", "kakao"].includes(call.name)).length, 2);
   assert.equal(api.calls.at(-1)?.args?.p_action, "notify_finish");
+  assert.equal(api.calls.find(call => call.name === "email")?.args?.email, "owner@example.invalid");
+  for (const input of [{ action: "request", note: "추가 자료 요청" }, { action: "review", requestId: "request-a", decision: "ACCEPTED", note: "확인 완료" }, { action: "review", requestId: "request-a", decision: "REJECTED", note: "추가 수정 필요" }] as const) {
+    api.calls.length = 0;
+    await api.performSupplementAction(admin, input);
+    assert.equal(api.calls.filter(call => call.name === "email").length, 1, "committed supplement change automatically sends one notice");
+    assert.ok(api.calls.findIndex(call => call.name === "email") > api.calls.findIndex(call => call.name === "mutate_submission_supplement"));
+  }
+  state.failMutation = true; api.calls.length = 0;
+  await assert.rejects(api.performSupplementAction(admin, { action: "request", note: "실패 요청" }));
+  assert.equal(api.calls.filter(call => call.name === "email").length, 0);
+  state.failMutation = false; state.memberError = true; api.calls.length = 0;
+  await api.performSupplementAction(admin, { action: "notify", requestId: "request-a" });
+  assert.equal(api.calls.filter(call => call.name === "email").length, 0, "member lookup failure must never use applicant_email");
+  state.memberError = false;
+  const guestAdmin = await api.getSupplementContext("guest-submission", request);
+  api.calls.length = 0;
+  await api.performSupplementAction(guestAdmin, { action: "notify", requestId: "guest-request" });
+  assert.equal(api.calls.find(call => call.name === "email")?.args?.email, "guest@example.invalid");
+  for (const [emailResult, warning] of [
+    [{ ok: false, queued: true, status: "retry", outboxId: "outbox-fixture" }, /자동 재시도/],
+    [{ ok: false, status: "uncertain", outboxId: "outbox-fixture" }, /접수 여부/],
+  ] as const) {
+    state.emailResult = emailResult;
+    const result = await api.performSupplementAction(admin, { action: "request", note: "후속 안내" }) as { warning?: string; notification: { email: string; emailStatus: string } };
+    assert.match(result.warning ?? "", warning);
+    assert.equal(result.notification.email, "FAILED", "queued/uncertain are not provider acceptance");
+    assert.equal(result.notification.emailStatus, emailResult.status);
+  }
+  state.emailResult = { ok: true, messageId: "email-id" };
+  state.failFinish = true;
+  const savedWithoutAudit = await api.performSupplementAction(admin, { action: "request", note: "감사 기록 실패" }) as { requestId?: string; warning?: string };
+  assert.equal(savedWithoutAudit.requestId, "request-a");
+  assert.match(savedWithoutAudit.warning ?? "", /저장되었지만/);
+  state.failFinish = false;
   api.calls.length = 0;
   state.notice.outcome = { email: "API_ACCEPTED", emailMessageId: "email-id", kakao: "SKIPPED" };
   await api.performSupplementAction(admin, { action: "notify", requestId: "request-a" });

@@ -12,3 +12,14 @@ export function verifySignupToken(token: string, signature: string): boolean {
   if (!/^[a-f0-9]{64}$/.test(signature)) return false;
   return timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(signSignupToken(token), "hex"));
 }
+
+export function signRecoveryToken(token: string): string {
+  return createHmac("sha256", getServiceRoleKey())
+    .update(`onside.recovery.confirmed_account_v1\0${token}`)
+    .digest("hex");
+}
+
+export function verifyRecoveryToken(token: string, signature: string): boolean {
+  if (!/^[a-f0-9]{64}$/.test(signature)) return false;
+  return timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(signRecoveryToken(token), "hex"));
+}

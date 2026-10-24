@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { headers as nextHeaders } from "next/headers";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import {
   sendPasswordResetEmail,
@@ -14,7 +14,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmailDeliveryConfiguration } from "@/lib/email-config";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import {
-  consumeRateLimit,
+  consumePersistentRateLimit,
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
 import { getAuthPageHref, getAuthReturnPath } from "./navigation";
@@ -24,7 +24,7 @@ import { buildUrl, getBaseUrl } from "@/lib/url";
 import { isAuthConnectionError, logAuthError, mapAuthError } from "./errors";
 import { loginSchema, signupSchema, profileSchema, passwordUpdateSchema, resetEmailSchema, toFieldErrors } from "./validation";
 import { findAccountByEmail, SIGNUP_VERIFICATION_FLOW } from "./account-lookup";
-import { signSignupToken, verifySignupToken } from "./signup-token";
+import { signSignupToken, verifySignupToken, signRecoveryToken, verifyRecoveryToken } from "./signup-token";
 
 export type ActionState = {
   error?: string;
@@ -34,8 +34,8 @@ export type ActionState = {
   verificationPending?: boolean;
 };
 
-const resetSuccessMessage = "가입된 이메일이라면 비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.";
-const signupPendingMessage = "이메일 확인이 필요한 계정이면 인증 메일을 보냈습니다. 메일의 버튼으로 확인을 완료해주세요. 이미 가입했거나 메일이 오지 않으면 비밀번호 찾기 또는 고객센터를 이용해주세요.";
+const resetSuccessMessage = "입력한 이메일로 안내 가능한 계정이면 복구 메일을 보내드립니다. 메일함과 스팸함을 확인해주세요.";
+const signupPendingMessage = "이메일 확인이 필요한 계정이면 인증 메일을 보내드립니다. 메일의 버튼으로 확인을 완료해주세요. 이미 가입했거나 메일이 오지 않으면 비밀번호 찾기 또는 고객센터를 이용해주세요.";
 const accountLookupMessage = "가입된 이메일이라면 아이디 안내를 보내드립니다. 메일함과 스팸함을 확인해주세요.";
 const mailConfigurationError = "메일 발송 설정에 문제가 있어 메일을 보내지 못했습니다. 고객센터에 문의해주세요.";
 
@@ -45,7 +45,7 @@ const isDuplicateAccount = (error: unknown) => {
   return ["email_exists", "user_already_exists"].includes(value.code ?? "") || /already.*registered|already.*exists/i.test(value.message ?? "");
 };
 
-async function sendSignupConfirmation(email: string, formData: FormData): Promise<ActionState> {
+async function sendSignupConfirmation(email: string, formData: FormData, expectedUserId: string): Promise<ActionState> {
   const english = formData.get("locale") === "en";
   const redirectTo = buildUrl(getAuthPageHref("confirm-email", String(formData.get("next") ?? ""), english), getBaseUrl());
   const admin = createAdminClient();
@@ -60,17 +60,22 @@ async function sendSignupConfirmation(email: string, formData: FormData): Promis
     logAuthError("generate signup link", error);
     return { error: mapAuthError(error, "signup"), verificationPending: true };
   }
-  if (!data.properties?.hashed_token || data.properties.verification_type !== "signup") {
+  if (!data.properties?.hashed_token || data.properties.verification_type !== "signup" ||
+      data.user?.id !== expectedUserId || data.user.email?.trim().toLowerCase() !== email.trim().toLowerCase() ||
+      data.user.email_confirmed_at || data.user.app_metadata?.signupVerificationFlow !== SIGNUP_VERIFICATION_FLOW) {
     return { error: "인증 링크를 준비하지 못했습니다. 잠시 후 인증 메일을 다시 요청해주세요.", verificationPending: true };
   }
   const link = new URL(redirectTo);
   // Fragment credentials stay out of page requests and ordinary access logs.
   link.hash = new URLSearchParams({ token_hash: data.properties.hashed_token, type: "signup", signature: signSignupToken(data.properties.hashed_token) }).toString();
-  const sent = await sendSignupVerificationEmail({ email, link: link.toString() });
-  if (!sent.ok) return {
-    error: sent.reason === "configuration" ? mailConfigurationError : "인증 메일을 보내지 못했습니다. 아래에서 인증 메일을 다시 요청해주세요.",
-    verificationPending: true, retryAfterSeconds: sent.retryAfterSeconds,
-  };
+  try {
+    const sent = await sendSignupVerificationEmail({
+      email, link: link.toString(),
+      idempotencyKey: `signup:${createHash("sha256").update(data.properties.hashed_token).digest("hex")}`,
+      expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    });
+    if (!sent.ok) console.warn("[Auth] signup email not accepted", { reason: sent.reason });
+  } catch (error) { logAuthError("signup email delivery", error); }
   return { message: signupPendingMessage, verificationPending: true, retryAfterSeconds: 60 };
 }
 
@@ -89,13 +94,13 @@ const checkAuthRateLimit = async ({
 }) => {
   const requestHeaders = await nextHeaders();
   const requestIdentifier = getRequestIdentifier(requestHeaders);
-  const byIp = consumeRateLimit({
+  const byIp = await consumePersistentRateLimit({
     namespace: `${namespace}-ip`,
     identifier: requestIdentifier,
     limit: ipLimit,
     windowMs,
   });
-  const byEmail = consumeRateLimit({
+  const byEmail = await consumePersistentRateLimit({
     namespace: `${namespace}-email`,
     identifier: email,
     limit: emailLimit,
@@ -233,14 +238,14 @@ export async function signupAction(
     if (error || !data.user) {
       if (needsVerification && isDuplicateAccount(error)) {
         const existing = await findAccountByEmail(parsed.data.email);
-        if (existing && !existing.email_confirmed_at && existing.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return await sendSignupConfirmation(existing.email, formData);
+        if (existing && !existing.email_confirmed_at && existing.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return await sendSignupConfirmation(existing.email, formData, existing.id);
         return { message: signupPendingMessage, verificationPending: true, retryAfterSeconds: 60 };
       }
       logAuthError("signup", error);
       return { error: mapAuthError(error, "signup") };
     }
 
-    if (needsVerification) return await sendSignupConfirmation(parsed.data.email, formData);
+    if (needsVerification) return await sendSignupConfirmation(parsed.data.email, formData, data.user.id);
 
     const emailResult = await sendWelcomeEmail({
       email: parsed.data.email,
@@ -271,7 +276,7 @@ export async function resendSignupAction(_prevState: ActionState, formData: Form
     // Only accounts created with an unknowable temporary password may enter
     // this flow. Confirming legacy pending credentials before replacing them
     // could activate a password chosen by someone who did not own the inbox.
-    if (account && !account.email_confirmed_at && account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return await sendSignupConfirmation(account.email, formData);
+    if (account && !account.email_confirmed_at && account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return await sendSignupConfirmation(account.email, formData, account.id);
     return { message: signupPendingMessage, verificationPending: true, retryAfterSeconds: 60 };
   } catch (error) {
     logAuthError("resend signup", error);
@@ -288,7 +293,7 @@ export async function confirmSignupAction(_prevState: ActionState, formData: For
   const password = passwordUpdateSchema.safeParse({ newPassword: formData.get("newPassword"), confirmPassword: formData.get("confirmPassword") });
   if (!password.success) return { fieldErrors: toFieldErrors(password.error.flatten().fieldErrors) };
   const requestHeaders = await nextHeaders();
-  const limit = consumeRateLimit({ namespace: "signup-verify-ip", identifier: getRequestIdentifier(requestHeaders), limit: 15, windowMs: 15 * 60 * 1000 });
+  const limit = await consumePersistentRateLimit({ namespace: "signup-verify-ip", identifier: getRequestIdentifier(requestHeaders), limit: 15, windowMs: 15 * 60 * 1000 });
   if (!limit.allowed) return { error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", retryAfterSeconds: limit.retryAfterSeconds };
   try {
     if (!verifySignupToken(token, signature)) return { error: "유효한 가입 인증 링크가 아닙니다. 인증 메일을 다시 요청해주세요." };
@@ -310,6 +315,14 @@ export async function confirmSignupAction(_prevState: ActionState, formData: For
     if (updateError || signOutError) {
       logAuthError("finish signup", updateError ?? signOutError);
       return { error: "이메일은 확인했지만 비밀번호 설정을 완료하지 못했습니다. 비밀번호 찾기로 새 비밀번호를 설정해주세요." };
+    }
+    // OTP consumption makes this completion one-use. Delivery failure must not
+    // undo a completed account; the shared outbox owns safe delivery retries.
+    if (data.user?.id && data.user.email) {
+      try {
+        const welcome = await sendWelcomeEmail({ email: data.user.email, idempotencyKey: `welcome:${data.user.id}` });
+        if (!welcome.ok) console.warn("[Auth] welcome email not accepted", { reason: welcome.reason });
+      } catch (error) { logAuthError("welcome delivery", error); }
     }
     return { message: "이메일 확인과 비밀번호 설정이 완료되었습니다. 새 비밀번호로 로그인해주세요." };
   } catch (error) {
@@ -388,6 +401,19 @@ export async function resetPasswordAction(
         console.error("[Email] password reset sender unavailable", { diagnostic: delivery.diagnostic });
         return { error: "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요." };
     }
+      const account = await findAccountByEmail(parsed.data);
+      const response = { message: resetSuccessMessage, retryAfterSeconds: 60 };
+      if (!account) return response;
+      if (!account.email_confirmed_at) {
+        // Recovery verification confirms an unconfirmed GoTrue account before
+        // changing its password. Only our unknowable-password signup flow is
+        // safe for pending accounts; legacy pending credentials stay inactive.
+        if (account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) {
+          const result = await sendSignupConfirmation(account.email, formData, account.id);
+          if (result.error) console.warn("[Auth] pending recovery email not accepted");
+        }
+        return response;
+      }
       const admin = createAdminClient();
       const { data, error } = await admin.auth.admin.generateLink({
         type: "recovery",
@@ -396,39 +422,67 @@ export async function resetPasswordAction(
       });
       if (error) {
         logAuthError("generate recovery link", error);
-        if (error.code === "user_not_found") {
-          return { message: resetSuccessMessage, retryAfterSeconds: 60 };
-        }
-        return { error: mapAuthError(error, "reset") };
+        return response;
       }
       const tokenHash = data?.properties?.hashed_token;
-      if (!tokenHash) {
+      if (!tokenHash || data.properties?.verification_type !== "recovery" ||
+          data.user?.id !== account.id || !data.user.email_confirmed_at ||
+          data.user.email?.trim().toLowerCase() !== account.email.trim().toLowerCase()) {
         logAuthError("generate recovery link", { code: "missing_recovery_token" });
-        return { error: "비밀번호 재설정 링크를 준비하지 못했습니다. 잠시 후 다시 시도해주세요." };
+        return response;
       }
-      // Verify on our recovery screen so a simple link-prefetch request does
-      // not consume the one-time token at the mail provider's redirect URL.
+      // Sign only confirmed-account tokens. The page collects a new password
+      // before any OTP verification; even JavaScript link scanners cannot
+      // consume credentials. Fragment tokens stay out of request/referrer logs.
       const recoveryUrl = new URL(redirectTo);
-      recoveryUrl.searchParams.set("token_hash", tokenHash);
-      recoveryUrl.searchParams.set("type", "recovery");
+      recoveryUrl.hash = new URLSearchParams({ token_hash: tokenHash, type: "recovery", signature: signRecoveryToken(tokenHash) }).toString();
       const emailResult = await sendPasswordResetEmail({
         email: parsed.data,
         link: recoveryUrl.toString(),
+        idempotencyKey: `recovery:${createHash("sha256").update(tokenHash).digest("hex")}`,
+        expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
       });
-      if (emailResult.ok) {
-        return { message: resetSuccessMessage, retryAfterSeconds: 60 };
-      }
-      return {
-        error: emailResult.reason === "configuration"
-          ? "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요."
-          : emailResult.reason === "rate_limit"
-            ? "메일 발송 서비스가 잠시 혼잡합니다. 잠시 후 다시 시도해주세요."
-            : "재설정 메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요. 문제가 계속되면 고객센터에 문의해주세요.",
-        retryAfterSeconds: emailResult.retryAfterSeconds,
-      };
+      if (!emailResult.ok) console.warn("[Auth] recovery email not accepted", { reason: emailResult.reason });
+      return response;
   } catch (error) {
     logAuthError("password reset", error);
-    return { error: mapAuthError(error, "reset") };
+    return { message: resetSuccessMessage, retryAfterSeconds: 60 };
+  }
+}
+
+export async function completePasswordRecoveryAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const token = String(formData.get("token_hash") ?? "").trim();
+  const signature = String(formData.get("signature") ?? "");
+  const invalidLink = "유효하지 않거나 만료된 재설정 링크입니다. 비밀번호 찾기에서 새 메일을 요청해주세요.";
+  if (formData.get("type") !== "recovery" || !/^[a-zA-Z0-9_-]{16,512}$/.test(token) || !/^[a-f0-9]{64}$/.test(signature)) return { error: invalidLink };
+  const password = passwordUpdateSchema.safeParse({ newPassword: formData.get("newPassword"), confirmPassword: formData.get("confirmPassword") });
+  if (!password.success) return { fieldErrors: toFieldErrors(password.error.flatten().fieldErrors) };
+  const requestHeaders = await nextHeaders();
+  const limit = await consumePersistentRateLimit({ namespace: "recovery-verify-ip", identifier: getRequestIdentifier(requestHeaders), limit: 15, windowMs: 15 * 60 * 1000 });
+  if (!limit.allowed) return { error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", retryAfterSeconds: limit.retryAfterSeconds };
+  try {
+    if (!verifyRecoveryToken(token, signature)) return { error: invalidLink };
+    const client = createAdminClient();
+    const { data, error } = await client.auth.verifyOtp({ type: "recovery", token_hash: token });
+    if (error || !data.session) {
+      logAuthError("verify recovery", error);
+      return { error: invalidLink };
+    }
+    let updateError;
+    let signOutError;
+    try {
+      ({ error: updateError } = await client.auth.updateUser({ password: password.data.newPassword }));
+    } finally {
+      ({ error: signOutError } = await createAdminClient().auth.admin.signOut(data.session.access_token, "global"));
+    }
+    if (updateError || signOutError) {
+      logAuthError("finish recovery", updateError ?? signOutError);
+      return { error: "비밀번호 변경을 완료하지 못했습니다. 새 재설정 메일을 요청해주세요." };
+    }
+    return { message: "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요." };
+  } catch (error) {
+    logAuthError("complete recovery", error);
+    return { error: "비밀번호 변경을 완료하지 못했습니다. 새 재설정 메일을 요청해주세요." };
   }
 }
 

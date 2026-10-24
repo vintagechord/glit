@@ -160,14 +160,20 @@ test recipient, then run:
 npm run email:smoke -- --to you@example.com
 ```
 
-`/api/health` checks provider configuration; it does not verify email delivery.
+`/api/health` checks provider configuration, durable queue availability, worker
+heartbeat and delivery exceptions; it does not verify inbox delivery.
 Resend remains an optional provider and requires an owned, verified sender
 domain. Daum SMTP credentials stay in Supabase function secrets; Render uses
 the HTTPS relay URL and its separate server secret.
 
 Signup verification, account lookup, password recovery, guest code recovery
 and review updates use the selected app email provider. Failed sends do not
-retry through Supabase's default sender. Keep Supabase Auth's redirect allowlist
+retry through Supabase's default sender. Safe failures retry from a server-only
+database outbox; uncertain SMTP acceptance requires an explicit operator decision
+at `/admin/emails`. See [deployment order and scheduler setup](docs/auth-email-configuration.md).
+Password recovery uses a signed fragment and consumes its token only on password
+submission. Links issued before this hardening deployment must be requested again.
+Keep Supabase Auth's redirect allowlist
 configured for the actual site's `/reset-password` and `/en/reset-password` URLs.
 
 To check login and password recovery without sending email, run the following
@@ -175,7 +181,7 @@ against an explicitly selected app. It uses the local Supabase configuration,
 creates one temporary account, tests both passwords, then deletes the account:
 
 ```bash
-AUTH_QA_BASE_URL=http://127.0.0.1:3000 AUTH_QA_LINK_MODE=token_hash npx tsx scripts/auth-live-smoke.ts
+AUTH_QA_BASE_URL=http://127.0.0.1:3000 npx tsx scripts/auth-live-smoke.ts
 ```
 
 ## Notes

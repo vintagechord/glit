@@ -5,6 +5,7 @@ import { sendKakaoOfficialNotification } from "../src/lib/kakao";
 import { runRuntimeConfigChecks, summarizeRuntimeHealth } from "../src/lib/runtime-health";
 import { getEmailDeliveryConfiguration } from "../src/lib/email-config";
 import { sendSubmissionUpdateEmail } from "../src/lib/email";
+import { setEmailOutboxTestDispatcher } from "../src/lib/email-transport";
 
 test("Kakao sender and readiness share alternate webhook configuration", async () => {
   const originalEnv = { ...process.env };
@@ -45,6 +46,8 @@ test("required email configuration cannot pass readiness as an optional warning"
 test("notification transports preserve idempotency and only return safe provider IDs", async () => {
   const env = { ...process.env }, fetchBefore = globalThis.fetch;
   try {
+    Object.assign(process.env, { NODE_ENV: "test" });
+    setEmailOutboxTestDispatcher(async (_message, deliver) => deliver());
     process.env.RESEND_API_KEY = "fixture-key";
     process.env.RESEND_FROM = "notify@example.invalid";
     process.env.KAKAO_ALIMTALK_WEBHOOK_URL = "https://notify.fixture.invalid/hook";
@@ -57,8 +60,9 @@ test("notification transports preserve idempotency and only return safe provider
     assert.deepEqual(await sendSubmissionUpdateEmail(payload), { ok: true, messageId: "fixture-message-id" });
     assert.deepEqual(await sendKakaoOfficialNotification({ phone: "01000000000", title: "fixture", message: "fixture", idempotencyKey: "supplement-fixture-state" }), { ok: true, messageId: "fixture-message-id" });
     providerId = "private@example.invalid/token";
-    assert.deepEqual(await sendSubmissionUpdateEmail(payload), { ok: true });
+    assert.equal((await sendSubmissionUpdateEmail(payload)).ok, false);
   } finally {
+    setEmailOutboxTestDispatcher(undefined);
     globalThis.fetch = fetchBefore;
     for (const key of Object.keys(process.env)) if (!(key in env)) delete process.env[key];
     Object.assign(process.env, env);

@@ -7,14 +7,14 @@ let documentHtml = "";
 // auth provider, account creation, or session exchange is reachable here.
 test.beforeAll(async () => {
   const bundle = await build({
-    stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {ConfirmEmailForm} from './src/features/auth/confirm-email-form';import {AccountEmailForm} from './src/features/auth/account-email-form';const nextPath=new URLSearchParams(location.search).get('next');createRoot(document.getElementById('root')).render(location.pathname.endsWith('/find-id')?<AccountEmailForm purpose="account" nextPath={nextPath}/>:<ConfirmEmailForm nextPath={nextPath}/>);`, resolveDir: process.cwd(), loader: "tsx" },
+    stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {ConfirmEmailForm} from './src/features/auth/confirm-email-form';import {AccountEmailForm} from './src/features/auth/account-email-form';import {PasswordRecoveryForm} from './src/features/auth/password-recovery-form';const nextPath=new URLSearchParams(location.search).get('next');createRoot(document.getElementById('root')).render(location.pathname.endsWith('/find-id')?<AccountEmailForm purpose="account" nextPath={nextPath}/>:location.pathname.endsWith('/reset-password')?<PasswordRecoveryForm nextPath={nextPath}/>:<ConfirmEmailForm nextPath={nextPath}/>);`, resolveDir: process.cwd(), loader: "tsx" },
     bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' },
     plugins: [{ name: "confirmation-fixture", setup(plugin) {
       plugin.onResolve({ filter: /^(next\/(?:navigation|link)|\.\/actions)$/ }, args => ({ path: args.path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ loader: "jsx", resolveDir: process.cwd(), contents: {
         "next/navigation": "export const usePathname=()=>location.pathname;",
         "next/link": "import React from 'react';export default function Link({children,...props}){return <a {...props}>{children}</a>}",
-        "./actions": "const call=(kind,form)=>{window.__fixture.calls.push({kind,form:Object.fromEntries(form)});return new Promise(resolve=>window.__fixture.resolve=resolve);};export const confirmSignupAction=(_,form)=>call('confirm',form);export const resendSignupAction=(_,form)=>call('resend',form);export const findAccountIdAction=(_,form)=>call('account',form);",
+        "./actions": "const call=(kind,form)=>{window.__fixture.calls.push({kind,form:Object.fromEntries(form)});return new Promise(resolve=>window.__fixture.resolve=resolve);};export const completePasswordRecoveryAction=(_,form)=>call('recovery',form);export const confirmSignupAction=(_,form)=>call('confirm',form);export const resendSignupAction=(_,form)=>call('resend',form);export const findAccountIdAction=(_,form)=>call('account',form);",
       }[path] }));
     } }],
   });
@@ -66,4 +66,46 @@ test("failed confirmation stays recoverable and email account lookup shows the g
   await expect(page.getByRole("status")).toHaveText("가입된 이메일이라면 아이디 안내를 보내드립니다.");
   await expect(page.getByRole("button", { name: /초 후 다시 보내기/ })).toBeDisabled();
   await expect(page.getByRole("link", { name: "로그인", exact: true })).toHaveAttribute("href", "/login");
+});
+
+for (const english of [false, true]) {
+  test(`${english ? "English" : "Korean"} recovery never consumes tokens on load and clears signed credentials only after explicit completion`, async ({ page }) => {
+    const prefix = english ? "/en" : "";
+    await page.goto(`http://email-ui.test${prefix}/reset-password?next=%2Fdashboard%2Fnew%3Fdraft%3Dfixture#token_hash=fixture-recovery-token-123456&type=recovery&signature=${"b".repeat(64)}`);
+    await expect(page.locator("#reset-new-password")).toBeVisible();
+    expect(await page.evaluate(() => (window as unknown as { __fixture: { calls: unknown[] } }).__fixture.calls.length)).toBe(0);
+    await page.locator("#reset-new-password").fill("Fixture-password-123");
+    await page.locator("#reset-confirm-password").fill("Fixture-password-123");
+    await page.getByRole("button", { name: english ? "Change password" : "비밀번호 변경", exact: true }).click();
+    await expect(page.getByRole("button", { name: english ? "Changing password..." : "변경 중...", exact: true })).toBeDisabled();
+    const calls = await page.evaluate(() => (window as unknown as { __fixture: { calls: Array<{kind:string;form:Record<string,string>}> } }).__fixture.calls);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].kind).toBe("recovery");
+    expect(calls[0].form.type).toBe("recovery");
+    expect(calls[0].form.signature).toBe("b".repeat(64));
+    await page.evaluate(() => (window as unknown as { __fixture: { resolve: (value: object) => void } }).__fixture.resolve({ message: "비밀번호가 변경되었습니다." }));
+    await expect(page.getByRole("status")).toBeVisible();
+    await expect(page.getByRole("link", { name: english ? "Log in" : "로그인", exact: true })).toHaveAttribute("href", `${prefix}/login?next=${encodeURIComponent(`${prefix}/dashboard/new?draft=fixture`)}`);
+    expect(new URL(page.url()).hash).toBe("");
+  });
+}
+
+test("old or unsigned recovery URLs cannot use a browser session or trigger password mutation", async ({ page }) => {
+  for (const suffix of ["", "?code=old-pkce", "?token_hash=old-token&type=recovery", "#access_token=old&refresh_token=old", "#token_hash=fixture-recovery-token-123456&type=recovery"]) {
+    await page.goto(`http://email-ui.test/reset-password${suffix}`);
+    await expect(page.getByRole("alert")).toContainText("새 메일");
+    await expect(page.locator("#reset-new-password")).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __fixture: { calls: unknown[] } }).__fixture.calls.length)).toBe(0);
+  }
+});
+
+test("expired signed recovery stays recoverable without claiming a password change", async ({ page }) => {
+  await page.goto(`http://email-ui.test/reset-password#token_hash=fixture-recovery-token-123456&type=recovery&signature=${"b".repeat(64)}`);
+  await page.locator("#reset-new-password").fill("Fixture-password-123");
+  await page.locator("#reset-confirm-password").fill("Fixture-password-123");
+  await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+  await page.evaluate(() => (window as unknown as { __fixture: { resolve: (value: object) => void } }).__fixture.resolve({ error: "유효하지 않거나 만료된 재설정 링크입니다." }));
+  await expect(page.getByRole("alert")).toContainText("만료");
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "재설정 메일 다시 받기", exact: true })).toHaveAttribute("href", "/forgot-password");
 });

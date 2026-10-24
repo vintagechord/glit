@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const fixtureEmail = "auth-ui@example.invalid";
 const fixturePassword = "Fixture-pass-123!";
 const connectionError = "인증 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요. 문제가 계속되면 고객센터에 문의해주세요.";
-type ActionResult = { error?: string; message?: string; retryAfterSeconds?: number; verificationPending?: boolean };
+type ActionResult = { error?: string; message?: string; retryAfterSeconds?: number; verificationPending?: boolean; fieldErrors?: Record<string,string> };
 
 /** UI coverage only: no real login, reset emails, or account changes. */
 async function mockAuth(page: Page, options: {
@@ -123,9 +123,9 @@ test("reset request displays a generic success without sending email", async ({ 
   expect(calls.actions).toBe(1);
 });
 
-test("reset sender failure is shown without success and limits repeated requests", async ({ page }) => {
+test("global reset throttling is shown without success and limits repeated requests", async ({ page }) => {
   await page.clock.install();
-  const error = "재설정 메일을 발송하지 못했습니다. 잠시 후 다시 시도해주세요.";
+  const error = "재설정 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
   const calls = await mockAuth(page, { actionResult: { error, retryAfterSeconds: 60 } });
   await page.goto("/forgot-password");
   await page.getByLabel("이메일", { exact: true }).fill(fixtureEmail);
@@ -138,67 +138,52 @@ test("reset sender failure is shown without success and limits repeated requests
   expect(calls.actions).toBe(1);
 });
 
-for (const suffix of ["", "?code=", "?token_hash=", "#error=access_denied&error_description=expired"]) {
-  test(`missing or invalid recovery credential keeps password changes disabled (${suffix || "missing"})`, async ({ page }) => {
+const signedRecovery = `#token_hash=fixture-recovery-token-123456&type=recovery&signature=${"b".repeat(64)}`;
+
+for (const suffix of ["", "?code=", "?token_hash=old-token&type=recovery", "#access_token=old&refresh_token=old"]) {
+  test(`unsigned recovery credential cannot trigger a session or password mutation (${suffix || "missing"})`, async ({ page }) => {
     const calls = await mockAuth(page);
     await page.goto(`/reset-password${suffix}`);
-    await expect(page.getByRole("heading", { name: "링크 확인", exact: true })).toBeVisible();
-    await expect(page.getByLabel("새 비밀번호", { exact: true })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "변경하기", exact: true })).toBeDisabled();
-    await expect(page.getByRole("link", { name: "새 재설정 링크 요청하기", exact: true })).toHaveAttribute("href", "/forgot-password");
+    await expect(page.getByRole("main").getByRole("alert")).toContainText("새 메일");
+    await expect(page.locator("#reset-new-password")).toHaveCount(0);
+    expect(calls.actions).toBe(0);
     expect(calls.verifications).toBe(0);
     expect(calls.passwordUpdates).toBe(0);
   });
 }
 
-test("expired recovery token is exchanged once and offers a new link", async ({ page }) => {
-  const calls = await mockAuth(page, { expiredRecovery: true });
-  await page.goto("/reset-password?token_hash=expired-fixture&type=recovery");
-  await expect(page.getByRole("main").getByRole("alert")).toContainText("링크가 만료되었거나 이미 사용되었습니다.");
-  await expect(page.getByLabel("새 비밀번호", { exact: true })).toBeDisabled();
-  expect(calls.verifications).toBe(1);
-  expect(calls.passwordUpdates).toBe(0);
-});
-
-test("an explicit invalid link cannot reuse an already signed-in session", async ({ page }) => {
-  const calls = await mockAuth(page);
-  await page.goto("/reset-password?token_hash=valid-fixture&type=recovery");
-  await expect(page.getByLabel("새 비밀번호", { exact: true })).toBeEnabled();
-  expect(calls.verifications).toBe(1);
-  await page.goto("/reset-password?code=");
-  await expect(page.getByRole("heading", { name: "링크 확인", exact: true })).toBeVisible();
-  await expect(page.getByLabel("새 비밀번호", { exact: true })).toBeDisabled();
-  expect(calls.verifications).toBe(1);
-  expect(calls.passwordUpdates).toBe(0);
-});
-
-test("valid recovery exchanges once, validates confirmation, and saves the new password", async ({ page }) => {
-  const calls = await mockAuth(page);
-  await page.goto("/reset-password?token_hash=valid-fixture&type=recovery");
-  await expect(page.getByLabel("새 비밀번호", { exact: true })).toBeEnabled();
-  await expect(page).toHaveURL(/\/reset-password$/);
-  expect(calls.verifications).toBe(1);
-  await page.getByLabel("새 비밀번호", { exact: true }).fill(fixturePassword);
-  await page.getByLabel("새 비밀번호 확인", { exact: true }).fill("Different-password-123!");
-  await page.getByRole("button", { name: "변경하기", exact: true }).click();
-  await expect(page.getByText("비밀번호가 일치하지 않습니다.", { exact: true })).toBeVisible();
-  expect(calls.passwordUpdates).toBe(0);
-  await page.getByLabel("새 비밀번호 확인", { exact: true }).fill(fixturePassword);
-  await page.getByRole("button", { name: "변경하기", exact: true }).click();
+test("signed recovery waits for explicit submit, reports validation and completion through server action", async ({ page }) => {
+  const actionResult: ActionResult = { fieldErrors: { confirmPassword: "비밀번호가 일치하지 않습니다." } };
+  const calls = await mockAuth(page, { actionResult });
+  await page.goto(`/reset-password${signedRecovery}`);
+  await expect(page.locator("#reset-new-password")).toBeVisible();
+  expect(calls.actions).toBe(0);
+  expect(calls.verifications).toBe(0);
+  await page.locator("#reset-new-password").fill(fixturePassword);
+  await page.locator("#reset-confirm-password").fill("Different-password-123!");
+  await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("비밀번호가 일치하지 않습니다.");
+  delete actionResult.fieldErrors;
+  actionResult.message = "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.";
+  await page.locator("#reset-confirm-password").fill(fixturePassword);
+  await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("비밀번호가 변경되었습니다.");
-  expect(calls.passwordUpdates).toBe(1);
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("main").getByRole("link", { name: "로그인", exact: true })).toHaveAttribute("href", "/login");
+  expect(calls.actions).toBe(2);
+  expect(calls.verifications).toBe(0);
+  expect(calls.passwordUpdates).toBe(0);
+  expect(new URL(page.url()).hash).toBe("");
 });
 
-test("a rejected password update keeps the verified form available for retry", async ({ page }) => {
-  const calls = await mockAuth(page, { failedPasswordUpdate: true });
-  await page.goto("/reset-password?token_hash=valid-fixture&type=recovery");
-  await expect(page.getByLabel("새 비밀번호", { exact: true })).toBeEnabled();
-  await page.getByLabel("새 비밀번호", { exact: true }).fill(fixturePassword);
-  await page.getByLabel("새 비밀번호 확인", { exact: true }).fill(fixturePassword);
-  await page.getByRole("button", { name: "변경하기", exact: true }).click();
-  await expect(page.getByText("현재 비밀번호와 다른 새 비밀번호를 입력해주세요.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "변경하기", exact: true })).toBeEnabled();
-  expect(calls.passwordUpdates).toBe(1);
-  expect(calls.verifications).toBe(1);
+test("expired signed recovery offers another email without claiming success", async ({ page }) => {
+  const calls = await mockAuth(page, { actionResult: { error: "유효하지 않거나 만료된 재설정 링크입니다. 비밀번호 찾기에서 새 메일을 요청해주세요." } });
+  await page.goto(`/reset-password${signedRecovery}`);
+  await page.locator("#reset-new-password").fill(fixturePassword);
+  await page.locator("#reset-confirm-password").fill(fixturePassword);
+  await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("만료");
+  await expect(page.getByRole("main").getByRole("status")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "재설정 메일 다시 받기", exact: true })).toHaveAttribute("href", "/forgot-password");
+  expect(calls.actions).toBe(1);
+  expect(calls.verifications).toBe(0);
 });

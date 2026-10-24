@@ -7,7 +7,7 @@ type Fixture = {
   submission: Record<string, unknown> | null;
   memberEmail: string | null;
   memberError: boolean;
-  emailResult: { ok: boolean; skipped?: boolean };
+  emailResult: { ok: boolean; skipped?: boolean; queued?: boolean; status?: string };
   mode: string;
   isAdmin: boolean;
   completionError: string | null;
@@ -32,7 +32,7 @@ async function fixture() {
           "@/lib/email": `${shared} export const sendSubmissionUpdateEmail=async input=>{calls.push({name:'email',input});if(state.throwEmail)throw Error('transport failure');return state.emailResult}; export const sendResultEmail=async input=>{calls.push({name:'result',input});return state.emailResult};`,
           "@/lib/email-delivery-mode": `${shared} export const getEmailDeliveryMode=()=>state.mode;`,
           "@/lib/kakao": `${shared} export const sendKakaoOfficialNotification=async input=>{calls.push({name:'kakao',input});return {ok:false,skipped:true}};`,
-          "@/lib/admin/mv-review-flow": `${shared} export const completeMvReviewFlow=async(_db,id,input)=>{calls.push({name:'commit',input});if(state.completionError)return {completed:false,error:state.completionError};Object.assign(state.submission,{mv_desired_rating:input.rating,result_status:input.resultStatus,status:'RESULT_READY'});return {completed:true,resultStatus:input.resultStatus,stationCount:1}};`,
+          "@/lib/admin/mv-review-flow": `${shared} export const completeMvReviewFlow=async(_db,id,input)=>{calls.push({name:'commit',input});if(state.completionError)return {completed:false,error:state.completionError};const changed=state.submission.mv_desired_rating!==input.rating||state.submission.result_status!==input.resultStatus||state.submission.status!=='RESULT_READY';Object.assign(state.submission,{mv_desired_rating:input.rating,result_status:input.resultStatus,status:'RESULT_READY'});return {completed:true,changed,resultStatus:input.resultStatus,stationCount:1}};`,
           "next/server": "export const NextResponse={json:(body,init)=>Response.json(body,init)};",
           "next/cache": "export const revalidatePath=()=>{};",
         };
@@ -98,7 +98,7 @@ test("manual mode, provider skips, rejection and thrown transport errors return 
   assert.match(outcome.warning ?? "", /발송에 실패/);
 });
 
-test("result emails omit notes and only record provider acceptance after successful delivery", async () => {
+test("result emails omit notes and delegate acceptance audit metadata to the durable outbox", async () => {
   const api = await fixture();
   api.state.emailResult = { ok: false };
   await api.sendSubmissionResultNotificationById({ ...update, resultStatus: "APPROVED", resultMemo: "private internal note" });
@@ -106,7 +106,9 @@ test("result emails omit notes and only record provider acceptance after success
   assert.doesNotMatch(JSON.stringify(api.calls), /private internal note/);
   api.state.emailResult = { ok: true }; api.calls.length = 0;
   assert.equal((await api.sendSubmissionResultNotificationById({ ...update, resultStatus: "APPROVED" })).deliveredCount, 1);
-  assert.equal(api.calls.filter((call) => call.name === "record").length, 1);
+  assert.equal(api.calls.filter((call) => call.name === "record").length, 0);
+  assert.equal(api.calls.find(call => call.name === "result")?.input?.markResultNotified, true);
+  assert.equal(api.calls.find(call => call.name === "result")?.input?.submissionId, update.submissionId);
 });
 
 test("active MV rating API authorizes, notifies only a committed change once, and reports delivery warnings", async () => {
@@ -125,8 +127,25 @@ test("active MV rating API authorizes, notifies only a committed change once, an
   assert.match((await response.json()).warning, /발송에 실패/);
   assert.equal(api.calls.filter((call) => call.name === "email").length, 1);
   assert.equal(api.calls.find((call) => call.name === "commit")?.input?.resultStatus, "REJECTED");
+  assert.equal(api.calls.find(call => call.name === "email")?.input?.markResultNotified, true);
+  assert.equal(api.calls.find(call => call.name === "email")?.input?.submissionId, update.submissionId);
   assert.ok(api.calls.findIndex((call) => call.name === "commit") < api.calls.findIndex((call) => call.name === "email"));
   api.calls.length = 0;
   assert.equal((await (await invoke()).json()).unchanged, true);
-  assert.equal(api.calls.length, 0, "saving an unchanged rating cannot resend a notice");
+  assert.equal(api.calls.filter((call) => call.name === "email").length, 0, "saving an unchanged rating cannot resend a notice");
+  assert.equal(api.calls.filter((call) => call.name === "commit").length, 1, "atomic RPC verifies station state before declaring a no-op");
+});
+
+
+test("queued and uncertain administrator notices remain distinguishable from provider acceptance", async () => {
+  const api = await fixture();
+  api.state.emailResult = { ok: false, queued: true, status: "retry" };
+  const queued = await api.sendSubmissionUpdateNotificationById(update);
+  assert.equal(queued.deliveredCount, 0);
+  assert.equal(queued.queuedCount, 1);
+  assert.match(queued.warning ?? "", /자동 재시도 예정/);
+  api.state.emailResult = { ok: false, status: "uncertain" };
+  const uncertain = await api.sendSubmissionUpdateNotificationById(update);
+  assert.match(uncertain.warning ?? "", /접수 여부/);
+  assert.equal(uncertain.deliveredCount, 0);
 });

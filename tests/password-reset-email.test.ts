@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { APP_CONFIG } from "../src/lib/config";
 import { sendPasswordResetEmail } from "../src/lib/email";
+import { setEmailOutboxTestDispatcher } from "../src/lib/email-transport";
 
 const recipient = "private-recipient@example.invalid";
 const recoveryLink = "https://onside.example/reset-password?token_hash=private-recovery-token&type=recovery";
@@ -15,10 +16,13 @@ async function withMailFixture(run: (logs: unknown[][]) => Promise<void>) {
   const originalKey = process.env.RESEND_API_KEY;
   const originalFrom = process.env.RESEND_FROM;
   const originalSupport = APP_CONFIG.supportEmail;
+  const originalNodeEnv = process.env.NODE_ENV;
   const logs: unknown[][] = [];
   process.env.RESEND_API_KEY = "fixture-api-key";
   process.env.RESEND_FROM = sender;
   APP_CONFIG.supportEmail = "support-fixture@daum.net";
+  Object.assign(process.env, { NODE_ENV: "test" });
+  setEmailOutboxTestDispatcher((_message, deliver) => deliver());
   console.error = (...args: unknown[]) => { logs.push(args); };
   globalThis.fetch = async () => { throw new Error("Unexpected network request in email fixture"); };
   try {
@@ -27,6 +31,9 @@ async function withMailFixture(run: (logs: unknown[][]) => Promise<void>) {
     globalThis.fetch = originalFetch;
     console.error = originalError;
     APP_CONFIG.supportEmail = originalSupport;
+    setEmailOutboxTestDispatcher(undefined);
+    if (originalNodeEnv === undefined) delete (process.env as Record<string, string | undefined>).NODE_ENV;
+    else Object.assign(process.env, { NODE_ENV: originalNodeEnv });
     if (originalKey === undefined) delete process.env.RESEND_API_KEY;
     else process.env.RESEND_API_KEY = originalKey;
     if (originalFrom === undefined) delete process.env.RESEND_FROM;

@@ -4,42 +4,6 @@ import { createRequire } from "node:module";
 import { build } from "esbuild";
 import type { NextRequest, NextResponse } from "next/server";
 
-import { verifyRecoverySession } from "../src/features/auth/recovery";
-
-test("empty recovery credentials never unlock the form using an unrelated existing session", async () => {
-  const calls: string[] = [];
-  const auth = {
-    getSession: async () => {
-      calls.push("getSession");
-      return { data: { session: { user: { id: "unrelated-session" } } }, error: null };
-    },
-  } as unknown as Parameters<typeof verifyRecoverySession>[0];
-
-  for (const suffix of [
-    "?code=", "?code=%20", "?token_hash=", "?token=", "?token_hash=&token=another",
-    "#access_token=&refresh_token=", "#access_token=access&refresh_token=",
-  ]) {
-    const result = await verifyRecoverySession(auth, new URL(`https://onside.test/reset-password${suffix}`));
-    assert.equal(result.ok, false, suffix);
-  }
-  assert.deepEqual(calls, []);
-});
-
-test("recovery passes the captured PKCE flow ID to the SDK exchange", async () => {
-  const calls: unknown[] = [];
-  const auth = {
-    exchangeCodeForSession: async (code: string, options: unknown) => {
-      calls.push({ code, options });
-      return { data: { session: { user: { id: "recovery-session" } } }, error: null };
-    },
-  } as unknown as Parameters<typeof verifyRecoverySession>[0];
-  assert.deepEqual(
-    await verifyRecoverySession(auth, new URL("https://onside.test/reset-password?code=fixture-code&sb_flow_id=fixture-flow")),
-    { ok: true },
-  );
-  assert.deepEqual(calls, [{ code: "fixture-code", options: { flowId: "fixture-flow" } }]);
-});
-
 test("session refresh reaches downstream request cookies, browser cookies and no-cache headers", async () => {
   const result = await build({
     stdin: {

@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 
 type SupplementFile = { id: string; original_name: string; size_bytes: number; status: string };
-type Notice = { id: string; state_key: string; attempts: number; last_attempt_at?: string | null; outcome: { email?: string; kakao?: string; emailMessageId?: string; kakaoMessageId?: string } };
+type Notice = { id: string; state_key: string; attempts: number; last_attempt_at?: string | null; outcome: { email?: string; kakao?: string; emailMessageId?: string; kakaoMessageId?: string; emailQueued?: boolean; emailStatus?: string } };
 type Revision = { id: string; revision_no: number; status: string; note?: string | null; review_note?: string | null; files: SupplementFile[]; notifications?: Notice[] };
 type Request = { id: string; note: string; status: string; created_at: string; revisions: Revision[] };
 
@@ -140,7 +141,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
     UPLOADING: t("전송 중", "Uploading"), VERIFIED: t("파일 전송 완료", "File Uploaded"),
     UPLOADED: t("파일 전송 완료", "File Uploaded"), ABORTED: t("전송 취소", "Cancelled"),
   }[status] ?? t("상태 확인 중", "Checking Status"));
-  const delivery = (status?: string, email = false) => status === "API_ACCEPTED" ? t("발송 업체 접수", "Accepted by Provider") : status === "SKIPPED" ? email && getEmailDeliveryMode() === "manual" ? t("자동 이메일 보류·별도 안내 필요", "Automatic Email Deferred; Notify Separately") : t("설정·수신처 확인 필요", "Configuration or Recipient Needed") : status === "FAILED" ? t("실패·재시도 필요", "Failed; Retry Needed") : t("응답 확인 필요", "Response Needs Checking");
+  const delivery = (status?: string, email = false, outcome?: Notice["outcome"]) => outcome?.emailStatus === "uncertain" ? t("업체 접수 여부 확인 필요", "Provider Acceptance Needs Review") : outcome?.emailQueued ? t("자동 재시도 예정", "Automatic Retry Scheduled") : status === "API_ACCEPTED" ? t("발송 업체 접수", "Accepted by Provider") : status === "SKIPPED" ? email && getEmailDeliveryMode() === "manual" ? t("자동 이메일 보류·별도 안내 필요", "Automatic Email Deferred; Notify Separately") : t("설정·수신처 확인 필요", "Configuration or Recipient Needed") : status === "FAILED" ? t("실패·재시도 필요", "Failed; Retry Needed") : t("응답 확인 필요", "Response Needs Checking");
 
   return <section className="my-6 rounded-xl border border-border bg-card p-4 sm:p-6" aria-labelledby={labelId}>
     <h2 id={labelId} className="text-lg font-bold">{t("보완 요청·제출 내역", "Supplement Requests and Submissions")}</h2>
@@ -155,7 +156,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
       {uploading && <button className={buttonClass} type="button" onClick={() => controller.current?.abort()}>{t("전송 취소", "Cancel Upload")}</button>}
       <button className={buttonClass} disabled={busy} type="button" onClick={() => void run(load)}>{t("새로 불러오기", "Reload")}</button>
       {loaded && !requests.length && <p className="text-sm">{t("등록된 보완 요청이 없습니다.", "There are no supplement requests.")}</p>}
-      {admin && <form className="space-y-2" onSubmit={event => { event.preventDefault(); void run(async () => { await api({ action: "request", note: requestNote }); setRequestNote(""); await load(); }); }}>
+      {admin && <form className="space-y-2" onSubmit={event => { event.preventDefault(); void run(async () => { const result = await api<{ warning?: string }>({ action: "request", note: requestNote }); setRequestNote(""); await load(); setMessage(result.warning || t("보완 요청을 저장하고 이메일 안내를 요청했습니다.", "Request saved and email notification requested.")); }); }}>
         <label className="block text-sm font-bold" htmlFor={`${regionId}-request`}>{t("요청할 방송사·트랙·파일과 보완 사유", "Broadcaster, Track, Required Files, and Reason")}</label>
         <textarea id={`${regionId}-request`} required minLength={3} maxLength={4000} value={requestNote} onChange={event => setRequestNote(event.target.value)} className="min-h-24 w-full rounded border border-border bg-background p-3 text-base" />
         <button type="submit" disabled={busy} className={buttonClass}>{t("보완 요청 등록", "Create Request")}</button>
@@ -168,8 +169,8 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
           <h3 className="font-bold">{statusLabel(request.status)}</h3>
           <p className="whitespace-pre-wrap break-words text-sm">{request.note}</p>
           {admin && <button type="button" disabled={busy} className={buttonClass} onClick={() => void run(async () => {
-            const result = await api<{ notification: { email: string; kakao: string; alreadyAccepted?: boolean } }>({ action: "notify", requestId: request.id });
-            setMessage(`${t("이메일", "Email")}: ${delivery(result.notification.email, true)} · ${t("카카오", "Kakao")}: ${delivery(result.notification.kakao)}. ${t("실제 수신 여부는 수신함에서 확인해주세요.", "Confirm delivery in the recipient’s inbox.")}`);
+            const result = await api<{ notification: Notice["outcome"] & { alreadyAccepted?: boolean }; warning?: string }>({ action: "notify", requestId: request.id });
+            setMessage(`${t("이메일", "Email")}: ${delivery(result.notification.email, true, result.notification)} · ${t("카카오", "Kakao")}: ${delivery(result.notification.kakao)}. ${t("실제 수신 여부는 수신함에서 확인해주세요.", "Confirm delivery in the recipient’s inbox.")}`);
             await load();
           })}>{t("보완 안내 보내기·실패 재시도", "Send Supplement Notice / Retry Failures")}</button>}
           {request.revisions.map(revision => <div key={revision.id} className="rounded-lg border border-border p-3 text-sm">
@@ -179,9 +180,10 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
             {admin && !!revision.notifications?.length && <details className="mt-3 rounded border border-border p-3">
               <summary className="cursor-pointer font-semibold">{t("보완 안내 발송 이력", "Supplement Notification History")}</summary>
               <p className="mt-2">{t("업체 접수와 실제 수신은 다릅니다. 응답이 불확실하거나 오래된 실패는 공급자 기록을 대조한 후 재시도해주세요.", "Provider acceptance does not confirm delivery. Reconcile uncertain responses or old failures with provider records before retrying.")}</p>
+              <p className="mt-2">{t("아래는 요청 처리 당시 기록입니다. 자동 재시도 이후의 현재 상태는 이메일 발송 내역에서 확인해주세요.", "These are records from the original request. Check Email Delivery History for the current status after automatic retries.")} <Link href="/admin/emails" className="underline">{t("이메일 발송 내역", "Email Delivery History")}</Link></p>
               <ul className="mt-2 space-y-3">{revision.notifications.map(notice => <li key={notice.id} className="break-words">
                 <p>{notice.state_key} · {notice.attempts} {t("회 시도", "attempts")} · {notice.last_attempt_at ? new Date(notice.last_attempt_at).toLocaleString(english ? "en-US" : "ko-KR") : "—"}</p>
-                <p>{t("이메일", "Email")}: {delivery(notice.outcome.email, true)} · {t("카카오", "Kakao")}: {delivery(notice.outcome.kakao)}</p>
+                <p>{t("이메일", "Email")}: {delivery(notice.outcome.email, true, notice.outcome)} · {t("카카오", "Kakao")}: {delivery(notice.outcome.kakao)}</p>
                 {notice.outcome.emailMessageId && <p className="break-all font-mono">Email ID: {notice.outcome.emailMessageId}</p>}
                 {notice.outcome.kakaoMessageId && <p className="break-all font-mono">Kakao ID: {notice.outcome.kakaoMessageId}</p>}
               </li>)}</ul>
@@ -209,7 +211,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
           {admin && request.status === "SUBMITTED" && <>
             <label className="block text-sm font-bold" htmlFor={`${regionId}-${request.id}-review`}>{t("검수 내용·재보완 사유", "Review Notes or Revision Reason")}</label>
             <textarea id={`${regionId}-${request.id}-review`} maxLength={4000} value={notes[request.id] ?? ""} onChange={event => setNotes(value => ({ ...value, [request.id]: event.target.value }))} className="min-h-24 w-full rounded border border-border bg-background p-3 text-base" />
-            <div className="flex flex-wrap gap-2">{(["ACCEPTED", "REJECTED"] as const).map(decision => <button key={decision} type="button" disabled={busy || (decision === "REJECTED" && !notes[request.id]?.trim())} className={buttonClass} onClick={() => void run(async () => { await api({ action: "review", requestId: request.id, decision, note: notes[request.id] ?? "" }); await load(); })}>{decision === "ACCEPTED" ? t("보완 자료 수락", "Accept Supplements") : t("재보완 요청", "Request Another Revision")}</button>)}</div>
+            <div className="flex flex-wrap gap-2">{(["ACCEPTED", "REJECTED"] as const).map(decision => <button key={decision} type="button" disabled={busy || (decision === "REJECTED" && !notes[request.id]?.trim())} className={buttonClass} onClick={() => void run(async () => { const result = await api<{ warning?: string }>({ action: "review", requestId: request.id, decision, note: notes[request.id] ?? "" }); await load(); setMessage(result.warning || t("보완 검수를 저장하고 이메일 안내를 요청했습니다.", "Review saved and email notification requested.")); })}>{decision === "ACCEPTED" ? t("보완 자료 수락", "Accept Supplements") : t("재보완 요청", "Request Another Revision")}</button>)}</div>
           </>}
         </article>;
       })}

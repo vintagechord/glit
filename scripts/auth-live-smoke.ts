@@ -3,8 +3,11 @@
  * Supabase project. Creates exactly one disposable account and deletes it in
  * finally. Never requests email delivery or records browser traces/screenshots.
  *
- * AUTH_QA_BASE_URL=https://... AUTH_QA_LINK_MODE=action npx tsx scripts/auth-live-smoke.ts
- * AUTH_QA_BASE_URL=http://127.0.0.1:3000 AUTH_QA_LINK_MODE=token_hash npx tsx scripts/auth-live-smoke.ts
+ * Uses the same service-role signing key as the target app. Recovery is checked
+ * with an app-signed fragment and explicit password form submission.
+ *
+ * AUTH_QA_BASE_URL=https://... npx tsx scripts/auth-live-smoke.ts
+ * AUTH_QA_BASE_URL=http://127.0.0.1:3000 npx tsx scripts/auth-live-smoke.ts
  */
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -13,6 +16,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { chromium, expect, type Browser, type BrowserContext } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
+import { signRecoveryToken } from "../src/features/auth/signup-token";
 
 async function main() {
   process.loadEnvFile(".env.local");
@@ -140,29 +144,34 @@ async function main() {
       options: { redirectTo: new URL("/reset-password", target).href },
     });
     assert.equal(generated.error, null, "Recovery link generation failed.");
-    assert.ok(generated.data.properties?.hashed_token && generated.data.properties.action_link);
+    assert.ok(generated.data.properties?.hashed_token);
+    assert.equal(generated.data.properties.verification_type, "recovery");
+    assert.equal(generated.data.user.id, userId);
+    assert.ok(generated.data.user.email_confirmed_at);
     pass(stage);
     await context.close();
     context = await browser.newContext();
     page = await context.newPage();
     const recoveryUrl = new URL("/reset-password", target);
-    recoveryUrl.searchParams.set("token_hash", generated.data.properties.hashed_token);
-    recoveryUrl.searchParams.set("type", "recovery");
-    const link = process.env.AUTH_QA_LINK_MODE === "action"
-      ? generated.data.properties.action_link
-      : recoveryUrl.href;
-    stage = "verify recovery link in a fresh browser session";
-    await page.goto(link);
+    recoveryUrl.hash = new URLSearchParams({
+      token_hash: generated.data.properties.hashed_token,
+      type: "recovery",
+      signature: signRecoveryToken(generated.data.properties.hashed_token),
+    }).toString();
+    stage = "open signed recovery link without consuming it in a fresh browser session";
+    await page.goto(recoveryUrl.href);
     await expect(page.getByLabel("새 비밀번호", { exact: true })).toBeEnabled({ timeout: 30_000 });
     assert.equal(new URL(page.url()).origin, target.origin, "Recovery did not return to the configured QA app.");
-    await expect.poll(() => new URL(page.url()).search + new URL(page.url()).hash).toBe("");
+    assert.equal(new URL(page.url()).search, "", "Recovery credentials must not appear in the query string.");
+    assert.equal(new URL(page.url()).hash, recoveryUrl.hash, "Opening the page unexpectedly consumed the recovery link.");
     pass(stage);
 
     stage = "update dedicated account password through recovery form";
     await page.getByLabel("새 비밀번호", { exact: true }).fill(newPassword);
     await page.getByLabel("새 비밀번호 확인", { exact: true }).fill(newPassword);
-    await page.getByRole("button", { name: "변경하기", exact: true }).click();
+    await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
     await expect(page.getByText("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => new URL(page.url()).search + new URL(page.url()).hash).toBe("");
     pass(stage);
     await context.close();
     context = await browser.newContext();

@@ -58,7 +58,7 @@ class RelayFailure extends Error {
 const response = (status: number, body: object) => Response.json(body, {
   status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
 });
-const failure = (status: number, reason: Reason) => response(status, { ok: false, reason });
+const failure = (status: number, reason: Reason, disposition?: "retry" | "failed" | "uncertain") => response(status, { ok: false, reason, ...(disposition ? { disposition } : {}) });
 const secretPattern = /^[a-f\d]{64}$/i;
 const controls = /[\u0000-\u001f\u007f]/;
 
@@ -151,7 +151,8 @@ async function readPayload(request: Request, signal: AbortSignal): Promise<unkno
 function validatedMessage(payload: unknown, from: string, messageId: string, parse: Dependencies["parseAddress"]): RelayMail {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new RelayFailure(400, "configuration");
   const input = payload as Record<string, unknown>;
-  if (Object.keys(input).some((key) => !["to", "subject", "html", "replyTo"].includes(key))) throw new RelayFailure(400, "configuration");
+  if (Object.keys(input).some((key) => !["to", "subject", "html", "replyTo", "requestId"].includes(key))) throw new RelayFailure(400, "configuration");
+  if (input.requestId !== undefined && (typeof input.requestId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(input.requestId))) throw new RelayFailure(400, "configuration");
   const to = mailbox(input.to, parse);
   const replyTo = input.replyTo === undefined ? undefined : mailbox(input.replyTo, parse);
   if (!to || replyTo === null || typeof input.subject !== "string" || !input.subject.trim() ||
@@ -186,7 +187,8 @@ export function createEmailRelayHandler(dependencies: Dependencies) {
         controller.signal.throwIfAborted();
         const { from, senderDomain, options } = smtpConfiguration(dependencies.env, dependencies.parseAddress);
         const payload = await readPayload(request, controller.signal);
-        const id = randomUUID();
+        const suppliedId = payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as Record<string, unknown>).requestId : undefined;
+        const id = typeof suppliedId === "string" ? suppliedId : randomUUID();
         const mail = validatedMessage(payload, from, `<${id}@${senderDomain}>`, dependencies.parseAddress);
         controller.signal.throwIfAborted();
         transport = dependencies.createTransport(options);
@@ -201,10 +203,12 @@ export function createEmailRelayHandler(dependencies: Dependencies) {
     } catch (error) {
       if (error instanceof RelayFailure) return failure(error.status, error.reason);
       if (controller.signal.aborted) return failure(504, "delivery");
-      const smtp = error && typeof error === "object" ? error as { code?: string; responseCode?: number } : {};
+      const smtp = error && typeof error === "object" ? error as { code?: string; responseCode?: number; command?: string } : {};
       if (smtp.code === "EAUTH") return failure(503, "configuration");
-      if ([421, 450, 451, 452].includes(smtp.responseCode ?? 0)) return failure(429, "rate_limit");
-      return failure(502, "delivery");
+      if (smtp.responseCode && smtp.responseCode >= 400 && smtp.responseCode < 500) return failure(429, "rate_limit", "retry");
+      if (smtp.responseCode && smtp.responseCode >= 500) return failure(502, "delivery", "failed");
+      if (smtp.command === "CONN" || smtp.code === "EDNS") return failure(502, "delivery", "retry");
+      return failure(502, "delivery", "uncertain");
     } finally {
       if (timer) clearTimeout(timer);
       request.signal.removeEventListener("abort", abort);

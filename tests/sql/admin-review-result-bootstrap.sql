@@ -1,0 +1,12 @@
+create role anon;
+create role authenticated;
+create role service_role;
+create type public.station_review_status as enum ('NOT_SENT','SENT','RECEIVED','APPROVED','REJECTED','NEEDS_FIX');
+create table public.profiles(user_id uuid primary key,role text);
+create table public.submissions(id uuid primary key,type text,status text,result_status text,result_memo text,mv_desired_rating text,result_notified_at timestamptz,updated_at timestamptz);
+create table public.stations(id uuid primary key default gen_random_uuid(),code text unique,name text,is_active boolean);
+create table public.station_reviews(id uuid primary key default gen_random_uuid(),submission_id uuid references public.submissions(id),station_id uuid references public.stations(id),status public.station_review_status,result_note text,updated_at timestamptz,unique(submission_id,station_id));
+create table public.submission_events(id uuid primary key default gen_random_uuid(),submission_id uuid references public.submissions(id),actor_user_id uuid,event_type text,message text);
+grant select,insert,update,delete on all tables in schema public to service_role;
+insert into public.profiles values ('22222222-2222-4222-8222-222222222222','admin'),('33333333-3333-4333-8333-333333333333','user');
+insert into public.submissions(id,type,status) values ('11111111-1111-4111-8111-111111111111','MV_DISTRIBUTION','PRE_REVIEW'),('44444444-4444-4444-8444-444444444444','ALBUM','IN_PROGRESS');

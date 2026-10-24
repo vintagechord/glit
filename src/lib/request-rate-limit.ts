@@ -91,6 +91,39 @@ export const consumeRateLimit = ({
   };
 };
 
+/** Shared across instances/restarts. Only hashed identifiers leave the app.
+ * Fail closed when the database cannot enforce a limit; do not turn an outage
+ * into an unrestricted email endpoint. Local tests can inject an RPC adapter.
+ */
+export async function consumePersistentRateLimit(
+  options: RateLimitOptions,
+  rpc?: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }>,
+): Promise<RateLimitResult> {
+  if (process.env.NODE_ENV === "test" && !rpc) return consumeRateLimit(options);
+  const windowMs = Math.min(86_400_000, Math.max(1_000, Math.trunc(options.windowMs)));
+  const fallback: RateLimitResult = { allowed: false, remaining: 0, retryAfterSeconds: 60, resetAt: Date.now() + 60_000 };
+  try {
+    let call = rpc;
+    if (!call) {
+      const { createAdminClient } = await import("@/lib/supabase/admin");
+      const db = createAdminClient();
+      call = (name, args) => db.rpc(name, args);
+    }
+    const { data, error } = await call("consume_email_rate_limit", {
+      p_key: digestIdentifier(options.namespace, options.identifier || "unknown"),
+      p_limit: Math.max(1, Math.trunc(options.limit)),
+      p_window_ms: windowMs,
+      p_cost: Math.max(1, Math.trunc(options.cost ?? 1)),
+    });
+    if (error || !data || typeof data !== "object") return fallback;
+    const result = data as RateLimitResult;
+    if (typeof result.allowed !== "boolean" || !Number.isFinite(result.resetAt) || !Number.isFinite(result.remaining) || !Number.isFinite(result.retryAfterSeconds)) return fallback;
+    return result;
+  } catch {
+    return fallback;
+  }
+}
+
 export const getRequestIdentifier = (headers: Pick<Headers, "get">) => {
   const candidates = [
     headers.get("cf-connecting-ip"),

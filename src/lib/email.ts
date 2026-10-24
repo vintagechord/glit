@@ -1,12 +1,14 @@
 import { sendTransactionalEmail, type EmailSendResult } from "@/lib/email-transport";
 import { APP_CONFIG } from "@/lib/config";
 
-type WelcomeEmailPayload = {
+type EmailDeliveryOptions = { idempotencyKey?: string; expiresAt?: string };
+
+type WelcomeEmailPayload = EmailDeliveryOptions & {
   email: string;
   name?: string;
 };
 
-type SubmissionReceiptPayload = {
+type SubmissionReceiptPayload = EmailDeliveryOptions & {
   email: string;
   title: string;
   kind: "ALBUM" | "MV";
@@ -17,21 +19,23 @@ type SubmissionReceiptPayload = {
   siteLink?: string;
 };
 
-type ResultEmailPayload = {
+type ResultEmailPayload = EmailDeliveryOptions & {
   email: string;
   title: string;
   artist?: string | null;
   resultStatus: "APPROVED" | "REJECTED" | "NEEDS_FIX";
   resultMemo?: string | null;
   link?: string;
+  submissionId?: string;
+  markResultNotified?: boolean;
 };
 
-type PasswordResetEmailPayload = {
+type PasswordResetEmailPayload = EmailDeliveryOptions & {
   email: string;
   link: string;
 };
 
-type SubmissionBankRequestEmailPayload = {
+type SubmissionBankRequestEmailPayload = EmailDeliveryOptions & {
   email: string;
   title: string;
   artist?: string | null;
@@ -42,7 +46,7 @@ type SubmissionBankRequestEmailPayload = {
   siteLink?: string;
 };
 
-type SubmissionUpdateEmailPayload = {
+type SubmissionUpdateEmailPayload = EmailDeliveryOptions & {
   email: string;
   title: string;
   artist?: string | null;
@@ -51,10 +55,12 @@ type SubmissionUpdateEmailPayload = {
   summary: string;
   link?: string;
   subject?: string;
-  idempotencyKey?: string;
+  submissionId?: string;
+  guestToken?: string;
+  markResultNotified?: boolean;
 };
 
-type GuestSubmissionLookupEmailPayload = {
+type GuestSubmissionLookupEmailPayload = EmailDeliveryOptions & {
   email: string;
   name?: string | null;
   items: Array<{
@@ -80,7 +86,7 @@ export async function sendWelcomeEmail(payload: WelcomeEmailPayload): Promise<Em
     html: `<p>${name}님, 온사이드 가입이 완료되었습니다.</p><p>음반·뮤직비디오 심의 신청, 진행 확인, 결과 파일 수령을 한 곳에서 이용하실 수 있습니다.</p><p>다음 신청부터 신청자 정보와 접수 기록을 더 빠르게 관리할 수 있습니다.</p>`,
   };
 
-  return sendTransactionalEmail({ to: payload.email, subject: "[onside] 회원가입이 완료되었습니다", html: body.html, operation: "welcome" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 회원가입이 완료되었습니다", html: body.html, operation: "welcome" });
 }
 
 const normalizeAbsoluteUrl = (value?: string) => {
@@ -118,7 +124,7 @@ export async function sendPasswordResetEmail(
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, subject: "[onside] 비밀번호 재설정 안내", html, operation: "password reset" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 비밀번호 재설정 안내", html, operation: "password reset" });
 }
 
 export async function sendSubmissionReceiptEmail(
@@ -174,7 +180,7 @@ export async function sendSubmissionReceiptEmail(
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, subject: `[onside] ${kindLabel} 접수 완료 안내`, html, operation: "submission receipt" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: `[onside] ${kindLabel} 접수 완료 안내`, html, operation: "submission receipt" });
 }
 
 export async function sendResultEmail(
@@ -212,7 +218,7 @@ export async function sendResultEmail(
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, subject: `[onside] 심의 결과 안내 — ${statusLabel}`, html, operation: "review result" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: `[onside] 심의 결과 안내 — ${statusLabel}`, html, operation: "review result", submissionId: payload.submissionId, markResultNotified: payload.markResultNotified });
 }
 
 export async function sendSubmissionBankRequestEmail(
@@ -285,7 +291,7 @@ export async function sendSubmissionBankRequestEmail(
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, subject: `[onside] 무통장 입금 안내 — ${kindLabel} 심의`, html, operation: "bank payment request" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: `[onside] 무통장 입금 안내 — ${kindLabel} 심의`, html, operation: "bank payment request" });
 }
 
 export async function sendSubmissionUpdateEmail(
@@ -319,6 +325,8 @@ export async function sendSubmissionUpdateEmail(
             <p style="margin:12px 0 0;font-size:12px;color:#475569;">아티스트</p>
             <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0f172a;">${safeArtist}</p>
           </div>
+          ${payload.submissionId ? `<p style="margin-top:16px;font-size:12px;">접수 번호: ${escapeHtml(payload.submissionId)}</p>` : ""}
+          ${payload.guestToken ? `<p style="font-size:13px;word-break:break-all;">비회원 조회 코드: <strong>${escapeHtml(payload.guestToken)}</strong></p>` : ""}
           <div style="margin-top:16px;border-radius:14px;border:1px solid #d6e8fb;background:#f4f9ff;padding:16px;">
             <p style="margin:0;font-size:12px;color:#475569;">업데이트 내용</p>
             <p style="margin:8px 0 0;font-size:14px;line-height:1.7;color:#0f172a;">${safeSummary}</p>
@@ -333,7 +341,7 @@ export async function sendSubmissionUpdateEmail(
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, subject: payload.subject ?? `[onside] 심의 업데이트 안내 — ${kindLabel} 심의`, html, operation: "submission update", idempotencyKey: payload.idempotencyKey, includeMessageId: true });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: payload.subject ?? `[onside] 심의 업데이트 안내 — ${kindLabel} 심의`, html, operation: "submission update", includeMessageId: true, submissionId: payload.submissionId, markResultNotified: payload.markResultNotified });
 }
 
 export async function sendGuestSubmissionLookupEmail(
@@ -374,24 +382,24 @@ export async function sendGuestSubmissionLookupEmail(
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, subject: "[onside] 비회원 접수 조회 코드 안내", html, operation: "guest lookup" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 비회원 접수 조회 코드 안내", html, operation: "guest lookup" });
 }
 
-export async function sendSignupVerificationEmail(payload: { email: string; link: string }): Promise<EmailSendResult> {
+export async function sendSignupVerificationEmail(payload: EmailDeliveryOptions & { email: string; link: string }): Promise<EmailSendResult> {
   const link = normalizeAbsoluteUrl(payload.link);
   if (!link) return { ok: false, reason: "configuration" };
   const safeLink = escapeHtml(link);
   return sendTransactionalEmail({
-    to: payload.email, subject: "[onside] 회원가입 이메일 인증", operation: "signup verification",
+    to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 회원가입 이메일 인증", operation: "signup verification",
     html: `<p>온사이드 가입을 완료하려면 아래 링크를 열어 이메일 인증을 진행해주세요.</p><p><a href="${safeLink}">이메일 인증하기</a></p><p>직접 가입을 요청하지 않았다면 이 메일을 무시해주세요.</p><p>${safeLink}</p>`,
   });
 }
 
-export async function sendAccountIdEmail(payload: { email: string; link?: string }): Promise<EmailSendResult> {
+export async function sendAccountIdEmail(payload: EmailDeliveryOptions & { email: string; link?: string }): Promise<EmailSendResult> {
   const link = normalizeAbsoluteUrl(payload.link);
   const safeEmail = escapeHtml(payload.email);
   return sendTransactionalEmail({
-    to: payload.email, subject: "[onside] 가입 아이디 안내", operation: "account lookup",
+    to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 가입 아이디 안내", operation: "account lookup",
     html: `<p>온사이드의 로그인 아이디는 가입한 이메일 주소입니다.</p><p><strong>${safeEmail}</strong></p>${link ? `<p><a href="${escapeHtml(link)}">로그인하기</a></p>` : ""}<p>직접 아이디 찾기를 요청하지 않았다면 이 메일을 무시해주세요.</p>`,
   });
 }

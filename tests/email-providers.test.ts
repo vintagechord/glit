@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import { build } from "esbuild";
 import { getEmailDeliveryConfiguration, getEmailSenderConfiguration } from "../src/lib/email-config";
+import { setEmailOutboxTestDispatcher } from "../src/lib/email-transport";
 import {
   sendAccountIdEmail, sendGuestSubmissionLookupEmail, sendPasswordResetEmail, sendResultEmail,
   sendSignupVerificationEmail, sendSubmissionBankRequestEmail, sendSubmissionReceiptEmail,
@@ -32,10 +33,12 @@ function restoreEnv(env: NodeJS.ProcessEnv) {
 async function withFixture(run: (logs: unknown[][]) => Promise<void>) {
   const env = { ...process.env }, fetch = globalThis.fetch, error = console.error;
   const logs: unknown[][] = [];
+  Object.assign(process.env, { NODE_ENV: "test" });
+  setEmailOutboxTestDispatcher(async (_message, deliver) => deliver());
   process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = "transactional";
   console.error = (...args: unknown[]) => { logs.push(args); };
   globalThis.fetch = async () => { throw new Error("Unexpected network request"); };
-  try { await run(logs); } finally { restoreEnv(env); globalThis.fetch = fetch; console.error = error; }
+  try { await run(logs); } finally { setEmailOutboxTestDispatcher(undefined); restoreEnv(env); globalThis.fetch = fetch; console.error = error; }
 }
 
 test("authenticated mailbox providers permit public mailboxes while Resend keeps domain verification rules", async () => {
@@ -328,7 +331,7 @@ test("manual and invalid modes suppress every template including malformed link 
 });
 
 test("SMTP enforces TLS, isolates recipients, closes transports and reports rejection safely", async () => {
-  const built = await build({ stdin: { contents: "export * from './src/lib/email'; export {fixture} from 'smtp-fixture';", resolveDir: process.cwd(), loader: "ts" }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false,
+  const built = await build({ stdin: { contents: "export * from './src/lib/email'; export {setEmailOutboxTestDispatcher} from './src/lib/email-transport'; export {fixture} from 'smtp-fixture';", resolveDir: process.cwd(), loader: "ts" }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false,
     plugins: [{ name: "smtp-fixture", setup(plugin) {
       plugin.onResolve({ filter: /^(smtp-fixture|nodemailer)$/ }, args => ({ path: args.path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ loader: "js", contents: path === "smtp-fixture"
@@ -337,10 +340,11 @@ test("SMTP enforces TLS, isolates recipients, closes transports and reports reje
     } }],
   });
   type Fixture = { options: Array<Record<string, unknown>>; messages: Array<Record<string, unknown>>; closed: number; result: { accepted: string[]; rejected: string[] }; error: unknown };
-  const loaded = { exports: {} as { sendPasswordResetEmail: typeof sendPasswordResetEmail; sendSubmissionUpdateEmail: typeof sendSubmissionUpdateEmail; fixture: Fixture } };
+  const loaded = { exports: {} as { sendPasswordResetEmail: typeof sendPasswordResetEmail; sendSubmissionUpdateEmail: typeof sendSubmissionUpdateEmail; setEmailOutboxTestDispatcher: typeof setEmailOutboxTestDispatcher; fixture: Fixture } };
   new Function("require", "module", "exports", built.outputFiles[0].text)(createRequire(import.meta.url), loaded, loaded.exports);
   await withFixture(async logs => {
     Object.assign(process.env, smtpEnv);
+    loaded.exports.setEmailOutboxTestDispatcher(async (_message, deliver) => deliver());
     const { fixture, sendPasswordResetEmail: send } = loaded.exports;
     assert.equal((await send({ email: recipient, link })).ok, true);
     let options = fixture.options.at(-1)!;

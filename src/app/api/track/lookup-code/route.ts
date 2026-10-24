@@ -7,7 +7,7 @@ import { getEmailDeliveryConfiguration } from "@/lib/email-config";
 import { matchesGuestLookupIdentity } from "@/lib/guest-lookup-match";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
-  consumeRateLimit,
+  consumePersistentRateLimit,
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     }, { status: 503, headers: { "cache-control": "no-store" } });
   }
   const requestIdentifier = getRequestIdentifier(request.headers);
-  const ipLimit = consumeRateLimit({
+  const ipLimit = await consumePersistentRateLimit({
     namespace: "track-lookup-ip",
     identifier: requestIdentifier,
     limit: 5,
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
   const name = normalizeName(parsed.data.name);
   const email = normalizeEmail(parsed.data.email);
   const emailPattern = email.replace(/[\\%_]/g, "\\$&");
-  const emailLimit = consumeRateLimit({
+  const emailLimit = await consumePersistentRateLimit({
     namespace: "track-lookup-email",
     identifier: email,
     limit: 3,
@@ -130,40 +130,48 @@ export async function POST(request: NextRequest) {
   const selectFields =
     "id, guest_token, title, type, created_at, guest_name, guest_email, applicant_name, applicant_email";
 
-  const [byGuestInfo, byApplicantInfo] = await Promise.all([
-    admin
-      .from("submissions")
-      .select(selectFields)
-      .is("user_id", null)
-      .not("guest_token", "is", null)
-      .ilike("guest_email", emailPattern)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    admin
-      .from("submissions")
-      .select(selectFields)
-      .is("user_id", null)
-      .not("guest_token", "is", null)
-      .ilike("applicant_email", emailPattern)
-      .order("created_at", { ascending: false })
-      .limit(20),
-  ]);
-
-  if (byGuestInfo.error && byApplicantInfo.error) {
-    console.error("[TrackLookup][lookup-code] query failed", {
-      guestQueryFailed: Boolean(byGuestInfo.error),
-      applicantQueryFailed: Boolean(byApplicantInfo.error),
-    });
+  const signal = AbortSignal.timeout(10_000);
+  const readMatchingRows = async (column: "guest_email" | "applicant_email") => {
+    const matched: GuestLookupRow[] = [];
+    const matchedIds = new Set<string>();
+    const pageSize = 100;
+    for (let offset = 0; ; offset += pageSize) {
+      signal.throwIfAborted();
+      const { data, error } = await admin.from("submissions")
+        .select(selectFields)
+        .is("user_id", null)
+        .not("guest_token", "is", null)
+        .ilike(column, emailPattern)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + pageSize - 1)
+        .abortSignal(signal);
+      if (error) throw new Error("Guest lookup query unavailable");
+      const rows = (data ?? []) as GuestLookupRow[];
+      for (const row of rows) {
+        if (!matchedIds.has(row.id) && row.guest_token && row.guest_token.length >= 8 && matchesGuestLookupIdentity(row, name, email)) {
+          matched.push(row);
+          matchedIds.add(row.id);
+        }
+        // Each branch is ordered newest first, so later rows cannot displace
+        // its ten newest matches in the final merged result.
+        if (matched.length === 10) return matched;
+      }
+      if (rows.length < pageSize) return matched;
+    }
+  };
+  let candidates: GuestLookupRow[];
+  try {
+    const matches = await Promise.all([readMatchingRows("guest_email"), readMatchingRows("applicant_email")]);
+    candidates = mergeRows(matches.flat());
+  } catch {
+    // A timeout or failure is never treated as a complete no-match search.
+    console.error("[TrackLookup][lookup-code] query failed");
     return NextResponse.json(
       { ok: false, error: "조회 코드를 확인하지 못했습니다. 잠시 후 다시 시도해주세요." },
-      { status: 500 },
+      { status: 503, headers: { "cache-control": "no-store" } },
     );
   }
-
-  const candidates = mergeRows([
-    ...(((byGuestInfo.data ?? []) as GuestLookupRow[]) ?? []),
-    ...(((byApplicantInfo.data ?? []) as GuestLookupRow[]) ?? []),
-  ]);
 
   const matchedItems = candidates
     .filter((row) => {

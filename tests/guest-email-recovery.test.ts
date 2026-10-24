@@ -13,12 +13,12 @@ test("guest recovery preflights delivery and only emails complete matching guest
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls} from 'lookup-fixture';";
         const files: Record<string, string> = {
-          "lookup-fixture": "export const state={configured:true,rows:[],sendResult:{ok:true},limited:false};export const calls=[];",
+          "lookup-fixture": "export const state={configured:true,rows:[],sendResult:{ok:true},limited:false,queryFails:false};export const calls=[];",
           "@/lib/email-config": `${shared} export const getEmailDeliveryConfiguration=()=>({ok:state.configured});`,
           "@/lib/email-delivery-mode": "export const getEmailDeliveryMode=()=> 'transactional';",
           "@/lib/email": `${shared} export async function sendGuestSubmissionLookupEmail(payload){calls.push({type:'email',payload});return state.sendResult;}`,
-          "@/lib/request-rate-limit": `${shared} export const consumeRateLimit=()=>({allowed:!state.limited,retryAfterSeconds:60});export const getRequestIdentifier=()=> 'fixture';`,
-          "@/lib/supabase/admin": `${shared} export function createAdminClient(){calls.push({type:'database'});return {from(){const q={select(){return q},is(...args){calls.push({type:'filter',args});return q},not(){return q},ilike(...args){calls.push({type:'pattern',args});return q},order(){return q},limit(){return Promise.resolve({data:state.rows,error:null})}};return q}};}`,
+          "@/lib/request-rate-limit": `${shared} export const consumePersistentRateLimit=()=>({allowed:!state.limited,retryAfterSeconds:60});export const getRequestIdentifier=()=> 'fixture';`,
+          "@/lib/supabase/admin": `${shared} export function createAdminClient(){calls.push({type:'database'});return {from(){const q={select(){return q},is(...args){calls.push({type:'filter',args});return q},not(){return q},ilike(...args){calls.push({type:'pattern',args});return q},order(){return q},range(start,end){q.start=start;q.end=end;calls.push({type:'page',args:[start,end]});return q},abortSignal(signal){if(!(signal instanceof AbortSignal))throw Error('missing deadline');return Promise.resolve({data:state.rows.slice(q.start,q.end+1),error:state.queryFails?{code:'fixture'}:null})}};return q}};}`,
         };
         return { loader: "js", contents: files[path] };
       });
@@ -26,7 +26,7 @@ test("guest recovery preflights delivery and only emails complete matching guest
   });
   const bundled = { exports: {} as {
     POST: (request: NextRequest) => Promise<Response>;
-    state: { configured: boolean; rows: Record<string, unknown>[]; sendResult: { ok: boolean; reason?: string }; limited: boolean };
+    state: { configured: boolean; rows: Record<string, unknown>[]; sendResult: { ok: boolean; reason?: string }; limited: boolean; queryFails: boolean };
     calls: { type: string; args?: unknown[]; payload?: { email: string; items: { token: string; link: string }[] } }[];
   } };
   new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), bundled, bundled.exports);
@@ -65,6 +65,25 @@ test("guest recovery preflights delivery and only emails complete matching guest
   assert.ok(api.calls.filter(call => call.type === "filter").every(call => JSON.stringify(call.args) === JSON.stringify(["user_id", null])));
   assert.ok(api.calls.filter(call => call.type === "pattern").every(call => call.args?.[1] === "guest\\_name@example.invalid"));
 
+  // Hundreds of newer submissions for a different name must not hide the
+  // owner's older matching submission behind an email-only result limit.
+  api.calls.length = 0;
+  api.state.rows = Array.from({ length: 205 }, (_, index) => ({
+    id: `other-${index}`, guest_token: `other-code-${index}`, guest_name: "다른사람", guest_email: "guest_name@example.invalid",
+  }));
+  api.state.rows.push({ id: "older-match", guest_token: "private-older-code", guest_name: "  신청자  ", guest_email: "GUEST_NAME@example.invalid" });
+  response = await api.POST(request());
+  assert.equal(response.status, 202);
+  assert.deepEqual(api.calls.find(call => call.type === "email")?.payload?.items.map(item => item.token), ["private-older-code"]);
+  assert.ok(api.calls.some(call => call.type === "page" && call.args?.[0] === 200));
+
+  api.calls.length = 0;
+  api.state.queryFails = true;
+  response = await api.POST(request());
+  assert.equal(response.status, 503, "an incomplete search cannot report a successful no-match");
+  assert.equal(api.calls.some(call => call.type === "email"), false);
+  api.state.queryFails = false;
+
   // A recipient-specific rejection must not reveal whether a submission exists.
   api.state.sendResult = { ok: false, reason: "delivery" };
   const originalWarn = console.warn;
@@ -74,6 +93,6 @@ test("guest recovery preflights delivery and only emails complete matching guest
     response = await api.POST(request());
     assert.equal(response.status, 202);
     assert.equal(await response.text(), noMatchBody);
-    assert.doesNotMatch(JSON.stringify(logs), /private-guest|guest_name|Private title|do-not-send/);
+    assert.doesNotMatch(JSON.stringify(logs), /private-guest|private-older|guest_name|Private title|do-not-send/);
   } finally { console.warn = originalWarn; }
 });

@@ -4,6 +4,10 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 
 const exactTranslations: Record<string, string> = {
+  "입력한 이메일로 안내 가능한 계정이면 복구 메일을 보내드립니다. 메일함과 스팸함을 확인해주세요.": "If this email belongs to an eligible account, we will send recovery instructions. Check your inbox and spam folder.",
+  "이메일 확인이 필요한 계정이면 인증 메일을 보내드립니다. 메일의 버튼으로 확인을 완료해주세요. 이미 가입했거나 메일이 오지 않으면 비밀번호 찾기 또는 고객센터를 이용해주세요.": "If this account needs verification, we will send a verification email. Complete verification using its button. If you already signed up or no email arrives, use password reset or contact support.",
+  "유효하지 않거나 만료된 재설정 링크입니다. 비밀번호 찾기에서 새 메일을 요청해주세요.": "This reset link is invalid or expired. Request a new password reset email.",
+  "비밀번호 변경을 완료하지 못했습니다. 새 재설정 메일을 요청해주세요.": "We could not update your password. Request a new reset email.",
   "아이디 찾기": "Find Account",
   "회원가입 이메일 확인": "Verify Signup Email",
   "이메일 확인이 필요한 계정이면 인증 메일을 보냈습니다. 메일의 버튼으로 확인을 완료해주세요. 이미 가입했거나 메일이 오지 않으면 비밀번호 찾기 또는 고객센터를 이용해주세요.": "If this account needs verification, we sent a verification email. Complete verification using its button. If you already signed up or no email arrives, use password reset or contact support.",

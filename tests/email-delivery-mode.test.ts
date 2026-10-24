@@ -112,7 +112,7 @@ test("deferred lookup-code recovery returns support guidance before customer que
           "lookup-fixture": "export const calls=[];",
           "@/lib/email": `${shared} export async function sendGuestSubmissionLookupEmail(){calls.push('email');throw new Error('Unexpected email');}`,
           "@/lib/supabase/admin": `${shared} export function createAdminClient(){calls.push('database');throw new Error('Unexpected database access');}`,
-          "@/lib/request-rate-limit": `${shared} export const consumeRateLimit=()=>{calls.push('limit');return {allowed:true}};export const getRequestIdentifier=()=>{calls.push('ip');return 'fixture'};`,
+          "@/lib/request-rate-limit": `${shared} export const consumePersistentRateLimit=()=>{calls.push('limit');return {allowed:true}};export const getRequestIdentifier=()=>{calls.push('ip');return 'fixture'};`,
           "@/lib/request-body": `${shared} export async function readBoundedJsonBody(){calls.push('body');throw new Error('Unexpected body read');}`,
         };
         return { loader: "js", contents: files[path] };

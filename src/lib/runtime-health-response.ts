@@ -7,6 +7,7 @@ import {
 } from "@/lib/runtime-health";
 import { checkSupabaseConnection } from "@/lib/supabase/health";
 import { getSupabaseEnv } from "@/lib/supabase/env";
+import { checkEmailOutboxHealth } from "@/lib/email-health";
 
 const headers = {
   "cache-control": "no-store, max-age=0",
@@ -34,7 +35,10 @@ export function createRuntimeConnectivityProbe(
   };
 }
 
-const readRuntimeConnectivity = createRuntimeConnectivityProbe();
+const readRuntimeConnectivity = createRuntimeConnectivityProbe(async () => {
+  const [connection, email] = await Promise.all([checkSupabaseConnection(), checkEmailOutboxHealth()]);
+  return [...connection, ...email];
+});
 
 export async function buildRuntimeHealthPayload(connectionProbe = readRuntimeConnectivity) {
   const checks = runRuntimeConfigChecks({

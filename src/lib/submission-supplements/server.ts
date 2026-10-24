@@ -7,6 +7,7 @@ import { abortMultipartUpload, completeMultipartUpload, createMultipartUpload, g
 import { abortClaimedMultipartGrant, cleanupExpiredMultipartGrants, createMultipartGrant, getMultipartGrant, getMultipartOwnerKey, getMultipartPartSize } from "@/lib/multipart-upload-grants";
 import { isSupplementFilenameAllowed, matchesSupplementSignature, SUPPLEMENT_PART_BYTES, supplementActionSchema, supplementMimeType } from "./model";
 import { sendSubmissionUpdateEmail } from "@/lib/email";
+import { resolveSubmissionNotificationRecipient } from "@/lib/admin/notification-recipient";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 
@@ -100,9 +101,18 @@ export async function performSupplementAction(context: Context, input: z.infer<t
   if (input.action === "notify") return notifySupplement(context, input.requestId);
   if (input.action === "request" || input.action === "review") {
     if (!context.isAdmin) throw new SupplementError("관리자 권한이 필요합니다.", 403);
-    return mutate(context, input.action === "request" ? "request" : input.decision === "ACCEPTED" ? "accept" : "reject", {
+    const saved = await mutate(context, input.action === "request" ? "request" : input.decision === "ACCEPTED" ? "accept" : "reject", {
       requestId: "requestId" in input ? input.requestId : undefined, note: input.note,
     });
+    const requestId = input.action === "request" ? saved.requestId : input.requestId;
+    // The mutation has committed. Notification failures must not claim that the
+    // request/review was rolled back or cause a duplicate request on retry.
+    try {
+      if (typeof requestId !== "string") throw new Error("Missing request id");
+      return { ...saved, ...await notifySupplement(context, requestId) };
+    } catch {
+      return { ...saved, warning: "보완 상태는 저장되었지만 이메일 안내를 완료하지 못했습니다. 발송 내역을 확인하거나 보완 안내 보내기를 다시 눌러주세요." };
+    }
   }
   if (input.action === "download") {
     const { file } = await findFile(context, input.fileId);
@@ -205,6 +215,9 @@ type NotificationOutcome = {
   email: "API_ACCEPTED" | "FAILED" | "SKIPPED";
   kakao: "API_ACCEPTED" | "FAILED" | "SKIPPED";
   emailMessageId?: string;
+  emailQueued?: boolean;
+  emailStatus?: string;
+  emailOutboxId?: string;
   kakaoMessageId?: string;
 };
 
@@ -215,18 +228,9 @@ async function notifySupplement(context: Context, requestId: string) {
   if (claim.alreadyAccepted) return { notification: { ...previous, alreadyAccepted: true } };
   const { data: submission, error } = await context.db.from("submissions").select("title,artist_name,applicant_email,guest_email,applicant_phone,guest_phone").eq("id", context.submission.id).single();
   if (error || !submission) throw new SupplementError("안내 수신 정보를 확인할 수 없습니다.", 503);
-  let email = (submission.applicant_email || submission.guest_email || "").trim();
-  let phone = submission.applicant_phone || submission.guest_phone || "";
-  if (context.submission.user_id && (!email || !phone)) {
-    if (!email) {
-      const member = await context.db.auth.admin.getUserById(context.submission.user_id);
-      email = member.data.user?.email?.trim() || "";
-    }
-    if (!phone) {
-      const profile = await context.db.from("profiles").select("phone").eq("user_id", context.submission.user_id).maybeSingle();
-      phone = profile.data?.phone || "";
-    }
-  }
+  const { recipient: email, phone } = await resolveSubmissionNotificationRecipient(context.db, {
+    ...submission, user_id: context.submission.user_id,
+  });
   const headline = claim.state === "ACCEPTED" ? "보완 자료를 수락했습니다." : claim.state === "SUBMITTED" ? "보완 자료를 확인하고 있습니다." : "자료 보완 요청이 있습니다.";
   const summary = claim.state === "ACCEPTED"
     ? "관리자가 보완 자료를 확인하여 수락했습니다. 신청 내역에서 이후 진행 상황을 확인해주세요."
@@ -248,8 +252,14 @@ async function notifySupplement(context: Context, requestId: string) {
   const outcome: NotificationOutcome = {
     email: classify(emailResult), kakao: classify(kakaoResult),
     ...("messageId" in emailResult && emailResult.messageId ? { emailMessageId: emailResult.messageId } : {}),
+    ...("queued" in emailResult && emailResult.queued ? { emailQueued: true } : {}),
+    ...("status" in emailResult && typeof emailResult.status === "string" ? { emailStatus: emailResult.status } : {}),
+    ...("outboxId" in emailResult && typeof emailResult.outboxId === "string" ? { emailOutboxId: emailResult.outboxId } : {}),
     ...("messageId" in kakaoResult && kakaoResult.messageId ? { kakaoMessageId: kakaoResult.messageId } : {}),
   };
   await mutate(context, "notify_finish", { requestId, file: { notificationId: claim.notificationId, leaseToken: claim.leaseToken, outcome } });
-  return { notification: outcome };
+  return { notification: outcome, warning: outcome.email === "API_ACCEPTED" ? undefined
+    : outcome.emailStatus === "uncertain" ? "보완 상태는 저장되었습니다. 발송 업체의 접수 여부를 이메일 발송 내역에서 확인해주세요."
+    : outcome.emailQueued ? "보완 상태는 저장되었습니다. 이메일은 자동 재시도 예정입니다."
+    : "보완 상태는 저장되었지만 이메일을 보내지 못했습니다. 수신처·발송 설정을 확인하고 보완 안내 보내기를 다시 눌러주세요." };
 }
