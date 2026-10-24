@@ -468,9 +468,51 @@ const exactTranslations: Record<string, string> = {
   "작업": "Actions",
   "상세": "Details",
   "가사 작성 기준": "Lyrics Guidelines",
-  "욕설 포함 곡 심의 안내": "Review Guidance for Tracks with Profanity",
-  "욕설이 있는 곡은 심의 부적격 대상이며, 한 곡만 포함돼도 앨범 전체 심의가 중단될 수 있습니다. 해당 곡은 제외하고 신청해주세요.":
-    "Tracks containing profanity are ineligible for approval. Even one such track may halt the review of the entire album. Please exclude these tracks from your submission.",
+  "가사 원문": "Original Lyrics",
+  "번역본 가사": "Translated Lyrics",
+  "욕설 체크": "Check Profanity",
+  "자동번역": "Automatic Translation",
+  "자동번역 중...": "Translating...",
+  "가사 욕설 검사 결과": "Lyrics Profanity Check Results",
+  "명확한 욕설 표현 감지": "Explicit Profanity Detected",
+  "확인 필요 표현 감지": "Expressions Need Review",
+  "가사 검사 미완료": "Lyrics Check Incomplete",
+  "가사 텍스트 검사 결과": "Lyrics Text Check Results",
+  "명확한 욕설": "Explicit Profanity",
+  "욕설 사전의 표현 또는 우회 표기와 일치합니다.":
+    "Matches a profanity dictionary entry or an altered spelling.",
+  "욕설과 발음이 비슷한 표현입니다. 문맥을 확인해주세요.":
+    "Pronunciation resembles profanity. Review the context.",
+  "다른 뜻으로도 쓰이는 표현입니다. 문맥을 확인해주세요.":
+    "This expression can have other meanings. Review the context.",
+  "욕설의 초성 표기로 쓰일 수 있습니다. 문맥을 확인해주세요.":
+    "May be initials used for profanity. Review the context.",
+  "일부 글자를 가린 욕설 표기와 일치합니다.":
+    "Matches profanity with some letters obscured.",
+  "관리자가 등록한 확인 대상 표현과 일치합니다.":
+    "Matches an expression added by the administrator for review.",
+  "욕설이 들리는 음원은 심의 접수가 불가합니다. 해당 곡을 제외하거나 욕설 구간을 마스킹한 음원과 가사를 제출해주세요.":
+    "Audio with audible profanity cannot be submitted for review. Remove the track or submit audio and lyrics with the profanity masked.",
+  "무음·삐처리 등으로 실제 음원의 욕설을 마스킹한 경우에는 접수할 수 있습니다. 가사에도 해당 구간을 [무음] 또는 [삐처리]로 표시해주세요.":
+    "You may submit audio with profanity silenced or bleeped. Mark the corresponding lyrics with [silenced] or [bleeped] as well.",
+  "욕설로 들릴 수 있는 우회 표기가 있습니다. 실제 발음과 가사를 확인해주세요.":
+    "Some spellings may sound like profanity. Check the actual pronunciation and lyrics.",
+  "가사가 길어 전체 검사를 완료하지 못했습니다. 가사를 확인하거나 고객센터에 문의해주세요.":
+    "The full check could not be completed because the lyrics exceed the check limit. Review the lyrics or contact support.",
+  "입력한 가사에서 명확한 욕설·확인 필요 표현이 감지되지 않았습니다.":
+    "No explicit profanity or expressions requiring review were detected in the entered lyrics.",
+  "입력한 가사를 기준으로 검사합니다. 실제 제출 음원과 가사를 동일하게 맞춰주세요.":
+    "This check uses the lyrics you entered. Make sure they match the audio you submit.",
+  "가사는 실제 제출 음원과 일치하도록 작성하고, 들리는 구간을 임의로 누락하지 마세요.":
+    "Write lyrics that match the submitted audio, including every audible passage.",
+  "자동번역 미리보기": "Automatic Translation Preview",
+  "자동번역 일부 완료 · 확인 필요": "Translation Partly Complete · Review Needed",
+  "자동번역 결과 미리보기": "Automatic Translation Result Preview",
+  "완료된 번역은 아래에 보관했습니다. 미완료 구간은 원문으로 남아 있으며 번역본에 자동 반영하지 않았습니다. 자동번역을 다시 시도해주세요.":
+    "Completed translations are preserved below. Unfinished passages retain the original text and were not added to your translated lyrics. Retry automatic translation.",
+  "직접 입력한 번역본은 유지했습니다. 아래 결과를 확인한 뒤 필요한 부분을 번역본에 직접 반영해주세요.":
+    "Your existing translation was kept. Review the result below and copy any needed passages into your translated lyrics.",
+  "자동번역 다시 시도": "Retry Automatic Translation",
   "자동 번역 안내": "Automatic Translation Guidance",
   "직접 번역이 어려운 경우 자동 번역으로 심의 진행 가능합니다.":
     "If translating the lyrics yourself is difficult, you can use automatic translation for the review.",

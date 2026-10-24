@@ -17,9 +17,11 @@ test("normalize applies leet replacements and repeat compression", () => {
 test("allowlist prevents false positives for known safe terms", () => {
   const safeKorean = "시발점부터 다시 시작합니다";
   const safeFinger = "새끼손가락을 다쳤어요";
+  const safeStation = "시발역에서 출발합니다";
 
   assert.equal(evaluate(safeKorean).action, "allow");
   assert.equal(evaluate(safeFinger).action, "allow");
+  assert.equal(evaluate(safeStation).action, "allow");
 });
 
 test("detects evasion patterns across symbols, spacing, leet, and jamo", () => {

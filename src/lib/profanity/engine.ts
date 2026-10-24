@@ -1,6 +1,9 @@
 import rulesData from "../../../config/profanity_rules.json";
 import allowlistData from "../../../config/profanity_allowlist.json";
 
+export { analyzeLyricsProfanity, LYRICS_PROFANITY_LIMITS } from "./lyrics";
+export type { LyricsProfanityAnalysis, LyricsProfanityMatch, LyricsProfanityCategory } from "./lyrics";
+
 export type ProfanitySeverity = "BLOCK" | "MASK" | "WARN";
 export type ProfanityAction = "allow" | "warn" | "mask" | "block";
 
