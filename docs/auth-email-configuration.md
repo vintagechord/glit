@@ -1,6 +1,6 @@
 # 회원 인증·찾기·심의 알림 이메일 설정
 
-2026-10-24 확인: 기존 비밀번호 재설정·비회원 코드·심의 알림은 `8b68c86`에서 manual 모드로 보류됐다. 가입 이메일 확인은 최초 구현에서 존재했고 `a20544a`의 관리자 자동 승인으로 바뀌었다. 이번 변경은 확인 가입과 아이디 안내를 추가하고 모든 앱 메일을 동일한 공급자 설정으로 통합한다. 사용자는 기존 고객센터 **`myonside@daum.net`**을 발신자로 선택했다.
+2026-10-24 확인: 기존 비밀번호 재설정·비회원 코드·심의 알림은 `8b68c86`에서 manual 모드로 보류됐다. 가입 이메일 확인은 최초 구현에서 존재했고 `a20544a`의 관리자 자동 승인으로 바뀌었다. 이번 변경은 확인 가입과 아이디 안내를 추가하고 모든 앱 메일을 동일한 공급자 설정으로 통합한다. 사용자는 기존 고객센터 **`iamonside@daum.net`**을 발신자로 선택했다.
 
 ## 도메인 구매 없이 가능한 경로
 
@@ -21,9 +21,9 @@
 
 ### 1. Daum에서 앱 비밀번호 준비
 
-1. `myonside@daum.net`의 **Daum 메일 → 설정 → IMAP/POP3 설정 → POP3 설정**에서 **POP3/SMTP 사용함**을 선택하고 **저장하기**를 누른다. [Daum 공식 설정 안내](https://cs.daum.net/faq/service/43/category/9234/detail/34503)
+1. `iamonside@daum.net`의 **Daum 메일 → 설정 → IMAP/POP3 설정 → POP3 설정**에서 **POP3/SMTP 사용함**을 선택하고 **저장하기**를 누른다. [Daum 공식 설정 안내](https://cs.daum.net/faq/service/43/category/9234/detail/34503)
 2. **Daum 마이페이지 → 계정 보안**에서 2단계 인증을 확인하고 온사이드용 **앱 비밀번호**를 발급한다. [최신 Daum 공식 안내](https://cs.daum.net/faq/service/43/category/9234/detail/35945)는 2025년 1월 2일부터 2단계 인증·앱 비밀번호가 필요하며, **2025년 12월 1일 서비스 분리 후 앱 비밀번호 발급·관리 주체가 카카오계정에서 Daum 회원정보로 변경됐다**고 명시한다. 이전 카카오계정 경로가 남은 오래된 안내 대신 이 경로를 확인한다.
-3. SMTP 로그인 사용자 이름은 **전체 메일주소 `myonside@daum.net`**을 사용한다. [Daum 아웃룩 설정 안내](https://cs.daum.net/faq/service/43/category/9234/detail/38593)도 로그온 정보에 본인의 메일주소를 입력하도록 안내한다. 일반 웹 로그인 비밀번호 대신 위 앱 비밀번호를 Supabase의 `SMTP_PASS`에 직접 저장한다. 비밀번호를 채팅에 보내거나 저장소에 기록하지 않는다.
+3. SMTP 로그인 사용자 이름은 **전체 메일주소 `iamonside@daum.net`**을 사용한다. [Daum 아웃룩 설정 안내](https://cs.daum.net/faq/service/43/category/9234/detail/38593)도 로그온 정보에 본인의 메일주소를 입력하도록 안내한다. 일반 웹 로그인 비밀번호 대신 위 앱 비밀번호를 Supabase의 `SMTP_PASS`에 직접 저장한다. 비밀번호를 채팅에 보내거나 저장소에 기록하지 않는다.
 
 ### 2. Supabase의 함수 비밀값 설정
 
@@ -32,9 +32,9 @@
 ```dotenv
 SMTP_HOST=smtp.daum.net
 SMTP_PORT=465
-SMTP_USER=myonside@daum.net
+SMTP_USER=iamonside@daum.net
 SMTP_PASS=<Daum app password>
-SMTP_FROM=온사이드 <myonside@daum.net>
+SMTP_FROM=온사이드 <iamonside@daum.net>
 EMAIL_RELAY_SECRET=<32 random bytes encoded as 64 hexadecimal characters>
 ```
 
@@ -56,8 +56,8 @@ supabase functions deploy send-transactional-email --project-ref rwysjsmxtpuqeke
 EMAIL_PROVIDER=supabase-smtp
 SUPABASE_EMAIL_RELAY_URL=https://rwysjsmxtpuqekeltwxi.supabase.co/functions/v1/send-transactional-email
 EMAIL_RELAY_SECRET=<same relay secret as Supabase>
-SMTP_FROM=온사이드 <myonside@daum.net>
-NEXT_PUBLIC_SUPPORT_EMAIL=myonside@daum.net
+SMTP_FROM=온사이드 <iamonside@daum.net>
+NEXT_PUBLIC_SUPPORT_EMAIL=iamonside@daum.net
 # 실제 SMTP 인증·발송 검증 후 transactional로 전환하고 재빌드한다.
 NEXT_PUBLIC_EMAIL_DELIVERY_MODE=manual
 ```
@@ -81,7 +81,7 @@ GMAIL_CLIENT_ID=<OAuth client ID>
 GMAIL_CLIENT_SECRET=<OAuth client secret>
 GMAIL_REFRESH_TOKEN=<sender refresh token>
 GMAIL_FROM=온사이드 <your-sender@gmail.com>
-NEXT_PUBLIC_SUPPORT_EMAIL=myonside@daum.net
+NEXT_PUBLIC_SUPPORT_EMAIL=iamonside@daum.net
 NEXT_PUBLIC_EMAIL_DELIVERY_MODE=transactional
 ```
 
@@ -99,7 +99,7 @@ SMTP_HOST=smtp.daum.net
 SMTP_PORT=465
 SMTP_USER=<sender login>
 SMTP_PASS=<SMTP credential>
-SMTP_FROM=온사이드 <myonside@daum.net>
+SMTP_FROM=온사이드 <iamonside@daum.net>
 NEXT_PUBLIC_EMAIL_DELIVERY_MODE=transactional
 ```
 
