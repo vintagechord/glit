@@ -99,7 +99,7 @@ const filePolicyContent = `파일 보관/삭제 정책
 심의 접수, 자료 보완, 방송국/기관 제출, 결과 확인, 분쟁 대응 및 증빙 발급을 위해 필요한 범위에서 보관합니다.
 
 2. 보관 기간
-심의용으로 제출한 음원 파일은 1개월간 보관합니다.
+심의용으로 제출한 음원 파일은 각 파일의 제출일부터 1개월간 보관합니다. 보완 제출한 음원도 해당 파일의 제출일을 기준으로 합니다.
 영상, 가사, 신청서, 결과 파일과 필증은 별도의 기간 만료 없이 관리자가 삭제할 때까지 보관합니다.
 신청 내역과 심의 결과 내역도 관리자가 삭제할 때까지 유지하며, 음원 파일의 보관 기간이 끝나더라도 함께 삭제하지 않습니다.
 
@@ -214,7 +214,7 @@ Onside uses copyrighted materials such as audio, video, lyrics, and application 
 Files are stored only within the scope needed for review submission, material supplementation, broadcaster or organization submission, result confirmation, dispute handling, and receipt issuance.
 
 2. Retention Periods
-Audio files submitted for review are retained for one month.
+Audio files submitted for review are retained for one month from each file's submission date. Supplementary audio files follow the same rule, starting from their own submission date.
 Videos, lyrics, application forms, result files, and certificates have no scheduled expiry and are retained until an administrator deletes them.
 Application and review result records are also retained until an administrator deletes them. They are not deleted when the audio file retention period ends.
 

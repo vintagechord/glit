@@ -93,8 +93,9 @@
     "source": "User confirmation",
     "submittedAudio": {
       "period": "one month",
-      "startsAt": "AWAITING_USER_CLARIFICATION",
-      "automaticDeletionImplemented": false
+      "startsAt": "each audio file submission date",
+      "automaticDeletionImplemented": false,
+      "supplementaryAudio": "one month from that supplementary file submission date; prior files keep their original start date"
     },
     "otherFilesAndApplicationResultRecords": "until explicit administrator deletion",
     "reviewDocumentJobs": {
@@ -127,6 +128,17 @@
         "failed": 0
       },
       "isolatedPostgres": "PASS"
+    },
+    "submissionStartClarificationChecks": {
+      "dateKst": "2026-10-24",
+      "footerLint": "PASS",
+      "policyModal": {
+        "ko": "PASS",
+        "en": "PASS",
+        "viewport": 390,
+        "mutationRequests": "blocked"
+      },
+      "scope": "submission-date policy text only; no automatic deletion implemented or production changes"
     }
   }
 }

@@ -33932,7 +33932,7 @@
         "ko",
         "en"
       ],
-      "audio": "심의용 제출 음원은 1개월 보관",
+      "audio": "심의용 제출 음원은 각 파일의 제출일부터 1개월 보관. 보완 음원도 해당 파일의 제출일 기준이며 기존 파일의 기산점은 유지",
       "otherFiles": "영상·가사·신청서·결과 파일·필증은 별도 기간 만료 없이 관리자가 삭제할 때까지 보관",
       "records": "신청 및 심의 결과 내역은 음원 보관 만료와 분리하여 관리자 삭제 전까지 유지",
       "emailSubmittedFiles": "온라인 제출 파일과 같은 기준",
@@ -33964,7 +33964,7 @@
     "sourceSnapshots": [
       {
         "file": "src/components/site/footer.tsx",
-        "sha256": "da67fffa86689325cfabd95be61bfc36b021f873bd5ebba776fb67167548552e"
+        "sha256": "83c7d132359dd0fbd3db0afd4f4b749ee9ec583bf61ccc81985a6ab5cc20601b"
       },
       {
         "file": "src/lib/review-docs/retention.ts",
