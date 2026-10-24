@@ -5,12 +5,10 @@ import { getStorageLogId } from "@/lib/guest-storage-owner";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { certificateSubmissionId, currentSubmissionCertificateKey, hasPublishedSubmissionResult, type SubmissionCertificateState } from "@/lib/submission-certificate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const CERT_PATH_PATTERN = /^submissions\/([0-9a-fA-F-]{36})\/certificate\//i;
-const ADMIN_FREE_PREFIX = "submissions/admin-free/free-upload/";
 
 const normalizeFilePath = (raw: string) => raw.trim();
 
@@ -35,8 +33,15 @@ export async function GET(req: NextRequest) {
     objectKey = filePath;
   }
 
-  const isAdminFree = objectKey.startsWith(ADMIN_FREE_PREFIX);
-  const certMatch = objectKey.match(CERT_PATH_PATTERN);
+  let prefix: string;
+  try {
+    prefix = getB2Config().prefix;
+  } catch {
+    return NextResponse.json({ error: "파일 저장소가 아직 설정되지 않았습니다. 관리자에게 문의해주세요." }, { status: 503 });
+  }
+  const isAdminFree = [`${prefix}admin-free/free-upload/`, "submissions/admin-free/free-upload/"]
+    .some(value => objectKey.startsWith(value));
+  const submissionId = certificateSubmissionId(objectKey, prefix);
   let allowed = false;
 
   if (isAdminFree) {
@@ -48,10 +53,9 @@ export async function GET(req: NextRequest) {
       ? await supabase.rpc("is_admin")
       : { data: false };
     allowed = Boolean(user && isAdmin === true);
-  } else if (certMatch) {
-    const submissionId = certMatch[1];
+  } else if (submissionId) {
     const { submission, error } = await ensureSubmissionOwner(submissionId, guestToken);
-    let certificateSubmissionType = submission?.type ?? null;
+    let certificate: SubmissionCertificateState | null = submission;
     if (error === "UNAUTHORIZED") {
       return NextResponse.json({ error: "로그인 또는 조회코드가 필요합니다." }, { status: 401 });
     }
@@ -59,29 +63,36 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
     }
     if (error === "FORBIDDEN") {
-      // 관리자이면 통과
+      // Administrator access still requires the current, published certificate.
       const supabase = await createServerSupabase();
-      const { data: isAdmin } = await supabase.rpc("is_admin");
-      if (isAdmin !== true) {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: isAdmin } = user ? await supabase.rpc("is_admin") : { data: false };
+      if (!user || isAdmin !== true) {
         return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
       }
       const admin = createAdminClient();
-      const { data: adminSubmission } = await admin
+      const { data: adminSubmission, error: loadError } = await admin
         .from("submissions")
-        .select("type")
+        .select("id,type,certificate_b2_path,status,result_status,result_notified_at")
         .eq("id", submissionId)
         .maybeSingle();
-      certificateSubmissionType = adminSubmission?.type ?? null;
+      if (loadError) return NextResponse.json({ error: "필증 정보를 불러오지 못했습니다." }, { status: 503 });
+      certificate = adminSubmission;
     }
-    if (certificateSubmissionType !== "MV_DISTRIBUTION") {
+    if (!certificate) return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
+    if (certificate.type !== "MV_DISTRIBUTION") {
       return NextResponse.json(
         { error: "온라인 업로드용 뮤직비디오 심의 필증만 다운로드할 수 있습니다." },
         { status: 403 },
       );
     }
-    if (submission || certificateSubmissionType) {
-      allowed = true;
+    if (currentSubmissionCertificateKey(certificate) !== objectKey) {
+      return NextResponse.json({ error: "현재 등록된 필증이 아닙니다." }, { status: 404 });
     }
+    if (!hasPublishedSubmissionResult(certificate)) {
+      return NextResponse.json({ error: "아직 결과가 준비되지 않았습니다." }, { status: 403 });
+    }
+    allowed = true;
   }
 
   if (!allowed) {
@@ -124,7 +135,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const signed = await presignGetUrl(objectKey, 60 * 10);
-    return NextResponse.redirect(signed, 302);
+    const response = NextResponse.redirect(signed, 302);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
   } catch (error) {
     if (error instanceof B2ConfigError) {
       return NextResponse.json(

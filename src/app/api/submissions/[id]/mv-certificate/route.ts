@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { presignGetUrl } from "@/lib/b2";
+import { currentSubmissionCertificateKey, hasPublishedSubmissionResult } from "@/lib/submission-certificate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,14 +47,9 @@ export async function GET(
   }
 
   const cert = submission as CertificateFields;
-  const key = cert.certificate_b2_path?.trim();
-  const hasResultSignal = Boolean(
-    cert.result_status ||
-      cert.result_notified_at ||
-      (submission.status && ["RESULT_READY", "COMPLETED"].includes(submission.status)),
-  );
+  const key = currentSubmissionCertificateKey(cert);
 
-  if (!hasResultSignal) {
+  if (!hasPublishedSubmissionResult(cert)) {
     return NextResponse.json({ error: "아직 결과가 준비되지 않았습니다." }, { status: 403 });
   }
 

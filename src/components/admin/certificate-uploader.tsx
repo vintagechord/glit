@@ -168,7 +168,7 @@ export function CertificateUploader({
       {currentFile.objectKey ? (
         <a
           className="inline-flex rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
-          href={`/api/b2/download?filePath=${encodeURIComponent(currentFile.objectKey)}`}
+          href={`/api/admin/submissions/${submissionId}/mv-certificate`}
           target="_blank"
           rel="noreferrer"
         >
