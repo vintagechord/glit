@@ -10,6 +10,7 @@ import { useModalFocus } from "@/lib/use-modal-focus";
 import { getAuthPageHref, getAuthReturnPath } from "./navigation";
 import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "./policy";
 import { PasswordInput } from "./password-input";
+import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 
 import { signupAction, type ActionState } from "./actions";
 
@@ -22,6 +23,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
   const localePrefix =
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const english = Boolean(localePrefix);
+  const needsVerification = getEmailDeliveryMode() !== "manual";
   const effectiveNextPath = getAuthReturnPath(nextPath, english);
   const loginHref = getAuthPageHref("login", effectiveNextPath, english);
   const successHref = getAuthPageHref("login", effectiveNextPath, english, true);
@@ -44,13 +46,13 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
   const agreeRefundRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (!state.message || didRedirect.current) return;
+    if (!state.message || state.verificationPending || didRedirect.current) return;
     didRedirect.current = true;
     const timer = window.setTimeout(() => {
       router.push(successHref);
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [successHref, state.message, router]);
+  }, [successHref, state.message, state.verificationPending, router]);
 
   useEffect(() => {
     const order = [
@@ -119,6 +121,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="next" value={effectiveNextPath ?? ""} />
+      <input type="hidden" name="locale" value={english ? "en" : "ko"} />
       <div className="space-y-2">
         <label
           htmlFor="signup-email"
@@ -139,13 +142,15 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
           className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
         />
         <p id="signup-email-note" className="text-xs leading-5 text-muted-foreground">
-          {english ? "Signup does not verify email ownership. Enter an email address where you can receive updates." : "가입 시 별도 이메일 소유 확인을 진행하지 않습니다. 안내를 받을 수 있는 이메일을 입력해주세요."}
+          {needsVerification
+            ? english ? "We will email a verification link. Set your password after verifying your email." : "인증 링크를 이메일로 보내드립니다. 이메일 확인 후 비밀번호를 설정하면 가입이 완료됩니다."
+            : english ? "Signup does not verify email ownership. Enter an email address where you can receive updates." : "가입 시 별도 이메일 소유 확인을 진행하지 않습니다. 안내를 받을 수 있는 이메일을 입력해주세요."}
         </p>
         {state.fieldErrors?.email && (
           <p id="signup-email-error" className="text-xs text-red-500">{state.fieldErrors.email}</p>
         )}
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      {!needsVerification && <><div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <label
             htmlFor="signup-password"
@@ -202,7 +207,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
 
       <p id="signup-password-help" className="text-xs text-muted-foreground">
         {english ? `Use ${PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters.` : `비밀번호는 ${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자로 입력해주세요.`}
-      </p>
+      </p></>}
       <fieldset className="space-y-2 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3 text-sm text-foreground">
         <legend className="sr-only">약관 동의</legend>
         <label className="flex cursor-pointer items-center gap-2 rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111]">
@@ -358,9 +363,10 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
           aria-live="polite"
           className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]"
         >
-          {state.message} 로그인 페이지로 이동합니다.
+          {state.message}{!state.verificationPending ? " 로그인 페이지로 이동합니다." : ""}
         </p>
       )}
+      {state.verificationPending && <Link href={getAuthPageHref("confirm-email", effectiveNextPath, english)} className="block text-sm font-semibold underline underline-offset-4">{english ? "Resend verification email" : "인증 메일 다시 받기"}</Link>}
       <SubmitButton />
       <p className="text-center text-xs text-muted-foreground">
         이미 계정이 있나요?{" "}

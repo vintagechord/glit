@@ -16,6 +16,7 @@ type Props = {
 
 type CertificateUploadResponse = {
   error?: string;
+  warning?: string;
   certificate?: {
     objectKey: string;
     originalName: string;
@@ -129,7 +130,7 @@ export function CertificateUploader({
           uploadedAt: json.certificate.uploadedAt,
         });
       }
-      const successMessage = "필증을 업로드했습니다.";
+      const successMessage = ["필증을 업로드했습니다.", json?.warning].filter(Boolean).join(" ");
       setNotice(successMessage);
       setSavePopup({ id: Date.now(), message: successMessage });
       setFile(null);

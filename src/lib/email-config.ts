@@ -1,5 +1,7 @@
 import { getEmailDeliveryMode } from "./email-delivery-mode";
 
+export type EmailProvider = "resend" | "smtp" | "gmail" | "supabase-smtp";
+
 export type EmailSenderConfiguration =
   | { ok: true; from: string; replyTo?: string; senderDomain: string }
   | {
@@ -70,15 +72,17 @@ const parseSender = (value: string) => {
  * A support inbox is only a reply destination, never a fallback sender.
  * Failure diagnostics are fixed strings and never contain environment values.
  */
-export function getEmailSenderConfiguration({ from, supportEmail }: {
+export function getEmailSenderConfiguration({ from, supportEmail, provider = "resend" }: {
   from?: string | null;
   supportEmail?: string | null;
+  provider?: EmailProvider;
 }): EmailSenderConfiguration {
+  const senderVariable = provider === "resend" ? "RESEND_FROM" : provider === "gmail" ? "GMAIL_FROM" : "SMTP_FROM";
   if (from == null || from === "" || (!CONTROL_CHARACTERS.test(from) && !from.trim())) {
     return {
       ok: false,
       reason: "missing_sender",
-      diagnostic: "RESEND_FROM is required; configure a verified sender domain.",
+      diagnostic: provider === "resend" ? "RESEND_FROM is required; configure a verified sender domain." : `${senderVariable} is required; configure your authenticated mailbox sender.`,
     };
   }
   const sender = parseSender(from);
@@ -86,10 +90,10 @@ export function getEmailSenderConfiguration({ from, supportEmail }: {
     return {
       ok: false,
       reason: "invalid_sender",
-      diagnostic: "RESEND_FROM must contain one valid sender address without control characters.",
+      diagnostic: `${senderVariable} must contain one valid sender address without control characters.`,
     };
   }
-  if ([...UNSUPPORTED_SENDER_DOMAINS].some((domain) =>
+  if (provider === "resend" && [...UNSUPPORTED_SENDER_DOMAINS].some((domain) =>
     sender.domain === domain || sender.domain.endsWith(`.${domain}`))) {
     return {
       ok: false,
@@ -109,20 +113,106 @@ export function getEmailSenderConfiguration({ from, supportEmail }: {
   };
 }
 
-/** The sender and readiness probe must agree on whether mail can be attempted. */
+export type SmtpConfiguration = {
+  host: string;
+  port: 465 | 587;
+  secure: boolean;
+  user: string;
+  pass: string;
+};
+
+/** Only a single recipient mailbox is allowed, never address-list syntax. */
+export function isEmailRecipient(value: string): boolean {
+  return Boolean(parseMailbox(value));
+}
+
+function getSmtpConfiguration(): { ok: true; config: SmtpConfiguration } | { ok: false; diagnostic: string } {
+  const host = process.env.SMTP_HOST?.trim() ?? "";
+  const port = process.env.SMTP_PORT?.trim();
+  const user = process.env.SMTP_USER?.trim() ?? "";
+  const pass = process.env.SMTP_PASS ?? "";
+  if (!host || host.length > 253 || !host.split(".").every(label => DOMAIN_LABEL.test(label))) {
+    return { ok: false, diagnostic: "SMTP_HOST must be a valid hostname." };
+  }
+  if (port !== "465" && port !== "587") {
+    return { ok: false, diagnostic: "SMTP_PORT must be 465 (TLS) or 587 (required STARTTLS)." };
+  }
+  if (!user || CONTROL_CHARACTERS.test(user) || !pass.trim() || CONTROL_CHARACTERS.test(pass)) {
+    return { ok: false, diagnostic: "SMTP_USER and SMTP_PASS are required without control characters." };
+  }
+  return { ok: true, config: { host, port: port === "465" ? 465 : 587, secure: port === "465", user, pass } };
+}
+
+export type GmailConfiguration = { clientId: string; clientSecret: string; refreshToken: string };
+
+export type SupabaseEmailRelayConfiguration = { url: string; secret: string };
+
+function getSupabaseEmailRelayConfiguration(): { ok: true; config: SupabaseEmailRelayConfiguration } | { ok: false; diagnostic: string } {
+  // Match the server's Supabase client: an explicit server URL wins over the
+  // public build value, so a stale public URL cannot receive relay credentials.
+  const serverUrl = process.env.SUPABASE_URL;
+  const projectUrl = serverUrl?.trim() ? serverUrl : process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const relayUrl = process.env.SUPABASE_EMAIL_RELAY_URL ?? "";
+  const secret = process.env.EMAIL_RELAY_SECRET ?? "";
+  try {
+    const project = new URL(projectUrl);
+    // A relay must belong to this configured hosted project. Never send the
+    // dedicated secret or message contents to an arbitrary configurable URL.
+    if (
+      CONTROL_CHARACTERS.test(projectUrl) || projectUrl !== projectUrl.trim() ||
+      project.protocol !== "https:" || !/^[a-z0-9-]+\.supabase\.co$/.test(project.hostname) ||
+      project.port || project.username || project.password || project.pathname !== "/" ||
+      project.search || project.hash || /[?#]/.test(projectUrl) ||
+      relayUrl !== `${project.origin}/functions/v1/send-transactional-email`
+    ) throw new Error("Invalid relay URL");
+  } catch {
+    return { ok: false, diagnostic: "SUPABASE_EMAIL_RELAY_URL must be the current Supabase project's HTTPS send-transactional-email function URL." };
+  }
+  if (!/^[a-fA-F0-9]{64}$/.test(secret)) {
+    return { ok: false, diagnostic: "EMAIL_RELAY_SECRET must contain exactly 64 hexadecimal characters." };
+  }
+  return { ok: true, config: { url: relayUrl, secret } };
+}
+
+function getGmailConfiguration(): { ok: true; config: GmailConfiguration } | { ok: false; diagnostic: string } {
+  const clientId = process.env.GMAIL_CLIENT_ID?.trim() ?? "";
+  const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim() ?? "";
+  const refreshToken = process.env.GMAIL_REFRESH_TOKEN?.trim() ?? "";
+  if ([clientId, clientSecret, refreshToken].some(value => !value || CONTROL_CHARACTERS.test(value))) {
+    return { ok: false, diagnostic: "GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN are required." };
+  }
+  return { ok: true, config: { clientId, clientSecret, refreshToken } };
+}
+
+/** The sender and readiness probe agree on the selected transport. Never fall back. */
 export function getEmailDeliveryConfiguration({
   apiKey = process.env.RESEND_API_KEY,
-  from = process.env.RESEND_FROM,
+  from,
   supportEmail,
-}: { apiKey?: string; from?: string; supportEmail?: string | null } = {}) {
-  const sender = getEmailSenderConfiguration({ from, supportEmail });
+  provider = process.env.EMAIL_PROVIDER ?? "resend",
+}: { apiKey?: string; from?: string; supportEmail?: string | null; provider?: string } = {}) {
+  const selectedProvider = provider.trim();
+  const providerValid = selectedProvider === "resend" || selectedProvider === "smtp" || selectedProvider === "gmail" || selectedProvider === "supabase-smtp";
+  const sender = getEmailSenderConfiguration({
+    from: from ?? (selectedProvider === "smtp" || selectedProvider === "supabase-smtp" ? process.env.SMTP_FROM : selectedProvider === "gmail" ? process.env.GMAIL_FROM : process.env.RESEND_FROM),
+    supportEmail,
+    provider: providerValid ? selectedProvider : "resend",
+  });
   const normalizedKey = apiKey?.trim() || "";
   const mode = getEmailDeliveryMode();
   const enabled = mode === "transactional";
+  const smtp = selectedProvider === "smtp" ? getSmtpConfiguration() : undefined;
+  const gmail = selectedProvider === "gmail" ? getGmailConfiguration() : undefined;
+  const relay = selectedProvider === "supabase-smtp" ? getSupabaseEmailRelayConfiguration() : undefined;
+  const transportReady = selectedProvider === "smtp" ? smtp?.ok === true : selectedProvider === "gmail" ? gmail?.ok === true : selectedProvider === "supabase-smtp" ? relay?.ok === true : Boolean(normalizedKey);
   return {
     mode,
-    ok: enabled && Boolean(normalizedKey) && sender.ok,
-    apiKey: enabled ? normalizedKey : "",
+    provider: providerValid ? selectedProvider : "invalid",
+    ok: enabled && providerValid && transportReady && sender.ok,
+    apiKey: enabled && selectedProvider === "resend" ? normalizedKey : "",
+    smtp: enabled && smtp?.ok ? smtp.config : undefined,
+    gmail: enabled && gmail?.ok ? gmail.config : undefined,
+    relay: enabled && relay?.ok ? relay.config : undefined,
     from: enabled && sender.ok ? sender.from : "",
     replyTo: enabled && sender.ok ? sender.replyTo : undefined,
     sender,
@@ -130,9 +220,17 @@ export function getEmailDeliveryConfiguration({
       ? "Transactional email delivery is deferred in manual mode."
       : mode === "invalid"
         ? "NEXT_PUBLIC_EMAIL_DELIVERY_MODE must be manual or transactional."
-        : !normalizedKey
-      ? "RESEND_API_KEY is required for transactional email."
-      : !sender.ok ? sender.diagnostic : undefined,
+        : !providerValid
+          ? "EMAIL_PROVIDER must be resend, smtp, gmail or supabase-smtp."
+          : smtp && !smtp.ok
+            ? smtp.diagnostic
+            : gmail && !gmail.ok
+              ? gmail.diagnostic
+            : relay && !relay.ok
+              ? relay.diagnostic
+            : selectedProvider === "resend" && !normalizedKey
+              ? "RESEND_API_KEY is required for the Resend email provider."
+              : !sender.ok ? sender.diagnostic : undefined,
   };
 }
 

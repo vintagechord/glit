@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { isRatingCode } from "@/lib/mv-assets";
+import { sendSubmissionUpdateNotificationById } from "@/lib/admin/submission-notifications";
 import { completeMvReviewFlow } from "@/lib/admin/mv-review-flow";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -24,7 +25,7 @@ export async function PATCH(
   } = await supabase.auth.getUser();
   const { data: isAdmin } = await supabase.rpc("is_admin");
 
-  if (!user || !isAdmin) {
+  if (!user || isAdmin !== true) {
     return NextResponse.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
   }
 
@@ -41,7 +42,7 @@ export async function PATCH(
   const admin = createAdminClient();
   const { data: submission } = await admin
     .from("submissions")
-    .select("id, type")
+    .select("id, type, mv_desired_rating, result_status, status")
     .eq("id", submissionId)
     .maybeSingle();
 
@@ -55,8 +56,12 @@ export async function PATCH(
     );
   }
 
+  const expectedResult = parsed.data.rating === "REJECT" ? "REJECTED" : "APPROVED";
+  if (submission.mv_desired_rating === parsed.data.rating && submission.result_status === expectedResult && submission.status === "RESULT_READY") {
+    return NextResponse.json({ ok: true, rating: parsed.data.rating, resultStatus: expectedResult, unchanged: true });
+  }
   const completion = await completeMvReviewFlow(admin, submissionId, {
-    rating: parsed.data.rating,
+    rating: parsed.data.rating, resultStatus: expectedResult,
   });
 
   console.info("[admin][mv-rating] update", {
@@ -85,8 +90,12 @@ export async function PATCH(
   revalidatePath("/mypage");
   revalidatePath("/track");
 
+  const notification = await sendSubmissionUpdateNotificationById({
+    submissionId, headline: "뮤직비디오 심의 등급이 업데이트되었습니다.",
+    summary: "신청 내역에서 확정된 심의 등급을 확인해주세요.", subject: "[onside] 뮤직비디오 심의 등급 안내",
+  });
   return NextResponse.json({
-    ok: true,
+    ok: true, warning: notification.warning,
     rating: parsed.data.rating,
     resultStatus: completion.resultStatus,
     stationCount: completion.stationCount,

@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const fixtureEmail = "auth-ui@example.invalid";
 const fixturePassword = "Fixture-pass-123!";
 const connectionError = "인증 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요. 문제가 계속되면 고객센터에 문의해주세요.";
-type ActionResult = { error?: string; message?: string; retryAfterSeconds?: number };
+type ActionResult = { error?: string; message?: string; retryAfterSeconds?: number; verificationPending?: boolean };
 
 /** UI coverage only: no real login, reset emails, or account changes. */
 async function mockAuth(page: Page, options: {
@@ -69,16 +69,30 @@ async function mockAuth(page: Page, options: {
   return calls;
 }
 
-test("successful signup returns to login with the original draft destination", async ({ page }) => {
-  const calls = await mockAuth(page, { actionResult: { message: "회원가입이 완료되었습니다. 로그인해 주세요." } });
+test("signup preserves the original draft destination through email verification or manual signup", async ({ page }) => {
+  const actionResult: ActionResult = {};
+  const calls = await mockAuth(page, { actionResult });
   const next = "/dashboard/new?type=mv&draft=fixture-id";
   await page.goto(`/signup?next=${encodeURIComponent(next)}`);
   await page.locator("#signup-email").fill(fixtureEmail);
-  await page.locator("#signup-password").fill(fixturePassword);
-  await page.locator("#signup-confirm-password").fill(fixturePassword);
+  const manualSignup = await page.locator("#signup-password").count() > 0;
+  if (manualSignup) {
+    await page.locator("#signup-password").fill(fixturePassword);
+    await page.locator("#signup-confirm-password").fill(fixturePassword);
+    actionResult.message = "회원가입이 완료되었습니다. 로그인해 주세요.";
+  } else {
+    actionResult.message = "인증 메일을 확인해주세요.";
+    actionResult.verificationPending = true;
+  }
   await page.getByLabel("필수 항목 전체 동의", { exact: true }).check();
   await page.getByRole("button", { name: "회원가입", exact: true }).click();
-  await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("next") === next && url.searchParams.get("signup") === "success");
+  if (manualSignup) {
+    await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("next") === next && url.searchParams.get("signup") === "success");
+  } else {
+    await expect(page.getByText("인증 메일을 확인해주세요.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "인증 메일 다시 받기", exact: true })).toHaveAttribute("href", `/confirm-email?next=${encodeURIComponent(next)}`);
+    await expect(page).toHaveURL((url) => url.pathname === "/signup" && url.searchParams.get("next") === next);
+  }
   expect(calls.actions).toBe(1);
 });
 

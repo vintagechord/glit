@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { sendGuestSubmissionLookupEmail } from "@/lib/email";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
+import { getEmailDeliveryConfiguration } from "@/lib/email-config";
 import { matchesGuestLookupIdentity } from "@/lib/guest-lookup-match";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
@@ -64,6 +65,14 @@ export async function POST(request: NextRequest) {
         : "조회 코드 이메일 발송 설정을 확인할 수 없습니다. 고객센터에 문의해주세요.",
     }, { status: 503, headers: { "cache-control": "no-store" } });
   }
+  // Check once before looking up a person so missing provider credentials have
+  // the same response for existing and nonexistent submissions.
+  if (!getEmailDeliveryConfiguration().ok) {
+    return NextResponse.json({
+      ok: false,
+      error: "조회 코드 이메일 발송을 준비 중입니다. 잠시 후 다시 시도하거나 고객센터에 문의해주세요.",
+    }, { status: 503, headers: { "cache-control": "no-store" } });
+  }
   const requestIdentifier = getRequestIdentifier(request.headers);
   const ipLimit = consumeRateLimit({
     namespace: "track-lookup-ip",
@@ -97,6 +106,7 @@ export async function POST(request: NextRequest) {
 
   const name = normalizeName(parsed.data.name);
   const email = normalizeEmail(parsed.data.email);
+  const emailPattern = email.replace(/[\\%_]/g, "\\$&");
   const emailLimit = consumeRateLimit({
     namespace: "track-lookup-email",
     identifier: email,
@@ -126,7 +136,7 @@ export async function POST(request: NextRequest) {
       .select(selectFields)
       .is("user_id", null)
       .not("guest_token", "is", null)
-      .ilike("guest_email", email)
+      .ilike("guest_email", emailPattern)
       .order("created_at", { ascending: false })
       .limit(20),
     admin
@@ -134,15 +144,15 @@ export async function POST(request: NextRequest) {
       .select(selectFields)
       .is("user_id", null)
       .not("guest_token", "is", null)
-      .ilike("applicant_email", email)
+      .ilike("applicant_email", emailPattern)
       .order("created_at", { ascending: false })
       .limit(20),
   ]);
 
   if (byGuestInfo.error && byApplicantInfo.error) {
     console.error("[TrackLookup][lookup-code] query failed", {
-      byGuestInfo: byGuestInfo.error,
-      byApplicantInfo: byApplicantInfo.error,
+      guestQueryFailed: Boolean(byGuestInfo.error),
+      applicantQueryFailed: Boolean(byApplicantInfo.error),
     });
     return NextResponse.json(
       { ok: false, error: "조회 코드를 확인하지 못했습니다. 잠시 후 다시 시도해주세요." },
@@ -190,7 +200,7 @@ export async function POST(request: NextRequest) {
       console.warn("[TrackLookup][lookup-code] recovery mail not sent", {
         skipped: emailResult.skipped ?? false,
         itemCount: matchedItems.length,
-        message: emailResult.message,
+        reason: emailResult.reason,
       });
     }
   }
@@ -198,5 +208,5 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     message: genericLookupMessage,
-  }, { status: 202 });
+  }, { status: 202, headers: { "cache-control": "no-store" } });
 }

@@ -6,14 +6,15 @@ import { createRequire } from "node:module";
 test("auth actions validate, map transport failures, preserve safe login redirects and avoid duplicate reset attempts", async () => {
   const result = await build({ stdin: { contents: `export * from './src/features/auth/actions'; export {state,calls} from 'auth-fixture';`, resolveDir: process.cwd(), loader: "ts" }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false,
     plugins: [{ name: "auth-action-test", setup(plugin) {
-      plugin.onResolve({ filter: /^(auth-fixture|@\/lib\/supabase\/(?:server|admin)|@\/lib\/email|@\/lib\/request-rate-limit|next\/(?:navigation|headers))$/ }, (args) => ({ path: args.path, namespace: "fixture" }));
+      plugin.onResolve({ filter: /^(auth-fixture|@\/lib\/supabase\/(?:server|admin)|@\/lib\/email|@\/lib\/request-rate-limit|next\/(?:navigation|headers)|.*account-lookup)$/ }, (args) => ({ path: args.path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = `import {state,calls} from 'auth-fixture';`;
         const files: Record<string, string> = {
           'auth-fixture': `export const state={error:null,throws:false,linkData:null,emailResult:{ok:true},limited:false}; export const calls=[];`,
           '@/lib/supabase/server': `${shared} export async function createServerSupabase(){ return {auth:{signInWithPassword:async input=>{calls.push({method:'login',input});if(state.throws)throw state.error;return {error:state.error};},resetPasswordForEmail:async()=>{calls.push({method:'reset'});return {error:state.error};}}}; }`,
           '@/lib/supabase/admin': `${shared} export function createAdminClient(){return {auth:{admin:{createUser:async input=>{calls.push({method:'signup',input});return {data:{user:{id:'fixture'}},error:state.error};},generateLink:async()=>{calls.push({method:'generateLink'});return {data:state.linkData,error:state.error};}}}};}`,
-          '@/lib/email': `${shared} export async function sendWelcomeEmail(){calls.push({method:'welcome'});return {ok:true};} export async function sendPasswordResetEmail(input){calls.push({method:'sendReset',input});return state.emailResult;}`,
+          './account-lookup': `export const SIGNUP_VERIFICATION_FLOW='email_password_v1'; export async function findAccountByEmail(){return null;}`,
+          '@/lib/email': `${shared} export async function sendSignupVerificationEmail(){return {ok:true};} export async function sendAccountIdEmail(){return {ok:true};} export async function sendWelcomeEmail(){calls.push({method:'welcome'});return {ok:true};} export async function sendPasswordResetEmail(input){calls.push({method:'sendReset',input});return state.emailResult;}`,
           '@/lib/request-rate-limit': `${shared} export const consumeRateLimit=()=>({allowed:!state.limited,retryAfterSeconds:state.limited?120:0}); export const getRequestIdentifier=()=> 'fixture';`,
           'next/navigation': `export function redirect(location){throw Object.assign(new Error('test redirect'),{location});}`,
           'next/headers': `export async function headers(){return new Headers();}`,
@@ -46,6 +47,7 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     await assert.rejects(auth.loginAction({}, form({ ...signIn, locale: "en", next: "/dashboard/new?draft=fixture" })), (error: unknown) => (error as { location: string }).location === "/en/dashboard/new?draft=fixture");
     await assert.rejects(auth.loginAction({}, form({ ...signIn, locale: "en", next: "//evil.invalid" })), (error: unknown) => (error as { location: string }).location === "/en/mypage");
     auth.calls.length = 0;
+    process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = "manual";
     const signup = await auth.signupAction({}, form({ ...signIn, password: "fixture-password", confirmPassword: "fixture-password", agreeAge: "on", agreeTerms: "on", agreePrivacy: "on", agreeRefund: "on" }));
     assert.ok(signup.message);
     const created = auth.calls.find(call => call.method === "signup")?.input as { app_metadata: { signupConsent: { acceptedAt: string; versions: object; marketing: boolean; age14OrOlder: boolean }; emailOwnershipVerifiedAtSignup: boolean } };
@@ -57,6 +59,7 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     auth.calls.length = 0;
     const invalidSignup = await auth.signupAction({}, form({ ...signIn, password: "123", confirmPassword: "123", agreeAge: "on", agreeTerms: "on", agreePrivacy: "on", agreeRefund: "on" }));
     assert.match(invalidSignup.fieldErrors?.password ?? "", /8자 이상/); assert.equal(auth.calls.length, 0);
+    process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = "transactional";
     process.env.RESEND_API_KEY = "fixture-only";
     for (const from of [undefined, "", "onside <myonside@daum.net>", "onside <noreply@example.invalid>\r\nBcc: private@example.invalid"]) {
       if (from === undefined) delete process.env.RESEND_FROM;
@@ -73,7 +76,7 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     assert.match(reset.error ?? "", /인증 서버에 연결/); assert.deepEqual(auth.calls.map((call) => call.method), ["generateLink"]);
     delete process.env.RESEND_API_KEY; auth.calls.length = 0;
     await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
-    assert.deepEqual(auth.calls.map((call) => call.method), ["reset"], "no custom-link request when custom sender is not configured");
+    assert.equal(auth.calls.length, 0, "unconfigured mail must not consume Supabase built-in quota");
     process.env.RESEND_API_KEY = "fixture-only";
     auth.state.error = null;
     auth.state.linkData = { properties: { hashed_token: "fixture-recovery-hash", action_link: "https://provider.invalid/consume-once" } };

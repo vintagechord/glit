@@ -5,7 +5,7 @@ export function getAuthReturnPath(value: string | null | undefined, english = fa
   if (!safe || safe.length > 2048) return null;
   const url = new URL(safe, "https://onside-internal.invalid");
   const pathname = url.pathname.replace(/^\/en(?=\/|$)/, "") || "/";
-  if (/^\/(login|signup|forgot-password|reset-password)(\/|$)/.test(pathname)) return null;
+  if (/^\/(login|signup|forgot-password|reset-password|find-id|confirm-email)(\/|$)/.test(pathname)) return null;
   // These destinations have locale aliases. Keep the draft/cart query and hash
   // intact while allowing a language switch on an authentication screen.
   if (/^\/(dashboard|mypage|track)(\/|$)/.test(pathname)) {
@@ -14,7 +14,7 @@ export function getAuthReturnPath(value: string | null | undefined, english = fa
   return safe;
 }
 
-export function getAuthPageHref(page: "login" | "signup" | "forgot-password" | "reset-password", nextPath?: string | null, english = false, signupSuccess = false) {
+export function getAuthPageHref(page: "login" | "signup" | "forgot-password" | "reset-password" | "find-id" | "confirm-email", nextPath?: string | null, english = false, signupSuccess = false) {
   const query = new URLSearchParams();
   const next = getAuthReturnPath(nextPath, english);
   if (next) query.set("next", next);

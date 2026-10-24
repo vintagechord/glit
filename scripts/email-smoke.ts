@@ -1,10 +1,10 @@
 #!/usr/bin/env tsx
 /**
- * Sends a real email through the same Resend path used by app notifications.
+ * Sends a real email through the selected provider used by app notifications.
  *
  * Usage:
  *   npm run email:smoke -- --to you@example.com
- *   RESEND_TEST_TO=you@example.com npm run email:smoke
+ *   EMAIL_TEST_TO=you@example.com npm run email:smoke
  */
 
 import process from "node:process";
@@ -47,29 +47,22 @@ const maskEmail = (email: string) => {
   return `${visible}***@${domain}`;
 };
 
-const requireEnv = (key: string) => {
-  const value = process.env[key]?.trim();
-  if (!value) {
-    throw new Error(`Missing required env: ${key}`);
-  }
-  return value;
-};
-
 const main = async () => {
   const to =
     parseArgValue("to") ||
+    process.env.EMAIL_TEST_TO?.trim() ||
     process.env.RESEND_TEST_TO?.trim() ||
-    process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() ||
     "";
 
   if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
     throw new Error(
-      "Missing valid test recipient. Pass --to you@example.com or set RESEND_TEST_TO.",
+      "Missing valid test recipient. Pass --to you@example.com or set EMAIL_TEST_TO.",
     );
   }
 
-  requireEnv("RESEND_API_KEY");
-  requireEnv("RESEND_FROM");
+  const { getEmailDeliveryConfiguration } = await import("../src/lib/email-config");
+  const config = getEmailDeliveryConfiguration();
+  if (!config.ok) throw new Error(config.diagnostic ?? "Email delivery is not configured.");
 
   const emailModule = (await import("../src/lib/email")) as EmailModule;
   const sendSubmissionUpdateEmail =
@@ -87,7 +80,7 @@ const main = async () => {
     artist: "Onside",
     kind: "ALBUM",
     headline: "Email smoke test",
-    summary: `This is a real Resend smoke test from the app notification path.\nSent at: ${now}`,
+    summary: `This is a real ${config.provider} smoke test from the app notification path.\nSent at: ${now}`,
     link:
       process.env.NEXT_PUBLIC_SITE_URL ||
       process.env.NEXT_PUBLIC_APP_URL ||
@@ -96,6 +89,7 @@ const main = async () => {
   });
 
   const output = {
+    provider: config.provider,
     recipient: maskEmail(to),
     ok: result.ok,
     skipped: result.skipped ?? false,

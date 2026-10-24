@@ -21,14 +21,13 @@ import {
 } from "@/constants/review-status";
 import {
   resolveStationTrackResults,
+  areTrackResultsEquivalent,
   getStationReviewTracks,
   isWbsReview,
 } from "@/lib/track-results";
 import { saveStationReview } from "@/lib/admin/station-review-save";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
-import { sendResultEmail, sendSubmissionUpdateEmail } from "@/lib/email";
-import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
-import { sendKakaoOfficialNotification } from "@/lib/kakao";
+import { sendSubmissionResultNotificationById, sendSubmissionUpdateNotificationById } from "@/lib/admin/submission-notifications";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAllowedImageSource } from "@/lib/image-source";
@@ -37,7 +36,6 @@ import {
   completeMvReviewFlow,
   resolveMvFallbackStationId,
 } from "@/lib/admin/mv-review-flow";
-import { buildUrl, getBaseUrl } from "@/lib/url";
 import {
   ALBUM_REVIEW_DISCOUNT_SETTING_KEY,
   normalizeAlbumDiscountPercent,
@@ -285,283 +283,6 @@ const buildSubmissionFormRedirect = (
     state,
   });
 
-const normalizeEmailValue = (value?: string | null) =>
-  value?.trim().toLowerCase() ?? "";
-
-const collectNotificationEmails = (
-  ...values: Array<string | null | undefined>
-) => {
-  const recipients = new Set<string>();
-  for (const value of values) {
-    const normalized = normalizeEmailValue(value);
-    if (normalized) {
-      recipients.add(normalized);
-    }
-  }
-  return Array.from(recipients);
-};
-
-type SubmissionNotificationContext = {
-  submission: {
-    id: string;
-    title?: string | null;
-    artist_name?: string | null;
-    type?: string | null;
-    user_id?: string | null;
-    guest_token?: string | null;
-    applicant_email?: string | null;
-    applicant_phone?: string | null;
-    guest_email?: string | null;
-    guest_phone?: string | null;
-  };
-  recipientEmails: string[];
-  recipientPhone?: string | null;
-  link: string;
-  kind: "ALBUM" | "MV";
-};
-
-const loadSubmissionNotificationContext = async (
-  submissionId: string,
-): Promise<SubmissionNotificationContext | null> => {
-  const supabase = createAdminClient();
-  const { data: submission, error } = await supabase
-    .from("submissions")
-    .select(
-      "id, title, artist_name, type, user_id, guest_token, applicant_email, applicant_phone, guest_email, guest_phone",
-    )
-    .eq("id", submissionId)
-    .maybeSingle();
-
-  if (error || !submission) {
-    if (error) {
-      console.warn("[Email][update] submission load failed", {
-        submissionId,
-        error,
-      });
-    }
-    return null;
-  }
-
-  let memberEmail: string | null = null;
-  let memberPhone: string | null = null;
-  if (submission.user_id) {
-    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(
-      submission.user_id,
-    );
-    if (userError) {
-      console.warn("[Email][update] member lookup failed", {
-        submissionId,
-        userId: submission.user_id,
-        error: userError,
-      });
-    } else {
-      memberEmail = userData?.user?.email ?? null;
-    }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("phone")
-      .eq("user_id", submission.user_id)
-      .maybeSingle();
-    memberPhone = profile?.phone ?? null;
-  }
-
-  const recipientEmails = collectNotificationEmails(
-    submission.applicant_email,
-    submission.guest_email,
-    memberEmail,
-  );
-
-  const baseUrl = getBaseUrl();
-  const link =
-    submission.guest_token && submission.guest_token.length >= 8
-      ? buildUrl(`/track/${encodeURIComponent(submission.guest_token)}`, baseUrl)
-      : buildUrl(`/dashboard/submissions/${submission.id}`, baseUrl);
-  const kind = submission.type?.startsWith("MV") ? "MV" : "ALBUM";
-
-  return {
-    submission,
-    recipientEmails,
-    recipientPhone:
-      submission.applicant_phone ?? submission.guest_phone ?? memberPhone ?? null,
-    link,
-    kind,
-  };
-};
-
-const markSubmissionResultNotified = async (submissionId: string) => {
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("submissions")
-    .update({
-      result_notified_at: new Date().toISOString(),
-    })
-    .eq("id", submissionId);
-
-  if (!error) return true;
-
-  if (error.code === "42703") {
-    console.warn("[Email][result] result_notified_at column missing", {
-      submissionId,
-    });
-    return false;
-  }
-
-  console.warn("[Email][result] failed to persist notified timestamp", {
-    submissionId,
-    error,
-  });
-  return false;
-};
-
-const sendSubmissionUpdateNotificationById = async ({
-  submissionId,
-  headline,
-  summary,
-  subject,
-}: {
-  submissionId: string;
-  headline: string;
-  summary: string;
-  subject?: string;
-}) => {
-  const context = await loadSubmissionNotificationContext(submissionId);
-  if (!context) return;
-
-  for (const recipientEmail of context.recipientEmails) {
-    const result = await sendSubmissionUpdateEmail({
-      email: recipientEmail,
-      title: context.submission.title ?? "제목 미입력",
-      artist: context.submission.artist_name ?? null,
-      kind: context.kind,
-      headline,
-      summary,
-      link: context.link,
-      subject,
-    });
-    if (!result.ok && !result.skipped) {
-      console.warn("[Email][update] send failed", {
-        submissionId,
-        message: result.message,
-      });
-    }
-  }
-  await sendKakaoOfficialNotification({
-    phone: context.recipientPhone,
-    title: headline,
-    message: summary,
-    link: context.link,
-  });
-};
-
-const sendSubmissionResultNotificationById = async ({
-  submissionId,
-  resultStatus,
-  resultMemo,
-}: {
-  submissionId: string;
-  resultStatus: z.infer<typeof resultStatusEnum>;
-  resultMemo?: string;
-}) => {
-  const context = await loadSubmissionNotificationContext(submissionId);
-  if (!context) {
-    return {
-      deliveredCount: 0,
-      skippedCount: 0,
-      failedCount: 0,
-      recipientCount: 0,
-      warning: "접수 정보를 찾지 못해 결과 메일을 보내지 못했습니다.",
-    };
-  }
-
-  const sendKakaoResultNotification = () =>
-    sendKakaoOfficialNotification({
-      phone: context.recipientPhone,
-      title: "심의 결과가 업데이트되었습니다.",
-      message: [
-        `${context.submission.title ?? "제목 미입력"} 심의 결과가 업데이트되었습니다.`,
-        resultMemo ? `메모: ${resultMemo}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      link: context.link,
-    });
-
-  if (getEmailDeliveryMode() === "manual") {
-    await sendKakaoResultNotification();
-    return {
-      deliveredCount: 0,
-      skippedCount: context.recipientEmails.length,
-      failedCount: 0,
-      recipientCount: context.recipientEmails.length,
-      warning: "심의 결과는 저장되었습니다. 자동 이메일 발송은 보류 중입니다. 고객에게 신청 내역에서 결과를 확인하도록 별도로 안내해주세요.",
-    };
-  }
-
-  if (!context.recipientEmails.length) {
-    await sendKakaoResultNotification();
-    return {
-      deliveredCount: 0,
-      skippedCount: 0,
-      failedCount: 0,
-      recipientCount: 0,
-      warning: "수신 이메일이 없어 결과 메일을 보내지 못했습니다.",
-    };
-  }
-
-  let deliveredCount = 0;
-  let skippedCount = 0;
-  let failedCount = 0;
-
-  for (const recipientEmail of context.recipientEmails) {
-    const result = await sendResultEmail({
-      email: recipientEmail,
-      title: context.submission.title ?? "제목 미입력",
-      artist: context.submission.artist_name ?? null,
-      resultStatus,
-      resultMemo: resultMemo ?? null,
-      link: context.link,
-    });
-
-    if (result.ok) {
-      deliveredCount += 1;
-      continue;
-    }
-
-    if (result.skipped) {
-      skippedCount += 1;
-      continue;
-    }
-
-    failedCount += 1;
-    console.warn("[Email][result] send failed", {
-      submissionId,
-      message: result.message,
-    });
-  }
-
-  if (deliveredCount > 0) {
-    await markSubmissionResultNotified(submissionId);
-  }
-  await sendKakaoResultNotification();
-
-  const warning =
-    deliveredCount === 0
-      ? skippedCount > 0
-        ? "이메일 발송 설정이 없어 결과 메일을 보내지 못했습니다."
-        : "결과 메일 발송에 실패했습니다."
-      : failedCount > 0 || skippedCount > 0
-        ? "일부 수신자에게만 결과 메일이 발송되었습니다."
-        : undefined;
-
-  return {
-    deliveredCount,
-    skippedCount,
-    failedCount,
-    recipientCount: context.recipientEmails.length,
-    warning,
-  };
-};
-
 const packageSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().min(1),
@@ -746,6 +467,13 @@ export async function updateSubmissionStatusAction(
   }
 
   const supabase = createAdminClient();
+  const { data: previous, error: previousError } = await supabase.from("submissions")
+    .select("status, admin_memo").eq("id", parsed.data.submissionId).maybeSingle();
+  if (previousError || !previous) return { error: "접수 정보를 확인하지 못했습니다." };
+  const statusChanged = previous.status !== parsed.data.status;
+  if (!statusChanged && (previous.admin_memo ?? "") === (parsed.data.adminMemo || "")) {
+    return { message: "변경된 내용이 없습니다." };
+  }
   const updatePayload: {
     status: z.infer<typeof reviewStatusEnum>;
     admin_memo: string | null;
@@ -773,16 +501,16 @@ export async function updateSubmissionStatusAction(
     `관리자 상태 변경: ${parsed.data.status}`,
     "ADMIN_STATUS",
   );
-  await sendSubmissionUpdateNotificationById({
+  const notification = statusChanged ? await sendSubmissionUpdateNotificationById({
     submissionId: parsed.data.submissionId,
     headline: "심의 진행 상태가 업데이트되었습니다.",
     summary: `현재 상태: ${
       reviewStatusLabelMap[parsed.data.status] ?? parsed.data.status
     }`,
     subject: "[onside] 심의 진행 상태 업데이트",
-  });
+  }) : null;
 
-  return { message: "상태가 업데이트되었습니다." };
+  return { message: "상태가 업데이트되었습니다.", warning: notification?.warning };
 }
 
 export async function updateSubmissionStatusFormAction(
@@ -815,7 +543,9 @@ export async function updateSubmissionStatusFormAction(
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
     revalidateUserDashboards(submissionId);
-    redirect(`/admin/submissions/${submissionId}?saved=status`);
+    redirect(buildSubmissionFormRedirect(formData, submissionId, {
+      saved: result.warning ? "status_warning" : "status", savedWarning: result.warning,
+    }));
   }
 }
 
@@ -838,7 +568,7 @@ export async function updateSubmissionMvRatingAction(
   const supabase = createAdminClient();
   const { data: submission } = await supabase
     .from("submissions")
-    .select("type")
+    .select("type, mv_desired_rating, result_status, status")
     .eq("id", parsed.data.submissionId)
     .maybeSingle();
 
@@ -851,8 +581,12 @@ export async function updateSubmissionMvRatingAction(
     };
   }
 
+  const expectedResult = parsed.data.rating === "REJECT" ? "REJECTED" : "APPROVED";
+  if (submission.mv_desired_rating === parsed.data.rating && submission.result_status === expectedResult && submission.status === "RESULT_READY") {
+    return { message: "변경된 내용이 없습니다." };
+  }
   const completion = await completeMvReviewFlow(supabase, parsed.data.submissionId, {
-    rating: parsed.data.rating,
+    rating: parsed.data.rating, resultStatus: expectedResult,
   });
 
   if (completion.error) {
@@ -868,7 +602,11 @@ export async function updateSubmissionMvRatingAction(
     "RESULT_UPDATE",
   );
 
-  return { message: "MV 등급이 저장되었습니다." };
+  const notification = await sendSubmissionUpdateNotificationById({
+    submissionId: parsed.data.submissionId, headline: "뮤직비디오 심의 등급이 업데이트되었습니다.",
+    summary: "신청 내역에서 확정된 심의 등급을 확인해주세요.", subject: "[onside] 뮤직비디오 심의 등급 안내",
+  });
+  return { message: "MV 등급이 저장되었습니다.", warning: notification.warning };
 }
 
 export async function updateSubmissionMvRatingFormAction(
@@ -897,7 +635,7 @@ export async function updateSubmissionMvRatingFormAction(
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidatePath(`/admin/submissions/detail?id=${submissionId}`);
     revalidateUserDashboards(submissionId);
-    redirect(`/admin/submissions/${submissionId}?saved=rating`);
+    redirect(buildSubmissionFormRedirect(formData, submissionId, { saved: "rating", savedWarning: result.warning }));
   }
 }
 
@@ -928,6 +666,12 @@ export async function updateSubmissionBasicInfoAction(
   }
 
   const supabase = createAdminClient();
+  const { data: previous, error: previousError } = await supabase.from("submissions")
+    .select("title, artist_name").eq("id", parsed.data.submissionId).maybeSingle();
+  if (previousError || !previous) return { error: "접수 정보를 확인하지 못했습니다." };
+  if ((!title || title === previous.title) && (!artistName || artistName === previous.artist_name)) {
+    return { message: "변경된 내용이 없습니다." };
+  }
   const { data: updatedSubmission, error } = await supabase
     .from("submissions")
     .update(updatePayload)
@@ -948,7 +692,11 @@ export async function updateSubmissionBasicInfoAction(
     "ADMIN_BASIC_INFO",
   );
 
-  return { message: "아티스트/앨범 정보가 업데이트되었습니다." };
+  const notification = await sendSubmissionUpdateNotificationById({
+    submissionId: parsed.data.submissionId, headline: "접수 정보가 업데이트되었습니다.",
+    summary: "신청 내역에서 작품명과 아티스트 정보를 확인해주세요.", subject: "[onside] 접수 정보 업데이트 안내",
+  });
+  return { message: "아티스트/앨범 정보가 업데이트되었습니다.", warning: notification.warning };
 }
 
 export async function updateSubmissionBasicInfoFormAction(
@@ -980,7 +728,7 @@ export async function updateSubmissionBasicInfoFormAction(
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${submissionId}`);
   revalidateUserDashboards(submissionId);
-  redirect(`/admin/submissions/${submissionId}?saved=basic`);
+  redirect(buildSubmissionFormRedirect(formData, submissionId, { saved: "basic", savedWarning: result.warning }));
 }
 
 export async function updatePaymentStatusAction(
@@ -1017,7 +765,11 @@ export async function updatePaymentStatusAction(
   if (orderPayment.confirmedIds) {
     for (const id of orderPayment.confirmedIds) revalidateUserDashboards(id);
     for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
-    return { message: "주문 전체의 입금이 확인되었습니다." };
+    const outcomes = await Promise.all(orderPayment.confirmedIds.map((submissionId) => sendSubmissionUpdateNotificationById({
+      submissionId, headline: "입금이 확인되었습니다.",
+      summary: "입금이 확인되었습니다. 자료 확인 후 방송국·기관 접수를 진행합니다.", subject: "[onside] 입금 확인 안내",
+    })));
+    return { message: "주문 전체의 입금이 확인되었습니다.", warning: outcomes.find((item) => item.warning)?.warning };
   }
 
   const nextStatus =
@@ -1053,7 +805,13 @@ export async function updatePaymentStatusAction(
     "PAYMENT_UPDATE",
   );
 
-  return { message: "결제 상태가 업데이트되었습니다." };
+  const notification = submission.payment_status !== parsed.data.paymentStatus || submission.status !== nextStatus
+    ? await sendSubmissionUpdateNotificationById({
+      submissionId: parsed.data.submissionId, headline: "결제 상태가 업데이트되었습니다.",
+      summary: `결제 상태: ${paymentStatusLabelMap[parsed.data.paymentStatus] ?? parsed.data.paymentStatus}`,
+      subject: "[onside] 결제 상태 업데이트 안내",
+    }) : null;
+  return { message: "결제 상태가 업데이트되었습니다.", warning: notification?.warning };
 }
 
 export async function updatePaymentStatusFormAction(
@@ -1088,17 +846,9 @@ export async function updatePaymentStatusFormAction(
   revalidatePath(`/admin/submissions/${submissionId}`);
   if (submissionId) {
     revalidateUserDashboards(submissionId);
-    await sendSubmissionUpdateNotificationById({
-      submissionId,
-      headline: "결제 상태가 업데이트되었습니다.",
-      summary: `관리자가 결제 상태를 ${
-        paymentStatusLabelMap[paymentStatus] ?? paymentStatus
-      } 상태로 변경했습니다.`,
-      subject: "[onside] 결제 상태 업데이트 안내",
-    });
   }
   if (submissionId) {
-    redirect(`/admin/submissions/${submissionId}?saved=payment`);
+    redirect(buildSubmissionFormRedirect(formData, submissionId, { saved: "payment", savedWarning: result.warning }));
   }
 }
 
@@ -1159,6 +909,9 @@ export async function updateStationReviewAction(
       status: track.status as "PENDING" | "APPROVED" | "REJECTED",
     })) : undefined;
   }
+  const { data: previousReview, error: previousReviewError } = await supabase.from("station_reviews")
+    .select("*").eq("submission_id", input.submissionId).eq("station_id", input.stationId).maybeSingle();
+  if (previousReviewError) return { error: "기존 심의 결과를 확인하지 못했습니다." };
   const result = await saveStationReview(supabase, {
     reviewId: input.reviewId,
     submissionId: input.submissionId,
@@ -1174,8 +927,16 @@ export async function updateStationReviewAction(
     result.row.status as StationReviewStatusValue,
     { submissionId: input.submissionId, stationId: input.stationId },
   );
-  await insertEvent(input.submissionId, `방송국 상태 변경: ${result.row.status}`, "STATION_UPDATE");
-  return { message: "심의 결과가 저장되었습니다.", row: result.row, warning: result.warning ?? warning ?? undefined };
+  const changed = !previousReview || previousReview.status !== result.row.status ||
+    (previousReview.result_note ?? "") !== (result.row.result_note ?? "") ||
+    (trackResults !== undefined && !areTrackResultsEquivalent(previousReview.track_results_json ?? previousReview.track_results, result.row.track_results));
+  const notification = changed ? await sendSubmissionUpdateNotificationById({
+    submissionId: input.submissionId, headline: "방송국 심의 정보가 업데이트되었습니다.",
+    summary: `방송국 진행 상태: ${getStationReviewDisplayStatus(result.row).label}\n신청 내역에서 방송국·트랙별 심의 결과를 확인해주세요.`,
+    subject: "[onside] 방송국 심의 업데이트 안내", changeKey: result.row.updated_at,
+  }) : null;
+  if (changed) await insertEvent(input.submissionId, `방송국 상태 변경: ${result.row.status}`, "STATION_UPDATE");
+  return { message: "심의 결과가 저장되었습니다.", row: result.row, warning: [result.warning, warning, notification?.warning].filter(Boolean).join(" / ") || undefined };
 }
 
 export async function updateStationReviewFormAction(
@@ -1362,21 +1123,6 @@ export async function updateStationReviewFormAction(
   if (submissionId) {
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidateUserDashboards(submissionId);
-    const stationStatusLabel =
-      result.row
-        ? getStationReviewDisplayStatus(result.row).label
-        : stationReviewStatusOptions.find((option) => option.value === status)?.label ?? status;
-    await sendSubmissionUpdateNotificationById({
-      submissionId,
-      headline: "방송국 진행 정보가 업데이트되었습니다.",
-      summary: [
-        `방송국 진행 상태: ${stationStatusLabel}`,
-        resultNote ? `메모: ${resultNote}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      subject: "[onside] 방송국 진행 업데이트 안내",
-    });
     const warningMessages = [...trackResultsWarnings, result.warning].filter(Boolean);
     if (warningMessages.length > 0) {
       redirect(
@@ -1602,6 +1348,13 @@ export async function updateSubmissionResultAction(
   }
 
   const supabase = createAdminClient();
+  const { data: previous, error: previousError } = await supabase.from("submissions")
+    .select("*").eq("id", parsed.data.submissionId).maybeSingle();
+  if (previousError || !previous) return { error: "접수 정보를 확인하지 못했습니다." };
+  if (previous.status === "RESULT_READY" && previous.result_status === parsed.data.resultStatus &&
+      (previous.result_memo ?? "") === (parsed.data.resultMemo || "")) {
+    return { message: "변경된 내용이 없습니다." };
+  }
   let { error } = await supabase
     .from("submissions")
     .update({
@@ -1688,7 +1441,10 @@ export async function updateSubmissionResultAction(
   );
 
   revalidatePath(`/admin/submissions/${parsed.data.submissionId}`);
-  return { message: "결과 정보가 저장되었습니다." };
+  const notification = await sendSubmissionResultNotificationById({
+    submissionId: parsed.data.submissionId, resultStatus: parsed.data.resultStatus,
+  });
+  return { message: "결과 정보가 저장되었습니다.", warning: notification.warning };
 }
 
 export async function updateSubmissionResultFormAction(
@@ -1721,16 +1477,11 @@ export async function updateSubmissionResultFormAction(
     revalidatePath(`/admin/submissions/${submissionId}`);
     revalidateUserDashboards(submissionId);
     revalidatePath("/");
-    const mailResult = await sendSubmissionResultNotificationById({
-      submissionId,
-      resultStatus,
-      resultMemo,
-    });
-    if (mailResult.warning) {
+    if (result.warning) {
       redirect(
         buildSubmissionFormRedirect(formData, submissionId, {
           saved: "result_warning",
-          savedWarning: mailResult.warning,
+          savedWarning: result.warning,
         }),
       );
     }
@@ -2561,12 +2312,17 @@ export async function saveSubmissionAdminFormAction(
     artistName && currentSubmissionRow.artist_name !== artistName
       ? "아티스트명이 정리되었습니다."
       : null,
-    (currentSubmissionRow.admin_memo ?? "") !== adminMemo
-      ? "관리자 메모가 업데이트되었습니다."
-      : null,
   ].filter(Boolean);
 
   let savedWarning = "";
+  if (!changes.length && (currentSubmissionRow.admin_memo ?? "") !== adminMemo) {
+    // Staff-only edits keep their audit trail without sending customer mail.
+    try {
+      await insertEvent(submissionId, "관리자 메모가 업데이트되었습니다.", "ADMIN_MEMO");
+    } catch {
+      savedWarning = "상태는 저장됐지만 처리 기록 저장은 실패했습니다.";
+    }
+  }
   if (changes.length > 0) {
     const changeSummary = [
       ...changes,
@@ -2588,12 +2344,13 @@ export async function saveSubmissionAdminFormAction(
     }
 
     try {
-      await sendSubmissionUpdateNotificationById({
+      const notification = await sendSubmissionUpdateNotificationById({
         submissionId,
         headline: "접수 정보가 업데이트되었습니다.",
         summary: changeSummary,
         subject: "[onside] 접수 정보 업데이트 안내",
       });
+      savedWarning = [savedWarning, notification.warning].filter(Boolean).join(" / ");
     } catch (error) {
       console.warn("[admin save] notification failed", {
         submissionId,
@@ -2603,6 +2360,14 @@ export async function saveSubmissionAdminFormAction(
     }
   }
 
+  for (const siblingId of orderPayment.confirmedIds ?? []) {
+    if (siblingId === submissionId) continue;
+    const notification = await sendSubmissionUpdateNotificationById({
+      submissionId: siblingId, headline: "입금이 확인되었습니다.",
+      summary: "입금이 확인되었습니다. 자료 확인 후 방송국·기관 접수를 진행합니다.", subject: "[onside] 입금 확인 안내",
+    });
+    savedWarning = [savedWarning, notification.warning].filter(Boolean).join(" / ");
+  }
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${submissionId}`);
   revalidatePath(`/admin/submissions/detail?id=${submissionId}`);

@@ -32,12 +32,16 @@ test("login and signup keep a safe draft return path and show the password polic
   await page.goto(`/login?next=${encodeURIComponent(next)}`);
   await page.getByRole("main").getByRole("link", { name: "회원가입", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/signup\\?next=${encodeURIComponent(next).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
-  await expect(page.getByText("비밀번호는 8~128자로 입력해주세요.", { exact: true })).toBeVisible();
-  await page.locator("#signup-password").fill("fixture-password");
-  await page.getByRole("button", { name: "비밀번호 보기", exact: true }).click();
-  await expect(page.locator("#signup-password")).toHaveAttribute("type", "text");
-  await page.getByRole("button", { name: "비밀번호 숨기기", exact: true }).click();
-  await expect(page.locator("#signup-password")).toHaveAttribute("type", "password");
+  if (await page.locator("#signup-password").count()) {
+    await expect(page.getByText("비밀번호는 8~128자로 입력해주세요.", { exact: true })).toBeVisible();
+    await page.locator("#signup-password").fill("fixture-password");
+    await page.getByRole("button", { name: "비밀번호 보기", exact: true }).click();
+    await expect(page.locator("#signup-password")).toHaveAttribute("type", "text");
+    await page.getByRole("button", { name: "비밀번호 숨기기", exact: true }).click();
+    await expect(page.locator("#signup-password")).toHaveAttribute("type", "password");
+  } else {
+    await expect(page.getByText("인증 링크를 이메일로 보내드립니다. 이메일 확인 후 비밀번호를 설정하면 가입이 완료됩니다.", { exact: true })).toBeVisible();
+  }
   await page.getByLabel("필수 항목 전체 동의", { exact: true }).check();
   await expect(page.locator("#agreeMarketing")).not.toBeChecked();
   for (const policy of ["이용약관 보기", "개인정보 처리 보기", "결제·환불 정책 보기"]) {

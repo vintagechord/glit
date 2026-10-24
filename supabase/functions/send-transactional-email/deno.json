@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "nodemailer": "npm:nodemailer@10.2.1",
+    "nodemailer/lib/addressparser": "npm:nodemailer@10.2.1/lib/addressparser"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}

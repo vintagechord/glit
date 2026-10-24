@@ -1,5 +1,5 @@
+import { sendTransactionalEmail, type EmailSendResult } from "@/lib/email-transport";
 import { APP_CONFIG } from "@/lib/config";
-import { classifyEmailProviderFailure, getEmailDeliveryConfiguration } from "@/lib/email-config";
 
 type WelcomeEmailPayload = {
   email: string;
@@ -66,49 +66,6 @@ type GuestSubmissionLookupEmailPayload = {
   }>;
 };
 
-type EmailSendResult = {
-  ok: boolean;
-  skipped?: boolean;
-  message?: string;
-  reason?: "configuration" | "rate_limit" | "delivery";
-  retryAfterSeconds?: number;
-  messageId?: string;
-};
-
-const EMAIL_REQUEST_TIMEOUT_MS = 10_000;
-
-const getResendConfig = () => getEmailDeliveryConfiguration({ supportEmail: APP_CONFIG.supportEmail });
-
-const manualEmailResult = (): EmailSendResult => ({
-  ok: false,
-  skipped: true,
-  reason: "configuration",
-  message: "현재 이메일 자동 발송을 제공하지 않습니다. 신청 내역에서 진행 상황과 결과를 확인해주세요.",
-});
-
-const logEmailTransportError = (operation: string, error: unknown) => {
-  // Transport errors can carry request metadata. Keep production logs useful
-  // without serializing recipient addresses, message bodies, or auth headers.
-  console.error(`[Email] ${operation} failed`, {
-    errorName: error instanceof Error && ["AbortError", "TimeoutError", "TypeError", "Error"].includes(error.name)
-      ? error.name : "UnknownError",
-  });
-};
-
-const readEmailFailureMessage = async (
-  response: Response,
-  fallback: string,
-) => {
-  try {
-    // Drain the response so the connection can be reused, but do not surface
-    // provider payloads: they may echo recipient or request metadata.
-    await response.text();
-    return `${fallback} (${response.status})`;
-  } catch {
-    return `${fallback} (${response.status})`;
-  }
-};
-
 const escapeHtml = (value: string) =>
   value
     .replace(/&/g, "&amp;")
@@ -118,40 +75,12 @@ const escapeHtml = (value: string) =>
     .replace(/'/g, "&#39;");
 
 export async function sendWelcomeEmail(payload: WelcomeEmailPayload): Promise<EmailSendResult> {
-  const { apiKey, from, mode } = getResendConfig();
-  if (mode === "manual") return manualEmailResult();
-
-  if (!apiKey || !from) {
-    return { ok: false, skipped: true } as const;
-  }
-
   const name = escapeHtml(payload.name?.trim() || "onside");
   const body = {
-    from,
-    to: payload.email,
-    subject: "[onside] 회원가입이 완료되었습니다",
     html: `<p>${name}님, 온사이드 가입이 완료되었습니다.</p><p>음반·뮤직비디오 심의 신청, 진행 확인, 결과 파일 수령을 한 곳에서 이용하실 수 있습니다.</p><p>다음 신청부터 신청자 정보와 접수 기록을 더 빠르게 관리할 수 있습니다.</p>`,
   };
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      return { ok: false, skipped: false } as const;
-    }
-
-    return { ok: true } as const;
-  } catch {
-    return { ok: false, skipped: false } as const;
-  }
+  return sendTransactionalEmail({ to: payload.email, subject: "[onside] 회원가입이 완료되었습니다", html: body.html, operation: "welcome" });
 }
 
 const normalizeAbsoluteUrl = (value?: string) => {
@@ -174,24 +103,6 @@ const normalizeAbsoluteUrl = (value?: string) => {
 export async function sendPasswordResetEmail(
   payload: PasswordResetEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from, replyTo, sender, mode } = getResendConfig();
-  if (mode === "manual") return manualEmailResult();
-
-  if (!apiKey) {
-    return {
-      ok: false,
-      skipped: true,
-      reason: "configuration",
-      message:
-        "RESEND_API_KEY가 설정되어 있지 않아 온사이드 발신 메일을 보내지 못했습니다.",
-    };
-  }
-
-  if (!sender.ok) {
-    console.error("[Email] password reset sender unavailable", { diagnostic: sender.diagnostic });
-    return { ok: false, skipped: true, reason: "configuration" };
-  }
-
   const normalizedLink = normalizeAbsoluteUrl(payload.link);
   if (!normalizedLink) return { ok: false, reason: "configuration" };
   const safeLink = escapeHtml(normalizedLink);
@@ -207,69 +118,12 @@ export async function sendPasswordResetEmail(
     </div>
   `;
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: payload.email,
-        subject: "[onside] 비밀번호 재설정 안내",
-        ...(replyTo ? { reply_to: replyTo } : {}),
-        html,
-      }),
-    });
-
-    if (!response.ok) {
-      const providerError = await response.json().catch(() => null);
-      const { reason, diagnostic } = classifyEmailProviderFailure(response.status, providerError?.name);
-      // Keep the sender failure observable without logging the recipient,
-      // recovery credentials, or a provider payload that could contain them.
-      console.error("[Email] password reset rejected", { status: response.status, reason, diagnostic });
-      const retryHeader = Number(response.headers.get("retry-after"));
-      return {
-        ok: false,
-        skipped: false,
-        reason,
-        retryAfterSeconds: reason === "rate_limit"
-          ? Number.isFinite(retryHeader) && retryHeader > 0
-            ? Math.min(3600, Math.ceil(retryHeader))
-            : 60
-          : undefined,
-        message: "비밀번호 재설정 메일 발송에 실패했습니다.",
-      };
-    }
-
-    return { ok: true };
-  } catch (error) {
-    logEmailTransportError("password reset", error);
-    return {
-      ok: false,
-      skipped: false,
-      reason: "delivery",
-      message: "비밀번호 재설정 메일 발송에 실패했습니다.",
-    };
-  }
+  return sendTransactionalEmail({ to: payload.email, subject: "[onside] 비밀번호 재설정 안내", html, operation: "password reset" });
 }
 
 export async function sendSubmissionReceiptEmail(
   payload: SubmissionReceiptPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from, mode } = getResendConfig();
-  if (mode === "manual") return manualEmailResult();
-
-  if (!apiKey || !from) {
-    return {
-      ok: false,
-      skipped: true,
-      message: "이메일 발송 설정이 되어 있지 않아 영수증 메일을 보내지 못했습니다.",
-    };
-  }
-
   const kindLabel = payload.kind === "MV" ? "뮤직비디오" : "음반";
   const safeTitle = escapeHtml(payload.title?.trim() || "제목 미입력");
   const safeSubmissionId = escapeHtml(payload.submissionId);
@@ -310,8 +164,8 @@ export async function sendSubmissionReceiptEmail(
           </div>
           ${guestCodeSection}
           <div style="margin: 18px 0 0; display: flex; flex-wrap: wrap; gap: 10px;">
-            <a href="${progressLink}" style="display: inline-block; border-radius: 999px; background: #f6d64a; color: #111827; text-decoration: none; font-size: 13px; font-weight: 800; padding: 11px 18px;">내 심의 진행상황 조회</a>
-            <a href="${siteLink}" style="display: inline-block; border-radius: 999px; background: #0f172a; color: #f8fafc; text-decoration: none; font-size: 13px; font-weight: 700; padding: 11px 18px;">온사이드 사이트</a>
+            <a href="${escapeHtml(progressLink)}" style="display: inline-block; border-radius: 999px; background: #f6d64a; color: #111827; text-decoration: none; font-size: 13px; font-weight: 800; padding: 11px 18px;">내 심의 진행상황 조회</a>
+            <a href="${escapeHtml(siteLink)}" style="display: inline-block; border-radius: 999px; background: #0f172a; color: #f8fafc; text-decoration: none; font-size: 13px; font-weight: 700; padding: 11px 18px;">온사이드 사이트</a>
           </div>
           <p style="margin: 14px 0 0; font-size: 12px; color: #64748b; line-height: 1.6;">버튼이 동작하지 않으면 아래 링크를 복사해 브라우저에 붙여넣어 주세요.</p>
           <p style="margin: 6px 0 0; font-size: 12px; color: #334155; word-break: break-all;">${escapeHtml(progressLink)}</p>
@@ -320,57 +174,12 @@ export async function sendSubmissionReceiptEmail(
     </div>
   `;
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: payload.email,
-        subject: `[onside] ${kindLabel} 접수 완료 안내`,
-        html,
-      }),
-    });
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        skipped: false,
-        message: await readEmailFailureMessage(
-          response,
-          "접수 완료 안내 메일 발송에 실패했습니다.",
-        ),
-      };
-    }
-    return { ok: true };
-  } catch (error) {
-    logEmailTransportError("submission receipt", error);
-    return {
-      ok: false,
-      skipped: false,
-      message: "이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.",
-    };
-  }
+  return sendTransactionalEmail({ to: payload.email, subject: `[onside] ${kindLabel} 접수 완료 안내`, html, operation: "submission receipt" });
 }
 
 export async function sendResultEmail(
   payload: ResultEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from, mode } = getResendConfig();
-  if (mode === "manual") return manualEmailResult();
-
-  if (!apiKey || !from) {
-    return {
-      ok: false,
-      skipped: true,
-      message: "이메일 발송 설정이 되어 있지 않습니다.",
-    };
-  }
-
   const statusLabel =
     payload.resultStatus === "APPROVED"
       ? "적격"
@@ -403,55 +212,12 @@ export async function sendResultEmail(
     </div>
   `;
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: payload.email,
-        subject: `[onside] 심의 결과 안내 — ${statusLabel}`,
-        html,
-      }),
-    });
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        skipped: false,
-        message: "심의 결과 메일 발송에 실패했습니다.",
-      };
-    }
-
-    return { ok: true };
-  } catch (error) {
-    logEmailTransportError("review result", error);
-    return {
-      ok: false,
-      skipped: false,
-      message: "심의 결과 메일 발송에 실패했습니다.",
-    };
-  }
+  return sendTransactionalEmail({ to: payload.email, subject: `[onside] 심의 결과 안내 — ${statusLabel}`, html, operation: "review result" });
 }
 
 export async function sendSubmissionBankRequestEmail(
   payload: SubmissionBankRequestEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from, mode } = getResendConfig();
-  if (mode === "manual") return manualEmailResult();
-
-  if (!apiKey || !from) {
-    return {
-      ok: false,
-      skipped: true,
-      message: "이메일 발송 설정이 되어 있지 않아 무통장 안내 메일을 보내지 못했습니다.",
-    };
-  }
-
   const kindLabel = payload.kind === "MV" ? "뮤직비디오" : "음반";
   const safeTitle = escapeHtml(payload.title?.trim() || "제목 미입력");
   const safeArtist = escapeHtml(payload.artist?.trim() || "-");
@@ -509,8 +275,8 @@ export async function sendSubmissionBankRequestEmail(
             </div>
           </div>
           <div style="margin:18px 0 0;display:flex;flex-wrap:wrap;gap:10px;">
-            <a href="${progressLink}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">내 진행상황 보기</a>
-            <a href="${siteLink}" style="display:inline-block;border-radius:999px;background:#0f172a;color:#f8fafc;text-decoration:none;font-size:13px;font-weight:700;padding:11px 18px;">온사이드 사이트</a>
+            <a href="${escapeHtml(progressLink)}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">내 진행상황 보기</a>
+            <a href="${escapeHtml(siteLink)}" style="display:inline-block;border-radius:999px;background:#0f172a;color:#f8fafc;text-decoration:none;font-size:13px;font-weight:700;padding:11px 18px;">온사이드 사이트</a>
           </div>
           <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">입금 후 관리자가 확인하면 진행상황이 자동으로 업데이트됩니다.</p>
           <p style="margin:6px 0 0;font-size:12px;color:#334155;word-break:break-all;">${escapeHtml(progressLink)}</p>
@@ -519,58 +285,12 @@ export async function sendSubmissionBankRequestEmail(
     </div>
   `;
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: payload.email,
-        subject: `[onside] 무통장 입금 안내 — ${kindLabel} 심의`,
-        html,
-      }),
-    });
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        skipped: false,
-        message: await readEmailFailureMessage(
-          response,
-          "무통장 입금 안내 메일 발송에 실패했습니다.",
-        ),
-      };
-    }
-
-    return { ok: true };
-  } catch (error) {
-    logEmailTransportError("bank payment request", error);
-    return {
-      ok: false,
-      skipped: false,
-      message: "무통장 입금 안내 메일 발송에 실패했습니다.",
-    };
-  }
+  return sendTransactionalEmail({ to: payload.email, subject: `[onside] 무통장 입금 안내 — ${kindLabel} 심의`, html, operation: "bank payment request" });
 }
 
 export async function sendSubmissionUpdateEmail(
   payload: SubmissionUpdateEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from, mode } = getResendConfig();
-  if (mode === "manual") return manualEmailResult();
-
-  if (!apiKey || !from) {
-    return {
-      ok: false,
-      skipped: true,
-      message: "이메일 발송 설정이 되어 있지 않아 업데이트 알림을 보내지 못했습니다.",
-    };
-  }
-
   const kindLabel = payload.kind === "MV" ? "뮤직비디오" : "음반";
   const safeTitle = escapeHtml(payload.title?.trim() || "제목 미입력");
   const safeArtist = escapeHtml(payload.artist?.trim() || "-");
@@ -604,7 +324,7 @@ export async function sendSubmissionUpdateEmail(
             <p style="margin:8px 0 0;font-size:14px;line-height:1.7;color:#0f172a;">${safeSummary}</p>
           </div>
           <div style="margin:18px 0 0;display:flex;flex-wrap:wrap;gap:10px;">
-            <a href="${progressLink}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">진행상황 바로 보기</a>
+            <a href="${escapeHtml(progressLink)}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">진행상황 바로 보기</a>
           </div>
           <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">링크를 클릭하면 로그인 후 해당 접수 상세로 이동합니다.</p>
           <p style="margin:6px 0 0;font-size:12px;color:#334155;word-break:break-all;">${escapeHtml(progressLink)}</p>
@@ -613,57 +333,12 @@ export async function sendSubmissionUpdateEmail(
     </div>
   `;
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        ...(payload.idempotencyKey ? { "Idempotency-Key": payload.idempotencyKey } : {}),
-      },
-      body: JSON.stringify({
-        from,
-        to: payload.email,
-        subject: payload.subject ?? `[onside] 심의 업데이트 안내 — ${kindLabel} 심의`,
-        html,
-      }),
-    });
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        skipped: false,
-        message: "업데이트 알림 메일 발송에 실패했습니다.",
-      };
-    }
-
-    const accepted = await response.json().catch(() => null) as { id?: unknown } | null;
-    const messageId = typeof accepted?.id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(accepted.id) ? accepted.id : undefined;
-    return { ok: true, ...(messageId ? { messageId } : {}) };
-  } catch (error) {
-    logEmailTransportError("submission update", error);
-    return {
-      ok: false,
-      skipped: false,
-      message: "업데이트 알림 메일 발송에 실패했습니다.",
-    };
-  }
+  return sendTransactionalEmail({ to: payload.email, subject: payload.subject ?? `[onside] 심의 업데이트 안내 — ${kindLabel} 심의`, html, operation: "submission update", idempotencyKey: payload.idempotencyKey, includeMessageId: true });
 }
 
 export async function sendGuestSubmissionLookupEmail(
   payload: GuestSubmissionLookupEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from, mode } = getResendConfig();
-  if (mode === "manual") return manualEmailResult();
-  if (!apiKey || !from) {
-    return {
-      ok: false,
-      skipped: true,
-      message: "이메일 발송 설정이 되어 있지 않습니다.",
-    };
-  }
-
   const safeName = escapeHtml(payload.name?.trim() || "신청자");
   const itemRows = payload.items
     .slice(0, 10)
@@ -671,7 +346,7 @@ export async function sendGuestSubmissionLookupEmail(
       const safeTitle = escapeHtml(item.title?.trim() || "제목 미입력");
       const kindLabel = item.type?.startsWith("MV") ? "뮤직비디오" : "음반";
       const safeToken = escapeHtml(item.token);
-      const safeLink = escapeHtml(normalizeAbsoluteUrl(item.link) || item.link);
+      const safeLink = escapeHtml(normalizeAbsoluteUrl(item.link));
       const createdAt = item.createdAt ? new Date(item.createdAt) : null;
       const createdLabel =
         createdAt && !Number.isNaN(createdAt.getTime())
@@ -699,38 +374,24 @@ export async function sendGuestSubmissionLookupEmail(
     </div>
   `;
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: payload.email,
-        subject: "[onside] 비회원 접수 조회 코드 안내",
-        html,
-      }),
-    });
-    if (!response.ok) {
-      return {
-        ok: false,
-        skipped: false,
-        message: await readEmailFailureMessage(
-          response,
-          "조회 코드 메일 발송에 실패했습니다.",
-        ),
-      };
-    }
-    return { ok: true };
-  } catch (error) {
-    logEmailTransportError("guest lookup", error);
-    return {
-      ok: false,
-      skipped: false,
-      message: "조회 코드 메일 발송에 실패했습니다.",
-    };
-  }
+  return sendTransactionalEmail({ to: payload.email, subject: "[onside] 비회원 접수 조회 코드 안내", html, operation: "guest lookup" });
+}
+
+export async function sendSignupVerificationEmail(payload: { email: string; link: string }): Promise<EmailSendResult> {
+  const link = normalizeAbsoluteUrl(payload.link);
+  if (!link) return { ok: false, reason: "configuration" };
+  const safeLink = escapeHtml(link);
+  return sendTransactionalEmail({
+    to: payload.email, subject: "[onside] 회원가입 이메일 인증", operation: "signup verification",
+    html: `<p>온사이드 가입을 완료하려면 아래 링크를 열어 이메일 인증을 진행해주세요.</p><p><a href="${safeLink}">이메일 인증하기</a></p><p>직접 가입을 요청하지 않았다면 이 메일을 무시해주세요.</p><p>${safeLink}</p>`,
+  });
+}
+
+export async function sendAccountIdEmail(payload: { email: string; link?: string }): Promise<EmailSendResult> {
+  const link = normalizeAbsoluteUrl(payload.link);
+  const safeEmail = escapeHtml(payload.email);
+  return sendTransactionalEmail({
+    to: payload.email, subject: "[onside] 가입 아이디 안내", operation: "account lookup",
+    html: `<p>온사이드의 로그인 아이디는 가입한 이메일 주소입니다.</p><p><strong>${safeEmail}</strong></p>${link ? `<p><a href="${escapeHtml(link)}">로그인하기</a></p>` : ""}<p>직접 아이디 찾기를 요청하지 않았다면 이 메일을 무시해주세요.</p>`,
+  });
 }

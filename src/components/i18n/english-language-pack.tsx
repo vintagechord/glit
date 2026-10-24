@@ -4,6 +4,20 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 
 const exactTranslations: Record<string, string> = {
+  "아이디 찾기": "Find Account",
+  "회원가입 이메일 확인": "Verify Signup Email",
+  "이메일 확인이 필요한 계정이면 인증 메일을 보냈습니다. 메일의 버튼으로 확인을 완료해주세요. 이미 가입했거나 메일이 오지 않으면 비밀번호 찾기 또는 고객센터를 이용해주세요.": "If this account needs verification, we sent a verification email. Complete verification using its button. If you already signed up or no email arrives, use password reset or contact support.",
+  "가입된 이메일이라면 아이디 안내를 보내드립니다. 메일함과 스팸함을 확인해주세요.": "If this email is registered, we will send your account details. Check your inbox and spam folder.",
+  "메일 발송 설정에 문제가 있어 메일을 보내지 못했습니다. 고객센터에 문의해주세요.": "An email configuration issue prevented delivery. Please contact support.",
+  "인증 링크를 준비하지 못했습니다. 잠시 후 인증 메일을 다시 요청해주세요.": "We could not prepare the verification link. Please request another verification email shortly.",
+  "인증 메일을 보내지 못했습니다. 아래에서 인증 메일을 다시 요청해주세요.": "We could not send the verification email. Request another email below.",
+  "인증 메일 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.": "We could not process the verification email request. Please try again shortly.",
+  "유효한 가입 인증 링크가 아닙니다. 인증 메일을 다시 요청해주세요.": "This signup verification link is invalid. Please request another verification email.",
+  "인증 링크가 만료되었거나 이미 사용되었습니다. 인증 메일을 다시 요청해주세요.": "This verification link has expired or has already been used. Please request another verification email.",
+  "이메일은 확인했지만 비밀번호 설정을 완료하지 못했습니다. 비밀번호 찾기로 새 비밀번호를 설정해주세요.": "Your email was verified, but password setup could not be completed. Use password reset to choose a new password.",
+  "이메일 확인과 비밀번호 설정이 완료되었습니다. 새 비밀번호로 로그인해주세요.": "Email verification and password setup are complete. Please log in with your new password.",
+  "가입 확인을 완료하지 못했습니다. 비밀번호 찾기 또는 인증 메일 재요청을 이용해주세요.": "We could not complete signup verification. Use password reset or request another verification email.",
+  "아이디 안내 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.": "We could not process your account lookup request. Please try again shortly.",
   "심의 완료": "Review Completed",
   "결과 준비": "Results Ready",
   "결제 준비 중...": "Preparing Payment...",

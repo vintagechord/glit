@@ -46,7 +46,7 @@ test.beforeAll(async () => {
   html = `<!doctype html><html lang="ko"><head><meta name="viewport" content="width=device-width, initial-scale=1"/></head><body><main id="root"></main><script>${bundle.outputFiles[0].text.replace(/<\/script/gi, "<\\/script")}</script></body></html>`;
 });
 
-async function mount(page: Page, rating: string, notified = false) {
+async function mount(page: Page, rating: string, notified = false, warning?: string) {
   const requests: Array<{ rating: string }> = [];
   await page.route("**/*", async route => {
     if (route.request().resourceType() === "document") {
@@ -54,7 +54,7 @@ async function mount(page: Page, rating: string, notified = false) {
     } else if (route.request().url().endsWith("/api/admin/submissions/fixture-mv/mv-rating")) {
       const body = route.request().postDataJSON() as { rating: string };
       requests.push(body);
-      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rating: body.rating }) });
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rating: body.rating, warning }) });
     } else {
       await route.fulfill({ status: 404 });
     }
@@ -103,4 +103,15 @@ test("legacy free-text wishes and new Korean labels cannot be sent as official r
     expect(requests).toEqual([]);
     await page.unrouteAll();
   }
+});
+
+
+test("saved MV ratings display delivery warnings without claiming that the save failed", async ({ page }) => {
+  const warning = "변경사항은 저장되었지만 이메일 발송에 실패했습니다. 고객에게 별도로 안내해주세요.";
+  const requests = await mount(page, "", false, warning);
+  await page.getByRole("combobox", { name: "결과 등급", exact: true }).selectOption("15");
+  await page.getByRole("button", { name: "등급 저장", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText(warning);
+  await expect(page.getByRole("status")).toContainText("사용자 화면에 통보되었습니다");
+  expect(requests).toEqual([{ rating: "15" }]);
 });

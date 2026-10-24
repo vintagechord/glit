@@ -15,7 +15,7 @@ test("signup and successful signup preserve the draft query and selected locale"
 });
 
 test("authentication return paths reject external targets and authentication loops", () => {
-  for (const next of ["https://evil.invalid", "//evil.invalid", "/\\evil.invalid", "/login?next=/mypage", "/en/signup", "/reset-password?token=fixture", "/forgot-password", `/mypage?${"x".repeat(2048)}`]) {
+  for (const next of ["https://evil.invalid", "//evil.invalid", "/\\evil.invalid", "/login?next=/mypage", "/en/signup", "/reset-password?token=fixture", "/forgot-password", "/en/confirm-email", "/find-id", `/mypage?${"x".repeat(2048)}`]) {
     assert.equal(getAuthReturnPath(next), null, next);
     assert.equal(getAuthPageHref("signup", next), "/signup");
   }

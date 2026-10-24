@@ -6,6 +6,7 @@ import { z } from "zod";
 import { B2ConfigError, getB2Config, sanitizeFileName } from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendSubmissionUpdateNotificationById } from "@/lib/admin/submission-notifications";
 import { getStorageLogId } from "@/lib/guest-storage-owner";
 
 export const runtime = "nodejs";
@@ -211,8 +212,13 @@ export async function POST(
       return NextResponse.json({ error: "필증 정보를 저장하지 못했습니다." }, { status: 500 });
     }
 
+    const notification = await sendSubmissionUpdateNotificationById({
+      submissionId, headline: "뮤직비디오 필증 정보가 업데이트되었습니다.",
+      summary: "필증 정보가 업데이트되었습니다. 공개된 심의 결과는 신청 내역에서 확인할 수 있습니다.",
+      subject: "[onside] 뮤직비디오 필증 등록 안내", changeKey: uploadedAt,
+    });
     return NextResponse.json({
-      ok: true,
+      ok: true, warning: notification.warning,
       certificate: {
         objectKey: uploadedObjectKey,
         originalName: filenameRaw,

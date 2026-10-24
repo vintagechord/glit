@@ -1,0 +1,6 @@
+project_id = "glit"
+
+[functions.send-transactional-email]
+# This server-to-server endpoint validates EMAIL_RELAY_SECRET itself before
+# reading the body. A public anon key or ordinary member JWT is insufficient.
+verify_jwt = false

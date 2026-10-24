@@ -76,13 +76,14 @@ export function MvRatingControl({
         ok?: boolean;
         rating?: string;
         error?: string;
+        warning?: string;
       } | null;
       if (!res.ok || json?.error) {
         throw new Error(json?.error || `저장 실패 (status ${res.status})`);
       }
       setSavedRating(json?.rating ?? rating);
       setResultNotified(true);
-      const successMessage = "결과 등급이 사용자 화면에 통보되었습니다.";
+      const successMessage = ["결과 등급이 사용자 화면에 통보되었습니다.", json?.warning].filter(Boolean).join(" ");
       setNotice(successMessage);
       setSavePopup({ id: Date.now(), message: successMessage });
       setError(null);

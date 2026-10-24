@@ -27,10 +27,27 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
-      # Automatic email is deferred until the Onside sender domain is ready.
-      # Set transactional and rebuild after configuring the verified sender.
+      # Preserve the dashboard choice. Set transactional and rebuild after
+      # configuring a sender. Daum uses the Supabase HTTPS relay on Free;
+      # direct SMTP does not work here (Free blocks outbound ports 465/587).
       - key: NEXT_PUBLIC_EMAIL_DELIVERY_MODE
-        value: manual
+        sync: false
+      - key: EMAIL_PROVIDER
+        sync: false
+      - key: SUPABASE_EMAIL_RELAY_URL
+        sync: false
+      - key: EMAIL_RELAY_SECRET
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: GMAIL_CLIENT_ID
+        sync: false
+      - key: GMAIL_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_REFRESH_TOKEN
+        sync: false
+      - key: GMAIL_FROM
+        sync: false
       - key: RESEND_FROM
         # Set an address on a domain verified in Resend in the dashboard.
         # Preserve that value across Blueprint syncs.
