@@ -36,12 +36,12 @@ test("both completion endpoints verify bounded bytes before staging and retain s
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls} from 'content-fixture';";
         const modules: Record<string, string> = {
-          "content-fixture": `export const state={bytes:new TextEncoder().encode('RIFF1234WAVEdata'),filename:'fixture.wav',rangeLength:null,ownerError:null}; export const calls=[];`,
+          "content-fixture": `export const state={bytes:new TextEncoder().encode('RIFF1234WAVEdata'),filename:'fixture.wav',rangeLength:null,ownerError:null,sizeOverride:null}; export const calls=[];`,
           "@/lib/b2": `${shared} export class B2ConfigError extends Error{}; export const getB2Config=()=>({prefix:'submissions/',bucket:'fixture',client:{send:async command=>{calls.push({name:command.constructor.name,input:command.input});if(command.constructor.name==='HeadObjectCommand')return {ContentLength:state.bytes.length,ETag:'fixture-etag'};return {ContentLength:state.rangeLength??state.bytes.length,Body:{transformToWebStream:()=>new ReadableStream({pull(controller){calls.push({name:'read'});controller.enqueue(state.bytes);controller.close()},cancel(){calls.push({name:'cancel'})}})}}}}});export const deleteObject=async()=>{calls.push({name:'delete'})};export const presignGetUrl=async()=> 'https://fixture.invalid/download';export const completeMultipartUpload=async()=>{calls.push({name:'complete'})};`,
           "@/lib/payments/submission": `${shared} export const ensureSubmissionOwner=async()=>({user:{id:'fixture-user'},submission:{id:'fixture',user_id:'fixture-user',status:'DRAFT',payment_status:'UNPAID',current_order_id:null},error:state.ownerError});`,
           "@/lib/submission-object-key": `export const isSubmissionObjectKeyOwned=()=>true;`,
           "@/lib/request-rate-limit": `export const consumeRateLimit=()=>({allowed:true});export const getRequestIdentifier=()=> 'fixture';`,
-          "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({rpc:async()=>({error:null}),from(table){const chain={upsert(payload){calls.push({name:'stage',table,payload});return chain},select(){return chain},async maybeSingle(){return {data:{id:'staging-fixture'},error:null}}};return chain}});`,
+          "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({rpc:async()=>({data:"START",error:null}),from(table){const chain={upsert(payload){calls.push({name:'stage',table,payload});return chain},select(){return chain},async maybeSingle(){return {data:{id:'staging-fixture'},error:null}}};return chain}});`,
           "@/lib/multipart-upload-grants": `${shared} export const getMultipartOwnerKey=()=> 'user:fixture-user';export const getMultipartGrant=async()=>({id:'grant',status:'ACTIVE',expires_at:new Date(Date.now()+60000).toISOString(),declared_size_bytes:state.bytes.length,original_name:state.filename,mime_type:'audio/wav',upload_kind:'audio'});export const multipartGrantMatches=()=>true;export const abortExpiredMultipartGrant=async()=>{};export const abortCompletingMultipartGrant=async()=>{calls.push({name:'abort'})};export const markMultipartGrantCompleted=async()=>{calls.push({name:'completed'})};export const markMultipartGrantFailed=async()=>{calls.push({name:'failed'})};`,
         };
         return { loader: "js", contents: modules[path] };
@@ -49,13 +49,13 @@ test("both completion endpoints verify bounded bytes before staging and retain s
     } }],
   });
   type Route = (request: Request) => Promise<Response>;
-  const output = { exports: {} as { direct: Route; multipart: Route; state: { bytes: Uint8Array; filename: string; rangeLength: number | null; ownerError: string | null }; calls: Array<{ name: string; input?: { Range?: string }; payload?: { original_name?: string } }> } };
+  const output = { exports: {} as { direct: Route; multipart: Route; state: { bytes: Uint8Array; filename: string; rangeLength: number | null; ownerError: string | null; sizeOverride: number | null }; calls: Array<{ name: string; input?: { Range?: string }; payload?: { original_name?: string } }> } };
   new Function("require", "module", "exports", bundle.outputFiles[0].text)(createRequire(import.meta.url), output, output.exports);
   const api = output.exports;
   const id = "11111111-1111-4111-8111-111111111111";
   function request(legacy = false) {
     const key = `submissions/fixture/${api.state.filename}`;
-    return new Request("https://fixture.invalid/api/uploads/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ submissionId: id, grantId: id, uploadId: "fixture-upload", parts: [{ partNumber: 1, etag: "fixture-etag" }], ...(legacy ? { objectKey: key } : { key, filename: api.state.filename }), kind: "AUDIO", mimeType: "audio/wav", sizeBytes: api.state.bytes.length }) });
+    return new Request("https://fixture.invalid/api/uploads/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ submissionId: id, grantId: id, uploadId: "fixture-upload", parts: [{ partNumber: 1, etag: "fixture-etag" }], ...(legacy ? { objectKey: key } : { key, filename: api.state.filename }), kind: "AUDIO", mimeType: "audio/wav", sizeBytes: api.state.sizeOverride ?? api.state.bytes.length }) });
   }
   for (const route of [api.direct, api.multipart]) {
     api.calls.length = 0; api.state.bytes = text("RIFF1234WAVEdata"); api.state.filename = "fixture.wav";
@@ -90,6 +90,13 @@ test("both completion endpoints verify bounded bytes before staging and retain s
     api.state.ownerError = null;
   }
   api.calls.length = 0; api.state.bytes = text("RIFF1234WAVEdata"); api.state.filename = "legacy.wav";
+  api.state.sizeOverride = api.state.bytes.length + 1;
+  const mismatch = await api.direct(request());
+  assert.equal(mismatch.status, 400);
+  assert.equal(api.calls.some(call => call.name === "delete"), false, "incorrect request metadata must not delete a previously staged/live object");
+  assert.equal(api.calls.some(call => call.name === "stage"), false);
+  api.state.sizeOverride = null;
+  api.calls.length = 0;
   const legacy = await api.direct(request(true));
   assert.equal(legacy.status, 200);
   assert.equal(api.calls.find(call => call.name === "stage")?.payload?.original_name, "legacy.wav");

@@ -3,15 +3,17 @@
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowUpRight, Landmark, RefreshCw, ShoppingCart } from "lucide-react";
+import { ArrowUpRight, CreditCard, Landmark, RefreshCw, ShoppingCart } from "lucide-react";
 import * as React from "react";
 import { CommerceConfirmDialog } from "./commerce-confirm-dialog";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { brandStatusTones } from "@/lib/brand-status-tones";
+import { prepareOrderCheckout } from "@/lib/submission-checkout";
 import {
-  addGuestSubmissionCartEntries, readGuestSubmissionOrderEntries,
-  SUBMISSION_CART_UPDATED_EVENT, SUBMISSION_ORDERS_UPDATED_EVENT, toGuestTokensBySubmissionId,
+  readGuestSubmissionOrderEntries,
+  SUBMISSION_ORDERS_UPDATED_EVENT, toGuestTokensBySubmissionId,
 } from "@/lib/guest-submission-cart";
 import type { SubmissionOrder, SubmissionOrderItem, SubmissionOrderStatus, SubmissionOrdersPage } from "@/lib/submission-orders-types";
 
@@ -27,9 +29,9 @@ const filters = [
 ] as const;
 type FilterId = typeof filters[number]["id"];
 const panelClass = "min-w-0 rounded-[10px] border-2 border-[var(--bauhaus-ink)] bg-card p-4 shadow-[4px_4px_0_var(--bauhaus-shadow)] sm:p-5";
-const buttonClass = "inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background px-3 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-50";
+const buttonClass = "inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background px-3 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 disabled:cursor-wait disabled:bg-muted disabled:text-muted-foreground disabled:hover:translate-y-0";
 const orderTone = (status: SubmissionOrderStatus) => status === "PAID"
-  ? "border-emerald-600 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+  ? brandStatusTones.progress
   : ["FAILED", "CANCELED", "REFUNDED"].includes(status)
     ? "border-border bg-muted text-muted-foreground"
     : "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]";
@@ -57,6 +59,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
   const [error, setError] = React.useState<string | null>(null);
   const [returnOrder, setReturnOrder] = React.useState<SubmissionOrder | null>(null);
   const [returningId, setReturningId] = React.useState<string | null>(null);
+  const checkoutInFlight = React.useRef(false);
   const requestSequence = React.useRef(0);
   const activeRequest = React.useRef<AbortController | null>(null);
   const focusedId = React.useRef<string | null>(null);
@@ -112,26 +115,23 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
     requestAnimationFrame(() => document.getElementById(`order-${focusedOrder.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   }, [focusedOrder]);
 
-  const returnToCart = async (order: SubmissionOrder) => {
-    if (returningId) return;
+  const returnToCheckout = async (order: SubmissionOrder) => {
+    if (checkoutInFlight.current || !order.canReturnToCart) return;
+    checkoutInFlight.current = true;
     setReturningId(order.id); setError(null);
     try {
       const entries = readGuestSubmissionOrderEntries();
       const itemIds = new Set(order.items.map((item) => item.submissionId ?? item.submissionRef));
-      const response = await fetchWithTimeout("/api/orders/return", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: order.id, guestTokensBySubmissionId: userId ? {} : toGuestTokensBySubmissionId(entries.filter((entry) => itemIds.has(entry.submissionId))) }),
+      const { href } = await prepareOrderCheckout({
+        orderId: order.id,
+        localePrefix: prefix,
+        guestTokensBySubmissionId: userId ? {} : toGuestTokensBySubmissionId(entries.filter((entry) => itemIds.has(entry.submissionId))),
       });
-      const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; submissionIds?: string[]; error?: string };
-      if (!response.ok || !payload.ok || !Array.isArray(payload.submissionIds) || payload.submissionIds.length === 0) throw new Error(payload.error ?? "주문을 장바구니로 돌리지 못했습니다. 다시 시도해주세요.");
-      if (!userId) addGuestSubmissionCartEntries(entries.filter((entry) => payload.submissionIds!.includes(entry.submissionId)));
-      window.dispatchEvent(new Event(SUBMISSION_CART_UPDATED_EVENT));
-      window.dispatchEvent(new Event(SUBMISSION_ORDERS_UPDATED_EVENT));
-      router.push(`${cartHref}?focus=${encodeURIComponent(payload.submissionIds[0])}`);
+      router.push(href);
       router.refresh();
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "주문을 장바구니로 돌리지 못했습니다. 다시 시도해주세요.");
-    } finally { setReturningId(null); }
+      setError(failure instanceof Error ? failure.message : "결제 화면을 준비하지 못했습니다. 다시 시도해주세요.");
+    } finally { checkoutInFlight.current = false; setReturningId(null); }
   };
   const visibleOrders = orders.filter((order) => filter === "all" || (filters.find((entry) => entry.id === filter)!.statuses as readonly string[]).includes(order.status));
   const getDetailHref = (item: SubmissionOrderItem) => !item.submissionId ? null
@@ -151,7 +151,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
         {filters.map((entry) => <button key={entry.id} type="button" onClick={() => setFilter(entry.id)} aria-pressed={filter === entry.id}
           className={cn(buttonClass, filter === entry.id && "bg-[var(--bauhaus-yellow)] text-[#111111]")}>{entry.label}</button>)}
       </nav>
-      {error && <div role="alert" className="rounded-[8px] border-2 border-red-600 bg-red-50 p-4 text-sm leading-6 text-red-800 dark:bg-red-950 dark:text-red-200">{error}</div>}
+      {error && <div role="alert" className={`rounded-[8px] border-2 p-4 text-sm leading-6 ${brandStatusTones.danger}`}>{error}</div>}
       {!loaded && loading ? <div className={panelClass}>주문내역을 불러오는 중입니다...</div> : visibleOrders.length === 0 ? (
         <div className={`${panelClass} space-y-3`}>
           <p className="text-sm text-muted-foreground">{orders.length === 0 ? "주문 내역이 없습니다." : "해당 상태의 주문이 없습니다."}</p>
@@ -187,9 +187,9 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
             </ul>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div><p className="text-xs text-muted-foreground">주문 금액</p><p className="mt-1 text-xl font-black tabular-nums [overflow-wrap:anywhere]">{displayAmount(order.amountKrw, order.amount, order.currency)}</p></div>
-              {order.canReturnToCart && <button type="button" disabled={Boolean(returningId)} onClick={() => setReturnOrder(order)} className={cn(buttonClass, "w-full bg-foreground text-background sm:w-auto")}><ArrowLeft size={15} aria-hidden />{returningId === order.id ? "변경 중" : "장바구니로 돌리기"}</button>}
+              {order.canReturnToCart && <button type="button" disabled={Boolean(returningId)} onClick={() => order.status === "BANK_PENDING" ? setReturnOrder(order) : void returnToCheckout(order)} className={cn(buttonClass, "w-full bg-[var(--bauhaus-yellow)] text-[#111111] sm:w-auto")}><CreditCard size={15} aria-hidden />{returningId === order.id ? "결제 준비 중" : "결제하기"}</button>}
             </div>
-            {order.status === "BANK_PENDING" && <div className="mt-4 rounded-[8px] border-2 border-[#1556a4]/40 bg-[#1556a4]/5 p-4">
+            {order.status === "BANK_PENDING" && <div className="mt-4 rounded-[8px] border-2 border-[var(--bauhaus-blue)] bg-background p-4">
               <p className="flex items-center gap-2 text-xs font-black"><Landmark size={15} aria-hidden />입금 계좌</p>
               <dl className="mt-3 grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs leading-6">
                 <dt className="text-muted-foreground">은행</dt><dd>{APP_CONFIG.bankName}</dd>
@@ -205,11 +205,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
         </div>
       )}
       {nextOffset !== null && <div className="flex justify-center"><button type="button" className={buttonClass} disabled={loading || Boolean(returningId)} onClick={() => void loadOrders(nextOffset, true)}>{loading ? "불러오는 중..." : "이전 주문 더 보기"}</button></div>}
-      {returnOrder && <CommerceConfirmDialog title="장바구니로 돌리기" confirmLabel="장바구니로 돌리기" message={[
-        "이 주문에 포함된 신청서를 모두 장바구니로 돌립니다. 기존 주문 이력은 남고 결제 수단을 다시 선택할 수 있습니다.",
-        returnOrder.status === "BANK_PENDING" ? "아직 입금하지 않은 경우에만 진행해주세요. 이미 입금했다면 입금 확인을 기다려주세요." : null,
-        ["CARD_PENDING", "PAYPAL_PENDING"].includes(returnOrder.status) ? "열려 있는 결제창을 먼저 닫아주세요. 진행 중인 결제 요청이 취소됩니다." : null,
-      ].filter(Boolean).join("\n\n")} onCancel={() => setReturnOrder(null)} onConfirm={() => { const order = returnOrder; setReturnOrder(null); void returnToCart(order); }} />}
+      {returnOrder && <CommerceConfirmDialog title="결제 수단 다시 선택" confirmLabel="결제하기" message="아직 입금하지 않은 경우에만 진행해주세요. 기존 입금 신청을 취소하고 카드 결제 또는 무통장 입금을 다시 선택합니다. 이미 입금했다면 입금 확인을 기다려주세요." onCancel={() => setReturnOrder(null)} onConfirm={() => { const order = returnOrder; setReturnOrder(null); void returnToCheckout(order); }} />}
     </div>
   );
 }

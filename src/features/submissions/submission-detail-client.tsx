@@ -20,6 +20,7 @@ import {
 } from "@/features/submissions/submission-files-panel";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { getAlbumPackageLabel } from "@/lib/album-package-label";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import {
   buildStationTrackSummaryText,
   getStationReviewDisplayStatus,
@@ -42,7 +43,8 @@ import { SubmissionSupplements } from "@/features/submissions/submission-supplem
 import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { loadSubmissionDetailRelations, preservePendingStationReviews } from "@/lib/submissions/detail-relations";
 import { downloadEndpointFile } from "@/lib/browser-download";
-import { addGuestSubmissionCartEntries, rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
+import { addGuestSubmissionCartEntries, readGuestSubmissionOrderEntries, rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
+import { buildSubmissionCheckoutHref, prepareOrderCheckout } from "@/lib/submission-checkout";
 
 type Submission = {
   id: string;
@@ -464,6 +466,9 @@ export function SubmissionDetailClient({
     summary: ReturnType<typeof summarizeTrackResults>;
   } | null>(null);
   const [showPaymentInfo, setShowPaymentInfo] = React.useState(false);
+  const [isPreparingCheckout, setIsPreparingCheckout] = React.useState(false);
+  const [checkoutError, setCheckoutError] = React.useState<string | null>(null);
+  const checkoutPendingRef = React.useRef(false);
   const [isReceptionInfoOpen, setIsReceptionInfoOpen] = React.useState(false);
   const [isSubmissionFormOpen, setIsSubmissionFormOpen] = React.useState(false);
   const [isAttachmentsOpen, setIsAttachmentsOpen] = React.useState(false);
@@ -626,13 +631,48 @@ export function SubmissionDetailClient({
     );
   const canRetryCardPayment =
     submission.payment_method !== "BANK" && submission.payment_status !== "PAID";
-  const retryPaymentHref = `${localePrefix}/mypage/${submission.current_order_id ? "orders" : "cart"}?focus=${submission.id}`;
-  const openCartForPayment = () => {
-    if (guestToken) {
-      const remember = submission.current_order_id ? rememberGuestSubmissionOrderEntries : addGuestSubmissionCartEntries;
-      remember([{ submissionId: submission.id, guestToken }]);
+  const openCartForPayment = async () => {
+    if (checkoutPendingRef.current) return;
+    setCheckoutError(null);
+    if (submission.payment_method === "BANK") {
+      // Deposit instructions remain distinct from cancelling an unpaid bank
+      // order; an already-transferred deposit must not prompt another payment.
+      if (guestToken) {
+        const remember = submission.current_order_id ? rememberGuestSubmissionOrderEntries : addGuestSubmissionCartEntries;
+        remember([{ submissionId: submission.id, guestToken }]);
+      }
+      router.push(`${localePrefix}/mypage/${submission.current_order_id ? "orders" : "cart"}?focus=${submission.id}`);
+      return;
     }
-    router.push(retryPaymentHref);
+    checkoutPendingRef.current = true;
+    setIsPreparingCheckout(true);
+    try {
+      let href: string;
+      if (submission.current_order_id) {
+        const proofs = guestToken ? Object.fromEntries([
+          ...readGuestSubmissionOrderEntries().map(entry => [entry.submissionId, entry.guestToken]),
+          [submission.id, guestToken],
+        ]) as Record<string, string> : {};
+        if (Object.keys(proofs).length > 100) throw new Error("이 주문의 비회원 조회 정보를 확인하지 못했습니다. 주문내역에서 다시 진행해주세요.");
+        const previousOrderId = submission.current_order_id;
+        const prepared = await prepareOrderCheckout({ orderId: previousOrderId, guestTokensBySubmissionId: proofs, localePrefix });
+        href = prepared.href;
+        setSubmission(current => current.current_order_id === previousOrderId && current.payment_status !== "PAID"
+          ? { ...current, current_order_id: null, payment_status: "UNPAID", status: "SUBMITTED" } : current);
+      } else {
+        if (guestToken && !addGuestSubmissionCartEntries([{ submissionId: submission.id, guestToken }])) {
+          throw new Error("비회원 결제 정보를 이 브라우저에 저장하지 못했습니다. 조회 코드를 보관하고 브라우저 저장을 허용한 뒤 다시 확인해주세요.");
+        }
+        href = buildSubmissionCheckoutHref([submission.id], localePrefix);
+      }
+      router.push(href);
+      router.refresh();
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : "결제 준비를 완료하지 못했습니다. 주문내역을 새로고침한 뒤 다시 시도해주세요.");
+    } finally {
+      checkoutPendingRef.current = false;
+      setIsPreparingCheckout(false);
+    }
   };
   const mvSongTitleDisplay =
     submission.mv_song_title_official ||
@@ -717,7 +757,7 @@ export function SubmissionDetailClient({
   });
   const handlePrimaryStatusAction = () => {
     if (submission.current_order_id && ["payment-info", "retry-payment"].includes(displayStatus.primaryAction ?? "")) {
-      openCartForPayment();
+      void openCartForPayment();
       return;
     }
     if (displayStatus.primaryAction === "payment-info") {
@@ -725,7 +765,7 @@ export function SubmissionDetailClient({
       return;
     }
     if (displayStatus.primaryAction === "retry-payment" && canRetryCardPayment) {
-      openCartForPayment();
+      void openCartForPayment();
       return;
     }
     if (displayStatus.primaryAction === "station-review") {
@@ -1197,6 +1237,7 @@ export function SubmissionDetailClient({
         </div>
       ) : <>
       {submission.payment_status === "PAID" ? <SubmissionSupplements submissionId={submissionId} guestToken={guestToken} /> : null}
+      {checkoutError && <p role="alert" className={`mb-5 rounded-lg border-2 p-4 text-sm ${brandStatusTones.danger}`}>{checkoutError}</p>}
       {paymentFeedback ? (
         <div
           className={`mb-6 rounded-[10px] border-2 px-5 py-4 shadow-[5px_5px_0_#111111] dark:shadow-[5px_5px_0_#f2cf27] ${paymentFeedback.tone}`}
@@ -1293,7 +1334,8 @@ export function SubmissionDetailClient({
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={openCartForPayment}
+                  onClick={() => void openCartForPayment()}
+                  disabled={isPreparingCheckout}
                   className="rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-4 py-2 text-xs font-black uppercase tracking-normal text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
                 >
                   {submission.current_order_id ? "주문 내역 보기" : "장바구니"}
@@ -1345,9 +1387,11 @@ export function SubmissionDetailClient({
                   <button
                     type="button"
                     onClick={handlePrimaryStatusAction}
+                    disabled={isPreparingCheckout}
+                    aria-busy={isPreparingCheckout}
                     className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#111111] px-5 py-2 text-sm font-black text-white shadow-[3px_3px_0_#1556a4] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[3px_3px_0_#3f8ad8]"
                   >
-                    {displayStatus.primaryActionLabel}
+                    {isPreparingCheckout ? "결제 준비 중..." : displayStatus.primaryActionLabel}
                   </button>
                 ) : null}
                 <button

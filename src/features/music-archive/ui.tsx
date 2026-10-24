@@ -3,6 +3,7 @@
 import { useEffect, useRef, useId, useState, Children, isValidElement, cloneElement, type ReactNode, type ButtonHTMLAttributes } from "react";
 import Image from "next/image";
 import { X, ExternalLink, Disc3, UserRound } from "lucide-react";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const inputClass = "min-h-11 w-full min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground";
 export const panelClass = "min-w-0 rounded-xl border-2 border-border bg-card p-4 sm:p-5";
@@ -14,19 +15,13 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   return <div className="flex min-w-0 flex-col gap-1.5 text-sm font-semibold"><label htmlFor={id}>{label}</label>{Children.map(children, (child) => isValidElement<{id?: string; "aria-describedby"?: string}>(child) && ["input", "select", "textarea"].includes(String(child.type)) ? cloneElement(child, { id, ...(hint ? { "aria-describedby": `${id}-hint` } : {}) }) : child)}{hint && <span id={`${id}-hint`} className="text-xs font-normal leading-5 text-muted-foreground">{hint}</span>}</div>;
 }
 export function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) {
-  return <div role={error ? "alert" : "note"} className={`rounded-lg border p-3 text-sm leading-6 ${error ? "border-red-300 bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-100" : "border-border bg-background text-foreground"}`}>{children}</div>;
+  return <div role={error ? "alert" : "note"} className={`rounded-lg border-2 p-3 text-sm leading-6 ${error ? brandStatusTones.danger : brandStatusTones.neutral}`}>{children}</div>;
 }
 export type BadgeTone = "neutral" | "success" | "warning" | "progress" | "danger";
-const badgeTones: Record<BadgeTone, string> = {
-  neutral: "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200",
-  success: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-200",
-  warning: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200",
-  progress: "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200",
-  danger: "border-red-300 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200",
-};
+const badgeTones: Record<BadgeTone, string> = brandStatusTones;
 export function Badge({ children, attention = false, tone }: { children: ReactNode; attention?: boolean; tone?: BadgeTone }) {
   const color = tone ?? (attention ? "warning" : "neutral");
-  return <span data-status-tone={color} className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold leading-5 [word-break:keep-all] ${badgeTones[color]}`}>{children}</span>;
+  return <span data-status-tone={color} className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border-2 px-2 py-1 text-xs font-bold leading-5 [word-break:keep-all] ${badgeTones[color]}`}>{children}</span>;
 }
 export function External({ href, children }: { href: string; children: ReactNode }) {
   if (!/^https:\/\//i.test(href)) return <span>{children}</span>;

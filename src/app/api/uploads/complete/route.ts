@@ -177,13 +177,8 @@ export async function POST(request: Request) {
 
     const contentLength = head.ContentLength ?? 0;
     if (contentLength !== sizeBytes) {
-      await deleteObject(normalizedKey).catch((cleanupError) => {
-        console.error("[Upload][complete] mismatched object cleanup failed", {
-          submissionIdHash: getStorageLogId(submissionId),
-          errorName:
-            cleanupError instanceof Error ? cleanupError.name : "UnknownError",
-        });
-      });
+      // A caller's incorrect declared size cannot authorize deleting an
+      // existing staged/live object, including during a payment-state race.
       return NextResponse.json(
         {
           error: "업로드된 파일 크기가 일치하지 않습니다.",

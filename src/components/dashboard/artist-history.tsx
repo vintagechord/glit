@@ -16,6 +16,7 @@ import {
 
 import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { formatDate } from "@/lib/format";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type SubmissionItem = {
   id: string;
@@ -41,41 +42,40 @@ type DeletePayload = {
 };
 
 const stageTone: Record<string, string> = {
-  "접수 완료": "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]",
-  "심의 진행": "border-[var(--bauhaus-ink)] bg-[var(--foreground)] text-[var(--background)]",
-  "결과 전달": "border-[var(--bauhaus-green)] bg-[var(--bauhaus-green)] text-white dark:text-[#06111f]",
+  "임시 저장": brandStatusTones.neutral,
+  "접수 완료": brandStatusTones.warning,
+  "자료 확인 중": brandStatusTones.warning,
+  "심의 진행": brandStatusTones.progress,
+  "결과 준비": brandStatusTones.success,
+  "심의 완료": brandStatusTones.success,
 };
 
 const outlineControlClass =
   "inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black tracking-normal text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
 
 const dangerControlClass =
-  "inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
+  "inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-3 text-[11px] font-black tracking-normal text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-[var(--background)] disabled:text-[var(--foreground)] disabled:opacity-100 disabled:shadow-none disabled:hover:translate-y-0 dark:text-[#06111f]";
 
 const smallDangerControlClass =
-  "inline-flex h-11 w-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:text-[#06111f]";
+  "inline-flex h-11 w-11 items-center justify-center rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] text-white shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-[var(--background)] disabled:text-[var(--foreground)] disabled:opacity-100 disabled:shadow-none disabled:hover:translate-y-0 dark:text-[#06111f]";
 
 const getStageLabel = (item: SubmissionItem) => {
-  if (["RESULT_READY", "COMPLETED"].includes(item.status)) {
-    return "결과 전달";
-  }
-  if (item.status === "IN_PROGRESS") {
-    return "심의 진행";
-  }
-  if (["SUBMITTED", "PRE_REVIEW"].includes(item.status)) {
-    return "접수 완료";
-  }
-  return "접수 완료";
+  return ({
+    DRAFT: "임시 저장", SUBMITTED: "접수 완료", PRE_REVIEW: "자료 확인 중",
+    WAITING_PAYMENT: "접수 완료", IN_PROGRESS: "심의 진행",
+    RESULT_READY: "결과 준비", COMPLETED: "심의 완료",
+  } as Record<string, string>)[item.status] ?? "접수 완료";
 };
 
-function StatusChip({ label }: { label: string }) {
+function StatusChip({ label, href }: { label: string; href: string }) {
   const tone =
     stageTone[label] ??
     "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]";
   return (
-    <span className={`inline-flex h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-[8px] border-2 px-3 text-[11px] font-black leading-none tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] ${tone}`}>
+    <Link href={href} prefetch={false} className={`inline-flex h-11 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-[8px] border-2 px-3 text-xs font-black leading-none tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground ${tone}`}>
       {label}
-    </span>
+      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+    </Link>
   );
 }
 
@@ -112,11 +112,12 @@ function SubmissionManagementRow({
   const localePrefix =
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const [prefetchDetail, setPrefetchDetail] = React.useState(false);
+  const detailHref = `${localePrefix}/dashboard/submissions/${encodeURIComponent(item.id)}`;
   return (
     <div
-      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 @sm:grid-cols-[auto_minmax(0,1fr)_auto] @sm:items-center ${
+      className={`grid grid-cols-[44px_minmax(0,1fr)] gap-x-3 gap-y-2 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 @sm:grid-cols-[44px_minmax(0,1fr)_auto] @sm:items-center ${
         selected
-          ? "rounded-[8px] bg-[rgba(242,207,39,0.22)] shadow-[2px_2px_0_var(--bauhaus-shadow)]"
+          ? "rounded-[8px] bg-[var(--bauhaus-yellow)] text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)]"
           : "rounded-[8px] hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
       }`}
     >
@@ -149,21 +150,21 @@ function SubmissionManagementRow({
         </span>
       </label>
       <Link
-        href={`${localePrefix}/dashboard/submissions/${encodeURIComponent(item.id)}`}
+        href={detailHref}
         prefetch={prefetchDetail ? true : false}
         onMouseEnter={() => setPrefetchDetail(true)}
         onFocus={() => setPrefetchDetail(true)}
         className="flex min-h-11 min-w-0 flex-col justify-center"
       >
-        <p className="font-semibold leading-6 text-foreground [overflow-wrap:anywhere]">
+        <p className={`font-semibold leading-6 [overflow-wrap:anywhere] ${selected ? "text-[#111111]" : "text-foreground"}`}>
           {item.title || "제목 미입력"}
         </p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className={`truncate text-xs ${selected ? "text-[#111111]" : "text-muted-foreground"}`}>
           {formatDate(item.created_at)}
         </p>
       </Link>
-      <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 @sm:col-start-auto @sm:justify-end">
-        <StatusChip label={getStageLabel(item)} />
+      <div className="col-start-2 flex w-fit min-w-0 max-w-full flex-wrap items-center gap-2 @sm:col-start-auto @sm:justify-self-end">
+        <StatusChip label={getStageLabel(item)} href={detailHref} />
         <button
           type="button"
           onClick={() => onDelete(item)}
@@ -220,7 +221,7 @@ function ArtistCard({
             <p className="text-base font-semibold leading-6 text-foreground [overflow-wrap:anywhere]">
               {group.artistName}
             </p>
-            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-black text-muted-foreground">
+            <span className="shrink-0 rounded-full border border-[#111111] bg-[var(--bauhaus-yellow)] px-2 py-0.5 text-[11px] font-black text-[#111111]">
               {group.submissions.length}
             </span>
           </div>

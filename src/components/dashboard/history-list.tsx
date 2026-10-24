@@ -10,6 +10,7 @@ import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { formatCurrency, formatDate, formatDateTime, formatShortDate } from "@/lib/format";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
 import { getAlbumPackageLabel } from "@/lib/album-package-label";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type StationReview = {
   id: string;
@@ -50,7 +51,7 @@ const submissionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bauhaus-status-chip--info",
   },
   PRE_REVIEW: {
-    label: "사전 검토",
+    label: "자료 확인 중",
     tone: "bauhaus-status-chip--waiting",
   },
   WAITING_PAYMENT: {
@@ -62,11 +63,11 @@ const submissionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bauhaus-status-chip--progress",
   },
   RESULT_READY: {
-    label: "결과 전달",
+    label: "결과 준비",
     tone: "bauhaus-status-chip--success",
   },
   COMPLETED: {
-    label: "완료",
+    label: "심의 완료",
     tone: "bauhaus-status-chip--success",
   },
 };
@@ -245,7 +246,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
         </button>
       </div>
       {notice && (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-600">
+        <div className={`rounded-2xl border-2 px-4 py-2 text-xs ${brandStatusTones.danger}`}>
           {notice}
         </div>
       )}
@@ -267,15 +268,16 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
         return (
           <div
             key={submission.id}
-            className="grid items-center gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card/80 px-4 py-3 text-sm transition hover:border-foreground md:grid-cols-[28px_28px_minmax(0,1fr)_auto]"
+            className="grid grid-cols-[20px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 overflow-hidden rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm transition hover:border-foreground md:grid-cols-[20px_28px_minmax(0,1fr)_auto]"
           >
             <input
               type="checkbox"
               checked={selectedIds.has(submission.id)}
               onChange={() => toggleSelection(submission.id)}
+              aria-label={`${submission.title || "심의 내역"} 선택`}
               className="h-4 w-4 rounded border-border"
             />
-            <span className="text-xs text-muted-foreground">
+            <span className="hidden text-xs text-muted-foreground md:block">
               {submission.order}
             </span>
             <div className="flex min-w-0 items-center gap-4">
@@ -287,13 +289,6 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                   <p className="min-w-0 truncate text-sm font-semibold text-foreground">
                     {submission.title || (submission.isOneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
                   </p>
-                  {!hasPaymentAction ? (
-                    <span
-                      className={`bauhaus-status-chip bauhaus-status-chip--compact ${statusInfo.tone}`}
-                    >
-                      {statusInfo.label}
-                    </span>
-                  ) : null}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {submission.artistName} · {submission.typeLabel} ·{" "}
@@ -305,13 +300,13 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            <div className="col-start-2 flex flex-wrap items-center gap-2 md:col-start-auto md:justify-end">
               <button
                 type="button"
                 onClick={() => setActiveSubmission(submission)}
-                className="rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
+                className={`inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 px-3 py-2 text-xs font-bold transition hover:-translate-y-0.5 ${hasPaymentAction ? brandStatusTones.neutral : `${statusInfo.tone} bauhaus-status-chip`}`}
               >
-                상세보기
+                {hasPaymentAction ? "상세보기" : statusInfo.label}
               </button>
               {hasPaymentAction ? (
                 <Link
