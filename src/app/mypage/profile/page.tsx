@@ -2,7 +2,7 @@ import {
   defaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
-import { ProfilePageView } from "@/app/dashboard/profile/page";
+import { ProfilePageView } from "@/app/dashboard/profile/view";
 
 export const metadata = {
   title: "마이페이지 - 계정 정보",

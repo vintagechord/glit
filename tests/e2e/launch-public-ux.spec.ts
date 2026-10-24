@@ -30,19 +30,50 @@ for (const width of [360, 390, 430, 768, 1024, 1440]) {
   });
 }
 
-test("home prioritizes service choices and labels its fictional sample", async ({ page }) => {
-  await page.goto("/");
-  const sample = page.locator("details").filter({ has: page.getByText("진행 화면 예시 보기", { exact: true }) });
+for (const width of [390, 1024, 1440]) for (const english of [false, true]) test(`home restores the original hero columns with a visible example at ${width}px (${english ? "en" : "ko"})`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 1000 });
+  await page.goto(english ? "/en" : "/");
+  await expect(page.getByRole("complementary", { name: english ? "Email Delivery Notice" : "이메일 발송 안내", exact: true })).toHaveCount(0);
+  await expect(page.getByText(english ? /Automated email is being prepared\./ : /이메일 자동 발송을 준비 중입니다\./)).toHaveCount(0);
+  const sample = page.getByText(english ? "Fictional Progress Example" : "가상의 진행 예시", { exact: true }).locator("xpath=../..");
   await expect(sample).toBeVisible();
-  await expect(sample).not.toHaveAttribute("open", "");
-  await sample.locator("summary").click();
-  await expect(sample).toContainText("실제 접수 내역이 아닙니다.");
-  await expect(sample).toContainText("방송국 6곳 중 1곳 결과 완료");
-  await expect(sample).toContainText("보완 요청");
+  await expect(page.getByText("진행 화면 예시 보기", { exact: true })).toHaveCount(0);
+  await expect(sample).toContainText(english ? "Sample Data" : "예시 데이터");
+  if (!english) await expect(sample).toContainText("방송국 6곳 중 1곳 결과 완료");
+  await expect(sample).toContainText(english ? "Supplement Requested" : "보완 요청");
   await expect(sample).not.toContainText("Updated");
-  const sampleTop = (await sample.boundingBox())!.y;
-  const albumTop = (await page.getByRole("heading", { name: "음반 심의", exact: true }).boundingBox())!.y;
-  expect(sampleTop).toBeGreaterThan(albumTop);
+  const benefits = page.getByRole("region", { name: english ? "Your next steps with Onside" : "온사이드와 함께하는 심의 그 다음", exact: true });
+  await expect(benefits.getByRole("button")).toHaveCount(3);
+  const heading = page.getByRole("heading", { level: 1 });
+  const apply = page.getByRole("main").getByRole("link", { name: english ? "Apply" : "심의 신청", exact: true });
+  const headingBounds = (await heading.boundingBox())!;
+  const benefitBounds = (await benefits.boundingBox())!;
+  const applyBounds = (await apply.boundingBox())!;
+  const sampleBounds = (await sample.boundingBox())!;
+  expect(benefitBounds.y).toBeGreaterThan(headingBounds.y + headingBounds.height);
+  expect(applyBounds.y).toBeGreaterThan(benefitBounds.y + benefitBounds.height);
+  if (width >= 1024) {
+    expect(sampleBounds.x).toBeGreaterThan(headingBounds.x + headingBounds.width);
+    expect(Math.abs(sampleBounds.y - headingBounds.y)).toBeLessThan(120);
+  } else {
+    expect(Math.abs(sampleBounds.x - headingBounds.x)).toBeLessThan(8);
+    expect(sampleBounds.y).toBeGreaterThan(applyBounds.y + applyBounds.height);
+  }
+  for (const removedCopy of [
+    "방송국 수별 패키지 · 앨범 1건 기준", "Package by number of stations · per album",
+    "영상 1건 · 선택 항목별 비용", "Per video · fees depend on selected options",
+    "영상 1건 · 선택 방송사별 비용", "Per video · fees depend on selected broadcasters",
+  ]) await expect(page.getByText(removedCopy, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: english ? "Compare Materials, Deliverables, and Pricing" : "준비 자료·결과물·비용 기준 비교", exact: true })).toHaveCount(0);
+  await expect(page.getByText(english ? /Review approval does not guarantee broadcast scheduling\./ : /심의 결과는 실제 방송 편성을 보장하지 않습니다\./)).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  for (const name of english ? ["Album Review", "Online MV", "Broadcast MV"] : ["음반 심의", "MV 온라인", "MV 방송"]) {
+    const service = page.getByRole("link").filter({ has: page.getByRole("heading", { name, exact: true }) });
+    await service.scrollIntoViewIfNeeded();
+    await expect(service).toHaveAttribute("data-reveal-state", "visible");
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath(`home-original-layout-${width}-${english ? "en" : "ko"}.png`), fullPage: true, animations: "disabled" });
 });
 
 test("English service cards preserve explicit purpose and locale", async ({ page }) => {

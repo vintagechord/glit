@@ -72,9 +72,9 @@ function StatusChip({ label, href }: { label: string; href: string }) {
     stageTone[label] ??
     "border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]";
   return (
-    <Link href={href} prefetch={false} className={`inline-flex h-11 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-[8px] border-2 px-3 text-xs font-black leading-none tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground ${tone}`}>
-      {label}
-      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+    <Link href={href} prefetch={false} className={`inline-flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-[8px] border-2 px-3 py-2 text-center text-xs font-black leading-4 tracking-normal shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground ${tone}`}>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
+      <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
     </Link>
   );
 }
@@ -115,7 +115,9 @@ function SubmissionManagementRow({
   const detailHref = `${localePrefix}/dashboard/submissions/${encodeURIComponent(item.id)}`;
   return (
     <div
-      className={`grid grid-cols-[44px_minmax(0,1fr)] gap-x-3 gap-y-2 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 @sm:grid-cols-[44px_minmax(0,1fr)_auto] @sm:items-center ${
+      role="group"
+      aria-label={item.title || "제목 미입력"}
+      className={`grid grid-cols-[44px_minmax(0,1fr)] items-start gap-x-3 gap-y-3 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 ${
         selected
           ? "rounded-[8px] bg-[var(--bauhaus-yellow)] text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)]"
           : "rounded-[8px] hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
@@ -149,27 +151,13 @@ function SubmissionManagementRow({
           <Check className="h-4 w-4" strokeWidth={3} />
         </span>
       </label>
-      <Link
-        href={detailHref}
-        prefetch={prefetchDetail ? true : false}
-        onMouseEnter={() => setPrefetchDetail(true)}
-        onFocus={() => setPrefetchDetail(true)}
-        className="flex min-h-11 min-w-0 flex-col justify-center"
-      >
-        <p className={`font-semibold leading-6 [overflow-wrap:anywhere] ${selected ? "text-[#111111]" : "text-foreground"}`}>
-          {item.title || "제목 미입력"}
-        </p>
-        <p className={`truncate text-xs ${selected ? "text-[#111111]" : "text-muted-foreground"}`}>
-          {formatDate(item.created_at)}
-        </p>
-      </Link>
-      <div className="col-start-2 flex w-fit min-w-0 max-w-full flex-wrap items-center gap-2 @sm:col-start-auto @sm:justify-self-end">
+      <div className="flex min-w-0 items-start justify-end gap-2">
         <StatusChip label={getStageLabel(item)} href={detailHref} />
         <button
           type="button"
           onClick={() => onDelete(item)}
           disabled={deleting}
-          className={smallDangerControlClass}
+          className={`${smallDangerControlClass} shrink-0`}
           aria-label={`${item.title || "제목 미입력"} 심의 내역 삭제`}
           title="삭제"
         >
@@ -180,6 +168,20 @@ function SubmissionManagementRow({
           )}
         </button>
       </div>
+      <Link
+        href={detailHref}
+        prefetch={prefetchDetail ? true : false}
+        onMouseEnter={() => setPrefetchDetail(true)}
+        onFocus={() => setPrefetchDetail(true)}
+        className="col-span-2 flex min-h-11 min-w-0 flex-col justify-center gap-1 rounded-[4px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+      >
+        <p className={`font-semibold leading-6 [overflow-wrap:anywhere] ${selected ? "text-[#111111]" : "text-foreground"}`}>
+          {item.title || "제목 미입력"}
+        </p>
+        <p className={`text-xs ${selected ? "text-[#111111]" : "text-muted-foreground"}`}>
+          {formatDate(item.created_at)}
+        </p>
+      </Link>
     </div>
   );
 }
@@ -504,7 +506,7 @@ export function ArtistHistoryTabs({
           심의 내역이 없습니다.
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
           {groups.map((group) => (
             <ArtistCard
               key={`${group.artistId ?? group.artistName}`}

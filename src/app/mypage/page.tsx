@@ -2,7 +2,7 @@ import {
   defaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
-import { StatusPageView } from "@/app/dashboard/page";
+import { StatusPageView } from "@/app/dashboard/view";
 
 export const metadata = {
   title: "마이페이지 - 접수현황",

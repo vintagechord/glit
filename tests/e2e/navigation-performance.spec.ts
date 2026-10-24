@@ -44,8 +44,21 @@ test("the chat launcher stays mounted when moving between public pages", async (
   const launcher = page.getByRole("button", { name: "실시간 채팅 열기", exact: true });
   await expect(launcher).toBeVisible();
   await launcher.evaluate((element) => { element.setAttribute("data-qa-existing-launcher", "true"); });
-  await page.getByRole("navigation", { name: "주요 메뉴", exact: true })
-    .getByRole("link", { name: "심의 신청", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "무엇을 신청하시나요?" })).toBeVisible();
+  const footer=page.locator('footer');
+  await footer.locator('summary').filter({hasText:'사이트 링크'}).click();
+  await footer.getByRole('link',{name:'고객센터',exact:true}).click();
+  await expect(page).toHaveURL(/\/support$/);
+  await expect(page.getByRole("heading", { name: "어떻게 도와드릴까요?", exact: true })).toBeVisible();
   await expect(launcher).toHaveAttribute("data-qa-existing-launcher", "true");
+});
+
+test("application navigation hides the chat launcher without a document reload", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "실시간 채팅 열기", exact: true })).toBeVisible();
+  const documents: string[]=[];
+  page.on("request",request=>{if(request.isNavigationRequest()&&request.resourceType()==="document")documents.push(request.url())});
+  await page.getByRole("navigation", { name: "주요 메뉴", exact: true }).getByRole("link", { name: "심의 신청", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "무엇을 신청하시나요?", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "실시간 채팅 열기", exact: true })).toHaveCount(0);
+  expect(documents).toEqual([]);
 });

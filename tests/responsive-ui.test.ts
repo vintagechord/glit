@@ -74,7 +74,7 @@ test("dashboard navigation, cart and order details stay compact on narrow screen
 });
 
 test("credit details use progressive disclosure instead of repeated guidance", () => {
-  const source = readSource("src/app/mypage/credits/page.tsx");
+  const source = readSource("src/features/credits/credits-page-view.tsx");
 
   assert.match(source, /<summary className="cursor-pointer font-black">이용 안내<\/summary>/);
   assert.match(source, />요청 내역<\/h2>/);

@@ -1,4 +1,4 @@
-import { TrackPageView } from "@/app/track/page";
+import { TrackPageView } from "@/features/track/track-page-view";
 
 export { metadata } from "@/app/track/page";
 

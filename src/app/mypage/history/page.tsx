@@ -2,7 +2,7 @@ import {
   defaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
-import { HistoryPageView } from "@/app/dashboard/history/page";
+import { HistoryPageView } from "@/app/dashboard/history/view";
 
 export const metadata = {
   title: "마이페이지 - 나의 심의 내역",

@@ -7,7 +7,7 @@ const readSource = (relativePath: string) =>
 
 test("English artist history links have a locale-aware detail route", () => {
   const history = readSource("src/components/dashboard/artist-history.tsx");
-  const detail = readSource("src/app/dashboard/artists/[id]/page.tsx");
+  const detail = readSource("src/app/dashboard/artists/[id]/view.tsx");
   const englishWrapper = readSource(
     "src/app/en/dashboard/artists/[id]/page.tsx",
   );
@@ -22,7 +22,7 @@ test("English artist history links have a locale-aware detail route", () => {
 
 test("English magazine credit requests preserve locale on every redirect", () => {
   const englishWrapper = readSource("src/app/en/magazine/page.tsx");
-  const page = readSource("src/app/magazine/page.tsx");
+  const page = readSource("src/features/magazine/magazine-page-view.tsx");
   const actions = readSource("src/features/credits/actions.ts");
 
   assert.match(englishWrapper, /localePrefix: "\/en"/);

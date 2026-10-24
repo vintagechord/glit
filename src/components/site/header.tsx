@@ -100,7 +100,11 @@ export function SiteHeader() {
   const pathname = usePathname();
   const headerRef = React.useRef<HTMLElement | null>(null);
   const [authState, setAuthState] = React.useState<AuthState>("unauthenticated");
+  const [authUserId, setAuthUserId] = React.useState<string | null>(null);
   const [cartCount, setCartCount] = React.useState(0);
+  const cartOwnerRef = React.useRef<string | null>(null);
+  const sessionSyncRef = React.useRef<(() => Promise<void>) | null>(null);
+  const previousPathnameRef = React.useRef(pathname);
   const [locationSuffix, setLocationSuffix] = React.useState("");
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const activeNavLinks = isEnglishRoute ? englishNavLinks : navLinks;
@@ -161,10 +165,15 @@ export function SiteHeader() {
   React.useEffect(() => {
     const supabase = createClient();
     let active = true;
+    let syncing = false;
+    let resyncRequested = false;
+    let authEventVersion = 0;
 
-    const persist = (nextState: AuthState) => {
+    const persist = (userId: string | null) => {
       if (!active) return;
+      const nextState = userId ? "authenticated" : "unauthenticated";
       setAuthState(nextState);
+      setAuthUserId(userId);
       try {
         window.sessionStorage.setItem(authStorageKey, nextState);
       } catch {
@@ -182,27 +191,44 @@ export function SiteHeader() {
     }
 
     const syncSession = async () => {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
-
-      if (!active) return;
-
-      if (error) {
-        if (!error.message.toLowerCase().includes("auth session missing")) {
-          console.error("[SiteHeader] Failed to read session:", error.message);
-        }
-        persist("unauthenticated");
+      if (syncing) {
+        resyncRequested = true;
         return;
       }
-
-      persist(session?.user ? "authenticated" : "unauthenticated");
+      syncing = true;
+      const version = authEventVersion;
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        // An auth event received during this read is newer than its result.
+        if (!active || version !== authEventVersion) return;
+        if (error) {
+          if (!error.message.toLowerCase().includes("auth session missing")) {
+            console.error("[SiteHeader] Failed to read session:", error.message);
+          }
+          persist(null);
+          return;
+        }
+        persist(session?.user?.id ?? null);
+      } catch (error) {
+        if (active && version === authEventVersion) {
+          console.error("[SiteHeader] Failed to read session:", error instanceof Error ? error.name : "UnknownError");
+          persist(null);
+        }
+      } finally {
+        syncing = false;
+        if (resyncRequested && active) {
+          resyncRequested = false;
+          void syncSession();
+        }
+      }
     };
 
+    sessionSyncRef.current = syncSession;
     void syncSession();
 
-    const handlePageShow = () => void syncSession();
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) void syncSession();
+    };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void syncSession();
@@ -212,7 +238,8 @@ export function SiteHeader() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      persist(session?.user ? "authenticated" : "unauthenticated");
+      authEventVersion += 1;
+      persist(session?.user?.id ?? null);
     });
 
     window.addEventListener("pageshow", handlePageShow);
@@ -220,14 +247,25 @@ export function SiteHeader() {
 
     return () => {
       active = false;
+      if (sessionSyncRef.current === syncSession) sessionSyncRef.current = null;
       subscription.unsubscribe();
       window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
+  }, []);
+
+  React.useEffect(() => {
+    const previous = previousPathnameRef.current.replace(/^\/en(?=\/)/, "");
+    const current = pathname.replace(/^\/en(?=\/)/, "");
+    previousPathnameRef.current = pathname;
+    // Server Action login updates cookies without a browser SDK auth event.
+    // Re-read only when leaving login, rather than after every menu click.
+    if (previous === "/login" && current !== "/login") void sessionSyncRef.current?.();
   }, [pathname]);
 
   React.useEffect(() => {
-    if (authState !== "authenticated") {
+    if (authState !== "authenticated" || !authUserId) {
+      cartOwnerRef.current = null;
       const loadGuestCartCount = () => {
         setCartCount(readGuestSubmissionCartEntries().length);
       };
@@ -253,7 +291,18 @@ export function SiteHeader() {
     }
 
     const controller = new AbortController();
+    if (cartOwnerRef.current !== authUserId) {
+      cartOwnerRef.current = authUserId;
+      setCartCount(0);
+    }
+    let loading = false;
+    let refreshAgain = false;
     const loadCartCount = async () => {
+      if (loading) {
+        refreshAgain = true;
+        return;
+      }
+      loading = true;
       try {
         const response = await fetch("/api/cart/count", {
           cache: "no-store",
@@ -270,17 +319,43 @@ export function SiteHeader() {
         if (!controller.signal.aborted) {
           console.error("[SiteHeader] Failed to read cart count:", error);
         }
+      } finally {
+        loading = false;
+        if (refreshAgain && !controller.signal.aborted) {
+          refreshAgain = false;
+          void loadCartCount();
+        }
       }
+    };
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) void loadCartCount();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void loadCartCount();
     };
 
     void loadCartCount();
     window.addEventListener(SUBMISSION_CART_UPDATED_EVENT, loadCartCount);
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       controller.abort();
       window.removeEventListener(SUBMISSION_CART_UPDATED_EVENT, loadCartCount);
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [authState, pathname]);
+  }, [authState, authUserId]);
+
+  React.useEffect(() => {
+    // A completed application can enter the cart without a client mutation
+    // event. Refresh on commerce entry, while ordinary menu navigation reuses
+    // the mounted header and its existing count.
+    const path = pathname.replace(/^\/en(?=\/)/, "");
+    if (["/mypage/cart", "/dashboard/cart", "/mypage/orders", "/dashboard/orders"].includes(path)) {
+      window.dispatchEvent(new Event(SUBMISSION_CART_UPDATED_EVENT));
+    }
+  }, [pathname]);
 
   return (
     <header

@@ -2,7 +2,7 @@ import {
   defaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
-import { SubmissionCartPageView } from "@/app/dashboard/cart/page";
+import { SubmissionCartPageView } from "@/app/dashboard/cart/view";
 
 export const metadata = {
   title: "마이페이지 - 장바구니",

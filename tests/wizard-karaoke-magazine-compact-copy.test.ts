@@ -146,7 +146,7 @@ test("magazine request keeps one login action and one credit heading", () => {
   const source = readSource(
     "src/features/magazine/magazine-request-form.tsx",
   );
-  const page = readSource("src/app/magazine/page.tsx");
+  const page = readSource("src/features/magazine/magazine-page-view.tsx");
 
   assert.match(page, /aria-label="크레딧 현황"/);
   assert.match(page, /sm:grid-cols-2/);
