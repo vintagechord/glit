@@ -69,6 +69,19 @@ async function mockAuth(page: Page, options: {
   return calls;
 }
 
+test("successful signup returns to login with the original draft destination", async ({ page }) => {
+  const calls = await mockAuth(page, { actionResult: { message: "회원가입이 완료되었습니다. 로그인해 주세요." } });
+  const next = "/dashboard/new?type=mv&draft=fixture-id";
+  await page.goto(`/signup?next=${encodeURIComponent(next)}`);
+  await page.locator("#signup-email").fill(fixtureEmail);
+  await page.locator("#signup-password").fill(fixturePassword);
+  await page.locator("#signup-confirm-password").fill(fixturePassword);
+  await page.getByLabel("필수 항목 전체 동의", { exact: true }).check();
+  await page.getByRole("button", { name: "회원가입", exact: true }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("next") === next && url.searchParams.get("signup") === "success");
+  expect(calls.actions).toBe(1);
+});
+
 for (const error of ["이메일 또는 비밀번호를 확인해주세요.", connectionError]) {
   test(`login shows a recoverable Korean error: ${error.slice(0, 16)}`, async ({ page }) => {
     const calls = await mockAuth(page, { actionResult: { error } });

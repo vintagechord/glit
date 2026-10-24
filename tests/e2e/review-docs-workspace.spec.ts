@@ -17,7 +17,7 @@ function fixtureJob(): Job {
     sources: data.sources.map(({ id, name }) => ({ id, name, mime: undefined, size: undefined, url: undefined })),
     outputs: [], has_zip: false, counts: null, result_version: null, validation: null,
     template_version: null, error_code: null, error_message: null, retryable: false, attempts: 1, extraction_attempts: 1,
-    created_at: "2026-09-08T00:00:00Z", updated_at: "2026-09-08T00:00:00Z", expires_at: "2099-01-01T00:00:00Z",
+    created_at: "2026-09-08T00:00:00Z", updated_at: "2026-09-08T00:00:00Z", expires_at: "infinity",
   };
 }
 
@@ -40,6 +40,20 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => { await new Promise<void>((resolve) => server?.close(() => resolve())); });
+
+test("retained conversion outputs show administrator-deletion policy without an invalid download date", async ({ page }) => {
+  const job: Job = { ...fixtureJob(), status: "completed", result_version: 1, has_zip: true,
+    outputs: [{ id: "output", name: "result.docx", size: 123 }], counts: { albumCount: 1, trackCount: 2, docxCount: 1 } };
+  await page.route(`**${apiPath}/**`, route => route.fulfill({ json: { job } }));
+  await page.route(`**${apiPath}`, route => route.fulfill({ json: { jobs: [job], workerReady: true, workerMode: "web", supportedFormats: ["docx"] } }));
+  await page.goto(origin);
+  await page.getByRole("button", { name: /음반 자료 · 생성 완료/ }).click();
+  const results = page.getByRole("region", { name: "완료 결과" });
+  await expect(results).toContainText("관리자가 별도로 삭제하기 전까지");
+  await expect(results.getByRole("link", { name: "전체 ZIP 다운로드" })).toHaveAttribute("href", `${apiPath}/${job.id}/download?file=zip`);
+  await expect(page.locator("body")).not.toContainText("Invalid Date");
+  await expect(page.locator("body")).not.toContainText("7일간");
+});
 
 test("web processing enables analysis and clearly limits uploads to DOCX without a dedicated worker", async ({ page }) => {
   await page.route(`**${apiPath}`, (route) => route.fulfill({ json: { jobs: [], workerReady: true, workerMode: "web", supportedFormats: ["docx"] } }));

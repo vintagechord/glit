@@ -89,6 +89,100 @@ async function openFileSubmission(page: Page, kind: "album" | "mv") {
 }
 
 for (const kind of ["album", "mv"] as const) {
+  test(`${kind} email delivery shows pending materials and keyboard file selection remains available`, async ({ page }) => {
+    const results = await mockSubmissionServices(page);
+    const files = await openFileSubmission(page, kind);
+    // The step transition intentionally focuses its section on the next frame.
+    // Wait for that navigation to finish before testing the file control.
+    await expect(page.locator(`[data-submission-step="${kind === "album" ? 5 : 4}"]`)).toBeFocused();
+    const input = files.locator('input[type="file"]');
+    await input.focus();
+    await expect(input).toBeFocused();
+    const chooser = page.waitForEvent("filechooser");
+    await page.keyboard.press("Enter");
+    await chooser;
+    const emailChoice = files.getByRole("button", { name: "파일은 이메일로 나중에 제출", exact: true });
+    await expect(emailChoice).toHaveCount(1);
+    await emailChoice.click();
+    await expect(emailChoice).toHaveAttribute("aria-pressed", "true");
+    await expect(files.getByText(/접수번호 11111111-1111-4111-8111-111111111111/)).toBeVisible();
+    await page.getByRole("button", { name: "다음 단계", exact: true }).click();
+    const preflight = page.locator('section[aria-labelledby="submission-preflight-title"]');
+    await expect(preflight.getByRole("status")).toHaveText("자료 제출 대기");
+    await expect(preflight.getByText(/제목·접수자 정보와 자료 내용은 아직 확인되지 않았습니다/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "장바구니에 담기", exact: true })).toBeEnabled();
+    expect(results.completed).toEqual([]);
+    expect(results.unexpected).toEqual([]);
+    expect(results.errors).toEqual([]);
+  });
+}
+
+test("album basic fields expose names, linked errors and mixed-group input without clearing entered values", async ({ page }) => {
+  const results = await mockSubmissionServices(page);
+  await page.goto("/dashboard/new/album");
+  await page.getByRole("button", { name: /발매 전이에요/ }).click();
+  await page.getByRole("button", { name: "신청서 작성으로 계속", exact: true }).click();
+  await page.getByRole("radio", { name: /온라인 작성/ }).click();
+  await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();
+  for (const label of ["앨범 제목", "아티스트명 공식 표기", "아티스트 한글명", "아티스트 영문명", "발매일", "장르", "유통사", "제작사", "이전 발매곡", "그룹/솔로", "성별"]) {
+    await expect(page.getByLabel(`${label} *`, { exact: true })).toBeVisible();
+  }
+  await page.getByLabel("앨범 제목 *", { exact: true }).fill("유지할 앨범명");
+  await page.getByRole("button", { name: "저장하고 다음 단계", exact: true }).click();
+  await expect(page.locator("#album-applicantName")).toBeFocused();
+  await expect(page.locator("#album-artistName")).toHaveAttribute("aria-invalid", "true");
+  await expect(page.locator("#album-artistName")).toHaveAttribute("aria-describedby", "album-artistName-error");
+  await expect(page.locator("#album-artistName-error")).toBeVisible();
+  await expect(page.getByLabel("앨범 제목 *", { exact: true })).toHaveValue("유지할 앨범명");
+  await page.getByLabel("그룹/솔로 *", { exact: true }).selectOption("GROUP");
+  await page.getByLabel("성별 *", { exact: true }).selectOption("MIXED");
+  await page.getByLabel("팀원 전체 이름 *", { exact: true }).fill("멤버 A, 멤버 B");
+  await expect(page.getByLabel("성별 *", { exact: true })).toHaveValue("MIXED");
+  expect(results.unexpected).toEqual([]);
+  expect(results.errors).toEqual([]);
+});
+
+test("KBS-only broadcast submission shows only KBS guidance and distinguishes reference specifications", async ({ page }) => {
+  const results = await mockSubmissionServices(page);
+  await page.goto("/dashboard/new/mv");
+  await page.getByRole("button", { name: /TV 송출 목적의 심의/ }).click();
+  await page.getByRole("button", { name: /KBS 뮤직비디오 심의/ }).click();
+  await page.getByRole("button", { name: "다음 단계", exact: true }).click();
+  await page.getByRole("radio", { name: /파일로 제출/ }).click();
+  await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();
+  await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+  await page.getByRole("button", { name: "파일 업로드로 이동", exact: true }).click();
+  const guidance = page.locator(".broadcast-specs");
+  await expect(guidance.locator(".broadcast-card")).toHaveCount(1);
+  await expect(guidance.getByRole("button", { name: /^KBS/ })).toBeVisible();
+  await expect(guidance.getByText("1분~1분30초", { exact: true })).toBeVisible();
+  await expect(guidance.getByText(/접수 경로의 적용 규격은 담당자 확인이 필요/)).toBeVisible();
+  expect(results.unexpected).toEqual([]);
+  expect(results.errors).toEqual([]);
+});
+
+test("English album email delivery retains the application ID and does not claim material review is complete", async ({ page }) => {
+  const results = await mockSubmissionServices(page);
+  await page.goto("/en/dashboard/new/album");
+  await page.getByRole("button", { name: /Not Released Yet/ }).click();
+  await page.getByRole("button", { name: "Continue to Application", exact: true }).click();
+  await page.getByRole("radio", { name: /Submit a File/ }).click();
+  await page.getByRole("button", { name: "Continue with Selection", exact: true }).click();
+  await page.locator('[data-preflight-field="aiUsed"]').getByRole("button").first().click();
+  await page.getByRole("button", { name: "Next Step", exact: true }).click();
+  await page.getByRole("button", { name: "Send Files Later by Email", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Copy Email Subject", exact: true })).toBeVisible();
+  await expect(page.getByText(/Application ID 11111111-1111-4111-8111-111111111111/)).toBeVisible();
+  await page.getByRole("button", { name: "Next Step", exact: true }).click();
+  const preflight = page.locator('section[aria-labelledby="submission-preflight-title"]');
+  await expect(preflight.getByRole("status")).toHaveText("Awaiting Materials");
+  await expect(preflight.getByText(/The title, contact details, and file contents have not yet been checked/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add to Cart", exact: true })).toBeEnabled();
+  expect(results.unexpected).toEqual([]);
+  expect(results.errors).toEqual([]);
+});
+
+for (const kind of ["album", "mv"] as const) {
   test(`${kind} application and media uploads reach the cart with both attachments`, async ({ page }) => {
     const results = await mockSubmissionServices(page, { failFirstPut: kind === "mv" });
     const files = await openFileSubmission(page, kind);

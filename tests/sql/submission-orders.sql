@@ -33,11 +33,46 @@ begin
   perform set_config('onside.checkout_order_write','',true);
   perform pg_temp.expect_error('update public.submissions set payment_status=''PAID'' where id=''00000000-0000-4000-8000-000000000003''');
   select array_agg(submission_id) into ids from public.confirm_submission_order_bank_payment(oid,'99999999-9999-4999-8999-999999999999','Verified fixture');
-  if cardinality(ids)<>2 or exists(select 1 from public.submissions where id=any(ids) and (payment_status<>'PAID' or status<>'IN_PROGRESS')) then raise exception 'Partial bank confirmation'; end if;
+  if cardinality(ids)<>2 or exists(select 1 from public.submissions where id=any(ids) and (payment_status<>'PAID' or status<>'PRE_REVIEW')) then raise exception 'Partial bank confirmation or review started before materials were checked'; end if;
   select count(*) into n from public.submission_events;
   perform * from public.confirm_submission_order_bank_payment(oid,'99999999-9999-4999-8999-999999999999',null);
   if (select count(*) from public.submission_events)<>n then raise exception 'Idempotent confirmation duplicated history'; end if;
   perform pg_temp.expect_error(format('select * from public.return_submission_order_to_cart(%L,%L)',oid,'11111111-1111-4111-8111-111111111111'));
+end;
+$$;
+
+-- Deposit confirmation must preserve real review/results, including legacy
+-- pending bank rows that already reached a later stage. It never alters the
+-- original order snapshot; repeat confirmations preserve both stage and log.
+do $$
+declare sid uuid; oid uuid; before_status submission_status; expected submission_status; snapshot_before jsonb; event_count integer;
+begin
+  foreach before_status in array enum_range(null::submission_status) loop
+    sid:=gen_random_uuid();
+    insert into public.submissions(id,user_id,package_id,status,payment_status)
+    values(sid,'11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','SUBMITTED','UNPAID');
+    perform * from public.begin_submission_bank_payment(array[sid],'11111111-1111-4111-8111-111111111111');
+    select current_order_id into oid from public.submissions where id=sid;
+    -- Fixture only: reconstruct each historical bank/review combination.
+    perform set_config('onside.checkout_order_write',oid::text,true);
+    update public.submissions set status=before_status where id=sid;
+    select to_jsonb(i) into snapshot_before from public.submission_order_items i where order_id=oid and submission_ref=sid;
+    perform set_config('onside.checkout_order_write','',true);
+    perform * from public.confirm_submission_order_bank_payment(oid,'99999999-9999-4999-8999-999999999999',null);
+    expected:=case when before_status in ('DRAFT','SUBMITTED','WAITING_PAYMENT') then 'PRE_REVIEW'::submission_status else before_status end;
+    if not exists(select 1 from public.submissions where id=sid and payment_status='PAID' and status=expected) then
+      raise exception 'Deposit changed % to wrong review state; expected %',before_status,expected;
+    end if;
+    if snapshot_before is distinct from (select to_jsonb(i) from public.submission_order_items i where order_id=oid and submission_ref=sid) then
+      raise exception 'Deposit rewrote original order snapshot';
+    end if;
+    select count(*) into event_count from public.submission_events where submission_id=sid;
+    perform * from public.confirm_submission_order_bank_payment(oid,'99999999-9999-4999-8999-999999999999',null);
+    if (select status from public.submissions where id=sid)<>expected or
+       (select count(*) from public.submission_events where submission_id=sid)<>event_count then
+      raise exception 'Repeated deposit confirmation changed stage or duplicated events';
+    end if;
+  end loop;
 end;
 $$;
 
@@ -104,6 +139,8 @@ select * from public.approve_submission_payment_order('CARD-TWO','tid-2','00','o
 do $$ begin
   if not exists(select 1 from public.submission_orders o join public.submission_payments p on p.checkout_order_id=o.id
     where p.order_id='CARD-TWO' and o.status='PAID' and p.status='APPROVED') then raise exception 'PG approval not atomic with order'; end if;
+  if (select status from public.submissions where id='20000000-0000-4000-8000-000000000002')<>'PRE_REVIEW' then
+    raise exception 'Card approval started review before materials were checked'; end if;
 end $$;
 select * from public.begin_submission_payment_order('20000000-0000-4000-8000-000000000003',array['20000000-0000-4000-8000-000000000003']::uuid[],'CARD-UNKNOWN',50000,'11111111-1111-4111-8111-111111111111','{"closeState":"11111111-1111-4111-8111-111111111111"}');
 select * from public.claim_inicis_submission_approval('CARD-UNKNOWN','11111111-1111-4111-8111-111111111111');
@@ -142,6 +179,92 @@ select * from public.approve_paypal_submission_payment('40000000-0000-4000-8000-
 do $$ begin
   if not exists(select 1 from public.submission_orders o join public.submission_payments p on p.checkout_order_id=o.id
     where p.order_id='PAYPAL-ONE' and p.status='APPROVED' and o.status='PAID' and o.amount=90 and o.currency='USD') then raise exception 'PayPal order projection mismatch'; end if;
+  if (select status from public.submissions where id='40000000-0000-4000-8000-000000000001')<>'PRE_REVIEW' then
+    raise exception 'PayPal approval started review before materials were checked'; end if;
+end $$;
+
+-- Reconstruct historical pending gateway rows for every review-state enum.
+-- Only fixture preparation bypasses the edit guard; both guards are enabled
+-- before approval, so locks/financial writes/order projection run normally.
+do $$
+declare sid uuid; oid uuid; gateway text; external_order text; before_status submission_status;
+  expected submission_status; original_snapshot jsonb;
+begin
+  foreach gateway in array array['CARD','PAYPAL'] loop
+    foreach before_status in array enum_range(null::submission_status) loop
+      sid:=gen_random_uuid(); external_order:='MATRIX-'||gateway||'-'||before_status::text;
+      insert into public.submissions(id,user_id,package_id,status,payment_status,payment_method,payment_provider,payment_amount,payment_currency)
+      values(sid,'11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','SUBMITTED','UNPAID',gateway::payment_method,lower(gateway),90,'USD');
+      if gateway='CARD' then
+        perform * from public.begin_submission_payment_order(sid,array[sid],external_order,50000,'11111111-1111-4111-8111-111111111111','{"closeState":"11111111-1111-4111-8111-111111111111"}');
+        perform * from public.claim_inicis_submission_approval(external_order,'11111111-1111-4111-8111-111111111111');
+      else
+        perform * from public.begin_paypal_submission_payment(sid,'11111111-1111-4111-8111-111111111111',null,external_order,90,'USD','{"paypalReturnState":"11111111-1111-4111-8111-111111111111"}');
+        perform pg_temp.expect_error(format('select * from public.approve_paypal_submission_payment(%L,%L,null,null,%L,%L,90,''USD'',''COMPLETED'',''{}'',now())',sid,'11111111-1111-4111-8111-111111111111',external_order,'capture-'||external_order));
+        perform * from public.claim_paypal_submission_capture(sid,'11111111-1111-4111-8111-111111111111',null,null,external_order);
+      end if;
+      select current_order_id into oid from public.submissions where id=sid;
+      select to_jsonb(i) into original_snapshot from public.submission_order_items i where order_id=oid and submission_ref=sid;
+      set constraints all immediate;
+      alter table public.submissions disable trigger protect_requested_payment_submission_update;
+      perform set_config('onside.checkout_order_write',oid::text,true);
+      update public.submissions set status=before_status where id=sid;
+      alter table public.submissions enable trigger protect_requested_payment_submission_update;
+      set constraints all deferred;
+      perform set_config('onside.checkout_order_write','',true);
+      if gateway='CARD' then
+        perform * from public.approve_submission_payment_order(external_order,'tid-'||external_order,'00','ok','{}',now());
+      else
+        perform pg_temp.expect_error(format('select * from public.approve_paypal_submission_payment(%L,%L,null,null,%L,%L,91,''USD'',''COMPLETED'',''{}'',now())',sid,'11111111-1111-4111-8111-111111111111',external_order,'capture-'||external_order),'22000');
+        perform * from public.approve_paypal_submission_payment(sid,'11111111-1111-4111-8111-111111111111',null,null,external_order,'capture-'||external_order,90,'USD','COMPLETED','{}',now());
+      end if;
+      expected:=case when before_status in ('DRAFT','SUBMITTED','WAITING_PAYMENT') then 'PRE_REVIEW'::submission_status else before_status end;
+      if not exists(select 1 from public.submissions where id=sid and payment_status='PAID' and status=expected)
+        or not exists(select 1 from public.submission_orders where id=oid and status='PAID') then
+        raise exception '% approval changed % to wrong state; expected %',gateway,before_status,expected;
+      end if;
+      if original_snapshot is distinct from (select to_jsonb(i) from public.submission_order_items i where order_id=oid and submission_ref=sid) then
+        raise exception '% approval rewrote original order snapshot',gateway;
+      end if;
+    end loop;
+  end loop;
+end $$;
+
+-- Real callback replays must preserve all existing review/result stages and
+-- immutable order snapshots, even when legacy approved data has an early stage.
+-- Reset the transaction-local write marker before each callback so this also
+-- exercises the live order guard on repeated approval (no payment UPDATE).
+do $$
+declare before_status submission_status; card_id uuid:='20000000-0000-4000-8000-000000000002';
+  paypal_id uuid:='40000000-0000-4000-8000-000000000001'; card_order uuid; paypal_order uuid;
+  card_snapshot jsonb; paypal_snapshot jsonb; event_count integer;
+begin
+  select current_order_id into card_order from public.submissions where id=card_id;
+  select current_order_id into paypal_order from public.submissions where id=paypal_id;
+  select to_jsonb(i) into card_snapshot from public.submission_order_items i where order_id=card_order and submission_ref=card_id;
+  select to_jsonb(i) into paypal_snapshot from public.submission_order_items i where order_id=paypal_order and submission_ref=paypal_id;
+  select count(*) into event_count from public.submission_events where submission_id in (card_id,paypal_id);
+  foreach before_status in array enum_range(null::submission_status) loop
+    perform set_config('onside.checkout_order_write',card_order::text,true);
+    update public.submissions set status=before_status where id=card_id;
+    perform set_config('onside.checkout_order_write',paypal_order::text,true);
+    update public.submissions set status=before_status where id=paypal_id;
+    perform set_config('onside.checkout_order_write','',true);
+    perform * from public.approve_submission_payment_order('CARD-TWO','tid-2','00','ok','{}',now());
+    perform * from public.approve_paypal_submission_payment(paypal_id,'11111111-1111-4111-8111-111111111111',null,null,'PAYPAL-ONE','CAPTURE-ONE',90,'USD','COMPLETED','{}',now());
+    if exists(select 1 from public.submissions where id in (card_id,paypal_id) and (status<>before_status or payment_status<>'PAID')) then
+      raise exception 'Repeated gateway approval regressed existing % stage',before_status;
+    end if;
+  end loop;
+  if card_snapshot is distinct from (select to_jsonb(i) from public.submission_order_items i where order_id=card_order and submission_ref=card_id)
+    or paypal_snapshot is distinct from (select to_jsonb(i) from public.submission_order_items i where order_id=paypal_order and submission_ref=paypal_id)
+    or (select count(*) from public.submission_events where submission_id in (card_id,paypal_id))<>event_count then
+    raise exception 'Gateway callback rewrote snapshot or duplicated audit events';
+  end if;
+  if has_function_privilege('authenticated','public.approve_submission_payment_order(text,text,text,text,jsonb,timestamptz)','execute')
+    or has_function_privilege('anon','public.approve_paypal_submission_payment(uuid,uuid,text,text,text,text,numeric,text,text,jsonb,timestamptz)','execute') then
+    raise exception 'Gateway approval RPC exposed to public caller';
+  end if;
 end $$;
 
 -- Check actual owner SELECT policies, rather than only catalog privileges.

@@ -27,6 +27,8 @@ import {
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStorageLogId } from "@/lib/guest-storage-owner";
+import { UploadSignatureMismatchError, verifyUploadedObjectSignature } from "@/lib/upload-content-verification";
+import type { FileSignatureStatus } from "@/lib/file-signature";
 import {
   getSubmissionUploadBlockMessage,
   getSubmissionUploadBlockReason,
@@ -91,6 +93,7 @@ export async function POST(request: Request) {
   let claimedGrant: MultipartUploadGrant | null = null;
   let completedObjectKey: string | null = null;
   let stagedObjectKey: string | null = null;
+  let signature: FileSignatureStatus | null = null;
   const requestLimit = consumeRateLimit({
     namespace: "upload-multipart-complete-ip",
     identifier: getRequestIdentifier(request.headers),
@@ -272,6 +275,7 @@ export async function POST(request: Request) {
       );
     }
 
+    signature = await verifyUploadedObjectSignature(key, grant.original_name);
     const accessUrl = await presignGetUrl(
       key,
       Number(process.env.B2_ACCESS_URL_EXPIRES_SECONDS ?? "86400"),
@@ -322,7 +326,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      verified: true,
+      verified: signature === "matched",
+      verification: { size: true, signature, codec: "not_checked", contents: "not_checked" },
       etag: head.ETag,
       contentLength,
       attachmentId: null,
@@ -355,7 +360,8 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             ok: true,
-            verified: true,
+            verified: signature === "matched",
+            verification: { size: true, signature, codec: "not_checked", contents: "not_checked" },
             processing: true,
             staged: true,
             key: stagedObjectKey,
@@ -382,11 +388,12 @@ export async function POST(request: Request) {
       {
         error:
           uploadConflictMessage ??
+          (error instanceof UploadSignatureMismatchError ? error.message : null) ??
           (isConfig
             ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
             : "업로드 완료 처리 중 오류가 발생했습니다. 다시 시도해주세요."),
       },
-      { status: uploadConflictMessage ? 409 : isConfig ? 503 : 500 },
+      { status: uploadConflictMessage ? 409 : error instanceof UploadSignatureMismatchError ? 400 : isConfig ? 503 : 500 },
     );
   }
 }

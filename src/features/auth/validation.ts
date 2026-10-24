@@ -1,12 +1,13 @@
 import { z } from "zod";
+import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "./policy";
 
 const emailSchema = z.string({ error: "이메일을 입력해주세요." })
   .trim().email("올바른 이메일 주소를 입력해주세요.")
   .max(254, "이메일은 254자 이하로 입력해주세요.");
 
 const newPasswordSchema = z.string({ error: "비밀번호를 입력해주세요." })
-  .min(8, "비밀번호는 8자 이상 입력해주세요.")
-  .max(128, "비밀번호는 128자 이하로 입력해주세요.");
+  .min(PASSWORD_MIN_LENGTH, "비밀번호는 8자 이상 입력해주세요.")
+  .max(PASSWORD_MAX_LENGTH, "비밀번호는 128자 이하로 입력해주세요.");
 
 export const loginSchema = z.object({
   email: emailSchema,

@@ -1,6 +1,7 @@
 import { Clapperboard, Disc3, Tv } from "lucide-react";
 
 import { ReliableLink } from "@/components/site/reliable-link";
+import { reviewServices, reviewServiceNotice } from "@/lib/onside-content";
 
 export const metadata = {
   title: "새 심의 접수",
@@ -19,7 +20,7 @@ const submissionCards = [
     meta: "유통 · 온라인 업로드",
     title: "뮤직비디오 온라인 심의",
     description: "유통·업로드용 등급 심의입니다.",
-    href: "/dashboard/new/mv",
+    href: "/dashboard/new/mv?type=distribution",
     icon: Clapperboard,
     tone: "border-[#111111] bg-[#1556a4] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[6px_6px_0_#f2cf27]",
   },
@@ -51,20 +52,33 @@ export default function NewSubmissionPage() {
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-3 sm:mt-8 sm:gap-5">
-          {submissionCards.map((card) => (
+          {submissionCards.map((card, index) => (
             <ReliableLink
               key={card.href}
               href={card.href}
               className={`group min-w-0 rounded-[10px] border-2 p-4 sm:p-6 transition duration-200 hover:-translate-y-1 hover:shadow-[9px_9px_0_#111111] ${card.tone}`}
             >
               <card.icon className="h-7 w-7" aria-hidden="true" />
-              <p className="mt-3 text-[11px] font-black uppercase tracking-normal opacity-75">
+              <p className="mt-3 text-sm font-black tracking-normal">
                 {card.meta}
               </p>
               <h2 className="mt-4 break-keep text-balance text-2xl font-black leading-snug tracking-normal sm:text-[28px]">
-                {card.title}
+                {reviewServices[index].title}
               </h2>
-              <p className="mt-3 text-sm font-semibold leading-6 opacity-82">{card.description}</p>
+              <p className="mt-3 text-sm font-semibold leading-6">{reviewServices[index].purpose}</p>
+              <dl className="mt-4 space-y-3 text-sm leading-6">
+                {[
+                  ["준비 자료", reviewServices[index].preparation],
+                  ["결과물", reviewServices[index].deliverable],
+                  ["비용 단위", reviewServices[index].billing],
+                  ["진행 기간", reviewServices[index].timing],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="font-black">{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
               <div className="mt-6 inline-flex items-center gap-2 border-2 border-current bg-white px-4 py-2 text-sm font-black text-[#111111]">
                 신청하기
                 <span className="transition-transform duration-200 group-hover:translate-x-1">
@@ -74,6 +88,13 @@ export default function NewSubmissionPage() {
             </ReliableLink>
           ))}
         </div>
+        <p className="mt-6 text-sm leading-6 text-muted-foreground">{reviewServiceNotice}</p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">Mnet·ETN 옵션은 편성·기존 심의 등 선행조건을 상담한 뒤 선택해주세요.</p>
+        <details className="mt-6 rounded-[8px] border border-border p-4">
+          <summary className="cursor-pointer text-base font-bold">어떤 심의가 필요한지 모르겠어요</summary>
+          <p className="mt-3 text-sm leading-6">공개할 곳, 제출할 방송사·유통사, 요청받은 서류 이름을 확인해주세요. 음원인지 영상인지와 제출처의 요구사항을 기준으로 안내해 드립니다.</p>
+          <ReliableLink href="/support" className="mt-3 inline-flex min-h-11 items-center font-bold text-primary underline underline-offset-4">제출처와 요청 서류로 문의하기</ReliableLink>
+        </details>
       </section>
       <div className="mt-4 text-right text-xs font-semibold text-muted-foreground">
         <ReliableLink

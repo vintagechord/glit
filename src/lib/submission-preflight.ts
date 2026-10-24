@@ -108,6 +108,8 @@ export type SubmissionPreflightResult = {
   canSubmit: boolean;
   firstBlockingTarget: SubmissionPreflightTarget | null;
   requiresPriceChangeConfirmation: boolean;
+  /** A delivery choice does not prove that an operator has received the files. */
+  awaitingMaterials: boolean;
 };
 
 export type MvSubmissionPreflightInput = {
@@ -641,6 +643,18 @@ export const buildAlbumSubmissionPreflight = (
 
   addCartPriceChangeIssue(issues, input);
 
+  if (input.filesSubmittedByEmail) {
+    issues.push(issue(
+      "materials.email-pending",
+      "warning",
+      "자료 제출 대기",
+      isDownloadedForm
+        ? "작성한 신청서와 음원 파일을 이메일로 보내주세요. 신청서의 제목·접수자 정보와 자료 내용은 아직 확인되지 않았습니다. 자료 수신·확인 후 방송사 접수를 진행합니다."
+        : "음원 파일을 이메일로 보내주세요. 이메일 제출 선택은 파일 수신 확인이 아닙니다. 자료 수신·확인 후 방송사 접수를 진행합니다.",
+      { step: 5, field: "files" },
+    ));
+  }
+
   const blockingIssues = issues.filter(
     (item) => item.severity === "blocking",
   );
@@ -655,6 +669,7 @@ export const buildAlbumSubmissionPreflight = (
     requiresPriceChangeConfirmation: blockingIssues.some(
       (item) => item.acknowledgementKey === "cart-price-change",
     ),
+    awaitingMaterials: input.filesSubmittedByEmail,
   };
 };
 
@@ -675,6 +690,7 @@ const buildPreflightResult = (
     requiresPriceChangeConfirmation: blockingIssues.some(
       (item) => item.acknowledgementKey === "cart-price-change",
     ),
+    awaitingMaterials: issues.some((item) => item.id === "materials.email-pending"),
   };
 };
 
@@ -970,6 +986,18 @@ export const buildMvSubmissionPreflight = (
         ),
       );
     }
+  }
+
+  if (input.filesSubmittedByEmail) {
+    issues.push(issue(
+      "materials.email-pending",
+      "warning",
+      "자료 제출 대기",
+      isDownloadedForm
+        ? "작성한 신청서와 영상 파일을 이메일로 보내주세요. 신청서의 제목·접수자 정보와 자료 내용은 아직 확인되지 않았습니다. 자료 수신·확인 후 접수를 진행합니다."
+        : "영상 파일을 이메일로 보내주세요. 이메일 제출 선택은 파일 수신 확인이 아닙니다. 자료 수신·확인 후 접수를 진행합니다.",
+      { step: 4, field: "files" },
+    ));
   }
 
   return buildPreflightResult(issues);

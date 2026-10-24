@@ -132,6 +132,10 @@ const finalizeAbort = async (
     await abortMultipartUpload({
       objectKey: grant.object_key,
       uploadId: grant.upload_id,
+    }).catch((error: unknown) => {
+      // A retry after successful abort (or a completion/abort race) has no
+      // multipart upload left. Its separately recorded object is not deleted.
+      if (!(error instanceof Error && error.name === "NoSuchUpload")) throw error;
     });
     const { data, error } = await admin
       .from("multipart_upload_grants")

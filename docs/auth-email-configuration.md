@@ -17,3 +17,11 @@
 검증: `node --test --import tsx tests/email-config.test.ts tests/password-reset-email.test.ts tests/auth-actions.test.ts tests/auth-recovery.test.ts tests/auth-session-lifecycle.test.ts tests/email-runtime-health.test.ts`.
 
 공식 문서: [Resend 도메인 인증](https://resend.com/docs/dashboard/domains/introduction), [Resend 오류 코드](https://resend.com/docs/api-reference/errors), [Supabase 기본 메일 제한](https://supabase.com/docs/guides/auth/auth-smtp).
+
+## 자동 이메일 보류 모드
+
+현재 온사이드는 도메인 구매·메일 연동을 나중으로 미루기로 하여 `NEXT_PUBLIC_EMAIL_DELIVERY_MODE=manual`로 배포한다. 자동 이메일은 키 존재 여부와 관계없이 보내지 않으며, 비밀번호 재설정 메일·조회 코드 재발급은 고객센터를 안내한다. 기존 정상 복구 링크와 저장한 조회 코드의 사용은 유지한다. 결과는 신청 내역에서 직접 조회하며, 관리자는 별도 고객 안내를 담당한다.
+
+이 플래그는 비밀값이 아니며 Docker 빌드와 런타임에 같은 값을 사용한다. 변경 시 **재빌드·재배포**가 필요하다. 수동 모드 health에는 `email delivery deferred` 경고가 표시되지만 DB·B2·PG 필수 검사는 그대로 적용된다. 설정을 생략하면 transactional이 기본이고, 잘못된 값은 준비 상태 오류다.
+
+향후 온사이드 전용 도메인 인증 및 `RESEND_FROM`·발송 키 설정을 완료하고 실제 수신을 검증한 뒤 플래그를 `transactional`로 바꾸어 재빌드한다. 아트멜론 발신 도메인은 사용하지 않는다.

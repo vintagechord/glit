@@ -4,7 +4,11 @@ export const metadata = {
   title: "회원가입",
 };
 
-export default function SignupPage() {
+export default async function SignupPage({ searchParams }: {
+  searchParams?: Promise<{ next?: string | string[] }>;
+}) {
+  const query = (await searchParams) ?? {};
+  const nextPath = Array.isArray(query.next) ? query.next[0] : query.next;
   return (
     <div className="relative mx-auto flex w-full max-w-5xl flex-1 items-center justify-center px-4 py-10 sm:px-6 sm:py-16">
       <div aria-hidden="true" className="absolute right-8 top-12 h-16 w-16 bg-[#f2cf27]" />
@@ -14,7 +18,7 @@ export default function SignupPage() {
           <p className="bauhaus-kicker mx-auto">회원가입</p>
           <h1 className="font-display text-2xl font-black text-foreground sm:text-3xl">이메일로 시작하기</h1>
         </div>
-        <SignupForm />
+        <SignupForm nextPath={nextPath} />
       </div>
     </div>
   );

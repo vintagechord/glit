@@ -1,10 +1,11 @@
 import type { ReviewDocumentData } from "./model";
+import { isReviewJobExpired } from "./retention";
 
 export const REVIEW_JOB_LIMITS = {
   files: 8, fileBytes: 10 * 1024 * 1024, totalBytes: 40 * 1024 * 1024,
   urls: 8, pagesPerFile: 80, albums: 8, tracks: 100,
   activePerAdmin: 3, workerConcurrency: 1, processingSeconds: 900,
-  retentionDays: 7, translationCharacters: 60_000,
+  retentionDays: null, retentionPolicy: "until_admin_deletion", translationCharacters: 60_000,
 } as const;
 
 export type ReviewJobStatus = "uploading" | "queued" | "extracting" | "translating" | "needs_review" | "generating" | "validating" | "completed" | "failed" | "cancelled" | "expired";
@@ -33,7 +34,7 @@ export class ReviewJobError extends Error {
 }
 
 export function publicReviewJob(job: ReviewJob) {
-  const expired = job.status === "expired" || Date.parse(job.expires_at) <= Date.now();
+  const expired = isReviewJobExpired(job);
   return {
     id: job.id, mode: job.mode, input_kind: job.input_kind, status: expired ? "expired" as const : job.status,
     operation: job.operation, version: job.version, application_date: job.application_date,

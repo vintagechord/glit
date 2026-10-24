@@ -593,3 +593,34 @@ test("MV email handoff permits checkout after failed or still-pending uploads", 
     assert.equal(result.canSubmit, true, status);
   }
 });
+
+test("email delivery is an awaiting-materials state, even when a downloaded application has no title or contact details", () => {
+  const album = buildAlbumSubmissionPreflight(validOnlineInput({
+    applicationFormMode: "upload", title: "", applicantName: "", applicantEmail: "", applicantPhone: "",
+    files: [], uploads: [], filesSubmittedByEmail: true,
+  }));
+  const mv = buildMvSubmissionPreflight(validMvInput({
+    applicationFormMode: "upload", title: "", guestName: "", guestEmail: "", guestPhone: "",
+    files: [], uploads: [], filesSubmittedByEmail: true,
+  }));
+  for (const result of [album, mv]) {
+    assert.equal(result.canSubmit, true, "email delivery remains an allowed checkout choice");
+    assert.equal(result.awaitingMaterials, true);
+    assert.equal(result.warnings.length, 1);
+    assert.equal(result.warnings[0].title, "자료 제출 대기");
+    assert.match(result.warnings[0].message, /제목·접수자 정보와 자료 내용은 아직 확인되지 않았습니다/);
+    assert.equal(result.warnings[0].target.field, "files");
+  }
+});
+
+test("attached files clear material delivery waiting while required online data remains enforced", () => {
+  for (const result of [buildAlbumSubmissionPreflight(validOnlineInput()), buildMvSubmissionPreflight(validMvInput())]) {
+    assert.equal(result.awaitingMaterials, false);
+  }
+  const album = buildAlbumSubmissionPreflight(validOnlineInput({ title: "", files: [], filesSubmittedByEmail: true }));
+  const mv = buildMvSubmissionPreflight(validMvInput({ title: "", files: [], filesSubmittedByEmail: true }));
+  assert.equal(album.canSubmit, false);
+  assert.equal(mv.canSubmit, false);
+  assert.ok(album.blockingIssues.some((item) => item.target.field === "title"));
+  assert.ok(mv.blockingIssues.some((item) => item.target.field === "title"));
+});

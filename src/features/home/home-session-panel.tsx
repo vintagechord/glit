@@ -16,7 +16,7 @@ function buildExampleState() {
     {
       id: "sample-1",
       status: "NOT_SENT",
-      updated_at: new Date(now + 86400000).toISOString(),
+      updated_at: new Date(now - 86400000).toISOString(),
       station: { name: "KBS" },
     },
     {
@@ -40,7 +40,7 @@ function buildExampleState() {
     {
       id: "sample-5",
       status: "NOT_SENT",
-      updated_at: new Date(now + 86400000 * 2).toISOString(),
+      updated_at: new Date(now - 86400000 * 2).toISOString(),
       station: { name: "CBS 기독교방송" },
     },
     {
@@ -151,6 +151,9 @@ export async function HomeSessionPanel() {
   if (!user) {
     const exampleState = buildExampleState();
     return (
+      <details className="rounded-[10px] border border-border bg-card p-4">
+        <summary className="cursor-pointer text-base font-bold">진행 화면 예시 보기</summary>
+        <p className="my-3 text-sm text-muted-foreground">가상의 신청으로 구성한 예시입니다. 실제 접수 내역이 아닙니다.</p>
       <HomeReviewPanel
         isLoggedIn={false}
         albumSubmissions={exampleState.albumSubmissions}
@@ -160,6 +163,7 @@ export async function HomeSessionPanel() {
         enableRemoteSync={false}
         {...panelProps}
       />
+      </details>
     );
   }
 

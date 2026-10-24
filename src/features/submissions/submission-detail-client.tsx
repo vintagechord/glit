@@ -19,6 +19,7 @@ import {
   type SubmissionFile,
 } from "@/features/submissions/submission-files-panel";
 import { formatCurrency, formatDateTime } from "@/lib/format";
+import { getAlbumPackageLabel } from "@/lib/album-package-label";
 import {
   buildStationTrackSummaryText,
   getStationReviewDisplayStatus,
@@ -37,6 +38,7 @@ import { BroadcastSupportPanel } from "@/features/submissions/broadcast-support-
 import { RadioRequestDialog } from "@/features/submissions/radio-request-dialog";
 import { RadioStationGuideContent } from "@/features/submissions/radio-station-guide";
 import { APP_CONFIG } from "@/lib/config";
+import { SubmissionSupplements } from "@/features/submissions/submission-supplements";
 import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { loadSubmissionDetailRelations, preservePendingStationReviews } from "@/lib/submissions/detail-relations";
 import { downloadEndpointFile } from "@/lib/browser-download";
@@ -1194,6 +1196,7 @@ export function SubmissionDetailClient({
           ) : null}
         </div>
       ) : <>
+      {submission.payment_status === "PAID" ? <SubmissionSupplements submissionId={submissionId} guestToken={guestToken} /> : null}
       {paymentFeedback ? (
         <div
           className={`mb-6 rounded-[10px] border-2 px-5 py-4 shadow-[5px_5px_0_#111111] dark:shadow-[5px_5px_0_#f2cf27] ${paymentFeedback.tone}`}
@@ -1420,7 +1423,7 @@ export function SubmissionDetailClient({
                     <div>
                       <p className="text-sm text-muted-foreground">패키지</p>
                       <p className="mt-1 font-semibold">
-                        {packageInfo?.name ?? "-"}
+                        {getAlbumPackageLabel(packageInfo?.name, packageInfo?.station_count)}
                       </p>
                     </div>
                     <div>

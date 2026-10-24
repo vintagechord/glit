@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { sendGuestSubmissionLookupEmail } from "@/lib/email";
+import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import { matchesGuestLookupIdentity } from "@/lib/guest-lookup-match";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
@@ -54,6 +55,15 @@ const genericLookupMessage =
   "입력한 정보와 일치하는 접수가 있으면 해당 이메일로 조회 코드를 보내드립니다.";
 
 export async function POST(request: NextRequest) {
+  const emailMode = getEmailDeliveryMode();
+  if (emailMode !== "transactional") {
+    return NextResponse.json({
+      ok: false,
+      error: emailMode === "manual"
+        ? "현재 조회 코드 이메일 발송을 제공하지 않습니다. 조회 코드 확인은 고객센터에 문의해주세요."
+        : "조회 코드 이메일 발송 설정을 확인할 수 없습니다. 고객센터에 문의해주세요.",
+    }, { status: 503, headers: { "cache-control": "no-store" } });
+  }
   const requestIdentifier = getRequestIdentifier(request.headers);
   const ipLimit = consumeRateLimit({
     namespace: "track-lookup-ip",

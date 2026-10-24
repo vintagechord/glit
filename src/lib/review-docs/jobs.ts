@@ -8,6 +8,7 @@ import { recordManualReviewEdits } from "./manual-edits";
 import { REVIEW_JOB_LIMITS, ReviewJobError, type ReviewJob, type ReviewJobSource } from "./jobs-types";
 import { assertPrivateReviewBucket, deleteReviewObject, putReviewObject, reviewObjectKey } from "./storage";
 import { assertReviewFormats, reviewProcessor } from "./web-runtime";
+import { isReviewJobExpired } from "./retention";
 
 export function jobDatabaseError(error: { message?: string; code?: string } | null) {
   if (!error) return;
@@ -28,7 +29,7 @@ export async function loadReviewJob(id: string, owner: string) {
   return data as ReviewJob;
 }
 export function assertJobLive(job: ReviewJob) {
-  if (job.status === "expired" || Date.parse(job.expires_at) <= Date.now()) throw new ReviewJobError("보존기간이 만료되었습니다. 새 작업으로 업로드해주세요.", 410, "JOB_EXPIRED");
+  if (isReviewJobExpired(job)) throw new ReviewJobError("보존기간이 만료되었습니다. 새 작업으로 업로드해주세요.", 410, "JOB_EXPIRED");
 }
 function hasRecentWorkerHeartbeat(heartbeat: { updated_at: string } | null) {
   return !!heartbeat && Date.parse(heartbeat.updated_at) > Date.now() - 90_000;

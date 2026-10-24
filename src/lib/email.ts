@@ -1,5 +1,5 @@
 import { APP_CONFIG } from "@/lib/config";
-import { classifyEmailProviderFailure, getEmailSenderConfiguration } from "@/lib/email-config";
+import { classifyEmailProviderFailure, getEmailDeliveryConfiguration } from "@/lib/email-config";
 
 type WelcomeEmailPayload = {
   email: string;
@@ -51,6 +51,7 @@ type SubmissionUpdateEmailPayload = {
   summary: string;
   link?: string;
   subject?: string;
+  idempotencyKey?: string;
 };
 
 type GuestSubmissionLookupEmailPayload = {
@@ -71,19 +72,19 @@ type EmailSendResult = {
   message?: string;
   reason?: "configuration" | "rate_limit" | "delivery";
   retryAfterSeconds?: number;
+  messageId?: string;
 };
 
 const EMAIL_REQUEST_TIMEOUT_MS = 10_000;
 
-const getResendConfig = () => {
-  const sender = getEmailSenderConfiguration({ from: process.env.RESEND_FROM, supportEmail: APP_CONFIG.supportEmail });
-  return {
-    apiKey: process.env.RESEND_API_KEY?.trim() || "",
-    from: sender.ok ? sender.from : "",
-    replyTo: sender.ok ? sender.replyTo : undefined,
-    sender,
-  };
-};
+const getResendConfig = () => getEmailDeliveryConfiguration({ supportEmail: APP_CONFIG.supportEmail });
+
+const manualEmailResult = (): EmailSendResult => ({
+  ok: false,
+  skipped: true,
+  reason: "configuration",
+  message: "현재 이메일 자동 발송을 제공하지 않습니다. 신청 내역에서 진행 상황과 결과를 확인해주세요.",
+});
 
 const logEmailTransportError = (operation: string, error: unknown) => {
   // Transport errors can carry request metadata. Keep production logs useful
@@ -116,8 +117,9 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-export async function sendWelcomeEmail(payload: WelcomeEmailPayload) {
-  const { apiKey, from } = getResendConfig();
+export async function sendWelcomeEmail(payload: WelcomeEmailPayload): Promise<EmailSendResult> {
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey || !from) {
     return { ok: false, skipped: true } as const;
@@ -172,7 +174,8 @@ const normalizeAbsoluteUrl = (value?: string) => {
 export async function sendPasswordResetEmail(
   payload: PasswordResetEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from, replyTo, sender } = getResendConfig();
+  const { apiKey, from, replyTo, sender, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey) {
     return {
@@ -256,7 +259,8 @@ export async function sendPasswordResetEmail(
 export async function sendSubmissionReceiptEmail(
   payload: SubmissionReceiptPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey || !from) {
     return {
@@ -356,7 +360,8 @@ export async function sendSubmissionReceiptEmail(
 export async function sendResultEmail(
   payload: ResultEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey || !from) {
     return {
@@ -436,7 +441,8 @@ export async function sendResultEmail(
 export async function sendSubmissionBankRequestEmail(
   payload: SubmissionBankRequestEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey || !from) {
     return {
@@ -467,7 +473,7 @@ export async function sendSubmissionBankRequestEmail(
         <div style="background:linear-gradient(135deg,#0f172a,#1f2937);padding:24px 24px 20px;color:#f8fafc;">
           <p style="margin:0;font-size:12px;letter-spacing:0.18em;font-weight:700;text-transform:uppercase;color:#cbd5e1;">Onside Bank Transfer</p>
           <h2 style="margin:10px 0 0;font-size:24px;line-height:1.35;font-weight:800;">무통장 입금 안내를 보내드립니다.</h2>
-          <p style="margin:10px 0 0;font-size:13px;color:#cbd5e1;">신청서는 정상 접수되었으며, 아래 계좌로 입금하시면 심의가 이어집니다.</p>
+          <p style="margin:10px 0 0;font-size:13px;color:#cbd5e1;">무통장 입금 신청이 저장되었습니다. 입금 및 자료 확인 후 방송국·기관 접수를 진행합니다.</p>
         </div>
         <div style="padding:22px 24px 24px;">
           <div style="display:grid;gap:12px;">
@@ -554,7 +560,8 @@ export async function sendSubmissionBankRequestEmail(
 export async function sendSubmissionUpdateEmail(
   payload: SubmissionUpdateEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey || !from) {
     return {
@@ -613,6 +620,7 @@ export async function sendSubmissionUpdateEmail(
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        ...(payload.idempotencyKey ? { "Idempotency-Key": payload.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from,
@@ -630,7 +638,9 @@ export async function sendSubmissionUpdateEmail(
       };
     }
 
-    return { ok: true };
+    const accepted = await response.json().catch(() => null) as { id?: unknown } | null;
+    const messageId = typeof accepted?.id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(accepted.id) ? accepted.id : undefined;
+    return { ok: true, ...(messageId ? { messageId } : {}) };
   } catch (error) {
     logEmailTransportError("submission update", error);
     return {
@@ -644,7 +654,8 @@ export async function sendSubmissionUpdateEmail(
 export async function sendGuestSubmissionLookupEmail(
   payload: GuestSubmissionLookupEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
   if (!apiKey || !from) {
     return {
       ok: false,

@@ -12,7 +12,7 @@ test("auth actions validate, map transport failures, preserve safe login redirec
         const files: Record<string, string> = {
           'auth-fixture': `export const state={error:null,throws:false,linkData:null,emailResult:{ok:true},limited:false}; export const calls=[];`,
           '@/lib/supabase/server': `${shared} export async function createServerSupabase(){ return {auth:{signInWithPassword:async input=>{calls.push({method:'login',input});if(state.throws)throw state.error;return {error:state.error};},resetPasswordForEmail:async()=>{calls.push({method:'reset'});return {error:state.error};}}}; }`,
-          '@/lib/supabase/admin': `${shared} export function createAdminClient(){return {auth:{admin:{createUser:async()=>{calls.push({method:'signup'});return {data:{user:{id:'fixture'}},error:state.error};},generateLink:async()=>{calls.push({method:'generateLink'});return {data:state.linkData,error:state.error};}}}};}`,
+          '@/lib/supabase/admin': `${shared} export function createAdminClient(){return {auth:{admin:{createUser:async input=>{calls.push({method:'signup',input});return {data:{user:{id:'fixture'}},error:state.error};},generateLink:async()=>{calls.push({method:'generateLink'});return {data:state.linkData,error:state.error};}}}};}`,
           '@/lib/email': `${shared} export async function sendWelcomeEmail(){calls.push({method:'welcome'});return {ok:true};} export async function sendPasswordResetEmail(input){calls.push({method:'sendReset',input});return state.emailResult;}`,
           '@/lib/request-rate-limit': `${shared} export const consumeRateLimit=()=>({allowed:!state.limited,retryAfterSeconds:state.limited?120:0}); export const getRequestIdentifier=()=> 'fixture';`,
           'next/navigation': `export function redirect(location){throw Object.assign(new Error('test redirect'),{location});}`,
@@ -30,6 +30,7 @@ test("auth actions validate, map transport failures, preserve safe login redirec
   const signIn = { email: "qa@example.invalid", password: "legacy" };
   const originalResend = process.env.RESEND_API_KEY;
   const originalSender = process.env.RESEND_FROM;
+  const originalEmailMode = process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE;
   const validSender = "onside <noreply@example.invalid>";
   process.env.RESEND_FROM = validSender;
   try {
@@ -42,6 +43,17 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     for (const [next, expected] of [["/admin/review-docs", "/admin/review-docs"], ["https://evil.test", "/mypage"], ["/login?next=%2Fadmin", "/mypage"], ["/en/login?loop=1", "/mypage"]]) {
       await assert.rejects(auth.loginAction({}, form({ ...signIn, next })), (error: unknown) => (error as { location: string }).location === expected);
     }
+    await assert.rejects(auth.loginAction({}, form({ ...signIn, locale: "en", next: "/dashboard/new?draft=fixture" })), (error: unknown) => (error as { location: string }).location === "/en/dashboard/new?draft=fixture");
+    await assert.rejects(auth.loginAction({}, form({ ...signIn, locale: "en", next: "//evil.invalid" })), (error: unknown) => (error as { location: string }).location === "/en/mypage");
+    auth.calls.length = 0;
+    const signup = await auth.signupAction({}, form({ ...signIn, password: "fixture-password", confirmPassword: "fixture-password", agreeAge: "on", agreeTerms: "on", agreePrivacy: "on", agreeRefund: "on" }));
+    assert.ok(signup.message);
+    const created = auth.calls.find(call => call.method === "signup")?.input as { app_metadata: { signupConsent: { acceptedAt: string; versions: object; marketing: boolean; age14OrOlder: boolean }; emailOwnershipVerifiedAtSignup: boolean } };
+    assert.equal(created.app_metadata.emailOwnershipVerifiedAtSignup, false);
+    assert.equal(created.app_metadata.signupConsent.marketing, false);
+    assert.equal(created.app_metadata.signupConsent.age14OrOlder, true);
+    assert.ok(Number.isFinite(Date.parse(created.app_metadata.signupConsent.acceptedAt)));
+    assert.deepEqual(Object.keys(created.app_metadata.signupConsent.versions).sort(), ["privacy", "refund", "terms"]);
     auth.calls.length = 0;
     const invalidSignup = await auth.signupAction({}, form({ ...signIn, password: "123", confirmPassword: "123", agreeAge: "on", agreeTerms: "on", agreePrivacy: "on", agreeRefund: "on" }));
     assert.match(invalidSignup.fieldErrors?.password ?? "", /8자 이상/); assert.equal(auth.calls.length, 0);
@@ -74,6 +86,11 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     assert.equal(sentLink.pathname, "/reset-password");
     assert.equal(sentLink.searchParams.get("token_hash"), "fixture-recovery-hash");
     assert.equal(sentLink.searchParams.get("type"), "recovery");
+    auth.calls.length = 0;
+    await auth.resetPasswordAction({}, form({ resetEmail: signIn.email, locale: "en", next: "/dashboard/new?draft=fixture" }));
+    const localizedLink = new URL((auth.calls[1].input as {link:string}).link);
+    assert.equal(localizedLink.pathname, "/en/reset-password");
+    assert.equal(localizedLink.searchParams.get("next"), "/en/dashboard/new?draft=fixture");
 
     for (const reason of ["configuration", "rate_limit", "delivery"]) {
       auth.calls.length = 0;
@@ -96,8 +113,23 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     assert.equal(limited.retryAfterSeconds, 120);
     assert.equal(auth.calls.length, 0);
 
+    auth.state.limited = false;
+    for (const mode of ["manual", "unexpected-value"]) {
+      process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = mode;
+      for (const configured of [true, false]) {
+        if (configured) process.env.RESEND_API_KEY = "fixture-only";
+        else delete process.env.RESEND_API_KEY;
+        auth.calls.length = 0;
+        const blocked = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
+        assert.match(blocked.error ?? "", /고객센터/);
+        assert.equal(blocked.message, undefined);
+        assert.deepEqual(auth.calls, [], "deferred or invalid delivery must not generate tokens, send mail, or invoke Supabase fallback");
+      }
+    }
+
   } finally {
     if (originalResend === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = originalResend;
     if (originalSender === undefined) delete process.env.RESEND_FROM; else process.env.RESEND_FROM = originalSender;
+    if (originalEmailMode === undefined) delete process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE; else process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = originalEmailMode;
   }
 });

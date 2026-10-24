@@ -1,3 +1,5 @@
+import { getEmailDeliveryMode } from "./email-delivery-mode";
+
 export type EmailSenderConfiguration =
   | { ok: true; from: string; replyTo?: string; senderDomain: string }
   | {
@@ -104,6 +106,33 @@ export function getEmailSenderConfiguration({ from, supportEmail }: {
     from: sender.from,
     ...(replyTo ? { replyTo } : {}),
     senderDomain: sender.domain,
+  };
+}
+
+/** The sender and readiness probe must agree on whether mail can be attempted. */
+export function getEmailDeliveryConfiguration({
+  apiKey = process.env.RESEND_API_KEY,
+  from = process.env.RESEND_FROM,
+  supportEmail,
+}: { apiKey?: string; from?: string; supportEmail?: string | null } = {}) {
+  const sender = getEmailSenderConfiguration({ from, supportEmail });
+  const normalizedKey = apiKey?.trim() || "";
+  const mode = getEmailDeliveryMode();
+  const enabled = mode === "transactional";
+  return {
+    mode,
+    ok: enabled && Boolean(normalizedKey) && sender.ok,
+    apiKey: enabled ? normalizedKey : "",
+    from: enabled && sender.ok ? sender.from : "",
+    replyTo: enabled && sender.ok ? sender.replyTo : undefined,
+    sender,
+    diagnostic: mode === "manual"
+      ? "Transactional email delivery is deferred in manual mode."
+      : mode === "invalid"
+        ? "NEXT_PUBLIC_EMAIL_DELIVERY_MODE must be manual or transactional."
+        : !normalizedKey
+      ? "RESEND_API_KEY is required for transactional email."
+      : !sender.ok ? sender.diagnostic : undefined,
   };
 }
 

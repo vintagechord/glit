@@ -28,7 +28,7 @@ test("email health rejects missing or unusable senders even when a support inbox
     delete process.env.RESEND_API_KEY;
     const missingKey = runRuntimeConfigChecks({ includeOptionalNotifications: true }).find((entry) => entry.name === "email env");
     assert.equal(missingKey?.ok, false);
-    assert.equal(missingKey?.severity, "warning");
+    assert.equal(missingKey?.severity, "error");
     assert.match(missingKey?.detail ?? "", /RESEND_API_KEY/);
   } finally {
     if (originalKey === undefined) delete process.env.RESEND_API_KEY;

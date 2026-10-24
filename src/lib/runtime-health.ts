@@ -1,5 +1,7 @@
 import { APP_CONFIG } from "./config";
-import { getEmailSenderConfiguration } from "./email-config";
+import { getEmailDeliveryConfiguration } from "./email-config";
+import { getInicisMode, getStdPayConfig } from "./inicis/config";
+import { getKakaoConfiguration } from "./kakao-config";
 import { checkSupabaseConfig } from "./supabase/health";
 
 export type RuntimeHealthCheck = {
@@ -9,8 +11,6 @@ export type RuntimeHealthCheck = {
   detail?: string;
 };
 
-type InicisMode = "prod" | "stg";
-
 type RuntimeHealthOptions = {
   strict?: boolean;
   includeOptionalNotifications?: boolean;
@@ -18,38 +18,6 @@ type RuntimeHealthOptions = {
 
 const truthy = (value: string | undefined | null) =>
   Boolean(value && value.trim().length > 0);
-
-const clean = (value?: string | null) => value?.trim() ?? "";
-
-const normalizeMode = (value?: string | null): InicisMode | null => {
-  const normalized = clean(value).toLowerCase();
-  if (normalized === "prod" || normalized === "production" || normalized === "live") {
-    return "prod";
-  }
-  if (
-    normalized === "stg" ||
-    normalized === "stage" ||
-    normalized === "staging" ||
-    normalized === "test"
-  ) {
-    return "stg";
-  }
-  return null;
-};
-
-const hasStdPayEnv = (mode: InicisMode) => {
-  const suffix = mode === "prod" ? "PROD" : "STG";
-  return truthy(process.env[`INICIS_MID_${suffix}`]) &&
-    truthy(process.env[`INICIS_SIGN_KEY_${suffix}`]);
-};
-
-const resolveInicisMode = (): InicisMode => {
-  const override =
-    normalizeMode(process.env.INICIS_ENV) ??
-    normalizeMode(process.env.NEXT_PUBLIC_INICIS_ENV);
-  if (override) return override;
-  return hasStdPayEnv("prod") || !hasStdPayEnv("stg") ? "prod" : "stg";
-};
 
 const isAbsoluteHttpUrl = (value?: string | null) => {
   if (!truthy(value)) return false;
@@ -78,17 +46,30 @@ const checkEnv = (
 const checkEmail = (
   severity: RuntimeHealthCheck["severity"] = "error",
 ): RuntimeHealthCheck => {
-  const missing = [
-    !truthy(process.env.RESEND_API_KEY) ? "RESEND_API_KEY" : null,
-    !truthy(process.env.RESEND_FROM) ? "RESEND_FROM" : null,
-  ].filter((key): key is string => Boolean(key));
-  const sender = getEmailSenderConfiguration({ from: process.env.RESEND_FROM });
+  const config = getEmailDeliveryConfiguration();
+
+  if (config.mode === "manual") {
+    return {
+      name: "email delivery deferred",
+      ok: false,
+      severity: "warning",
+      detail: config.diagnostic,
+    };
+  }
+  if (config.mode === "invalid") {
+    return {
+      name: "email delivery mode",
+      ok: false,
+      severity: "error",
+      detail: config.diagnostic,
+    };
+  }
 
   return {
     name: "email env",
-    ok: missing.length === 0 && sender.ok,
+    ok: config.ok,
     severity,
-    detail: missing.length ? `missing: ${missing.join(", ")}` : !sender.ok ? sender.diagnostic : undefined,
+    detail: config.diagnostic,
   };
 };
 
@@ -152,43 +133,15 @@ const checkBaseUrl = (): RuntimeHealthCheck => {
 };
 
 const checkInicis = (): RuntimeHealthCheck => {
-  const mode = resolveInicisMode();
-  const suffix = mode === "prod" ? "PROD" : "STG";
-  const missing = [
-    `INICIS_MID_${suffix}`,
-    `INICIS_SIGN_KEY_${suffix}`,
-  ].filter((key) => !truthy(process.env[key]));
-
-  if (missing.length > 0) {
+  const mode = getInicisMode();
+  try {
+    getStdPayConfig();
+  } catch (error) {
     return {
       name: `inicis ${mode} env`,
       ok: false,
       severity: "error",
-      detail: `missing: ${missing.join(", ")}`,
-    };
-  }
-
-  const stdJsUrl =
-    mode === "prod"
-      ? "https://stdpay.inicis.com/stdjs/INIStdPay.js"
-      : process.env[`INICIS_STDJS_URL_${suffix}`] ??
-        "https://stgstdpay.inicis.com/stdjs/INIStdPay.js";
-  const isProdJs = stdJsUrl.includes("stdpay.inicis.com");
-  const isStgJs = stdJsUrl.includes("stgstdpay.inicis.com");
-  if (mode === "stg" && isProdJs) {
-    return {
-      name: `inicis ${mode} env`,
-      ok: false,
-      severity: "error",
-      detail: "stg mode cannot use production STDPay JS URL",
-    };
-  }
-  if (mode === "prod" && isStgJs) {
-    return {
-      name: `inicis ${mode} env`,
-      ok: false,
-      severity: "error",
-      detail: "prod mode cannot use staging STDPay JS URL",
+      detail: error instanceof Error ? error.message : "Invalid STDPay configuration.",
     };
   }
 
@@ -232,13 +185,17 @@ export const runRuntimeConfigChecks = (
   ];
 
   if (includeOptionalNotifications) {
+    const kakao = getKakaoConfiguration();
     checks.push(
-      checkEmail(optionalSeverity),
-      checkEnv(
-        ["KAKAO_ALIMTALK_WEBHOOK_URL"],
-        "kakao notification",
-        "warning",
-      ),
+      // Transactional delivery requires working email. An explicit manual mode
+      // stays visible as a warning while all unrelated readiness checks remain.
+      checkEmail("error"),
+      {
+        name: "kakao notification env",
+        ok: kakao.ok,
+        severity: "warning",
+        detail: kakao.ok ? undefined : kakao.diagnostic,
+      },
     );
   }
 

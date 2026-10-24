@@ -8,7 +8,7 @@ import { validateReviewData, type ReviewDocumentData } from "./model";
 import { getReviewRetrySourceIds, mergeRetryExtraction } from "./retry";
 import { jobDatabaseError } from "./jobs";
 import { REVIEW_JOB_LIMITS, ReviewJobError, type ReviewJob, type ReviewJobOutput } from "./jobs-types";
-import { assertPrivateReviewBucket, assertReviewObjectKey, deleteReviewObject, getReviewObject, putReviewObject, reviewObjectKey } from "./storage";
+import { assertPrivateReviewBucket, assertReviewObjectKey, getReviewObject, putReviewObject, reviewObjectKey } from "./storage";
 
 async function updateClaim(job: ReviewJob, update: Record<string, unknown>, signal?: AbortSignal) {
   signal?.throwIfAborted();
@@ -25,7 +25,7 @@ async function persistOutput(job: ReviewJob, name: string, buffer: Buffer, type:
   signal?.throwIfAborted();
   if (buffer.length > 64 * 1024 * 1024) throw new ReviewJobError("생성 파일이 64MB를 초과합니다. 앨범을 나누어 생성해주세요.", 422, "OUTPUT_LIMIT");
   const id = randomUUID(); const objectKey = reviewObjectKey(job.created_by, job.id, id);
-  // Record the object before upload: failures and superseded versions remain eligible for cleanup.
+  // Record every object before upload so failed or superseded versions remain traceable.
   const { error } = await createAdminClient().from("review_document_artifacts").insert({ id, job_id: job.id, object_key: objectKey }).abortSignal(signal ?? AbortSignal.timeout(20_000));
   jobDatabaseError(error);
   signal?.throwIfAborted();
@@ -107,20 +107,8 @@ export async function failReviewJob(job: ReviewJob, error: unknown) {
 }
 
 export async function cleanupReviewJobs() {
-  const admin = createAdminClient();
-  const { data, error } = await admin.from("review_document_jobs").select("id,created_by,sources").lt("expires_at", new Date().toISOString()).is("lease_token", null).is("purged_at", null).limit(10);
-  jobDatabaseError(error);
-  for (const job of data ?? []) {
-    const { data: artifacts, error: artifactError } = await admin.from("review_document_artifacts").select("id,object_key").eq("job_id", job.id);
-    jobDatabaseError(artifactError);
-    const keys = [...(job.sources as ReviewJob["sources"]).flatMap((s) => s.objectKey ? [s.objectKey] : []), ...(artifacts ?? []).map((a) => a.object_key as string)];
-    // Do not expire/purge metadata until each dedicated object is successfully deleted.
-    for (const key of keys) await deleteReviewObject(key, job.created_by, job.id);
-    const { error: artifactDeleteError } = await admin.from("review_document_artifacts").delete().eq("job_id", job.id);
-    jobDatabaseError(artifactDeleteError);
-    const { error: jobError } = await admin.from("review_document_jobs").update({ status: "expired", sources: [], outputs: [], zip_output: null, extracted_data: null, draft_data: null, snapshot_data: null, purged_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", job.id);
-    jobDatabaseError(jobError);
-  }
-  const { error: historyError } = await admin.from("review_document_jobs").delete().not("purged_at", "is", null).lt("created_at", new Date(Date.now() - 90 * 86400000).toISOString());
-  jobDatabaseError(historyError);
+  // Compatibility entry point for existing web/dedicated worker loops.
+  // Durable sources, outputs, revisions and history are retained until an
+  // explicit administrator deletion. Processing leases and local scratch
+  // cleanup remain independent; elapsed time alone never deletes stored data.
 }

@@ -1,10 +1,12 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { B2ConfigError, deleteObject, getB2Config, sanitizeFileName } from "@/lib/b2";
+import { B2ConfigError, getB2Config, sanitizeFileName } from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getStorageLogId } from "@/lib/guest-storage-owner";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -163,10 +165,10 @@ export async function POST(
   );
   const safeName = sanitizeFileName(filenameRaw) || "certificate";
   const uploadedAt = new Date().toISOString();
-  const uploadedObjectKey = `submissions/${submissionId}/certificate/${Date.now()}_${safeName}`;
 
   try {
-    const { client, bucket } = getB2Config();
+    const { client, bucket, prefix } = getB2Config();
+    const uploadedObjectKey = `${prefix}${submissionId}/certificate/${randomUUID()}_${safeName}`;
     const body = Buffer.from(await fileValue.arrayBuffer());
     const detectedMimeType = detectCertificateMimeType(body);
     if (!detectedMimeType || detectedMimeType !== mimeType) {
@@ -186,35 +188,27 @@ export async function POST(
       }),
     );
 
-    const { error: updateError } = await admin
-      .from("submissions")
-      .update({
-        certificate_b2_path: uploadedObjectKey,
-        certificate_original_name: filenameRaw,
-        certificate_mime: mimeType,
-        certificate_size: sizeBytes,
-        certificate_uploaded_at: uploadedAt,
-      })
-      .eq("id", submissionId);
+    // The row lock, current pointer and previous/new file audit commit together.
+    // A later replacement retains both objects; downloads still use the current pointer.
+    const { error: updateError } = await admin.rpc("record_submission_certificate", {
+      p_submission_id: submissionId,
+      p_actor_user_id: user.id,
+      p_object_key: uploadedObjectKey,
+      p_original_name: filenameRaw,
+      p_mime_type: mimeType,
+      p_size_bytes: sizeBytes,
+      p_uploaded_at: uploadedAt,
+    });
 
     if (updateError) {
-      await deleteObject(uploadedObjectKey).catch((cleanupError) => {
-        console.warn("[certificate][upload] rollback delete failed", {
-          uploadedObjectKey,
-          cleanupError,
-        });
+      // A response can be lost after the transaction commits. Never delete an
+      // object that may already be the current certificate or an audited result.
+      console.warn("[certificate][upload] persistence unconfirmed; object retained", {
+        submissionId,
+        objectKeyHash: getStorageLogId(uploadedObjectKey),
+        code: updateError.code,
       });
       return NextResponse.json({ error: "필증 정보를 저장하지 못했습니다." }, { status: 500 });
-    }
-
-    const previousObjectKey = submission.certificate_b2_path?.trim();
-    if (previousObjectKey && previousObjectKey !== uploadedObjectKey) {
-      await deleteObject(previousObjectKey).catch((cleanupError) => {
-        console.warn("[certificate][upload] previous delete failed", {
-          previousObjectKey,
-          cleanupError,
-        });
-      });
     }
 
     return NextResponse.json({
@@ -228,10 +222,8 @@ export async function POST(
   } catch (error) {
     const message =
       error instanceof B2ConfigError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : "업로드 중 오류가 발생했습니다.";
+        ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요."
+        : "업로드 중 오류가 발생했습니다.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

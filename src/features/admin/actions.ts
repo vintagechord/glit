@@ -27,6 +27,7 @@ import {
 import { saveStationReview } from "@/lib/admin/station-review-save";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
 import { sendResultEmail, sendSubmissionUpdateEmail } from "@/lib/email";
+import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -42,7 +43,7 @@ import {
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
-import { confirmLinkedOrderPayment } from "@/lib/admin/order-payment";
+import { confirmLinkedOrderPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
 import {
   PUBLIC_CATALOG_CACHE_TAG,
   PUBLIC_ALBUM_DISCOUNT_CACHE_TAG,
@@ -97,6 +98,7 @@ const adminOperationalStageLabelMap: Record<AdminOperationalStage, string> = {
 const mapAdminOperationalStage = (
   stage: AdminOperationalStage,
   currentPaymentStatus?: PaymentStatus | null,
+  currentStatus: ReviewStatus = "SUBMITTED",
 ): { status: ReviewStatus; paymentStatus: PaymentStatus } => {
   switch (stage) {
     case "APPLICATION_RECEIVED":
@@ -108,7 +110,7 @@ const mapAdminOperationalStage = (
             : "PAYMENT_PENDING",
       };
     case "PAYMENT_COMPLETE":
-      return { status: "SUBMITTED", paymentStatus: "PAID" };
+      return { status: currentPaymentStatus === "PAID" ? currentStatus : statusAfterPaymentConfirmation(currentStatus), paymentStatus: "PAID" };
     case "REVIEW_IN_PROGRESS":
       return { status: "IN_PROGRESS", paymentStatus: "PAID" };
     case "RESULT_NOTIFIED":
@@ -483,6 +485,17 @@ const sendSubmissionResultNotificationById = async ({
         .join("\n"),
       link: context.link,
     });
+
+  if (getEmailDeliveryMode() === "manual") {
+    await sendKakaoResultNotification();
+    return {
+      deliveredCount: 0,
+      skippedCount: context.recipientEmails.length,
+      failedCount: 0,
+      recipientCount: context.recipientEmails.length,
+      warning: "심의 결과는 저장되었습니다. 자동 이메일 발송은 보류 중입니다. 고객에게 신청 내역에서 결과를 확인하도록 별도로 안내해주세요.",
+    };
+  }
 
   if (!context.recipientEmails.length) {
     await sendKakaoResultNotification();
@@ -1008,10 +1021,8 @@ export async function updatePaymentStatusAction(
   }
 
   const nextStatus =
-    parsed.data.paymentStatus === "PAID" &&
-    (submission?.status === "WAITING_PAYMENT" ||
-      submission?.status === "SUBMITTED")
-      ? "IN_PROGRESS"
+    parsed.data.paymentStatus === "PAID" && submission.payment_status !== "PAID"
+      ? statusAfterPaymentConfirmation(submission.status as ReviewStatus)
       : submission.status;
 
   const { data: updatedSubmission, error } = await supabase
@@ -2463,7 +2474,7 @@ export async function saveSubmissionAdminFormAction(
   const currentStatus = currentSubmissionRow.status as ReviewStatus;
   const currentPaymentStatus = currentSubmissionRow.payment_status as PaymentStatus;
   const mappedStage = parsedOperationalStage.success
-    ? mapAdminOperationalStage(parsedOperationalStage.data, currentPaymentStatus)
+    ? mapAdminOperationalStage(parsedOperationalStage.data, currentPaymentStatus, currentStatus)
     : null;
   const mappedStageLabel = parsedOperationalStage.success
     ? adminOperationalStageLabelMap[parsedOperationalStage.data]
@@ -2474,11 +2485,11 @@ export async function saveSubmissionAdminFormAction(
 
   if (
     !mappedStage &&
+    currentPaymentStatus !== "PAID" &&
     nextPaymentStatus === "PAID" &&
-    (currentStatus === "WAITING_PAYMENT" || currentStatus === "SUBMITTED") &&
     status === currentStatus
   ) {
-    nextStatus = "IN_PROGRESS";
+    nextStatus = statusAfterPaymentConfirmation(currentStatus);
   }
 
   const orderPayment = await confirmLinkedOrderPayment(supabase, {
@@ -2490,7 +2501,9 @@ export async function saveSubmissionAdminFormAction(
   });
   if (orderPayment.error) redirectWithError(orderPayment.error);
   if (orderPayment.confirmedIds) {
-    if (nextStatus === "SUBMITTED") nextStatus = "IN_PROGRESS";
+    if (["DRAFT", "WAITING_PAYMENT", "SUBMITTED"].includes(nextStatus)) {
+      nextStatus = statusAfterPaymentConfirmation(currentStatus);
+    }
     for (const id of orderPayment.confirmedIds) revalidateUserDashboards(id);
     for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
   }
@@ -2557,8 +2570,8 @@ export async function saveSubmissionAdminFormAction(
   if (changes.length > 0) {
     const changeSummary = [
       ...changes,
-      nextPaymentStatus === "PAID" && status === currentStatus && nextStatus === "IN_PROGRESS"
-        ? "결제 완료 처리에 따라 접수 상태를 심의 진행으로 전환했습니다."
+      currentPaymentStatus !== "PAID" && nextPaymentStatus === "PAID" && nextStatus === "PRE_REVIEW"
+        ? "입금이 확인되었습니다. 자료 확인 후 방송국·기관 접수를 진행합니다."
         : null,
     ]
       .filter(Boolean)

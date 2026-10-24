@@ -1427,7 +1427,7 @@ export async function saveAlbumSubmissionAction(
 
   let receiptEmailSent = false;
   let bankGuideEmailSent = false;
-  if (parsed.data.status === "SUBMITTED" && !wasPreviouslySubmitted) {
+  if (parsed.data.status === "SUBMITTED" && !deferPayment && !wasPreviouslySubmitted) {
     const notificationTitle =
       titleValue || (isOneClick ? "발매된 음반 · URL 접수" : "제목 미입력");
     const recipientEmails = collectRecipientEmails(
@@ -2021,7 +2021,7 @@ export async function saveMvSubmissionAction(
 
   let receiptEmailSent = false;
   let bankGuideEmailSent = false;
-  if (parsed.data.status === "SUBMITTED" && !wasPreviouslySubmitted) {
+  if (parsed.data.status === "SUBMITTED" && !deferPayment && !wasPreviouslySubmitted) {
     const recipientEmails = collectRecipientEmails(
       applicantEmailValue,
       guestEmailValue,

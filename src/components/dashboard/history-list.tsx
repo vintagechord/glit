@@ -9,6 +9,7 @@ import * as React from "react";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { formatCurrency, formatDate, formatDateTime, formatShortDate } from "@/lib/format";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
+import { getAlbumPackageLabel } from "@/lib/album-package-label";
 
 type StationReview = {
   id: string;
@@ -257,7 +258,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
           submission.paymentMethod,
         );
         const hasPaymentAction = submission.paymentStatus !== "PAID";
-        const packageLabel = submission.packageInfo?.name ?? "패키지 미지정";
+        const packageLabel = getAlbumPackageLabel(submission.packageInfo?.name, submission.packageInfo?.station_count, "패키지 미지정");
         const trackCount = submission.tracks.length;
         const amountLabel =
           submission.amountKrw != null
@@ -397,7 +398,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                   패키지
                 </p>
                 <p className="mt-1 text-sm font-semibold text-foreground">
-                  {activeSubmission.packageInfo?.name ?? "-"}
+                  {getAlbumPackageLabel(activeSubmission.packageInfo?.name, activeSubmission.packageInfo?.station_count)}
                 </p>
               </div>
               <div>

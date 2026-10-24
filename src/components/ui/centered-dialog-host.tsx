@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useModalFocus } from "@/lib/use-modal-focus";
 
 import {
   CENTERED_DIALOG_REQUEST_EVENT,
@@ -12,7 +13,7 @@ export function CenteredDialogHost() {
   const [queue, setQueue] = React.useState<CenteredDialogRequest[]>([]);
   const active = queue[0] ?? null;
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
-  const primaryButtonRef = React.useRef<HTMLButtonElement | null>(null);
+
 
   React.useEffect(() => {
     const handleRequest = (event: Event) => {
@@ -38,51 +39,11 @@ export function CenteredDialogHost() {
     };
   }, []);
 
-  React.useEffect(() => {
+  useModalFocus(Boolean(active), dialogRef, () => {
     if (!active) return;
-    const previouslyFocused =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    primaryButtonRef.current?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        active.resolve(active.kind === "alert");
-        setQueue((current) => current.slice(1));
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-      );
-      if (!focusable || focusable.length === 0) {
-        event.preventDefault();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      if (previouslyFocused?.isConnected) {
-        previouslyFocused.focus();
-      }
-    };
-  }, [active]);
+    active.resolve(active.kind === "alert");
+    setQueue((current) => current.slice(1));
+  });
 
   if (!active) return null;
 
@@ -101,6 +62,7 @@ export function CenteredDialogHost() {
     >
       <div
         ref={dialogRef}
+        tabIndex={-1}
         role={isConfirm ? "alertdialog" : "dialog"}
         aria-modal="true"
         aria-labelledby={`centered-dialog-title-${active.id}`}
@@ -130,7 +92,6 @@ export function CenteredDialogHost() {
             </button>
           ) : null}
           <button
-            ref={primaryButtonRef}
             type="button"
             onClick={() => finish(true)}
             className="inline-flex min-h-11 min-w-24 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-4 text-xs font-black text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 dark:text-[#06111f]"

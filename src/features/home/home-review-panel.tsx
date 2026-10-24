@@ -117,7 +117,7 @@ const stageStatusMap = {
     tone: "bauhaus-status-chip--success",
   },
   received: {
-    label: "접수완료",
+    label: "자료 확인 중",
     tone: "bauhaus-status-chip--info",
   },
   progress: {
@@ -129,8 +129,12 @@ const stageStatusMap = {
     tone: "bauhaus-status-chip--success",
   },
   attention: {
-    label: "확인 필요",
+    label: "보완 요청",
     tone: "bg-orange-500 text-white dark:bg-orange-300 dark:text-[#06111f]",
+  },
+  partial: {
+    label: "일부 결과 도착",
+    tone: "bauhaus-status-chip--info",
   },
 };
 
@@ -812,7 +816,7 @@ export function HomeReviewPanel({
   const stationProgressPercent =
     totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   const progressPercent = stationProgressPercent;
-  const progressText = `${totalCount}곳 중 ${completedCount}곳 완료 · ${progressPercent}%`;
+  const progressText = `방송국 ${totalCount}곳 중 ${completedCount}곳 결과 완료 · ${progressPercent}%`;
   const isAlbumStatusContext = tab === "album" || activeSubmission?.type === "ALBUM";
   const hasAllStationResults =
     !needsPayment && totalCount > 0 && completedCount === totalCount;
@@ -823,14 +827,16 @@ export function HomeReviewPanel({
     totalCount > 0 &&
     !hasAllStationResults;
   const currentSubmissionStatus =
-    hasPendingAlbumStationResults
-      ? stageStatusMap.received
-      : isAlbumStatusContext && hasAllStationResults
-        ? stageStatusMap.completed
-        : hasAttentionStatus
+    hasAttentionStatus
       ? stageStatusMap.attention
       : activeSubmission && hasAllStationResults
       ? stageStatusMap.completed
+      : !needsPayment && completedCount > 0
+      ? stageStatusMap.partial
+      : hasPendingAlbumStationResults
+      ? (activeStations.some((station) => ["SENT", "RECEIVED"].includes(station.status))
+        ? stageStatusMap.progress
+        : stageStatusMap.received)
       : getStageStatus(activeSubmission);
 
   const rowsPerPage = Math.max(1, Math.floor(stationRowsPerPage));
@@ -1046,7 +1052,7 @@ export function HomeReviewPanel({
             ? `${submissionLabels.summary} 심의`
             : isLoggedIn
               ? "나의 심의"
-              : ""}
+              : "가상의 진행 예시"}
         </span>
         <span className="inline-flex items-center gap-2">
           {isLoading || isRemoteLoading ? (
@@ -1061,7 +1067,7 @@ export function HomeReviewPanel({
               실시간
             </>
           ) : (
-            "미리보기"
+            "예시 데이터"
           )}
         </span>
       </div>
@@ -1227,7 +1233,7 @@ export function HomeReviewPanel({
                 <p className="text-sm font-semibold text-foreground">
                   방송국별 현황
                 </p>
-                {!needsPayment && latestStationUpdatedAt ? (
+                {isLoggedIn && !needsPayment && latestStationUpdatedAt ? (
                   <p
                     className="mt-1 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
                     title={formatDate(latestStationUpdatedAt)}

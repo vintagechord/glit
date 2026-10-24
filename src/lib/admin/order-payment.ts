@@ -1,4 +1,13 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
+import type { ReviewStatus } from "@/constants/review-status";
+
+/** Payment confirms funds; the review team still has to check the materials.
+ * Reconfirming payment must never reset an existing review or result. */
+export function statusAfterPaymentConfirmation(currentStatus: ReviewStatus): ReviewStatus {
+  return ["DRAFT", "WAITING_PAYMENT", "SUBMITTED"].includes(currentStatus)
+    ? "PRE_REVIEW"
+    : currentStatus;
+}
 
 /** A linked order owns payment state for its entire item group. Admin review
  * edits may update a paid submission's review stage, but cannot rewrite money

@@ -1,3 +1,38 @@
+export const reviewServices = [
+  {
+    id: "album",
+    title: "음원 방송 심의",
+    purpose: "라디오·TV에 제출할 음원",
+    href: "/dashboard/new/album",
+    preparation: "발매 전 신청서·음원·전체 가사 / 발매 후 앨범 링크·음원",
+    deliverable: "선택한 방송국별 심의 결과",
+    billing: "방송국 수별 패키지 · 앨범 1건 기준",
+    timing: "자료·결제 확인 후 접수하며 방송국별 일정이 다릅니다.",
+  },
+  {
+    id: "distribution",
+    title: "MV 온라인 유통용 심의",
+    purpose: "유통사·플랫폼이 요청한 영상 심의 자료",
+    href: "/dashboard/new/mv?type=distribution",
+    preparation: "영상·신청 정보·제출처가 요청한 서류 확인",
+    deliverable: "온라인용 심의 결과와 등록된 필증·등급 자료",
+    billing: "영상 1건 · 선택 항목별 비용",
+    timing: "자료 확인 후 진행하며 제출처와 보완 여부에 따라 달라집니다.",
+  },
+  {
+    id: "broadcast",
+    title: "MV 방송사 심의",
+    purpose: "선택한 방송사에 제출할 영상",
+    href: "/dashboard/new/mv?type=broadcast",
+    preparation: "방송사 규격의 영상·신청서·음원 심의 여부 확인",
+    deliverable: "선택한 방송사별 영상 심의 결과",
+    billing: "영상 1건 · 선택 방송사별 비용",
+    timing: "방송사 접수 후 해당 방송사의 심의 일정에 따릅니다.",
+  },
+] as const;
+
+export const reviewServiceNotice = "심의 결과는 실제 방송 편성을 보장하지 않습니다. 필요한 절차와 서류는 공개 목적과 제출처에 따라 확인해주세요.";
+
 export const faqItems = [
   {
     category: "결과 확인",
@@ -63,7 +98,7 @@ export const faqItems = [
     category: "결제",
     question: "결제는 어떻게 하나요?",
     answer:
-      "온라인 신청 단계에서 카드 결제 또는 무통장 입금을 선택합니다. 결제 전 심의 종류, 방송국, 총액을 다시 확인합니다.",
+      "PC에서는 카드 결제 또는 무통장 입금을 선택합니다. 모바일에서는 무통장 입금을 이용하거나 저장한 신청을 PC에서 이어서 카드 결제할 수 있습니다. 결제 전 심의 종류, 방송국, 총액을 다시 확인합니다.",
   },
   {
     category: "자료 준비",

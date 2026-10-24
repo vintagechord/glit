@@ -40,8 +40,9 @@ test("central dialog host is bounded by the dynamic viewport", () => {
 
   assert.match(source, /max-h-\[calc\(100dvh-3rem\)\]/);
   assert.match(source, /overflow-y-auto/);
-  assert.match(source, /event\.key !== "Tab"/);
-  assert.match(source, /document\.body\.style\.overflow = "hidden"/);
+  // Keyboard containment and restoration are exercised against the shared
+  // focus controller by auth-accessibility.spec.ts, including nested dialogs.
+  assert.match(source, /useModalFocus\(Boolean\(active\), dialogRef/);
 });
 
 test("mobile form controls avoid focus zoom", () => {

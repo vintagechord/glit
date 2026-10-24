@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { Suspense, useActionState, useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useFormStatus } from "react-dom";
+import { getAuthPageHref, getAuthReturnPath } from "@/features/auth/navigation";
+import { ManualEmailSupport } from "@/features/auth/manual-email-support";
+import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 
 import {
   resetPasswordAction,
@@ -35,7 +38,7 @@ function SubmitButton({ retrySeconds }: { retrySeconds: number }) {
   );
 }
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
   const [email, setEmail] = useState("");
   const [retrySeconds, setRetrySeconds] = useState(0);
   const [retryAt, setRetryAt] = useState(0);
@@ -51,6 +54,9 @@ export default function ForgotPasswordPage() {
   );
   const pathname = usePathname();
   const localePrefix = pathname.startsWith("/en/") ? "/en" : "";
+  const searchParams = useSearchParams();
+  const nextPath = getAuthReturnPath(searchParams.get("next"), Boolean(localePrefix));
+  const emailAvailable = getEmailDeliveryMode() === "transactional";
 
   useEffect(() => {
     if (!retryAt) return;
@@ -70,11 +76,13 @@ export default function ForgotPasswordPage() {
       <div className="relative w-full max-w-xl rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-10">
         <div className="text-center">
           <h1 className="font-display text-3xl font-black leading-tight tracking-normal text-foreground">
-            재설정 링크 받기
+            {emailAvailable ? "재설정 링크 받기" : localePrefix ? "Password Reset Help" : "비밀번호 재설정 안내"}
           </h1>
         </div>
 
-        <form action={formAction} className="mt-8 space-y-5">
+        {emailAvailable ? <form action={formAction} className="mt-8 space-y-5">
+          <input type="hidden" name="locale" value={localePrefix ? "en" : "ko"} />
+          <input type="hidden" name="next" value={nextPath ?? ""} />
           <div className="space-y-2">
             <label
               htmlFor="reset-email"
@@ -115,12 +123,12 @@ export default function ForgotPasswordPage() {
             </p>
           )}
           <SubmitButton retrySeconds={retrySeconds} />
-        </form>
+        </form> : <div className="mt-8"><ManualEmailSupport english={Boolean(localePrefix)} purpose="password" /></div>}
 
         <div className="mt-6 flex justify-center">
           <div className="flex flex-wrap justify-center gap-2">
             <Link
-              href={`${localePrefix}/login`}
+              href={getAuthPageHref("login", nextPath, Boolean(localePrefix))}
               className="inline-flex items-center rounded-[8px] border-2 border-border px-4 py-2 text-sm font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
             >
               로그인
@@ -136,4 +144,8 @@ export default function ForgotPasswordPage() {
       </div>
     </div>
   );
+}
+
+export default function ForgotPasswordPage() {
+  return <Suspense><ForgotPasswordContent /></Suspense>;
 }

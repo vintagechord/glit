@@ -1,1 +1,5 @@
-export { default } from "@/app/forms/page";
+import { FormsPageView } from "@/features/support/forms-page-view";
+
+export default function EnglishFormsPage() {
+  return <FormsPageView localePrefix="/en" />;
+}

@@ -9,11 +9,13 @@ import {
 } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmailSenderConfiguration } from "@/lib/email-config";
+import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import {
   consumeRateLimit,
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
-import { getSafeInternalPath } from "@/lib/safe-internal-path";
+import { getAuthPageHref, getAuthReturnPath } from "./navigation";
+import { SIGNUP_POLICY_VERSIONS } from "./policy";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 import { isAuthConnectionError, logAuthError, mapAuthError } from "./errors";
@@ -107,18 +109,9 @@ export async function loginAction(
     return { error: mapAuthError(error, "login") };
   }
 
-  const internalNext = getSafeInternalPath(parsed.data.next);
-  const nextPathname = internalNext?.split(/[?#]/, 1)[0];
-  const safeNext =
-    internalNext &&
-    nextPathname !== "/login" &&
-    !nextPathname?.startsWith("/login/") &&
-    nextPathname !== "/en/login" &&
-    !nextPathname?.startsWith("/en/login/")
-      ? internalNext
-      : null;
-
-  redirect(safeNext ?? "/mypage");
+  const english = formData.get("locale") === "en";
+  const safeNext = getAuthReturnPath(parsed.data.next, english);
+  redirect(safeNext ?? (english ? "/en/mypage" : "/mypage"));
 }
 
 export async function signupAction(
@@ -164,7 +157,21 @@ export async function signupAction(
     const { data, error } = await admin.auth.admin.createUser({
       email: parsed.data.email,
       password: parsed.data.password,
+      // Existing account policy permits signup without proving email ownership.
+      // Do not interpret email_confirm as delivery or ownership verification.
       email_confirm: true,
+      app_metadata: {
+        signupConsent: {
+          acceptedAt: new Date().toISOString(),
+          versions: SIGNUP_POLICY_VERSIONS,
+          age14OrOlder: true,
+          terms: true,
+          privacy: true,
+          refund: true,
+          marketing: parsed.data.agreeMarketing === "on",
+        },
+        emailOwnershipVerifiedAtSignup: false,
+      },
       user_metadata: {
         name: parsed.data.name ?? "",
         company: parsed.data.company ?? "",
@@ -200,6 +207,13 @@ export async function resetPasswordAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const emailMode = getEmailDeliveryMode();
+  if (emailMode === "manual") {
+    return { error: "현재 이메일 자동 발송을 제공하지 않습니다. 비밀번호 재설정은 고객센터에 문의해주세요." };
+  }
+  if (emailMode === "invalid") {
+    return { error: "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요." };
+  }
   const email = String(formData.get("resetEmail") || "").trim();
   if (!email) {
     return { fieldErrors: { resetEmail: "이메일을 입력해주세요." } };
@@ -224,7 +238,8 @@ export async function resetPasswordAction(
   }
 
   try {
-    const redirectTo = buildUrl("/reset-password", getBaseUrl());
+    const english = formData.get("locale") === "en";
+    const redirectTo = buildUrl(getAuthPageHref("reset-password", String(formData.get("next") ?? ""), english), getBaseUrl());
     // A configured sender owns this attempt. Falling back after a failed send
     // generates another token and masks delivery/configuration errors with the
     // built-in provider's project-wide email quota.
