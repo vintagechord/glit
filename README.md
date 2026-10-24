@@ -43,10 +43,13 @@ OPENAI_API_KEY=your_openai_api_key
 OPENAI_TRANSLATION_MODEL=gpt-5.5
 OPENAI_TRANSLATION_TIMEOUT_MS=15000
 
-# Email notifications (Resend)
-RESEND_API_KEY=your_resend_key
-RESEND_FROM="onside <no-reply@your-verified-domain.example>"
-RESEND_TEST_TO=you@example.com
+# Email notifications (Supabase relay; SMTP credentials belong in function secrets)
+EMAIL_PROVIDER=supabase-smtp
+SUPABASE_EMAIL_RELAY_URL=https://your-project.supabase.co/functions/v1/send-transactional-email
+EMAIL_RELAY_SECRET=your_64_hex_character_relay_secret
+SMTP_FROM="온사이드 <iamonside@daum.net>"
+NEXT_PUBLIC_EMAIL_DELIVERY_MODE=transactional
+EMAIL_TEST_TO=you@example.com
 
 # Optional (official Kakao/Alimtalk notification webhook)
 KAKAO_ALIMTALK_WEBHOOK_URL=https://your-kakao-provider-webhook
@@ -143,25 +146,29 @@ Render Starter 이상 유료 플랜 또는 always-on을 제공하는 호스팅�
 - `/readyz`: runtime configuration readiness check
 - `/api/health`: backward-compatible runtime configuration check
 
-For a real email send test, configure `RESEND_API_KEY`, `RESEND_FROM`, and a
-verified Resend sender/domain, then run:
+Production uses the existing Daum mailbox through a Supabase Edge Function.
+No new domain or Resend account is required. The `6b19cd9` deployment went live
+in `transactional` mode on 2026-10-25; a common app notification was sent and
+the user confirmed receipt. See [email configuration](docs/auth-email-configuration.md)
+and the [deployment record](docs/email-production-activation-2026-10-24.md)
+for setup and the exact verification scope.
+
+For a real email send test, configure the selected provider and an approved
+test recipient, then run:
 
 ```bash
 npm run email:smoke -- --to you@example.com
 ```
 
-`RESEND_FROM` must use a domain you own and have [verified in Resend](https://resend.com/docs/dashboard/domains/introduction).
-The example above is a placeholder; a personal Daum/Gmail inbox can receive
-mail but cannot serve as your verified Resend sender domain. Set the real
-sender in Render's Environment settings. The Blueprint preserves this value.
-`/api/health` checks environment presence; it does not verify email delivery.
+`/api/health` checks provider configuration; it does not verify email delivery.
+Resend remains an optional provider and requires an owned, verified sender
+domain. Daum SMTP credentials stay in Supabase function secrets; Render uses
+the HTTPS relay URL and its separate server secret.
 
-Password recovery uses Resend when its API key is configured. A failed custom
-send reports a delivery error and does not retry through Supabase's default
-sender, which has a separate project-wide email quota. Without a Resend key,
-configure [Supabase custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp)
-for production delivery. Supabase Auth's redirect allowlist must include the
-actual site origin's `/reset-password` and `/en/reset-password` URLs.
+Signup verification, account lookup, password recovery, guest code recovery
+and review updates use the selected app email provider. Failed sends do not
+retry through Supabase's default sender. Keep Supabase Auth's redirect allowlist
+configured for the actual site's `/reset-password` and `/en/reset-password` URLs.
 
 To check login and password recovery without sending email, run the following
 against an explicitly selected app. It uses the local Supabase configuration,
@@ -177,4 +184,4 @@ AUTH_QA_BASE_URL=http://127.0.0.1:3000 AUTH_QA_LINK_MODE=token_hash npx tsx scri
 - Render 무료 플랜의 휘발성 디스크에 파일을 저장하지 않습니다.
 - `public/forms/*` 파일은 MVP용 placeholder입니다.
 - 관리자 계정은 Supabase `profiles` 테이블에서 `role='admin'`으로 설정하세요.
-- 이메일 인증 없이 가입하려면 Supabase Auth 설정에서 Email Confirm을 꺼주세요.
+- 운영 회원가입은 이메일 확인 후 비밀번호를 설정합니다. Supabase Auth의 Email Confirm을 유지하고 [이메일 설정 문서](docs/auth-email-configuration.md)를 따르세요.

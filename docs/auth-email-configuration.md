@@ -2,6 +2,8 @@
 
 2026-10-24 확인: 기존 비밀번호 재설정·비회원 코드·심의 알림은 `8b68c86`에서 manual 모드로 보류됐다. 가입 이메일 확인은 최초 구현에서 존재했고 `a20544a`의 관리자 자동 승인으로 바뀌었다. 이번 변경은 확인 가입과 아이디 안내를 추가하고 모든 앱 메일을 동일한 공급자 설정으로 통합한다. 사용자는 기존 고객센터 **`iamonside@daum.net`**을 발신자로 선택했다.
 
+**2026-10-25 운영 상태:** Daum 앱 비밀번호와 Supabase 중계로 실제 발송·사용자 수신 확인을 완료했다. 운영 웹 `6b19cd9`는 `transactional` 모드로 배포됐다. 상세 이력과 검증 범위는 [운영 활성화 기록](email-production-activation-2026-10-24.md)을 참고한다.
+
 ## 도메인 구매 없이 가능한 경로
 
 | 공급자 | 새 도메인 | 현재 Render Free | 필요한 설정 |
@@ -17,7 +19,7 @@
 
 ## 선택한 경로: 기존 Daum 주소 + Supabase 중계
 
-`Render → HTTPS → Supabase Edge Function → TLS 465 → Daum`으로 발송한다. Supabase의 [Edge Function 제한](https://supabase.com/docs/guides/functions/limits)은 25/587 연결을 차단하며, Daum의 465는 차단 목록에 포함하지 않는다. Supabase도 [Nodemailer SMTP 예제](https://github.com/supabase/supabase/blob/master/examples/edge-functions/supabase/functions/send-email-smtp/index.ts)를 제공한다. 따라서 도메인 구입, Resend 가입, Render 유료 전환 없이 구성할 수 있다. 실제 클라우드 연결·메일 수신은 앱 비밀번호 설정 후 별도 확인해야 한다. 메일함 발송량 제한과 [Supabase 함수 사용량 제한](https://supabase.com/docs/guides/functions/pricing)은 적용된다.
+`Render → HTTPS → Supabase Edge Function → TLS 465 → Daum`으로 발송한다. Supabase의 [Edge Function 제한](https://supabase.com/docs/guides/functions/limits)은 25/587 연결을 차단하며, Daum의 465는 차단 목록에 포함하지 않는다. Supabase도 [Nodemailer SMTP 예제](https://github.com/supabase/supabase/blob/master/examples/edge-functions/supabase/functions/send-email-smtp/index.ts)를 제공한다. 따라서 도메인 구입, Resend 가입, Render 유료 전환 없이 구성할 수 있다. 현재 구성은 실제 클라우드 연결·메일 수신을 확인했다. 메일함 발송량 제한과 [Supabase 함수 사용량 제한](https://supabase.com/docs/guides/functions/pricing)은 적용된다.
 
 ### 1. Daum에서 앱 비밀번호 준비
 
@@ -58,15 +60,15 @@ SUPABASE_EMAIL_RELAY_URL=https://rwysjsmxtpuqekeltwxi.supabase.co/functions/v1/s
 EMAIL_RELAY_SECRET=<same relay secret as Supabase>
 SMTP_FROM=온사이드 <iamonside@daum.net>
 NEXT_PUBLIC_SUPPORT_EMAIL=iamonside@daum.net
-# 실제 SMTP 인증·발송 검증 후 transactional로 전환하고 재빌드한다.
-NEXT_PUBLIC_EMAIL_DELIVERY_MODE=manual
+# 실제 SMTP 발송·수신 검증 후 재빌드한 현재 운영값
+NEXT_PUBLIC_EMAIL_DELIVERY_MODE=transactional
 ```
 
-앱에 설정된 Supabase 프로젝트와 중계 URL의 호스트가 일치해야 한다. 외부 URL로 비밀값을 전송하거나 리다이렉트를 따라가지 않는다. 연결 확인 전에는 기존 운영 manual 설정을 유지하고, 준비 후 transactional로 바꾸어 재빌드·재배포한다.
+앱에 설정된 Supabase 프로젝트와 중계 URL의 호스트가 일치해야 한다. 외부 URL로 비밀값을 전송하거나 리다이렉트를 따라가지 않는다. 새로운 환경을 구성할 때는 연결·실수신 확인 전까지 manual을 사용하고, 확인 후 transactional로 바꾸어 재빌드·재배포한다. 현재 운영은 이 검증과 전환을 완료했다.
 
-2026-10-24 운영 반영: 브라우저의 온사이드 Supabase 대시보드에서 `send-transactional-email` 함수를 배포하고, 사용자 승인에 따라 이 함수의 JWT 검증을 해제했다(`verify_jwt=false`). 함수 내부의 전용 서버 비밀값 인증은 유지한다. Supabase Secrets와 Render의 중계 연결 설정도 저장했다. 웹 앱 커밋 `9eba890`은 **2026-10-24 23:34:34 KST**, Render 배포 `dep-dbec2jo473hc73cqu5a0`에서 live 상태가 됐다.
+2026-10-25 운영 반영: 브라우저의 온사이드 Supabase 대시보드에 `6b19cd9` 기준 `send-transactional-email` 함수를 배포했다. 사용자 승인에 따라 이 함수의 JWT 검증은 해제하되(`verify_jwt=false`), 함수 내부 전용 서버 비밀값 인증은 유지한다. `SMTP_USER=iamonside`와 사용자가 직접 입력한 Daum 앱 비밀번호로 공통 앱 알림 발송이 성공했고 사용자가 수신을 확인했다. 같은 소스의 최종 [Render 배포 `dep-dbedu00m7kps73dj5au0`](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-dbedu00m7kps73dj5au0)는 **2026-10-25 01:40:26 KST**에 Live가 됐다. 운영 모드는 `transactional`이다.
 
-전용 인증값을 포함한 빈 본문 `POST {}`는 HTTP 400으로 거절되어 함수 인증·환경값 구문 검증·입력 검증 경로를 확인했다. 다만 승인된 자기 주소로 보낸 두 차례 실제 발송 검사는 **HTTP 503 / `configuration`**으로 실패했다. 이는 현재 함수에서 SMTP 인증 오류 `EAUTH`에 대응하는 응답이다. Daum의 POP3/SMTP 사용 설정과 현재 발급한 앱 비밀번호를 사용자가 확인하는 단계이며, 어느 설정이 원인인지는 아직 확정하지 않았다. **실수신은 미확인이고 운영 모드는 `manual`을 유지한다.** SMTP 인증·발송 검증을 통과한 뒤에만 `transactional`로 바꾸어 재빌드·재배포한다.
+초기 실제 발송은 `503 configuration`으로 실패했으나, 계정명·POP3/SMTP 설정·앱 비밀번호 항목을 바로잡은 뒤 해결됐다. 이후 인증값 없는 요청과 잘못된 인증값은 401, 올바른 전용 인증값의 빈 `POST {}`는 400이었다. 최종 공개 health는 HTTP 200·오류 0건·이메일 환경 검사 정상이며 기타 경고 1건이 있었다. 비밀번호 찾기·비회원 조회의 운영 발송 입력 화면과 올바른 고객센터 주소를 확인했다. 각 업무의 실제 수신 검증 범위는 운영 활성화 기록에서 구분한다.
 
 ## Gmail API: 현재 호스팅을 유지하는 방법
 
@@ -133,4 +135,4 @@ npm run email:smoke -- --to <approved-test-recipient>
 
 `EMAIL_TEST_TO` 또는 기존 `RESEND_TEST_TO`도 사용할 수 있다. 고객센터 주소로 자동 발송하는 기본값은 없다. 이어서 테스트 계정으로 가입·아이디·비밀번호·코드·관리자 변경 알림 수신과 만료/재사용 토큰 거절을 확인한다.
 
-자동 테스트는 모의 공급자·인증 응답을 사용하며 실제 수신함 도착을 보증하지 않는다. 운영 함수·웹 앱 배포와 Supabase/Render 설정 저장은 위 운영 반영 기록과 같이 완료했다. 실제 자기 주소 발송 검사는 SMTP 인증 단계에서 실패했으므로, Daum 계정 설정 확인 후 발송·실수신을 다시 검증해야 한다. 그 전까지 자동 이메일은 `manual` 모드로 보류한다.
+자동 테스트는 모의 공급자·인증 응답을 사용하며 실제 수신함 도착을 보증하지 않는다. 운영 함수·웹 앱 배포, Supabase/Render 설정 저장, 공통 앱 알림 경로의 실제 자기 주소 발송과 사용자 수신 확인은 완료했다. 운영 비밀번호 재설정 1회 요청은 일반 성공 안내와 대기시간 표시까지 확인했으며, 별도 메일 수신은 아직 확인하지 않았다. 실제 비회원 접수의 코드 재발송은 테스트 접수가 없어 미검증이다. 자동 이메일은 `transactional`로 운영 중이다.

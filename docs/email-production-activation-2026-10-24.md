@@ -1,76 +1,57 @@
 # 이메일 운영 활성화 진행 기록
 
-최신 상태: **2026-10-25 KST. 실제 SMTP 발송이 성공했고 사용자가 메일 도착을 확인했다. Render의 `transactional` 모드 재빌드·재배포는 진행 중이며 운영 전환 완료는 아직 확인하지 않았다.** 아래 과거 단계의 실패·미설정 기록과 현재 상태를 구분한다.
+최종 확인: **2026-10-25 01:40:44 KST. Daum SMTP 실제 발송·수신을 확인했고, 운영 웹의 `transactional` 모드 배포를 완료했다.** 아래 과거 실패 기록은 현재 장애를 뜻하지 않는다.
 
-## 현재 상태
+## 현재 운영 상태
 
-- 저장소 `main`에는 `6b19cd9`까지 반영됐다. 발신 계정 정정은 `9efcfb2`, Daum 접속 아이디만으로 SMTP 로그인할 수 있도록 한 변경은 `6b19cd9`다. **마지막으로 확인한 운영 웹은 `9eba890`·`manual` 모드이며 새 배포 완료는 아직 확인하지 않았다. 중계 함수는 최신 `6b19cd9` 번들로 배포를 완료했다.** Supabase 편집기에 전체 번들을 입력해 Deploy updates를 실행한 뒤 최근 배포 시각과 수정 표시가 사라진 것을 확인했다.
-- Supabase의 `SMTP_USER`는 계정 화면의 접속 아이디인 **`iamonside`로 저장 완료**했다. Secrets 목록의 갱신 시각은 **16:23:51 UTC**였다. `SMTP_FROM=온사이드 <iamonside@daum.net>`와 Render의 발신자·고객센터 주소 정정도 저장된 상태다.
-- Daum 계정의 POP3/SMTP는 **사용함**이다. 새로고침 후에도 설정이 유지되고 저장 버튼이 비활성화된 것을 확인했다.
-- 사용자는 기존 `SMTP_PASS`에 넣은 값이 **평소 로그인 비밀번호**라고 최종 확인했다. 이후 앱 비밀번호 저장을 완료했다고 답했지만 실제 발송은 다시 실패했다. Secrets 목록에는 `온사이드`라는 새 이름이 **16:20:44 UTC**에 추가됐고, 정작 함수가 읽는 `SMTP_PASS`의 갱신 시각은 기존 **14:33 UTC** 그대로였다. 이름·갱신 시각만 확인했으며 비밀번호 값은 읽지 않았다.
-- 이후 사용자가 정확한 **`SMTP_PASS`** 항목에 앱 비밀번호를 직접 입력해 기존 값을 교체했다. Secrets 목록의 갱신 시각 **2026-10-24 16:28:23 UTC**를 확인했다. 비밀번호 값은 읽거나 문서·채팅·저장소에 기록하지 않았다.
-- 교체 후 공통 앱 알림 함수 **`sendSubmissionUpdateEmail`** 경로로 `iamonside@daum.net`에 실제 발송한 결과는 **`ok: true`, `skipped: false`**였다. 사용자가 실제 수신함에서 **메일 도착을 확인했다**고 답했다. bare ID `iamonside`와 새 중계 번들로 실제 SMTP 발송·수신이 확인됐다.
-- 발송·수신 확인 후 Render에서 **`NEXT_PUBLIC_EMAIL_DELIVERY_MODE=transactional`**을 지정하고 **Save, rebuild, and deploy**를 실행했다. 화면은 배포 처리 중이며, 새 웹의 Live 상태와 운영 화면·이메일 모드 검증은 아직 남아 있다.
-- 배포한 `6b19cd9` 파일은 `/private/tmp/glit-email-relay-editor.ts`, **12,273 bytes**, SHA256 `44abb1c774733bc71b3ffa17680ad7898ad7f3b9f7df52cce1b0fad4c571dace`다. 릴레이 테스트 10개, 소스·단일 파일 Deno 검사, ESLint 및 diff 검사를 통과했고 별도 보안 검토도 완료했다.
-- 배포 후 `Verify JWT with legacy secret`이 **OFF**이고 Save 버튼이 비활성 상태임을 확인했다. 인증값 없는 GET과 잘못된 인증값의 GET은 각각 **401**, 올바른 전용 인증값의 빈 POST `{}`는 **400**이었다. 별도 서버 비밀키 검증이 유지되고 bare ID 설정의 구성 검증이 통과함을 확인했으며, 이 인증 점검에서는 메일을 발송하지 않았다. 실제 발송·수신 검증은 위 `SMTP_PASS` 교체 후 별도로 완료했다.
+- 운영 웹 소스는 **`6b19cd9`**다. [최종 Render 배포 `dep-dbedu00m7kps73dj5au0`](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-dbedu00m7kps73dj5au0)는 Deploy succeeded이며 로그의 Live 시각은 **2026-10-25 01:40:26 KST**다. `NEXT_PUBLIC_EMAIL_DELIVERY_MODE=transactional`로 재빌드·배포했다.
+- 공급자는 `supabase-smtp`다. `Render → HTTPS → Supabase Edge Function → Daum TLS/465` 경로를 사용하며, 새 도메인 구매나 Resend 연동 없이 운영한다.
+- Supabase 중계 함수도 `6b19cd9` 번들로 배포했다. `Verify JWT with legacy secret`은 OFF이고, 함수 자체의 별도 서버 비밀키 인증을 유지한다. 일반 Supabase 공개 키나 회원 토큰으로 메일을 보낼 수 없다.
+- Daum의 POP3/SMTP는 **사용함**이며 새로고침 후에도 설정이 유지됨을 확인했다. `SMTP_USER=iamonside`, `SMTP_FROM=온사이드 <iamonside@daum.net>`을 사용한다. 사용자가 앱 비밀번호를 직접 교체한 `SMTP_PASS` 항목의 갱신 시각은 **2026-10-24 16:28:23 UTC**였다. 비밀번호 값은 읽거나 문서·채팅·저장소에 기록하지 않았다.
+- Render의 `SMTP_FROM`과 `NEXT_PUBLIC_SUPPORT_EMAIL`도 올바른 `iamonside@daum.net` 값으로 저장·재빌드했다. 최종 공개 비밀번호 찾기·비회원 조회 화면의 고객센터 링크에 올바른 주소가 있고 이전 `myonside` 주소가 없음을 확인했다.
+- 배포한 단일 파일은 `/private/tmp/glit-email-relay-editor.ts`, **12,273 bytes**, SHA256 `44abb1c774733bc71b3ffa17680ad7898ad7f3b9f7df52cce1b0fad4c571dace`다. 릴레이 테스트 10개, 소스·번들 Deno 검사, ESLint 및 diff 검사를 통과했고 별도 보안 검토도 완료했다.
 
-## 완료
+## 검증 결과와 범위
 
-- 검증한 이메일 관련 50개 파일을 별도 작업 트리에서 커밋했다. 기존 `19.png` 삭제와 Supabase CLI 캐시 변경은 제외했다.
-- `vintagechord/glit`의 `main`을 `7848536cebfcb437a2410ef39e4bb2601628f022`에서 `9eba8902f021c151a08cac8d9e151fb96d80bb72`로 강제 푸시 없이 반영했다.
-- 해당 커밋은 관련 테스트 59개, 변경 파일 ESLint, transactional 모드의 운영 webpack 빌드 및 TypeScript 검사를 통과했다. 앞선 전체 테스트 결과는 923 통과, 6 건너뜀이다.
-- 브라우저로 온사이드 Supabase 프로젝트 `rwysjsmxtpuqekeltwxi`에 처음 접근했을 당시 Edge Functions와 custom secrets가 없음을 확인했다.
-- 최초 중계 함수를 단일 파일로 준비하고 Supabase 새 함수 편집기에 입력했다. 당시 파일의 SHA256은 `4ac190cf3bc46d1558b0a013a9bfef79bccab26bb412193ec41cddd272b616ec`였고, 단일 파일도 Deno 타입 검사를 통과했다. 같은 임시 경로의 현재 파일은 위 최신 번들로 교체했다.
+| 검증 | 확인한 결과 | 범위 |
+|---|---|---|
+| 공통 앱 이메일 발송 | `sendSubmissionUpdateEmail`로 본인 주소 `iamonside@daum.net`에 발송: `ok: true`, `skipped: false`. 사용자가 실제 수신함 도착 확인 | 실제 SMTP 연결·인증·발송·수신 확인 |
+| 중계 인증·입력 검증 | 인증값 없는 GET 401, 잘못된 인증값의 GET 401, 올바른 전용 인증값의 빈 POST `{}` 400 | 해당 요청은 메일을 발송하지 않음 |
+| 최종 공개 health | **01:40:44 KST**, HTTP 200, 오류 0건, 이메일 환경 검사 `ok: true`; 기타 경고 1건 | 환경 검사이며 개별 메일 도착을 보증하지 않음 |
+| 공개 페이지 | 한국어·영어의 비밀번호 찾기, 비회원 조회, 회원가입, 아이디 찾기 8개 페이지 HTTP 200 | 실제 운영 경로 접근 확인 |
+| 비회원 조회 화면 | 비로그인 브라우저의 `/track?mode=guest`에서 이름·이메일 입력과 코드 이메일 발송 버튼 확인 | 실제 고객 접수를 조회하거나 코드를 재발송하지 않음 |
+| 비밀번호 찾기 화면 | 비로그인 브라우저의 `/forgot-password`에서 이메일 입력·발송 버튼과 올바른 고객센터 주소 확인 | 운영 `transactional` 화면 확인 |
+| 운영 비밀번호 재설정 요청 | 본인 주소로 1회 제출 후 일반 성공 안내와 재요청 대기시간 표시 확인 | 해당 주소의 회원 여부는 확인하지 않았으므로 이 응답만으로 실제 재설정 메일 발송을 단정하지 않음. 추가 수신 확인 대기 |
+| 비회원 조회 입력 검증 | 빈 객체 요청 1회에 예상한 400 응답 | DB 조회·메일 발송 전 입력 검증만 확인 |
 
-## 승인 후 진행
+## 후속 확인 범위
 
-- 사용자가 Daum 앱 비밀번호를 직접 입력하겠다고 답했고, 중계 함수를 서버 전용 비밀키 인증으로 배포하는 것을 명시적으로 승인했다.
-- Supabase Dashboard에서 `send-transactional-email` 배포가 성공했다. 함수 Settings에서 `Verify JWT with legacy secret`을 OFF로 바꾸고 저장 완료를 확인했다.
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_FROM` 네 설정을 저장했다. `EMAIL_RELAY_SECRET`도 생성해 저장했다. 비밀값은 문서·대화 출력에 기록하지 않았다.
-- 배포 직후 비밀값 등록 전 GET 및 POST `{}` 요청은 함수 자체의 `503 {ok:false,reason:configuration}`을 반환했다. 부팅·패키지 import 오류는 없었다.
-- 이 단계에서 Render Dashboard의 운영 커밋은 `7848536`이었고 `9eba890` 배포는 시작 전이었다. 이후 수동 배포 결과는 다음 항목에 기록했다.
+1. 운영 비밀번호 재설정 요청의 추가 수신 확인은 선택적인 후속 확인으로 남긴다. 가입 여부를 숨기는 일반 성공 응답은 메일 발송 증거로 사용하지 않는다. 공통 SMTP 실제 수신과 운영 배포 완료는 이미 확인했다.
+2. 허가된 비회원 테스트 접수가 준비되면 일치하는 이름·이메일로 실제 접수 코드 재발송과 수신을 확인한다. 현재는 해당 테스트 접수가 없어 전체 흐름을 검증하지 않았다.
+3. 가입·아이디 안내·비밀번호 재설정·관리자 변경 등 개별 업무 흐름은 모의 테스트와 공통 발송 경로 검증을 구분한다. 실제 업무 데이터로 모든 수신 시나리오를 실행한 것으로 기록하지 않는다.
 
-## 운영 웹 배포 확인
+현재 SMTP 설정이나 웹 배포를 다시 완료해야 하는 상태는 아니다. 후속 설정 방법과 재검증 절차는 [이메일 설정 문서](auth-email-configuration.md)를 따른다.
 
-- 사용자와 브라우저 조작 시간을 조율한 뒤 Render에 `EMAIL_PROVIDER=supabase-smtp`, 함수 URL, 전용 중계키, 발신자와 고객센터 주소를 저장했다. Supabase도 동일한 중계키로 맞췄다.
-- 전용키 인증 GET은 405, 빈 POST는 SMTP 비밀번호 등록 전 503, 등록 후 400을 반환했다. 인증이 통과하고 메일 payload 검증이 실행됨을 확인했다. 이 점검에서는 메일을 발송하지 않았다.
-- [Render 배포 dep-dbec2jo473hc73cqu5a0](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-dbec2jo473hc73cqu5a0): `9eba890` 배포 성공, 로그의 Live 시각 **2026-10-24 23:34:34 KST**.
-- 23:36:04 KST 공개 확인: `/find-id`, `/confirm-email`, `/track` 모두 HTTP 200. `/api/health` 정상·오류 0건이며 이메일은 수동 모드로 유지했다.
-- 사용자가 `SMTP_PASS`를 직접 저장했다고 알렸고, Secrets 목록에서 해당 이름의 존재만 확인했다. 비밀번호 값은 읽지 않았다.
-- 고객센터 본인 주소로 공통 앱 알림 경로의 실제 발송 테스트를 두 번 시도했으나, 모두 중계 함수의 `503 configuration`으로 실패했다. 이후 빈 POST가 400인 점과 함수의 EAUTH 매핑을 고려하면 SMTP 인증이 거부된 것으로 판단한다. 발송 성공·수신함 도착으로 기록하지 않는다.
-- 최신 Daum 공식 도움말(35945)에 따라 Daum 회원정보의 앱 비밀번호와 POP3/SMTP 사용함 설정을 사용자에게 확인 요청했다. 일반 비밀번호 또는 예전 카카오계정 앱 비밀번호와 구분해야 한다.
+## 소스 반영과 최초 배포 이력
 
-## 이전 단계의 장애 기록
+- 검증한 이메일 관련 50개 파일을 별도 작업 트리에서 커밋했다. 기존 `19.png` 삭제와 Supabase CLI 캐시 변경은 제외했다. `main`을 `7848536cebfcb437a2410ef39e4bb2601628f022`에서 `9eba8902f021c151a08cac8d9e151fb96d80bb72`로 강제 푸시 없이 반영했다.
+- `9eba890`은 관련 테스트 59개, 변경 파일 ESLint, transactional 모드의 운영 webpack 빌드 및 TypeScript 검사를 통과했다. 앞선 전체 테스트 결과는 923 통과, 6 건너뜀이었다.
+- 최초 Supabase 프로젝트 `rwysjsmxtpuqekeltwxi`에는 Edge Functions와 custom secrets가 없었다. 최초 단일 번들의 SHA256은 `4ac190cf3bc46d1558b0a013a9bfef79bccab26bb412193ec41cddd272b616ec`였고 Deno 검사를 통과했다. 현재 임시 경로의 파일은 위 최신 번들로 교체했다.
+- 사용자는 앱 비밀번호를 직접 입력하겠다고 답했고, 전용 서버 비밀키 인증으로 중계 함수를 배포하는 것을 승인했다. 함수 배포와 JWT 설정 저장을 완료했다. 비밀값 등록 전 GET 및 POST `{}`는 자체 `503 configuration`을 반환했으며 부팅·패키지 import 오류는 없었다.
+- [최초 웹 배포 `dep-dbec2jo473hc73cqu5a0`](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-dbec2jo473hc73cqu5a0)의 `9eba890` Live 시각은 **2026-10-24 23:34:34 KST**였다. 23:36:04 KST에 `/find-id`, `/confirm-email`, `/track` HTTP 200과 health 오류 0건을 확인했지만, 당시에는 `manual`을 유지했다.
+- 발신 계정 정정과 Docker의 `NEXT_PUBLIC_SUPPORT_EMAIL` 전달은 `9efcfb2`, 발신자와 일치하는 bare SMTP ID 지원과 Message-ID 도메인 처리는 `6b19cd9`에 반영했다.
 
-아래는 초기 진행 중의 기록이다. 함수 배포, 비밀값 등록, Render 설정 저장, 두 서비스의 중계키 일치와 웹 경로 배포는 이후 완료했으며, 현재 미완료 작업은 다음 절을 따른다.
+## 이전 장애와 해결 이력
 
-- 첫 Deploy 클릭은 인증 설정 미확인을 이유로 자동 승인 검토에서 거절됐으나, 위 사용자 승인 후 배포와 설정 저장은 완료했다.
-- 당시 `SMTP_PASS`는 등록 전이어서 사용자 직접 입력을 요청했다. 이후 값은 등록됐으나, 현재 확인된 일반 로그인 비밀번호를 앱 비밀번호로 교체해야 한다.
-- Render CLI v2.25.0에는 로그인 정보가 없었지만 브라우저 대시보드 접근은 가능했다. 사용자와 브라우저를 동시에 조작하면서 도구가 반복 시간 초과·사용자 화면 변경을 반환해 당시 Render 설정 저장이 지연됐다.
-- 첫 메모리 전용 중계키를 만든 도구 세션이 시간 초과로 초기화되어, 당시 Supabase와 Render의 최종 키 일치를 다시 확인해야 했다. 이후 동일한 키로 저장·인증 검증했다.
-- 초기 운영 `/api/health` HTTP 200, 오류 0건은 확인했지만 새 `/find-id` 및 `/confirm-email` 경로는 404였다. `9eba890` 웹 배포 후 두 경로의 HTTP 200을 확인했다.
-- 이 초기 단계에는 실제 발송 테스트와 Render 환경변수 변경을 하지 않았다. 이후 설정 저장과 발송 시도는 위 운영 웹 배포 기록에 남겼으며 실제 SMTP 성공은 아직 없다.
+- 첫 Deploy 요청은 인증 설정 미확인을 이유로 자동 승인 검토에서 거절됐다. 사용자 승인과 설정 확인 후 배포를 완료했다.
+- Render CLI에는 로그인 정보가 없었지만 브라우저 대시보드로 접근했다. 사용자와 브라우저를 동시에 조작하면서 시간 초과·화면 변경이 발생해 초기 설정 저장이 지연됐으나 이후 완료했다.
+- 첫 메모리 전용 중계키를 만든 도구 세션이 초기화돼 Supabase와 Render의 키 일치를 다시 확인해야 했다. 이후 동일한 키로 저장하고 전용 인증 경로를 검증했다.
+- 초기에는 새 `/find-id`·`/confirm-email` 경로가 404였다. 최초 웹 배포 후 두 경로의 HTTP 200을 확인했다.
+- 최초 고객센터 본인 주소 발송 두 차례는 중계의 `503 configuration`으로 실패했다. 빈 POST 400과 EAUTH 매핑에 따라 SMTP 인증 거부로 판단했지만, 당시 발신 계정 `myonside@daum.net`이 잘못됐으므로 그 결과를 올바른 계정의 비밀번호 오류로 단정하지 않았다.
+- 사용자는 계정을 `iamonside@daum.net`으로 정정했다. 이후 기존 `SMTP_PASS`가 평소 로그인 비밀번호였다고 확인했다. Daum POP3/SMTP를 사용함으로 저장하고, 최신 공식 안내에 따라 Daum 계정의 앱 비밀번호를 사용하도록 수정했다.
+- 앱 비밀번호를 저장했다는 첫 답변 후에도 발송이 실패했다. Secrets 목록에서 `온사이드`라는 새 이름만 **16:20:44 UTC**에 추가됐고, 함수가 읽는 `SMTP_PASS`는 **14:33 UTC** 그대로임을 확인했다. 값은 읽지 않았다. 정확한 이름 `SMTP_PASS`로 교체한 **16:28:23 UTC** 이후 공통 경로 발송과 사용자 수신 확인이 성공했다.
+- 최신 중계 번들 배포 후 `SMTP_USER=iamonside`를 **16:23:51 UTC**에 저장했다. 이름·발신 주소의 정확한 일치만 허용하는 검증을 유지했다.
+- 첫 transactional 웹 배포 [`dep-dbedqjbrjlhs73fcl8v0`](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-dbedqjbrjlhs73fcl8v0)는 **2026-10-25 01:35:48 KST**에 Live가 됐지만 공개 고객센터 주소에 `myonside`가 남아 있었다. Render의 공개 설정 필드를 확인하니 `SMTP_FROM`과 `NEXT_PUBLIC_SUPPORT_EMAIL`의 이전 값이 남아 있었다. **이전에 두 값의 정정 저장이 끝났다고 판단한 기록은 이 확인으로 정정한다.**
+- 두 필드를 정확한 `iamonside@daum.net` 값으로 입력·확인하고 다시 빌드했다. 최종 배포 `dep-dbedu00m7kps73dj5au0`의 성공과 공개 화면에서 이전 주소가 사라진 것을 확인했다.
 
-## 남은 작업
-
-1. 사용자가 **Daum 마이페이지 → 계정 보안**에서 현재 Daum 계정용 앱 비밀번호를 발급하고 Supabase `SMTP_PASS`에 직접 저장한다. 기존 평소 로그인 비밀번호를 교체하며 값을 읽거나 대화·저장소에 기록하지 않는다.
-2. 검증된 `6b19cd9` 중계 번들을 배포하고, 현재 계정의 POP3 설정 화면에 표시된 접속 아이디에 맞춰 `SMTP_USER=iamonside`로 저장한다. 고정 발신자는 `iamonside@daum.net`을 유지한다.
-3. 전용 중계키·입력 검증을 다시 확인한 뒤, 승인된 고객센터 본인 주소로 공통 앱 경로의 실제 발송 성공과 수신함 도착을 확인한다. 환경값 존재나 빈 POST의 400만으로 SMTP 성공을 판단하지 않는다.
-4. SMTP 발송·수신 검증을 통과하면 Render의 `NEXT_PUBLIC_EMAIL_DELIVERY_MODE=transactional`을 저장하고 최신 소스로 재빌드·재배포한다. 그 전까지 발송 불가 상태에서 가입·복구가 막히지 않도록 `manual`을 유지한다.
-5. 실제 운영 비밀번호 찾기·비회원 코드 찾기 화면과 테스트 수신 흐름을 확인한다.
-
-## 최초 작업 순서 (실행 이력 참고)
-
-1. [Supabase Secrets](https://supabase.com/dashboard/project/rwysjsmxtpuqekeltwxi/functions/secrets)에 Daum 앱 비밀번호와 나머지 서버 설정을 저장한다. 정확한 값과 설명은 `auth-email-configuration.md`의 선택한 경로를 따른다.
-2. 준비된 `send-transactional-email` 함수를 배포하고 자체 비밀키 인증과 일치하는 JWT 설정을 확인한다. 비밀값 없는 요청·틀린 키 요청이 거부되는지 검증한다.
-3. [Render glit 서비스](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug)에서 웹 배포 커밋과 환경변수를 확인한다. 중계 URL과 공용 서버 비밀값을 연결한다.
-4. 발송 연결을 확인한 뒤 `NEXT_PUBLIC_EMAIL_DELIVERY_MODE=transactional`로 **재빌드·재배포**한다.
-5. 승인된 테스트 수신자에게 메일 발송을 검증하고, 운영 비밀번호 복구 및 비회원 코드 찾기 화면·수신 흐름을 확인한다.
-
-도메인 구매나 Resend는 이 Daum + Supabase 중계 구성의 필수 조건이 아니다. SMTP 인증과 실제 클라우드 접속·수신 확인은 여전히 필요하다.
-
-## 발신 계정 정정
-
-사용자가 실제 고객센터·SMTP 계정은 **`iamonside@daum.net`**이라고 정정했다. 앞선 두 차례 실패 당시 설정된 `myonside@daum.net`은 잘못된 계정명이었으므로, 그 결과를 실제 계정의 비밀번호 오류로 단정하지 않는다. 당시에는 앱 비밀번호가 맞다고 설명했지만 이후 평소 로그인 비밀번호를 넣었다고 최종 확인했다. 위 실패 기록은 당시 설정으로 실행한 이력으로 남긴다.
-
-앱 고객센터 기본값, 설정 예시와 현재 구성 안내를 올바른 주소로 고쳤다. Docker 빌드에도 `NEXT_PUBLIC_SUPPORT_EMAIL`을 전달하여 브라우저의 고객센터 안내와 서버의 Reply-To가 같은 설정을 사용하도록 했다. 이 소스는 `9efcfb2`에 반영됐지만 운영 웹은 아직 `9eba890`이다. Supabase의 SMTP 로그인·발신자와 Render의 발신자·고객센터 설정 저장은 완료했다. 앱 비밀번호 교체, 새 중계 배포와 실제 발송·수신 검증이 남았으며 자동 이메일은 아직 활성화하지 않았다.
+이전 실패와 저장 착오는 해결됐으며 자동 이메일은 활성화됐다. 개별 업무 흐름에 대한 확인 범위는 위 검증 결과와 후속 확인 범위에 한정한다.
