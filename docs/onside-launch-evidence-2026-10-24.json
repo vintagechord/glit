@@ -85,6 +85,48 @@
   "migrationsPending": [
     "20261023210008_submission_supplements.sql",
     "20261023212202_payment_pre_review.sql",
-    "20261023212253_certificate_result_history.sql"
-  ]
+    "20261023212253_certificate_result_history.sql",
+    "20261024015746_review_documents_admin_retention.sql"
+  ],
+  "retentionPolicyFollowup": {
+    "confirmedDateKst": "2026-10-24",
+    "source": "User confirmation",
+    "submittedAudio": {
+      "period": "one month",
+      "startsAt": "AWAITING_USER_CLARIFICATION",
+      "automaticDeletionImplemented": false
+    },
+    "otherFilesAndApplicationResultRecords": "until explicit administrator deletion",
+    "reviewDocumentJobs": {
+      "newAndStillLiveUnpurgedJobs": "infinity",
+      "expiredOrPurgedJobsRestored": false,
+      "automatic7DayObjectAnd90DayHistoryCleanup": "disabled in local code",
+      "productionApplied": false
+    },
+    "validation": {
+      "recordedAtKst": "2026-10-24 11:02",
+      "unit": {
+        "total": 843,
+        "passed": 837,
+        "failed": 0,
+        "skipped": 6
+      },
+      "lint": {
+        "errors": 0,
+        "warnings": 9
+      },
+      "webpackBuildAndTypecheck": "PASS",
+      "policyModalChecks": {
+        "ko": true,
+        "en": true,
+        "viewport": 390,
+        "writes": "blocked"
+      },
+      "reviewDocsWorkspaceMockE2e": {
+        "passed": 8,
+        "failed": 0
+      },
+      "isolatedPostgres": "PASS"
+    }
+  }
 }

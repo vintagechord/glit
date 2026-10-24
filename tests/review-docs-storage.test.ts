@@ -48,7 +48,7 @@ test("review storage object keys bind owner/job and reject traversal and custome
   assert.throws(() => assertReviewObjectKey(`${key}/${file}`, owner, job));
 });
 test("job responses hide private storage keys, snapshot and stale outputs", () => {
-  const job = { id: "job", status: "completed", version: 2, result_version: 1,
+  const job = { id: "job", status: "completed", version: 2, result_version: 1, expires_at: "infinity",
     sources: [{ id: "source", name: "자료.docx", objectKey: "private-input" }],
     outputs: [{ id: "file", name: "가사.docx", objectKey: "private-output" }],
     zip_output: { objectKey: "private-zip" }, snapshot_data: { secret: true },

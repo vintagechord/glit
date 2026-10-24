@@ -98,13 +98,18 @@ const filePolicyContent = `파일 보관/삭제 정책
 1. 보관 목적
 심의 접수, 자료 보완, 방송국/기관 제출, 결과 확인, 분쟁 대응 및 증빙 발급을 위해 필요한 범위에서 보관합니다.
 
-2. 접근 제한
+2. 보관 기간
+심의용으로 제출한 음원 파일은 1개월간 보관합니다.
+영상, 가사, 신청서, 결과 파일과 필증은 별도의 기간 만료 없이 관리자가 삭제할 때까지 보관합니다.
+신청 내역과 심의 결과 내역도 관리자가 삭제할 때까지 유지하며, 음원 파일의 보관 기간이 끝나더라도 함께 삭제하지 않습니다.
+
+3. 접근 제한
 업로드 파일은 업무 담당자와 시스템 관리자만 접수 처리 목적에 한해 접근합니다.
 
-3. 삭제 요청
+4. 삭제 요청
 심의 완료 후 파일 삭제가 필요한 경우 신청자 본인 확인을 거쳐 삭제를 요청할 수 있습니다. 단, 법령상 보관 의무가 있는 결제·세금 증빙 기록은 별도 기간 동안 보관될 수 있습니다.
 
-4. 이메일 제출 파일
+5. 이메일 제출 파일
 이메일로 제출한 파일도 온라인 제출 파일과 동일한 기준으로 관리합니다.
 
 파일 삭제 또는 보관 기간 문의는 ${APP_CONFIG.supportEmail}로 접수해주세요.`;
@@ -208,13 +213,18 @@ Onside uses copyrighted materials such as audio, video, lyrics, and application 
 1. Storage Purpose
 Files are stored only within the scope needed for review submission, material supplementation, broadcaster or organization submission, result confirmation, dispute handling, and receipt issuance.
 
-2. Access Restrictions
+2. Retention Periods
+Audio files submitted for review are retained for one month.
+Videos, lyrics, application forms, result files, and certificates have no scheduled expiry and are retained until an administrator deletes them.
+Application and review result records are also retained until an administrator deletes them. They are not deleted when the audio file retention period ends.
+
+3. Access Restrictions
 Uploaded files are accessible only to responsible staff and system administrators for submission handling purposes.
 
-3. Deletion Requests
+4. Deletion Requests
 After review completion, applicants may request file deletion after identity confirmation. Records that must be retained by law, such as payment and tax evidence, may be stored for the required period.
 
-4. Email-submitted Files
+5. Email-submitted Files
 Files submitted by email are managed under the same standards as online submitted files.
 
 For file deletion or retention period inquiries, contact ${APP_CONFIG.supportEmail}.`;

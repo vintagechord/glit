@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "inventoryDateKst": "2026-10-24",
   "repository": "vintagechord/glit",
-  "baseCommit": "3811f942233e5dd4890cc2c7efa5ba50a9503b3f",
+  "baseCommit": "38837e97d4aa8b9305e1eb61765e53177cd06ad6",
   "snapshot": "진행 중 로컬 작업 트리 소스 기준; 커밋/배포 여부와 다름. 각 route source 및 직접 검토한 컴포넌트의 sha256 포함. 상태 없는 정적 추출이며 실행 범위는 testCoverage.execution 참조.",
   "counts": {
     "pageModules": 109,
@@ -24,7 +24,8 @@
     "savedState의 테이블·RPC·호출은 route/래퍼 및 직접 렌더 컴포넌트에서 관찰한 단서다. 함께 존재한다고 같은 함수에서 쓰는 테이블로 확정하지 않는다. 공유 helper 전체를 무차별 추적하지 않았으므로 연결 helper 추가 확인이 필요하다.",
     "정책 모달·조회 모달·채팅 위젯·문의 모달은 page 모듈이 아니므로 page 수에 별도 추가하지 않았다. 공통 사이트 layout/모달의 기능 검증은 관련 공개·인증 테스트 보고서와 함께 본다.",
     "mainAction.summary는 정적 기능 요약이며 지원하지 않는 HTTP 메서드까지 허용한다고 뜻하지 않는다. 정확한 메서드는 httpMethods, 요청별 검증은 handler/helper를 확인한다.",
-    "inventory 작성자 E2E 39개 고유 시나리오는 실제 로컬 경로+mock 17개와 격리 컴포넌트 22개로 구분한다. 격리 fixture URL은 실제 page 실행 PASS로 올리지 않는다. 같은 테스트가 여러 URL을 통과해도 고유 테스트 수에 중복 합산하지 않는다."
+    "inventory 작성자 E2E 39개 고유 시나리오는 실제 로컬 경로+mock 17개와 격리 컴포넌트 22개로 구분한다. 격리 fixture URL은 실제 page 실행 PASS로 올리지 않는다. 같은 테스트가 여러 URL을 통과해도 고유 테스트 수에 중복 합산하지 않는다.",
+    "공개 보관정책과 review-docs 자동정리 중지 근거는 retentionPolicyEvidence에 분리했다. 정적 정책 문구는 실제 음원 자동 삭제나 운영 migration 적용 완료 증거가 아니다."
   ],
   "sharedRoutingEvidence": {
     "proxy": "src/proxy.ts",
@@ -4359,47 +4360,47 @@
           {
             "text": "(url: string, options?: RequestInit): Promise",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 21
+            "line": 22
           },
           {
             "text": "Promise",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 182
+            "line": 183
           },
           {
             "text": "심의자료 처리 환경과 지원 파일 형식을 확인하고 있습니다…",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 227
+            "line": 228
           },
           {
             "text": "기준파일 선택",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 235
+            "line": 236
           },
           {
             "text": "제외",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 237
+            "line": 238
           },
           {
             "text": "처리 범위와 보관 기간",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 241
+            "line": 242
           },
           {
             "text": "상태 새로고침",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 252
+            "line": 253
           },
           {
             "text": "작업 취소",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 256
+            "line": 257
           },
           {
             "text": "실패한 단계 재시도",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 256
+            "line": 257
           }
         ],
         "directUiSourceFiles": [
@@ -4408,12 +4409,13 @@
         "basis": "정적 소스·route 명명·직접 렌더 컴포넌트 검토; 실제 실행 범위는 testCoverage.execution으로 한정"
       },
       "savedState": {
-        "summary": "하단 sourceEvidence의 테이블·RPC·액션 호출은 정적 단서이며 실제 변경 결과는 미검증",
+        "summary": "관리자 문서 변환 작업의 원본·생성 문서·수정 데이터·이력. 무기한 infinity를 명시적으로 처리하며 7일/90일 자동정리는 중지하는 로컬 코드·migration 변경. 이미 만료·정리된 과거 작업은 복원하지 않으며 운영 적용은 별도 확인",
         "tablesReferenced": [],
         "rpcReferenced": [],
         "mutationLikeCallSites": [],
         "actionCallSites": [],
-        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인"
+        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인",
+        "retentionEvidenceReference": "retentionPolicyEvidence"
       },
       "nextDestinations": [
         {
@@ -4428,21 +4430,21 @@
           "dynamic": true,
           "literalOnly": true,
           "file": "src/features/review-docs/review-docs-workspace.tsx",
-          "line": 265
+          "line": 266
         },
         {
           "value": "/api/admin/review-docs/jobs/${job.id}/download?file=zip",
           "dynamic": true,
           "literalOnly": true,
           "file": "src/features/review-docs/review-docs-workspace.tsx",
-          "line": 310
+          "line": 311
         },
         {
           "value": "/api/admin/review-docs/jobs/${job.id}/download?file=${encodeURIComponent(output.id)}",
           "dynamic": true,
           "literalOnly": true,
           "file": "src/features/review-docs/review-docs-workspace.tsx",
-          "line": 310
+          "line": 311
         }
       ],
       "errorAndEmptyStates": {
@@ -4450,72 +4452,72 @@
           {
             "text": "작업을 처리할 수 없습니다. 다시 시도해주세요.",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 31
+            "line": 32
           },
           {
             "text": "신청일·입력 길이·WBS 선택 수를 확인해주세요. 날짜를 입력하고 WBS는 최대 3곡까지 선택할 수 있습니다.",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 77
+            "line": 78
           },
           {
             "text": "작업 이력과 연결 상태를 불러오지 못했습니다. 잠시 후 다시 확인합니다.",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 111
+            "line": 112
           },
           {
             "text": "작업 상태 조회에 실패했습니다. 상태 새로고침을 눌러주세요.",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 159
+            "line": 160
           },
           {
             "text": "서버 응답이 지연되고 있습니다. 작업 이력을 새로고침해 접수 여부를 확인해주세요.",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 186
+            "line": 187
           },
           {
             "text": ", failed: ",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 12
+            "line": 13
           },
           {
             "text": "보관 만료",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 12
+            "line": 13
           },
           {
             "text": "서버 응답을 읽을 수 없습니다. 연결 상태를 확인한 후 다시 시도해주세요.",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 30
+            "line": 31
           },
           {
             "text": "failed",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 256
+            "line": 257
           },
           {
             "text": ")}>실패한 단계 재시도</button>}{job.status === ",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 256
+            "line": 257
           },
           {
             "text": " && failedSourceCount > 0 && <button type=",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 256
+            "line": 257
           },
           {
             "text": ")}>실패한 원본 다시 분석 ({failedSourceCount}개)</button>}</div>{job.status === ",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 256
+            "line": 257
           },
           {
             "text": "아직 추출된 원문 텍스트가 없습니다.",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 268
+            "line": 269
           },
           {
             "text": "extraction_failed",
             "file": "src/features/review-docs/review-docs-workspace.tsx",
-            "line": 296
+            "line": 297
           }
         ],
         "httpStatusLiterals": [],
@@ -4540,8 +4542,17 @@
             ]
           }
         ],
-        "unitSourceReferences": [],
-        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 관리자 운영의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증"
+        "unitSourceReferences": [
+          "tests/review-docs-retention.test.ts",
+          "tests/review-docs-storage.test.ts"
+        ],
+        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 관리자 운영의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증",
+        "sqlSourceReferences": [
+          {
+            "file": "tests/sql/review-document-retention.sql",
+            "basis": "보관 정책 테스트 소스 참조; inventory 작성자의 직접 실행 아님"
+          }
+        ]
       },
       "inspectedSources": [
         "src/app/admin/review-docs/page.tsx",
@@ -4557,7 +4568,9 @@
           "symbols": "{ ReviewDocsWorkspace }"
         }
       ],
-      "notes": [],
+      "notes": [
+        "보관정책 후속 변경은 정적 근거만 갱신. 다른 협업자의 격리 workspace 실행으로 실제 관리자 route 또는 운영 DB를 PASS로 표시하지 않음."
+      ],
       "nextDestinationsNote": "정적 소스의 링크·요청·이동 문자열이며 dynamic=true 항목은 실행 시 완성됨. locale 래퍼·호출자 설정으로 최종 경로가 바뀔 수 있음 공유 모듈의 다른 named/default export에 있는 문자열도 포함될 수 있어 현재 route의 도달 가능성을 단정하지 않음.",
       "httpMethodsNote": "페이지 GET 진입; 리디렉션·권한 가드 또는 서버 렌더 결과가 적용됨",
       "inspectedSourceSnapshots": [
@@ -4567,7 +4580,37 @@
         },
         {
           "file": "src/features/review-docs/review-docs-workspace.tsx",
-          "sha256": "14124ea13bceedace439c2cfb388e797af41752e68a00ec51e1c36d2d9961cce"
+          "sha256": "55e6e820a0e5ccaf152b3b7943212b0b5e489905850a7afcdb5e8165085cfbb6"
+        }
+      ],
+      "relatedStaticSourceSnapshots": [
+        {
+          "file": "src/lib/review-docs/retention.ts",
+          "sha256": "6ba9a9bd9bd6d168c1b3c30ee6fb2299fc7ca832e98067e45d721d8e36ee840d"
+        },
+        {
+          "file": "src/lib/review-docs/jobs-types.ts",
+          "sha256": "8630d4ac2dbee38736e17501995c672ee340928f532e660151d7daa2eba2f37e"
+        },
+        {
+          "file": "src/lib/review-docs/jobs.ts",
+          "sha256": "84e880dc3be16eb5e6e9992212502a10f3d38007a3c2408f527d2eea123a0c0b"
+        },
+        {
+          "file": "src/lib/review-docs/worker.ts",
+          "sha256": "fec5928896a1aa196b2fcfc20ff0ebcb6609869d1c2a59cffafc9cfea44f82c7"
+        },
+        {
+          "file": "src/features/review-docs/review-docs-workspace.tsx",
+          "sha256": "55e6e820a0e5ccaf152b3b7943212b0b5e489905850a7afcdb5e8165085cfbb6"
+        },
+        {
+          "file": "supabase/migrations/20261024015746_review_documents_admin_retention.sql",
+          "sha256": "0dc5efc7d4131c127d6df5ef950c1fc82f49b98b87dadb08beaba5b2b5ca5365"
+        },
+        {
+          "file": "docs/review-docs/implementation-report.md",
+          "sha256": "80aa78d71ebfd351b304d6ccb8f8bac3c57b368729a56e91270f0cb06b0085f6"
         }
       ]
     },
@@ -6908,12 +6951,13 @@
         "basis": "정적 소스·route 명명·직접 렌더 컴포넌트 검토; 실제 실행 범위는 testCoverage.execution으로 한정"
       },
       "savedState": {
-        "summary": "문서 작업·산출물 메타데이터와 저장소 파일; worker 실행·실제 파일 내용 검증은 별도",
+        "summary": "관리자 문서 변환 작업의 원본·생성 문서·수정 데이터·이력. 무기한 infinity를 명시적으로 처리하며 7일/90일 자동정리는 중지하는 로컬 코드·migration 변경. 이미 만료·정리된 과거 작업은 복원하지 않으며 운영 적용은 별도 확인",
         "tablesReferenced": [],
         "rpcReferenced": [],
         "mutationLikeCallSites": [],
         "actionCallSites": [],
-        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인"
+        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인",
+        "retentionEvidenceReference": "retentionPolicyEvidence"
       },
       "nextDestinations": [],
       "errorAndEmptyStates": {
@@ -6929,8 +6973,17 @@
           "scenarios": []
         },
         "e2eSourceReferences": [],
-        "unitSourceReferences": [],
-        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 심의자료 생성·변환 API의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증"
+        "unitSourceReferences": [
+          "tests/review-docs-retention.test.ts",
+          "tests/review-docs-storage.test.ts"
+        ],
+        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 심의자료 생성·변환 API의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증",
+        "sqlSourceReferences": [
+          {
+            "file": "tests/sql/review-document-retention.sql",
+            "basis": "보관 정책 테스트 소스 참조; inventory 작성자의 직접 실행 아님"
+          }
+        ]
       },
       "inspectedSources": [
         "src/app/api/admin/review-docs/jobs/[id]/[action]/route.ts"
@@ -6954,7 +7007,8 @@
         }
       ],
       "notes": [
-        "handler의 응답·테이블·호출 목록은 정적 관찰이며 실제 인증/DB/RLS/외부 서비스 통합 성공을 입증하지 않음"
+        "handler의 응답·테이블·호출 목록은 정적 관찰이며 실제 인증/DB/RLS/외부 서비스 통합 성공을 입증하지 않음",
+        "보관정책 후속 변경은 정적 근거만 갱신. 다른 협업자의 격리 workspace 실행으로 실제 관리자 route 또는 운영 DB를 PASS로 표시하지 않음."
       ],
       "nextDestinationsNote": "정적 URL 리터럴 목적지가 추출되지 않음; JSON/파일 응답, 호출자 상태 갱신 또는 동적 목적지는 source와 호출자를 확인 공유 모듈의 다른 named/default export에 있는 문자열도 포함될 수 있어 현재 route의 도달 가능성을 단정하지 않음.",
       "httpMethodsNote": "export된 메서드 목록; 명시적으로 405를 반환하는 메서드도 포함될 수 있음",
@@ -6962,6 +7016,36 @@
         {
           "file": "src/app/api/admin/review-docs/jobs/[id]/[action]/route.ts",
           "sha256": "59822b375a640e34952b706f3b189eb9a40546fdeebc29b63f0e7ee3e2234b9b"
+        }
+      ],
+      "relatedStaticSourceSnapshots": [
+        {
+          "file": "src/lib/review-docs/retention.ts",
+          "sha256": "6ba9a9bd9bd6d168c1b3c30ee6fb2299fc7ca832e98067e45d721d8e36ee840d"
+        },
+        {
+          "file": "src/lib/review-docs/jobs-types.ts",
+          "sha256": "8630d4ac2dbee38736e17501995c672ee340928f532e660151d7daa2eba2f37e"
+        },
+        {
+          "file": "src/lib/review-docs/jobs.ts",
+          "sha256": "84e880dc3be16eb5e6e9992212502a10f3d38007a3c2408f527d2eea123a0c0b"
+        },
+        {
+          "file": "src/lib/review-docs/worker.ts",
+          "sha256": "fec5928896a1aa196b2fcfc20ff0ebcb6609869d1c2a59cffafc9cfea44f82c7"
+        },
+        {
+          "file": "src/features/review-docs/review-docs-workspace.tsx",
+          "sha256": "55e6e820a0e5ccaf152b3b7943212b0b5e489905850a7afcdb5e8165085cfbb6"
+        },
+        {
+          "file": "supabase/migrations/20261024015746_review_documents_admin_retention.sql",
+          "sha256": "0dc5efc7d4131c127d6df5ef950c1fc82f49b98b87dadb08beaba5b2b5ca5365"
+        },
+        {
+          "file": "docs/review-docs/implementation-report.md",
+          "sha256": "80aa78d71ebfd351b304d6ccb8f8bac3c57b368729a56e91270f0cb06b0085f6"
         }
       ]
     },
@@ -6995,12 +7079,13 @@
         "basis": "정적 소스·route 명명·직접 렌더 컴포넌트 검토; 실제 실행 범위는 testCoverage.execution으로 한정"
       },
       "savedState": {
-        "summary": "문서 작업·산출물 메타데이터와 저장소 파일; worker 실행·실제 파일 내용 검증은 별도",
+        "summary": "관리자 문서 변환 작업의 원본·생성 문서·수정 데이터·이력. 무기한 infinity를 명시적으로 처리하며 7일/90일 자동정리는 중지하는 로컬 코드·migration 변경. 이미 만료·정리된 과거 작업은 복원하지 않으며 운영 적용은 별도 확인",
         "tablesReferenced": [],
         "rpcReferenced": [],
         "mutationLikeCallSites": [],
         "actionCallSites": [],
-        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인"
+        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인",
+        "retentionEvidenceReference": "retentionPolicyEvidence"
       },
       "nextDestinations": [],
       "errorAndEmptyStates": {
@@ -7016,8 +7101,17 @@
           "scenarios": []
         },
         "e2eSourceReferences": [],
-        "unitSourceReferences": [],
-        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 심의자료 생성·변환 API의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증"
+        "unitSourceReferences": [
+          "tests/review-docs-retention.test.ts",
+          "tests/review-docs-storage.test.ts"
+        ],
+        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 심의자료 생성·변환 API의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증",
+        "sqlSourceReferences": [
+          {
+            "file": "tests/sql/review-document-retention.sql",
+            "basis": "보관 정책 테스트 소스 참조; inventory 작성자의 직접 실행 아님"
+          }
+        ]
       },
       "inspectedSources": [
         "src/app/api/admin/review-docs/jobs/[id]/download/route.ts"
@@ -7029,7 +7123,8 @@
         }
       ],
       "notes": [
-        "handler의 응답·테이블·호출 목록은 정적 관찰이며 실제 인증/DB/RLS/외부 서비스 통합 성공을 입증하지 않음"
+        "handler의 응답·테이블·호출 목록은 정적 관찰이며 실제 인증/DB/RLS/외부 서비스 통합 성공을 입증하지 않음",
+        "보관정책 후속 변경은 정적 근거만 갱신. 다른 협업자의 격리 workspace 실행으로 실제 관리자 route 또는 운영 DB를 PASS로 표시하지 않음."
       ],
       "nextDestinationsNote": "정적 URL 리터럴 목적지가 추출되지 않음; JSON/파일 응답, 호출자 상태 갱신 또는 동적 목적지는 source와 호출자를 확인 공유 모듈의 다른 named/default export에 있는 문자열도 포함될 수 있어 현재 route의 도달 가능성을 단정하지 않음.",
       "httpMethodsNote": "export된 메서드 목록; 명시적으로 405를 반환하는 메서드도 포함될 수 있음",
@@ -7037,6 +7132,36 @@
         {
           "file": "src/app/api/admin/review-docs/jobs/[id]/download/route.ts",
           "sha256": "59680e5bdb4d37b6e912a1f0177f4b9bcb7c63a99c2349ca4f1ac7c525c9a425"
+        }
+      ],
+      "relatedStaticSourceSnapshots": [
+        {
+          "file": "src/lib/review-docs/retention.ts",
+          "sha256": "6ba9a9bd9bd6d168c1b3c30ee6fb2299fc7ca832e98067e45d721d8e36ee840d"
+        },
+        {
+          "file": "src/lib/review-docs/jobs-types.ts",
+          "sha256": "8630d4ac2dbee38736e17501995c672ee340928f532e660151d7daa2eba2f37e"
+        },
+        {
+          "file": "src/lib/review-docs/jobs.ts",
+          "sha256": "84e880dc3be16eb5e6e9992212502a10f3d38007a3c2408f527d2eea123a0c0b"
+        },
+        {
+          "file": "src/lib/review-docs/worker.ts",
+          "sha256": "fec5928896a1aa196b2fcfc20ff0ebcb6609869d1c2a59cffafc9cfea44f82c7"
+        },
+        {
+          "file": "src/features/review-docs/review-docs-workspace.tsx",
+          "sha256": "55e6e820a0e5ccaf152b3b7943212b0b5e489905850a7afcdb5e8165085cfbb6"
+        },
+        {
+          "file": "supabase/migrations/20261024015746_review_documents_admin_retention.sql",
+          "sha256": "0dc5efc7d4131c127d6df5ef950c1fc82f49b98b87dadb08beaba5b2b5ca5365"
+        },
+        {
+          "file": "docs/review-docs/implementation-report.md",
+          "sha256": "80aa78d71ebfd351b304d6ccb8f8bac3c57b368729a56e91270f0cb06b0085f6"
         }
       ]
     },
@@ -7071,12 +7196,13 @@
         "basis": "정적 소스·route 명명·직접 렌더 컴포넌트 검토; 실제 실행 범위는 testCoverage.execution으로 한정"
       },
       "savedState": {
-        "summary": "문서 작업·산출물 메타데이터와 저장소 파일; worker 실행·실제 파일 내용 검증은 별도",
+        "summary": "관리자 문서 변환 작업의 원본·생성 문서·수정 데이터·이력. 무기한 infinity를 명시적으로 처리하며 7일/90일 자동정리는 중지하는 로컬 코드·migration 변경. 이미 만료·정리된 과거 작업은 복원하지 않으며 운영 적용은 별도 확인",
         "tablesReferenced": [],
         "rpcReferenced": [],
         "mutationLikeCallSites": [],
         "actionCallSites": [],
-        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인"
+        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인",
+        "retentionEvidenceReference": "retentionPolicyEvidence"
       },
       "nextDestinations": [],
       "errorAndEmptyStates": {
@@ -7092,8 +7218,17 @@
           "scenarios": []
         },
         "e2eSourceReferences": [],
-        "unitSourceReferences": [],
-        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 심의자료 생성·변환 API의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증"
+        "unitSourceReferences": [
+          "tests/review-docs-retention.test.ts",
+          "tests/review-docs-storage.test.ts"
+        ],
+        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 심의자료 생성·변환 API의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증",
+        "sqlSourceReferences": [
+          {
+            "file": "tests/sql/review-document-retention.sql",
+            "basis": "보관 정책 테스트 소스 참조; inventory 작성자의 직접 실행 아님"
+          }
+        ]
       },
       "inspectedSources": [
         "src/app/api/admin/review-docs/jobs/[id]/route.ts"
@@ -7113,7 +7248,8 @@
         }
       ],
       "notes": [
-        "handler의 응답·테이블·호출 목록은 정적 관찰이며 실제 인증/DB/RLS/외부 서비스 통합 성공을 입증하지 않음"
+        "handler의 응답·테이블·호출 목록은 정적 관찰이며 실제 인증/DB/RLS/외부 서비스 통합 성공을 입증하지 않음",
+        "보관정책 후속 변경은 정적 근거만 갱신. 다른 협업자의 격리 workspace 실행으로 실제 관리자 route 또는 운영 DB를 PASS로 표시하지 않음."
       ],
       "nextDestinationsNote": "정적 URL 리터럴 목적지가 추출되지 않음; JSON/파일 응답, 호출자 상태 갱신 또는 동적 목적지는 source와 호출자를 확인 공유 모듈의 다른 named/default export에 있는 문자열도 포함될 수 있어 현재 route의 도달 가능성을 단정하지 않음.",
       "httpMethodsNote": "export된 메서드 목록; 명시적으로 405를 반환하는 메서드도 포함될 수 있음",
@@ -7121,6 +7257,36 @@
         {
           "file": "src/app/api/admin/review-docs/jobs/[id]/route.ts",
           "sha256": "898973817cc9defa1df4ff73554f347fe700c886c39966f61d65a85877e115d4"
+        }
+      ],
+      "relatedStaticSourceSnapshots": [
+        {
+          "file": "src/lib/review-docs/retention.ts",
+          "sha256": "6ba9a9bd9bd6d168c1b3c30ee6fb2299fc7ca832e98067e45d721d8e36ee840d"
+        },
+        {
+          "file": "src/lib/review-docs/jobs-types.ts",
+          "sha256": "8630d4ac2dbee38736e17501995c672ee340928f532e660151d7daa2eba2f37e"
+        },
+        {
+          "file": "src/lib/review-docs/jobs.ts",
+          "sha256": "84e880dc3be16eb5e6e9992212502a10f3d38007a3c2408f527d2eea123a0c0b"
+        },
+        {
+          "file": "src/lib/review-docs/worker.ts",
+          "sha256": "fec5928896a1aa196b2fcfc20ff0ebcb6609869d1c2a59cffafc9cfea44f82c7"
+        },
+        {
+          "file": "src/features/review-docs/review-docs-workspace.tsx",
+          "sha256": "55e6e820a0e5ccaf152b3b7943212b0b5e489905850a7afcdb5e8165085cfbb6"
+        },
+        {
+          "file": "supabase/migrations/20261024015746_review_documents_admin_retention.sql",
+          "sha256": "0dc5efc7d4131c127d6df5ef950c1fc82f49b98b87dadb08beaba5b2b5ca5365"
+        },
+        {
+          "file": "docs/review-docs/implementation-report.md",
+          "sha256": "80aa78d71ebfd351b304d6ccb8f8bac3c57b368729a56e91270f0cb06b0085f6"
         }
       ]
     },
@@ -7154,12 +7320,13 @@
         "basis": "정적 소스·route 명명·직접 렌더 컴포넌트 검토; 실제 실행 범위는 testCoverage.execution으로 한정"
       },
       "savedState": {
-        "summary": "문서 작업·산출물 메타데이터와 저장소 파일; worker 실행·실제 파일 내용 검증은 별도",
+        "summary": "관리자 문서 변환 작업의 원본·생성 문서·수정 데이터·이력. 무기한 infinity를 명시적으로 처리하며 7일/90일 자동정리는 중지하는 로컬 코드·migration 변경. 이미 만료·정리된 과거 작업은 복원하지 않으며 운영 적용은 별도 확인",
         "tablesReferenced": [],
         "rpcReferenced": [],
         "mutationLikeCallSites": [],
         "actionCallSites": [],
-        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인"
+        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인",
+        "retentionEvidenceReference": "retentionPolicyEvidence"
       },
       "nextDestinations": [],
       "errorAndEmptyStates": {
@@ -7175,8 +7342,17 @@
           "scenarios": []
         },
         "e2eSourceReferences": [],
-        "unitSourceReferences": [],
-        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 심의자료 생성·변환 API의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증"
+        "unitSourceReferences": [
+          "tests/review-docs-retention.test.ts",
+          "tests/review-docs-storage.test.ts"
+        ],
+        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 심의자료 생성·변환 API의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증",
+        "sqlSourceReferences": [
+          {
+            "file": "tests/sql/review-document-retention.sql",
+            "basis": "보관 정책 테스트 소스 참조; inventory 작성자의 직접 실행 아님"
+          }
+        ]
       },
       "inspectedSources": [
         "src/app/api/admin/review-docs/jobs/[id]/source/route.ts"
@@ -7188,7 +7364,8 @@
         }
       ],
       "notes": [
-        "handler의 응답·테이블·호출 목록은 정적 관찰이며 실제 인증/DB/RLS/외부 서비스 통합 성공을 입증하지 않음"
+        "handler의 응답·테이블·호출 목록은 정적 관찰이며 실제 인증/DB/RLS/외부 서비스 통합 성공을 입증하지 않음",
+        "보관정책 후속 변경은 정적 근거만 갱신. 다른 협업자의 격리 workspace 실행으로 실제 관리자 route 또는 운영 DB를 PASS로 표시하지 않음."
       ],
       "nextDestinationsNote": "정적 URL 리터럴 목적지가 추출되지 않음; JSON/파일 응답, 호출자 상태 갱신 또는 동적 목적지는 source와 호출자를 확인 공유 모듈의 다른 named/default export에 있는 문자열도 포함될 수 있어 현재 route의 도달 가능성을 단정하지 않음.",
       "httpMethodsNote": "export된 메서드 목록; 명시적으로 405를 반환하는 메서드도 포함될 수 있음",
@@ -7196,6 +7373,36 @@
         {
           "file": "src/app/api/admin/review-docs/jobs/[id]/source/route.ts",
           "sha256": "71aca013aea3ceaf7d902cb89adc7244558bb8ef52225a1bf275e13d34ef5174"
+        }
+      ],
+      "relatedStaticSourceSnapshots": [
+        {
+          "file": "src/lib/review-docs/retention.ts",
+          "sha256": "6ba9a9bd9bd6d168c1b3c30ee6fb2299fc7ca832e98067e45d721d8e36ee840d"
+        },
+        {
+          "file": "src/lib/review-docs/jobs-types.ts",
+          "sha256": "8630d4ac2dbee38736e17501995c672ee340928f532e660151d7daa2eba2f37e"
+        },
+        {
+          "file": "src/lib/review-docs/jobs.ts",
+          "sha256": "84e880dc3be16eb5e6e9992212502a10f3d38007a3c2408f527d2eea123a0c0b"
+        },
+        {
+          "file": "src/lib/review-docs/worker.ts",
+          "sha256": "fec5928896a1aa196b2fcfc20ff0ebcb6609869d1c2a59cffafc9cfea44f82c7"
+        },
+        {
+          "file": "src/features/review-docs/review-docs-workspace.tsx",
+          "sha256": "55e6e820a0e5ccaf152b3b7943212b0b5e489905850a7afcdb5e8165085cfbb6"
+        },
+        {
+          "file": "supabase/migrations/20261024015746_review_documents_admin_retention.sql",
+          "sha256": "0dc5efc7d4131c127d6df5ef950c1fc82f49b98b87dadb08beaba5b2b5ca5365"
+        },
+        {
+          "file": "docs/review-docs/implementation-report.md",
+          "sha256": "80aa78d71ebfd351b304d6ccb8f8bac3c57b368729a56e91270f0cb06b0085f6"
         }
       ]
     },
@@ -7230,12 +7437,13 @@
         "basis": "정적 소스·route 명명·직접 렌더 컴포넌트 검토; 실제 실행 범위는 testCoverage.execution으로 한정"
       },
       "savedState": {
-        "summary": "문서 작업·산출물 메타데이터와 저장소 파일; worker 실행·실제 파일 내용 검증은 별도",
+        "summary": "관리자 문서 변환 작업의 원본·생성 문서·수정 데이터·이력. 무기한 infinity를 명시적으로 처리하며 7일/90일 자동정리는 중지하는 로컬 코드·migration 변경. 이미 만료·정리된 과거 작업은 복원하지 않으며 운영 적용은 별도 확인",
         "tablesReferenced": [],
         "rpcReferenced": [],
         "mutationLikeCallSites": [],
         "actionCallSites": [],
-        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인"
+        "evidenceLimit": "mutationLikeCallSites는 호출 이름 단서로, 해시/로컬 객체 update도 포함될 수 있음. 실제 DB 쓰기 테이블·실행 함수는 소스와 helper를 확인",
+        "retentionEvidenceReference": "retentionPolicyEvidence"
       },
       "nextDestinations": [],
       "errorAndEmptyStates": {
@@ -7272,8 +7480,17 @@
             ]
           }
         ],
-        "unitSourceReferences": [],
-        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 심의자료 생성·변환 API의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증"
+        "unitSourceReferences": [
+          "tests/review-docs-retention.test.ts",
+          "tests/review-docs-storage.test.ts"
+        ],
+        "recommendedVerification": "권한 있는 관리자 계정과 식별 가능한 테스트 데이터로 심의자료 생성·변환 API의 정상·오류·빈 상태 및 다른 사용자 접근 차단 검증",
+        "sqlSourceReferences": [
+          {
+            "file": "tests/sql/review-document-retention.sql",
+            "basis": "보관 정책 테스트 소스 참조; inventory 작성자의 직접 실행 아님"
+          }
+        ]
       },
       "inspectedSources": [
         "src/app/api/admin/review-docs/jobs/route.ts"
@@ -7297,7 +7514,8 @@
         }
       ],
       "notes": [
-        "handler의 응답·테이블·호출 목록은 정적 관찰이며 실제 인증/DB/RLS/외부 서비스 통합 성공을 입증하지 않음"
+        "handler의 응답·테이블·호출 목록은 정적 관찰이며 실제 인증/DB/RLS/외부 서비스 통합 성공을 입증하지 않음",
+        "보관정책 후속 변경은 정적 근거만 갱신. 다른 협업자의 격리 workspace 실행으로 실제 관리자 route 또는 운영 DB를 PASS로 표시하지 않음."
       ],
       "nextDestinationsNote": "정적 URL 리터럴 목적지가 추출되지 않음; JSON/파일 응답, 호출자 상태 갱신 또는 동적 목적지는 source와 호출자를 확인 공유 모듈의 다른 named/default export에 있는 문자열도 포함될 수 있어 현재 route의 도달 가능성을 단정하지 않음.",
       "httpMethodsNote": "export된 메서드 목록; 명시적으로 405를 반환하는 메서드도 포함될 수 있음",
@@ -7305,6 +7523,36 @@
         {
           "file": "src/app/api/admin/review-docs/jobs/route.ts",
           "sha256": "1f145d8919d8aea79674560139051e8d21fc85ee7725984e7d34ed98aac32f5d"
+        }
+      ],
+      "relatedStaticSourceSnapshots": [
+        {
+          "file": "src/lib/review-docs/retention.ts",
+          "sha256": "6ba9a9bd9bd6d168c1b3c30ee6fb2299fc7ca832e98067e45d721d8e36ee840d"
+        },
+        {
+          "file": "src/lib/review-docs/jobs-types.ts",
+          "sha256": "8630d4ac2dbee38736e17501995c672ee340928f532e660151d7daa2eba2f37e"
+        },
+        {
+          "file": "src/lib/review-docs/jobs.ts",
+          "sha256": "84e880dc3be16eb5e6e9992212502a10f3d38007a3c2408f527d2eea123a0c0b"
+        },
+        {
+          "file": "src/lib/review-docs/worker.ts",
+          "sha256": "fec5928896a1aa196b2fcfc20ff0ebcb6609869d1c2a59cffafc9cfea44f82c7"
+        },
+        {
+          "file": "src/features/review-docs/review-docs-workspace.tsx",
+          "sha256": "55e6e820a0e5ccaf152b3b7943212b0b5e489905850a7afcdb5e8165085cfbb6"
+        },
+        {
+          "file": "supabase/migrations/20261024015746_review_documents_admin_retention.sql",
+          "sha256": "0dc5efc7d4131c127d6df5ef950c1fc82f49b98b87dadb08beaba5b2b5ca5365"
+        },
+        {
+          "file": "docs/review-docs/implementation-report.md",
+          "sha256": "80aa78d71ebfd351b304d6ccb8f8bac3c57b368729a56e91270f0cb06b0085f6"
         }
       ]
     },
@@ -33666,13 +33914,94 @@
       "limitations": "member-a/member-b 명칭은 컴포넌트 fixture 값이며 실제 사용자 간 RLS/IDOR 검증이 아님. 실제 PG 승인·DB 저장·알림 수신은 검증하지 않음"
     }
   ],
-  "snapshotUpdatedAtUtc": "2026-10-23T21:28:56.418268+00:00",
+  "snapshotUpdatedAtUtc": "2026-10-24T02:02:24.530248+00:00",
   "executionSummary": {
     "uniqueE2eScenariosByInventoryAuthor": 39,
     "passedAfterTargetedRetest": 39,
     "liveApplicationUiWithMockOrBlockedServices": 17,
     "isolatedComponentScenarios": 22,
     "actualExternalMutationsExecuted": 0,
-    "note": "다른 협업자의 인증·보완·공개 UI E2E 및 SQL/unit 결과는 여기 합산하지 않고 최종 보고서에서 통합; 최초 focus 경쟁조건 실패·재검증 내역은 executionEvidence 유지"
+    "note": "다른 협업자의 인증·보완·공개 UI E2E 및 SQL/unit 결과는 여기 합산하지 않고 최종 보고서에서 통합; 최초 focus 경쟁조건 실패·재검증 내역은 executionEvidence 유지",
+    "retentionFollowupScope": "39개와 10URL은 앞선 실행 근거를 유지한 수치다. 이후 보관정책 변경은 작성자가 재실행하지 않았으며 정책 문구·retention helper·migration은 정적 근거만 갱신했다."
+  },
+  "retentionPolicyEvidence": {
+    "basis": "2026-10-24 사용자 보관 정책 후속 반영의 정적 소스 검토; 이번 inventory 작성자는 추가 기능 테스트나 운영 데이터 변경을 실행하지 않음",
+    "declaredPublicPolicy": {
+      "file": "src/components/site/footer.tsx",
+      "languages": [
+        "ko",
+        "en"
+      ],
+      "audio": "심의용 제출 음원은 1개월 보관",
+      "otherFiles": "영상·가사·신청서·결과 파일·필증은 별도 기간 만료 없이 관리자가 삭제할 때까지 보관",
+      "records": "신청 및 심의 결과 내역은 음원 보관 만료와 분리하여 관리자 삭제 전까지 유지",
+      "emailSubmittedFiles": "온라인 제출 파일과 같은 기준",
+      "scopeLimit": "공개 정책 문구의 정적 확인이다. 음원 1개월 자동 삭제 작업의 구현·실행 완료를 이 목록에서 입증하지 않는다."
+    },
+    "reviewDocumentRuntime": {
+      "noExpiryValue": "infinity",
+      "validation": "명시적 infinity만 무기한으로 처리; expired 상태·기한경과·잘못된 날짜는 만료로 처리해 접근을 새로 허용하지 않음",
+      "automaticCleanup": "cleanupReviewJobs는 호환 진입점을 남긴 no-op; 경과 시간만으로 객체·수정 데이터·작업 이력을 지우던 7일/90일 자동정리 제거",
+      "retainedData": "원본·생성 문서·수정 데이터·작업 이력은 관리자 별도 삭제 전까지 비공개 보관",
+      "unrelatedTimeouts": "처리 lease·작업 제한시간·임시 변환 파일 정리는 별개로 유지",
+      "administrativeDeletion": "새 관리자 삭제 기능을 추가한 변경은 아님"
+    },
+    "migration": {
+      "file": "supabase/migrations/20261024015746_review_documents_admin_retention.sql",
+      "newJobs": "review_document_jobs.expires_at 기본값 infinity",
+      "existingJobs": "purged_at IS NULL, status <> expired, expires_at > now()인 아직 유효한 작업만 infinity로 변경",
+      "preservation": "이미 만료·정리되었거나 기한이 지난 과거 작업은 복원하지 않고 기존 데이터 payload를 지우지 않음",
+      "deployment": "로컬 migration 파일의 정적 확인; 운영 적용 여부는 이 inventory의 검증 대상이 아님"
+    },
+    "relatedRoutes": [
+      "/admin/review-docs",
+      "/api/admin/review-docs/jobs/[id]/[action]",
+      "/api/admin/review-docs/jobs/[id]/download",
+      "/api/admin/review-docs/jobs/[id]",
+      "/api/admin/review-docs/jobs/[id]/source",
+      "/api/admin/review-docs/jobs"
+    ],
+    "sourceSnapshots": [
+      {
+        "file": "src/components/site/footer.tsx",
+        "sha256": "da67fffa86689325cfabd95be61bfc36b021f873bd5ebba776fb67167548552e"
+      },
+      {
+        "file": "src/lib/review-docs/retention.ts",
+        "sha256": "6ba9a9bd9bd6d168c1b3c30ee6fb2299fc7ca832e98067e45d721d8e36ee840d"
+      },
+      {
+        "file": "src/lib/review-docs/jobs-types.ts",
+        "sha256": "8630d4ac2dbee38736e17501995c672ee340928f532e660151d7daa2eba2f37e"
+      },
+      {
+        "file": "src/lib/review-docs/jobs.ts",
+        "sha256": "84e880dc3be16eb5e6e9992212502a10f3d38007a3c2408f527d2eea123a0c0b"
+      },
+      {
+        "file": "src/lib/review-docs/worker.ts",
+        "sha256": "fec5928896a1aa196b2fcfc20ff0ebcb6609869d1c2a59cffafc9cfea44f82c7"
+      },
+      {
+        "file": "src/features/review-docs/review-docs-workspace.tsx",
+        "sha256": "55e6e820a0e5ccaf152b3b7943212b0b5e489905850a7afcdb5e8165085cfbb6"
+      },
+      {
+        "file": "supabase/migrations/20261024015746_review_documents_admin_retention.sql",
+        "sha256": "0dc5efc7d4131c127d6df5ef950c1fc82f49b98b87dadb08beaba5b2b5ca5365"
+      },
+      {
+        "file": "docs/review-docs/implementation-report.md",
+        "sha256": "80aa78d71ebfd351b304d6ccb8f8bac3c57b368729a56e91270f0cb06b0085f6"
+      }
+    ],
+    "testSourceReferences": [
+      "tests/review-docs-retention.test.ts",
+      "tests/sql/review-document-retention.sql",
+      "tests/review-docs-storage.test.ts",
+      "tests/e2e/review-docs-workspace.spec.ts",
+      "scripts/review-docs/test-jobs.sh"
+    ],
+    "execution": "정적 검토만. 협업자의 19개 unit·격리 PostgreSQL·8개 격리 workspace E2E 보고는 최종 보고서에서 별도로 확인하며 작성자 39개/10URL PASS에 합산하지 않음"
   }
 }

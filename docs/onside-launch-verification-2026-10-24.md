@@ -10,7 +10,7 @@
 
 현재 운영 health의 HTTP 200은 업로드·결제·알림의 실제 성공 증거가 아니다. 이메일 경고가 있었으며, 수정된 readiness는 필수 이메일 설정이 유효하지 않으면 503을 반환한다. 배포 전에 해당 설정과 발송 경로부터 확인해야 한다.
 
-고객 원본·결과 파일 보관 기간은 아직 확인되지 않았다. 조회한 B2 버킷에서는 lifecycle 설정이 없었으며, 이것만으로 별도 삭제 작업까지 없다고 단정할 수는 없다. 기간이나 환불률을 임의로 추가하지 않았다.
+사용자가 2026-10-24에 보관 정책을 확정했다. 심의용 음원 파일은 **1개월**, 영상·가사·신청서·결과 파일·필증 및 신청·심의 결과 내역은 **관리자가 삭제할 때까지 기간 만료 없이 보관**한다. 음원 보관 종료가 신청/결과 내역 삭제를 의미하지 않는다. 한·영 파일 정책에 반영했다. 음원 1개월의 기산점은 추가 확인 중이며 자동 음원 삭제는 구현·실행하지 않았다. 조회한 B2 버킷에는 lifecycle 설정이 없었고, 파일 종류별 분류가 현재 삭제 기준으로 충분하지 않으므로 버킷 전체 만료를 설정하지 않았다.
 
 ## 2. 검증 표·환경·증거
 
@@ -45,7 +45,7 @@
 
 전체 URL 목록은 [라우트 인벤토리](onside-route-inventory-2026-10-24.json)에 있다. 페이지 109개, API handler 73개, 기타 HTTP handler 3개를 구분하며 영문·별칭·개발 경로를 실제 검증 수로 세지 않는다. 각 항목은 URL, 진입 조건, 행동, 상태 저장 단서, 다음 경로, 오류·빈 상태, 테스트 근거와 source hash를 포함한다. 인벤토리 작성자의 부분 PASS와 위 표의 다른 실행 증거는 구분해서 읽어야 한다.
 
-### 최종 검사 집계
+### 1차 수정 검사 집계 (06:29 KST)
 
 - `npm test`: **840개 중 834 PASS / 0 FAIL / 6 SKIP**, 최종 실행 약 9.15초. 기존 문구 계약 테스트를 현 정책/공유 컴포넌트에 맞게 수정한 후 전체 재실행했다.
 - SKIP 6개: bundled Chromium이 필요한 DOM 검사 1개, Linux 전용 process/메모리 검사 2개, 고정 버전 문서 변환기·한국어 폰트/OCR이 필요한 3개. 설치된 Chrome의 실제 영어 경로 E2E와 구분하며 생략한 검사를 통과로 세지 않았다.
@@ -68,12 +68,22 @@ npx --no-install next build --webpack
 bash scripts/submission-supplements-sql-test.sh
 bash scripts/submission-orders-sql-test.sh
 bash scripts/certificate-history-sql-test.sh
+bash scripts/review-docs/test-jobs.sh  # 외부 네트워크 없는 임시 PostgreSQL 컨테이너 전용
 # 로컬 dev 앱을 3001에 기동한 뒤, 외부 mutation을 mock/차단하는 선택된 specs만 실행
 NEXT_E2E_BASE_URL=http://127.0.0.1:3001 npx playwright test --config=/private/tmp/glit-auth-playwright.config.ts tests/e2e/auth-flow.spec.ts tests/e2e/auth-accessibility.spec.ts --workers=1
 NEXT_E2E_BASE_URL=http://127.0.0.1:3001 npx playwright test --config=/private/tmp/glit-supplement-playwright.config.ts tests/e2e/submission-supplements.spec.ts --workers=1
 ```
 
 실제 계정 변경이 있는 `auth-live-smoke`, 실제 발송이 있는 `email-smoke`, 전체 외부 연동 E2E를 무분별하게 실행하지 않았다. 인증/입금/PG/수신 검증을 하지 않은 항목에는 PASS를 부여하지 않았다.
+
+### 보관 정책 후속 반영 (사용자 확인 이후)
+
+- 한·영 파일 정책에 **음원 1개월 / 나머지 파일·신청·결과 내역은 관리자 삭제 전까지**를 명시했다. 이메일 제출도 같은 정책을 따르며, 실제 메일함·백업 정리 절차는 운영 설정과 함께 확인해야 한다.
+- 관리자 서류 변환 작업은 별도 원본·DOCX/ZIP·추출/수정 데이터에 7일 만료와 90일 이력 삭제가 있었으므로, 이번 후속 코드에서 자동 정리를 중지했다. 새 migration은 새 작업과 아직 유효한 미정리 작업의 만료일을 무기한으로 바꾼다. 기존에 만료되거나 삭제된 자료를 되살리지는 않는다.
+- 처리 시간 제한, worker lease, 임시 로컬 작업 디렉터리 정리는 보관 정책과 별개로 유지한다. 새 관리자 삭제 기능이나 자동 음원 삭제를 추가하지 않았다.
+- 음원 1개월의 **기산점은 질문에 대한 답변을 기다리는 중**이다. 이를 임의로 업로드일·결제일·심의 완료일 또는 30일로 정하지 않았다. 실제 음원 분류, 만료일·삭제 이력, 이메일/백업/객체 버전 처리가 준비되기 전에는 자동 삭제를 활성화하지 않는다.
+- 후속 최종 검증(2026-10-24 11:02 KST): 전체 단위 **843개 중 837 PASS / 0 FAIL / 6 SKIP**; ESLint **0 errors / 기존 9 warnings**; Webpack 빌드·TypeScript **PASS**. 한·영 파일정책 모달 390px 읽기 전용 Chrome 확인 2건, 관리자 서류 변환 화면 fixture E2E 8건, 격리 PostgreSQL 보관/권한/worker 회귀 모두 PASS. 로그: `/private/tmp/glit-retention-unit-final.log`, `glit-retention-lint-final.log`, `glit-retention-build-final.log`, `glit-retention-ui.log`, `glit-review-docs-retention-sql.log`. 기존 72개 시나리오 전체를 이번에 재실행했다는 뜻은 아니다.
+- 이번 후속 수정도 운영 DB/스토리지에 적용하지 않았다. 운영에는 기존 7일 정리 코드가 남아 있을 수 있으므로 migration과 새 worker를 함께 배포해야 한다.
 
 ## 3. 수정 사항과 변경 묶음
 
@@ -113,18 +123,19 @@ NEXT_E2E_BASE_URL=http://127.0.0.1:3001 npx playwright test --config=/private/tm
 2. **Render 실제 배포 정보:** 온사이드 서비스 콘솔에서 배포 SHA, branch, 자동배포, 플랜·지역, 도메인, 문서 변환기/worker 상태를 확인한다. 실제 Free이면 유휴 정지와 재기동이 첫 진입/결제 callback에 미치는 영향을 [Render 공식 제한](https://render.com/docs/free)과 대조한다. 요금제나 비용을 변경하지 않았다.
 3. **알림 설정과 지정 테스트 수신자:** Render 환경의 Resend API key·검증된 발신 도메인을 확인하고 Supabase Auth SMTP 경로와 구분한다. 지정 수신자에게만 접수/결제/보완/결과/조회 코드/비밀번호 복구를 시험하고 provider ID → 수신함 → 링크 권한을 대조한다. 카카오는 선택 채널 설정과 provider idempotency 지원을 확인한다. [Supabase Auth SMTP](https://supabase.com/docs/guides/auth/auth-smtp), [Resend 중복 방지](https://resend.com/docs/dashboard/emails/idempotency-keys).
 4. **실결제 승인 범위:** 온사이드 가맹점, 테스트할 심의 주문, 금액, 카드수단·회원/비회원, 즉시 취소 담당자와 취소 계획을 확정한 뒤 실행한다. 심의 접수의 PG 자동 환불은 이번에 구현하지 않았다. 기존 `requestRefund` 호출은 다른 구독 상품 경로이며 심의 환불 검증의 대체 증거가 아니다. 연결된 묶음 주문은 개별 REFUNDED 수정이 차단된다. PG 관리자 수동 취소와 앱 주문 전체 상태 반영 절차를 확정하고, REFUNDED 표시가 같은 사건을 가리키는지 반드시 대조한다. [이니시스 일반결제](https://manual.inicis.com/pay/stdpay_pc.html), [취소](https://manual.inicis.com/pay/cancel.html).
-5. **직접 접수 규격·보관 정책:** KBS 직접 제출 담당 경로의 최신 규격과 원본/결과 보관 기간·삭제 요청·예외 처리·백업 보관을 확정한다. [RIAK FAQ](https://review.riak.or.kr/community.asp?inx=3)는 직접 경로 확정 근거로 사용하지 않았다. 현재 미정인 기간·환불률은 임의 설정하지 않는다.
+5. **직접 접수 규격·보관 실행 기준:** KBS 직접 제출 담당 경로의 최신 규격은 확인이 필요하다. [RIAK FAQ](https://review.riak.or.kr/community.asp?inx=3)는 직접 경로 확정 근거로 사용하지 않았다. 보관 기간 자체는 음원 1개월/나머지 관리자 삭제 전까지로 확정됐으며, 음원의 기산점과 이메일·백업·스토리지 버전을 포함한 실제 삭제 절차는 별도 확정해야 한다. 현재 album 첨부의 `kind=AUDIO`와 보완 grant의 `upload_kind=audio`에는 문서·ZIP도 포함될 수 있으므로 그 값만으로 만료 삭제하면 안 된다. 실제 음원 형식을 확인하고 혼합 ZIP은 자동 분류에서 제외해야 한다. 미정인 환불률을 임의 설정하지 않는다.
 6. **실제 전 과정 시험:** 식별 가능한 시험 계정/신청과 파일로 회원 A/B/비회원/관리자 접근을 교차 확인한다. 최대 용량 부근 파일, 실제 결과·필증/등급표·생성 문서 열기, 실제 수신, 재시도/중복/불확실 결제 대사까지 끝낸 후 오픈 판정을 갱신한다.
 
 ## 6. 배포 변경 묶음·migration·롤백
 
-적용 후보는 이번 소스/테스트/문서와 다음 **신규 migration 3개**다.
+적용 후보는 이번 소스/테스트/문서와 다음 **신규 migration 4개**다.
 
 | 적용 순서 | 파일 | 목적·전제 |
 |---|---|---|
 | 1 | `20261023210008_submission_supplements.sql` | 보완 요청/버전/파일/알림 감사 테이블과 service-role RPC. 기존 multipart grants(0081), submissions/events/profiles 필요 |
 | 2 | `20261023212202_payment_pre_review.sql` | 입금·카드·PayPal 첫 결제의 초기 상태만 PRE_REVIEW. 기존 승인·claim·금액·snapshot·주문 잠금 유지. 기존 0076/0097/0098 권한·주문 구조 확인 필요 |
 | 3 | `20261023212253_certificate_result_history.sql` | 기존 events에 details JSONB와 관리자 필증 기록 RPC 추가. 기존 필증 컬럼(0037) 필요 |
+| 4 | `20261024015746_review_documents_admin_retention.sql` | 관리자 문서 변환 작업의 신규 만료 기본값을 infinity로 변경하고 아직 유효하며 purge되지 않은 기존 작업만 만료 해제. 이미 만료·정리된 데이터는 복원하지 않음. 기존 0094/0103/0105 구조 확인 필요 |
 
 파일은 모두 `supabase/migrations/`에 있으며 운영에는 미적용이다. 기존 신청·결제·파일의 일괄 갱신/삭제를 실행하는 migration이 아니다.  운영 이력을 보지 못했으므로 `supabase db push`로 모든 로컬 migration을 일괄 적용해서는 안 된다.
 
@@ -133,11 +144,11 @@ NEXT_E2E_BASE_URL=http://127.0.0.1:3001 npx playwright test --config=/private/tm
 1. 실제 온사이드 대상·현재 SHA·migration 이력을 확인하고 DB 백업/PITR 복구 시점, storage metadata/객체 버전, 기존 환경 설정을 확보한다. 비밀값을 Git에 넣지 않는다.
 2. 별도 검증 환경에서 기존 schema와 신규 migration의 호환성을 확인한다. service-role 전용 RPC, anon/auth 직접 접근 거부, 기존 결제·파일 권한 회귀를 확인한다.
 3. 이메일/도메인/PG callback/Auth redirect/B2 CORS를 실제 운영 주소와 대조한다. readiness 503 원인을 해결한다. 카카오 미설정은 선택 채널 경고로 구별한다.
-4. 승인된 릴리스의 신규 migration을 먼저 적용하고 이력/권한을 기록한다. 변경 소스를 배포한다. 신규 migration 적용 전 UI는 보완 기능을 준비 중으로 안내할 수 있으나 이는 완성 상태가 아니다.
+4. 관리자 문서 변환 worker와 웹 dispatcher의 작업을 잠시 중지한 상태에서 승인된 신규 migration을 적용하고 이력/권한을 기록한다. 보관 정책을 반영한 소스를 배포한 뒤 해당 버전의 worker만 재개한다. 구버전 worker가 만료 데이터를 정리하는 경쟁 조건을 피해야 한다. 신규 migration 적용 전 UI는 보완 기능을 준비 중으로 안내할 수 있으나 이는 완성 상태가 아니다.
 5. `/healthz`, `/readyz`, `/api/health`, KO/EN 신청·조회·보완을 smoke test한다. 지정 시험 대상의 파일 연결/관리자 열기/알림 수신과 승인된 결제·취소를 대조한다. 기본 Docker/Turbopack 빌드는 실제 배포 환경에서도 확인한다.
 6. 배포 SHA, 승인된 시험 데이터 ID, provider 거래/메시지 ID, 결과를 비공개 운영 기록에 남긴다. 전체 오픈은 차단 항목 해소 후 진행한다.
 
-롤백은 우선 앱을 직전 검증 SHA로 되돌린다. 보완 테이블과 필증 이력 컬럼은 추가형이므로 접수된 보완 이력을 보호하기 위해 **drop/전체삭제하지 않는다**. 신규 쓰기를 중단하고 실패 건을 식별한 뒤 호환 수정 또는 개별 복구한다. 결제 검수 상태 RPC 변경을 되돌릴 필요가 있다면 직전 백업의 함수 정의를 확인한 별도 forward migration으로 진행하고, 이미 기록된 진행 상태는 임의로 일괄 변경하지 않는다. 이미 생성한 B2 객체와 결제 거래를 코드 rollback만으로 삭제/취소하지 않는다. migration의 실패 원인과 적용 이력을 확인하기 전 재실행·repair·reset을 하지 않는다.
+롤백은 우선 앱을 직전 검증 SHA로 되돌린다. 보완 테이블과 필증 이력 컬럼은 추가형이므로 접수된 보완 이력을 보호하기 위해 **drop/전체삭제하지 않는다**. 신규 쓰기를 중단하고 실패 건을 식별한 뒤 호환 수정 또는 개별 복구한다. 결제 검수 상태 RPC 변경을 되돌릴 필요가 있다면 직전 백업의 함수 정의를 확인한 별도 forward migration으로 진행하고, 이미 기록된 진행 상태는 임의로 일괄 변경하지 않는다. 이미 생성한 B2 객체와 결제 거래를 코드 rollback만으로 삭제/취소하지 않는다. migration의 실패 원인과 적용 이력을 확인하기 전 재실행·repair·reset을 하지 않는다. 구버전 문서 worker로 되돌리면 7일/90일 자동 정리가 다시 실행될 수 있으므로, 보관 정책 수정이 유지됨을 확인하기 전에는 worker를 재개하지 않는다.
 
 보완 업로드가 중단되어 완료 여부가 불확실하면 먼저 재확인한다. ACTIVE/ABORTING 만료 grant는 기존 정리 경로가 처리하지만, 완료된 고아 객체는 자동 일괄 삭제하지 않는다. request/revision/file/grant 식별자를 대조하고 확정한 보관 정책에 따라 개별 정리한다. 알림의 provider 응답이 불확실하면 재전송 전 공급자 기록을 확인한다. Resend idempotency 보존은 24시간이며 모든 공급자가 영구 중복 방지를 보장하는 것은 아니다.
 
@@ -152,5 +163,5 @@ NEXT_E2E_BASE_URL=http://127.0.0.1:3001 npx playwright test --config=/private/tm
 | 알림 실패 | 보완 이력의 채널별 결과·시도 시각/provider ID 확인. 수락된 채널은 중복 발송하지 않고 실패 채널만 재시도. 실제 수신은 별도 확인 |
 | 부분·최종 결과 | 방송사·트랙별 결과와 사유, 고객 화면의 완료 분모, 필증/등급표 파일 내용·권한을 대조. 일부 결과를 전체 완료로 표시하지 않음 |
 | 취소·환불 | PG 관리자 취소 상태/금액/일시와 앱 REFUNDED 및 처리 이력 대조. 앱 상태만으로 실제 환불을 확정하지 않음 |
-| 저장소·작업 실패 | 만료 multipart, DB 연결 실패, 문서 생성 실패, 보완 고아 객체를 개별 확인. 식별 불명 파일이나 기존 초안은 삭제하지 않음 |
+| 저장소·작업 실패 | 만료 multipart, DB 연결 실패, 문서 생성 실패, 보완 고아 객체를 개별 확인. 음원 만료 처리 시 파일 바이트만 대상으로 하며 신청·결과·결제 이력은 유지. 문서·영상·결과 및 식별 불명 파일을 음원으로 간주해 삭제하지 않음 |
 | 서비스 준비 상태 | readiness·메일/카카오 provider 오류·문서 worker·콜백 실패 점검. 실패를 정상 결제/결과 저장 상태로 덮어쓰지 않음 |
