@@ -4,6 +4,10 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 
 const exactTranslations: Record<string, string> = {
+  "현재 이메일 자동 발송을 제공하지 않습니다. 비밀번호 재설정은 고객센터에 문의해주세요.": "Automated email is not available yet. Contact support for password reset help.",
+  "현재 조회 코드 이메일 발송을 제공하지 않습니다. 조회 코드 확인은 고객센터에 문의해주세요.": "Lookup codes cannot currently be sent by email. Contact support if you need help finding your code.",
+  "비밀번호 재설정 안내": "Password Reset Help",
+  "진행·결과 직접 조회": "View Progress and Results",
   "파일 내용과 확장자가 일치하지 않습니다. 원본 파일 형식을 확인하고 다시 선택해주세요.": "The file contents do not match the extension. Check the original format and select the file again.",
   "기존 사이트에서 접수한 신청은 해당 사이트의 접수번호와 제출 안내를 따라 진행해주세요.": "For applications submitted on the previous site, follow that site’s application ID and submission instructions.",
   "제출 경로나 진행상황을 확인하려면 접수번호를 준비해 고객센터에 문의해주세요.": "To confirm where to send materials or check progress, contact support with your application ID.",

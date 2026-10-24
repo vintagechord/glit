@@ -48,6 +48,23 @@ const checkEmail = (
 ): RuntimeHealthCheck => {
   const config = getEmailDeliveryConfiguration();
 
+  if (config.mode === "manual") {
+    return {
+      name: "email delivery deferred",
+      ok: false,
+      severity: "warning",
+      detail: config.diagnostic,
+    };
+  }
+  if (config.mode === "invalid") {
+    return {
+      name: "email delivery mode",
+      ok: false,
+      severity: "error",
+      detail: config.diagnostic,
+    };
+  }
+
   return {
     name: "email env",
     ok: config.ok,
@@ -170,8 +187,8 @@ export const runRuntimeConfigChecks = (
   if (includeOptionalNotifications) {
     const kakao = getKakaoConfiguration();
     checks.push(
-      // Email carries result delivery and guest lookup recovery; it is required
-      // for readiness even when the additional Kakao channel is optional.
+      // Transactional delivery requires working email. An explicit manual mode
+      // stays visible as a warning while all unrelated readiness checks remain.
       checkEmail("error"),
       {
         name: "kakao notification env",

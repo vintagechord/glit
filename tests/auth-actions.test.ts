@@ -30,6 +30,7 @@ test("auth actions validate, map transport failures, preserve safe login redirec
   const signIn = { email: "qa@example.invalid", password: "legacy" };
   const originalResend = process.env.RESEND_API_KEY;
   const originalSender = process.env.RESEND_FROM;
+  const originalEmailMode = process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE;
   const validSender = "onside <noreply@example.invalid>";
   process.env.RESEND_FROM = validSender;
   try {
@@ -112,8 +113,23 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     assert.equal(limited.retryAfterSeconds, 120);
     assert.equal(auth.calls.length, 0);
 
+    auth.state.limited = false;
+    for (const mode of ["manual", "unexpected-value"]) {
+      process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = mode;
+      for (const configured of [true, false]) {
+        if (configured) process.env.RESEND_API_KEY = "fixture-only";
+        else delete process.env.RESEND_API_KEY;
+        auth.calls.length = 0;
+        const blocked = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
+        assert.match(blocked.error ?? "", /고객센터/);
+        assert.equal(blocked.message, undefined);
+        assert.deepEqual(auth.calls, [], "deferred or invalid delivery must not generate tokens, send mail, or invoke Supabase fallback");
+      }
+    }
+
   } finally {
     if (originalResend === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = originalResend;
     if (originalSender === undefined) delete process.env.RESEND_FROM; else process.env.RESEND_FROM = originalSender;
+    if (originalEmailMode === undefined) delete process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE; else process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = originalEmailMode;
   }
 });

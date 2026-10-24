@@ -79,6 +79,13 @@ const EMAIL_REQUEST_TIMEOUT_MS = 10_000;
 
 const getResendConfig = () => getEmailDeliveryConfiguration({ supportEmail: APP_CONFIG.supportEmail });
 
+const manualEmailResult = (): EmailSendResult => ({
+  ok: false,
+  skipped: true,
+  reason: "configuration",
+  message: "현재 이메일 자동 발송을 제공하지 않습니다. 신청 내역에서 진행 상황과 결과를 확인해주세요.",
+});
+
 const logEmailTransportError = (operation: string, error: unknown) => {
   // Transport errors can carry request metadata. Keep production logs useful
   // without serializing recipient addresses, message bodies, or auth headers.
@@ -110,8 +117,9 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-export async function sendWelcomeEmail(payload: WelcomeEmailPayload) {
-  const { apiKey, from } = getResendConfig();
+export async function sendWelcomeEmail(payload: WelcomeEmailPayload): Promise<EmailSendResult> {
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey || !from) {
     return { ok: false, skipped: true } as const;
@@ -166,7 +174,8 @@ const normalizeAbsoluteUrl = (value?: string) => {
 export async function sendPasswordResetEmail(
   payload: PasswordResetEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from, replyTo, sender } = getResendConfig();
+  const { apiKey, from, replyTo, sender, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey) {
     return {
@@ -250,7 +259,8 @@ export async function sendPasswordResetEmail(
 export async function sendSubmissionReceiptEmail(
   payload: SubmissionReceiptPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey || !from) {
     return {
@@ -350,7 +360,8 @@ export async function sendSubmissionReceiptEmail(
 export async function sendResultEmail(
   payload: ResultEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey || !from) {
     return {
@@ -430,7 +441,8 @@ export async function sendResultEmail(
 export async function sendSubmissionBankRequestEmail(
   payload: SubmissionBankRequestEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey || !from) {
     return {
@@ -548,7 +560,8 @@ export async function sendSubmissionBankRequestEmail(
 export async function sendSubmissionUpdateEmail(
   payload: SubmissionUpdateEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
 
   if (!apiKey || !from) {
     return {
@@ -641,7 +654,8 @@ export async function sendSubmissionUpdateEmail(
 export async function sendGuestSubmissionLookupEmail(
   payload: GuestSubmissionLookupEmailPayload,
 ): Promise<EmailSendResult> {
-  const { apiKey, from } = getResendConfig();
+  const { apiKey, from, mode } = getResendConfig();
+  if (mode === "manual") return manualEmailResult();
   if (!apiKey || !from) {
     return {
       ok: false,

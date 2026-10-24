@@ -4978,7 +4978,7 @@
         },
         {
           "file": "src/app/admin/submissions/detail/page.tsx",
-          "sha256": "17b7fbf43190700e3239fa3adb7f2ec1b17ace29fb100f75584ffbdbd7769252"
+          "sha256": "59c2f6cfcf013e3ad9f38948c29d6630721a98f22a711a152cc90d12ca363d8a"
         },
         {
           "file": "src/features/submissions/submission-files-panel.tsx",
@@ -4986,7 +4986,7 @@
         },
         {
           "file": "src/features/submissions/submission-supplements.tsx",
-          "sha256": "1cec3230b0dc0ed23e6cc3dadf58e8e8cf90a006a467513d51b7e3a50c495063"
+          "sha256": "26e266c9bab1cade13aafb54d2d4719ff39a1c2187d642a9ad38a8d906599871"
         },
         {
           "file": "src/components/admin/save-toast.tsx",
@@ -5002,7 +5002,7 @@
         },
         {
           "file": "src/components/admin/certificate-uploader.tsx",
-          "sha256": "52937890dae587882941825fc8c39ed28b2949ff27c9e60bf6ec365129edc212"
+          "sha256": "d2900d606ddb19e79ffaca9da58903a343462a34ccc50f1b2f236a5aa74e4e5b"
         },
         {
           "file": "src/components/admin/confirm-form.tsx",
@@ -5032,7 +5032,7 @@
       "family": "admin",
       "source": {
         "file": "src/app/admin/submissions/detail/page.tsx",
-        "sha256": "17b7fbf43190700e3239fa3adb7f2ec1b17ace29fb100f75584ffbdbd7769252"
+        "sha256": "59c2f6cfcf013e3ad9f38948c29d6630721a98f22a711a152cc90d12ca363d8a"
       },
       "httpMethods": [
         "GET (page)"
@@ -5460,7 +5460,7 @@
       "inspectedSourceSnapshots": [
         {
           "file": "src/app/admin/submissions/detail/page.tsx",
-          "sha256": "17b7fbf43190700e3239fa3adb7f2ec1b17ace29fb100f75584ffbdbd7769252"
+          "sha256": "59c2f6cfcf013e3ad9f38948c29d6630721a98f22a711a152cc90d12ca363d8a"
         },
         {
           "file": "src/features/submissions/submission-files-panel.tsx",
@@ -5468,7 +5468,7 @@
         },
         {
           "file": "src/features/submissions/submission-supplements.tsx",
-          "sha256": "1cec3230b0dc0ed23e6cc3dadf58e8e8cf90a006a467513d51b7e3a50c495063"
+          "sha256": "26e266c9bab1cade13aafb54d2d4719ff39a1c2187d642a9ad38a8d906599871"
         },
         {
           "file": "src/components/admin/save-toast.tsx",
@@ -5484,7 +5484,7 @@
         },
         {
           "file": "src/components/admin/certificate-uploader.tsx",
-          "sha256": "52937890dae587882941825fc8c39ed28b2949ff27c9e60bf6ec365129edc212"
+          "sha256": "d2900d606ddb19e79ffaca9da58903a343462a34ccc50f1b2f236a5aa74e4e5b"
         },
         {
           "file": "src/components/admin/confirm-form.tsx",
@@ -9135,7 +9135,7 @@
       "family": "upload",
       "source": {
         "file": "src/app/api/b2/download/route.ts",
-        "sha256": "7117d7a7ce0e4dabb22f86a6dbf0981a78deaada80ee098c3f5d0abc6eb8b59b"
+        "sha256": "598b0e3f15d2344b993abd5a67a107f6bf28afd54e086f66c414b45c5436af33"
       },
       "httpMethods": [
         "GET"
@@ -9299,7 +9299,7 @@
       "inspectedSourceSnapshots": [
         {
           "file": "src/app/api/b2/download/route.ts",
-          "sha256": "7117d7a7ce0e4dabb22f86a6dbf0981a78deaada80ee098c3f5d0abc6eb8b59b"
+          "sha256": "598b0e3f15d2344b993abd5a67a107f6bf28afd54e086f66c414b45c5436af33"
         }
       ]
     },
@@ -13640,7 +13640,7 @@
       "family": "api_submission",
       "source": {
         "file": "src/app/api/submissions/[id]/mv-certificate/route.ts",
-        "sha256": "bf938990101d0530f8e0b7eaea9b68afa2cd4ce6e65d4dcc2fbf4e6ddf6df708"
+        "sha256": "7bfadecc150759048f3fd5f7b241e9382763b2882aebfaf7f573df76fa2f0e39"
       },
       "httpMethods": [
         "GET"
@@ -13771,7 +13771,7 @@
       "inspectedSourceSnapshots": [
         {
           "file": "src/app/api/submissions/[id]/mv-certificate/route.ts",
-          "sha256": "bf938990101d0530f8e0b7eaea9b68afa2cd4ce6e65d4dcc2fbf4e6ddf6df708"
+          "sha256": "7bfadecc150759048f3fd5f7b241e9382763b2882aebfaf7f573df76fa2f0e39"
         }
       ]
     },
@@ -15113,7 +15113,7 @@
       "family": "guest_lookup",
       "source": {
         "file": "src/app/api/track/lookup-code/route.ts",
-        "sha256": "c21bd24f115280f034c7c7e57064df52742cd332888e3f52d0aad556c5021dcd"
+        "sha256": "0d0f4c202f66c4a8aa5c99d1e8973550eb91ecdb3f4db43a93b3cb323c258402"
       },
       "httpMethods": [
         "POST"
@@ -15237,7 +15237,7 @@
       "inspectedSourceSnapshots": [
         {
           "file": "src/app/api/track/lookup-code/route.ts",
-          "sha256": "c21bd24f115280f034c7c7e57064df52742cd332888e3f52d0aad556c5021dcd"
+          "sha256": "0d0f4c202f66c4a8aa5c99d1e8973550eb91ecdb3f4db43a93b3cb323c258402"
         }
       ]
     },
@@ -24445,7 +24445,7 @@
         },
         {
           "file": "src/app/forgot-password/page.tsx",
-          "sha256": "f617d6feb23a917ff64cbf2a9ed7799745b43daf35ca72b5ef3febb9a7d87afe"
+          "sha256": "ed4037fbf526079ff2f054a8be69a73a0ada60988b84f0272587af17acf26a7e"
         }
       ]
     },
@@ -28583,7 +28583,7 @@
         },
         {
           "file": "src/features/track/track-lookup-form.tsx",
-          "sha256": "01c7980eaea32087fbc695eb31d0e111131ba9a491727ef5baeb7dd9405adbad"
+          "sha256": "2110f26d65d63e756238b6495f8b96866ada2c86e42177cf0c99051e8b76a626"
         },
         {
           "file": "src/features/track/track-lookup-selector.tsx",
@@ -28708,7 +28708,7 @@
       "family": "auth",
       "source": {
         "file": "src/app/forgot-password/page.tsx",
-        "sha256": "f617d6feb23a917ff64cbf2a9ed7799745b43daf35ca72b5ef3febb9a7d87afe"
+        "sha256": "ed4037fbf526079ff2f054a8be69a73a0ada60988b84f0272587af17acf26a7e"
       },
       "httpMethods": [
         "GET (page)"
@@ -28837,7 +28837,7 @@
       "inspectedSourceSnapshots": [
         {
           "file": "src/app/forgot-password/page.tsx",
-          "sha256": "f617d6feb23a917ff64cbf2a9ed7799745b43daf35ca72b5ef3febb9a7d87afe"
+          "sha256": "ed4037fbf526079ff2f054a8be69a73a0ada60988b84f0272587af17acf26a7e"
         }
       ]
     },
@@ -33833,7 +33833,7 @@
         },
         {
           "file": "src/features/track/track-lookup-form.tsx",
-          "sha256": "01c7980eaea32087fbc695eb31d0e111131ba9a491727ef5baeb7dd9405adbad"
+          "sha256": "2110f26d65d63e756238b6495f8b96866ada2c86e42177cf0c99051e8b76a626"
         },
         {
           "file": "src/features/track/track-lookup-selector.tsx",
@@ -34003,5 +34003,12 @@
       "scripts/review-docs/test-jobs.sh"
     ],
     "execution": "정적 검토만. 협업자의 19개 unit·격리 PostgreSQL·8개 격리 workspace E2E 보고는 최종 보고서에서 별도로 확인하며 작성자 39개/10URL PASS에 합산하지 않음"
+  },
+  "manualEmailFollowup": {
+    "dateKst": "2026-10-24",
+    "flag": "NEXT_PUBLIC_EMAIL_DELIVERY_MODE=manual",
+    "scope": "사용자가 메일 연동을 보류하도록 지시. 기존 발송 시나리오의 실제 메일 수신을 PASS로 뜻하지 않음. 고객 직접 조회·기존 유효 복구 링크 유지, 새 메일 요청은 지원 안내.",
+    "newHelper": "src/lib/email-delivery-mode.ts",
+    "runtimeValidation": "docs/onside-production-rollout-2026-10-24.md 참고"
   }
 }

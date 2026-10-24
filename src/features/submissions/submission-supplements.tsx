@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
+import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 
 type SupplementFile = { id: string; original_name: string; size_bytes: number; status: string };
 type Notice = { id: string; state_key: string; attempts: number; last_attempt_at?: string | null; outcome: { email?: string; kakao?: string; emailMessageId?: string; kakaoMessageId?: string } };
@@ -139,7 +140,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
     UPLOADING: t("전송 중", "Uploading"), VERIFIED: t("파일 전송 완료", "File Uploaded"),
     UPLOADED: t("파일 전송 완료", "File Uploaded"), ABORTED: t("전송 취소", "Cancelled"),
   }[status] ?? t("상태 확인 중", "Checking Status"));
-  const delivery = (status?: string) => status === "API_ACCEPTED" ? t("발송 업체 접수", "Accepted by Provider") : status === "SKIPPED" ? t("설정·수신처 확인 필요", "Configuration or Recipient Needed") : status === "FAILED" ? t("실패·재시도 필요", "Failed; Retry Needed") : t("응답 확인 필요", "Response Needs Checking");
+  const delivery = (status?: string, email = false) => status === "API_ACCEPTED" ? t("발송 업체 접수", "Accepted by Provider") : status === "SKIPPED" ? email && getEmailDeliveryMode() === "manual" ? t("자동 이메일 보류·별도 안내 필요", "Automatic Email Deferred; Notify Separately") : t("설정·수신처 확인 필요", "Configuration or Recipient Needed") : status === "FAILED" ? t("실패·재시도 필요", "Failed; Retry Needed") : t("응답 확인 필요", "Response Needs Checking");
 
   return <section className="my-6 rounded-xl border border-border bg-card p-4 sm:p-6" aria-labelledby={labelId}>
     <h2 id={labelId} className="text-lg font-bold">{t("보완 요청·제출 내역", "Supplement Requests and Submissions")}</h2>
@@ -168,7 +169,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
           <p className="whitespace-pre-wrap break-words text-sm">{request.note}</p>
           {admin && <button type="button" disabled={busy} className={buttonClass} onClick={() => void run(async () => {
             const result = await api<{ notification: { email: string; kakao: string; alreadyAccepted?: boolean } }>({ action: "notify", requestId: request.id });
-            setMessage(`${t("이메일", "Email")}: ${delivery(result.notification.email)} · ${t("카카오", "Kakao")}: ${delivery(result.notification.kakao)}. ${t("실제 수신 여부는 수신함에서 확인해주세요.", "Confirm delivery in the recipient’s inbox.")}`);
+            setMessage(`${t("이메일", "Email")}: ${delivery(result.notification.email, true)} · ${t("카카오", "Kakao")}: ${delivery(result.notification.kakao)}. ${t("실제 수신 여부는 수신함에서 확인해주세요.", "Confirm delivery in the recipient’s inbox.")}`);
             await load();
           })}>{t("보완 안내 보내기·실패 재시도", "Send Supplement Notice / Retry Failures")}</button>}
           {request.revisions.map(revision => <div key={revision.id} className="rounded-lg border border-border p-3 text-sm">
@@ -180,7 +181,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
               <p className="mt-2">{t("업체 접수와 실제 수신은 다릅니다. 응답이 불확실하거나 오래된 실패는 공급자 기록을 대조한 후 재시도해주세요.", "Provider acceptance does not confirm delivery. Reconcile uncertain responses or old failures with provider records before retrying.")}</p>
               <ul className="mt-2 space-y-3">{revision.notifications.map(notice => <li key={notice.id} className="break-words">
                 <p>{notice.state_key} · {notice.attempts} {t("회 시도", "attempts")} · {notice.last_attempt_at ? new Date(notice.last_attempt_at).toLocaleString(english ? "en-US" : "ko-KR") : "—"}</p>
-                <p>{t("이메일", "Email")}: {delivery(notice.outcome.email)} · {t("카카오", "Kakao")}: {delivery(notice.outcome.kakao)}</p>
+                <p>{t("이메일", "Email")}: {delivery(notice.outcome.email, true)} · {t("카카오", "Kakao")}: {delivery(notice.outcome.kakao)}</p>
                 {notice.outcome.emailMessageId && <p className="break-all font-mono">Email ID: {notice.outcome.emailMessageId}</p>}
                 {notice.outcome.kakaoMessageId && <p className="break-all font-mono">Kakao ID: {notice.outcome.kakaoMessageId}</p>}
               </li>)}</ul>

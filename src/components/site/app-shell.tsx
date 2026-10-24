@@ -7,6 +7,7 @@ import * as React from "react";
 import { SiteFooter } from "@/components/site/footer";
 import { SiteHeader } from "@/components/site/header";
 import { ReliableLink } from "@/components/site/reliable-link";
+import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 
 const EnglishLanguagePack = dynamic(
   () =>
@@ -83,6 +84,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </a>
       {isEnglishRoute ? <EnglishLanguagePack /> : null}
       <SiteHeader />
+      {getEmailDeliveryMode() === "manual" ? (
+        <aside aria-label={isEnglishRoute ? "Email Delivery Notice" : "이메일 발송 안내"} className="border-b border-border bg-[#f2cf27]/15 px-4 py-3 text-sm leading-6 sm:px-6">
+          <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1">
+            <p>{isEnglishRoute
+              ? "Automated email is being prepared. Check progress and results on the site, and keep your guest lookup code."
+              : "이메일 자동 발송을 준비 중입니다. 진행·결과는 사이트에서 직접 조회하고, 비회원 조회 코드를 보관해주세요."}</p>
+            <ReliableLink href={isEnglishRoute ? "/en/track" : "/track"} className="inline-flex min-h-11 items-center font-bold underline underline-offset-4">
+              {isEnglishRoute ? "View Progress and Results" : "진행·결과 직접 조회"}
+            </ReliableLink>
+          </div>
+        </aside>
+      ) : null}
       <main id="main-content" className="flex-1">
         {children}
       </main>

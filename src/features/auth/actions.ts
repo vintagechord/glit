@@ -9,6 +9,7 @@ import {
 } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmailSenderConfiguration } from "@/lib/email-config";
+import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import {
   consumeRateLimit,
   getRequestIdentifier,
@@ -206,6 +207,13 @@ export async function resetPasswordAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const emailMode = getEmailDeliveryMode();
+  if (emailMode === "manual") {
+    return { error: "현재 이메일 자동 발송을 제공하지 않습니다. 비밀번호 재설정은 고객센터에 문의해주세요." };
+  }
+  if (emailMode === "invalid") {
+    return { error: "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요." };
+  }
   const email = String(formData.get("resetEmail") || "").trim();
   if (!email) {
     return { fieldErrors: { resetEmail: "이메일을 입력해주세요." } };

@@ -268,7 +268,7 @@ export default async function AdminSubmissionDetailPage({
         return "접수/결제 상태가 저장되었습니다.";
       case "result":
       case "result_warning":
-        return "최종 통보 정보가 저장되었습니다.";
+        return "심의 결과가 저장되었습니다.";
       case "error":
         return "저장 중 오류가 발생했습니다. 다시 시도해주세요.";
       default:

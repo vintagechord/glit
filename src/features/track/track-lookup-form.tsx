@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { ManualEmailSupport } from "@/features/auth/manual-email-support";
+import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 
 export function TrackLookupForm({
   onSuccess,
@@ -20,6 +22,7 @@ export function TrackLookupForm({
   const [lookupError, setLookupError] = React.useState("");
   const [lookupMessage, setLookupMessage] = React.useState("");
   const [lookupBusy, setLookupBusy] = React.useState(false);
+  const emailAvailable = getEmailDeliveryMode() === "transactional";
 
   const openTrack = React.useCallback(
     (value: string) => {
@@ -59,6 +62,7 @@ export function TrackLookupForm({
 
   const handleLookupCode = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!emailAvailable) return;
     const name = lookupName.trim();
     const email = lookupEmail.trim();
     if (!name || !email) {
@@ -139,7 +143,7 @@ export function TrackLookupForm({
         </button>
       </form>
 
-      <div className="rounded-[8px] border-2 border-border bg-background/70 p-4">
+      {emailAvailable ? <div className="rounded-[8px] border-2 border-border bg-background/70 p-4">
         <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
           조회 코드를 이메일로 받기
         </p>
@@ -197,7 +201,7 @@ export function TrackLookupForm({
             {lookupMessage}
           </p>
         ) : null}
-      </div>
+      </div> : <ManualEmailSupport english={Boolean(localePrefix)} purpose="lookup" />}
     </div>
   );
 }

@@ -27,6 +27,10 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      # Automatic email is deferred until the Onside sender domain is ready.
+      # Set transactional and rebuild after configuring the verified sender.
+      - key: NEXT_PUBLIC_EMAIL_DELIVERY_MODE
+        value: manual
       - key: RESEND_FROM
         # Set an address on a domain verified in Resend in the dashboard.
         # Preserve that value across Blueprint syncs.

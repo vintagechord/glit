@@ -27,6 +27,7 @@ import {
 import { saveStationReview } from "@/lib/admin/station-review-save";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
 import { sendResultEmail, sendSubmissionUpdateEmail } from "@/lib/email";
+import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -484,6 +485,17 @@ const sendSubmissionResultNotificationById = async ({
         .join("\n"),
       link: context.link,
     });
+
+  if (getEmailDeliveryMode() === "manual") {
+    await sendKakaoResultNotification();
+    return {
+      deliveredCount: 0,
+      skippedCount: context.recipientEmails.length,
+      failedCount: 0,
+      recipientCount: context.recipientEmails.length,
+      warning: "심의 결과는 저장되었습니다. 자동 이메일 발송은 보류 중입니다. 고객에게 신청 내역에서 결과를 확인하도록 별도로 안내해주세요.",
+    };
+  }
 
   if (!context.recipientEmails.length) {
     await sendKakaoResultNotification();
