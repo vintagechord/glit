@@ -2,7 +2,7 @@ import {
   englishDefaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
-import { ProfilePageView } from "@/app/dashboard/profile/page";
+import { ProfilePageView } from "@/app/dashboard/profile/view";
 
 export { metadata } from "@/app/mypage/profile/page";
 

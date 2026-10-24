@@ -2,7 +2,7 @@ import {
   englishDefaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
-import { SubmissionCartPageView } from "@/app/dashboard/cart/page";
+import { SubmissionCartPageView } from "@/app/dashboard/cart/view";
 
 export { metadata } from "@/app/mypage/cart/page";
 

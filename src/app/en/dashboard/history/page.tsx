@@ -1,5 +1,5 @@
 import { englishStatusDashboardTabs } from "@/components/dashboard/dashboard-shell";
-import { HistoryPageView } from "@/app/dashboard/history/page";
+import { HistoryPageView } from "@/app/dashboard/history/view";
 
 export { metadata } from "@/app/dashboard/history/page";
 

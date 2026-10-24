@@ -105,10 +105,15 @@ export const getSubmissionCartItems = async (
 };
 
 export const getSubmissionCartCount = async (userId: string) => {
-  const { items, error } = await getSubmissionCartItems(userId);
-  if (error) {
-    return { count: 0, totalAmountKrw: 0, error };
+  const supabase = await createServerSupabase();
+  // The header needs only a badge and total. Do not load titles, artist data,
+  // package joins or complete cart records on every badge refresh.
+  let result = await buildCartQuery(supabase, userId, "id,amount_krw");
+  if (result.error && isMissingCartOptionalColumn(result.error)) {
+    result = await buildCartQuery(supabase, userId, "id,amount_krw", false);
   }
+  if (result.error) return { count: 0, totalAmountKrw: 0, error: result.error };
+  const items = (result.data ?? []) as unknown as Array<{ amount_krw: number | null }>;
 
   const totalAmountKrw = items.reduce((sum, item) => {
     const amount = Math.round(Number(item.amount_krw ?? 0));

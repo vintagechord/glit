@@ -5,17 +5,17 @@ import test from "node:test";
 const readSource = (relativePath: string) =>
   readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
-test("the home hero explains the three review purposes", () => {
+test("the home hero restores the original review record message", () => {
   const homePage = readSource("src/app/page.tsx");
   const translations = readSource(
     "src/components/i18n/english-language-pack.tsx",
   );
 
-  assert.match(homePage, /음원 방송 심의, MV 온라인 유통용 심의, MV 방송사 심의를 목적에 맞게 선택하세요\./);
+  assert.match(homePage, /내 작품의 심의 기록을 한곳에서 관리하세요/);
   assert.doesNotMatch(homePage, /신청 · 결제 · 결과를 한곳에서/);
   assert.match(
     translations,
-    /"음원 방송 심의, MV 온라인 유통용 심의, MV 방송사 심의를 목적에 맞게 선택하세요\.":/,
+    /"내 작품의 심의 기록을 한곳에서 관리하세요":/,
   );
 });
 
@@ -73,7 +73,7 @@ test("the legacy form page presents one concise explanation and an accessible li
 });
 
 test("lookup and auth pages remove repeated headers while retaining required controls", () => {
-  const trackPage = readSource("src/app/track/page.tsx");
+  const trackPage = readSource("src/features/track/track-page-view.tsx");
   const trackDetail = readSource("src/app/track/[token]/page.tsx");
   const trackForm = readSource("src/features/track/track-lookup-form.tsx");
   const loginPage = readSource("src/app/login/page.tsx");

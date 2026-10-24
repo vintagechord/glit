@@ -2,7 +2,7 @@ import {
   englishDefaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
-import { DraftSubmissionsPageView } from "@/app/dashboard/drafts/page";
+import { DraftSubmissionsPageView } from "@/app/dashboard/drafts/view";
 
 export { metadata } from "@/app/mypage/drafts/page";
 

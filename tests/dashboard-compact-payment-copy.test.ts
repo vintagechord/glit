@@ -49,7 +49,7 @@ test("draft and cart rows keep type and action without payment-waiting chips", (
 
 test("paid-only history views describe review progress, not payment progress", () => {
   const history = readSource("src/components/dashboard/artist-history.tsx");
-  const artistDetail = readSource("src/app/dashboard/artists/[id]/page.tsx");
+  const artistDetail = readSource("src/app/dashboard/artists/[id]/view.tsx");
 
   assert.doesNotMatch(history, /결제 대기|결제 확인/);
   assert.match(history, /IN_PROGRESS: "심의 진행"/);

@@ -2,7 +2,7 @@ import {
   englishDefaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
-import { StatusPageView } from "@/app/dashboard/page";
+import { StatusPageView } from "@/app/dashboard/view";
 
 export { metadata } from "@/app/mypage/page";
 

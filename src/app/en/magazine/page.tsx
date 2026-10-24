@@ -1,7 +1,7 @@
 import {
   MagazinePageView,
   type MagazinePageSearchParams,
-} from "@/app/magazine/page";
+} from "@/features/magazine/magazine-page-view";
 
 export { metadata } from "@/app/magazine/page";
 

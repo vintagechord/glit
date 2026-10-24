@@ -13,7 +13,6 @@ import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { HomeHeroAdBanner } from "@/components/site/home-hero-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { ReliableLink } from "@/components/site/reliable-link";
-import { reviewServices, reviewServiceNotice } from "@/lib/onside-content";
 import {
   HomeSessionPanel,
   HomeSessionPanelFallback,
@@ -109,7 +108,7 @@ export default function Home() {
             <div className="absolute inset-0 bg-[linear-gradient(135deg,#fffaf0_0%,#fffaf0_64%,rgba(242,207,39,0.18)_100%)] dark:bg-[linear-gradient(135deg,#101010_0%,#101010_64%,rgba(242,207,39,0.12)_100%)]" />
           </div>
 
-          <div className="relative z-10 mx-auto w-full max-w-6xl px-4 py-7 sm:px-6 sm:py-8">
+          <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-6 px-4 py-7 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,0.98fr)_minmax(430px,0.92fr)] lg:items-stretch lg:gap-9">
             <div className="flex h-full flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-700 sm:gap-6">
               <div className="space-y-5 sm:space-y-6">
                 <span className="bauhaus-kicker" style={{ textTransform: "none" }}>
@@ -122,9 +121,10 @@ export default function Home() {
                   결과 확인까지
                 </h1>
                 <p className="max-w-xl break-keep text-base font-semibold leading-7 text-foreground/74 dark:text-white/76">
-                  음원 방송 심의, MV 온라인 유통용 심의, MV 방송사 심의를 목적에 맞게 선택하세요.
+                  내 작품의 심의 기록을 한곳에서 관리하세요
                 </p>
               </div>
+              <HomeHeroAdBanner />
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:max-w-[540px] lg:flex-1">
                 {heroCtas.map((cta) => {
                   const Icon = cta.icon;
@@ -148,11 +148,18 @@ export default function Home() {
               </div>
             </div>
 
+            <Suspense fallback={<HomeSessionPanelFallback />}>
+              <HomeSessionPanel />
+            </Suspense>
           </div>
         </div>
       </section>
 
       <section className="mx-auto w-full max-w-6xl px-4 pb-12 pt-2 sm:px-6">
+        <div className="mb-10">
+          <StripAdBanner />
+        </div>
+
         <div
           data-scroll-reveal
           data-reveal-state="hidden"
@@ -198,8 +205,6 @@ export default function Home() {
                 <h3 className="mt-7 max-w-[13rem] break-keep text-3xl font-black leading-none tracking-normal sm:text-4xl">
                   {card.title}
                 </h3>
-                <p className="my-4 text-sm font-semibold leading-6">{reviewServices[index].purpose}</p>
-                <p className="mb-4 text-sm leading-6">{reviewServices[index].billing}</p>
                 <div className={`mt-auto inline-flex w-fit items-center gap-2 px-4 py-3 text-sm font-black tracking-normal transition group-hover:translate-x-1 ${card.actionClass}`}>
                   신청 <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </div>
@@ -207,17 +212,6 @@ export default function Home() {
             </ReliableLink>
           ))}
         </div>
-        <p className="mt-6 text-sm leading-6 text-muted-foreground">{reviewServiceNotice}</p>
-        <ReliableLink href="/dashboard/new" className="mt-3 inline-flex min-h-11 items-center font-bold text-primary underline underline-offset-4">준비 자료·결과물·비용 기준 비교</ReliableLink>
-      </section>
-      <section className="mx-auto w-full max-w-6xl px-4 pb-12 sm:px-6" aria-label="심의 진행 현황">
-        <Suspense fallback={<HomeSessionPanelFallback />}>
-          <HomeSessionPanel />
-        </Suspense>
-      </section>
-      <section className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-12 sm:px-6" aria-label="추가 서비스 안내">
-        <HomeHeroAdBanner />
-        <StripAdBanner />
       </section>
     </div>
   );

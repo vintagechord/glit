@@ -48,8 +48,7 @@ for (const english of [false, true]) {
       await expect(page.locator("#reset-email")).toHaveCount(0);
       await expect(page.getByRole("link", { name: english ? "Contact Support" : "고객센터 문의", exact: true })).toHaveAttribute("href", `${prefix}/support`);
       const notice = page.getByRole("complementary", { name: english ? "Email Delivery Notice" : "이메일 발송 안내" });
-      await expect(notice).toContainText(english ? "keep your guest lookup code" : "비회원 조회 코드를 보관해주세요");
-      await expect(notice.getByRole("link")).toHaveAttribute("href", `${prefix}/track`);
+      await expect(notice).toHaveCount(0);
       expect(await page.evaluate(() => (window as typeof window & { __manualEffects: { emailActions: number } }).__manualEffects.emailActions)).toBe(0);
     });
 

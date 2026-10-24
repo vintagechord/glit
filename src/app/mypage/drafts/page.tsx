@@ -2,7 +2,7 @@ import {
   defaultDashboardTabs,
   type DashboardTab,
 } from "@/components/dashboard/dashboard-shell";
-import { DraftSubmissionsPageView } from "@/app/dashboard/drafts/page";
+import { DraftSubmissionsPageView } from "@/app/dashboard/drafts/view";
 
 export const metadata = {
   title: "마이페이지 - 작성중 신청서",

@@ -1,7 +1,7 @@
 import {
   MyPageCreditsPageView,
   type MyPageCreditsSearchParams,
-} from "@/app/mypage/credits/page";
+} from "@/features/credits/credits-page-view";
 
 export { metadata } from "@/app/mypage/credits/page";
 

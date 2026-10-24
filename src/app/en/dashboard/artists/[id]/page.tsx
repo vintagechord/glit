@@ -1,5 +1,5 @@
 import { englishStatusDashboardTabs } from "@/components/dashboard/dashboard-shell";
-import { DashboardArtistDetailPageView } from "@/app/dashboard/artists/[id]/page";
+import { DashboardArtistDetailPageView } from "@/app/dashboard/artists/[id]/view";
 
 export { metadata } from "@/app/dashboard/artists/[id]/page";
 
