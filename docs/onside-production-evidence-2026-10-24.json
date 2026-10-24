@@ -1,0 +1,364 @@
+{
+  "service": "온사이드",
+  "repository": "vintagechord/glit",
+  "recordedAt": "2026-10-24T16:50:01+09:00",
+  "productionUrl": "https://glit-b1yn.onrender.com",
+  "release": {
+    "sourceCommit": "8b68c86a05eb396cfbca67b10ef9efb398b36a61",
+    "liveCommit": "6f4bfd47c69010d8bb8d628bda61318cd916043f",
+    "pullRequest": "https://github.com/vintagechord/glit/pull/1",
+    "renderDeployId": "dep-dbe5p7bncjis73e8n26g",
+    "renderUiStatus": "Deploy succeeded | Live",
+    "liveAt": "2026-10-24T16:24:57+09:00",
+    "plan": "Free",
+    "emailMode": "manual"
+  },
+  "database": {
+    "projectRef": "rwysjsmxtpuqekeltwxi",
+    "migrationCountBefore": 105,
+    "migrationCountAfter": 109,
+    "appliedVersions": [
+      "20261023210008",
+      "20261023212202",
+      "20261023212253",
+      "20261024015746"
+    ],
+    "newTableAnonAccess": "4/4 HEAD HTTP 401",
+    "reviewDocumentExpiresAtDefault": "infinity"
+  },
+  "healthAndAccess": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "status": 200,
+      "curlExit": 0,
+      "body": {
+        "ok": true,
+        "errorCount": 0,
+        "warningCount": 2,
+        "checks": [
+          {
+            "name": "app base url",
+            "ok": true,
+            "severity": "error"
+          },
+          {
+            "name": "supabase env",
+            "ok": true,
+            "severity": "error"
+          },
+          {
+            "name": "b2 env",
+            "ok": true,
+            "severity": "error"
+          },
+          {
+            "name": "inicis prod env",
+            "ok": true,
+            "severity": "error"
+          },
+          {
+            "name": "support and bank config",
+            "ok": true,
+            "severity": "warning"
+          },
+          {
+            "name": "email delivery deferred",
+            "ok": false,
+            "severity": "warning"
+          },
+          {
+            "name": "kakao notification env",
+            "ok": false,
+            "severity": "warning"
+          },
+          {
+            "name": "supabase auth connectivity",
+            "ok": true,
+            "severity": "error"
+          },
+          {
+            "name": "supabase product catalog connectivity",
+            "ok": true,
+            "severity": "error"
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/readyz",
+      "status": 200,
+      "curlExit": 0,
+      "body": {
+        "ok": true,
+        "errorCount": 0,
+        "warningCount": 2,
+        "checks": [
+          {
+            "name": "app base url",
+            "ok": true,
+            "severity": "error"
+          },
+          {
+            "name": "supabase env",
+            "ok": true,
+            "severity": "error"
+          },
+          {
+            "name": "b2 env",
+            "ok": true,
+            "severity": "error"
+          },
+          {
+            "name": "inicis prod env",
+            "ok": true,
+            "severity": "error"
+          },
+          {
+            "name": "support and bank config",
+            "ok": true,
+            "severity": "warning"
+          },
+          {
+            "name": "email delivery deferred",
+            "ok": false,
+            "severity": "warning"
+          },
+          {
+            "name": "kakao notification env",
+            "ok": false,
+            "severity": "warning"
+          },
+          {
+            "name": "supabase auth connectivity",
+            "ok": true,
+            "severity": "error"
+          },
+          {
+            "name": "supabase product catalog connectivity",
+            "ok": true,
+            "severity": "error"
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/healthz",
+      "status": 200,
+      "curlExit": 0,
+      "body": "ok"
+    },
+    {
+      "method": "POST",
+      "path": "/api/track/lookup-code",
+      "status": 503,
+      "curlExit": 0,
+      "body": {
+        "ok": false,
+        "error": "현재 조회 코드 이메일 발송을 제공하지 않습니다. 조회 코드 확인은 고객센터에 문의해주세요."
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/submissions/00000000-0000-4000-8000-000000000001/mv-certificate",
+      "status": 403,
+      "curlExit": 0,
+      "body": {
+        "error": "관리자 권한이 필요합니다."
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/submissions/00000000-0000-4000-8000-000000000001/mv-certificate",
+      "status": 401,
+      "curlExit": 0,
+      "body": {
+        "error": "로그인 또는 조회코드가 필요합니다."
+      }
+    }
+  ],
+  "publicUi": {
+    "koEnPublicRoutes": 8,
+    "httpStatus": "8/8 HTTP 200",
+    "manualBanner": "KO/EN visible SSR text verified",
+    "forgotPassword": "KO/EN actual browser support notice verified",
+    "mvWizard": "Chrome normal and Safari re-entry purpose selection displayed",
+    "guestUnpaidResultPage": "QA title visible; payment pending view retained"
+  },
+  "actualFileDelivery": {
+    "fixtureLabel": "[QA ONLY] 결과 전달 검증 20261024 - 실제 심의 아님",
+    "fixtureIdPrefix": "0FE4EAA1",
+    "file": {
+      "filename": "onside-QA-ONLY-not-a-review-certificate.pdf",
+      "sizeBytes": 2072,
+      "sha256": "02febc71ab0dd1784ee274e0217d1c5a12b0daa1593e69c597a87ddf02304d13"
+    },
+    "adminUpload": "Actual authenticated browser UI success",
+    "publication": "Actual authenticated browser UI result save success",
+    "beforePublication": {
+      "phase": "uploaded-but-unpublished",
+      "status": 403,
+      "body": {
+        "error": "아직 결과가 준비되지 않았습니다."
+      }
+    },
+    "afterPublication": [
+      {
+        "phase": "after-publication",
+        "actor": "owner",
+        "status": 200,
+        "curlExit": 0,
+        "sizeBytes": 2072,
+        "sha256": "02febc71ab0dd1784ee274e0217d1c5a12b0daa1593e69c597a87ddf02304d13",
+        "matchesUploadedFile": true,
+        "pdfSignature": true,
+        "pdfContentType": true,
+        "attachmentDisposition": true
+      },
+      {
+        "phase": "after-publication",
+        "actor": "wrong-token",
+        "status": 403,
+        "curlExit": 0,
+        "sizeBytes": 52,
+        "error": "접수에 대한 권한이 없습니다."
+      },
+      {
+        "phase": "after-publication",
+        "actor": "no-auth",
+        "status": 401,
+        "curlExit": 0,
+        "sizeBytes": 61,
+        "error": "로그인 또는 조회코드가 필요합니다."
+      }
+    ],
+    "legacyRoute": [
+      {
+        "route": "/api/b2/download",
+        "actor": "owner-current",
+        "status": 302,
+        "curlExit": 0,
+        "redirectNotFollowed": true
+      },
+      {
+        "route": "/api/b2/download",
+        "actor": "wrong-token",
+        "status": 403,
+        "curlExit": 0,
+        "redirectNotFollowed": true,
+        "error": "권한이 없습니다."
+      },
+      {
+        "route": "/api/b2/download",
+        "actor": "no-auth",
+        "status": 401,
+        "curlExit": 0,
+        "redirectNotFollowed": true,
+        "error": "로그인 또는 조회코드가 필요합니다."
+      },
+      {
+        "route": "/api/b2/download",
+        "actor": "owner-noncurrent",
+        "status": 404,
+        "curlExit": 0,
+        "redirectNotFollowed": true,
+        "error": "현재 등록된 필증이 아닙니다."
+      }
+    ],
+    "guestResultPage": {
+      "route": "/track/<private QA token>",
+      "status": 200,
+      "curlExit": 0,
+      "qaTitleInResponse": true,
+      "qaFilenameInResponse": true,
+      "certificateKeyFound": true,
+      "fields": {
+        "status": "RESULT_READY",
+        "payment_status": "UNPAID",
+        "amount_krw": 0,
+        "result_status": "APPROVED",
+        "result_notified_at": null,
+        "certificate_size": 2072
+      }
+    },
+    "emailSent": false,
+    "testRecordRetained": true
+  },
+  "localVerification": {
+    "unitTotal": 852,
+    "pass": 846,
+    "fail": 0,
+    "skip": 6,
+    "productionWebpackBuild": "PASS",
+    "typescript": "PASS",
+    "eslintErrors": 0,
+    "existingEslintWarnings": 9,
+    "defaultAuthBrowserTests": 17,
+    "manualKoEnBrowserTests": 4
+  },
+  "remaining": {
+    "realPaymentRefund": "User performs actual PG transactions; agent code/structure handoff only",
+    "paymentRefundSync": "No review-order PG refund API or verified cancellation-to-order automatic synchronization",
+    "automaticNotifications": "Email deferred by user; Kakao unconfigured, no actual recipient delivery verified",
+    "paidCustomerDownloadUi": "Requires user real-payment test; unpaid guest view intentionally stays pending",
+    "audioRetention": "One month from each file submission is policy; scheduled automatic deletion is not implemented"
+  },
+  "finalHealth": {
+    "observedAt": "2026-10-24T16:51:13+09:00",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "errorCount": 0,
+      "warningCount": 2,
+      "checks": [
+        {
+          "name": "app base url",
+          "ok": true,
+          "severity": "error"
+        },
+        {
+          "name": "supabase env",
+          "ok": true,
+          "severity": "error"
+        },
+        {
+          "name": "b2 env",
+          "ok": true,
+          "severity": "error"
+        },
+        {
+          "name": "inicis prod env",
+          "ok": true,
+          "severity": "error"
+        },
+        {
+          "name": "support and bank config",
+          "ok": true,
+          "severity": "warning"
+        },
+        {
+          "name": "email delivery deferred",
+          "ok": false,
+          "severity": "warning"
+        },
+        {
+          "name": "kakao notification env",
+          "ok": false,
+          "severity": "warning"
+        },
+        {
+          "name": "supabase auth connectivity",
+          "ok": true,
+          "severity": "error"
+        },
+        {
+          "name": "supabase product catalog connectivity",
+          "ok": true,
+          "severity": "error"
+        }
+      ]
+    }
+  }
+}
