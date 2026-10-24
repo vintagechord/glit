@@ -21,7 +21,9 @@
 
 ### 1. Daum에서 앱 비밀번호 준비
 
-Daum 메일의 외부 메일 프로그램 접속을 허용하고 계정 보안 설정에서 앱 비밀번호를 생성한다. [Daum 공식 안내](https://cs.daum.net/faq/service/43/category/9234/detail/30863)는 일반 로그인 비밀번호 대신 앱 비밀번호를 사용하도록 안내한다. 비밀번호를 채팅에 보내거나 저장소에 기록하지 않는다.
+1. `myonside@daum.net`의 **Daum 메일 → 설정 → IMAP/POP3 설정 → POP3 설정**에서 **POP3/SMTP 사용함**을 선택하고 **저장하기**를 누른다. [Daum 공식 설정 안내](https://cs.daum.net/faq/service/43/category/9234/detail/34503)
+2. **Daum 마이페이지 → 계정 보안**에서 2단계 인증을 확인하고 온사이드용 **앱 비밀번호**를 발급한다. [최신 Daum 공식 안내](https://cs.daum.net/faq/service/43/category/9234/detail/35945)는 2025년 1월 2일부터 2단계 인증·앱 비밀번호가 필요하며, **2025년 12월 1일 서비스 분리 후 앱 비밀번호 발급·관리 주체가 카카오계정에서 Daum 회원정보로 변경됐다**고 명시한다. 이전 카카오계정 경로가 남은 오래된 안내 대신 이 경로를 확인한다.
+3. SMTP 로그인 사용자 이름은 **전체 메일주소 `myonside@daum.net`**을 사용한다. [Daum 아웃룩 설정 안내](https://cs.daum.net/faq/service/43/category/9234/detail/38593)도 로그온 정보에 본인의 메일주소를 입력하도록 안내한다. 일반 웹 로그인 비밀번호 대신 위 앱 비밀번호를 Supabase의 `SMTP_PASS`에 직접 저장한다. 비밀번호를 채팅에 보내거나 저장소에 기록하지 않는다.
 
 ### 2. Supabase의 함수 비밀값 설정
 
@@ -56,12 +58,15 @@ SUPABASE_EMAIL_RELAY_URL=https://rwysjsmxtpuqekeltwxi.supabase.co/functions/v1/s
 EMAIL_RELAY_SECRET=<same relay secret as Supabase>
 SMTP_FROM=온사이드 <myonside@daum.net>
 NEXT_PUBLIC_SUPPORT_EMAIL=myonside@daum.net
-NEXT_PUBLIC_EMAIL_DELIVERY_MODE=transactional
+# 실제 SMTP 인증·발송 검증 후 transactional로 전환하고 재빌드한다.
+NEXT_PUBLIC_EMAIL_DELIVERY_MODE=manual
 ```
 
 앱에 설정된 Supabase 프로젝트와 중계 URL의 호스트가 일치해야 한다. 외부 URL로 비밀값을 전송하거나 리다이렉트를 따라가지 않는다. 연결 확인 전에는 기존 운영 manual 설정을 유지하고, 준비 후 transactional로 바꾸어 재빌드·재배포한다.
 
-2026-10-24 현재 로컬 CLI에는 Supabase 관리용 로그인 토큰이 없고, 연결된 MCP 계정으로 온사이드 프로젝트를 조회하면 권한 없음 응답이 나온다. 온사이드 프로젝트 권한이 있는 계정으로 Supabase를 연결해야 한다. Daum 앱 비밀번호도 아직 설정되지 않았다. 따라서 함수 배포·Secrets 저장·실수신 확인이 완료됐다는 의미는 아니다.
+2026-10-24 운영 반영: 브라우저의 온사이드 Supabase 대시보드에서 `send-transactional-email` 함수를 배포하고, 사용자 승인에 따라 이 함수의 JWT 검증을 해제했다(`verify_jwt=false`). 함수 내부의 전용 서버 비밀값 인증은 유지한다. Supabase Secrets와 Render의 중계 연결 설정도 저장했다. 웹 앱 커밋 `9eba890`은 **2026-10-24 23:34:34 KST**, Render 배포 `dep-dbec2jo473hc73cqu5a0`에서 live 상태가 됐다.
+
+전용 인증값을 포함한 빈 본문 `POST {}`는 HTTP 400으로 거절되어 함수 인증·환경값 구문 검증·입력 검증 경로를 확인했다. 다만 승인된 자기 주소로 보낸 두 차례 실제 발송 검사는 **HTTP 503 / `configuration`**으로 실패했다. 이는 현재 함수에서 SMTP 인증 오류 `EAUTH`에 대응하는 응답이다. Daum의 POP3/SMTP 사용 설정과 현재 발급한 앱 비밀번호를 사용자가 확인하는 단계이며, 어느 설정이 원인인지는 아직 확정하지 않았다. **실수신은 미확인이고 운영 모드는 `manual`을 유지한다.** SMTP 인증·발송 검증을 통과한 뒤에만 `transactional`로 바꾸어 재빌드·재배포한다.
 
 ## Gmail API: 현재 호스팅을 유지하는 방법
 
@@ -128,4 +133,4 @@ npm run email:smoke -- --to <approved-test-recipient>
 
 `EMAIL_TEST_TO` 또는 기존 `RESEND_TEST_TO`도 사용할 수 있다. 고객센터 주소로 자동 발송하는 기본값은 없다. 이어서 테스트 계정으로 가입·아이디·비밀번호·코드·관리자 변경 알림 수신과 만료/재사용 토큰 거절을 확인한다.
 
-자동 테스트는 모의 공급자·인증 응답을 사용한다. 실제 메일 발송, 계정 OAuth 허가, 도메인 구매, 호스팅 변경, 운영 환경변수 변경·배포를 완료했다는 뜻이 아니다. 현재 발신 자격정보가 없어 실수신 검증은 별도 설정 후 진행해야 한다.
+자동 테스트는 모의 공급자·인증 응답을 사용하며 실제 수신함 도착을 보증하지 않는다. 운영 함수·웹 앱 배포와 Supabase/Render 설정 저장은 위 운영 반영 기록과 같이 완료했다. 실제 자기 주소 발송 검사는 SMTP 인증 단계에서 실패했으므로, Daum 계정 설정 확인 후 발송·실수신을 다시 검증해야 한다. 그 전까지 자동 이메일은 `manual` 모드로 보류한다.
