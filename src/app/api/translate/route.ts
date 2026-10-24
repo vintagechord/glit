@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { translateLyricsBatch } from "@/lib/server-lyrics-translation";
+import { isUsableLyricsTranslation, LYRICS_TRANSLATION_LIMITS } from "@/lib/lyrics-translation-validation";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
   consumeRateLimit,
@@ -11,13 +12,15 @@ type TranslateRequest = {
   lines?: string[];
   source?: string;
   target?: string;
+  context?: string;
 };
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
-const maxTranslateLines = 120;
-const maxTranslateLineLength = 5000;
-const maxTranslateTotalLength = 60_000;
+const maxTranslateLines = LYRICS_TRANSLATION_LIMITS.apiSegments;
+const maxTranslateLineLength = LYRICS_TRANSLATION_LIMITS.apiLine;
+const maxTranslateTotalLength = LYRICS_TRANSLATION_LIMITS.total;
 
 const normalizeLanguageCode = (value: string, fallback: string) => {
   const normalized = value.trim().toLowerCase();
@@ -60,9 +63,13 @@ export async function POST(request: Request) {
       );
     }
     const body = rawBody as TranslateRequest;
+    if ((body.lines !== undefined && (!Array.isArray(body.lines) || body.lines.some(line => typeof line !== "string"))) || (body.context !== undefined && typeof body.context !== "string")) {
+      return NextResponse.json({ error: "Translation request is invalid" }, { status: 400 });
+    }
     if (
       (body.lines !== undefined && !Array.isArray(body.lines)) ||
       (body.lines?.length ?? 0) > maxTranslateLines ||
+      (body.context?.length ?? 0) > LYRICS_TRANSLATION_LIMITS.context ||
       (body.lines ?? []).some(
         (line) => typeof line === "string" && line.length > maxTranslateLineLength,
       ) ||
@@ -78,8 +85,7 @@ export async function POST(request: Request) {
     }
     const lines = Array.isArray(body.lines)
       ? body.lines
-          .slice(0, maxTranslateLines)
-          .map((line) => String(line ?? "").slice(0, maxTranslateLineLength))
+          .map((line) => line)
       : [];
     if (!lines.length) {
       return NextResponse.json({ translations: [] });
@@ -94,20 +100,22 @@ export async function POST(request: Request) {
         ? normalizeLanguageCode(body.target, "ko")
         : "ko";
 
-    const translations = await translateLyricsBatch(lines, { source, target });
-    const requestedCount = lines.filter((line) => line.trim()).length;
-    const translatedCount = translations.filter((line) => line.trim()).length;
+    const deadline = AbortSignal.timeout(50_000);
+    const signal = AbortSignal.any([request.signal, deadline]);
+    const result = await translateLyricsBatch(lines, { source, target, context: body.context, signal });
+    const translations = lines.map((line, index) => result.length === lines.length && typeof result[index] === "string" && (!line.trim() || isUsableLyricsTranslation(result[index], line, target)) ? result[index] : "");
+    const failedIndexes = lines.flatMap((line, index) => line.trim() && !translations[index].trim() ? [index] : []);
 
-    if (translatedCount < requestedCount) {
+    if (result.length !== lines.length || failedIndexes.length || signal.aborted) {
       return NextResponse.json(
-        { error: "Translation provider did not translate every requested segment", translations },
-        { status: 502 },
+        { error: "Translation provider did not translate every requested segment", translations, failedIndexes },
+        { status: signal.aborted ? 504 : 502 },
       );
     }
 
     return NextResponse.json({ translations });
   } catch (error) {
-    console.error(error);
+    console.error("[translate] request failed", { category: error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name) ? error.name : "unknown" });
     return NextResponse.json(
       { error: "Translation failed" },
       { status: 500 },

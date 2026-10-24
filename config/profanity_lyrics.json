@@ -1,0 +1,25 @@
+{
+  "rules": [
+    { "id": "lyrics_ko_ssibal", "term": "씨발", "variants": ["씨발", "시발", "씨빨", "시빨", "씨팔", "시팔", "쒸발", "씌발", "씨바", "씨벌", "씨부랄", "씨x발", "시x발", "ㅅl발", "ㅆl발", "ㅅi발", "ㅆi발"], "language": "ko", "category": "confident" },
+    { "id": "lyrics_ko_byeongshin", "term": "병신", "variants": ["병신", "븅신", "빙신", "병x신"], "language": "ko", "category": "confident" },
+    { "id": "lyrics_ko_gaesaekki", "term": "개새끼", "variants": ["개새끼", "개쌔끼", "씹새끼"], "language": "ko", "category": "confident" },
+    { "id": "lyrics_ko_yeot", "term": "엿먹어", "variants": ["엿먹어", "엿먹어라"], "language": "ko", "category": "confident", "boundary": "word" },
+    { "id": "lyrics_ko_jot", "term": "좆", "variants": ["좆"], "language": "ko", "category": "confident" },
+    { "id": "lyrics_ko_jiral", "term": "지랄", "variants": ["지랄"], "language": "ko", "category": "confident" },
+    { "id": "lyrics_ko_jonna", "term": "존나", "variants": ["존나", "좃나", "좆나"], "language": "ko", "category": "confident" },
+    { "id": "lyrics_ko_ssyang", "term": "썅", "variants": ["썅"], "language": "ko", "category": "confident" },
+    { "id": "lyrics_ko_initials", "term": "ㅅㅂ", "variants": ["ㅅㅂ", "ㅆㅂ", "ㅂㅅ", "ㅈㄹ"], "language": "ko", "category": "suspected", "reason": "initials", "boundary": "word" },
+    { "id": "lyrics_ko_saekki", "term": "새끼", "variants": ["새끼", "쌔끼"], "language": "ko", "category": "suspected", "reason": "ambiguous" },
+    { "id": "lyrics_ko_phonetic_direct", "term": "퍽유", "variants": ["퍽유", "퍽큐", "뻑유", "뻑큐", "뻐큐", "빠큐"], "language": "ko", "category": "confident", "reason": "phonetic", "boundary": "word" },
+    { "id": "lyrics_ko_phonetic_review", "term": "욕설과 발음이 비슷한 표현", "variants": ["뻐킹", "뻑킹", "퍼킹", "퍽킹", "비취", "비치", "쉣", "쒯"], "language": "ko", "category": "suspected", "reason": "phonetic", "boundary": "word" },
+    { "id": "lyrics_ko_mixed_phonetic", "term": "c발", "variants": ["c발", "c바", "c벌"], "language": "mixed", "category": "suspected", "reason": "phonetic", "boundary": "word" },
+    { "id": "lyrics_en_fuck", "term": "fuck", "variants": ["fuck", "fucks", "fucking", "fuckin", "fukkin", "fucked", "fucker", "fuckers", "motherfucker", "motherfuckers", "motherfucking", "motherfuckin", "muthafucka", "muthafuckin", "muthafucker", "phuck", "phucking", "phuckin", "phucked", "fuk", "fvck"], "language": "en", "category": "confident" },
+    { "id": "lyrics_en_shit", "term": "shit", "variants": ["shit", "shits", "shitty", "bullshit", "bullshitting"], "language": "en", "category": "confident" },
+    { "id": "lyrics_en_bitch", "term": "bitch", "variants": ["bitch", "bitches", "bitching", "bitchy"], "language": "en", "category": "confident" },
+    { "id": "lyrics_en_insult", "term": "영어 욕설 표현", "variants": ["bastard", "bastards", "asshole", "assholes", "cunt", "cunts", "slut", "sluts", "whore", "whores"], "language": "en", "category": "confident" },
+    { "id": "lyrics_en_slurs", "term": "영어 비하 표현", "variants": ["nigga", "niggas", "nigger", "niggers", "faggot", "faggots"], "language": "en", "category": "confident" },
+    { "id": "lyrics_en_ambiguous", "term": "문맥 확인이 필요한 영어 표현", "variants": ["dick", "pussy", "damn"], "language": "en", "category": "suspected", "reason": "ambiguous" },
+    { "id": "lyrics_en_masked", "term": "가림 표기된 영어 욕설", "variants": ["f*ck", "f**k", "sh*t", "s**t", "b*tch", "b**ch", "b***h", "a**hole", "c*nt", "motherf*cker"], "language": "en", "category": "confident", "reason": "masked", "masked": true }
+  ],
+  "safeKoreanPhrases": ["시발점", "시발역", "시발지", "시바견", "씨바견", "새끼손가락", "새끼발가락", "새끼줄", "새끼고양이", "새끼강아지", "새끼오리", "비취색", "비취빛", "비취보석", "비취목걸이", "비취반지", "비취원석", "비취구슬", "해변의비치", "비치웨어", "비치볼", "비치타월"]
+}

@@ -57,6 +57,26 @@ test("a complete online album passes preflight and enables the cart CTA", () => 
   assert.equal(result.firstBlockingTarget, null);
 });
 
+test("preflight cannot be bypassed by skipping the optional lyrics-check button", () => {
+  const result = buildAlbumSubmissionPreflight(validOnlineInput({ tracks: [{
+    trackTitle: "첫 번째 곡", performer: "가수", composer: "작곡가", isTitle: true,
+    lyrics: "f.u.c.k", translatedLyrics: "말을 순화한 번역",
+  }] }));
+  assert.equal(result.canSubmit, false);
+  assert.ok(result.blockingIssues.some(item => item.id === "track.0.lyrics"));
+  assert.deepEqual(result.firstBlockingTarget, { step: 4, field: "lyrics", trackIndex: 0 });
+});
+
+test("preflight identifies suspicious phonetics as a warning while an actual clean-version cue stays valid", () => {
+  const original = validOnlineInput();
+  const warning = buildAlbumSubmissionPreflight({ ...original, tracks: [{ ...original.tracks[0], lyrics: "뻐킹" }] });
+  assert.equal(warning.canSubmit, true);
+  assert.ok(warning.warnings.some(item => item.id === "track.0.lyrics"));
+  const masked = buildAlbumSubmissionPreflight({ ...original, tracks: [{ ...original.tracks[0], lyrics: "오늘은 [삐처리] [무음]" }] });
+  assert.equal(masked.canSubmit, true);
+  assert.equal(masked.warnings.length, 0);
+});
+
 test("preflight returns every problem with a direct step and field target", () => {
   const result = buildAlbumSubmissionPreflight(
     validOnlineInput({

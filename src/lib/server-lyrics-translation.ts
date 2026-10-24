@@ -1,19 +1,14 @@
 import { translateLyricsWithOpenAI } from "./openai-translation";
 import { translateSpelledOutLetters } from "./foreign-lyrics";
 
-/** A nonempty response is not enough: untranslated source text must not pass as Korean. */
-export const isUsableLyricsTranslation = (translation: string, source: string, target = "ko") => {
-  const value = translation.trim();
-  if (!value || /^(?:TODO|번역문|번역 실패|translation)$/i.test(value)) return false;
-  return target.split("-")[0] !== "ko" || (/[가-힣]/.test(value) && value !== source.trim());
-};
+import { isUsableLyricsTranslation, normalizeLyricsTranslation, splitLyricsTranslationText, lyricsTranslationBatches, truncateLyricsContext, hasForeignLyricsLetters, withLyricsTranslationSignal } from "./lyrics-translation-validation";
+export { isUsableLyricsTranslation } from "./lyrics-translation-validation";
 
 const sleep = (ms: number) =>
   new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 
-const maxTranslateChunkLength = 1200;
 const translateConcurrency = 3;
 const lingvaTranslateOrigins = ["https://lingva.ml"];
 
@@ -64,43 +59,12 @@ const normalizeLanguageCode = (value: string, fallback: string) => {
     : fallback;
 };
 
-const normalizeTranslationOutput = (value: string) =>
-  value
-    .replace(/\s+/g, " ")
-    .replace(/^\s*번역\s*:\s*/i, "")
-    .trim();
+const normalizeTranslationOutput = normalizeLyricsTranslation;
 
 const baseLanguageCode = (value: string) =>
   value === "auto" ? value : value.split("-")[0] || value;
 
-const splitTextForTranslation = (text: string) => {
-  const trimmed = text.trim();
-  if (trimmed.length <= maxTranslateChunkLength) return [trimmed];
-
-  const chunks: string[] = [];
-  let remaining = trimmed;
-
-  while (remaining.length > maxTranslateChunkLength) {
-    const slice = remaining.slice(0, maxTranslateChunkLength);
-    const breakIndex = Math.max(
-      slice.lastIndexOf("\n"),
-      slice.lastIndexOf(". "),
-      slice.lastIndexOf("! "),
-      slice.lastIndexOf("? "),
-      slice.lastIndexOf(", "),
-      slice.lastIndexOf(" "),
-    );
-    const end = breakIndex > maxTranslateChunkLength * 0.45
-      ? breakIndex + 1
-      : maxTranslateChunkLength;
-    const chunk = remaining.slice(0, end).trim();
-    if (chunk) chunks.push(chunk);
-    remaining = remaining.slice(end).trim();
-  }
-
-  if (remaining) chunks.push(remaining);
-  return chunks;
-};
+const splitTextForTranslation = splitLyricsTranslationText;
 
 const translateLineWithGoogle = async (
   text: string,
@@ -263,73 +227,55 @@ const translateLine = async (
 
 export const translateLyricsBatch = async (
   lines: string[],
-  options: { source?: string; target?: string; fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
+  options: { source?: string; target?: string; fetchImpl?: typeof fetch; signal?: AbortSignal; context?: string; timeoutMs?: number } = {},
 ) => {
+  options.signal?.throwIfAborted();
   const source = normalizeLanguageCode(options.source ?? "auto", "auto");
   const target = normalizeLanguageCode(options.target ?? "ko", "ko");
-  const deadline = AbortSignal.timeout(55_000);
+  const deadline = AbortSignal.timeout(options.timeoutMs ?? 55_000);
   const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
   const fetchImpl: typeof fetch = (input, init) => {
     signal.throwIfAborted();
-    return (options.fetchImpl ?? fetch)(input, {
-      ...init,
-      signal: init?.signal ? AbortSignal.any([signal, init.signal]) : signal,
-    });
+    const requestSignal = init?.signal ? AbortSignal.any([signal, init.signal]) : signal;
+    return withLyricsTranslationSignal((options.fetchImpl ?? fetch)(input, { ...init, signal: requestSignal }), requestSignal);
   };
-  const normalizedCache = new Map<string, string>();
-  const uniqueTexts: string[] = [];
-
-  for (const line of lines) {
-    const normalized = line.trim();
-    if (!normalized || normalizedCache.has(normalized)) continue;
-    normalizedCache.set(normalized, "");
-    uniqueTexts.push(normalized);
-  }
-
-  if (uniqueTexts.length > 0) {
-    try {
-      const openAITranslations = await translateLyricsWithOpenAI(uniqueTexts, {
-        source,
-        target,
-        fetchImpl,
-      });
-      if (!openAITranslations) {
-        logTranslationProviderFailure("openai", new TranslationProviderError("not_configured"));
-      }
-      openAITranslations?.forEach((translation, index) => {
-        const text = uniqueTexts[index];
-        if (!text) return;
-        const normalized = normalizeTranslationOutput(translation);
-        if (isUsableLyricsTranslation(normalized, text, target)) normalizedCache.set(text, normalized);
-      });
-    } catch (error) {
-      logTranslationProviderFailure("openai", error);
+  const prepared = lines.map(line => ({ source: line.trim(), chunks: splitLyricsTranslationText(line) }));
+  const uniqueTexts = [...new Set(prepared.filter(line => !(target.split("-")[0] === "ko" && !hasForeignLyricsLetters(line.source))).flatMap(line => line.chunks))];
+  const translations = new Map<string, string>();
+  const context = truncateLyricsContext(options.context ?? lines.join("\n"));
+  const batches = lyricsTranslationBatches(uniqueTexts);
+  let nextBatch = 0;
+  let reportedMissingKey = false;
+  await Promise.allSettled(Array.from({ length: Math.min(2, batches.length) }, async () => {
+    while (nextBatch < batches.length && !signal.aborted) {
+      const batch = batches[nextBatch++];
+      try {
+        const result = await translateLyricsWithOpenAI(batch, { source, target, fetchImpl, signal, context });
+        if (!result && !reportedMissingKey) { reportedMissingKey = true; logTranslationProviderFailure("openai", new TranslationProviderError("not_configured")); }
+        result?.forEach((value, index) => {
+          const normalized = normalizeTranslationOutput(value);
+          if (isUsableLyricsTranslation(normalized, batch[index], target)) translations.set(batch[index], normalized);
+        });
+      } catch (error) { logTranslationProviderFailure("openai", error); }
     }
-
-    const fallbackTexts = uniqueTexts.filter(
-      (text) => !normalizedCache.get(text)?.trim(),
-    );
-    if (fallbackTexts.length > 0) {
-      let nextIndex = 0;
-      const workers = Array.from(
-        { length: Math.min(translateConcurrency, fallbackTexts.length) },
-        async () => {
-          while (nextIndex < fallbackTexts.length) {
-            signal.throwIfAborted();
-            const text = fallbackTexts[nextIndex];
-            nextIndex += 1;
-            const translated = await translateLine(text, source, target, fetchImpl);
-            normalizedCache.set(text, translated);
-          }
-        },
-      );
-      await Promise.all(workers);
+  }));
+  const missing = uniqueTexts.filter(text => !translations.has(text));
+  let nextText = 0;
+  await Promise.allSettled(Array.from({ length: Math.min(translateConcurrency, missing.length) }, async () => {
+    while (nextText < missing.length && !signal.aborted) {
+      const text = missing[nextText++];
+      try {
+        const translated = await withLyricsTranslationSignal(translateLine(text, source, target, fetchImpl), signal);
+        if (isUsableLyricsTranslation(translated, text, target)) translations.set(text, translated);
+      } catch { /* Retain completed results; an aborted segment is never success. */ }
     }
-  }
-
-  return lines.map((line) => {
-    const normalized = line.trim();
-    if (!normalized) return "";
-    return normalizedCache.get(normalized) ?? "";
+  }));
+  return prepared.map(line => {
+    if (!line.source) return "";
+    if (target.split("-")[0] === "ko" && !hasForeignLyricsLetters(line.source)) return line.source;
+    // A partially translated long excerpt must never look like a complete one.
+    if (!line.chunks.every(chunk => translations.has(chunk))) return "";
+    const value = line.chunks.map(chunk => translations.get(chunk)!).join(" ");
+    return isUsableLyricsTranslation(value, line.source, target) ? value : "";
   });
 };

@@ -5,6 +5,8 @@ import { after } from "next/server";
 import { z } from "zod";
 
 import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
+import { getAlbumLyricsSubmissionError } from "@/lib/album-lyrics-review";
+import { getPublicProfanityTerms } from "@/lib/public-catalog";
 import type { AlbumPriceTier } from "@/lib/album-payment-discount";
 import { B2ConfigError, getB2Config } from "@/lib/b2";
 import {
@@ -1179,6 +1181,20 @@ export async function saveAlbumSubmissionAction(
       tracks: submittedTracks,
     });
     if (requiredFieldsError) return { error: requiredFieldsError };
+
+    if (!isOneClick && !usesExternalApplicationForm) {
+      if (parsed.data.tracks === undefined) {
+        return { error: "최종 접수 전에 트랙과 가사를 다시 불러와 확인해주세요." };
+      }
+      try {
+        const terms = await getPublicProfanityTerms();
+        const lyricsError = getAlbumLyricsSubmissionError(submittedTracks, terms);
+        if (lyricsError) return { error: lyricsError };
+      } catch (error) {
+        console.error("[AlbumLyricsReview] failed", error instanceof Error ? error.name : "UnknownError");
+        return { error: "가사 검사를 완료하지 못했습니다. 잠시 후 다시 시도해주세요." };
+      }
+    }
 
     if (
       !isAdminReviewer &&

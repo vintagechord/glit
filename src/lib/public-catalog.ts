@@ -186,6 +186,11 @@ const loadProfanityTerms = unstable_cache(
   { revalidate: 300, tags: [PUBLIC_PROFANITY_TERMS_CACHE_TAG] },
 );
 
+// Final submission must distinguish a dictionary outage from an empty list.
+export async function getPublicProfanityTerms() {
+  return loadProfanityTerms();
+}
+
 async function withUncachedFallback<T>(query: Promise<T>, fallback: T): Promise<T> {
   try {
     return await query;

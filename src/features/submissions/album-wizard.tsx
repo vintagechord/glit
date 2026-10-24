@@ -27,6 +27,13 @@ import {
   removeAlbumTrackRowKey,
 } from "@/lib/album-track-table";
 import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
+import {
+  getAlbumLyricsReviewIssues,
+  LYRICS_PROFANITY_BLOCK_MESSAGE,
+  LYRICS_PROFANITY_MASKING_GUIDANCE,
+  LYRICS_PROFANITY_SUSPECTED_MESSAGE,
+  LYRICS_PROFANITY_INCOMPLETE_MESSAGE,
+} from "@/lib/album-lyrics-review";
 import { getAlbumPackageLabel } from "@/lib/album-package-label";
 import { orderAlbumDraftRowsForResume } from "@/lib/album-draft-order";
 import { showCenteredAlert, showCenteredConfirm } from "@/lib/centered-dialog";
@@ -49,6 +56,7 @@ import {
   buildInlineTranslatedLyrics,
   collectForeignLyricsSegments,
   hasNonKoreanLyrics,
+  LyricsTranslationError,
   requestLyricsTranslations,
 } from "@/lib/lyrics-tools";
 import {
@@ -58,13 +66,8 @@ import {
   isAudioUploadFile,
   isReleasedAlbumAudioFile,
 } from "@/lib/submission-files";
-import {
-  buildProfanityExtraRules,
-  buildLegacyProfanityMatchers,
-  extractProfanityWords,
-  type ProfanityTerm,
-} from "@/lib/profanity/legacy";
-import { runProfanityCheck } from "@/lib/profanity/check";
+import type { ProfanityTerm } from "@/lib/profanity/legacy";
+import { analyzeLyricsProfanity } from "@/lib/profanity/check";
 import {
   buildAlbumSubmissionPreflight,
   type ExistingCartSubmissionSnapshot,
@@ -179,6 +182,8 @@ const initialTrack: TrackInput = {
   broadcastSelected: false,
 };
 
+const noExtraProfanityTerms: ProfanityTerm[] = [];
+
 const standardSteps = ["온라인 신청서 작성", "음원 첨부", "결제", "신청 완료"];
 const oneClickSteps = ["URL 입력", "음원 첨부", "결제", "신청 완료"];
 const uploadFormSteps = ["신청서 작성", "음원 첨부", "결제", "신청 완료"];
@@ -276,7 +281,7 @@ const genreOptions = [
 
 const lyricCautions = [
   "코러스, 나레이션, 반복하는 후렴을 포함하여 모든 가사를 수록해야 합니다.",
-  "음원과 다르게 고의로 가사(욕설 및 선정성 문구 포함)를 누락하는 경우 심의가 불가하며, 향후 방송사에서 해당 음반기획사의 심의를 거부할 수 있습니다.",
+  "가사는 실제 제출 음원과 일치하도록 작성하고, 들리는 구간을 임의로 누락하지 마세요.",
   "외국어 가사에는 반드시 번역을 나란히 또는 번역본은 기재해주세요.",
   "심의요청서의 곡 순서와 CD 순서는 반드시 일치해야 합니다.",
   "실제 발매 앨범과 동일한 음원·가사·트랙수가 필요합니다. (예: 2트랙 앨범—AR 1곡 + INST 1곡—의 경우 INST까지 제출)",
@@ -378,8 +383,7 @@ export function AlbumWizard({
   packages,
   userId,
   userEmail,
-  profanityTerms = [],
-  profanityFilterV2Enabled = false,
+  profanityTerms = noExtraProfanityTerms,
   initialArchiveEntry: archiveEntrySeed,
   initialApplicant,
 }: {
@@ -471,19 +475,20 @@ export function AlbumWizard({
   const [packageConfirmTarget, setPackageConfirmTarget] =
     React.useState<PackageOption | null>(null);
   const lyricsOverlayRef = React.useRef<HTMLDivElement | null>(null);
-  const lyricsTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
-  const [lyricsToolApplied, setLyricsToolApplied] = React.useState<
-    Record<number, boolean>
-  >({});
   const [profanityCheckedMap, setProfanityCheckedMap] = React.useState<
-    Record<number, boolean>
-  >({});
-  const [profanityHighlightMap, setProfanityHighlightMap] = React.useState<
-    Record<number, boolean>
+    Record<string, string>
   >({});
   const [isTranslatingLyrics, setIsTranslatingLyrics] = React.useState(false);
+  const translationRequestRef = React.useRef<AbortController | null>(null);
+  const [translationPreview, setTranslationPreview] = React.useState<{
+    trackKey: string;
+    lyrics: string;
+    translatedLyrics: string;
+    text: string;
+    incomplete: boolean;
+  } | null>(null);
   const [translationPanelOpenMap, setTranslationPanelOpenMap] = React.useState<
-    Record<number, boolean>
+    Record<string, boolean>
   >({});
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [isContinuingDownloadedApplication, setIsContinuingDownloadedApplication] =
@@ -560,18 +565,17 @@ export function AlbumWizard({
     () => `onside:guest-token:album:${userId ?? "guest"}`,
     [userId],
   );
-  const profanityMatchers = React.useMemo(
-    () => buildLegacyProfanityMatchers(profanityTerms),
-    [profanityTerms],
-  );
-  const profanityExtraRules = React.useMemo(
-    () => buildProfanityExtraRules(profanityTerms),
-    [profanityTerms],
-  );
-  const isProfanityFilterV2Enabled = Boolean(profanityFilterV2Enabled);
-  const profanityPattern = profanityMatchers?.pattern ?? null;
-  const profanityTestPattern = profanityMatchers?.testPattern ?? null;
   const activeTrack = tracks[activeTrackIndex] ?? tracks[0];
+  const activeTrackKey = trackRowKeys.keys[activeTrackIndex] ?? "album-track-1";
+  const activeProfanity = React.useMemo(() => ({
+    original: analyzeLyricsProfanity(activeTrack.lyrics, profanityTerms),
+    translated: analyzeLyricsProfanity(activeTrack.translatedLyrics, profanityTerms),
+  }), [activeTrack.lyrics, activeTrack.translatedLyrics, profanityTerms]);
+  const profanitySnapshot = React.useMemo(() => JSON.stringify([activeTrack.lyrics, activeTrack.translatedLyrics]),
+    [activeTrack.lyrics, activeTrack.translatedLyrics]);
+  const hasConfidentProfanity = activeProfanity.original.hasProfanity || activeProfanity.translated.hasProfanity;
+  const hasSuspectedProfanity = activeProfanity.original.hasSuspectedProfanity || activeProfanity.translated.hasSuspectedProfanity;
+  const isProfanityCheckTruncated = activeProfanity.original.truncated || activeProfanity.translated.truncated;
   const isDownloadedApplicationFlow =
     !isOneClick && applicationFormMode === "upload";
   const hasTrackStep =
@@ -589,19 +593,13 @@ export function AlbumWizard({
     setApplicationFormMode(mode);
     setNotice({});
   };
-  const profanityWords = extractProfanityWords(
-    activeTrack.lyrics,
-    profanityPattern,
-  );
-  const showLyricsToolNotice = Boolean(lyricsToolApplied[activeTrackIndex]);
-  const showProfanityPanel = Boolean(profanityCheckedMap[activeTrackIndex]);
+  const showProfanityPanel = profanityCheckedMap[activeTrackKey] === profanitySnapshot ||
+    hasConfidentProfanity || hasSuspectedProfanity || isProfanityCheckTruncated;
   const showProfanityOverlay =
-    showProfanityPanel &&
-    Boolean(profanityHighlightMap[activeTrackIndex]) &&
-    profanityWords.length > 0;
+    showProfanityPanel && activeProfanity.original.matches.length > 0;
   const needsTranslatedLyrics = hasNonKoreanLyrics(activeTrack.lyrics);
   const showTranslatedLyricsPanel =
-    Boolean(translationPanelOpenMap[activeTrackIndex]) ||
+    Boolean(translationPanelOpenMap[activeTrackKey]) ||
     Boolean(activeTrack.translatedLyrics.trim()) ||
     needsTranslatedLyrics;
 
@@ -613,7 +611,22 @@ export function AlbumWizard({
     },
     [],
   );
-  const showLyricsTabs = showProfanityPanel;
+  const currentTranslationPreview = translationPreview?.trackKey === activeTrackKey &&
+    translationPreview.lyrics === activeTrack.lyrics &&
+    translationPreview.translatedLyrics === activeTrack.translatedLyrics
+    ? translationPreview : null;
+
+  React.useLayoutEffect(() => {
+    // Any edit, selection or row mutation invalidates a pending translation.
+    // A response must never write into a different track or overwrite new text.
+    translationRequestRef.current?.abort();
+    translationRequestRef.current = null;
+    setIsTranslatingLyrics(false);
+    return () => {
+      translationRequestRef.current?.abort();
+      translationRequestRef.current = null;
+    };
+  }, [tracks, activeTrackIndex, trackRowKeys]);
   const requireSubmissionId = React.useCallback(() => {
     if (!currentSubmissionId) {
       throw new Error("접수 ID를 준비하지 못했습니다. 잠시 후 다시 시도해주세요.");
@@ -730,6 +743,7 @@ export function AlbumWizard({
         artistGender,
         artistMembers,
         tracks,
+        profanityTerms,
         files: uploadedFiles,
         uploads,
         filesSubmittedByEmail: emailSubmitConfirmed,
@@ -755,6 +769,7 @@ export function AlbumWizard({
       isOneClick,
       melonUrl,
       previousRelease,
+      profanityTerms,
       priceChangeAcknowledged,
       productionCompany,
       releaseDate,
@@ -1259,6 +1274,11 @@ export function AlbumWizard({
     field: K,
     value: TrackInput[K],
   ) => {
+    if (field === "lyrics" || field === "translatedLyrics") {
+      translationRequestRef.current?.abort();
+      translationRequestRef.current = null;
+      setIsTranslatingLyrics(false);
+    }
     setTracks((prev) =>
       prev.map((track, idx) =>
         idx === index ? { ...track, [field]: value } : track,
@@ -1266,73 +1286,42 @@ export function AlbumWizard({
     );
   };
 
-  const markLyricsToolApplied = (index: number) => {
-    setLyricsToolApplied((prev) => ({ ...prev, [index]: true }));
-  };
-
   const toggleTranslationPanel = () => {
     setTranslationPanelOpenMap((prev) => ({
       ...prev,
-      [activeTrackIndex]: !showTranslatedLyricsPanel,
+      [activeTrackKey]: !showTranslatedLyricsPanel,
     }));
   };
 
   const renderProfanityPreview = (
     value: string,
-    pattern?: RegExp | null,
-    testPattern?: RegExp | null,
+    matches: ReturnType<typeof analyzeLyricsProfanity>["matches"],
   ) => {
-    if (!value || !pattern || !testPattern) return value;
-    const parts = value.split(pattern);
-    return parts.map((part, index) => {
-      if (!part) return null;
-      if (testPattern.test(part)) {
-        return (
-          <mark
-            key={`${part}-${index}`}
-            className="rounded bg-red-200/80 px-1 text-red-900 dark:bg-red-500/30 dark:text-red-100"
-          >
-            {part}
-          </mark>
-        );
-      }
-      return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
-    });
+    const parts: React.ReactNode[] = [];
+    let cursor = 0;
+    for (const match of matches) {
+      if (match.start < cursor) continue;
+      parts.push(value.slice(cursor, match.start));
+      parts.push(<mark key={`${match.start}-${match.end}`} className={match.category === "confident"
+        ? "rounded bg-[var(--bauhaus-red)] text-white dark:text-[#06111f]"
+        : "rounded bg-[var(--bauhaus-yellow)] text-[#111111]"}>{value.slice(match.start, match.end)}</mark>);
+      cursor = match.end;
+    }
+    parts.push(value.slice(cursor));
+    return parts;
   };
 
-  const handleProfanityCheck = async () => {
-    const lyrics = activeTrack.lyrics.trim();
-    if (!lyrics) return;
-    const v1HasProfanity = profanityTestPattern
-      ? profanityTestPattern.test(lyrics)
-      : false;
-    const { hasProfanity } = runProfanityCheck(lyrics, {
-      v1HasProfanity,
-      enableV2: isProfanityFilterV2Enabled,
-      preferV2: isProfanityFilterV2Enabled,
-      v2Options: { extraRules: profanityExtraRules },
-    });
-    if (hasProfanity) {
-      const shouldProceed = await showCenteredConfirm(
-        "욕설이 감지되었습니다. 욕설이 있는 경우 심의 부적격 가능성이 높습니다",
-      );
-      if (!shouldProceed) return;
-    }
+  const handleProfanityCheck = () => {
     setProfanityCheckedMap((prev) => ({
       ...prev,
-      [activeTrackIndex]: true,
+      [activeTrackKey]: profanitySnapshot,
     }));
-    setProfanityHighlightMap((prev) => ({
-      ...prev,
-      [activeTrackIndex]: hasProfanity,
-    }));
-    markLyricsToolApplied(activeTrackIndex);
   };
 
   const handleTranslateLyrics = async () => {
-    const lyricsFromState = activeTrack.lyrics;
-    const lyricsFromDom = lyricsTextareaRef.current?.value ?? "";
-    const lyrics = lyricsFromDom || lyricsFromState;
+    const lyrics = activeTrack.lyrics;
+    const originalTranslation = activeTrack.translatedLyrics;
+    const requestTrackKey = activeTrackKey;
     if (!lyrics.trim()) {
       setNotice({ error: "번역할 가사를 먼저 입력해주세요." });
       return;
@@ -1345,30 +1334,52 @@ export function AlbumWizard({
       });
       return;
     }
+    translationRequestRef.current?.abort();
+    const controller = new AbortController();
+    translationRequestRef.current = controller;
     setIsTranslatingLyrics(true);
+    const isCurrentRequest = () => !controller.signal.aborted && translationRequestRef.current === controller;
+    const keepPreview = (translations: string[], incomplete: boolean) => {
+      const text = buildInlineTranslatedLyrics(lines, segmentMap, translations, { allowPartial: incomplete }).join("\n");
+      setTranslationPreview({ trackKey: requestTrackKey, lyrics, translatedLyrics: originalTranslation, text, incomplete });
+    };
     try {
       const translations = await requestLyricsTranslations(sentencesToTranslate, {
         source: "auto",
         target: "ko",
+        signal: controller.signal,
+        context: lyrics,
       });
+      if (!isCurrentRequest()) return;
       const translatedLines = buildInlineTranslatedLyrics(
         lines,
         segmentMap,
         translations,
       );
-      updateTrack(activeTrackIndex, "translatedLyrics", translatedLines.join("\n"));
+      if (originalTranslation.trim()) {
+        keepPreview(translations, false);
+      } else {
+        updateTrack(activeTrackIndex, "translatedLyrics", translatedLines.join("\n"));
+        setTranslationPreview(null);
+      }
       setTranslationPanelOpenMap((prev) => ({
         ...prev,
-        [activeTrackIndex]: true,
+        [requestTrackKey]: true,
       }));
-      markLyricsToolApplied(activeTrackIndex);
     } catch (error) {
-      console.error(error);
+      if (!isCurrentRequest()) return;
+      if (error instanceof LyricsTranslationError && error.translations.some((text) => text.trim())) {
+        keepPreview(error.translations, true);
+        return;
+      }
       setNotice({
         error: "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
       });
     } finally {
-      setIsTranslatingLyrics(false);
+      if (translationRequestRef.current === controller) {
+        translationRequestRef.current = null;
+        setIsTranslatingLyrics(false);
+      }
     }
   };
 
@@ -2936,6 +2947,16 @@ export function AlbumWizard({
     return true;
   };
 
+  const validateLyricsProfanity = () => {
+    if (isOneClick || isDownloadedApplicationFlow) return true;
+    const issue = getAlbumLyricsReviewIssues(tracks, profanityTerms).find((item) => item.blocking);
+    if (!issue) return true;
+    setActiveTrackIndex(issue.trackIndex);
+    setStep(4);
+    setNotice({ error: issue.message });
+    return false;
+  };
+
   const validateTranslatedLyrics = () => {
     if (isAdminReviewer) return true;
 
@@ -2946,7 +2967,7 @@ export function AlbumWizard({
       setActiveTrackIndex(index);
       setTranslationPanelOpenMap((prev) => ({
         ...prev,
-        [index]: true,
+        [trackRowKeys.keys[index]]: true,
       }));
       setNotice({
         error: `트랙 ${index + 1} 가사에 한국어 외 언어가 포함되어 있습니다. 번역본 가사를 입력해주세요.`,
@@ -3263,6 +3284,7 @@ export function AlbumWizard({
     if (
       !validateBasicInfoStep() ||
       !validateTrackInfoStep() ||
+      !validateLyricsProfanity() ||
       !validateTranslatedLyrics()
     ) {
       return;
@@ -3534,6 +3556,7 @@ export function AlbumWizard({
     if (
       !validateBasicInfoStep() ||
       !validateTrackInfoStep() ||
+      !validateLyricsProfanity() ||
       !validateTranslatedLyrics()
     ) {
       return;
@@ -3712,7 +3735,7 @@ export function AlbumWizard({
       status === "SUBMITTED" &&
       !isDownloadedApplicationFlow &&
       !isOneClick &&
-      !validateTranslatedLyrics()
+      (!validateLyricsProfanity() || !validateTranslatedLyrics())
     ) {
       return;
     }
@@ -5042,19 +5065,6 @@ export function AlbumWizard({
                                 >
                                   욕설 체크
                                 </button>
-                                <button
-                                  type="button"
-                                  aria-label="욕설 포함 곡 심의 안내"
-                                  aria-haspopup="dialog"
-                                  title="욕설 포함 곡 심의 안내"
-                                  onClick={() => void showCenteredAlert(
-                                    "욕설이 있는 곡은 심의 부적격 대상이며, 한 곡만 포함돼도 앨범 전체 심의가 중단될 수 있습니다. 해당 곡은 제외하고 신청해주세요.",
-                                    { title: "욕설 포함 곡 심의 안내" },
-                                  )}
-                                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                >
-                                  <Info className="h-4 w-4" aria-hidden="true" />
-                                </button>
                               </div>
                               <div className="inline-flex items-center gap-1">
                                 <button
@@ -5080,12 +5090,6 @@ export function AlbumWizard({
                                 </button>
                               </div>
                             </div>
-                            {showLyricsToolNotice && (
-                              <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
-                                위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
-                                체크해주세요.
-                              </div>
-                            )}
                           </div>
                           <div className="relative isolate overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
                             {showProfanityOverlay && (
@@ -5097,14 +5101,14 @@ export function AlbumWizard({
                                 <div className="whitespace-pre-wrap">
                                   {renderProfanityPreview(
                                     activeTrack.lyrics,
-                                    profanityPattern,
-                                    profanityTestPattern,
+                                    activeProfanity.original.matches,
                                   )}
                                 </div>
                               </div>
                             )}
                             <textarea
-                              ref={lyricsTextareaRef}
+                              aria-label="가사 원문"
+                              data-preflight-field="lyrics"
                               value={activeTrack.lyrics}
                               onChange={(event) =>
                                 updateTrack(
@@ -5150,6 +5154,7 @@ export function AlbumWizard({
                                 {needsTranslatedLyrics ? " *" : ""}
                               </label>
                               <textarea
+                                aria-label="번역본 가사"
                                 data-preflight-field="translatedLyrics"
                                 value={activeTrack.translatedLyrics}
                                 onChange={(event) =>
@@ -5164,35 +5169,40 @@ export function AlbumWizard({
                               />
                             </div>
                           )}
-                          {showLyricsTabs && (
-                            <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-foreground">
-                              {showProfanityPanel && (
-                                <div className="mt-3 space-y-2">
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                                    감지된 단어
-                                  </p>
-                                  <div className="max-h-32 space-y-2 overflow-auto pr-1">
-                                    {profanityHighlightMap[activeTrackIndex] &&
-                                      profanityWords.length > 0 ? (
-                                      profanityWords.map((word) => (
-                                        <div
-                                          key={word}
-                                          className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px] font-semibold text-red-600"
-                                        >
-                                          {word}
-                                        </div>
-                                      ))
-                                    ) : (
-                                      <div className="rounded-xl border border-dashed border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
-                                        {profanityHighlightMap[activeTrackIndex]
-                                          ? "회피 패턴이 감지되었습니다."
-                                          : "욕설이 감지되지 않았습니다."}
-                                      </div>
-                                    )}
+                          {currentTranslationPreview && (
+                            <section aria-label="자동번역 미리보기" className="space-y-2 rounded-2xl border border-border bg-background p-4 text-sm">
+                              <p className="font-bold">{currentTranslationPreview.incomplete ? "자동번역 일부 완료 · 확인 필요" : "자동번역 결과 미리보기"}</p>
+                              <p className="text-xs leading-5 text-muted-foreground">{currentTranslationPreview.incomplete
+                                ? "완료된 번역은 아래에 보관했습니다. 미완료 구간은 원문으로 남아 있으며 번역본에 자동 반영하지 않았습니다. 자동번역을 다시 시도해주세요."
+                                : "직접 입력한 번역본은 유지했습니다. 아래 결과를 확인한 뒤 필요한 부분을 번역본에 직접 반영해주세요."}</p>
+                              <textarea aria-label="자동번역 미리보기" readOnly value={currentTranslationPreview.text} className="min-h-[120px] w-full rounded-xl border border-border bg-card p-3 text-sm text-foreground" />
+                              <button type="button" onClick={handleTranslateLyrics} disabled={isTranslatingLyrics} className="min-h-11 rounded-full border border-border px-4 py-2 font-semibold disabled:opacity-50">자동번역 다시 시도</button>
+                            </section>
+                          )}
+                          {showProfanityPanel && (
+                            <section aria-label="가사 욕설 검사 결과" className="space-y-3 rounded-2xl border-2 border-border bg-background p-4 text-sm text-foreground">
+                              <p className="font-bold">{hasConfidentProfanity ? "명확한 욕설 표현 감지" : hasSuspectedProfanity ? "확인 필요 표현 감지" : isProfanityCheckTruncated ? "가사 검사 미완료" : "가사 텍스트 검사 결과"}</p>
+                              {hasConfidentProfanity && <>
+                                <p className="font-semibold">{LYRICS_PROFANITY_BLOCK_MESSAGE}</p>
+                                <p className="leading-6">{LYRICS_PROFANITY_MASKING_GUIDANCE}</p>
+                              </>}
+                              {hasSuspectedProfanity && <p className="leading-6">{LYRICS_PROFANITY_SUSPECTED_MESSAGE}</p>}
+                              {isProfanityCheckTruncated && <p className="font-semibold">{LYRICS_PROFANITY_INCOMPLETE_MESSAGE}</p>}
+                              {!hasConfidentProfanity && !hasSuspectedProfanity && !isProfanityCheckTruncated && <p>입력한 가사에서 명확한 욕설·확인 필요 표현이 감지되지 않았습니다.</p>}
+                              <div className="max-h-64 space-y-2 overflow-y-auto">
+                                {([
+                                  { label: "가사 원문", text: activeTrack.lyrics, analysis: activeProfanity.original },
+                                  { label: "번역본 가사", text: activeTrack.translatedLyrics, analysis: activeProfanity.translated },
+                                ]).flatMap(({ label, text, analysis }) => analysis.matches.slice(0, 30).map((match) => (
+                                  <div key={`${label}-${match.start}-${match.end}-${match.ruleId}`} className="space-y-1 rounded-xl border border-border p-3">
+                                    <p className="text-xs font-bold"><span>{label}</span> · <span>{match.category === "confident" ? "명확한 욕설" : "확인 필요"}</span></p>
+                                    <p className="whitespace-pre-wrap break-words">{text.slice(Math.max(0, match.start - 24), match.start)}<mark className={match.category === "confident" ? "rounded bg-[var(--bauhaus-red)] text-white dark:text-[#06111f]" : "rounded bg-[var(--bauhaus-yellow)] text-[#111111]"}>{text.slice(match.start, match.end)}</mark>{text.slice(match.end, match.end + 24)}</p>
+                                    <p className="text-xs leading-5 text-muted-foreground">{match.reason}</p>
                                   </div>
-                                </div>
-                              )}
-                            </div>
+                                )))}
+                              </div>
+                              <p className="text-xs leading-5 text-muted-foreground">입력한 가사를 기준으로 검사합니다. 실제 제출 음원과 가사를 동일하게 맞춰주세요.</p>
+                            </section>
                           )}
                           <details className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3 text-xs text-muted-foreground">
                             <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground">

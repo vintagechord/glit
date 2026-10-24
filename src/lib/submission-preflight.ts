@@ -6,6 +6,8 @@ import {
 } from "@/lib/submission-files";
 import { hasNonKoreanLyrics } from "@/lib/lyrics-tools";
 import { getReleasedAlbumUrlError } from "@/lib/released-album-url";
+import { getAlbumLyricsReviewIssues } from "@/lib/album-lyrics-review";
+import type { ProfanityTerm } from "@/lib/profanity/legacy";
 
 export type SubmissionPreflightSeverity = "blocking" | "warning";
 
@@ -99,6 +101,7 @@ export type AlbumSubmissionPreflightInput = {
   files: AlbumPreflightFile[];
   uploads?: AlbumPreflightUpload[];
   filesSubmittedByEmail: boolean;
+  profanityTerms?: ProfanityTerm[];
 };
 
 export type SubmissionPreflightResult = {
@@ -550,6 +553,14 @@ export const buildAlbumSubmissionPreflight = (
           { step: 4, field: "broadcastSelected" },
         ),
       );
+    }
+  }
+
+  if (isOnlineForm) {
+    for (const review of getAlbumLyricsReviewIssues(input.tracks, input.profanityTerms)) {
+      addTrackIssue(issues, review.trackIndex, review.field,
+        review.kind === "incomplete" ? "가사 검사 미완료" : review.kind === "profanity" ? "욕설 확인" : "가사 표기 확인",
+        review.message, review.blocking ? "blocking" : "warning");
     }
   }
 

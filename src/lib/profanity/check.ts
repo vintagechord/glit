@@ -1,5 +1,8 @@
 import { evaluate, type ProfanityEvaluation, type ProfanityEvaluateOptions } from "./engine";
 
+export { analyzeLyricsProfanity, LYRICS_PROFANITY_LIMITS } from "./lyrics";
+export type { LyricsProfanityAnalysis, LyricsProfanityMatch, LyricsProfanityCategory } from "./lyrics";
+
 export type ProfanityCheckOutcome = {
   hasProfanity: boolean;
   v1HasProfanity: boolean;

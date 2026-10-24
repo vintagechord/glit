@@ -36,7 +36,7 @@ test("unreleased albums offer the application mode while released albums go dire
   assert.match(source, /applicationFormMode: applicationFormMode \?\? undefined/);
   const modeSelector = source.slice(
     source.indexOf("const selectApplicationFormMode"),
-    source.indexOf("const profanityWords"),
+    source.indexOf("const showProfanityPanel"),
   );
   assert.match(modeSelector, /setApplicationFormMode\(mode\)/);
   assert.doesNotMatch(modeSelector, /setFiles|setUploads|setUploadedFiles/);

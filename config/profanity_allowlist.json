@@ -6,6 +6,12 @@
     "lang": "ko"
   },
   {
+    "id": "ko_sibal_station",
+    "pattern": "시\\s*발\\s*역",
+    "description": "Non-profanity phrase for the first station on a route",
+    "lang": "ko"
+  },
+  {
     "id": "ko_saekki_finger",
     "pattern": "새\\s*끼\\s*손\\s*가\\s*락",
     "description": "Non-profanity phrase for finger name",
