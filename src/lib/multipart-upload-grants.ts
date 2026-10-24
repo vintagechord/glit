@@ -33,6 +33,7 @@ export type MultipartUploadGrant = {
   abort_attempts: number;
   last_abort_attempt_at: string | null;
   expires_at: string;
+  completion_manifest_hash?: string | null;
 };
 
 export const getMultipartOwnerKey = (params: {

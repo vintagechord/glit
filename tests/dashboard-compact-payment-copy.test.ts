@@ -16,9 +16,10 @@ test("dashboard summaries use the payment action instead of repeated payment lab
       source,
       /const hasPaymentAction = submission\.payment(?:_status|Status) !== "PAID"/,
     );
-    assert.match(source, /\{!hasPaymentAction \? \(/);
   }
 
+  assert.match(statusList, /\{!hasPaymentAction \? \(/);
+  assert.match(historyList, /\{hasPaymentAction \? "상세보기" : statusInfo\.label\}/);
   assert.match(statusList, /\{hasPaymentAction && \(/);
   assert.match(historyList, /\{hasPaymentAction \? \(/);
   assert.doesNotMatch(statusList, /const paymentLabels/);
@@ -51,7 +52,7 @@ test("paid-only history views describe review progress, not payment progress", (
   const artistDetail = readSource("src/app/dashboard/artists/[id]/page.tsx");
 
   assert.doesNotMatch(history, /결제 대기|결제 확인/);
-  assert.match(history, /return "심의 진행"/);
-  assert.match(history, /return "접수 완료"/);
+  assert.match(history, /IN_PROGRESS: "심의 진행"/);
+  assert.match(history, /WAITING_PAYMENT: "접수 완료"/);
   assert.match(artistDetail, /WAITING_PAYMENT: "접수 완료"/);
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 import { watchUploadProgress } from "@/lib/upload-watchdog";
 import {
@@ -4534,7 +4535,7 @@ export function MvWizard({
                 </div>
               )}
               {notice.submissionId && (
-                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
+                <div className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.success}`}>
                   임시 저장이 완료되었습니다.
                 </div>
               )}
@@ -4810,7 +4811,7 @@ export function MvWizard({
             </div>
           )}
           {notice.submissionId && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
+            <div className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.success}`}>
               임시 저장이 완료되었습니다.
             </div>
           )}
@@ -5250,12 +5251,12 @@ export function MvWizard({
           tabIndex={-1}
           className="rounded-[24px] border border-border/60 bg-card/80 p-4 text-center sm:rounded-[32px] sm:p-10 scroll-mt-[calc(var(--site-header-height,112px)+1rem)] outline-none"
         >
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/12 text-2xl text-emerald-600">
+          <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full border-2 text-2xl ${brandStatusTones.success}`}>
             ✓
           </div>
           <h2 className="font-display mt-4 text-3xl text-foreground">접수 완료</h2>
           {notice.emailNotice ? (
-            <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]">
+            <div className={`mt-6 rounded-2xl border-2 px-4 py-3 text-sm ${brandStatusTones.progress}`}>
               {notice.emailNotice}
             </div>
           ) : null}

@@ -66,11 +66,11 @@ export function PendingOverlay({ show, label }: PendingOverlayProps) {
       <div
         role="status"
         aria-live="polite"
-        className="flex items-center gap-3 rounded-2xl border border-border/70 bg-background/90 px-5 py-3 text-sm font-semibold text-foreground shadow-xl"
+        className="flex max-w-md items-center gap-3 rounded-[10px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-5 py-4 text-sm font-black text-[#111111] shadow-[4px_4px_0_var(--bauhaus-shadow)]"
       >
         <span
           aria-hidden="true"
-          className="h-4 w-4 animate-spin rounded-full border-2 border-foreground/40 border-t-transparent"
+          className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-[#111111] border-t-transparent"
         />
         <span>{label ?? "진행 중..."}</span>
       </div>

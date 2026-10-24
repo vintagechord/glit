@@ -3,6 +3,7 @@
 import { AlertTriangle, ArrowRight, Check, CircleAlert } from "lucide-react";
 
 import { formatCurrency } from "@/lib/format";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import type {
   SubmissionPreflightIssue,
   SubmissionPreflightResult,
@@ -40,7 +41,7 @@ const PriceChangeSummary = ({ issue }: { issue: SubmissionPreflightIssue }) => {
   }
 
   return (
-    <p className="mt-2 text-xs font-black text-foreground">
+    <p className="mt-2 text-xs font-black text-current">
       {formatCurrency(previous)}원 → {formatCurrency(current)}원
     </p>
   );
@@ -70,20 +71,18 @@ const IssueRow = ({
       data-preflight-issue={issue.id}
       className={`grid grid-cols-1 items-start sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center gap-3 rounded-[16px] border-2 p-3 sm:p-4 ${
         isBlocking
-          ? "border-[#d9362c]/45 bg-[#d9362c]/7"
-          : "border-[#e7b900]/60 bg-[#f2cf27]/10"
+          ? brandStatusTones.danger
+          : brandStatusTones.warning
       }`}
     >
       <div className="flex min-w-0 items-start gap-3">
         <Icon
           aria-hidden="true"
-          className={`mt-0.5 h-5 w-5 shrink-0 ${
-            isBlocking ? "text-[#d9362c]" : "text-[#9a7600]"
-          }`}
+          className="mt-0.5 h-5 w-5 shrink-0 text-current"
         />
         <div className="min-w-0 [overflow-wrap:anywhere]">
-          <p className="text-sm font-black text-foreground">{issue.title}</p>
-          <p className="mt-0.5 text-xs font-semibold leading-5 text-muted-foreground">
+          <p className="text-sm font-black text-current">{issue.title}</p>
+          <p className="mt-0.5 text-xs font-semibold leading-5 text-current">
             {issue.message}
           </p>
           <PriceChangeSummary issue={issue} />
@@ -138,10 +137,10 @@ export function SubmissionPreflightPanel({
           role="status"
           className={`inline-flex items-center gap-1 rounded-full border-2 px-3 py-1 text-xs font-black ${
             hasBlockingIssues
-              ? "border-[#d9362c] bg-[#d9362c] text-white"
+              ? brandStatusTones.danger
               : hasWarnings
-                ? "border-[#9a7600] bg-[#f2cf27]/25 text-[#6b5200] dark:text-[#f2cf27]"
-                : "border-emerald-700 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                ? brandStatusTones.warning
+                : brandStatusTones.success
           }`}
         >
           {!hasBlockingIssues && !hasWarnings ? (
@@ -192,11 +191,11 @@ export function SubmissionPreflightPanel({
           ) : null}
         </div>
       ) : (
-        <div className="mt-5 flex items-center gap-3 rounded-[16px] border-2 border-emerald-700/40 bg-emerald-50 p-4 text-sm font-black text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-white">
+        <div className={`mt-5 flex items-center gap-3 rounded-[16px] border-2 p-4 text-sm font-black ${brandStatusTones.success}`}>
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-current">
             <Check aria-hidden="true" className="h-4 w-4" />
           </span>
-          <p>필수 입력과 파일 첨부 상태를 확인했습니다.<br />자료 내용과 제출 규격은 관리자가 확인합니다.</p>
+          <p className="break-keep">필수 입력과 파일 첨부 상태를 확인했습니다.<br />자료 내용과 제출 규격은 관리자가 확인합니다.</p>
         </div>
       )}
 

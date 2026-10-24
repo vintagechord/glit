@@ -33,7 +33,7 @@ test("multipart part signing has bounded unique part numbers and rate limiting",
   assert.match(source, /new Set\(values\)\.size === values\.length/);
   assert.match(source, /namespace: "upload-multipart-presign-ip"/);
   assert.match(source, /status: 429/);
-  assert.match(complete, /claim_multipart_upload_grant/);
+  assert.match(complete, /claim_multipart_upload_completion/);
   assert.match(complete, /markMultipartGrantCompleted/);
   assert.match(b2Source, /ContentLength: params\.contentLength/);
 });

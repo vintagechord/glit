@@ -17,6 +17,8 @@ import {
 import * as React from "react";
 
 import { formatCurrency, formatDateTime } from "@/lib/format";
+import { brandStatusTones } from "@/lib/brand-status-tones";
+import { buildSubmissionCheckoutHref, parseCheckoutSubmissionIds } from "@/lib/submission-checkout";
 import {
   readGuestSubmissionCartEntries,
   rememberGuestSubmissionOrderEntries,
@@ -143,6 +145,13 @@ export function SubmissionCartCheckout({
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const localePrefix = isEnglishRoute ? "/en" : "";
   const ordersHref = `${localePrefix}/mypage/orders`;
+  const cartHref = `${localePrefix}/mypage/cart`;
+  const isPaymentStep = searchParams.get("step") === "payment";
+  const checkoutIdsParam = searchParams.get("items");
+  const checkoutSubmissionIds = React.useMemo(
+    () => parseCheckoutSubmissionIds(checkoutIdsParam),
+    [checkoutIdsParam],
+  );
   const newSubmissionHref = isEnglishRoute ? "/en/dashboard/new" : "/dashboard/new";
   const focusedSubmissionId =
     searchParams.get("focus") ?? searchParams.get("added");
@@ -176,6 +185,7 @@ export function SubmissionCartCheckout({
     if (isMobileDevice) setSelectedMethod("BANK");
   }, [isMobileDevice]);
   const [isOpening, setIsOpening] = React.useState(false);
+  const [paymentWindowOpen, setPaymentWindowOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [pendingDeleteIds, setPendingDeleteIds] = React.useState<string[] | null>(
     null,
@@ -346,6 +356,7 @@ export function SubmissionCartCheckout({
   }, [payableIds, payableItems]);
 
   React.useEffect(() => {
+    if (isPaymentStep) return;
     if (!focusedSubmissionId) return;
     const target = items.find((item) => item.id === focusedSubmissionId);
     if (!target || getPayableAmount(target) <= 0) return;
@@ -366,11 +377,19 @@ export function SubmissionCartCheckout({
         .getElementById(`cart-item-${focusedSubmissionId}`)
         ?.scrollIntoView({ block: "center", behavior: "smooth" });
     });
-  }, [focusedSubmissionId, items, payableItems]);
+  }, [focusedSubmissionId, isPaymentStep, items, payableItems]);
 
+  const checkoutSelectionIds = React.useMemo(
+    () => new Set(expandSubmissionCartGroupIds(payableItems, checkoutSubmissionIds)),
+    [checkoutSubmissionIds, payableItems],
+  );
+  const checkoutSelectionUnavailable = isPaymentStep && (
+    checkoutSubmissionIds.length === 0 ||
+    checkoutSubmissionIds.some((id) => !payableIds.includes(id))
+  );
   const selectedItems = React.useMemo(
-    () => items.filter((item) => selectedIds.has(item.id)),
-    [items, selectedIds],
+    () => items.filter((item) => (isPaymentStep ? checkoutSelectionIds : selectedIds).has(item.id)),
+    [checkoutSelectionIds, isPaymentStep, items, selectedIds],
   );
   const checkoutItemsRef = React.useRef<CartItem[]>([]);
   const moveItemsToOrders = React.useCallback((orderedItems: CartItem[]) => {
@@ -404,6 +423,7 @@ export function SubmissionCartCheckout({
       cleanupInicisPaymentLayer();
       moveItemsToOrders(orderedItems);
       setIsOpening(false);
+      setPaymentWindowOpen(false);
       setNotice(null);
       router.push(`${ordersHref}?focus=${encodeURIComponent(orderedItems[0].id)}`);
       router.refresh();
@@ -569,6 +589,10 @@ export function SubmissionCartCheckout({
 
   const handleCheckout = async () => {
     if (isOpening || isDeleting) return;
+    if (checkoutSelectionUnavailable) {
+      setNotice({ type: "error", message: "선택한 신청서의 상태가 변경되었습니다. 장바구니에서 다시 확인해주세요." });
+      return;
+    }
     if (selectedItems.length === 0) {
       setNotice({ type: "error", message: "결제할 신청서를 선택해주세요." });
       return;
@@ -586,6 +610,7 @@ export function SubmissionCartCheckout({
     rememberGuestSubmissionOrderEntries(orderedItems.flatMap((item) => item.guestToken
       ? [{ submissionId: item.id, guestToken: item.guestToken }] : []));
     setIsOpening(true);
+    setPaymentWindowOpen(false);
     setNotice({
       type: "info",
       message:
@@ -640,8 +665,20 @@ export function SubmissionCartCheckout({
       return;
     }
 
-    if (!redirected) moveItemsToOrders(orderedItems);
+    if (!redirected) {
+      // Reserve the order in storage, while keeping its items and total visible
+      // behind INIStdPay until the payment window reports its outcome.
+      removeGuestSubmissionCartEntries(orderedItems.map((item) => item.id));
+      window.dispatchEvent(new Event(SUBMISSION_ORDERS_UPDATED_EVENT));
+      setPaymentWindowOpen(true);
+    }
     setNotice(null);
+  };
+
+  const continueToPayment = () => {
+    if (isOpening || isDeleting || selectedItems.length === 0 || selectedTotal <= 0) return;
+    setNotice(null);
+    router.push(buildSubmissionCheckoutHref(selectedItems.map((item) => item.id), localePrefix));
   };
 
   if (isLoadingGuestCart) {
@@ -679,8 +716,27 @@ export function SubmissionCartCheckout({
     );
   }
 
+  if (checkoutSelectionUnavailable) {
+    return <div role="alert" className="space-y-4 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background p-5">
+      <h2 className="text-lg font-black">결제할 신청서를 다시 확인해주세요.</h2>
+      <p className="text-sm leading-6 text-muted-foreground">선택한 신청서가 이미 주문으로 이동했거나 상태가 변경되었습니다.</p>
+      <div className="flex flex-wrap gap-3">
+        <Link href={cartHref} className="rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-4 py-3 text-sm font-black text-[#111111]">장바구니에서 다시 선택</Link>
+        <Link href={ordersHref} className="rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background px-4 py-3 text-sm font-black">주문내역 확인</Link>
+      </div>
+    </div>;
+  }
+
   return (
     <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="flex flex-wrap items-center justify-between gap-3 xl:col-span-2">
+        <nav aria-label="결제 단계" className="flex items-center gap-3 text-sm font-black">
+          <span aria-current={!isPaymentStep ? "step" : undefined} className={!isPaymentStep ? "text-foreground" : "text-muted-foreground"}>1. 장바구니</span>
+          <span aria-hidden="true">→</span>
+          <span aria-current={isPaymentStep ? "step" : undefined} className={isPaymentStep ? "text-foreground" : "text-muted-foreground"}>2. 결제하기</span>
+        </nav>
+        {isPaymentStep ? <button type="button" disabled={isOpening} onClick={() => router.push(cartHref)} className="rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background px-3 py-2 text-xs font-black disabled:opacity-50">선택 변경</button> : null}
+      </div>
       {notice ? (
         <NoticeDialog
           type={notice.type}
@@ -704,6 +760,7 @@ export function SubmissionCartCheckout({
         />
       ) : null}
       <div className="min-w-0 space-y-4">
+        {isPaymentStep ? <div><h2 className="text-lg font-black">결제할 신청서</h2><p className="mt-1 text-sm text-muted-foreground">신청 내용과 금액을 확인한 뒤 결제 수단을 선택해주세요.</p></div> : (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 py-2 text-xs font-black text-foreground shadow-[2px_2px_0_var(--bauhaus-shadow)]">
             <ShoppingCart size={16} strokeWidth={2.5} />
@@ -731,11 +788,12 @@ export function SubmissionCartCheckout({
             </button>
           </div>
         </div>
+        )}
 
         <div className="space-y-3">
-          {items.map((item) => {
+          {(isPaymentStep ? selectedItems : items).map((item) => {
             const amount = getPayableAmount(item);
-            const selected = selectedIds.has(item.id);
+            const selected = isPaymentStep || selectedIds.has(item.id);
             const disabled = amount <= 0;
             const groupSize = items.filter(
               (candidate) =>
@@ -752,7 +810,7 @@ export function SubmissionCartCheckout({
                 key={item.id}
                 className={`grid min-w-0 grid-cols-[44px_minmax(0,1fr)] gap-3 rounded-[8px] border-2 px-3 py-4 transition sm:px-4 md:grid-cols-[44px_minmax(0,1fr)_auto] md:items-center xl:grid-cols-[44px_minmax(0,1fr)_auto_auto] ${
                   selected
-                    ? "border-[var(--bauhaus-ink)] bg-[#fff4bd] shadow-[4px_4px_0_var(--bauhaus-shadow)] dark:bg-[#f2cf27]/18"
+                    ? "border-[var(--bauhaus-ink)] bg-[var(--background)] shadow-[4px_4px_0_var(--bauhaus-yellow)]"
                     : "border-border bg-[var(--card)] hover:border-[var(--bauhaus-ink)]"
                 } ${disabled ? "opacity-60" : ""}`}
               >
@@ -761,7 +819,7 @@ export function SubmissionCartCheckout({
                   onClick={() => {
                     if (!disabled) toggleItem(item.id);
                   }}
-                  disabled={disabled || isDeleting || isOpening}
+                  disabled={disabled || isDeleting || isOpening || isPaymentStep}
                   aria-pressed={selected}
                   aria-label={selectionLabel}
                   className={`flex h-11 w-11 items-center justify-center rounded-[6px] border-2 ${
@@ -777,7 +835,7 @@ export function SubmissionCartCheckout({
                   onClick={() => {
                     if (!disabled) toggleItem(item.id);
                   }}
-                  disabled={disabled || isDeleting || isOpening}
+                  disabled={disabled || isDeleting || isOpening || isPaymentStep}
                   className="min-w-0 text-left disabled:cursor-default"
                 >
                   <span className="flex flex-wrap items-center gap-2">
@@ -803,7 +861,7 @@ export function SubmissionCartCheckout({
                 <span className="col-start-2 min-w-0 text-left text-base font-black tabular-nums text-foreground [overflow-wrap:anywhere] md:col-start-3 md:min-w-[112px] md:text-right">
                   {amount > 0 ? `${formatCurrency(amount)}원` : "금액 확인 필요"}
                 </span>
-                <div className="col-span-2 col-start-1 grid min-w-0 grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center md:col-start-2 xl:col-span-1 xl:col-start-4 xl:justify-end">
+                {!isPaymentStep ? <div className="col-span-2 col-start-1 grid min-w-0 grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center md:col-start-2 xl:col-span-1 xl:col-start-4 xl:justify-end">
                   <Link
                     href={getDetailHref(item)}
                     className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 text-[11px] font-black text-[var(--foreground)] shadow-[2px_2px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--bauhaus-yellow)] hover:text-[#111111]"
@@ -831,7 +889,7 @@ export function SubmissionCartCheckout({
                     <Trash2 size={14} strokeWidth={2.8} />
                     삭제
                   </button>
-                </div>
+                </div> : null}
               </div>
             );
           })}
@@ -840,9 +898,9 @@ export function SubmissionCartCheckout({
 
       <aside className="h-fit min-w-0 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--card)] p-4 shadow-[6px_6px_0_var(--bauhaus-shadow)] sm:p-5 xl:sticky xl:top-24">
         <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
-          결제
+          {isPaymentStep ? "결제 수단 선택" : "선택한 신청서"}
         </p>
-        <div className="mt-4 grid gap-2">
+        {isPaymentStep ? <div className="mt-4 grid gap-2">
           <button
             type="button"
             onClick={() => setSelectedMethod("CARD")}
@@ -871,8 +929,8 @@ export function SubmissionCartCheckout({
             <Landmark className="shrink-0" size={17} strokeWidth={2.6} />
             <span>무통장 입금</span>
           </button>
-        </div>
-        {isMobileDevice ? <p className="mt-3 text-xs leading-5 text-muted-foreground">{INICIS_MOBILE_UNAVAILABLE_MESSAGE}</p> : null}
+        </div> : null}
+        {isPaymentStep && isMobileDevice ? <p className="mt-3 text-xs leading-5 text-muted-foreground">{INICIS_MOBILE_UNAVAILABLE_MESSAGE}</p> : null}
         <div className="mt-4 space-y-3 text-sm font-semibold text-foreground">
           <div className="flex items-center justify-between gap-3">
             <span>선택</span>
@@ -887,22 +945,23 @@ export function SubmissionCartCheckout({
         </div>
         <button
           type="button"
-          onClick={handleCheckout}
+          onClick={isPaymentStep ? handleCheckout : continueToPayment}
           disabled={isOpening || isDeleting || selectedItems.length === 0 || selectedTotal <= 0}
           className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-4 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:text-[#06111f] dark:hover:bg-[#ff7a72]"
         >
-          {selectedMethod === "BANK" ? (
+          {isPaymentStep && selectedMethod === "BANK" ? (
             <Landmark size={18} strokeWidth={2.6} />
           ) : (
             <CreditCard size={18} strokeWidth={2.6} />
           )}
-          {isOpening
-            ? "준비 중"
-            : selectedMethod === "BANK"
+          {paymentWindowOpen
+            ? "결제 진행 중"
+            : isOpening ? "준비 중"
+            : isPaymentStep && selectedMethod === "BANK"
               ? "입금 신청"
               : "결제하기"}
         </button>
-        {selectedMethod === "BANK" ? (
+        {isPaymentStep && selectedMethod === "BANK" ? (
           <p className="mt-4 text-xs leading-5 text-muted-foreground">입금 신청 후 주문내역에서 계좌와 입금 상태를 확인할 수 있습니다.</p>
         ) : null}
       </aside>
@@ -919,12 +978,8 @@ function NoticeDialog({
   message: string;
   onClose: () => void;
 }) {
-  const tone =
-    type === "error"
-      ? "border-[#d9362c] bg-[#fff6f5] text-[#d9362c]"
-      : type === "success"
-        ? "border-[#1f7a5a] bg-[#f3fbf7] text-[#1f7a5a]"
-        : "border-[#1556a4] bg-[#f5f9ff] text-[#1556a4]";
+  const tone = type === "error" ? brandStatusTones.danger
+    : type === "success" ? brandStatusTones.success : brandStatusTones.progress;
   const title =
     type === "error" ? "확인 필요" : type === "success" ? "완료" : "처리 중";
 
