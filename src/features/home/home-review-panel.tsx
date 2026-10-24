@@ -1052,7 +1052,7 @@ export function HomeReviewPanel({
             ? `${submissionLabels.summary} 심의`
             : isLoggedIn
               ? "나의 심의"
-              : "가상의 진행 예시"}
+              : null}
         </span>
         <span className="inline-flex items-center gap-2">
           {isLoading || isRemoteLoading ? (

@@ -41,8 +41,9 @@ for (const width of [390, 1024, 1440]) for (const english of [false, true]) test
   await page.goto(english ? "/en" : "/");
   await expect(page.getByRole("complementary", { name: english ? "Email Delivery Notice" : "이메일 발송 안내", exact: true })).toHaveCount(0);
   await expect(page.getByText(english ? /Automated email is being prepared\./ : /이메일 자동 발송을 준비 중입니다\./)).toHaveCount(0);
-  const sample = page.getByText(english ? "Fictional Progress Example" : "가상의 진행 예시", { exact: true }).locator("xpath=../..");
+  const sample = page.getByText(english ? "Sample Data" : "예시 데이터", { exact: true }).locator("xpath=../..");
   await expect(sample).toBeVisible();
+  await expect(page.getByText(english ? "Fictional Progress Example" : "가상의 진행 예시", { exact: true })).toHaveCount(0);
   await expect(page.getByText("진행 화면 예시 보기", { exact: true })).toHaveCount(0);
   await expect(sample).toContainText(english ? "Sample Data" : "예시 데이터");
   if (!english) await expect(sample).toContainText("방송국 6곳 중 1곳 결과 완료");
