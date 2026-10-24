@@ -56,7 +56,7 @@ export default function NewSubmissionPage() {
             <ReliableLink
               key={card.href}
               href={card.href}
-              className={`group min-w-0 rounded-[10px] border-2 p-4 sm:p-6 transition duration-200 hover:-translate-y-1 hover:shadow-[9px_9px_0_#111111] ${card.tone}`}
+              className={`group flex min-w-0 flex-col rounded-[10px] border-2 p-4 sm:p-6 transition duration-200 hover:-translate-y-1 hover:shadow-[9px_9px_0_#111111] ${card.tone}`}
             >
               <card.icon className="h-7 w-7" aria-hidden="true" />
               <p className="mt-3 text-sm font-black tracking-normal">
@@ -65,21 +65,8 @@ export default function NewSubmissionPage() {
               <h2 className="mt-4 break-keep text-balance text-2xl font-black leading-snug tracking-normal sm:text-[28px]">
                 {reviewServices[index].title}
               </h2>
-              <p className="mt-3 text-sm font-semibold leading-6">{reviewServices[index].purpose}</p>
-              <dl className="mt-4 space-y-3 text-sm leading-6">
-                {[
-                  ["준비 자료", reviewServices[index].preparation],
-                  ["결과물", reviewServices[index].deliverable],
-                  ["비용 단위", reviewServices[index].billing],
-                  ["진행 기간", reviewServices[index].timing],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <dt className="font-black">{label}</dt>
-                    <dd>{value}</dd>
-                  </div>
-                ))}
-              </dl>
-              <div className="mt-6 inline-flex items-center gap-2 border-2 border-current bg-white px-4 py-2 text-sm font-black text-[#111111]">
+              <p className="mb-6 mt-3 text-sm font-semibold leading-6">{reviewServices[index].purpose}</p>
+              <div className="mt-auto inline-flex w-fit items-center gap-2 border-2 border-current bg-white px-4 py-2 text-sm font-black text-[#111111]">
                 신청하기
                 <span className="transition-transform duration-200 group-hover:translate-x-1">
                   →
