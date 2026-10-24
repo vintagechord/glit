@@ -23,7 +23,12 @@ for (const width of [360, 390, 430, 768, 1024, 1440]) {
       await expect(card).toHaveAttribute("href", path);
       for (const label of ["준비 자료", "결과물", "비용 단위", "진행 기간"]) await expect(card).toContainText(label);
     }
-    await expect(page.getByRole("link", { name: "신청·결제 도움말 및 문의 (새 창)" })).toBeVisible();
+    await page.locator("summary").filter({ hasText: "어떤 심의가 필요한지 모르겠어요" }).click();
+    const support = page.getByRole("link", { name: "신청·결제 도움말 및 문의 (새 창)", exact: true });
+    await expect(support).toHaveCount(1);
+    await expect(support).toBeVisible();
+    await expect(support).toHaveAttribute("href", "/support");
+    await expect(support).toHaveAttribute("target", "_blank");
     await expect(page.getByRole("button", { name: /실시간 채팅/ })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await page.screenshot({ path: testInfo.outputPath(`services-${width}.png`), fullPage: true });
@@ -87,6 +92,11 @@ test("English service cards preserve explicit purpose and locale", async ({ page
     await expect(card).toHaveAttribute("href", href);
     await expect(card).toContainText("Pricing Basis");
   }
+  await page.locator("summary").filter({ hasText: "Which review do I need?" }).click();
+  const support = page.getByRole("link", { name: "Application and Payment Support (New Window)", exact: true });
+  await expect(support).toHaveCount(1);
+  await expect(support).toHaveAttribute("href", "/en/support");
+  await expect(support).toHaveAttribute("target", "_blank");
 });
 
 test("service choices reflow at 200 percent CSS zoom", async ({ page }, testInfo) => {

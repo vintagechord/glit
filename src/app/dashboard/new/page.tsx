@@ -93,7 +93,7 @@ export default function NewSubmissionPage() {
         <details className="mt-6 rounded-[8px] border border-border p-4">
           <summary className="cursor-pointer text-base font-bold">어떤 심의가 필요한지 모르겠어요</summary>
           <p className="mt-3 text-sm leading-6">공개할 곳, 제출할 방송사·유통사, 요청받은 서류 이름을 확인해주세요. 음원인지 영상인지와 제출처의 요구사항을 기준으로 안내해 드립니다.</p>
-          <ReliableLink href="/support" className="mt-3 inline-flex min-h-11 items-center font-bold text-primary underline underline-offset-4">제출처와 요청 서류로 문의하기</ReliableLink>
+          <ReliableLink href="/support" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center font-bold text-primary underline underline-offset-4">신청·결제 도움말 및 문의 (새 창)</ReliableLink>
         </details>
       </section>
       <div className="mt-4 text-right text-xs font-semibold text-muted-foreground">
