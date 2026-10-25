@@ -1,6 +1,7 @@
 import { sendTransactionalEmail, type EmailSendResult } from "@/lib/email-transport";
 import { APP_CONFIG } from "@/lib/config";
 import type { EmailAttachmentRef } from "@/lib/email-attachments";
+import { formatDateTime } from "@/lib/format";
 
 type EmailDeliveryOptions = { idempotencyKey?: string; expiresAt?: string };
 
@@ -16,7 +17,10 @@ type AdminSubmissionReceiptPayload = EmailDeliveryOptions & {
   link: string;
 };
 
-type WelcomeEmailPayload = EmailDeliveryOptions & {
+/** Auth mail follows the UI language the customer used (/en or Korean). */
+type LocalizedEmailOptions = { english?: boolean };
+
+type WelcomeEmailPayload = EmailDeliveryOptions & LocalizedEmailOptions & {
   email: string;
   name?: string;
 };
@@ -43,20 +47,41 @@ type ResultEmailPayload = EmailDeliveryOptions & {
   markResultNotified?: boolean;
 };
 
-type PasswordResetEmailPayload = EmailDeliveryOptions & {
+type PasswordResetEmailPayload = EmailDeliveryOptions & LocalizedEmailOptions & {
   email: string;
   link: string;
 };
 
-type SubmissionBankRequestEmailPayload = EmailDeliveryOptions & {
-  email: string;
-  title: string;
+/** One line of an order as the customer saw it at checkout. */
+export type OrderEmailItem = {
+  title?: string | null;
   artist?: string | null;
   kind: "ALBUM" | "MV";
-  amountKrw: number;
-  bankDepositorName?: string | null;
+  amountKrw?: number | null;
+};
+
+type OrderBankTransferEmailPayload = EmailDeliveryOptions & {
+  email: string;
+  orderId: string;
+  items: OrderEmailItem[];
+  totalAmountKrw: number;
   link?: string;
   siteLink?: string;
+};
+
+type PaymentCompletedEmailPayload = EmailDeliveryOptions & {
+  email: string;
+  orderId: string;
+  paymentMethod: "CARD" | "BANK" | "PAYPAL";
+  paidAt?: string | null;
+  amountLabel: string;
+  items: OrderEmailItem[];
+  /** At least one application in the order chose to email its files later. */
+  awaitingEmailMaterials: boolean;
+  link: string;
+  ordersLink?: string;
+  submissionId?: string;
+  guestToken?: string;
 };
 
 type SubmissionUpdateEmailPayload = EmailDeliveryOptions & {
@@ -96,11 +121,11 @@ const escapeHtml = (value: string) =>
 
 export async function sendWelcomeEmail(payload: WelcomeEmailPayload): Promise<EmailSendResult> {
   const name = escapeHtml(payload.name?.trim() || "onside");
-  const body = {
-    html: `<p>${name}님, 온사이드 가입이 완료되었습니다.</p><p>음반·뮤직비디오 심의 신청, 진행 확인, 결과 파일 수령을 한 곳에서 이용하실 수 있습니다.</p><p>다음 신청부터 신청자 정보와 접수 기록을 더 빠르게 관리할 수 있습니다.</p>`,
-  };
+  const html = payload.english
+    ? `<p>Welcome to Onside, ${name}.</p><p>Submit album and music video reviews, follow their progress, and download result files in one place.</p><p>Your applicant details and submission history are kept with your account for faster future applications.</p>`
+    : `<p>${name}님, 온사이드 가입이 완료되었습니다.</p><p>음반·뮤직비디오 심의 신청, 진행 확인, 결과 파일 수령을 한 곳에서 이용하실 수 있습니다.</p><p>다음 신청부터 신청자 정보와 접수 기록을 더 빠르게 관리할 수 있습니다.</p>`;
 
-  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 회원가입이 완료되었습니다", html: body.html, operation: "welcome" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: payload.english ? "[onside] Your Onside account is ready" : "[onside] 회원가입이 완료되었습니다", html, operation: "welcome" });
 }
 
 const normalizeAbsoluteUrl = (value?: string) => {
@@ -162,19 +187,22 @@ export async function sendPasswordResetEmail(
   const normalizedLink = normalizeAbsoluteUrl(payload.link);
   if (!normalizedLink) return { ok: false, reason: "configuration" };
   const safeLink = escapeHtml(normalizedLink);
+  const copy = payload.english
+    ? { title: "Reset your password", intro: "Press the button below to choose a new password for your Onside account.", button: "Reset password", fallback: "If the button does not work, copy the link below into your browser.", subject: "[onside] Password reset" }
+    : { title: "비밀번호 재설정", intro: "온사이드 계정의 비밀번호를 새로 설정하려면 아래 버튼을 눌러주세요.", button: "비밀번호 재설정하기", fallback: "버튼이 동작하지 않으면 아래 링크를 복사해 브라우저에 붙여넣어 주세요.", subject: "[onside] 비밀번호 재설정 안내" };
   const html = `
     <div style="font-family: Arial, sans-serif; background-color: #0b1120; padding: 32px 0; text-align: center;">
       <div style="max-width: 520px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 28px 24px; color: #e2e8f0;">
-        <div style="font-size: 18px; font-weight: 700; margin: 0 0 8px 0;">비밀번호 재설정</div>
-        <p style="margin: 8px 0 0 0; color: #cbd5e1; line-height: 1.6;">온사이드 계정의 비밀번호를 새로 설정하려면 아래 버튼을 눌러주세요.</p>
-        <a href="${safeLink}" style="display: inline-block; margin: 18px 0 12px; padding: 12px 20px; border-radius: 999px; background: #fcd34d; color: #0f172a; font-weight: 700; text-decoration: none;">비밀번호 재설정하기</a>
-        <p style="margin: 10px 0 0 0; font-size: 12px; color: #94a3b8;">버튼이 동작하지 않으면 아래 링크를 복사해 브라우저에 붙여넣어 주세요.</p>
+        <div style="font-size: 18px; font-weight: 700; margin: 0 0 8px 0;">${copy.title}</div>
+        <p style="margin: 8px 0 0 0; color: #cbd5e1; line-height: 1.6;">${copy.intro}</p>
+        <a href="${safeLink}" style="display: inline-block; margin: 18px 0 12px; padding: 12px 20px; border-radius: 999px; background: #fcd34d; color: #0f172a; font-weight: 700; text-decoration: none;">${copy.button}</a>
+        <p style="margin: 10px 0 0 0; font-size: 12px; color: #94a3b8;">${copy.fallback}</p>
         <p style="margin: 6px 0 0 0; font-size: 12px; color: #cbd5e1; word-break: break-all;">${safeLink}</p>
       </div>
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 비밀번호 재설정 안내", html, operation: "password reset" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: copy.subject, html, operation: "password reset" });
 }
 
 export async function sendSubmissionReceiptEmail(
@@ -271,77 +299,137 @@ export async function sendResultEmail(
   return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: `[onside] 심의 결과 안내 — ${statusLabel}`, html, operation: "review result", submissionId: payload.submissionId, markResultNotified: payload.markResultNotified });
 }
 
-export async function sendSubmissionBankRequestEmail(
-  payload: SubmissionBankRequestEmailPayload,
+const formatKrw = (value: number) => `${new Intl.NumberFormat("ko-KR").format(Math.round(value))}원`;
+const orderKindLabel = (kind: OrderEmailItem["kind"]) => (kind === "MV" ? "뮤직비디오" : "음반");
+const paymentMethodLabel = (method: PaymentCompletedEmailPayload["paymentMethod"]) =>
+  method === "BANK" ? "무통장 입금" : method === "PAYPAL" ? "PayPal" : "카드 결제";
+const resolveSiteLink = (value?: string) =>
+  normalizeAbsoluteUrl(value) ||
+  normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_SITE_URL) ||
+  normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
+  "https://onside17.com/";
+
+const renderOrderItems = (items: OrderEmailItem[]) => {
+  const cell = "padding:10px 8px;border-bottom:1px solid #e2e8f0;font-size:13px;vertical-align:top;";
+  const rows = items.map((item) => {
+    const amount = typeof item.amountKrw === "number" && Number.isFinite(item.amountKrw) ? formatKrw(item.amountKrw) : "-";
+    return `<tr>
+      <td style="${cell}color:#475569;white-space:nowrap;">${orderKindLabel(item.kind)} 심의</td>
+      <td style="${cell}word-break:break-word;"><strong>${escapeHtml(item.title?.trim() || "제목 미입력")}</strong><br /><span style="color:#64748b;">${escapeHtml(item.artist?.trim() || "-")}</span></td>
+      <td style="${cell}text-align:right;white-space:nowrap;font-weight:700;">${amount}</td>
+    </tr>`;
+  }).join("");
+  const head = "padding:8px;border-bottom:2px solid #cbd5e1;font-size:12px;color:#475569;text-align:left;";
+  return `<table style="width:100%;border-collapse:collapse;">
+    <thead><tr><th style="${head}">구분</th><th style="${head}">작품명 · 아티스트</th><th style="${head}text-align:right;">금액</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+};
+
+/** Bank account and order summary, one message per order and recipient. */
+export async function sendOrderBankTransferEmail(
+  payload: OrderBankTransferEmailPayload,
 ): Promise<EmailSendResult> {
-  const kindLabel = payload.kind === "MV" ? "뮤직비디오" : "음반";
-  const safeTitle = escapeHtml(payload.title?.trim() || "제목 미입력");
-  const safeArtist = escapeHtml(payload.artist?.trim() || "-");
-  const safeDepositor = escapeHtml(payload.bankDepositorName?.trim() || "-");
-  const safeAmount = `${new Intl.NumberFormat("ko-KR").format(payload.amountKrw)}원`;
-  const safeBankName = escapeHtml(APP_CONFIG.bankName);
-  const safeBankAccount = escapeHtml(APP_CONFIG.bankAccount);
-  const safeBankHolder = escapeHtml(APP_CONFIG.bankHolder);
-  const siteLink =
-    normalizeAbsoluteUrl(payload.siteLink) ||
-    normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_SITE_URL) ||
-    normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
-    "https://onside17.com/";
+  const siteLink = resolveSiteLink(payload.siteLink);
   const progressLink = normalizeAbsoluteUrl(payload.link) || siteLink;
+  const safeOrderId = escapeHtml(payload.orderId);
+  const safeSupport = escapeHtml(APP_CONFIG.supportEmail);
 
   const html = `
     <div style="margin:0;padding:28px 12px;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#0f172a;">
       <div style="max-width:580px;margin:0 auto;border-radius:22px;overflow:hidden;border:1px solid #d5dbe5;background:#ffffff;">
         <div style="background:linear-gradient(135deg,#0f172a,#1f2937);padding:24px 24px 20px;color:#f8fafc;">
           <p style="margin:0;font-size:12px;letter-spacing:0.18em;font-weight:700;text-transform:uppercase;color:#cbd5e1;">Onside Bank Transfer</p>
-          <h2 style="margin:10px 0 0;font-size:24px;line-height:1.35;font-weight:800;">무통장 입금 안내를 보내드립니다.</h2>
-          <p style="margin:10px 0 0;font-size:13px;color:#cbd5e1;">무통장 입금 신청이 저장되었습니다. 입금 및 자료 확인 후 방송국·기관 접수를 진행합니다.</p>
+          <h2 style="margin:10px 0 0;font-size:24px;line-height:1.35;font-weight:800;">무통장 입금 안내</h2>
+          <p style="margin:10px 0 0;font-size:13px;color:#cbd5e1;">입금 신청이 접수되었습니다. 아래 계좌로 입금해주시면 입금 확인 후 심의 접수를 진행합니다.</p>
         </div>
         <div style="padding:22px 24px 24px;">
-          <div style="display:grid;gap:12px;">
-            <div style="border-radius:14px;border:1px solid #d6e8fb;background:#f4f9ff;padding:14px 16px;">
-              <p style="margin:0;font-size:12px;color:#475569;">접수 구분</p>
-              <p style="margin:6px 0 0;font-size:15px;font-weight:700;color:#0f172a;">${kindLabel} 심의</p>
-              <p style="margin:12px 0 0;font-size:12px;color:#475569;">작품명</p>
-              <p style="margin:6px 0 0;font-size:15px;font-weight:700;color:#0f172a;">${safeTitle}</p>
-              <p style="margin:12px 0 0;font-size:12px;color:#475569;">아티스트</p>
-              <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0f172a;">${safeArtist}</p>
-            </div>
-            <div style="border-radius:14px;border:1px solid #dbe3ec;background:#f8fafc;padding:16px;">
-              <p style="margin:0;font-size:12px;color:#475569;">입금 금액</p>
-              <p style="margin:6px 0 0;font-size:24px;font-weight:800;color:#0071e3;">${safeAmount}</p>
-              <div style="margin-top:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
-                <div>
-                  <p style="margin:0;font-size:12px;color:#64748b;">은행명</p>
-                  <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${safeBankName}</p>
-                </div>
-                <div>
-                  <p style="margin:0;font-size:12px;color:#64748b;">예금주</p>
-                  <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${safeBankHolder}</p>
-                </div>
-                <div style="grid-column:1 / -1;">
-                  <p style="margin:0;font-size:12px;color:#64748b;">계좌번호</p>
-                  <p style="margin:6px 0 0;font-size:16px;font-weight:800;color:#0f172a;letter-spacing:0.01em;">${safeBankAccount}</p>
-                </div>
-                <div style="grid-column:1 / -1;">
-                  <p style="margin:0;font-size:12px;color:#64748b;">입금자명</p>
-                  <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${safeDepositor}</p>
-                </div>
+          <div style="border-radius:14px;border:1px solid #dbe3ec;background:#f8fafc;padding:16px;">
+            <p style="margin:0;font-size:12px;color:#475569;">입금 금액</p>
+            <p style="margin:6px 0 0;font-size:24px;font-weight:800;color:#0071e3;">${formatKrw(payload.totalAmountKrw)}</p>
+            <div style="margin-top:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+              <div>
+                <p style="margin:0;font-size:12px;color:#64748b;">은행명</p>
+                <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${escapeHtml(APP_CONFIG.bankName)}</p>
+              </div>
+              <div>
+                <p style="margin:0;font-size:12px;color:#64748b;">예금주</p>
+                <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${escapeHtml(APP_CONFIG.bankHolder)}</p>
+              </div>
+              <div style="grid-column:1 / -1;">
+                <p style="margin:0;font-size:12px;color:#64748b;">계좌번호</p>
+                <p style="margin:6px 0 0;font-size:16px;font-weight:800;color:#0f172a;letter-spacing:0.01em;">${escapeHtml(APP_CONFIG.bankAccount)}</p>
               </div>
             </div>
           </div>
+          <div style="margin-top:16px;border-radius:14px;border:1px solid #d6e8fb;background:#f4f9ff;padding:16px;">
+            <p style="margin:0;font-size:12px;color:#475569;">주문 내역</p>
+            <p style="margin:6px 0 12px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono',monospace;color:#0f172a;word-break:break-all;">주문번호 ${safeOrderId}</p>
+            ${renderOrderItems(payload.items)}
+            <p style="margin:12px 0 0;text-align:right;font-size:14px;font-weight:800;color:#0f172a;">합계 ${formatKrw(payload.totalAmountKrw)}</p>
+          </div>
           <div style="margin:18px 0 0;display:flex;flex-wrap:wrap;gap:10px;">
-            <a href="${escapeHtml(progressLink)}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">내 진행상황 보기</a>
+            <a href="${escapeHtml(progressLink)}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">주문내역 보기</a>
             <a href="${escapeHtml(siteLink)}" style="display:inline-block;border-radius:999px;background:#0f172a;color:#f8fafc;text-decoration:none;font-size:13px;font-weight:700;padding:11px 18px;">온사이드 사이트</a>
           </div>
-          <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">입금 후 관리자가 확인하면 진행상황이 자동으로 업데이트됩니다.</p>
+          <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">입금이 확인되면 결제 완료 안내 메일을 보내드리고 진행상황이 자동으로 업데이트됩니다. 입금자명이 신청자명과 다르면 ${safeSupport}로 알려주세요. 아직 입금하지 않았다면 주문내역에서 결제 수단을 다시 선택할 수 있습니다.</p>
           <p style="margin:6px 0 0;font-size:12px;color:#334155;word-break:break-all;">${escapeHtml(progressLink)}</p>
         </div>
       </div>
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: `[onside] 무통장 입금 안내 — ${kindLabel} 심의`, html, operation: "bank payment request" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 무통장 입금 계좌 및 주문 내역 안내", html, operation: "bank payment request" });
+}
+
+/** Payment confirmation with the order summary; one message per order and recipient. */
+export async function sendPaymentCompletedEmail(
+  payload: PaymentCompletedEmailPayload,
+): Promise<EmailSendResult> {
+  const progressLink = normalizeAbsoluteUrl(payload.link) || resolveSiteLink();
+  const ordersLink = normalizeAbsoluteUrl(payload.ordersLink);
+  const isBank = payload.paymentMethod === "BANK";
+  const safeSupport = escapeHtml(APP_CONFIG.supportEmail);
+  const details = [
+    ["주문번호", payload.orderId],
+    ["결제 수단", paymentMethodLabel(payload.paymentMethod)],
+    ["결제 금액", payload.amountLabel],
+    [isBank ? "입금 확인 일시" : "결제 일시", formatDateTime(payload.paidAt)],
+  ];
+
+  const html = `
+    <div style="margin:0;padding:28px 12px;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#0f172a;">
+      <div style="max-width:580px;margin:0 auto;border-radius:22px;overflow:hidden;border:1px solid #d5dbe5;background:#ffffff;">
+        <div style="background:linear-gradient(135deg,#0f172a,#1f2937);padding:24px 24px 20px;color:#f8fafc;">
+          <p style="margin:0;font-size:12px;letter-spacing:0.18em;font-weight:700;text-transform:uppercase;color:#cbd5e1;">Onside Payment</p>
+          <h2 style="margin:10px 0 0;font-size:24px;line-height:1.35;font-weight:800;">${isBank ? "입금이 확인되었습니다." : "결제가 완료되었습니다."}</h2>
+          <p style="margin:10px 0 0;font-size:13px;color:#cbd5e1;">심의 신청이 접수예정 단계로 등록되었습니다. 자료 확인 후 방송사·기관 접수를 진행합니다.</p>
+        </div>
+        <div style="padding:22px 24px 24px;">
+          <table style="width:100%;border-collapse:collapse;">${details.map(([label, value]) => `<tr><th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e2e8f0;color:#475569;font-size:13px;white-space:nowrap;">${escapeHtml(label)}</th><td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;font-size:14px;font-weight:700;word-break:break-all;">${escapeHtml(value)}</td></tr>`).join("")}</table>
+          <div style="margin-top:16px;border-radius:14px;border:1px solid #d6e8fb;background:#f4f9ff;padding:16px;">
+            <p style="margin:0 0 12px;font-size:12px;color:#475569;">주문 내역</p>
+            ${renderOrderItems(payload.items)}
+            <p style="margin:12px 0 0;text-align:right;font-size:14px;font-weight:800;color:#0f172a;">합계 ${escapeHtml(payload.amountLabel)}</p>
+          </div>
+          ${payload.submissionId ? `<p style="margin-top:16px;font-size:12px;color:#334155;">접수 번호: ${escapeHtml(payload.submissionId)}</p>` : ""}
+          ${payload.guestToken ? `<p style="margin:6px 0 0;font-size:13px;word-break:break-all;">비회원 조회 코드: <strong>${escapeHtml(payload.guestToken)}</strong></p>` : ""}
+          ${payload.awaitingEmailMaterials ? `<div style="margin-top:16px;border-radius:14px;border:1px solid #fde68a;background:#fffbeb;padding:16px;">
+            <p style="margin:0;font-size:13px;font-weight:800;color:#92400e;">이메일 파일 제출 안내</p>
+            <p style="margin:8px 0 0;font-size:13px;line-height:1.7;color:#78350f;">파일을 이메일로 제출하기로 선택한 신청이 있습니다. 메일 제목에 접수 번호를 포함해 ${safeSupport}로 파일을 보내주세요. 자료를 확인한 후 접수를 진행합니다.</p>
+          </div>` : ""}
+          <div style="margin:18px 0 0;display:flex;flex-wrap:wrap;gap:10px;">
+            <a href="${escapeHtml(progressLink)}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">진행상황 바로 보기</a>
+            ${ordersLink ? `<a href="${escapeHtml(ordersLink)}" style="display:inline-block;border-radius:999px;background:#0f172a;color:#f8fafc;text-decoration:none;font-size:13px;font-weight:700;padding:11px 18px;">주문내역 보기</a>` : ""}
+          </div>
+          <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">${payload.guestToken ? "링크를 열면 조회 코드로 접수 상세를 확인할 수 있습니다." : "링크를 클릭하면 로그인 후 해당 접수 상세로 이동합니다."}</p>
+          <p style="margin:6px 0 0;font-size:12px;color:#334155;word-break:break-all;">${escapeHtml(progressLink)}</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: isBank ? "[onside] 입금 확인 및 심의 접수 안내" : "[onside] 결제 완료 및 심의 접수 안내", html, operation: "payment completed", includeMessageId: true, submissionId: payload.submissionId });
 }
 
 export async function sendSubmissionUpdateEmail(
@@ -384,7 +472,7 @@ export async function sendSubmissionUpdateEmail(
           <div style="margin:18px 0 0;display:flex;flex-wrap:wrap;gap:10px;">
             <a href="${escapeHtml(progressLink)}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">진행상황 바로 보기</a>
           </div>
-          <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">링크를 클릭하면 로그인 후 해당 접수 상세로 이동합니다.</p>
+          <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">${payload.guestToken ? "링크를 열면 조회 코드로 접수 상세를 확인할 수 있습니다." : "링크를 클릭하면 로그인 후 해당 접수 상세로 이동합니다."}</p>
           <p style="margin:6px 0 0;font-size:12px;color:#334155;word-break:break-all;">${escapeHtml(progressLink)}</p>
         </div>
       </div>
@@ -435,22 +523,28 @@ export async function sendGuestSubmissionLookupEmail(
   return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 비회원 접수 조회 코드 안내", html, operation: "guest lookup" });
 }
 
-export async function sendSignupVerificationEmail(payload: EmailDeliveryOptions & { email: string; link: string }): Promise<EmailSendResult> {
+export async function sendSignupVerificationEmail(payload: EmailDeliveryOptions & LocalizedEmailOptions & { email: string; link: string }): Promise<EmailSendResult> {
   const link = normalizeAbsoluteUrl(payload.link);
   if (!link) return { ok: false, reason: "configuration" };
   const safeLink = escapeHtml(link);
   return sendTransactionalEmail({
-    to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 회원가입 이메일 인증", operation: "signup verification",
-    html: `<p>온사이드 가입을 완료하려면 아래 링크를 열어 이메일 인증을 진행해주세요.</p><p><a href="${safeLink}">이메일 인증하기</a></p><p>직접 가입을 요청하지 않았다면 이 메일을 무시해주세요.</p><p>${safeLink}</p>`,
+    to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt,
+    subject: payload.english ? "[onside] Verify your email address" : "[onside] 회원가입 이메일 인증", operation: "signup verification",
+    html: payload.english
+      ? `<p>Open the link below to verify your email address and finish creating your Onside account.</p><p><a href="${safeLink}">Verify email</a></p><p>If you did not sign up, you can ignore this message.</p><p>${safeLink}</p>`
+      : `<p>온사이드 가입을 완료하려면 아래 링크를 열어 이메일 인증을 진행해주세요.</p><p><a href="${safeLink}">이메일 인증하기</a></p><p>직접 가입을 요청하지 않았다면 이 메일을 무시해주세요.</p><p>${safeLink}</p>`,
   });
 }
 
-export async function sendAccountIdEmail(payload: EmailDeliveryOptions & { email: string; link?: string }): Promise<EmailSendResult> {
+export async function sendAccountIdEmail(payload: EmailDeliveryOptions & LocalizedEmailOptions & { email: string; link?: string }): Promise<EmailSendResult> {
   const link = normalizeAbsoluteUrl(payload.link);
   const safeEmail = escapeHtml(payload.email);
   return sendTransactionalEmail({
-    to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 가입 아이디 안내", operation: "account lookup",
-    html: `<p>온사이드의 로그인 아이디는 가입한 이메일 주소입니다.</p><p><strong>${safeEmail}</strong></p>${link ? `<p><a href="${escapeHtml(link)}">로그인하기</a></p>` : ""}<p>직접 아이디 찾기를 요청하지 않았다면 이 메일을 무시해주세요.</p>`,
+    to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt,
+    subject: payload.english ? "[onside] Your Onside login ID" : "[onside] 가입 아이디 안내", operation: "account lookup",
+    html: payload.english
+      ? `<p>Your Onside login ID is the email address you registered with.</p><p><strong>${safeEmail}</strong></p>${link ? `<p><a href="${escapeHtml(link)}">Log in</a></p>` : ""}<p>If you did not request this, you can ignore this message.</p>`
+      : `<p>온사이드의 로그인 아이디는 가입한 이메일 주소입니다.</p><p><strong>${safeEmail}</strong></p>${link ? `<p><a href="${escapeHtml(link)}">로그인하기</a></p>` : ""}<p>직접 아이디 찾기를 요청하지 않았다면 이 메일을 무시해주세요.</p>`,
   });
 }
 

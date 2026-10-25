@@ -614,28 +614,62 @@ test("MV email handoff permits checkout after failed or still-pending uploads", 
   }
 });
 
-test("email delivery is an awaiting-materials state, even when a downloaded application has no title or contact details", () => {
+test("email delivery is a non-blocking reminder, even when a downloaded application has no title or contact details", () => {
   const album = buildAlbumSubmissionPreflight(validOnlineInput({
     applicationFormMode: "upload", title: "", applicantName: "", applicantEmail: "", applicantPhone: "",
     files: [], uploads: [], filesSubmittedByEmail: true,
   }));
   const mv = buildMvSubmissionPreflight(validMvInput({
-    applicationFormMode: "upload", title: "", guestName: "", guestEmail: "", guestPhone: "",
+    applicationFormMode: "upload", title: "", isGuest: false, guestName: "", guestEmail: "", guestPhone: "",
     files: [], uploads: [], filesSubmittedByEmail: true,
   }));
-  for (const result of [album, mv]) {
+  for (const [result, materials] of [[album, "작성한 신청서와 음원 파일"], [mv, "작성한 신청서와 영상 파일"]] as const) {
     assert.equal(result.canSubmit, true, "email delivery remains an allowed checkout choice");
     assert.equal(result.awaitingMaterials, true);
-    assert.equal(result.warnings.length, 1);
-    assert.equal(result.warnings[0].title, "자료 제출 대기");
-    assert.match(result.warnings[0].message, /제목·접수자 정보와 자료 내용은 아직 확인되지 않았습니다/);
-    assert.equal(result.warnings[0].target.field, "files");
+    assert.equal(result.warnings.length, 0, "the email choice is restated, never flagged as a problem");
+    assert.equal(result.issues.some((item) => item.id === "materials.email-pending"), false);
+    assert.equal(result.reminders.length, 1);
+    assert.equal(result.reminders[0].id, "materials.email-pending");
+    assert.equal(result.reminders[0].message, "접수 완료 후 이메일로 파일을 제출해주세요.");
+    assert.equal(result.reminders[0].detail, `보낼 자료: ${materials}`);
   }
+  assert.equal(buildAlbumSubmissionPreflight(validOnlineInput({ files: [], uploads: [], filesSubmittedByEmail: true })).reminders[0].detail, "보낼 자료: 음원 파일");
+  assert.equal(buildMvSubmissionPreflight(validMvInput({ files: [], uploads: [], filesSubmittedByEmail: true })).reminders[0].detail, "보낼 자료: 영상 파일");
+});
+
+test("guests must leave contact details even when the application form is uploaded", () => {
+  const album = buildAlbumSubmissionPreflight(validOnlineInput({
+    isGuest: true, applicationFormMode: "upload", applicantName: "", applicantEmail: "bad-address", applicantPhone: "",
+    files: [], uploads: [], filesSubmittedByEmail: true,
+  }));
+  assert.equal(album.canSubmit, false);
+  assert.deepEqual(album.blockingIssues.map((item) => item.id).sort(), ["applicant.email-format", "applicant.name", "applicant.phone"]);
+  assert.ok(album.blockingIssues.every((item) => item.target.step === 3));
+  const mv = buildMvSubmissionPreflight(validMvInput({
+    applicationFormMode: "upload", guestName: "", guestEmail: "", guestPhone: "",
+    files: [], uploads: [], filesSubmittedByEmail: true,
+  }));
+  assert.equal(mv.canSubmit, false);
+  assert.deepEqual(mv.blockingIssues.map((item) => item.id).sort(), ["mv.guest-email", "mv.guest-name", "mv.guest-phone"]);
+  // Members keep the lighter uploaded-form flow: their account mailbox is known.
+  assert.equal(buildAlbumSubmissionPreflight(validOnlineInput({
+    isGuest: false, applicationFormMode: "upload", applicantName: "", applicantEmail: "", applicantPhone: "",
+    files: [], uploads: [], filesSubmittedByEmail: true,
+  })).canSubmit, true);
+  assert.equal(buildMvSubmissionPreflight(validMvInput({
+    isGuest: false, applicationFormMode: "upload", guestName: "", guestEmail: "", guestPhone: "",
+    files: [], uploads: [], filesSubmittedByEmail: true,
+  })).canSubmit, true);
+  // With contact details present the uploaded-form flow still skips the online fields.
+  assert.equal(buildMvSubmissionPreflight(validMvInput({
+    applicationFormMode: "upload", title: "", files: [], uploads: [], filesSubmittedByEmail: true,
+  })).canSubmit, true);
 });
 
 test("attached files clear material delivery waiting while required online data remains enforced", () => {
   for (const result of [buildAlbumSubmissionPreflight(validOnlineInput()), buildMvSubmissionPreflight(validMvInput())]) {
     assert.equal(result.awaitingMaterials, false);
+    assert.deepEqual(result.reminders, []);
   }
   const album = buildAlbumSubmissionPreflight(validOnlineInput({ title: "", files: [], filesSubmittedByEmail: true }));
   const mv = buildMvSubmissionPreflight(validMvInput({ title: "", files: [], filesSubmittedByEmail: true }));

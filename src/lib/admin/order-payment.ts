@@ -15,8 +15,23 @@ export function statusAfterPaymentConfirmation(currentStatus: ReviewStatus): Rev
 export async function confirmLinkedOrderPayment(
   db: Pick<ReturnType<typeof createAdminClient>, "from" | "rpc">,
   input: { orderId: string | null; currentPaymentStatus: string | null; nextPaymentStatus: string; actorUserId: string; adminMemo?: string | null },
-): Promise<{ error?: string; confirmedIds?: string[] }> {
+): Promise<{ error?: string; confirmedIds?: string[]; refundedIds?: string[] }> {
   if (!input.orderId) return {};
+  if (input.nextPaymentStatus === "REFUNDED" && input.currentPaymentStatus === "PAID") {
+    // The gateway/bank reversal happened outside the app; this records it for
+    // the whole order so no item keeps running as paid.
+    const { data, error } = await db.rpc("refund_submission_order", {
+      p_order_id: input.orderId,
+      p_actor_user_id: input.actorUserId,
+      p_admin_memo: input.adminMemo || null,
+    });
+    if (error || !data?.length) {
+      return { error: error?.code === "55000"
+        ? "결제 완료 상태의 주문만 환불로 기록할 수 있습니다. 주문 상태를 새로고침해주세요."
+        : "주문 환불 기록을 저장하지 못했습니다. 잠시 후 다시 시도해주세요." };
+    }
+    return { refundedIds: data.map((row: { submission_id: string }) => row.submission_id) };
+  }
   if (input.nextPaymentStatus !== "PAID") {
     return input.nextPaymentStatus === input.currentPaymentStatus
       ? {}
@@ -38,4 +53,35 @@ export async function confirmLinkedOrderPayment(
   });
   if (confirmError || !data?.length) return { error: "주문 입금 확인을 저장하지 못했습니다. 주문 상태를 새로고침해주세요." };
   return { confirmedIds: data.map((row: { submission_id: string }) => row.submission_id) };
+}
+
+export type UncertainPaymentOutcome = "APPROVED" | "FAILED";
+
+/** Records what the Inicis console shows for an approval the callback could
+ * not confirm. APPROVED needs the console TID; FAILED reopens the order so the
+ * customer can pay again. No gateway request is made here. */
+export async function resolveUncertainCardPayment(
+  db: Pick<ReturnType<typeof createAdminClient>, "rpc">,
+  input: { orderId: string; actorUserId: string; outcome: UncertainPaymentOutcome; pgTid?: string | null; adminMemo?: string | null },
+): Promise<{ error?: string; submissionIds?: string[] }> {
+  const { data, error } = await db.rpc("resolve_uncertain_submission_payment", {
+    p_order_id: input.orderId,
+    p_actor_user_id: input.actorUserId,
+    p_outcome: input.outcome,
+    p_pg_tid: input.pgTid?.trim() || null,
+    p_admin_memo: input.adminMemo?.trim() || null,
+  });
+  if (error) {
+    const message = error.message ?? "";
+    if (message.includes("PG_TID_REQUIRED")) return { error: "승인 확인에는 이니시스 관리자 화면의 승인 TID가 필요합니다." };
+    if (message.includes("PAYMENT_NOT_UNCERTAIN") || message.includes("ORDER_NOT_REVIEW_REQUIRED")) {
+      return { error: "이미 처리됐거나 승인 확인이 필요한 상태가 아닙니다. 목록을 새로고침해주세요." };
+    }
+    if (error.code === "42501") return { error: "관리자 권한이 필요합니다." };
+    if (message.includes("PAYMENT_NOT_FOUND")) return { error: "결제 요청을 찾을 수 없습니다." };
+    return { error: "승인 확인 결과를 저장하지 못했습니다. 잠시 후 다시 시도해주세요." };
+  }
+  const submissionIds = ((data ?? []) as Array<{ submission_id: string }>).map((row) => row.submission_id);
+  if (submissionIds.length === 0) return { error: "승인 확인 결과가 저장되지 않았습니다. 목록을 새로고침해주세요." };
+  return { submissionIds };
 }

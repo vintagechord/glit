@@ -1,1 +1,1 @@
-export { default } from "@/app/mypage/submissions/[id]/page";
+export { default, metadata, dynamic, revalidate } from "@/app/en/dashboard/submissions/[id]/page";

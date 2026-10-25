@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, Check, CircleAlert } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, CircleAlert, Mail } from "lucide-react";
 
 import { formatCurrency } from "@/lib/format";
 import { brandStatusTones } from "@/lib/brand-status-tones";
@@ -27,7 +27,7 @@ type SubmissionPreflightPanelProps = {
 };
 
 const getIssueButtonLabel = (issue: SubmissionPreflightIssue) =>
-  issue.acknowledgementKey === "cart-price-change" ? "변경 확인" : issue.id === "materials.email-pending" ? "제출 안내" : "수정";
+  issue.acknowledgementKey === "cart-price-change" ? "변경 확인" : "수정";
 
 const PriceChangeSummary = ({ issue }: { issue: SubmissionPreflightIssue }) => {
   const previous = issue.meta?.previousAmountKrw;
@@ -150,8 +150,6 @@ export function SubmissionPreflightPanel({
           )}
           {hasBlockingIssues
             ? `확인 필요 ${result.blockingIssues.length}`
-            : result.awaitingMaterials
-              ? "자료 제출 대기"
             : hasWarnings
               ? `확인 권장 ${result.warnings.length}`
               : "입력·첨부 확인"}
@@ -198,6 +196,29 @@ export function SubmissionPreflightPanel({
           <p className="break-keep">필수 입력과 파일 첨부 상태를 확인했습니다.<br />자료 내용과 제출 규격은 관리자가 확인합니다.</p>
         </div>
       )}
+
+      {result.reminders.length > 0 ? (
+        <ul className="mt-4 space-y-2" aria-label="접수 후 안내">
+          {result.reminders.map((reminder) => (
+            <li
+              key={reminder.id}
+              data-preflight-reminder={reminder.id}
+              className={`flex items-start gap-3 rounded-[16px] border-2 p-3 sm:p-4 ${brandStatusTones.progress}`}
+            >
+              <Mail aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-current" />
+              <div className="min-w-0 [overflow-wrap:anywhere]">
+                <p className="text-sm font-black text-current">{reminder.title}</p>
+                <p className="mt-0.5 text-xs font-semibold leading-5 text-current">
+                  {reminder.message}
+                </p>
+                {reminder.detail ? (
+                  <p className="mt-1 text-xs leading-5 text-current">{reminder.detail}</p>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <details className="mt-4 rounded-[14px] border border-border/70 bg-background/60 px-4 py-3 text-xs text-muted-foreground">
         <summary className="cursor-pointer font-black text-foreground">

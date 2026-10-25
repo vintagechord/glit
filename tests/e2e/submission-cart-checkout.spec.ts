@@ -258,7 +258,9 @@ test.describe("isolated commerce account fixtures", () => {
     harness.orders[0] = { ...harness.orders[0], status: "CANCELED" };
     await page.evaluate(() => window.postMessage({ type: "INICIS:CANCEL" }, window.location.origin));
     await expect.poll(() => navigation(page)).toEqual([checkoutHref([ids[0]], true), `/en/mypage/orders?focus=${ids[0]}`]);
-    await expect(orderRow(page, orderIds[0])).toContainText("주문 취소");
+    await expect(orderRow(page, orderIds[0])).toContainText("결제 대기");
+    await expect(orderRow(page, orderIds[0])).not.toContainText("주문 취소");
+    await expect(orderRow(page, orderIds[0]).getByRole("button", { name: "결제하기", exact: true })).toBeEnabled();
     await page.evaluate(() => window.postMessage({ type: "INICIS:CANCEL" }, window.location.origin));
     expect(await navigation(page)).toHaveLength(2); expect(harness.writes.filter(write => write.path === "/api/inicis/submission/order")).toHaveLength(2); expectClean(harness);
   });

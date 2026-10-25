@@ -7,7 +7,7 @@ begin
   assert not has_function_privilege('authenticated','public.claim_paid_submission_notifications(integer)','EXECUTE');
   assert has_function_privilege('service_role','public.claim_paid_submission_notifications(integer)','EXECUTE');
   assert (select relrowsecurity from pg_class where oid='public.paid_submission_notification_events'::regclass);
-  assert not exists(select 1 from public.paid_submission_notification_events e join public.submissions s on s.id=e.submission_id where s.payment_status<>'PAID'), 'unpaid submission generated receipt';
+  assert not exists(select 1 from public.paid_submission_notification_events e join public.submissions s on s.id=e.submission_id where s.payment_status not in ('PAID','REFUNDED')), 'unpaid submission generated receipt';
   assert exists(select 1 from public.paid_submission_notification_events e join public.submissions s on s.id=e.submission_id where s.payment_method='CARD'), 'card receipt missing';
   assert exists(select 1 from public.paid_submission_notification_events e join public.submissions s on s.id=e.submission_id where s.payment_method='PAYPAL' and e.payment_key like 'paypal:%'), 'PayPal receipt key missing';
   assert exists(select 1 from public.paid_submission_notification_events e join public.submissions s on s.id=e.submission_id where s.payment_method='BANK' and e.payment_key='bank:'||coalesce(s.current_order_id::text,s.id::text)), 'bank receipt key missing';

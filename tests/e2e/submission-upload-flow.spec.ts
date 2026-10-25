@@ -85,10 +85,19 @@ async function openFileSubmission(page: Page, kind: "album" | "mv") {
   await page.getByRole("radio", { name: /파일로 제출/ }).click();
   await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();
   await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+  // Guests leave contact details even when the form itself is uploaded.
+  await fillGuestContact(page, kind);
   await page.getByRole("button", { name: kind === "album" ? "다음 단계" : "파일 업로드로 이동", exact: true }).click();
   const files = page.locator('[data-preflight-field="files"]');
   await expect(files.locator('input[type="file"]')).toBeEnabled();
   return files;
+}
+
+async function fillGuestContact(page: Page, kind: "album" | "mv") {
+  const prefix = kind === "album" ? "applicant" : "guest";
+  await page.locator(`[data-preflight-field="${prefix}Name"]`).fill("검증 접수자");
+  await page.locator(`[data-preflight-field="${prefix}Email"]`).fill("guest-upload@example.invalid");
+  await page.locator(`[data-preflight-field="${prefix}Phone"]`).fill("01012345678");
 }
 
 for (const kind of ["album", "mv"] as const) {
@@ -111,8 +120,9 @@ for (const kind of ["album", "mv"] as const) {
     await expect(files.getByText(/접수번호 11111111-1111-4111-8111-111111111111/)).toBeVisible();
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     const preflight = page.locator('section[aria-labelledby="submission-preflight-title"]');
-    await expect(preflight.getByRole("status")).toHaveText("자료 제출 대기");
-    await expect(preflight.getByText(/제목·접수자 정보와 자료 내용은 아직 확인되지 않았습니다/)).toBeVisible();
+    await expect(preflight.getByRole("status")).toHaveText("입력·첨부 확인");
+    await expect(preflight.getByText("접수 완료 후 이메일로 파일을 제출해주세요.", { exact: true })).toBeVisible();
+    await expect(preflight.getByRole("button", { name: /제출 안내/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "장바구니에 담기", exact: true })).toBeEnabled();
     expect(results.completed).toEqual([]);
     expect(results.unexpected).toEqual([]);
@@ -172,14 +182,16 @@ test("English album email delivery retains the application ID and does not claim
   await page.getByRole("radio", { name: /Submit a File/ }).click();
   await page.getByRole("button", { name: "Continue with Selection", exact: true }).click();
   await page.locator('[data-preflight-field="aiUsed"]').getByRole("button").first().click();
+  await fillGuestContact(page, "album");
   await page.getByRole("button", { name: "Next Step", exact: true }).click();
   await page.getByRole("button", { name: "Send Files Later by Email", exact: true }).click();
   await expect(page.getByRole("button", { name: "Copy Email Subject", exact: true })).toBeVisible();
   await expect(page.getByText(/Application ID 11111111-1111-4111-8111-111111111111/)).toBeVisible();
   await page.getByRole("button", { name: "Next Step", exact: true }).click();
   const preflight = page.locator('section[aria-labelledby="submission-preflight-title"]');
-  await expect(preflight.getByRole("status")).toHaveText("Awaiting Materials");
-  await expect(preflight.getByText(/The title, contact details, and file contents have not yet been checked/)).toBeVisible();
+  await expect(preflight.getByRole("status")).toHaveText("Required Fields and Attachments Checked");
+  await expect(preflight.getByText("After completing your application, please send your files by email.", { exact: true })).toBeVisible();
+  await expect(preflight.getByRole("button", { name: /Submission Instructions/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add to Cart", exact: true })).toBeEnabled();
   expect(results.unexpected).toEqual([]);
   expect(results.errors).toEqual([]);

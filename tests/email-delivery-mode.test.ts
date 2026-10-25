@@ -7,7 +7,7 @@ import { getEmailDeliveryMode } from "../src/lib/email-delivery-mode";
 import { getEmailDeliveryConfiguration } from "../src/lib/email-config";
 import {
   sendWelcomeEmail, sendPasswordResetEmail, sendSubmissionReceiptEmail,
-  sendResultEmail, sendSubmissionBankRequestEmail, sendSubmissionUpdateEmail,
+  sendResultEmail, sendOrderBankTransferEmail, sendSubmissionUpdateEmail,
   sendGuestSubmissionLookupEmail,
 } from "../src/lib/email";
 import { runRuntimeConfigChecks, summarizeRuntimeHealth } from "../src/lib/runtime-health";
@@ -52,7 +52,7 @@ test("manual and invalid modes suppress every email transport even with otherwis
         sendPasswordResetEmail({ email: "fixture@example.invalid", link: "https://app.fixture.invalid/reset-password?token_hash=fixture" }),
         sendSubmissionReceiptEmail({ email: "fixture@example.invalid", title: "fixture", kind: "ALBUM", submissionId: "fixture" }),
         sendResultEmail({ email: "fixture@example.invalid", title: "fixture", resultStatus: "APPROVED" }),
-        sendSubmissionBankRequestEmail({ email: "fixture@example.invalid", title: "fixture", kind: "ALBUM", amountKrw: 50000 }),
+        sendOrderBankTransferEmail({ email: "fixture@example.invalid", orderId: "fixture-order", items: [{ title: "fixture", kind: "ALBUM", amountKrw: 50000 }], totalAmountKrw: 50000 }),
         sendSubmissionUpdateEmail({ email: "fixture@example.invalid", title: "fixture", kind: "ALBUM", headline: "fixture", summary: "fixture" }),
         sendGuestSubmissionLookupEmail({ email: "fixture@example.invalid", items: [{ token: "fixture-token", link: "https://app.fixture.invalid/track/fixture-token" }] }),
       ]);

@@ -110,7 +110,7 @@ test("PayPal callback and guest detail use the server-only result grant", () => 
   );
   const detailPage = readFileSync(
     new URL(
-      "../src/app/dashboard/submissions/[id]/page.tsx",
+      "../src/app/dashboard/submissions/[id]/view.tsx",
       import.meta.url,
     ),
     "utf8",

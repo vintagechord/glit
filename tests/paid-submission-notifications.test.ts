@@ -14,8 +14,8 @@ async function fixture() {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,messages,receipts} from 'paid-notice-fixture';";
         const files: Record<string, string> = {
-          "paid-notice-fixture": `export const state={submission:{id:'${submissionId}',user_id:'member',guest_token:'legacy-private-token',guest_email:'guest@example.invalid',applicant_email:'wrong@example.invalid',type:'ALBUM',title:'Title<script>',artist_name:'Artist<&',payment_status:'PAID',amount_krw:1000},event:null,eventLookupError:false,email:'Owner@example.invalid',lookupError:false,lookupThrow:false,loadError:false,failedOperation:null,queuedOperation:null,throwOperation:null};export const messages=[];export const receipts=new Map();`,
-          "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({auth:{admin:{getUserById:async()=>{if(state.lookupThrow)throw Error('lookup unavailable');return {data:{user:{email:state.email}},error:state.lookupError?{}:null}}}},from(table){const q={select(){return q},eq(){return q},maybeSingle:async()=>({data:table==='paid_submission_notification_events'?state.event:table==='profiles'?{phone:null}:state.submission,error:(table==='paid_submission_notification_events'?state.eventLookupError:state.loadError)?{}:null})};return q;}});`,
+          "paid-notice-fixture": `export const state={submission:{id:'${submissionId}',user_id:'member',guest_token:'legacy-private-token',guest_email:'guest@example.invalid',applicant_email:'wrong@example.invalid',type:'ALBUM',title:'Title<script>',artist_name:'Artist<&',payment_status:'PAID',amount_krw:1000,current_order_id:null},order:null,orderItems:[],orderFlags:[],event:null,eventLookupError:false,email:'Owner@example.invalid',lookupError:false,lookupThrow:false,loadError:false,failedOperation:null,queuedOperation:null,throwOperation:null};export const messages=[];export const receipts=new Map();`,
+          "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({auth:{admin:{getUserById:async()=>{if(state.lookupThrow)throw Error('lookup unavailable');return {data:{user:{email:state.email}},error:state.lookupError?{}:null}}}},from(table){const q={select(){return q},eq(){return q},in(){return q},maybeSingle:async()=>({data:table==='paid_submission_notification_events'?state.event:table==='profiles'?{phone:null}:table==='submission_orders'?state.order:state.submission,error:(table==='paid_submission_notification_events'?state.eventLookupError:state.loadError)?{}:null}),then(resolve,reject){return Promise.resolve({data:table==='submission_order_items'?state.orderItems:table==='submissions'?state.orderFlags:[],error:null}).then(resolve,reject)}};return q;}});`,
           "@/lib/email-transport": `${shared} export const sendTransactionalEmail=async message=>{messages.push(message);if(state.throwOperation===message.operation)throw Error('fixture failure');if(state.failedOperation===message.operation)return {ok:false};const key=message.operation+':'+message.to+':'+message.idempotencyKey;if(!receipts.has(key))receipts.set(key,{ok:state.queuedOperation!==message.operation,status:state.queuedOperation===message.operation?'retry':'accepted',queued:state.queuedOperation===message.operation,outboxId:'receipt-'+receipts.size});return receipts.get(key);};`,
           "@/lib/kakao": "export const sendKakaoOfficialNotification=async()=>({ok:true});",
         };
@@ -24,7 +24,7 @@ async function fixture() {
     } }],
   });
   const loaded = { exports: {} as Pick<typeof import("../src/lib/payments/notifications"), "sendPaidSubmissionNotificationsById"> & Pick<typeof import("../src/lib/email"), "sendAdminSubmissionReceiptEmail"> & {
-    state: { submission: Record<string, unknown> | null; event: { payment_key: string; enqueued_at: string | null } | null; eventLookupError: boolean; email: string | null; lookupError: boolean; lookupThrow: boolean; loadError: boolean; failedOperation: string | null; queuedOperation: string | null; throwOperation: string | null };
+    state: { submission: Record<string, unknown> | null; order: Record<string, unknown> | null; orderItems: Record<string, unknown>[]; orderFlags: Record<string, unknown>[]; event: { payment_key: string; enqueued_at: string | null } | null; eventLookupError: boolean; email: string | null; lookupError: boolean; lookupThrow: boolean; loadError: boolean; failedOperation: string | null; queuedOperation: string | null; throwOperation: string | null };
     messages: EmailMessage[]; receipts: Map<string, EmailSendResult>;
   } };
   new Function("require", "module", "exports", built.outputFiles[0].text)(createRequire(import.meta.url), loaded, loaded.exports);
@@ -158,4 +158,70 @@ test("failed, expired and uncertain durable receipts request operator review ins
     assert.doesNotMatch(result.warning ?? "", /발송 대기열에 등록/);
     assert.match(result.warning ?? "", status === "uncertain" ? /자동 재발송을 보류/ : /실패·만료 사유/);
   }
+});
+
+const orderFixture = async (paymentMethod: "CARD" | "BANK" | "PAYPAL" = "CARD") => {
+  const h = await fixture();
+  h.state.submission!.current_order_id = "order-1";
+  h.state.order = { id: "order-1", payment_method: paymentMethod, amount_krw: 80000, amount: paymentMethod === "PAYPAL" ? 61.5 : null, currency: paymentMethod === "PAYPAL" ? "USD" : "KRW", paid_at: "2026-10-26T01:00:00Z" };
+  h.state.orderItems = [
+    { submission_ref: submissionId, title: "Title<script>", artist_name: "Artist<&", type: "ALBUM", amount_krw: 50000 },
+    { submission_ref: "22222222-2222-4222-8222-222222222222", title: "Second title", artist_name: "Second artist", type: "MV_BROADCAST", amount_krw: 30000 },
+  ];
+  h.state.orderFlags = [{ id: submissionId, files_submitted_by_email: true }, { id: "22222222-2222-4222-8222-222222222222", files_submitted_by_email: false }];
+  return h;
+};
+
+test("paid receipts carry the whole order once per order and restate the email file choice", async () => {
+  const h = await orderFixture();
+  const result = await h.sendPaidSubmissionNotificationsById(input);
+  assert.equal(result.recorded, true);
+  const customer = h.messages.find(message => message.operation === "payment completed")!;
+  assert.ok(customer, "the order-aware receipt replaces the per-application notice");
+  assert.equal(h.messages.some(message => message.operation === "submission update"), false);
+  assert.equal(customer.to, "owner@example.invalid");
+  assert.equal(customer.idempotencyKey, "payment-approved:SUBP-fixture-order:order-1:owner@example.invalid");
+  assert.match(customer.subject, /결제 완료 및 심의 접수 안내/);
+  assert.match(customer.html, /결제가 완료되었습니다/);
+  assert.match(customer.html, /order-1/);
+  assert.match(customer.html, /카드 결제/);
+  assert.match(customer.html, /80,000원/);
+  assert.match(customer.html, /Title&lt;script&gt;/);
+  assert.match(customer.html, /Second title/);
+  assert.match(customer.html, /이메일 파일 제출 안내/);
+  assert.match(customer.html, /\/mypage\/orders\?focus=/);
+  assert.match(customer.html, /\/dashboard\/submissions\//);
+  assert.doesNotMatch(customer.html, /<script>|legacy-private/);
+
+  // The second application of the same order reuses the order key, so the
+  // customer gets one summary while the administrator still gets one notice per application.
+  h.state.submission!.id = "22222222-2222-4222-8222-222222222222";
+  h.state.orderFlags = [{ id: submissionId, files_submitted_by_email: false }];
+  await h.sendPaidSubmissionNotificationsById({ ...input, submissionId: "22222222-2222-4222-8222-222222222222" });
+  assert.equal([...h.receipts.keys()].filter(key => key.startsWith("payment completed:")).length, 1);
+  assert.equal([...h.receipts.keys()].filter(key => key.startsWith("admin submission receipt:")).length, 2);
+  assert.doesNotMatch(h.messages.at(-1)!.html, /이메일 파일 제출 안내/);
+});
+
+test("bank confirmations and guest orders describe the deposit and keep the guest access code", async () => {
+  const h = await orderFixture("BANK");
+  h.state.submission!.user_id = null;
+  await h.sendPaidSubmissionNotificationsById({ ...input, paymentKey: "bank:order-1" });
+  const customer = h.messages.find(message => message.operation === "payment completed")!;
+  assert.equal(customer.to, "guest@example.invalid");
+  assert.match(customer.subject, /입금 확인/);
+  assert.match(customer.html, /입금이 확인되었습니다/);
+  assert.match(customer.html, /무통장 입금/);
+  assert.match(customer.html, /\/track\/legacy-private-token/);
+  assert.match(customer.html, /비회원 조회 코드/);
+  assert.doesNotMatch(customer.html, /\/mypage\/orders/);
+});
+
+test("an unreadable order falls back to the per-application notice instead of blocking the receipt", async () => {
+  const h = await orderFixture();
+  h.state.order = null;
+  const result = await h.sendPaidSubmissionNotificationsById(input);
+  assert.equal(result.recorded, true);
+  const customer = h.messages.find(message => message.operation === "submission update")!;
+  assert.equal(customer.idempotencyKey, `payment-approved:SUBP-fixture-order:${submissionId}:owner@example.invalid`);
 });

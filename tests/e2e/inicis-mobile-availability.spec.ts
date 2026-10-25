@@ -57,6 +57,8 @@ test.describe("mobile checkout uses the available bank route without opening PC 
   test("actual cart defaults to bank payment and completes the mocked bank selection", async ({ page, baseURL }, testInfo) => {
     const effects = await guardServices(page, new URL(baseURL!).origin);
     await page.goto("/mypage/cart");
+    // The cart first lists the selection; payment methods appear on the payment step.
+    await page.getByRole("button", { name: "결제하기", exact: true }).click();
     await expect(page.getByRole("button", { name: "카드 결제 · PC에서 이용", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "무통장 입금", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText(INICIS_MOBILE_UNAVAILABLE_MESSAGE, { exact: true })).toBeVisible();

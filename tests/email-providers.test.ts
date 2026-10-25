@@ -6,7 +6,7 @@ import { getEmailDeliveryConfiguration, getEmailSenderConfiguration } from "../s
 import { setEmailOutboxTestDispatcher } from "../src/lib/email-transport";
 import {
   sendAccountIdEmail, sendGuestSubmissionLookupEmail, sendPasswordResetEmail, sendResultEmail,
-  sendSignupVerificationEmail, sendSubmissionBankRequestEmail, sendSubmissionReceiptEmail,
+  sendSignupVerificationEmail, sendOrderBankTransferEmail, sendSubmissionReceiptEmail,
   sendSubmissionUpdateEmail, sendWelcomeEmail,
 } from "../src/lib/email";
 
@@ -321,7 +321,7 @@ test("manual and invalid modes suppress every template including malformed link 
         sendGuestSubmissionLookupEmail({ email: recipient, items: [{ token: "private-token", link: badLink }] }),
         sendSubmissionReceiptEmail({ email: recipient, title: "fixture", kind: "ALBUM", submissionId: "fixture", link: badLink }),
         sendResultEmail({ email: recipient, title: "fixture", resultStatus: "APPROVED", link: badLink }),
-        sendSubmissionBankRequestEmail({ email: recipient, title: "fixture", kind: "MV", amountKrw: 1000, link: badLink }),
+        sendOrderBankTransferEmail({ email: recipient, orderId: "fixture-order", items: [{ title: "fixture", kind: "MV", amountKrw: 1000 }], totalAmountKrw: 1000, link: badLink }),
         sendSubmissionUpdateEmail({ email: recipient, title: "fixture", kind: "MV", headline: "fixture", summary: "fixture", link: badLink }),
       ]);
       assert.equal(results.every(result => !result.ok), true);

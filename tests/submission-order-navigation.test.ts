@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
-import { confirmLinkedOrderPayment, statusAfterPaymentConfirmation } from "../src/lib/admin/order-payment";
+import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "../src/lib/admin/order-payment";
 
 const ID = "20000000-0000-4000-8000-000000000001";
 const OTHER = "20000000-0000-4000-8000-000000000002";
@@ -92,6 +92,29 @@ test("linked admin payments confirm the entire bank order and never reset or man
   assert.deepEqual(await confirmLinkedOrderPayment(db, { ...input, currentPaymentStatus: "PAID" }), {});
   assert.ok((await confirmLinkedOrderPayment(db, { ...input, currentPaymentStatus: "PAID", nextPaymentStatus: "PAYMENT_PENDING" })).error);
   assert.equal(calls.length, 0, "review stage edits of an already-paid order do not issue another confirmation");
+
+  // A refund is recorded for the whole order through its own RPC, only from PAID.
+  assert.deepEqual(await confirmLinkedOrderPayment(db, { ...input, currentPaymentStatus: "PAID", nextPaymentStatus: "REFUNDED", adminMemo: "PG cancelled" }), { refundedIds: [ID, OTHER] });
+  assert.deepEqual(calls, [{ method: "refund_submission_order", args: { p_order_id: ORDER, p_actor_user_id: "admin-fixture", p_admin_memo: "PG cancelled" } }]);
+  calls.length = 0;
+  assert.ok((await confirmLinkedOrderPayment(db, { ...input, currentPaymentStatus: "PAYMENT_PENDING", nextPaymentStatus: "REFUNDED" })).error);
+  assert.equal(calls.length, 0);
+});
+
+test("uncertain card approvals are resolved through the reconciliation RPC with readable failures", async () => {
+  const calls: { method: string; args: unknown }[] = [];
+  let failure: { code?: string; message?: string } | null = null;
+  const db = {
+    async rpc(method: string, args: unknown) { calls.push({ method, args }); return failure ? { data: null, error: failure } : { data: [{ submission_id: ID }], error: null }; },
+  } as unknown as Parameters<typeof resolveUncertainCardPayment>[0];
+  assert.deepEqual(await resolveUncertainCardPayment(db, { orderId: ORDER, actorUserId: "admin-fixture", outcome: "APPROVED", pgTid: " tid-123 ", adminMemo: "" }), { submissionIds: [ID] });
+  assert.deepEqual(calls, [{ method: "resolve_uncertain_submission_payment", args: { p_order_id: ORDER, p_actor_user_id: "admin-fixture", p_outcome: "APPROVED", p_pg_tid: "tid-123", p_admin_memo: null } }]);
+  for (const [message, expected] of [["PG_TID_REQUIRED", /TID/], ["PAYMENT_NOT_UNCERTAIN", /새로고침/], ["ORDER_NOT_REVIEW_REQUIRED", /새로고침/], ["PAYMENT_NOT_FOUND", /찾을 수 없습니다/], ["boom", /저장하지 못했습니다/]] as const) {
+    failure = { message };
+    assert.match((await resolveUncertainCardPayment(db, { orderId: ORDER, actorUserId: "admin-fixture", outcome: "FAILED" })).error ?? "", expected);
+  }
+  failure = { code: "42501", message: "ADMIN_REQUIRED" };
+  assert.match((await resolveUncertainCardPayment(db, { orderId: ORDER, actorUserId: "user", outcome: "FAILED" })).error ?? "", /관리자 권한/);
 });
 
 const serverBundle = build({

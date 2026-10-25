@@ -268,6 +268,50 @@ begin
 end $$;
 
 -- Check actual owner SELECT policies, rather than only catalog privileges.
+-- Operators resolve an uncertain card approval from the Inicis console; approval
+-- completes the order, failure reopens it for the customer, refunds are whole-order.
+do $$ declare oid uuid; ids uuid[]; failed_oid uuid; begin
+  select checkout_order_id into oid from public.submission_payments where order_id='CARD-UNKNOWN';
+  perform pg_temp.expect_error($q$select * from public.resolve_uncertain_submission_payment('CARD-UNKNOWN','11111111-1111-4111-8111-111111111111','APPROVED','tid-u')$q$,'42501');
+  perform pg_temp.expect_error($q$select * from public.resolve_uncertain_submission_payment('CARD-UNKNOWN','99999999-9999-4999-8999-999999999999','APPROVED',null)$q$,'22023');
+  perform pg_temp.expect_error($q$select * from public.resolve_uncertain_submission_payment('CARD-UNKNOWN','99999999-9999-4999-8999-999999999999','REFUNDED')$q$,'22023');
+  perform pg_temp.expect_error($q$select * from public.resolve_uncertain_submission_payment('CARD-TWO','99999999-9999-4999-8999-999999999999','FAILED')$q$);
+  select array_agg(submission_id) into ids from public.resolve_uncertain_submission_payment('CARD-UNKNOWN','99999999-9999-4999-8999-999999999999','APPROVED','tid-u','콘솔 승인 확인');
+  if ids<>array['20000000-0000-4000-8000-000000000003']::uuid[] then raise exception 'Resolution did not return the order group'; end if;
+  if (select status from public.submission_orders where id=oid)<>'PAID' or (select paid_at from public.submission_orders where id=oid) is null
+    or not exists(select 1 from public.submission_payments where order_id='CARD-UNKNOWN' and status='APPROVED' and pg_tid='tid-u')
+    or not exists(select 1 from public.submissions where id='20000000-0000-4000-8000-000000000003' and payment_status='PAID' and status='PRE_REVIEW' and current_order_id=oid)
+  then raise exception 'Admin approval resolution incomplete'; end if;
+  perform pg_temp.expect_error($q$select * from public.resolve_uncertain_submission_payment('CARD-UNKNOWN','99999999-9999-4999-8999-999999999999','FAILED')$q$);
+
+  -- A second uncertain attempt is confirmed as not approved: the customer pays again.
+  insert into public.submissions(id,user_id,package_id,status,payment_status) values
+   ('20000000-0000-4000-8000-000000000008','11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','SUBMITTED','UNPAID');
+  perform * from public.begin_submission_payment_order('20000000-0000-4000-8000-000000000008',array['20000000-0000-4000-8000-000000000008']::uuid[],'CARD-UNKNOWN-2',50000,'11111111-1111-4111-8111-111111111111','{"closeState":"11111111-1111-4111-8111-111111111111"}');
+  perform * from public.claim_inicis_submission_approval('CARD-UNKNOWN-2','11111111-1111-4111-8111-111111111111');
+  perform * from public.settle_inicis_submission_approval('CARD-UNKNOWN-2','11111111-1111-4111-8111-111111111111','UNCERTAIN','TIMEOUT','Unknown gateway state','{}');
+  select checkout_order_id into failed_oid from public.submission_payments where order_id='CARD-UNKNOWN-2';
+  perform * from public.resolve_uncertain_submission_payment('CARD-UNKNOWN-2','99999999-9999-4999-8999-999999999999','FAILED',null,'콘솔 미승인 확인');
+  if (select status from public.submission_orders where id=failed_oid)<>'FAILED'
+    or not exists(select 1 from public.submission_payments where order_id='CARD-UNKNOWN-2' and status='FAILED' and result_code='ADMIN_CONFIRMED_FAILURE')
+    or not exists(select 1 from public.submissions where id='20000000-0000-4000-8000-000000000008' and payment_status='UNPAID' and status='WAITING_PAYMENT' and current_order_id=failed_oid)
+  then raise exception 'Admin failure resolution incomplete'; end if;
+  perform * from public.return_submission_order_to_cart(failed_oid,'11111111-1111-4111-8111-111111111111','{}');
+  if (select current_order_id from public.submissions where id='20000000-0000-4000-8000-000000000008') is not null then raise exception 'Failed order could not be returned to the cart'; end if;
+
+  -- Refund records the reversal for the whole order, idempotently, only after payment.
+  perform pg_temp.expect_error(format('select * from public.refund_submission_order(%L,%L)',oid,'11111111-1111-4111-8111-111111111111'),'42501');
+  perform pg_temp.expect_error(format('select * from public.refund_submission_order(%L,%L)',(select checkout_order_id from public.submission_payments where order_id='LEGACY-FAILED'),'99999999-9999-4999-8999-999999999999'));
+  select array_agg(submission_id) into ids from public.refund_submission_order(oid,'99999999-9999-4999-8999-999999999999','PG 취소 완료');
+  if ids<>array['20000000-0000-4000-8000-000000000003']::uuid[]
+    or (select status from public.submission_orders where id=oid)<>'REFUNDED' or (select refunded_at from public.submission_orders where id=oid) is null
+    or exists(select 1 from public.submissions where current_order_id=oid and payment_status<>'REFUNDED')
+    or not exists(select 1 from public.submission_events where submission_id='20000000-0000-4000-8000-000000000003' and message like '%환불%')
+  then raise exception 'Refund not recorded on the whole order'; end if;
+  perform * from public.refund_submission_order(oid,'99999999-9999-4999-8999-999999999999',null);
+  if (select count(*) from public.submission_events where submission_id='20000000-0000-4000-8000-000000000003' and message like '%환불%')<>1 then raise exception 'Idempotent refund duplicated history'; end if;
+end $$;
+
 select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',true);
 set local role authenticated;
 do $$ begin

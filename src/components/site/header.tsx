@@ -57,6 +57,8 @@ const englishRoutePrefixes = [
   "/signup",
   "/forgot-password",
   "/reset-password",
+  "/find-id",
+  "/confirm-email",
   "/magazine",
   "/guide",
   "/faq",

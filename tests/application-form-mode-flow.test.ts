@@ -71,7 +71,7 @@ test("album uploads expose application files only in file-submission mode", () =
 test("MV applications use a six-step exclusive form-mode flow", () => {
   const source = read("src/features/submissions/mv-wizard.tsx");
   const stepsStart = source.indexOf("const steps =");
-  const stepsEnd = source.indexOf("const deferredPaymentNotice", stepsStart);
+  const stepsEnd = source.indexOf("function MvCreditConsistencyNotice", stepsStart);
   const steps = source.slice(stepsStart, stepsEnd);
 
   for (const label of [
@@ -80,10 +80,11 @@ test("MV applications use a six-step exclusive form-mode flow", () => {
     "신청서 작성",
     "파일 업로드",
     "최종 점검",
-    "접수 완료",
+    "장바구니",
   ]) {
     assert.match(steps, new RegExp(`"${label}"`));
   }
+  assert.doesNotMatch(steps, /"접수 완료"/, "saving to the cart is not an accepted application");
   assert.match(
     source,
     /React\.useState<ApplicationFormMode \| null>\(null\)/,
@@ -96,7 +97,7 @@ test("MV applications use a six-step exclusive form-mode flow", () => {
     source,
     /\{step === 5 && \([\s\S]*<SubmissionPreflightPanel[\s\S]*result=\{mvPreflight\}/,
   );
-  assert.match(source, /\{step === 6 && \([\s\S]*접수 완료/);
+  assert.match(source, /\/mypage\/cart\?added=\$\{encodeURIComponent\(result\.submissionId\)\}/);
   assert.match(source, /applicationFormMode: payload\.applicationFormMode/);
   const modeSelector = source.slice(
     source.indexOf("const selectApplicationFormMode"),

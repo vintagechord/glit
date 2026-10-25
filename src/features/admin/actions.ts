@@ -30,7 +30,7 @@ import {
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
-import { confirmLinkedOrderPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
+import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
 import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
 import {
   PUBLIC_CATALOG_CACHE_TAG,
@@ -667,6 +667,16 @@ export async function updatePaymentStatusAction(
       submissionId, paymentKey: `bank:${submission.current_order_id ?? submissionId}`,
     })));
     return { message: "주문 전체의 입금이 확인되었습니다.", warning: outcomes.find((item) => item.warning)?.warning };
+  }
+  if (orderPayment.refundedIds) {
+    for (const id of orderPayment.refundedIds) revalidateUserDashboards(id);
+    for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
+    const outcomes = await Promise.all(orderPayment.refundedIds.map((submissionId) => sendSubmissionUpdateNotificationById({
+      submissionId, headline: "결제가 환불 처리되었습니다.",
+      summary: "결제가 환불로 기록되어 심의 진행이 중단되었습니다. 환불 입금은 결제 수단에 따라 수일이 걸릴 수 있으며, 문의는 고객센터로 연락해주세요.",
+      subject: "[onside] 환불 처리 안내",
+    })));
+    return { message: "주문 전체가 환불로 기록되었습니다.", warning: outcomes.find((item) => item?.warning)?.warning };
   }
 
   const nextStatus =
@@ -2032,7 +2042,7 @@ export async function saveSubmissionAdminFormAction(
   const supabase = createAdminClient();
   const { data: currentSubmission, error: currentSubmissionError } = await supabase
     .from("submissions")
-    .select("id, status, payment_status, current_order_id, title, artist_name, admin_memo")
+    .select("id, type, mv_desired_rating, status, payment_status, current_order_id, title, artist_name, admin_memo")
     .eq("id", submissionId)
     .maybeSingle();
 
@@ -2061,6 +2071,17 @@ export async function saveSubmissionAdminFormAction(
   let nextStatus = mappedStage?.status ?? (parsedStatus?.data as ReviewStatus);
   const nextPaymentStatus =
     mappedStage?.paymentStatus ?? (parsedPaymentStatus?.data as PaymentStatus);
+  // An online MV result is its official rating. Publishing "결과 준비" before
+  // the rating is stored would show the customer an approved-but-unrated
+  // result that cannot be reverted from this screen.
+  if (
+    ["RESULT_READY", "COMPLETED"].includes(nextStatus) &&
+    !["RESULT_READY", "COMPLETED"].includes(currentStatus) &&
+    currentSubmissionRow.type === "MV_DISTRIBUTION" &&
+    !isRatingCode(currentSubmissionRow.mv_desired_rating)
+  ) {
+    redirectWithError("온라인 뮤직비디오는 영등위 확정 등급을 먼저 저장해야 결과 준비로 변경할 수 있습니다.");
+  }
 
   if (
     !mappedStage &&
@@ -2084,6 +2105,10 @@ export async function saveSubmissionAdminFormAction(
       nextStatus = statusAfterPaymentConfirmation(currentStatus);
     }
     for (const id of orderPayment.confirmedIds) revalidateUserDashboards(id);
+    for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
+  }
+  if (orderPayment.refundedIds) {
+    for (const id of orderPayment.refundedIds) revalidateUserDashboards(id);
     for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
   }
 
@@ -2175,6 +2200,11 @@ export async function saveSubmissionAdminFormAction(
       const notification = currentPaymentStatus !== "PAID" && nextPaymentStatus === "PAID"
         ? await sendPaidSubmissionNotificationsById({
           submissionId, paymentKey: `bank:${currentSubmissionRow.current_order_id ?? submissionId}`,
+        }) : orderPayment.refundedIds
+        ? await sendSubmissionUpdateNotificationById({
+          submissionId, headline: "결제가 환불 처리되었습니다.",
+          summary: "결제가 환불로 기록되어 심의 진행이 중단되었습니다. 환불 입금은 결제 수단에 따라 수일이 걸릴 수 있으며, 문의는 고객센터로 연락해주세요.",
+          subject: "[onside] 환불 처리 안내",
         }) : (currentStatus !== nextStatus && (["RESULT_READY", "COMPLETED"].includes(currentStatus) || ["RESULT_READY", "COMPLETED"].includes(nextStatus)))
         ? null : await sendSubmissionUpdateNotificationById({
         submissionId,
@@ -2198,6 +2228,15 @@ export async function saveSubmissionAdminFormAction(
       submissionId: siblingId, paymentKey: `bank:${currentSubmissionRow.current_order_id ?? siblingId}`,
     });
     savedWarning = [savedWarning, notification.warning].filter(Boolean).join(" / ");
+  }
+  for (const siblingId of orderPayment.refundedIds ?? []) {
+    if (siblingId === submissionId) continue;
+    const notification = await sendSubmissionUpdateNotificationById({
+      submissionId: siblingId, headline: "결제가 환불 처리되었습니다.",
+      summary: "결제가 환불로 기록되어 심의 진행이 중단되었습니다. 환불 입금은 결제 수단에 따라 수일이 걸릴 수 있으며, 문의는 고객센터로 연락해주세요.",
+      subject: "[onside] 환불 처리 안내",
+    });
+    savedWarning = [savedWarning, notification?.warning].filter(Boolean).join(" / ");
   }
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${submissionId}`);
@@ -2226,4 +2265,42 @@ export async function saveSubmissionAdminFormAction(
       }),
     );
   }
+}
+
+const uncertainPaymentOrderIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
+
+/** Operator reconciliation of a card approval the gateway callback could not
+ * confirm. The decision comes from the Inicis console; this only records it. */
+export async function resolveUncertainPaymentFormAction(formData: FormData): Promise<void> {
+  const actor = await requireAdminAction();
+  const orderId = String(formData.get("orderId") ?? "").trim();
+  const outcome = String(formData.get("outcome") ?? "").trim();
+  const pgTid = String(formData.get("pgTid") ?? "").trim();
+  const adminMemo = String(formData.get("adminMemo") ?? "").trim().slice(0, 500);
+  const back = (query: string) => redirect(`/admin/payments?filter=attention&${query}`);
+  if (!uncertainPaymentOrderIdPattern.test(orderId)) back("saved=error&savedError=" + encodeURIComponent("주문번호를 확인해주세요."));
+  if (outcome !== "APPROVED" && outcome !== "FAILED") back("saved=error&savedError=" + encodeURIComponent("승인 또는 미승인 중 하나를 선택해주세요."));
+  if (outcome === "APPROVED" && !/^[A-Za-z0-9_-]{5,64}$/.test(pgTid)) back("saved=error&savedError=" + encodeURIComponent("이니시스 승인 TID를 정확히 입력해주세요."));
+
+  const result = await resolveUncertainCardPayment(createAdminClient(), {
+    orderId, actorUserId: actor.id, outcome: outcome as "APPROVED" | "FAILED", pgTid, adminMemo,
+  });
+  if (result.error || !result.submissionIds) back("saved=error&savedError=" + encodeURIComponent(result.error ?? "처리하지 못했습니다."));
+  const submissionIds = result.submissionIds ?? [];
+  const warnings: string[] = [];
+  for (const submissionId of submissionIds) {
+    const notification = outcome === "APPROVED"
+      ? await sendPaidSubmissionNotificationsById({ submissionId, paymentKey: orderId })
+      : await sendSubmissionUpdateNotificationById({
+        submissionId, headline: "카드 결제가 완료되지 않았습니다.",
+        summary: "결제사 확인 결과 승인되지 않은 결제입니다. 청구된 금액은 없으며, 주문내역에서 다시 결제할 수 있습니다.",
+        subject: "[onside] 결제 미승인 안내",
+      });
+    if (notification?.warning) warnings.push(notification.warning);
+    revalidateUserDashboards(submissionId);
+  }
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/submissions");
+  for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
+  back(`saved=${outcome === "APPROVED" ? "approved" : "failed"}${warnings.length ? `&savedWarning=${encodeURIComponent(warnings.join(" / "))}` : ""}`);
 }

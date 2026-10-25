@@ -1,9 +1,46 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendAdminSubmissionReceiptEmail, sendSubmissionUpdateEmail } from "@/lib/email";
+import { sendAdminSubmissionReceiptEmail, sendPaymentCompletedEmail, sendSubmissionUpdateEmail, type OrderEmailItem } from "@/lib/email";
 import type { EmailSendResult } from "@/lib/email-transport";
 import { isEmailRecipient } from "@/lib/email-config";
+import { formatCurrency } from "@/lib/format";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { buildUrl, getBaseUrl } from "@/lib/url";
+
+type OrderSummary = {
+  id: string;
+  paymentMethod: "CARD" | "BANK" | "PAYPAL";
+  amountLabel: string;
+  paidAt: string | null;
+  items: OrderEmailItem[];
+  awaitingEmailMaterials: boolean;
+};
+
+/** The order snapshot taken at checkout; a missing or unreadable order only
+ * downgrades the receipt to the per-application notice. */
+async function loadOrderSummary(db: ReturnType<typeof createAdminClient>, orderId: string): Promise<OrderSummary | null> {
+  const { data: order, error } = await db.from("submission_orders")
+    .select("id,payment_method,amount_krw,amount,currency,paid_at").eq("id", orderId).maybeSingle();
+  if (error || !order) return null;
+  const { data: items, error: itemsError } = await db.from("submission_order_items")
+    .select("submission_ref,title,artist_name,type,amount_krw").eq("order_id", orderId);
+  if (itemsError || !items?.length) return null;
+  const { data: flags } = await db.from("submissions").select("id,files_submitted_by_email")
+    .in("id", items.map((item: { submission_ref: string }) => item.submission_ref));
+  const amountKrw = Number(order.amount_krw);
+  const amount = Number(order.amount);
+  return {
+    id: order.id,
+    paymentMethod: order.payment_method === "BANK" ? "BANK" : order.payment_method === "PAYPAL" ? "PAYPAL" : "CARD",
+    amountLabel: order.currency === "KRW" || !Number.isFinite(amount)
+      ? `${formatCurrency(Number.isFinite(amountKrw) ? amountKrw : 0)}원`
+      : `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(amount)} ${order.currency}`,
+    paidAt: order.paid_at ?? null,
+    items: items.map((item: { title: string | null; artist_name: string | null; type: string | null; amount_krw: number | null }) => ({
+      title: item.title, artist: item.artist_name, kind: item.type?.startsWith("MV") ? "MV" : "ALBUM", amountKrw: item.amount_krw,
+    })),
+    awaitingEmailMaterials: (flags ?? []).some((row: { files_submitted_by_email?: boolean | null }) => row.files_submitted_by_email === true),
+  };
+}
 
 export type PaidSubmissionNotificationOutcome = {
   /** True once each applicable notification has a durable outbox receipt. */
@@ -31,7 +68,7 @@ export async function sendPaidSubmissionNotificationsById(input: {
   try {
     const db = createAdminClient();
     const { data: submission, error } = await db.from("submissions")
-      .select("id,user_id,guest_token,guest_email,guest_phone,applicant_email,applicant_phone,title,artist_name,type,amount_krw,payment_status")
+      .select("id,user_id,guest_token,guest_email,guest_phone,applicant_email,applicant_phone,title,artist_name,type,amount_krw,payment_status,current_order_id")
       .eq("id", input.submissionId).maybeSingle();
     if (error || !submission) return { ...outcome, warning: "결제는 저장되었지만 접수 알림에 필요한 정보를 확인하지 못했습니다." };
     if (submission.payment_status !== "PAID") return { ...outcome, recorded: true };
@@ -49,9 +86,13 @@ export async function sendPaidSubmissionNotificationsById(input: {
     const paymentKey = event?.payment_key ?? input.paymentKey;
     const baseUrl = getBaseUrl();
     const kind = submission.type?.startsWith("MV") ? "MV" : "ALBUM";
-    const link = buildUrl(!submission.user_id && submission.guest_token?.length >= 8
+    const guestAccess = !submission.user_id && submission.guest_token?.length >= 8;
+    const link = buildUrl(guestAccess
       ? `/track/${encodeURIComponent(submission.guest_token)}`
       : `/dashboard/submissions/${submission.id}`, baseUrl);
+    const order = typeof submission.current_order_id === "string" && submission.current_order_id
+      ? await loadOrderSummary(db, submission.current_order_id).catch(() => null)
+      : null;
     let customerLookupFailed = false;
     // Begin the admin notice independently so customer account lookup or an
     // invalid/missing customer address cannot suppress the operations notice.
@@ -71,6 +112,18 @@ export async function sendPaidSubmissionNotificationsById(input: {
       } else email = submission.guest_email || submission.applicant_email || null;
       const recipient = email?.trim().toLowerCase() ?? "";
       if (!isEmailRecipient(recipient)) return null;
+      if (order) {
+        // One receipt per order: every application in the same order shares
+        // this key, so the outbox stores the summary message exactly once.
+        return sendPaymentCompletedEmail({
+          email: recipient, orderId: order.id, paymentMethod: order.paymentMethod, paidAt: order.paidAt,
+          amountLabel: order.amountLabel, items: order.items, awaitingEmailMaterials: order.awaitingEmailMaterials,
+          link, ordersLink: guestAccess ? undefined : buildUrl(`/mypage/orders?focus=${submission.id}`, baseUrl),
+          idempotencyKey: `payment-approved:${paymentKey}:${order.id}:${recipient}`,
+          submissionId: submission.id,
+          guestToken: submission.user_id ? undefined : submission.guest_token ?? undefined,
+        });
+      }
       return sendSubmissionUpdateEmail({
         email: recipient, title: submission.title ?? "제목 미입력", artist: submission.artist_name,
         kind, headline: "결제가 완료되었습니다.",
