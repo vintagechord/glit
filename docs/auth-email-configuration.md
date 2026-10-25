@@ -2,7 +2,7 @@
 
 2026-10-24 확인: 기존 비밀번호 재설정·비회원 코드·심의 알림은 `8b68c86`에서 manual 모드로 보류됐다. 가입 이메일 확인은 최초 구현에서 존재했고 `a20544a`의 관리자 자동 승인으로 바뀌었다. 이번 변경은 확인 가입과 아이디 안내를 추가하고 모든 앱 메일을 동일한 공급자 설정으로 통합한다. 사용자는 기존 고객센터 **`iamonside@daum.net`**을 발신자로 선택했다.
 
-**2026-10-25 운영 상태:** Daum 앱 비밀번호와 Supabase 중계로 실제 발송·사용자 수신 확인을 완료했다. 운영 웹 `6b19cd9`는 `transactional` 모드로 배포됐다. 상세 이력과 검증 범위는 [운영 활성화 기록](email-production-activation-2026-10-24.md)을 참고한다.
+**2026-10-25 11:05:24 KST 운영 상태:** 안정성 보완 소스 `04de307c7ae6ec04ccb4bc991d607b9689f4c46a`, 중계 v2, DB 마이그레이션 3개와 자동 재시도 스케줄러를 운영에 반영했다. 웹은 `transactional` 모드이며, 실제 worker·아이디 안내·비밀번호 복구 메일 3건이 각각 1회 메일 서버에 접수되고 본문이 삭제됐다. **이번 3건의 수신함 확인은 사용자 답변 대기 중**이다. 이전 `6b19cd9` 버전의 공통 알림·기존 회원 복구 메일은 실제 수신을 확인한 이력이다. 배포·검증 범위는 [운영 활성화 기록](email-production-activation-2026-10-24.md)을 참고한다.
 
 ## 도메인 구매 없이 가능한 경로
 
@@ -19,7 +19,7 @@
 
 ## 선택한 경로: 기존 Daum 주소 + Supabase 중계
 
-`Render → HTTPS → Supabase Edge Function → TLS 465 → Daum`으로 발송한다. Supabase의 [Edge Function 제한](https://supabase.com/docs/guides/functions/limits)은 25/587 연결을 차단하며, Daum의 465는 차단 목록에 포함하지 않는다. Supabase도 [Nodemailer SMTP 예제](https://github.com/supabase/supabase/blob/master/examples/edge-functions/supabase/functions/send-email-smtp/index.ts)를 제공한다. 따라서 도메인 구입, Resend 가입, Render 유료 전환 없이 구성할 수 있다. 현재 구성은 실제 클라우드 연결·메일 수신을 확인했다. 메일함 발송량 제한과 [Supabase 함수 사용량 제한](https://supabase.com/docs/guides/functions/pricing)은 적용된다.
+`Render → HTTPS → Supabase Edge Function → TLS 465 → Daum`으로 발송한다. Supabase의 [Edge Function 제한](https://supabase.com/docs/guides/functions/limits)은 25/587 연결을 차단하며, Daum의 465는 차단 목록에 포함하지 않는다. Supabase도 [Nodemailer SMTP 예제](https://github.com/supabase/supabase/blob/master/examples/edge-functions/supabase/functions/send-email-smtp/index.ts)를 제공한다. 따라서 도메인 구입, Resend 가입, Render 유료 전환 없이 구성할 수 있다. 이 발송 경로는 이전 운영 버전에서 실제 클라우드 연결·메일 수신을 확인했다. 최신 보완 배포의 서버 접수와 수신 확인 범위는 위 운영 상태와 구분한다. 메일함 발송량 제한과 [Supabase 함수 사용량 제한](https://supabase.com/docs/guides/functions/pricing)은 적용된다.
 
 ### 1. Daum에서 앱 비밀번호 준비
 
@@ -64,11 +64,11 @@ NEXT_PUBLIC_SUPPORT_EMAIL=iamonside@daum.net
 NEXT_PUBLIC_EMAIL_DELIVERY_MODE=transactional
 ```
 
-앱에 설정된 Supabase 프로젝트와 중계 URL의 호스트가 일치해야 한다. 외부 URL로 비밀값을 전송하거나 리다이렉트를 따라가지 않는다. 새로운 환경을 구성할 때는 연결·실수신 확인 전까지 manual을 사용하고, 확인 후 transactional로 바꾸어 재빌드·재배포한다. 현재 운영은 이 검증과 전환을 완료했다.
+앱에 설정된 Supabase 프로젝트와 중계 URL의 호스트가 일치해야 한다. 외부 URL로 비밀값을 전송하거나 리다이렉트를 따라가지 않는다. 새로운 환경을 구성할 때는 연결·실수신 확인 전까지 manual을 사용하고, 확인 후 transactional로 바꾸어 재빌드·재배포한다. 현재 운영은 최초 실수신 검증 후 이 전환을 완료했고, 최신 보완 버전도 같은 모드를 유지한다.
 
-2026-10-25 운영 반영: 브라우저의 온사이드 Supabase 대시보드에 `6b19cd9` 기준 `send-transactional-email` 함수를 배포했다. 사용자 승인에 따라 이 함수의 JWT 검증은 해제하되(`verify_jwt=false`), 함수 내부 전용 서버 비밀값 인증은 유지한다. `SMTP_USER=iamonside`와 사용자가 직접 입력한 Daum 앱 비밀번호로 공통 앱 알림 발송이 성공했고 사용자가 수신을 확인했다. 같은 소스의 최종 [Render 배포 `dep-dbedu00m7kps73dj5au0`](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-dbedu00m7kps73dj5au0)는 **2026-10-25 01:40:26 KST**에 Live가 됐다. 운영 모드는 `transactional`이다.
+최초 연결 이력: `6b19cd9`에서 `SMTP_USER=iamonside`와 사용자가 직접 입력한 Daum 앱 비밀번호로 공통 앱 알림 발송·사용자 수신을 확인하고 `transactional`로 전환했다. **현재 운영 웹**은 [Render 배포 `dep-dbem5mom7kps73eb9bog`](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-dbem5mom7kps73eb9bog)의 `04de307`이며, **2026-10-25 11:03:29 KST**에 Live가 됐다. 중계 함수는 아래 v2로 교체했다. 사용자 승인에 따른 `verify_jwt=false`와 함수 내부 전용 서버 비밀값 인증, 기존 SMTP 자격정보와 발신 주소는 유지한다.
 
-초기 실제 발송은 `503 configuration`으로 실패했으나, 계정명·POP3/SMTP 설정·앱 비밀번호 항목을 바로잡은 뒤 해결됐다. 이후 인증값 없는 요청과 잘못된 인증값은 401, 올바른 전용 인증값의 빈 `POST {}`는 400이었다. 최종 공개 health는 HTTP 200·오류 0건·이메일 환경 검사 정상이며 기타 경고 1건이 있었다. 비밀번호 찾기·비회원 조회의 운영 발송 입력 화면과 올바른 고객센터 주소를 확인했다. 각 업무의 실제 수신 검증 범위는 운영 활성화 기록에서 구분한다.
+초기 실제 발송은 `503 configuration`으로 실패했으나, 계정명·POP3/SMTP 설정·앱 비밀번호 항목을 바로잡은 뒤 해결됐다. 이후 인증값 없는 요청과 잘못된 인증값은 401, 올바른 전용 인증값의 빈 `POST {}`는 400이었다. **11:05:24 KST**의 최신 공개 health는 HTTP 200·오류 0건·모든 이메일 검사 정상이며, 이메일과 무관한 Kakao 설정 경고 1건이 있었다. 비밀번호 찾기·비회원 조회의 운영 발송 입력 화면과 올바른 고객센터 주소를 확인했다. 각 업무의 실제 수신 검증 범위는 운영 활성화 기록에서 구분한다.
 
 ## Gmail API: 현재 호스팅을 유지하는 방법
 
@@ -117,7 +117,7 @@ Resend나 온사이드 전용 도메인 주소를 선택하는 경우에 도메�
 
 - 가입: transactional 모드에서 이메일 확인 후 비밀번호를 설정한다. 메일 미리보기/GET만으로 토큰을 소비하지 않는다. 앱이 임의 초기 비밀번호로 만든 대기 계정에만 서버 서명된 확인 링크를 발급한다. 이전 방식의 미인증 계정은 이 흐름으로 활성화하지 않고 고객센터 확인이 필요하다. Supabase Confirm email을 유지한다. 2026-10-24 공개 Auth 설정 조회에서 `mailer_autoconfirm=false`를 확인했다.
 - 아이디: 이메일 자체가 아이디다. 실제 계정이 있으면 입력한 메일함으로 안내하며 웹에는 계정 존재나 다른 주소를 노출하지 않는다. 주소 자체를 잊은 경우 고객센터 확인이 필요하다.
-- 비밀번호: 기존 비밀번호를 보내지 않고 일회용 복구 링크로 새 비밀번호를 설정한다. 미가입 주소는 계정 존재를 노출하지 않는 일반 성공 안내를 표시하며, `generateLink`의 `user_not_found` 경로에서는 메일을 발송하지 않는다.
+- 비밀번호: 기존 비밀번호를 보내지 않고 일회용 복구 링크로 새 비밀번호를 설정한다. 미가입 주소는 계정 조회에서 발송을 생략하고, 계정 존재를 노출하지 않는 일반 성공 안내를 표시한다.
 - 비회원 코드: 저장된 동일 신원의 이름·이메일 쌍이 일치하는 비회원 접수만 이메일로 보낸다. 회원 접수는 제외하고 웹 응답에는 코드나 접수 내역을 표시하지 않는다.
 - 심의: 진행 상태·방송국 심의·최종 결과·접수 정보·보완 알림에서 공통 발송 설정을 재사용한다. MV 등급·필증 변경도 연결한다. 회원은 계정 이메일, 비회원은 접수 연락처를 사용한다. 내부 메모만 수정하거나 같은 값을 저장하면 불필요한 알림을 보내지 않는다.
 - 발송 실패가 심의 저장을 되돌리지는 않으며 관리자에게 대기·실패·접수 불확실 상태를 구분해 표시한다. 공통 이메일은 `email_outbox`에 먼저 기록하고, 안전하게 실패가 확인된 건만 자동 재시도한다. SMTP/Gmail의 접수 여부가 불확실한 경우에는 자동 재시도를 멈추며 관리자가 중복 가능성을 확인한 뒤 재발송한다. 메일 서버 접수는 수신함 도착 확인을 뜻하지 않는다.
@@ -129,7 +129,7 @@ Resend나 온사이드 전용 도메인 주소를 선택하는 경우에 도메�
 
 ## 이메일 안정성 보완 배포 (2026-10-25)
 
-아래 절차는 코드 배포와 DB/스케줄러 활성화를 함께 수행해야 한다. 실제 운영 완료 여부와 검증 결과는 `email-production-activation-2026-10-24.md`에 별도로 기록한다.
+**운영 적용 완료:** 아래 세 SQL, 중계 v2와 웹 배포를 모두 완료했다. 중계 v2는 12,998 bytes, SHA256 `db8537348228914a6718d0d8a7a8e45cc72d97449d6a8df53b545ff9e6bc8455`다. 운영 cron의 매분 실행·최근 성공, worker HTTP 200·timeout 없음, 최근 완료와 `last_error=false`를 확인했다. 테이블 3개 RLS와 RPC 10개의 브라우저 역할 접근 차단도 확인했다. 새 비밀번호·도메인·Resend 설정은 필요하지 않았다. 아래는 새 환경 구성이나 재배포 시의 절차이며, 현재 대기 중인 작업 목록이 아니다. 상세 증거는 [운영 활성화 기록](email-production-activation-2026-10-24.md)에 기록한다.
 
 1. `node scripts/build-email-relay-editor.mjs /private/tmp/glit-email-relay-editor-v2.ts`로 생성·검증한 중계 함수를 먼저 배포한다. 새 함수는 기존 요청과 새 `requestId` 요청을 모두 받는다. 이전 함수에 새 앱을 먼저 연결하면 입력 검증에서 거절될 수 있다. 기존 JWT OFF와 함수 자체 서버 비밀키 인증을 유지하며, SMTP 비밀번호·발신 주소는 변경하지 않는다.
 2. `20261024174812_atomic_admin_review_notifications.sql`, `20261024174939_email_worker_and_rate_limits.sql`, `20261024175001_durable_email_outbox.sql`을 적용한다. `anon`/`authenticated`에는 새 테이블과 RPC 접근을 허용하지 않는다. `service_role`만 큐·재시도·요청 제한·원자적 결과 저장을 처리한다.
@@ -161,4 +161,10 @@ npm run email:smoke -- --to <approved-test-recipient>
 
 `EMAIL_TEST_TO` 또는 기존 `RESEND_TEST_TO`도 사용할 수 있다. 고객센터 주소로 자동 발송하는 기본값은 없다. 이어서 테스트 계정으로 가입·아이디·비밀번호·코드·관리자 변경 알림 수신과 만료/재사용 토큰 거절을 확인한다.
 
-자동 테스트는 모의 공급자·인증 응답을 사용하며 실제 수신함 도착을 보증하지 않는다. 운영 함수·웹 앱 배포, Supabase/Render 설정 저장, 공통 앱 알림 경로의 실제 자기 주소 발송과 사용자 수신 확인은 완료했다. 지원 주소로 제출한 운영 비밀번호 재설정 요청의 미도착은 후속 Auth Users 조회에서 해당 회원이 없고 `user_not_found` 경로가 발송을 생략하는 정상 동작임을 확인했다. 이후 사용자가 지정한 기존 회원 주소를 Auth Users에서 확인하고 운영 `/forgot-password` 폼으로 1회 요청했다. 일반 성공 안내·재요청 대기시간이 표시됐고, 사용자가 `[onside] 비밀번호 재설정 안내` 메일 도착을 확인했다. 링크 클릭이나 비밀번호 변경은 하지 않았다. 실제 비회원 접수의 코드 재발송은 테스트 접수가 없어 미검증이다. 자동 이메일은 `transactional`로 운영 중이다.
+최신 배포 전 자동 테스트는 960 통과·0 실패·6 기존 조건부 건너뜀, 별도 인증 모의 브라우저 7 통과였다. PostgreSQL 17 격리 DB 검증, TypeScript·ESLint·webpack·Deno 검사와 실제 Render의 Turbopack·TypeScript·페이지 생성을 통과했다. 별도 Node 22 Docker의 네트워크 없는 최종 빌드도 87개 페이지 생성을 완료했다. `abc916c`의 최초 Render 빌드는 `dynamic` 설정 재내보내기 처리에서 실패했고, `04de307`의 직접 상수 선언으로 해결했다. 자동 테스트는 모의 공급자·인증 응답을 사용하므로 실제 수신함 도착을 보증하지 않는다.
+
+최신 운영에서는 허가된 고객센터 본인 주소로 worker 메일 1건, **사용자가 지정한 기존 회원 주소**로 아이디 안내와 비밀번호 복구 각 1건의 실제 서버 접수를 확인했다. 11:05:05 KST DB 점검에서 `accepted=3`, 나머지 상태 0, 접수 완료 후 남은 HTML 0이었다. 이번 3건의 사용자 수신함 확인은 대기 중이며, 정확히 한 번의 수신을 보장한다는 뜻은 아니다. 공개 한국어·영어 인증/비회원 8개 경로의 HTTP 200, 재설정 두 페이지의 `noindex`·`no-referrer` 메타데이터, 인증 없는 worker 401을 확인했다. 일반 회원 브라우저의 `/admin/emails` 접근은 `/dashboard`로 이동했으나 실제 관리자 목록 화면은 열어 보지 않았다.
+
+이전 `6b19cd9` 버전에서는 공통 앱 알림과 기존 회원의 `[onside] 비밀번호 재설정 안내` 메일 도착을 사용자가 확인했다. 당시 지원 주소의 복구 메일 미도착은 Auth Users에 회원이 없어 `user_not_found` 경로가 발송을 생략한 정상 동작이었다. 이 과거 실수신 이력과 최신 배포의 수신 확인 대기는 구분한다. 링크 클릭이나 비밀번호 변경은 운영 검증에서 하지 않았다.
+
+새 가입 완료·실제 비회원 접수 코드·관리자 심의 변경·결제의 전체 고객 흐름은 이번 운영 검증에서 실행하지 않았다. 테스트 계정·접수로 별도 확인할 범위이며, 모의 테스트나 공통 발송 성공을 각 업무의 실제 수신 완료로 기록하지 않는다. 자동 이메일은 `transactional`로 운영 중이다.
