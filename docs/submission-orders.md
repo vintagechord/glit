@@ -28,3 +28,16 @@ Inicis 승인 요청 전에 단일 처리 권한을 확보한다. 중복 콜백�
 ## 검증
 
 `scripts/submission-orders-sql-test.sh`는 운영 접속 정보 없이 격리 PostgreSQL에서 마이그레이션과 상태 전이를 검증한다. `tests/submission-orders*.test.ts`는 소유권·조회·반환 HTTP 계약을 검증한다. `tests/e2e/submission-cart-checkout.spec.ts`는 장바구니와 주문내역 UI를 검증하며 결제·반환 요청은 모의 응답을 사용한다. 실제 PG 결제나 고객 입금 상태 변경은 테스트로 실행하지 않는다.
+
+## 2026-10-26 결제 안내·표시 변경
+
+- 무통장 입금 신청(`/api/cart/bank`)은 주문 저장 직후 응답하고, 계좌 정보와 주문 내역(항목·합계)을 담은 안내 메일을 **주문 단위**로 응답 이후에 보낸다(`sendOrderBankTransferEmail`, 키 `bank-request:<주문ID>:<수신자>`). 발송 실패분은 기존 아웃박스 워커가 재시도한다.
+- 카드 승인·입금 확인으로 신청서가 PAID가 되면 고객에게 결제 정보(주문번호·결제수단·금액·일시)와 주문 내역을 담은 메일을 **주문당 한 통** 보낸다(`sendPaymentCompletedEmail`, 키 `payment-approved:<결제키>:<주문ID>:<수신자>`). 주문 정보를 읽지 못하면 기존 신청서 단위 안내로 대체한다. 이메일로 파일을 제출하기로 한 신청이 있으면 제출 안내를 함께 넣는다.
+- 결제창을 닫아 `CANCELED`로 기록된 카드 주문은 DB 상태를 유지한 채 주문내역에서 **결제 대기**로 표시하고 "대기" 필터에 포함한다. 장바구니로 돌린 주문(`returned_at`)과 환불·실패 주문은 종전과 같이 표시한다.
+- 주문이 없는 미결제 신청서의 상세 화면은 계좌 정보를 보여주지 않고 장바구니 결제로만 연결한다. 입금 계좌는 주문 생성 후 주문내역과 안내 메일에서만 노출한다.
+
+## 2026-10-26 운영자 처리 경로 추가
+
+- **승인 확인 필요(`APPROVAL_UNCERTAIN`) 카드 주문**: `/admin/payments`의 해당 행에서 이니시스 관리자 화면 대조 결과를 기록한다. `resolve_uncertain_submission_payment(order_id, actor, 'APPROVED'|'FAILED', tid, memo)`는 승인이면 기존 `approve_submission_payment_order`로 결제 완료·접수예정 전환과 결제 완료 메일을, 미승인이면 `close_submission_payment_order_v96('FAILED')`로 주문을 실패로 돌려 고객이 주문내역에서 다시 결제할 수 있게 한다. PG 요청은 보내지 않는다.
+- **환불 기록**: 접수 상세의 결제 상태를 "환불"로 저장하면 `refund_submission_order(order_id, actor, memo)`가 주문 전체를 `REFUNDED`(`refunded_at`)로 바꾸고 연결된 신청서의 `payment_status`를 `REFUNDED`로 기록한 뒤 환불 안내 메일을 보낸다. 실제 PG 취소·계좌 환불은 외부에서 먼저 처리한다. 결제 완료(`PAID`) 주문만 환불로 기록할 수 있다.
+- 두 함수 모두 service_role 전용이며 `scripts/submission-orders-sql-test.sh`에 회귀가 있다.

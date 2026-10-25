@@ -63,7 +63,7 @@ const submissionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bauhaus-status-chip--progress",
   },
   RESULT_READY: {
-    label: "결과 준비",
+    label: "결과 확인 가능",
     tone: "bauhaus-status-chip--success",
   },
   COMPLETED: {

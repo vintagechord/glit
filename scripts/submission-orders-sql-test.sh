@@ -26,6 +26,7 @@ order_psql --single-transaction < "$order_sql_root/supabase/migrations/202610232
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261024174939_email_worker_and_rate_limits.sql"
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261024175001_durable_email_outbox.sql"
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261025132939_paid_submission_notification_events.sql"
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261026120000_admin_payment_resolution.sql"
 # Receipt invariants must run inside the payment fixture transaction, before rollback.
 {
   sed '/^rollback;$/,$d' "$order_sql_root/tests/sql/submission-orders.sql"

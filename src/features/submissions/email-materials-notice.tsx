@@ -23,8 +23,9 @@ export function EmailMaterialsNotice({
 
   return (
     <div className="mt-4 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-5 text-sm">
-      <p className="font-bold">자료 제출 대기</p>
-      <p className="mt-2 text-muted-foreground">보낼 자료: {materials}. 자료를 수신하고 확인한 후 접수를 진행합니다.</p>
+      <p className="font-bold">이메일로 파일 제출</p>
+      <p className="mt-2 text-muted-foreground">접수 완료 후 아래 주소로 파일을 보내주세요. 자료를 확인한 후 접수를 진행합니다.</p>
+      <p className="mt-1 text-muted-foreground">보낼 자료: {materials}</p>
       <a className="mt-3 block break-all font-semibold underline underline-offset-4" href={`mailto:${APP_CONFIG.supportEmail}?subject=${encodeURIComponent(emailSubject)}`}>
         {APP_CONFIG.supportEmail}
       </a>

@@ -1,5 +1,6 @@
 "use server";
 
+import { hasNonKoreanLyrics as hasNonKoreanLyricsText } from "@/lib/lyrics-tools";
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { z } from "zod";
@@ -10,7 +11,7 @@ import { getPublicProfanityTerms } from "@/lib/public-catalog";
 import type { AlbumPriceTier } from "@/lib/album-payment-discount";
 import { B2ConfigError, getB2Config } from "@/lib/b2";
 import {
-  sendSubmissionBankRequestEmail,
+  sendOrderBankTransferEmail,
   sendSubmissionReceiptEmail,
 } from "@/lib/email";
 import { ensureArtistByName } from "@/lib/artist";
@@ -446,16 +447,9 @@ type CashReceiptPurpose = (typeof cashReceiptPurposeValues)[number];
 const normalizeDigits = (value?: string | null) =>
   (value ?? "").replace(/[^0-9]/g, "");
 
-const koreanLetterPattern = /[ㄱ-ㅎㅏ-ㅣ가-힣]/;
-const unicodeLetterPattern = /\p{L}/u;
-
-const hasNonKoreanLyrics = (value?: string | null) => {
-  for (const char of value ?? "") {
-    if (!unicodeLetterPattern.test(char)) continue;
-    if (!koreanLetterPattern.test(char)) return true;
-  }
-  return false;
-};
+// Shared with the client final check so both sides agree on what counts as
+// Korean (decomposed jamo and half-width forms included).
+const hasNonKoreanLyrics = (value?: string | null) => hasNonKoreanLyricsText(value ?? "");
 
 const validateBankPaymentDocument = (params: {
   isSubmitted: boolean;
@@ -921,10 +915,11 @@ export async function saveAlbumSubmissionAction(
   if (isGuest && !parsed.data.guestToken) {
     return { error: "로그인 정보를 확인할 수 없습니다." };
   }
+  // The uploaded form carries the album details, but the operator still
+  // needs a mailbox for payment, supplement and result notices.
   if (
     isSubmitted &&
     isGuest &&
-    !usesExternalApplicationForm &&
     (!guestNameValue || !guestEmailValue || !guestPhoneValue)
   ) {
     return { error: "비회원 정보(담당자, 연락처, 이메일)를 입력해주세요." };
@@ -1482,14 +1477,14 @@ export async function saveAlbumSubmissionAction(
           recipientEmail,
           label: "무통장 입금 안내",
           kind: "bank",
+          // Legacy in-wizard bank request (no checkout order exists yet);
+          // the cart checkout sends the order-level notice instead.
           send: () =>
-            sendSubmissionBankRequestEmail({
+            sendOrderBankTransferEmail({
               email: recipientEmail,
-              title: notificationTitle,
-              artist: artistNameValue || null,
-              kind: "ALBUM",
-              amountKrw,
-              bankDepositorName: bankDepositorNameValue || null,
+              orderId: parsed.data.submissionId,
+              items: [{ title: notificationTitle, artist: artistNameValue || null, kind: "ALBUM", amountKrw }],
+              totalAmountKrw: amountKrw,
               link,
               siteLink,
             }),
@@ -1602,10 +1597,11 @@ export async function saveMvSubmissionAction(
   ) {
     return { error: "작성한 신청서 파일을 업로드하거나 이메일 제출을 선택해주세요." };
   }
+  // The uploaded form carries the album details, but the operator still
+  // needs a mailbox for payment, supplement and result notices.
   if (
     isSubmitted &&
     isGuest &&
-    !usesExternalApplicationForm &&
     (!guestNameValue || !guestEmailValue || !guestPhoneValue)
   ) {
     return { error: "비회원 정보(담당자, 연락처, 이메일)를 입력해주세요." };
@@ -2074,14 +2070,14 @@ export async function saveMvSubmissionAction(
           recipientEmail,
           label: "무통장 입금 안내",
           kind: "bank",
+          // Legacy in-wizard bank request (no checkout order exists yet);
+          // the cart checkout sends the order-level notice instead.
           send: () =>
-            sendSubmissionBankRequestEmail({
+            sendOrderBankTransferEmail({
               email: recipientEmail,
-              title: titleValue || "제목 미입력",
-              artist: artistNameValue || null,
-              kind: "MV",
-              amountKrw,
-              bankDepositorName: bankDepositorNameValue || null,
+              orderId: parsed.data.submissionId,
+              items: [{ title: titleValue || "제목 미입력", artist: artistNameValue || null, kind: "MV", amountKrw }],
+              totalAmountKrw: amountKrw,
               link,
               siteLink,
             }),

@@ -46,7 +46,7 @@ const stageTone: Record<string, string> = {
   "접수예정": brandStatusTones.warning,
   "자료 확인 중": brandStatusTones.warning,
   "심의 진행": brandStatusTones.progress,
-  "결과 준비": brandStatusTones.success,
+  "결과 확인 가능": brandStatusTones.success,
   "심의 완료": brandStatusTones.success,
 };
 
@@ -63,7 +63,7 @@ const getStageLabel = (item: SubmissionItem) => {
   return ({
     DRAFT: "임시 저장", SUBMITTED: "접수예정", PRE_REVIEW: "접수예정",
     WAITING_PAYMENT: "접수예정", IN_PROGRESS: "심의 진행",
-    RESULT_READY: "결과 준비", COMPLETED: "심의 완료",
+    RESULT_READY: "결과 확인 가능", COMPLETED: "심의 완료",
   } as Record<string, string>)[item.status] ?? "접수예정";
 };
 

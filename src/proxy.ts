@@ -77,6 +77,20 @@ export default async function proxy(request: NextRequest) {
     isUserProtectedRoute || isAdminRoute;
 
   if (!requiresSessionCookie) {
+    // Public dashboard/cart pages still read the member session in Server
+    // Components, which cannot persist a rotated refresh token. Refresh it
+    // here so the browser keeps the current token; never redirect guests.
+    if (!isAdminRoute && (isDashboardRoute || isMypageRoute) && hasSupabaseAuthCookie(request)) {
+      const refreshed = await updateSession(request);
+      const refreshedResponse =
+        refreshed instanceof NextResponse ? refreshed : (refreshed?.response as NextResponse | undefined);
+      if (refreshedResponse) {
+        if (isDev && isDevStdPayPath) {
+          refreshedResponse.headers.set("Content-Security-Policy", devStdPayCsp);
+        }
+        return refreshedResponse;
+      }
+    }
     const passthrough = NextResponse.next();
     if (isDev && isDevStdPayPath) {
       passthrough.headers.set("Content-Security-Policy", devStdPayCsp);

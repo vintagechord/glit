@@ -100,7 +100,8 @@ export async function listSubmissionOrders(db: OrdersDb, actor: OrderActor, offs
   const visible = rows.slice(0, pageSize).filter(order => ownsOrder(order, actor, parents));
   return {
     orders: visible.map(order => mapOrder(order, actor, parents)),
-    nextOffset: rows.length > pageSize && visible.length > 0 ? offset + pageSize : null,
+    // A page can be entirely filtered by ownership for guests; later pages may still match.
+    nextOffset: rows.length > pageSize ? offset + pageSize : null,
   };
 }
 

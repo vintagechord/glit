@@ -3,6 +3,7 @@
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import Link from "next/link";
 import { CommerceConfirmDialog } from "./commerce-confirm-dialog";
+import { PendingOverlay } from "@/components/ui/pending-overlay";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Check,
@@ -611,13 +612,9 @@ export function SubmissionCartCheckout({
       ? [{ submissionId: item.id, guestToken: item.guestToken }] : []));
     setIsOpening(true);
     setPaymentWindowOpen(false);
-    setNotice({
-      type: "info",
-      message:
-        selectedMethod === "BANK"
-          ? "입금 신청 중"
-          : "결제창 준비 중",
-    });
+    // A blocking overlay (not a dismissable dialog) covers the short server
+    // round trip; the page moves on by itself when the order is saved.
+    setNotice(null);
 
     if (selectedMethod === "BANK") {
       try {
@@ -737,6 +734,10 @@ export function SubmissionCartCheckout({
         </nav>
         {isPaymentStep ? <button type="button" disabled={isOpening} onClick={() => router.push(cartHref)} className="rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background px-3 py-2 text-xs font-black disabled:opacity-50">선택 변경</button> : null}
       </div>
+      <PendingOverlay
+        show={isOpening && !paymentWindowOpen}
+        label={selectedMethod === "BANK" ? "입금 신청을 저장하는 중입니다..." : "결제창을 준비하는 중입니다..."}
+      />
       {notice ? (
         <NoticeDialog
           type={notice.type}

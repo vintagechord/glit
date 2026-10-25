@@ -719,6 +719,7 @@ export function AlbumWizard({
   const albumPreflight = React.useMemo(
     () =>
       buildAlbumSubmissionPreflight({
+        isGuest,
         submissionId: currentSubmissionId,
         selectedPackageId: selectedPackage?.id ?? null,
         amountKrw: totalPriceKrw,
@@ -751,6 +752,7 @@ export function AlbumWizard({
         filesSubmittedByEmail: emailSubmitConfirmed,
       }),
     [
+      isGuest,
       aiUsed,
       applicantEmail,
       applicantName,
@@ -4577,6 +4579,61 @@ export function AlbumWizard({
               <div className="mt-5 inline-flex rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
                 다음: 신청서 + 음원 첨부
               </div>
+              {isGuest && (
+                <div className="mt-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                    접수자 정보
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    입금·결제·결과 안내와 심의 조회에 사용됩니다. 신청서 파일과 별도로 입력해주세요.
+                  </p>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label htmlFor="album-applicantName" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        접수자 *
+                      </label>
+                      <input
+                        {...basicFieldProps("applicantName")}
+                        data-preflight-field="applicantName"
+                        value={applicantName}
+                        onChange={(event) => setApplicantName(event.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                      {renderBasicFieldError("applicantName")}
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="album-applicantEmail" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        이메일 *
+                      </label>
+                      <input
+                        {...basicFieldProps("applicantEmail")}
+                        data-preflight-field="applicantEmail"
+                        type="email"
+                        value={applicantEmail}
+                        onChange={(event) => setApplicantEmail(event.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                      {renderBasicFieldError("applicantEmail")}
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="album-applicantPhone" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        연락처 *
+                      </label>
+                      <input
+                        {...basicFieldProps("applicantPhone")}
+                        data-preflight-field="applicantPhone"
+                        value={applicantPhone}
+                        onChange={(event) => setApplicantPhone(event.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                      {renderBasicFieldError("applicantPhone")}
+                    </div>
+                  </div>
+                </div>
+              )}
                 <div data-preflight-field="aiUsed" tabIndex={-1} className="mt-5 outline-none">
                 <AiUsageSelector
                   value={aiUsed}

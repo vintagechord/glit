@@ -272,6 +272,9 @@ export async function POST(request: Request) {
       .from("submissions")
       .select(selectClause)
       .or(incompletePaymentFilter)
+      // Once an order exists the application is locked for payment; offering
+      // it as a resumable draft only produces edit-permission errors.
+      .is("current_order_id", null)
       .in("status", loadableDraftStatuses);
 
     if (parsed.data.type === "ALBUM") {

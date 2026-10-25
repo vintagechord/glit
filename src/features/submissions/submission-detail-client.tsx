@@ -204,6 +204,11 @@ const paymentMethodLabels: Record<string, string> = {
   CARD: "카드",
 };
 
+/** `mv_desired_rating` holds the applicant's wish until an administrator
+ * stores the official code; only a code means a result exists. */
+const isMvRatingCode = (value?: string | null) =>
+  ["ALL", "12", "15", "18", "19", "REJECT"].includes(value ?? "");
+
 const mvRatingLabel = (code?: string | null) => {
   switch (code) {
     case "ALL":
@@ -229,7 +234,7 @@ const aiUsageLabel = (value?: boolean | null) => {
   return "미입력";
 };
 
-type DetailPrimaryAction = "payment-info" | "retry-payment" | "order-status" | "station-review" | null;
+type DetailPrimaryAction = "payment-info" | "retry-payment" | "open-cart" | "order-status" | "station-review" | null;
 
 const normalizePaymentStatusLabel = (
   paymentStatus?: string | null,
@@ -260,6 +265,7 @@ const buildSubmissionDisplayStatus = ({
   stationDelivered,
   isMvSubmission,
   resultDelivered,
+  hasOrder,
 }: {
   submissionStatus: string;
   paymentStatus?: string | null;
@@ -271,6 +277,8 @@ const buildSubmissionDisplayStatus = ({
   stationDelivered: number;
   isMvSubmission: boolean;
   resultDelivered: boolean;
+  /** A checkout order exists; without one no account or payment request is valid yet. */
+  hasOrder: boolean;
 }) => {
   const isDraft = submissionStatus === "DRAFT";
   const safeStationTotal = Math.max(stationTotal, 0);
@@ -328,6 +336,22 @@ const buildSubmissionDisplayStatus = ({
       secondaryMessage: "이미 결제를 진행했다면 주문내역에서 승인 상태를 확인해주세요.",
       primaryAction: "order-status" as DetailPrimaryAction,
       primaryActionLabel: "주문내역 확인",
+    };
+  }
+
+  if (!isPaymentDone && !hasOrder) {
+    // The stored payment method is only a default until checkout. Showing a
+    // bank account here would invite deposits that no order can be matched to.
+    return {
+      currentLabel: "결제 대기",
+      submissionLabel,
+      paymentLabel,
+      broadcastLabel,
+      resultLabel,
+      primaryMessage: "장바구니에서 결제 수단을 선택하면 결제가 진행됩니다.",
+      secondaryMessage: "결제 확인 후 심의 접수가 이어집니다.",
+      primaryAction: "open-cart" as DetailPrimaryAction,
+      primaryActionLabel: "결제하기",
     };
   }
 
@@ -547,7 +571,7 @@ export function SubmissionDetailClient({
         ? "여"
         : submission.artist_gender || "-";
   const hasMvRatingResult =
-    isMvDistribution && Boolean(submission.mv_desired_rating) && hasResultSignal;
+    isMvDistribution && isMvRatingCode(submission.mv_desired_rating) && hasResultSignal;
   const hasMvDistributionResult = isMvDistribution && hasResultSignal;
   const isReviewComplete =
     hasMvDistributionResult ||
@@ -776,8 +800,13 @@ export function SubmissionDetailClient({
     stationDelivered: stationSummary.delivered,
     isMvSubmission,
     resultDelivered: displayResultDelivered,
+    hasOrder: Boolean(submission.current_order_id),
   });
   const handlePrimaryStatusAction = () => {
+    if (displayStatus.primaryAction === "open-cart") {
+      void openCartForPayment();
+      return;
+    }
     if (displayStatus.primaryAction === "order-status") {
       if (guestToken) rememberGuestSubmissionOrderEntries([{ submissionId: submission.id, guestToken }]);
       router.push(`${localePrefix}/mypage/orders?focus=${encodeURIComponent(submission.id)}`);
@@ -881,9 +910,11 @@ export function SubmissionDetailClient({
       label: finalProcessLabel,
       value: isMvSubmission
         ? hasFinalResultDone
-          ? isMvDistribution && submission.mv_desired_rating
+          ? isMvDistribution && isMvRatingCode(submission.mv_desired_rating)
             ? `${mvRatingLabel(submission.mv_desired_rating)} 결과 통보 완료`
-            : "결과 통보 완료"
+            : isMvDistribution
+              ? "결과 등급 통보 대기"
+              : "결과 통보 완료"
           : "결과 등급 통보 대기"
         : hasFinalResultDone
           ? "방송사별 결과 반영 완료"

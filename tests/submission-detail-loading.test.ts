@@ -113,7 +113,7 @@ test("member details contain submitted form fields without administrative data",
   for (const field of ["admin_memo", "guest_phone", "guest_email", "bank_depositor_name"]) {
     assert.ok(!SUBMISSION_USER_DETAIL_SELECT.includes(field), field);
   }
-  const page = readFileSync("src/app/dashboard/submissions/[id]/page.tsx", "utf8");
+  const page = readFileSync("src/app/dashboard/submissions/[id]/view.tsx", "utf8");
   assert.doesNotMatch(page, /ensureAlbumStationReviews|\.(?:upsert|insert|update|delete)\(/);
   const client = readFileSync("src/features/submissions/submission-detail-client.tsx", "utf8");
   assert.match(client, /if \(!initialDataComplete\) void fetchLatest\(\)/);

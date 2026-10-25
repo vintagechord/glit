@@ -70,7 +70,7 @@ async function sendSignupConfirmation(email: string, formData: FormData, expecte
   link.hash = new URLSearchParams({ token_hash: data.properties.hashed_token, type: "signup", signature: signSignupToken(data.properties.hashed_token) }).toString();
   try {
     const sent = await sendSignupVerificationEmail({
-      email, link: link.toString(),
+      email, link: link.toString(), english,
       idempotencyKey: `signup:${createHash("sha256").update(data.properties.hashed_token).digest("hex")}`,
       expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
     });
@@ -79,18 +79,27 @@ async function sendSignupConfirmation(email: string, formData: FormData, expecte
   return { message: signupPendingMessage, verificationPending: true, retryAfterSeconds: 60 };
 }
 
+/** A password rule the customer can act on (same or weak password); null for
+ * anything else so provider internals never reach the screen. */
+const describePasswordSetupFailure = (error: unknown) => {
+  const mapped = mapAuthError(error, "update");
+  return mapped === mapAuthError({}, "update") ? null : mapped;
+};
+
 const checkAuthRateLimit = async ({
   namespace,
   email,
   ipLimit,
   emailLimit,
   windowMs,
+  onUnavailable,
 }: {
   namespace: string;
   email: string;
   ipLimit: number;
   emailLimit: number;
   windowMs: number;
+  onUnavailable?: "deny" | "memory";
 }) => {
   const requestHeaders = await nextHeaders();
   const requestIdentifier = getRequestIdentifier(requestHeaders);
@@ -99,12 +108,14 @@ const checkAuthRateLimit = async ({
     identifier: requestIdentifier,
     limit: ipLimit,
     windowMs,
+    onUnavailable,
   });
   const byEmail = await consumePersistentRateLimit({
     namespace: `${namespace}-email`,
     identifier: email,
     limit: emailLimit,
     windowMs,
+    onUnavailable,
   });
   return {
     allowed: byIp.allowed && byEmail.allowed,
@@ -135,6 +146,8 @@ export async function loginAction(
     ipLimit: 20,
     emailLimit: 10,
     windowMs: 15 * 60 * 1_000,
+    // Login sends no mail; a limiter outage must not read as "too many requests".
+    onUnavailable: "memory",
   });
   if (!rateLimit.allowed) {
     return {
@@ -197,7 +210,9 @@ export async function signupAction(
   const rateLimit = await checkAuthRateLimit({
     namespace: "signup",
     email: parsed.data.email,
-    ipLimit: 5,
+    // Shared office/mobile-carrier addresses sign up in bursts; the per-email
+    // limit below is the real abuse guard.
+    ipLimit: 30,
     emailLimit: 3,
     windowMs: 60 * 60 * 1_000,
   });
@@ -314,13 +329,16 @@ export async function confirmSignupAction(_prevState: ActionState, formData: For
     }
     if (updateError || signOutError) {
       logAuthError("finish signup", updateError ?? signOutError);
-      return { error: "이메일은 확인했지만 비밀번호 설정을 완료하지 못했습니다. 비밀번호 찾기로 새 비밀번호를 설정해주세요." };
+      const reason = updateError ? describePasswordSetupFailure(updateError) : null;
+      return { error: reason
+        ? `이메일은 확인했지만 비밀번호를 설정하지 못했습니다. ${reason} 비밀번호 찾기로 새 비밀번호를 설정해주세요.`
+        : "이메일은 확인했지만 비밀번호 설정을 완료하지 못했습니다. 비밀번호 찾기로 새 비밀번호를 설정해주세요." };
     }
     // OTP consumption makes this completion one-use. Delivery failure must not
     // undo a completed account; the shared outbox owns safe delivery retries.
     if (data.user?.id && data.user.email) {
       try {
-        const welcome = await sendWelcomeEmail({ email: data.user.email, idempotencyKey: `welcome:${data.user.id}` });
+        const welcome = await sendWelcomeEmail({ email: data.user.email, idempotencyKey: `welcome:${data.user.id}`, english: formData.get("locale") === "en" });
         if (!welcome.ok) console.warn("[Auth] welcome email not accepted", { reason: welcome.reason });
       } catch (error) { logAuthError("welcome delivery", error); }
     }
@@ -342,7 +360,7 @@ export async function findAccountIdAction(_prevState: ActionState, formData: For
     if (account) {
       const english = formData.get("locale") === "en";
       try {
-        const result = await sendAccountIdEmail({ email: account.email, link: buildUrl(getAuthPageHref("login", String(formData.get("next") ?? ""), english), getBaseUrl()) });
+        const result = await sendAccountIdEmail({ email: account.email, english, link: buildUrl(getAuthPageHref("login", String(formData.get("next") ?? ""), english), getBaseUrl()) });
         if (!result.ok) console.warn("[Auth] account ID email not accepted", { reason: result.reason });
       } catch (error) {
         logAuthError("account ID delivery", error);
@@ -438,6 +456,7 @@ export async function resetPasswordAction(
       recoveryUrl.hash = new URLSearchParams({ token_hash: tokenHash, type: "recovery", signature: signRecoveryToken(tokenHash) }).toString();
       const emailResult = await sendPasswordResetEmail({
         email: parsed.data,
+        english,
         link: recoveryUrl.toString(),
         idempotencyKey: `recovery:${createHash("sha256").update(tokenHash).digest("hex")}`,
         expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
@@ -446,7 +465,9 @@ export async function resetPasswordAction(
       return response;
   } catch (error) {
     logAuthError("password reset", error);
-    return { message: resetSuccessMessage, retryAfterSeconds: 60 };
+    // Account lookup or provider outages are distinct from "no such account":
+    // the customer would otherwise wait for mail that was never requested.
+    return { error: "비밀번호 재설정 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요." };
   }
 }
 
@@ -477,7 +498,10 @@ export async function completePasswordRecoveryAction(_prevState: ActionState, fo
     }
     if (updateError || signOutError) {
       logAuthError("finish recovery", updateError ?? signOutError);
-      return { error: "비밀번호 변경을 완료하지 못했습니다. 새 재설정 메일을 요청해주세요." };
+      const reason = updateError ? describePasswordSetupFailure(updateError) : null;
+      return { error: reason
+        ? `${reason} 이 재설정 링크는 사용되었으므로 비밀번호 찾기에서 새 메일을 요청해주세요.`
+        : "비밀번호 변경을 완료하지 못했습니다. 새 재설정 메일을 요청해주세요." };
     }
     return { message: "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요." };
   } catch (error) {

@@ -3434,6 +3434,90 @@ export function MvWizard({
     );
   };
 
+  // Guests have no account mailbox; both application modes collect the same
+  // contact details for payment/result notices and lookup-code recovery.
+  const renderGuestContactSection = () =>
+    isGuest ? (
+            <div className="rounded-[28px] border border-border/60 bg-background/80 p-4 sm:p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                신청자 정보
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                이름과 이메일은 심의 조회시에 사용됩니다.
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label htmlFor="mv-guestName" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    담당자명 *
+                  </label>
+                  <input
+                    id="mv-guestName"
+                  data-mv-field="guestName"
+                    data-preflight-field="guestName"
+                    aria-invalid={invalidField === "guestName"}
+                  aria-describedby={invalidField === "guestName" ? "mv-basic-error" : undefined}
+                    value={guestName}
+                    onChange={(event) => {
+                      setGuestName(event.target.value);
+                      clearInvalidField("guestName");
+                    }}
+                    required
+                    className={requiredFieldClass("guestName")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    회사/기획사
+                  </label>
+                  <input
+                    value={guestCompany}
+                    onChange={(event) => setGuestCompany(event.target.value)}
+                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="mv-guestEmail" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    이메일 *
+                  </label>
+                  <input
+                    id="mv-guestEmail"
+                  data-mv-field="guestEmail"
+                    data-preflight-field="guestEmail"
+                    aria-invalid={invalidField === "guestEmail"}
+                  aria-describedby={invalidField === "guestEmail" ? "mv-basic-error" : undefined}
+                    type="email"
+                    value={guestEmail}
+                    onChange={(event) => {
+                      setGuestEmail(event.target.value);
+                      clearInvalidField("guestEmail");
+                    }}
+                    required
+                    className={requiredFieldClass("guestEmail")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="mv-guestPhone" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    연락처 *
+                  </label>
+                  <input
+                    id="mv-guestPhone"
+                  data-mv-field="guestPhone"
+                    data-preflight-field="guestPhone"
+                    aria-invalid={invalidField === "guestPhone"}
+                  aria-describedby={invalidField === "guestPhone" ? "mv-basic-error" : undefined}
+                    value={guestPhone}
+                    onChange={(event) => {
+                      setGuestPhone(event.target.value);
+                      clearInvalidField("guestPhone");
+                    }}
+                    required
+                    className={requiredFieldClass("guestPhone")}
+                  />
+                </div>
+              </div>
+            </div>
+    ) : null;
+
   return (
     <div className="min-w-0 space-y-8 text-[15px] leading-relaxed [overflow-wrap:anywhere] [&_input]:min-w-0 [&_select]:min-w-0 sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
@@ -3882,6 +3966,7 @@ export function MvWizard({
                   context="mv"
                 />
               </div>
+              <div className="mt-5">{renderGuestContactSection()}</div>
               {notice.error && (
                 <div role="alert" className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
                   {notice.error}
@@ -4444,86 +4529,7 @@ export function MvWizard({
                 </p>
               </div>
 
-              {isGuest && (
-                <div className="rounded-[28px] border border-border/60 bg-background/80 p-4 sm:p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                    신청자 정보
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    이름과 이메일은 심의 조회시에 사용됩니다.
-                  </p>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <label htmlFor="mv-guestName" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        담당자명 *
-                      </label>
-                      <input
-                        id="mv-guestName"
-                      data-mv-field="guestName"
-                        data-preflight-field="guestName"
-                        aria-invalid={invalidField === "guestName"}
-                      aria-describedby={invalidField === "guestName" ? "mv-basic-error" : undefined}
-                        value={guestName}
-                        onChange={(event) => {
-                          setGuestName(event.target.value);
-                          clearInvalidField("guestName");
-                        }}
-                        required
-                        className={requiredFieldClass("guestName")}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        회사/기획사
-                      </label>
-                      <input
-                        value={guestCompany}
-                        onChange={(event) => setGuestCompany(event.target.value)}
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label htmlFor="mv-guestEmail" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        이메일 *
-                      </label>
-                      <input
-                        id="mv-guestEmail"
-                      data-mv-field="guestEmail"
-                        data-preflight-field="guestEmail"
-                        aria-invalid={invalidField === "guestEmail"}
-                      aria-describedby={invalidField === "guestEmail" ? "mv-basic-error" : undefined}
-                        type="email"
-                        value={guestEmail}
-                        onChange={(event) => {
-                          setGuestEmail(event.target.value);
-                          clearInvalidField("guestEmail");
-                        }}
-                        required
-                        className={requiredFieldClass("guestEmail")}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label htmlFor="mv-guestPhone" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        연락처 *
-                      </label>
-                      <input
-                        id="mv-guestPhone"
-                      data-mv-field="guestPhone"
-                        data-preflight-field="guestPhone"
-                        aria-invalid={invalidField === "guestPhone"}
-                      aria-describedby={invalidField === "guestPhone" ? "mv-basic-error" : undefined}
-                        value={guestPhone}
-                        onChange={(event) => {
-                          setGuestPhone(event.target.value);
-                          clearInvalidField("guestPhone");
-                        }}
-                        required
-                        className={requiredFieldClass("guestPhone")}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
+              {renderGuestContactSection()}
 
               {notice.error && (
                 <div id="mv-basic-error" role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">

@@ -12,6 +12,10 @@ type RateLimitOptions = {
   windowMs: number;
   cost?: number;
   now?: number;
+  /** What to do when the shared limiter cannot answer. Mail endpoints keep
+   * "deny"; actions that send nothing (login) may fall back to this instance's
+   * in-memory limit instead of turning a database hiccup into a lockout. */
+  onUnavailable?: "deny" | "memory";
 };
 
 export type RateLimitResult = {
@@ -101,7 +105,12 @@ export async function consumePersistentRateLimit(
 ): Promise<RateLimitResult> {
   if (process.env.NODE_ENV === "test" && !rpc) return consumeRateLimit(options);
   const windowMs = Math.min(86_400_000, Math.max(1_000, Math.trunc(options.windowMs)));
-  const fallback: RateLimitResult = { allowed: false, remaining: 0, retryAfterSeconds: 60, resetAt: Date.now() + 60_000 };
+  const denied: RateLimitResult = { allowed: false, remaining: 0, retryAfterSeconds: 60, resetAt: Date.now() + 60_000 };
+  const fallback = () => {
+    if (options.onUnavailable !== "memory") return denied;
+    console.error("[RateLimit] shared limiter unavailable; using in-memory limit", { namespace: options.namespace });
+    return consumeRateLimit(options);
+  };
   try {
     let call = rpc;
     if (!call) {
@@ -115,12 +124,12 @@ export async function consumePersistentRateLimit(
       p_window_ms: windowMs,
       p_cost: Math.max(1, Math.trunc(options.cost ?? 1)),
     });
-    if (error || !data || typeof data !== "object") return fallback;
+    if (error || !data || typeof data !== "object") return fallback();
     const result = data as RateLimitResult;
-    if (typeof result.allowed !== "boolean" || !Number.isFinite(result.resetAt) || !Number.isFinite(result.remaining) || !Number.isFinite(result.retryAfterSeconds)) return fallback;
+    if (typeof result.allowed !== "boolean" || !Number.isFinite(result.resetAt) || !Number.isFinite(result.remaining) || !Number.isFinite(result.retryAfterSeconds)) return fallback();
     return result;
   } catch {
-    return fallback;
+    return fallback();
   }
 }
 

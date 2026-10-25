@@ -67,4 +67,19 @@ test("session refresh reaches downstream request cookies, browser cookies and no
   assert.match(redirect.headers.get("Cache-Control") ?? "", /private.*no-store/);
   assert.equal(redirect.headers.get("Expires"), "0");
   assert.equal(redirect.headers.get("Pragma"), "no-cache");
+
+  // Public wizard and cart pages render member state too; a returning member
+  // must receive the rotated token there, while guests pass straight through.
+  for (const path of ["/dashboard/new/album", "/mypage/cart", "/en/mypage/orders"]) {
+    const publicRequest = new RequestClass(`https://onside.test${path}`, {
+      headers: { cookie: "sb-fixture-auth-token.0=expired-part-one; sb-fixture-auth-token.1=expired-part-two" },
+    });
+    const publicResponse = await bundled.exports.proxy(publicRequest);
+    assert.equal(publicResponse.status, 200, path);
+    assert.equal(publicResponse.cookies.get("sb-fixture-auth-token.0")?.value, "refreshed-part-one", path);
+    assert.equal(publicResponse.cookies.get("sb-fixture-auth-token.1")?.value, "refreshed-part-two", path);
+  }
+  const guestResponse = await bundled.exports.proxy(new RequestClass("https://onside.test/dashboard/new/album"));
+  assert.equal(guestResponse.status, 200);
+  assert.equal(guestResponse.cookies.getAll().length, 0);
 });

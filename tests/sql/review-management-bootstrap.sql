@@ -4,7 +4,7 @@ create role service_role;
 create type public.station_review_status as enum ('NOT_SENT','SENT','RECEIVED','APPROVED','REJECTED','NEEDS_FIX');
 create type public.submission_status as enum ('DRAFT','SUBMITTED','PRE_REVIEW','WAITING_PAYMENT','IN_PROGRESS','RESULT_READY','COMPLETED');
 create table public.profiles(user_id uuid primary key,role text);
-create table public.submissions(id uuid primary key,type text,status public.submission_status,result_status text,result_memo text,mv_desired_rating text,mv_selected_station_codes text[],package_id uuid,result_notified_at timestamptz,updated_at timestamptz default now(),certificate_b2_path text,certificate_original_name text,certificate_mime text,certificate_size bigint,certificate_uploaded_at timestamptz);
+create table public.submissions(id uuid primary key,type text,status public.submission_status,payment_status text,result_status text,result_memo text,mv_desired_rating text,mv_selected_station_codes text[],package_id uuid,result_notified_at timestamptz,updated_at timestamptz default now(),certificate_b2_path text,certificate_original_name text,certificate_mime text,certificate_size bigint,certificate_uploaded_at timestamptz);
 create table public.stations(id uuid primary key default gen_random_uuid(),code text unique,name text,is_active boolean);
 create table public.package_stations(package_id uuid,station_id uuid references public.stations(id));
 create table public.station_reviews(id uuid primary key default gen_random_uuid(),submission_id uuid references public.submissions(id),station_id uuid references public.stations(id),status public.station_review_status,result_note text,track_results_json jsonb,updated_at timestamptz,unique(submission_id,station_id));

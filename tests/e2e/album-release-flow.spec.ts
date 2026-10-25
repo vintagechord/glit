@@ -128,7 +128,7 @@ const saveUrlAndOpenUpload = async (page: Page) => {
   await page.getByRole("button", { name: "저장하고 음원 첨부", exact: true }).click();
   await expect(page.getByRole("heading", { name: "음원 첨부", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "트랙 정보", exact: true })).not.toBeVisible();
-  await expect(page.getByRole("button", { name: "파일 없이 진행", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "파일은 이메일로 나중에 제출", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("navigation", { name: "신청 진행 단계" })).toContainText("음원 첨부");
 };
 
@@ -275,7 +275,7 @@ test("released albums can reach payment with no upload by selecting email delive
   await page.getByLabel("멜론·지니 앨범 URL *", { exact: true }).fill(url);
   await fillApplicant(page);
   await saveUrlAndOpenUpload(page);
-  await page.getByRole("button", { name: "파일 없이 진행", exact: true }).first().click();
+  await page.getByRole("button", { name: "파일은 이메일로 나중에 제출", exact: true }).first().click();
   await expect(page.getByText("파일 첨부 대신 아래 이메일 주소로 음원 파일을 보내주세요.")).toBeVisible();
   await openFinalReview(page, url);
   expect(uploadRuns.get(page)!.completed).toHaveLength(0);

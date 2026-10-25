@@ -50,6 +50,7 @@ export function ConfirmEmailForm({ nextPath }: { nextPath?: string | null }) {
       <input type="hidden" name="token_hash" value={credential.token} />
       <input type="hidden" name="type" value={credential.type} />
       <input type="hidden" name="signature" value={credential.signature} />
+      <input type="hidden" name="locale" value={english ? "en" : "ko"} />
       <p className="text-sm leading-6 text-muted-foreground">{english ? "If you requested signup, choose your password and confirm below. Opening this page alone does not verify your email." : "본인이 회원가입을 신청했다면 비밀번호를 설정하고 아래 버튼을 눌러주세요. 버튼을 누르면 이메일 확인과 가입이 완료됩니다."}</p>
       <label htmlFor="signup-new-password" className="block text-sm font-semibold">{english ? "New password" : "비밀번호"}</label>
       <PasswordInput id="signup-new-password" name="newPassword" label={english ? "New password" : "비밀번호"} english={english} autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} required className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm" />

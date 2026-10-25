@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
-import { sendSubmissionBankRequestEmail } from "@/lib/email";
+import { sendOrderBankTransferEmail } from "@/lib/email";
+import { runAfterResponse } from "@/lib/next/after-response";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
   consumeRateLimit,
@@ -299,40 +300,53 @@ export async function POST(req: NextRequest) {
   }
 
   const baseUrl = getBaseUrl(req);
-  await Promise.all(
-    submissions.map(async (submission) => {
+  const memberEmail = user?.email ?? null;
+  const submissionsByOrder = new Map<string, CartBankSubmission[]>();
+  for (const submission of submissions) {
+    const orderId = submission.current_order_id as string;
+    submissionsByOrder.set(orderId, [...(submissionsByOrder.get(orderId) ?? []), submission]);
+  }
+  // The order is stored; account details and the order summary go out as one
+  // message per order after the response, so a slow mail relay never holds
+  // the customer on the checkout screen. Unsent rows stay in the durable
+  // outbox for the scheduled worker.
+  await runAfterResponse(async () => {
+    await Promise.all(Array.from(submissionsByOrder, async ([orderId, orderSubmissions]) => {
       const recipients = collectEmails(
-        submission.user_id ? user?.email : submission.guest_email || submission.applicant_email,
+        ...orderSubmissions.map((submission) =>
+          submission.user_id ? memberEmail : submission.guest_email || submission.applicant_email),
       );
       if (recipients.length === 0) return;
-      await Promise.all(
-        recipients.map(async (email) => {
-          const result = await sendSubmissionBankRequestEmail({
-            email,
-            idempotencyKey: `bank-request:${submission.id}:${submission.current_order_id}:${email}`,
-            title: submission.title || "제목 미입력",
-            artist: submission.artist_name,
-            kind: getKind(submission.type),
-            amountKrw: Math.round(Number(submission.amount_krw ?? 0)),
-            bankDepositorName: null,
-            link: buildUrl(
-              !submission.user_id && submission.guest_token
-                ? `/track/${encodeURIComponent(submission.guest_token)}`
-                : `/mypage/orders?focus=${submission.id}`,
-              baseUrl,
-            ),
-            siteLink: buildUrl("/", baseUrl),
-          });
-          if (!result.ok && !result.skipped) {
-            console.warn("[CartBank] bank email failed", {
-              submissionId: submission.id,
-              message: result.message,
-            });
-          }
-        }),
+      const first = orderSubmissions[0];
+      const link = buildUrl(
+        !first.user_id && first.guest_token
+          ? `/track/${encodeURIComponent(first.guest_token)}`
+          : `/mypage/orders?focus=${first.id}`,
+        baseUrl,
       );
-    }),
-  );
+      const items = orderSubmissions.map((submission) => ({
+        title: submission.title,
+        artist: submission.artist_name,
+        kind: getKind(submission.type),
+        amountKrw: Math.round(Number(submission.amount_krw ?? 0)),
+      }));
+      const orderTotalKrw = items.reduce((sum, item) => sum + item.amountKrw, 0);
+      await Promise.all(recipients.map(async (email) => {
+        const result = await sendOrderBankTransferEmail({
+          email,
+          idempotencyKey: `bank-request:${orderId}:${email}`,
+          orderId,
+          items,
+          totalAmountKrw: orderTotalKrw,
+          link,
+          siteLink: buildUrl("/", baseUrl),
+        });
+        if (!result.ok && !result.skipped) {
+          console.warn("[CartBank] bank email failed", { orderId, message: result.message });
+        }
+      }));
+    }));
+  });
 
   revalidatePath("/dashboard/cart");
   revalidatePath("/mypage/cart");

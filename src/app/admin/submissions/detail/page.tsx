@@ -685,6 +685,17 @@ export default async function AdminSubmissionDetailPage({
   const submissionFiles = fileResult.data;
 
   const files = submissionFiles ?? [];
+  // Progress notices do not stamp result_notified_at; show the newest accepted
+  // customer mail so an operator does not resend a notice that already went out.
+  const { data: lastCustomerEmail } = await supabase
+    .from("email_outbox")
+    .select("operation, created_at, accepted_at")
+    .eq("submission_id", submission.id)
+    .in("operation", ["review result", "submission update", "payment completed"])
+    .eq("status", "accepted")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   const reviews = stationReviews ?? [];
   const isStationSubmittedStatus = (status?: string | null) => {
     const normalized = normalizeStationReviewStatus(status);
@@ -1183,7 +1194,12 @@ export default async function AdminSubmissionDetailPage({
           </div>
 
 
-          <ReviewEmailControl key={`${submission.id}-${submission.updated_at}`} submissionId={submission.id} lastNotifiedAt={submission.result_notified_at} />
+          <ReviewEmailControl
+            key={`${submission.id}-${submission.updated_at}`}
+            submissionId={submission.id}
+            lastNotifiedAt={submission.result_notified_at}
+            lastCustomerEmail={lastCustomerEmail ? { operation: String(lastCustomerEmail.operation), at: String(lastCustomerEmail.accepted_at ?? lastCustomerEmail.created_at) } : null}
+          />
           {isMvDistribution ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">

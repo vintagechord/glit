@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { UncertainPaymentResolver } from "@/components/admin/uncertain-payment-resolver";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { formatDateTime, formatCurrency } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -37,10 +38,15 @@ const attentionCodes = ["APPROVAL_IN_PROGRESS", "CAPTURE_IN_PROGRESS", "APPROVAL
 const pageSize = 100;
 
 export default async function AdminPaymentsPage({ searchParams }: {
-  searchParams: Promise<{ filter?: string; page?: string }>;
+  searchParams: Promise<{ filter?: string; page?: string; saved?: string; savedError?: string; savedWarning?: string }>;
 }) {
   await requireAdminPage();
   const params = await searchParams;
+  const savedNotice = params.saved === "approved"
+    ? "승인 확인을 저장했습니다. 주문은 결제 완료로 바뀌었고 고객에게 결제 완료 안내를 보냈습니다."
+    : params.saved === "failed"
+      ? "미승인 확인을 저장했습니다. 주문은 실패로 바뀌었고 고객이 주문내역에서 다시 결제할 수 있습니다."
+      : params.saved === "error" ? null : undefined;
   const filter = filters.some(([value]) => value === params.filter) ? params.filter! : "all";
   const requestedPage = Number(params.page);
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 && requestedPage <= 10000 ? requestedPage : 1;
@@ -91,8 +97,10 @@ export default async function AdminPaymentsPage({ searchParams }: {
           접수 관리
         </Link>
       </div>
+      {savedNotice ? <p role="status" className="mt-5 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100">{savedNotice}{params.savedWarning ? ` (${params.savedWarning})` : ""}</p> : null}
+      {params.saved === "error" ? <p role="alert" className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">{params.savedError || "처리하지 못했습니다."}</p> : null}
       <p className="mt-5 rounded-xl border border-border p-4 text-sm">
-        승인 확인 필요 건은 이니시스 관리자 거래 내역과 신청·주문 상태를 먼저 대조해주세요. 확인 전에는 재결제를 안내하지 마세요.
+        승인 확인 필요 건은 이니시스 관리자 거래 내역과 신청·주문 상태를 먼저 대조해주세요. 확인 전에는 재결제를 안내하지 마세요. 대조가 끝난 APPROVAL_UNCERTAIN 건은 아래 행에서 승인·미승인을 기록할 수 있습니다. 환불은 접수 상세의 결제 상태에서 ‘환불’로 기록합니다(PG·계좌 환불 실행은 별도).
         {" "}<Link href="/admin/submissions?type=ALL&payment=REFUNDED" className="font-semibold underline underline-offset-2">환불로 기록된 신청 확인</Link>
         {" "}(PG 취소 완료 여부는 별도 대조)
       </p>
@@ -178,6 +186,9 @@ export default async function AdminPaymentsPage({ searchParams }: {
                       <p className="text-muted-foreground">
                         {row.submission?.payment_method ?? "CARD"} / {row.submission?.payment_status ?? "신청 상태 확인 필요"}
                       </p>
+                      {row.status === "REQUESTED" && row.result_code === "APPROVAL_UNCERTAIN" ? (
+                        <UncertainPaymentResolver orderId={row.order_id} />
+                      ) : null}
                     </div>
                   </td>
                 </tr>

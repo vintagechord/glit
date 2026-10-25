@@ -101,3 +101,31 @@ begin
   if not exists(select 1 from public.station_reviews where submission_id=sid and station_id='77777777-7777-4777-8777-777777777777' and age_rating='15' and updated_at=revision) then raise exception 'failed audit left partial result'; end if;
 end $$;
 reset role;
+
+-- Station rows never rewrite the intake/payment stage, and a closed application stays closed.
+alter table public.submission_events drop constraint fixture_audit_failure;
+set role service_role;
+do $$
+declare sid uuid := 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'; actor uuid := '22222222-2222-4222-8222-222222222222';
+  kbs uuid := '66666666-6666-4666-8666-666666666666'; result jsonb; revision timestamptz;
+begin
+  insert into public.submissions(id,type,status,payment_status,mv_selected_station_codes,package_id) values (sid,'MV_BROADCAST','PRE_REVIEW','PAID','{KBS}',null);
+  result := public.save_station_review_result(sid,kbs,actor,null,'NOT_SENT','접수 준비 메모');
+  if result->>'submissionStatus'<>'PRE_REVIEW' then raise exception 'memo-only save rewrote a paid application as %', result->>'submissionStatus'; end if;
+  revision := (result->'row'->>'updated_at')::timestamptz;
+  result := public.save_station_review_result(sid,kbs,actor,revision,'APPROVED','KBS 완료','[]','12');
+  if result->>'submissionStatus'<>'RESULT_READY' then raise exception 'completed station did not publish results'; end if;
+  revision := (result->'row'->>'updated_at')::timestamptz;
+  update public.submissions set status='COMPLETED' where id=sid;
+  result := public.save_station_review_result(sid,kbs,actor,revision,'APPROVED','KBS 완료 · 메모 수정','[]','12');
+  if result->>'submissionStatus'<>'COMPLETED' then raise exception 'memo edit reopened a closed application as %', result->>'submissionStatus'; end if;
+  revision := (result->'row'->>'updated_at')::timestamptz;
+  result := public.save_station_review_result(sid,kbs,actor,revision,'NEEDS_FIX','보완','[]',null);
+  if result->>'submissionStatus'<>'IN_PROGRESS' then raise exception 'reopened station did not resume progress'; end if;
+  revision := (result->'row'->>'updated_at')::timestamptz;
+  result := public.save_station_review_result(sid,kbs,actor,revision,'NOT_SENT',null,'[]',null);
+  if result->>'submissionStatus'<>'PRE_REVIEW' then raise exception 'paid application without sent stations should wait in PRE_REVIEW, got %', result->>'submissionStatus'; end if;
+end $$;
+reset role;
+-- Restore the audit-failure fixture for the bulk-save suite that runs next.
+alter table public.submission_events add constraint fixture_audit_failure check(false) not valid;

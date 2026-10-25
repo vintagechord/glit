@@ -78,6 +78,8 @@ export type AlbumSubmissionPreflightInput = {
   existingCartSubmission?: ExistingCartSubmissionSnapshot | null;
   priceChangeAcknowledged?: boolean;
   isAdminReviewer?: boolean;
+  /** Guests have no account mailbox, so their contact details are required even when the form is uploaded. */
+  isGuest?: boolean;
   isOneClick: boolean;
   applicationFormMode: "online" | "upload" | null;
   applicantName?: string | null;
@@ -104,16 +106,35 @@ export type AlbumSubmissionPreflightInput = {
   profanityTerms?: ProfanityTerm[];
 };
 
+/** Informational notes shown in the final check. They never block checkout
+ * and have no correction target, unlike issues. */
+export type SubmissionPreflightReminder = {
+  id: "materials.email-pending";
+  title: string;
+  message: string;
+  detail?: string;
+};
+
 export type SubmissionPreflightResult = {
   issues: SubmissionPreflightIssue[];
   blockingIssues: SubmissionPreflightIssue[];
   warnings: SubmissionPreflightIssue[];
+  reminders: SubmissionPreflightReminder[];
   canSubmit: boolean;
   firstBlockingTarget: SubmissionPreflightTarget | null;
   requiresPriceChangeConfirmation: boolean;
   /** A delivery choice does not prove that an operator has received the files. */
   awaitingMaterials: boolean;
 };
+
+/** The customer chose to email the files after checkout. The final check
+ * only restates that choice; file receipt is confirmed by an operator later. */
+const emailMaterialsReminder = (materials: string): SubmissionPreflightReminder => ({
+  id: "materials.email-pending",
+  title: "이메일 파일 제출",
+  message: "접수 완료 후 이메일로 파일을 제출해주세요.",
+  detail: `보낼 자료: ${materials}`,
+});
 
 export type MvSubmissionPreflightInput = {
   submissionId?: string | null;
@@ -318,7 +339,7 @@ export const buildAlbumSubmissionPreflight = (
     );
   }
 
-  if (!isAdminReviewer && !isDownloadedForm) {
+  if (!isAdminReviewer && (!isDownloadedForm || input.isGuest)) {
     addRequiredTextIssue(issues, input.applicantName, {
       id: "applicant.name",
       title: "접수자 이름",
@@ -356,6 +377,9 @@ export const buildAlbumSubmissionPreflight = (
         ),
       );
     }
+  }
+
+  if (!isAdminReviewer && !isDownloadedForm) {
     if (typeof input.aiUsed !== "boolean") {
       issues.push(
         issue(
@@ -654,38 +678,17 @@ export const buildAlbumSubmissionPreflight = (
 
   addCartPriceChangeIssue(issues, input);
 
-  if (input.filesSubmittedByEmail) {
-    issues.push(issue(
-      "materials.email-pending",
-      "warning",
-      "자료 제출 대기",
-      isDownloadedForm
-        ? "작성한 신청서와 음원 파일을 이메일로 보내주세요. 신청서의 제목·접수자 정보와 자료 내용은 아직 확인되지 않았습니다. 자료 수신·확인 후 방송사 접수를 진행합니다."
-        : "음원 파일을 이메일로 보내주세요. 이메일 제출 선택은 파일 수신 확인이 아닙니다. 자료 수신·확인 후 방송사 접수를 진행합니다.",
-      { step: 5, field: "files" },
-    ));
-  }
-
-  const blockingIssues = issues.filter(
-    (item) => item.severity === "blocking",
-  );
-  const warnings = issues.filter((item) => item.severity === "warning");
-
-  return {
+  return buildPreflightResult(
     issues,
-    blockingIssues,
-    warnings,
-    canSubmit: blockingIssues.length === 0,
-    firstBlockingTarget: blockingIssues[0]?.target ?? null,
-    requiresPriceChangeConfirmation: blockingIssues.some(
-      (item) => item.acknowledgementKey === "cart-price-change",
-    ),
-    awaitingMaterials: input.filesSubmittedByEmail,
-  };
+    input.filesSubmittedByEmail
+      ? [emailMaterialsReminder(isDownloadedForm ? "작성한 신청서와 음원 파일" : "음원 파일")]
+      : [],
+  );
 };
 
 const buildPreflightResult = (
   issues: SubmissionPreflightIssue[],
+  reminders: SubmissionPreflightReminder[] = [],
 ): SubmissionPreflightResult => {
   const blockingIssues = issues.filter(
     (item) => item.severity === "blocking",
@@ -696,13 +699,60 @@ const buildPreflightResult = (
     issues,
     blockingIssues,
     warnings,
+    reminders,
     canSubmit: blockingIssues.length === 0,
     firstBlockingTarget: blockingIssues[0]?.target ?? null,
     requiresPriceChangeConfirmation: blockingIssues.some(
       (item) => item.acknowledgementKey === "cart-price-change",
     ),
-    awaitingMaterials: issues.some((item) => item.id === "materials.email-pending"),
+    awaitingMaterials: reminders.some((item) => item.id === "materials.email-pending"),
   };
+};
+
+const addMvGuestContactIssues = (
+  issues: SubmissionPreflightIssue[],
+  input: MvSubmissionPreflightInput,
+) => {
+  addRequiredTextIssue(issues, input.guestName, {
+    id: "mv.guest-name",
+    title: "담당자명",
+    field: "guestName",
+    step: 3,
+  });
+  addRequiredTextIssue(issues, input.guestEmail, {
+    id: "mv.guest-email",
+    title: "이메일",
+    field: "guestEmail",
+    step: 3,
+  });
+  if (hasText(input.guestEmail) && !isValidEmail(input.guestEmail)) {
+    issues.push(
+      issue(
+        "mv.guest-email-format",
+        "blocking",
+        "이메일",
+        "이메일 형식을 확인해주세요.",
+        { step: 3, field: "guestEmail" },
+      ),
+    );
+  }
+  addRequiredTextIssue(issues, input.guestPhone, {
+    id: "mv.guest-phone",
+    title: "연락처",
+    field: "guestPhone",
+    step: 3,
+  });
+  if (hasText(input.guestPhone) && !isValidPhone(input.guestPhone)) {
+    issues.push(
+      issue(
+        "mv.guest-phone-format",
+        "blocking",
+        "연락처",
+        "연락처는 숫자 9~11자리로 입력해주세요.",
+        { step: 3, field: "guestPhone" },
+      ),
+    );
+  }
 };
 
 /**
@@ -876,48 +926,12 @@ export const buildMvSubmissionPreflight = (
       });
     }
 
-    if (input.isGuest) {
-      addRequiredTextIssue(issues, input.guestName, {
-        id: "mv.guest-name",
-        title: "담당자명",
-        field: "guestName",
-        step: 3,
-      });
-      addRequiredTextIssue(issues, input.guestEmail, {
-        id: "mv.guest-email",
-        title: "이메일",
-        field: "guestEmail",
-        step: 3,
-      });
-      if (hasText(input.guestEmail) && !isValidEmail(input.guestEmail)) {
-        issues.push(
-          issue(
-            "mv.guest-email-format",
-            "blocking",
-            "이메일",
-            "이메일 형식을 확인해주세요.",
-            { step: 3, field: "guestEmail" },
-          ),
-        );
-      }
-      addRequiredTextIssue(issues, input.guestPhone, {
-        id: "mv.guest-phone",
-        title: "연락처",
-        field: "guestPhone",
-        step: 3,
-      });
-      if (hasText(input.guestPhone) && !isValidPhone(input.guestPhone)) {
-        issues.push(
-          issue(
-            "mv.guest-phone-format",
-            "blocking",
-            "연락처",
-            "연락처는 숫자 9~11자리로 입력해주세요.",
-            { step: 3, field: "guestPhone" },
-          ),
-        );
-      }
-    }
+  }
+
+  // Guests have no account mailbox: contact details are required in both the
+  // online and the uploaded-form flow so notices and code recovery can reach them.
+  if (!isAdminReviewer && input.isGuest && (isOnlineForm || isDownloadedForm)) {
+    addMvGuestContactIssues(issues, input);
   }
 
   if (
@@ -999,17 +1013,10 @@ export const buildMvSubmissionPreflight = (
     }
   }
 
-  if (input.filesSubmittedByEmail) {
-    issues.push(issue(
-      "materials.email-pending",
-      "warning",
-      "자료 제출 대기",
-      isDownloadedForm
-        ? "작성한 신청서와 영상 파일을 이메일로 보내주세요. 신청서의 제목·접수자 정보와 자료 내용은 아직 확인되지 않았습니다. 자료 수신·확인 후 접수를 진행합니다."
-        : "영상 파일을 이메일로 보내주세요. 이메일 제출 선택은 파일 수신 확인이 아닙니다. 자료 수신·확인 후 접수를 진행합니다.",
-      { step: 4, field: "files" },
-    ));
-  }
-
-  return buildPreflightResult(issues);
+  return buildPreflightResult(
+    issues,
+    input.filesSubmittedByEmail
+      ? [emailMaterialsReminder(isDownloadedForm ? "작성한 신청서와 영상 파일" : "영상 파일")]
+      : [],
+  );
 };

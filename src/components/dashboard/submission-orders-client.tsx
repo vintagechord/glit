@@ -28,11 +28,21 @@ const filters = [
   { id: "closed", label: "실패·취소", statuses: ["FAILED", "CANCELED", "REFUNDED"] },
 ] as const;
 type FilterId = typeof filters[number]["id"];
+/** A card window the customer closed records a CANCELED attempt, but the
+ * order is still payable. Customers read that as "waiting for payment",
+ * not as a canceled order; returned or settled orders keep their status. */
+const isAwaitingPayment = (order: SubmissionOrder) => order.status === "CANCELED" && order.canReturnToCart;
+const orderStatusLabel = (order: SubmissionOrder) => isAwaitingPayment(order) ? "결제 대기" : statusLabels[order.status];
+const matchesFilter = (order: SubmissionOrder, filter: FilterId) => {
+  if (filter === "all") return true;
+  if (isAwaitingPayment(order)) return filter === "waiting";
+  return (filters.find((entry) => entry.id === filter)!.statuses as readonly string[]).includes(order.status);
+};
 const panelClass = "min-w-0 rounded-[10px] border-2 border-[var(--bauhaus-ink)] bg-card p-4 shadow-[4px_4px_0_var(--bauhaus-shadow)] sm:p-5";
 const buttonClass = "inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background px-3 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 disabled:cursor-wait disabled:bg-muted disabled:text-muted-foreground disabled:hover:translate-y-0";
-const orderTone = (status: SubmissionOrderStatus) => status === "PAID"
+const orderTone = (order: SubmissionOrder) => order.status === "PAID"
   ? brandStatusTones.progress
-  : ["FAILED", "CANCELED", "REFUNDED"].includes(status)
+  : !isAwaitingPayment(order) && ["FAILED", "CANCELED", "REFUNDED"].includes(order.status)
     ? "border-border bg-muted text-muted-foreground"
     : "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]";
 const displayItemTitle = (item: SubmissionOrderItem) => item.title?.trim()
@@ -133,7 +143,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
       setError(failure instanceof Error ? failure.message : "결제 화면을 준비하지 못했습니다. 다시 시도해주세요.");
     } finally { checkoutInFlight.current = false; setReturningId(null); }
   };
-  const visibleOrders = orders.filter((order) => filter === "all" || (filters.find((entry) => entry.id === filter)!.statuses as readonly string[]).includes(order.status));
+  const visibleOrders = orders.filter((order) => matchesFilter(order, filter));
   const getDetailHref = (item: SubmissionOrderItem) => !item.submissionId ? null
     : userId ? `${prefix}/mypage/submissions/${item.submissionId}`
       : guestTokens[item.submissionId] ? `${prefix}/track/${encodeURIComponent(guestTokens[item.submissionId])}` : null;
@@ -168,8 +178,9 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
                 <p className="mt-1 break-all font-mono text-xs font-semibold">{order.id}</p>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">{formatDateTime(order.createdAt)} · {order.paymentMethod === "BANK" ? "무통장 입금" : order.paymentMethod === "PAYPAL" ? "PayPal" : "카드 결제"}</p>
               </div>
-              <span className={`inline-flex rounded-[6px] border-2 px-2.5 py-1 text-xs font-black ${orderTone(order.status)}`}>{statusLabels[order.status]}</span>
+              <span className={`inline-flex rounded-[6px] border-2 px-2.5 py-1 text-xs font-black ${orderTone(order)}`}>{orderStatusLabel(order)}</span>
             </div>
+            {isAwaitingPayment(order) && <p className="mt-3 text-xs leading-5 text-muted-foreground">결제가 완료되지 않았습니다. 결제하기를 눌러 다시 진행할 수 있습니다.</p>}
             <ul className="mt-4 divide-y divide-border rounded-[8px] border-2 border-border bg-background/70">
               {order.items.map((item) => {
                 const detailHref = getDetailHref(item);

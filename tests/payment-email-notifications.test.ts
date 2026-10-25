@@ -55,7 +55,7 @@ async function fixture(): Promise<Fixture> {
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>client;`,
           "@/lib/supabase/server": "export const createServerSupabase=async()=>({});",
           "@/lib/supabase/server-user": `${shared} export const getServerSessionUser=async()=>state.user;`,
-          "@/lib/email": `${shared} const send=(method,input)=>{calls.push({method,input});return Promise.resolve({ok:state.mailOk,queued:!state.mailOk,status:state.mailOk?'accepted':'retry'});};export const sendSubmissionUpdateEmail=input=>send('payment-email',input);export const sendSubmissionBankRequestEmail=input=>send('bank-email',input);export const sendAdminSubmissionReceiptEmail=input=>send('admin-receipt-email',input);`,
+          "@/lib/email": `${shared} const send=(method,input)=>{calls.push({method,input});return Promise.resolve({ok:state.mailOk,queued:!state.mailOk,status:state.mailOk?'accepted':'retry'});};export const sendSubmissionUpdateEmail=input=>send('payment-email',input);export const sendPaymentCompletedEmail=input=>send('payment-email',input);export const sendOrderBankTransferEmail=input=>send('bank-email',input);export const sendAdminSubmissionReceiptEmail=input=>send('admin-receipt-email',input);`,
           "@/lib/kakao": `${shared} export const sendKakaoOfficialNotification=async input=>{calls.push({method:'kakao',input});return {ok:true}};`,
           "@/lib/dashboard-status": "export const clearDashboardStatusCache=()=>{};",
           "@/lib/request-rate-limit": "export const consumeRateLimit=()=>({allowed:true});export const getRequestIdentifier=()=> 'fixture';",
@@ -82,7 +82,7 @@ const row = (userId: string | null = memberId): Row => ({
 });
 const bankRequest = (guest = false, ids = [submissionId]) => new Request("https://app.example.invalid/api/cart/bank", {
   method: "POST", headers: { "Content-Type": "application/json", Origin: "https://app.example.invalid" },
-  body: JSON.stringify({ submissionIds: ids, ...(guest ? { guestTokensBySubmissionId: { [submissionId]: "legacy-private-guest-token" } } : {}) }),
+  body: JSON.stringify({ submissionIds: ids, ...(guest ? { guestTokensBySubmissionId: Object.fromEntries(ids.map(id => [id, "legacy-private-guest-token"])) } : {}) }),
 }) as unknown as NextRequest;
 
 test("payment approval retries email registration with the same key and never repeats Kakao or exposes legacy guest credentials to members", async () => {
@@ -124,18 +124,22 @@ test("guest payment email uses the recorded guest mailbox and code while missing
   assert.equal(member.calls.filter(call => call.method === "admin-receipt-email").length, 1, "administrator intake notice is independent of customer mailbox lookup");
 });
 
-test("bank instructions use one owner mailbox, stable keys, and owner-appropriate links", async () => {
+test("bank instructions use one owner mailbox, stable keys, owner-appropriate links and the whole order", async () => {
+  const otherId = "20000000-0000-4000-8000-000000000003";
   for (const guest of [false, true]) {
     const h = await fixture();
-    h.state.rows = [row(guest ? null : memberId)];
+    h.state.rows = [row(guest ? null : memberId), { ...row(guest ? null : memberId), id: otherId, title: "Second title", amount_krw: 2500 }];
     if (guest) h.state.user = null;
-    const response = await h.POST(bankRequest(guest));
+    const response = await h.POST(bankRequest(guest, [submissionId, otherId]));
     assert.equal(response.status, 200);
     const emails = h.calls.filter(call => call.method === "bank-email");
-    assert.equal(emails.length, 1);
+    assert.equal(emails.length, 1, "one message per order, not per application");
     const email = emails[0].input;
     assert.equal(email?.email, guest ? "guest@example.invalid" : "member@example.invalid");
-    assert.match(String(email?.idempotencyKey), /^bank-request:/);
+    assert.equal(email?.idempotencyKey, `bank-request:${h.state.nextOrderId}:${email?.email}`);
+    assert.equal(email?.orderId, h.state.nextOrderId);
+    assert.equal(email?.totalAmountKrw, 3500);
+    assert.deepEqual((email?.items as Array<{ title: string; amountKrw: number }>).map(item => [item.title, item.amountKrw]), [["Fixture title", 1000], ["Second title", 2500]]);
     if (guest) assert.ok(String(email?.link).endsWith("/track/legacy-private-guest-token"));
     else assert.doesNotMatch(String(email?.link), /track|legacy-private/);
   }
